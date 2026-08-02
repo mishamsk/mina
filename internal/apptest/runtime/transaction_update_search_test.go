@@ -101,7 +101,7 @@ func TestTransactionReplaceInfersMissingNonUSDAmountUSD(t *testing.T) {
 				AccountId:            eurCash.AccountId,
 				Currency:             "EUR",
 				Amount:               "-11.00",
-				PostingStatus:        httpclient.PostingStatusPosted,
+				Settlement:           apptest.PostedSettlement(),
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.WritableSourceManual,
 			},
@@ -110,7 +110,6 @@ func TestTransactionReplaceInfersMissingNonUSDAmountUSD(t *testing.T) {
 				Currency:             "EUR",
 				Amount:               "11.00",
 				CategoryId:           apptest.Int64Ptr(refs.CategoryId),
-				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.WritableSourceManual,
 			},
@@ -178,9 +177,8 @@ func TestTransactionCancelBoundary(t *testing.T) {
 	refs := createTransactionRefs(t, client)
 
 	request := balancedTransactionRequest(refs)
-	request.Records[0].PostingStatus = httpclient.PostingStatusPending
+	request.Records[0].Settlement = apptest.PendingSettlement()
 	request.Records[0].ReconciliationStatus = httpclient.Unreconciled
-	request.Records[1].PostingStatus = httpclient.PostingStatusPosted
 	created, err := client.REST().CreateTransactionWithResponse(context.Background(), request)
 	requireNoTransportError(t, "create transaction to cancel", err)
 	if created.StatusCode() != http.StatusCreated {
@@ -192,15 +190,48 @@ func TestTransactionCancelBoundary(t *testing.T) {
 	if cancelled.StatusCode() != http.StatusOK {
 		t.Fatalf("cancel transaction status = %d, want %d; body %s", cancelled.StatusCode(), http.StatusOK, cancelled.Body)
 	}
-	assertTransactionRecordPostingStatuses(t, cancelled.JSON200.Records, httpclient.PostingStatusCancelled)
+	apptest.AssertTransactionLifecycle(t, cancelled.JSON200, httpclient.TransactionLifecycleStatusCancelled)
 	assertTransactionCancelPreservedFields(t, created.JSON201.Records, cancelled.JSON200.Records)
+
+	replaced, err := client.REST().ReplaceTransactionWithResponse(context.Background(), created.JSON201.TransactionId, replacementTransactionRequest(refs))
+	requireNoTransportError(t, "replace cancelled transaction", err)
+	if replaced.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("replace cancelled status = %d, want %d; body %s", replaced.StatusCode(), http.StatusBadRequest, replaced.Body)
+	}
+
+	settled, err := client.REST().BulkSetJournalRecordSettlementWithResponse(context.Background(), httpclient.BulkSetRecordSettlementRequest{
+		RecordIds:  []int64{created.JSON201.Records[0].RecordId},
+		Settlement: httpclient.SettlementStatusPosted,
+	})
+	requireNoTransportError(t, "settle cancelled transaction record", err)
+	if settled.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("settle cancelled status = %d, want %d; body %s", settled.StatusCode(), http.StatusBadRequest, settled.Body)
+	}
+
+	reconciled, err := client.REST().BulkSetJournalRecordReconciliationWithResponse(context.Background(), httpclient.BulkSetRecordReconciliationRequest{
+		RecordIds:            []int64{created.JSON201.Records[1].RecordId},
+		ReconciliationStatus: httpclient.Reconciled,
+	})
+	requireNoTransportError(t, "reconcile cancelled transaction record", err)
+	if reconciled.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("reconcile cancelled status = %d, want %d; body %s", reconciled.StatusCode(), http.StatusBadRequest, reconciled.Body)
+	}
+
+	reassigned, err := client.REST().BulkReassignJournalRecordAccountWithResponse(context.Background(), httpclient.BulkReassignRecordsAccountRequest{
+		RecordIds: []int64{created.JSON201.Records[1].RecordId},
+		AccountId: refs.MerchantAccountId,
+	})
+	requireNoTransportError(t, "reassign cancelled transaction record", err)
+	if reassigned.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("reassign cancelled status = %d, want %d; body %s", reassigned.StatusCode(), http.StatusBadRequest, reassigned.Body)
+	}
 
 	repeated, err := client.REST().CancelTransactionWithResponse(context.Background(), created.JSON201.TransactionId)
 	requireNoTransportError(t, "repeat cancel transaction", err)
 	if repeated.StatusCode() != http.StatusOK {
 		t.Fatalf("repeat cancel transaction status = %d, want %d; body %s", repeated.StatusCode(), http.StatusOK, repeated.Body)
 	}
-	assertTransactionRecordPostingStatuses(t, repeated.JSON200.Records, httpclient.PostingStatusCancelled)
+	apptest.AssertTransactionLifecycle(t, repeated.JSON200, httpclient.TransactionLifecycleStatusCancelled)
 
 	accountIDs := []int64{refs.CheckingAccountId}
 	balances, err := client.REST().ListAccountBalancesWithResponse(context.Background(), &httpclient.ListAccountBalancesParams{AccountIds: &accountIDs})
@@ -219,6 +250,20 @@ func TestTransactionCancelBoundary(t *testing.T) {
 	}
 	assertMonthTotal(t, "cancelled transaction spend", totals.JSON200.Spend, "0.00000000", 0)
 
+	restored, err := client.REST().RestoreTransactionWithResponse(context.Background(), created.JSON201.TransactionId)
+	requireNoTransportError(t, "restore transaction", err)
+	if restored.StatusCode() != http.StatusOK {
+		t.Fatalf("restore transaction status = %d, want %d; body %s", restored.StatusCode(), http.StatusOK, restored.Body)
+	}
+	apptest.AssertTransactionLifecycle(t, restored.JSON200, httpclient.TransactionLifecycleStatusActive)
+	assertTransactionCancelPreservedFields(t, created.JSON201.Records, restored.JSON200.Records)
+
+	restoredAgain, err := client.REST().RestoreTransactionWithResponse(context.Background(), created.JSON201.TransactionId)
+	requireNoTransportError(t, "repeat restore transaction", err)
+	if restoredAgain.StatusCode() != http.StatusOK {
+		t.Fatalf("repeat restore transaction status = %d, want %d; body %s", restoredAgain.StatusCode(), http.StatusOK, restoredAgain.Body)
+	}
+
 	missing, err := client.REST().CancelTransactionWithResponse(context.Background(), created.JSON201.TransactionId+9999)
 	requireNoTransportError(t, "cancel missing transaction", err)
 	if missing.StatusCode() != http.StatusNotFound {
@@ -236,125 +281,6 @@ func TestTransactionCancelBoundary(t *testing.T) {
 	if cancelTombstoned.StatusCode() != http.StatusNotFound {
 		t.Fatalf("cancel tombstoned transaction status = %d, want %d; body %s", cancelTombstoned.StatusCode(), http.StatusNotFound, cancelTombstoned.Body)
 	}
-}
-
-func TestExpectedTransactionsExcludedFromDefaultViewsAndAggregates(t *testing.T) {
-	client := newSharedClient(t)
-	refs := createTransactionRefs(t, client)
-
-	expectedRequest := balancedTransactionRequest(refs)
-	expectedRequest.Records[0].PostingStatus = httpclient.PostingStatusExpected
-	expectedRequest.Records[1].PostingStatus = httpclient.PostingStatusExpected
-	expected := createTransaction(t, client, expectedRequest)
-	posted := createTransaction(t, client, balancedTransactionRequest(refs))
-
-	defaultList, err := client.REST().ListTransactionsWithResponse(context.Background(), nil)
-	requireNoTransportError(t, "default transaction list", err)
-	assertTransactionListResponse(t, "default transaction list", defaultList, []int64{posted.JSON201.TransactionId}, 1)
-
-	expectedStatuses := []httpclient.PostingStatus{httpclient.PostingStatusExpected}
-	expectedList, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{PostingStatus: &expectedStatuses})
-	requireNoTransportError(t, "expected transaction list", err)
-	assertTransactionListResponse(t, "expected transaction list", expectedList, []int64{expected.JSON201.TransactionId}, 1)
-
-	defaultSearch, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), nil)
-	requireNoTransportError(t, "default record search", err)
-	if defaultSearch.StatusCode() != http.StatusOK {
-		t.Fatalf("default record search status = %d, want %d; body %s", defaultSearch.StatusCode(), http.StatusOK, defaultSearch.Body)
-	}
-	assertRecordIDs(t, defaultSearch.JSON200.Records, recordIDs(posted.JSON201.Records))
-
-	expectedStatus := httpclient.PostingStatusExpected
-	expectedSearch, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), &httpclient.SearchJournalRecordsParams{PostingStatus: &expectedStatus})
-	requireNoTransportError(t, "expected record search", err)
-	if expectedSearch.StatusCode() != http.StatusOK {
-		t.Fatalf("expected record search status = %d, want %d; body %s", expectedSearch.StatusCode(), http.StatusOK, expectedSearch.Body)
-	}
-	assertRecordIDs(t, expectedSearch.JSON200.Records, recordIDs(expected.JSON201.Records))
-
-	includeExpected := true
-	combinedSearch, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), &httpclient.SearchJournalRecordsParams{
-		IncludeExpected: &includeExpected,
-	})
-	requireNoTransportError(t, "combined record search", err)
-	if combinedSearch.StatusCode() != http.StatusOK {
-		t.Fatalf("combined record search status = %d, want %d; body %s", combinedSearch.StatusCode(), http.StatusOK, combinedSearch.Body)
-	}
-	assertRecordIDs(t, combinedSearch.JSON200.Records, append(recordIDs(expected.JSON201.Records), recordIDs(posted.JSON201.Records)...))
-
-	postedStatus := httpclient.PostingStatusPosted
-	postedPlusExpectedSearch, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), &httpclient.SearchJournalRecordsParams{
-		IncludeExpected: &includeExpected,
-		PostingStatus:   &postedStatus,
-	})
-	requireNoTransportError(t, "posted plus expected record search", err)
-	if postedPlusExpectedSearch.StatusCode() != http.StatusOK {
-		t.Fatalf("posted plus expected record search status = %d, want %d; body %s", postedPlusExpectedSearch.StatusCode(), http.StatusOK, postedPlusExpectedSearch.Body)
-	}
-	assertRecordIDs(t, postedPlusExpectedSearch.JSON200.Records, append(recordIDs(expected.JSON201.Records), recordIDs(posted.JSON201.Records)...))
-
-	includeRunningBalance := true
-	defaultRegister, err := client.REST().SearchAccountJournalRecordsWithResponse(context.Background(), refs.CheckingAccountId, &httpclient.SearchAccountJournalRecordsParams{
-		IncludeRunningBalance: &includeRunningBalance,
-	})
-	requireNoTransportError(t, "default account register", err)
-	if defaultRegister.StatusCode() != http.StatusOK {
-		t.Fatalf("default account register status = %d, want %d; body %s", defaultRegister.StatusCode(), http.StatusOK, defaultRegister.Body)
-	}
-	assertRecordIDs(t, defaultRegister.JSON200.Records, []int64{posted.JSON201.Records[0].RecordId})
-	assertRecordRunningBalances(t, defaultRegister.JSON200.Records, []string{"-12.34000000"})
-
-	expectedRegister, err := client.REST().SearchAccountJournalRecordsWithResponse(context.Background(), refs.CheckingAccountId, &httpclient.SearchAccountJournalRecordsParams{
-		IncludeRunningBalance: &includeRunningBalance,
-		PostingStatus:         &expectedStatus,
-	})
-	requireNoTransportError(t, "expected account register", err)
-	if expectedRegister.StatusCode() != http.StatusOK {
-		t.Fatalf("expected account register status = %d, want %d; body %s", expectedRegister.StatusCode(), http.StatusOK, expectedRegister.Body)
-	}
-	assertRecordIDs(t, expectedRegister.JSON200.Records, []int64{expected.JSON201.Records[0].RecordId})
-	assertRecordRunningBalances(t, expectedRegister.JSON200.Records, []string{"0.00000000"})
-
-	combinedRegister, err := client.REST().SearchAccountJournalRecordsWithResponse(context.Background(), refs.CheckingAccountId, &httpclient.SearchAccountJournalRecordsParams{
-		IncludeExpected:       &includeExpected,
-		IncludeRunningBalance: &includeRunningBalance,
-	})
-	requireNoTransportError(t, "combined account register", err)
-	if combinedRegister.StatusCode() != http.StatusOK {
-		t.Fatalf("combined account register status = %d, want %d; body %s", combinedRegister.StatusCode(), http.StatusOK, combinedRegister.Body)
-	}
-	assertRecordIDs(t, combinedRegister.JSON200.Records, []int64{expected.JSON201.Records[0].RecordId, posted.JSON201.Records[0].RecordId})
-	assertRecordRunningBalances(t, combinedRegister.JSON200.Records, []string{"0.00000000", "-12.34000000"})
-
-	postedPlusExpectedRegister, err := client.REST().SearchAccountJournalRecordsWithResponse(context.Background(), refs.CheckingAccountId, &httpclient.SearchAccountJournalRecordsParams{
-		IncludeExpected:       &includeExpected,
-		IncludeRunningBalance: &includeRunningBalance,
-		PostingStatus:         &postedStatus,
-	})
-	requireNoTransportError(t, "posted plus expected account register", err)
-	if postedPlusExpectedRegister.StatusCode() != http.StatusOK {
-		t.Fatalf("posted plus expected account register status = %d, want %d; body %s", postedPlusExpectedRegister.StatusCode(), http.StatusOK, postedPlusExpectedRegister.Body)
-	}
-	assertRecordIDs(t, postedPlusExpectedRegister.JSON200.Records, []int64{expected.JSON201.Records[0].RecordId, posted.JSON201.Records[0].RecordId})
-	assertRecordRunningBalances(t, postedPlusExpectedRegister.JSON200.Records, []string{"0.00000000", "-12.34000000"})
-
-	accountIDs := []int64{refs.CheckingAccountId}
-	balances, err := client.REST().ListAccountBalancesWithResponse(context.Background(), &httpclient.ListAccountBalancesParams{AccountIds: &accountIDs})
-	requireNoTransportError(t, "account balances", err)
-	if balances.StatusCode() != http.StatusOK {
-		t.Fatalf("account balances status = %d, want %d; body %s", balances.StatusCode(), http.StatusOK, balances.Body)
-	}
-	assertAccountBalances(t, balances.JSON200.Balances, []wantAccountBalance{
-		{accountID: refs.CheckingAccountId, currency: "USD", current: "-12.34000000", currentUSD: "-12.34000000", posted: "-12.34000000", unconvertedCount: 0},
-	})
-
-	totals, err := client.REST().GetTransactionMonthTotalsWithResponse(context.Background(), &httpclient.GetTransactionMonthTotalsParams{Month: "2024-03"})
-	requireNoTransportError(t, "month totals", err)
-	if totals.StatusCode() != http.StatusOK {
-		t.Fatalf("month totals status = %d, want %d; body %s", totals.StatusCode(), http.StatusOK, totals.Body)
-	}
-	assertMonthTotal(t, "expected-excluded spend", totals.JSON200.Spend, "12.34000000", 0)
-	assertMonthTotal(t, "expected-excluded income", totals.JSON200.Income, "0.00000000", 0)
 }
 
 func TestRecordSearchFiltersBoundary(t *testing.T) {
@@ -381,8 +307,7 @@ func TestRecordSearchFiltersBoundary(t *testing.T) {
 				AmountUsd:            apptest.StringPtr("-50.00"),
 				TagIds:               apptest.Int64SlicePtr(refs.SecondTagId),
 				Memo:                 &memo,
-				PendingDate:          &pendingDate,
-				PostingStatus:        httpclient.PostingStatusPending,
+				Settlement:           &httpclient.SettlementIntent{Status: httpclient.SettlementStatusPending, PendingDate: &pendingDate},
 				ReconciliationStatus: httpclient.Unreconciled,
 				Source:               httpclient.WritableSourceManual,
 			},
@@ -392,7 +317,6 @@ func TestRecordSearchFiltersBoundary(t *testing.T) {
 				Amount:               "50.00",
 				AmountUsd:            apptest.StringPtr("50.00"),
 				CategoryId:           apptest.Int64Ptr(refs.SecondCategoryId),
-				PostingStatus:        httpclient.PostingStatusPending,
 				ReconciliationStatus: httpclient.Unreconciled,
 				Source:               httpclient.WritableSourceManual,
 			},
@@ -418,7 +342,7 @@ func TestRecordSearchFiltersBoundary(t *testing.T) {
 		{name: "category", params: &httpclient.SearchJournalRecordsParams{CategoryId: &refs.CategoryId}, want: []int64{firstCredit.RecordId}},
 		{name: "tag", params: &httpclient.SearchJournalRecordsParams{TagId: &refs.TagId}, want: []int64{firstDebit.RecordId}},
 		{name: "member", params: &httpclient.SearchJournalRecordsParams{MemberId: &refs.MemberId}, want: []int64{firstDebit.RecordId}},
-		{name: "posting status", params: &httpclient.SearchJournalRecordsParams{PostingStatus: ptrTo(httpclient.PostingStatusPending)}, want: []int64{secondDebit.RecordId, secondCredit.RecordId}},
+		{name: "settlement", params: &httpclient.SearchJournalRecordsParams{Settlement: ptrTo(httpclient.SettlementStatusPending)}, want: []int64{secondDebit.RecordId}},
 		{name: "reconciliation status", params: &httpclient.SearchJournalRecordsParams{ReconciliationStatus: ptrTo(httpclient.Unreconciled)}, want: []int64{secondDebit.RecordId, secondCredit.RecordId}},
 		{name: "amount min", params: &httpclient.SearchJournalRecordsParams{AmountMin: new("40.00")}, want: []int64{secondCredit.RecordId}},
 		{name: "amount max", params: &httpclient.SearchJournalRecordsParams{AmountMax: new("-40.00")}, want: []int64{secondDebit.RecordId}},
@@ -426,10 +350,10 @@ func TestRecordSearchFiltersBoundary(t *testing.T) {
 		{name: "amount usd max", params: &httpclient.SearchJournalRecordsParams{AmountUsdMax: apptest.StringPtr("-40.00")}, want: []int64{secondDebit.RecordId}},
 		{name: "initiated from", params: &httpclient.SearchJournalRecordsParams{InitiatedDateFrom: apptest.DatePtr("2024-04-01")}, want: []int64{secondDebit.RecordId, secondCredit.RecordId}},
 		{name: "initiated to", params: &httpclient.SearchJournalRecordsParams{InitiatedDateTo: apptest.DatePtr("2024-03-31")}, want: []int64{firstDebit.RecordId, firstCredit.RecordId}},
-		{name: "pending from", params: &httpclient.SearchJournalRecordsParams{PendingDateFrom: apptest.TimestampPtr("2024-04-01T00:00:00Z")}, want: []int64{secondDebit.RecordId, secondCredit.RecordId}},
+		{name: "pending from", params: &httpclient.SearchJournalRecordsParams{PendingDateFrom: apptest.TimestampPtr("2024-04-01T00:00:00Z")}, want: []int64{secondDebit.RecordId}},
 		{name: "pending to", params: &httpclient.SearchJournalRecordsParams{PendingDateTo: apptest.TimestampPtr("2024-03-31T00:00:00Z")}, want: []int64{firstDebit.RecordId}},
 		{name: "posted from", params: &httpclient.SearchJournalRecordsParams{PostedDateFrom: apptest.TimestampPtr("2024-03-11T00:00:00Z")}, want: []int64{firstDebit.RecordId}},
-		{name: "posted to", params: &httpclient.SearchJournalRecordsParams{PostedDateTo: apptest.TimestampPtr("2024-03-11T00:00:00Z")}, want: []int64{firstDebit.RecordId, firstCredit.RecordId}},
+		{name: "posted to", params: &httpclient.SearchJournalRecordsParams{PostedDateTo: apptest.TimestampPtr("2024-03-11T00:00:00Z")}, want: []int64{firstDebit.RecordId}},
 		{name: "memo", params: &httpclient.SearchJournalRecordsParams{MemoContains: new("unc")}, want: []int64{firstDebit.RecordId}},
 		{name: "combined", params: &httpclient.SearchJournalRecordsParams{CategoryId: &refs.CategoryId, TagId: &refs.TagId, MemoContains: new("Lunch")}},
 	}
@@ -450,6 +374,9 @@ func TestRecordSearchFiltersBoundary(t *testing.T) {
 		t.Fatalf("account records status = %d, want %d; body %s", accountRecords.StatusCode(), http.StatusOK, accountRecords.Body)
 	}
 	assertRecordIDs(t, accountRecords.JSON200.Records, []int64{firstDebit.RecordId})
+	if settlement := accountRecords.JSON200.Records[0].Settlement; settlement == nil || *settlement != httpclient.SettlementStatusPosted {
+		t.Fatalf("account record settlement = %v, want posted", settlement)
+	}
 	if accountRecords.JSON200.Records[0].TransactionId != first.JSON201.TransactionId {
 		t.Fatalf("account record transaction_id = %d, want %d", accountRecords.JSON200.Records[0].TransactionId, first.JSON201.TransactionId)
 	}
@@ -474,6 +401,9 @@ func TestRecordSearchFiltersBoundary(t *testing.T) {
 		t.Fatalf("account pending date filter status = %d, want %d; body %s", accountPendingFiltered.StatusCode(), http.StatusOK, accountPendingFiltered.Body)
 	}
 	assertRecordIDs(t, accountPendingFiltered.JSON200.Records, []int64{secondDebit.RecordId})
+	if settlement := accountPendingFiltered.JSON200.Records[0].Settlement; settlement == nil || *settlement != httpclient.SettlementStatusPending {
+		t.Fatalf("pending account record settlement = %v, want pending", settlement)
+	}
 
 	accountAmountFiltered, err := client.REST().SearchAccountJournalRecordsWithResponse(context.Background(), refs.CheckingAccountId, &httpclient.SearchAccountJournalRecordsParams{
 		AmountMax: new("-10.00"),
@@ -499,10 +429,10 @@ func TestRecordSearchFiltersBoundary(t *testing.T) {
 	if invalidDate.StatusCode() != http.StatusBadRequest {
 		t.Fatalf("invalid date filter status = %d, want %d; body %s", invalidDate.StatusCode(), http.StatusBadRequest, invalidDate.Body)
 	}
-	invalidPostingStatus, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), nil, apptest.ReplaceRawQuery("posting_status=unknown"))
+	invalidSettlement, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), nil, apptest.ReplaceRawQuery("settlement=unknown"))
 	requireNoTransportError(t, "search records", err)
-	if invalidPostingStatus.StatusCode() != http.StatusBadRequest {
-		t.Fatalf("invalid posting status filter status = %d, want %d; body %s", invalidPostingStatus.StatusCode(), http.StatusBadRequest, invalidPostingStatus.Body)
+	if invalidSettlement.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("invalid settlement filter status = %d, want %d; body %s", invalidSettlement.StatusCode(), http.StatusBadRequest, invalidSettlement.Body)
 	}
 	invalidReconciliationStatus, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), nil, apptest.ReplaceRawQuery("reconciliation_status=unknown"))
 	requireNoTransportError(t, "search records", err)
@@ -635,10 +565,10 @@ func TestRecordSearchAccountFQNPrefixBoundary(t *testing.T) {
 	chaserChecking := scenario.AccountWithCurrency("banks:Chaser:checking", "USD")
 	allyChecking := scenario.AccountWithCurrency("banks:Ally:checking", "USD")
 
-	descendant := createTransaction(t, client, recordSearchPrefixTransactionRequest("2024-01-02", category.CategoryId, chaseChecking.AccountId, merchant.AccountId, httpclient.PostingStatusPosted))
-	flow := createTransaction(t, client, recordSearchPrefixTransactionRequest("2024-01-03", category.CategoryId, funding.AccountId, chaseFees.AccountId, httpclient.PostingStatusPending))
-	sibling := createTransaction(t, client, recordSearchPrefixTransactionRequest("2024-01-04", category.CategoryId, chaserChecking.AccountId, merchant.AccountId, httpclient.PostingStatusPosted))
-	other := createTransaction(t, client, recordSearchPrefixTransactionRequest("2024-01-05", category.CategoryId, allyChecking.AccountId, merchant.AccountId, httpclient.PostingStatusPosted))
+	descendant := createTransaction(t, client, recordSearchPrefixTransactionRequest("2024-01-02", category.CategoryId, chaseChecking.AccountId, merchant.AccountId, httpclient.SettlementStatusPosted))
+	flow := createTransaction(t, client, recordSearchPrefixTransactionRequest("2024-01-03", category.CategoryId, funding.AccountId, chaseFees.AccountId, httpclient.SettlementStatusPending))
+	sibling := createTransaction(t, client, recordSearchPrefixTransactionRequest("2024-01-04", category.CategoryId, chaserChecking.AccountId, merchant.AccountId, httpclient.SettlementStatusPosted))
+	other := createTransaction(t, client, recordSearchPrefixTransactionRequest("2024-01-05", category.CategoryId, allyChecking.AccountId, merchant.AccountId, httpclient.SettlementStatusPosted))
 
 	prefix := "banks:Chase"
 	sort := httpclient.SearchJournalRecordsParamsSortInitiatedDate
@@ -673,7 +603,7 @@ func TestRecordSearchAccountFQNPrefixBoundary(t *testing.T) {
 	limitOne := 1
 	filteredPage, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), &httpclient.SearchJournalRecordsParams{
 		AccountFqnPrefix: &prefix,
-		PostingStatus:    ptrTo(httpclient.PostingStatusPosted),
+		Settlement:       ptrTo(httpclient.SettlementStatusPosted),
 		Limit:            &limitOne,
 	})
 	requireNoTransportError(t, "search records by account fqn prefix with filters", err)
@@ -698,9 +628,9 @@ func TestRecordSearchAccountFQNPrefixBoundary(t *testing.T) {
 	wildcardDescendantAccount := scenario.AccountWithCurrency(wildcardPrefix+":Joint", "USD")
 	wildcardFeeAccount := scenario.AccountWithType(wildcardPrefix+":Fees", httpclient.WritableAccountTypeFlow)
 	wildcardLookalikeAccount := scenario.AccountWithCurrency("banks:Savex1ExtraVault:Joint", "USD")
-	wildcardDescendant := createTransaction(t, client, recordSearchPrefixTransactionRequest("2024-01-07", category.CategoryId, wildcardDescendantAccount.AccountId, merchant.AccountId, httpclient.PostingStatusPosted))
-	wildcardFee := createTransaction(t, client, recordSearchPrefixTransactionRequest("2024-01-08", category.CategoryId, funding.AccountId, wildcardFeeAccount.AccountId, httpclient.PostingStatusPosted))
-	createTransaction(t, client, recordSearchPrefixTransactionRequest("2024-01-08", category.CategoryId, wildcardLookalikeAccount.AccountId, merchant.AccountId, httpclient.PostingStatusPosted))
+	wildcardDescendant := createTransaction(t, client, recordSearchPrefixTransactionRequest("2024-01-07", category.CategoryId, wildcardDescendantAccount.AccountId, merchant.AccountId, httpclient.SettlementStatusPosted))
+	wildcardFee := createTransaction(t, client, recordSearchPrefixTransactionRequest("2024-01-08", category.CategoryId, funding.AccountId, wildcardFeeAccount.AccountId, httpclient.SettlementStatusPosted))
+	createTransaction(t, client, recordSearchPrefixTransactionRequest("2024-01-08", category.CategoryId, wildcardLookalikeAccount.AccountId, merchant.AccountId, httpclient.SettlementStatusPosted))
 
 	wildcardPrefixRecords, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), &httpclient.SearchJournalRecordsParams{
 		AccountFqnPrefix: &wildcardPrefix,
@@ -847,13 +777,16 @@ func TestAccountRecordRunningBalanceBoundary(t *testing.T) {
 	first := createTransactionForDate(t, client, refs.transactionRefs, sharedInitiatedDate, "First")
 	cancelledRequest := balancedTransactionRequest(refs.transactionRefs)
 	cancelledRequest.InitiatedDate = apptest.Date(sharedInitiatedDate)
-	cancelledRequest.Records[0].PostingStatus = httpclient.PostingStatusCancelled
-	cancelledRequest.Records[1].PostingStatus = httpclient.PostingStatusCancelled
+	cancelledRequest.Records[0].Settlement = apptest.PendingSettlement()
 	cancelled := createTransaction(t, client, cancelledRequest)
+	cancelledResponse, err := client.REST().CancelTransactionWithResponse(context.Background(), cancelled.JSON201.TransactionId)
+	requireNoTransportError(t, "cancel running-balance transaction", err)
+	if cancelledResponse.StatusCode() != http.StatusOK {
+		t.Fatalf("cancel running-balance transaction status = %d, want %d; body %s", cancelledResponse.StatusCode(), http.StatusOK, cancelledResponse.Body)
+	}
 	pendingRequest := balancedTransactionRequest(refs.transactionRefs)
 	pendingRequest.InitiatedDate = apptest.Date(sharedInitiatedDate)
-	pendingRequest.Records[0].PostingStatus = httpclient.PostingStatusPending
-	pendingRequest.Records[1].PostingStatus = httpclient.PostingStatusPending
+	pendingRequest.Records[0].Settlement = apptest.PendingSettlement()
 	pending := createTransaction(t, client, pendingRequest)
 	second := createTransactionForDate(t, client, refs.transactionRefs, sharedInitiatedDate, "Second")
 
@@ -1017,9 +950,7 @@ func replacementTransactionRequest(refs transactionRefs) httpclient.UpdateTransa
 				AmountUsd:            apptest.StringPtr("-20.00"),
 				TagIds:               apptest.Int64SlicePtr(refs.TagId),
 				Memo:                 &memo,
-				PendingDate:          &pendingDate,
-				PostedDate:           &postedDate,
-				PostingStatus:        httpclient.PostingStatusPosted,
+				Settlement:           &httpclient.SettlementIntent{Status: httpclient.SettlementStatusPosted, PendingDate: &pendingDate, PostedDate: &postedDate},
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.WritableSourceManual,
 			},
@@ -1029,7 +960,6 @@ func replacementTransactionRequest(refs transactionRefs) httpclient.UpdateTransa
 				Amount:               "20.00",
 				AmountUsd:            apptest.StringPtr("20.00"),
 				CategoryId:           apptest.Int64Ptr(refs.CategoryId),
-				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.WritableSourceManual,
 			},
@@ -1069,7 +999,7 @@ func recordSearchPrefixTransactionRequest(
 	categoryID int64,
 	firstAccountID int64,
 	secondAccountID int64,
-	postingStatus httpclient.PostingStatus,
+	settlement httpclient.SettlementStatus,
 ) httpclient.CreateTransactionRequest {
 	return httpclient.CreateTransactionRequest{
 		InitiatedDate: apptest.Date(date),
@@ -1079,7 +1009,7 @@ func recordSearchPrefixTransactionRequest(
 				Currency:             "USD",
 				Amount:               "-10.00",
 				AmountUsd:            apptest.StringPtr("-10.00"),
-				PostingStatus:        postingStatus,
+				Settlement:           &httpclient.SettlementIntent{Status: settlement},
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.WritableSourceManual,
 			},
@@ -1089,7 +1019,6 @@ func recordSearchPrefixTransactionRequest(
 				Amount:               "10.00",
 				AmountUsd:            apptest.StringPtr("10.00"),
 				CategoryId:           apptest.Int64Ptr(categoryID),
-				PostingStatus:        postingStatus,
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.WritableSourceManual,
 			},

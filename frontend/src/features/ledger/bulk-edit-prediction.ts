@@ -38,7 +38,7 @@ const sortedTagIds = (tagIds: readonly number[]): readonly number[] =>
 export const activeBulkEditRecords = (
   transaction: Transaction,
 ): readonly JournalRecord[] =>
-  transaction.records.filter((record) => record.posting_status !== "cancelled");
+  transaction.lifecycle_status === "active" ? transaction.records : [];
 
 export const bulkCategoryTargetRecords = (
   transaction: Transaction,

@@ -426,6 +426,7 @@ func newAccountingServices(
 		memberService,
 		exchangeRates,
 		referenceSerializer,
+		opts.clock(),
 		currencyUsageChanged,
 	)
 	accountService.SetTypeChangeValidator(transactionService)
@@ -450,6 +451,7 @@ func newAccountingServices(
 				templateService,
 				exchangeRates,
 				referenceSerializer,
+				opts.clock(),
 				currencyUsageChanged,
 			),
 			Clock: opts.clock(),

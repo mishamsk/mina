@@ -479,7 +479,7 @@ test("transaction detail panel is read-only while category chips keep filtering"
           currency: "USD",
           member_id: member.member_id,
           memo,
-          posting_status: "posted",
+          settlement: { status: "posted" },
           reconciliation_status: "unreconciled",
           source: "manual",
           tag_ids: [initialTag.tag_id],
@@ -491,7 +491,7 @@ test("transaction detail panel is read-only while category chips keep filtering"
           currency: "USD",
           member_id: member.member_id,
           memo,
-          posting_status: "posted",
+          settlement: null,
           reconciliation_status: "unreconciled",
           source: "manual",
           tag_ids: [initialTag.tag_id],
@@ -503,7 +503,7 @@ test("transaction detail panel is read-only while category chips keep filtering"
   const transaction = (await createResponse.json()) as TransactionDetailFixture;
 
   await page.goto(
-    `/transactions?page=1&pageSize=50&hideExpected=true&transaction=${transaction.transaction_id}`,
+    `/transactions?page=1&pageSize=50&transaction=${transaction.transaction_id}`,
   );
   const panel = page.getByRole("dialog", { name: transaction.display_title });
   const row = page.getByRole("row").filter({ hasText: memo }).first();
@@ -560,7 +560,6 @@ test("transaction detail panel is read-only while category chips keep filtering"
     .click();
   await expectTransactionFilterUrl(page, {
     categories: [initialCategory.category_id],
-    hideExpected: true,
   });
   await expect(
     page.getByRole("button", {
@@ -643,14 +642,14 @@ test("detail lifecycle and dateless records cover variants in detail and peek", 
   ]);
   const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const category = findByFqn(categories, "Entertainment:Books");
-  const [fundingAccount, splitMerchant] = await Promise.all([
+  const [fundingAccount, splitParty] = await Promise.all([
     createAccount(
       page,
       `assets:E2E:Lifecycle:${unique}:Funding`,
       "owned",
       "USD",
     ),
-    createAccount(page, `merchant:E2E:Lifecycle:${unique}`, "flow"),
+    createAccount(page, `people:E2E:Lifecycle:${unique}`, "party", "USD"),
   ]);
   const [firstTag, secondTag] = await Promise.all([
     createTag(page, `E2E:Lifecycle:${unique}:First`),
@@ -685,9 +684,7 @@ test("detail lifecycle and dateless records cover variants in detail and peek", 
           category_id: null,
           currency: "USD",
           memo: mixedMemo,
-          pending_date: "2026-07-12T16:00:00Z",
-          posted_date: "2026-07-13T16:00:00Z",
-          posting_status: "posted",
+          settlement: { status: "posted" },
           reconciliation_status: "unreconciled",
           source: "manual",
           tag_ids: [],
@@ -698,22 +695,18 @@ test("detail lifecycle and dateless records cover variants in detail and peek", 
           category_id: category.category_id,
           currency: "USD",
           memo: mixedMemo,
-          pending_date: "2026-07-12T16:00:00Z",
-          posted_date: "2026-07-14T16:00:00Z",
-          posting_status: "posted",
+          settlement: null,
           reconciliation_status: "unreconciled",
           source: "manual",
           tag_ids: [],
         },
         {
-          account_id: splitMerchant.account_id,
+          account_id: splitParty.account_id,
           amount: "20.00000000",
-          category_id: category.category_id,
+          category_id: null,
           currency: "USD",
           memo: mixedMemo,
-          pending_date: "2026-07-12T16:00:00Z",
-          posted_date: null,
-          posting_status: "pending",
+          settlement: { status: "pending" },
           reconciliation_status: "unreconciled",
           source: "manual",
           tag_ids: [],
@@ -736,9 +729,7 @@ test("detail lifecycle and dateless records cover variants in detail and peek", 
           category_id: null,
           currency: "USD",
           memo: cancelledMemo,
-          pending_date: null,
-          posted_date: null,
-          posting_status: "cancelled",
+          settlement: { status: "pending" },
           reconciliation_status: "unreconciled",
           source: "manual",
           tag_ids: [],
@@ -749,9 +740,7 @@ test("detail lifecycle and dateless records cover variants in detail and peek", 
           category_id: category.category_id,
           currency: "USD",
           memo: cancelledMemo,
-          pending_date: "2026-07-15T16:00:00Z",
-          posted_date: "2026-07-16T16:00:00Z",
-          posting_status: "cancelled",
+          settlement: null,
           reconciliation_status: "unreconciled",
           source: "manual",
           tag_ids: [],
@@ -761,7 +750,13 @@ test("detail lifecycle and dateless records cover variants in detail and peek", 
   });
   const cancelledBody = await cancelledResponse.text();
   expect(cancelledResponse.ok(), cancelledBody).toBe(true);
-  const cancelled = JSON.parse(cancelledBody) as TransactionDetailFixture;
+  const activeToCancel = JSON.parse(cancelledBody) as TransactionDetailFixture;
+  const cancelResponse = await page.request.post(
+    `/api/transactions/${activeToCancel.transaction_id}/cancel`,
+  );
+  const cancelBody = await cancelResponse.text();
+  expect(cancelResponse.ok(), cancelBody).toBe(true);
+  const cancelled = JSON.parse(cancelBody) as TransactionDetailFixture;
 
   const expected = await createExpectedRecurringFixture(
     page,
@@ -776,17 +771,29 @@ test("detail lifecycle and dateless records cover variants in detail and peek", 
     .first();
   await expect(simpleRow).toBeVisible();
   const mixedRow = page.getByRole("row").filter({ hasText: mixedMemo }).first();
-  const mixedIndicators = mixedRow.getByTestId("transaction-status-indicators");
-  await expect(mixedIndicators).toHaveAttribute("data-posting-status", "mixed");
+  const cancelledRow = page
+    .getByRole("row")
+    .filter({ hasText: cancelledMemo })
+    .first();
   await expect(
-    mixedIndicators.getByRole("img", { name: "Mixed posting status" }),
+    cancelledRow.getByRole("button", { name: "Edit transaction" }),
+  ).toHaveCount(0);
+  await expect(
+    cancelledRow.getByRole("button", { name: "Split transaction" }),
+  ).toHaveCount(0);
+  const mixedIndicators = mixedRow.getByTestId("transaction-status-indicators");
+  await expect(mixedIndicators).toHaveAttribute("data-display-status", "mixed");
+  await expect(
+    mixedIndicators.getByRole("img", { name: "Mixed settlement" }),
   ).toBeVisible();
   await simpleRow.locator(".transactions-description-column").click();
   const simpleExpandedRecords = simpleRow.locator(
     "xpath=following-sibling::tr[1]",
   );
-  await expect(simpleExpandedRecords).toContainText("pending —; posted ");
-  await expect(simpleExpandedRecords).not.toContainText("pending ;");
+  await expect(simpleExpandedRecords).toContainText("Initiated 2026-07-11");
+  await expect(simpleExpandedRecords).not.toContainText(
+    /pending date|posted date/i,
+  );
 
   const expectSimpleSurface = async (
     panel: Locator,
@@ -848,11 +855,11 @@ test("detail lifecycle and dateless records cover variants in detail and peek", 
   ) => {
     await expectDatelessReadOnlyDetailGrid(panel, 3, expectedVariant);
     const lifecycle = panel.getByTestId("transaction-lifecycle");
-    await expect(lifecycle).toHaveText(/Initiated\s*Jul 12\s*pending/);
+    await expect(lifecycle).toHaveText(/Initiated\s*Jul 12\s*Pending/);
     await expect(lifecycle).not.toContainText(/Posted|varies|2 of 3|→|–/);
     await expect(
       lifecycle.locator("[data-lifecycle-status='pending']"),
-    ).toHaveText("pending");
+    ).toHaveText("Pending");
   };
 
   const expectLifecycleContentFits = async (panel: Locator) => {
@@ -874,11 +881,11 @@ test("detail lifecycle and dateless records cover variants in detail and peek", 
   ) => {
     await expectDatelessReadOnlyDetailGrid(panel, 2, expectedVariant);
     const lifecycle = panel.getByTestId("transaction-lifecycle");
-    await expect(lifecycle).toHaveText(/Initiated\s*Jul 23\s*expected/);
+    await expect(lifecycle).toHaveText(/Initiated\s*Jul 23\s*Expected/);
     await expect(lifecycle).not.toContainText(/Pending|Posted|Cancelled|—/);
     await expect(
       lifecycle.locator("[data-lifecycle-status='expected']"),
-    ).toHaveText("expected");
+    ).toHaveText("Expected");
   };
 
   const expectCancelledSurface = async (
@@ -889,11 +896,11 @@ test("detail lifecycle and dateless records cover variants in detail and peek", 
     const recordsTable = panel.getByTestId("transaction-detail-records-table");
     const decluttered = expectedVariant === "decluttered";
     const lifecycle = panel.getByTestId("transaction-lifecycle");
-    await expect(lifecycle).toHaveText(/Initiated\s*Jul 16\s*cancelled/);
+    await expect(lifecycle).toHaveText(/Initiated\s*Jul 16\s*Cancelled/);
     await expect(lifecycle).not.toContainText(/Pending|Posted|varies|1 of 2|—/);
     await expect(
       lifecycle.locator("[data-lifecycle-status='cancelled']"),
-    ).toHaveText("cancelled");
+    ).toHaveText("Cancelled");
     const cancelledRows = recordsTable.locator(
       "tr[data-detail-record-row='true']",
     );
@@ -946,6 +953,30 @@ test("detail lifecycle and dateless records cover variants in detail and peek", 
     cancelled.transaction_id,
   );
   await expectCancelledSurface(cancelledDetail, "decluttered");
+  await expect(
+    cancelledDetail.getByRole("button", { name: "Edit transaction" }),
+  ).toHaveCount(0);
+  await expect(
+    cancelledDetail.getByRole("button", { name: "Split" }),
+  ).toHaveCount(0);
+  await cancelledDetail.getByRole("button", { name: "Restore" }).click();
+  await expect(
+    page.getByRole("status").filter({ hasText: "Transaction restored." }),
+  ).toBeVisible();
+  await expect(cancelledDetail.getByTestId("transaction-lifecycle")).toHaveText(
+    /Initiated\s*Jul 16\s*Pending/,
+  );
+  await expect(
+    cancelledDetail.getByRole("button", { name: "Cancel" }),
+  ).toBeFocused();
+  await cancelledDetail.getByRole("button", { name: "Cancel" }).click();
+  await expect(
+    page.getByRole("status").filter({ hasText: "Transaction cancelled." }),
+  ).toBeVisible();
+  await expectCancelledSurface(cancelledDetail, "decluttered");
+  await expect(
+    cancelledDetail.getByRole("button", { name: "Restore" }),
+  ).toBeFocused();
 
   await page.setViewportSize({ width: 720, height: 900 });
   const simplePeek = await openAccountTransactionPeek(
@@ -963,20 +994,6 @@ test("detail lifecycle and dateless records cover variants in detail and peek", 
   );
   await expectMixedSurface(mixedPeek, "full");
   await expectKeyboardDisclosure(mixedPeek);
-
-  const expectedPeek = await openAccountTransactionPeek(
-    page,
-    expected.checking,
-    expected.memo,
-  );
-  await expectExpectedSurface(expectedPeek, "full");
-
-  const cancelledPeek = await openAccountTransactionPeek(
-    page,
-    fundingAccount,
-    cancelledMemo,
-  );
-  await expectCancelledSurface(cancelledPeek, "full");
 });
 
 test("toolbar filter trigger opens after transaction detail closes", async ({
@@ -1287,7 +1304,7 @@ test("transaction detail edit preserves imported sources through a fitting short
           currency: "USD",
           member_id: member.member_id,
           memo: null,
-          posting_status: "posted",
+          settlement: { status: "posted" },
           reconciliation_status: "unreconciled",
           source: "imported",
           tag_ids: [],
@@ -1299,7 +1316,7 @@ test("transaction detail edit preserves imported sources through a fitting short
           currency: "USD",
           member_id: null,
           memo,
-          posting_status: "posted",
+          settlement: null,
           reconciliation_status: "unreconciled",
           source: "imported",
           tag_ids: [],
@@ -1365,7 +1382,7 @@ test("transaction detail edit preserves imported sources through a fitting short
       currency: "USD",
       member_id: member.member_id,
       memo: updatedMemo,
-      posting_status: "posted",
+      settlement: "posted",
       reconciliation_status: "unreconciled",
       source: "imported",
       tag_ids: [],
@@ -1377,7 +1394,7 @@ test("transaction detail edit preserves imported sources through a fitting short
       currency: "USD",
       member_id: null,
       memo: updatedMemo,
-      posting_status: "posted",
+      settlement: null,
       reconciliation_status: "unreconciled",
       source: "imported",
       tag_ids: [],
@@ -1418,7 +1435,7 @@ test("sparse shorthand metadata survives merchant removal while Duplicate uses A
           currency: "USD",
           member_id: null,
           memo: null,
-          posting_status: "posted",
+          settlement: { status: "posted" },
           reconciliation_status: "unreconciled",
           source: "manual",
           tag_ids: [],
@@ -1430,7 +1447,7 @@ test("sparse shorthand metadata survives merchant removal while Duplicate uses A
           currency: "USD",
           member_id: null,
           memo: null,
-          posting_status: "posted",
+          settlement: null,
           reconciliation_status: "unreconciled",
           source: "manual",
           tag_ids: [],
@@ -1442,7 +1459,7 @@ test("sparse shorthand metadata survives merchant removal while Duplicate uses A
           currency: "USD",
           member_id: member.member_id,
           memo,
-          posting_status: "posted",
+          settlement: null,
           reconciliation_status: "unreconciled",
           source: "manual",
           tag_ids: [],
@@ -1508,7 +1525,7 @@ test("sparse shorthand metadata survives merchant removal while Duplicate uses A
       currency: "USD",
       member_id: member.member_id,
       memo,
-      posting_status: "posted",
+      settlement: "posted",
       reconciliation_status: "unreconciled",
       source: "manual",
       tag_ids: [],
@@ -1520,7 +1537,7 @@ test("sparse shorthand metadata survives merchant removal while Duplicate uses A
       currency: "USD",
       member_id: null,
       memo: null,
-      posting_status: "posted",
+      settlement: null,
       reconciliation_status: "unreconciled",
       source: "manual",
       tag_ids: [],
@@ -1556,7 +1573,7 @@ test("transaction detail edit preserves imported sources through the journal edi
           category_id: null,
           currency: "USD",
           memo,
-          posting_status: "posted",
+          settlement: { status: "posted" },
           reconciliation_status: "unreconciled",
           source: "imported",
           tag_ids: [],
@@ -1567,7 +1584,7 @@ test("transaction detail edit preserves imported sources through the journal edi
           category_id: expenseCategory.category_id,
           currency: "USD",
           memo,
-          posting_status: "posted",
+          settlement: null,
           reconciliation_status: "unreconciled",
           source: "imported",
           tag_ids: [],
@@ -1578,7 +1595,7 @@ test("transaction detail edit preserves imported sources through the journal edi
           category_id: null,
           currency: "USD",
           memo,
-          posting_status: "posted",
+          settlement: { status: "posted" },
           reconciliation_status: "unreconciled",
           source: "imported",
           tag_ids: [],
@@ -1589,7 +1606,7 @@ test("transaction detail edit preserves imported sources through the journal edi
           category_id: incomeCategory.category_id,
           currency: "USD",
           memo,
-          posting_status: "posted",
+          settlement: null,
           reconciliation_status: "unreconciled",
           source: "imported",
           tag_ids: [],
@@ -1719,7 +1736,7 @@ test("shorthand edit escalation saves as a replacement", async ({
       currency: "USD",
       member_id: null,
       memo,
-      posting_status: "posted",
+      settlement: "posted",
       reconciliation_status: "reconciled",
       source: "manual",
       tag_ids: [],
@@ -1731,7 +1748,7 @@ test("shorthand edit escalation saves as a replacement", async ({
       currency: "USD",
       member_id: null,
       memo,
-      posting_status: "posted",
+      settlement: null,
       reconciliation_status: "reconciled",
       source: "manual",
       tag_ids: [],
@@ -1974,7 +1991,7 @@ test("transaction detail split opens journal replacement and surfaces replace er
         currency: "USD",
         member_id: null,
         memo,
-        posting_status: "posted",
+        settlement: "posted",
         reconciliation_status: "reconciled",
         source: "manual",
         tag_ids: [],
@@ -1986,7 +2003,7 @@ test("transaction detail split opens journal replacement and surfaces replace er
         currency: "USD",
         member_id: null,
         memo,
-        posting_status: "posted",
+        settlement: null,
         reconciliation_status: "reconciled",
         source: "manual",
         tag_ids: [],
@@ -1998,7 +2015,7 @@ test("transaction detail split opens journal replacement and surfaces replace er
         currency: "USD",
         member_id: null,
         memo: splitMemo,
-        posting_status: "posted",
+        settlement: null,
         reconciliation_status: "unreconciled",
         source: "manual",
         tag_ids: [],

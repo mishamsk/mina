@@ -46,7 +46,6 @@ type TemplateRecord struct {
 	Amount               *values.Decimal
 	TagIDs               []int64
 	Memo                 *string
-	PostingStatus        *transactions.PostingStatus
 	ReconciliationStatus *transactions.ReconciliationStatus
 	CreatedAt            time.Time
 	UpdatedAt            time.Time
@@ -68,7 +67,6 @@ type TemplateRecordInput struct {
 	Amount               *values.Decimal
 	TagIDs               []int64
 	Memo                 *string
-	PostingStatus        *transactions.PostingStatus
 	ReconciliationStatus *transactions.ReconciliationStatus
 }
 
@@ -389,13 +387,6 @@ func validateTemplateRecordShape(index int, record TemplateRecordInput) error {
 	}
 	if record.Memo != nil && strings.TrimSpace(*record.Memo) != *record.Memo {
 		return services.InvalidRequest(indexedField(index, "memo") + " must not have leading or trailing whitespace")
-	}
-	if record.PostingStatus != nil {
-		switch *record.PostingStatus {
-		case transactions.PostingStatusPending, transactions.PostingStatusPosted, transactions.PostingStatusCancelled:
-		default:
-			return services.InvalidRequest(indexedField(index, "posting_status") + " must be pending, posted, or cancelled")
-		}
 	}
 	if record.ReconciliationStatus != nil {
 		switch *record.ReconciliationStatus {

@@ -42,12 +42,12 @@
 - Recurring defer and date-rule resume write occurrence audit rows with definition schedule state in one store transaction.
 - Dictionary usage queries report active dependency facts only; services decide whether those facts block deletes.
 - Category FQN restructure rewrites active `budget.category_fqn` paths in the same store transaction as the category rewrite.
-- Transaction lists exclude expected records by default; explicit `posting_status=expected` filters include them.
+- Transaction and record lists exclude expected lifecycle by default; explicit lifecycle filters include it.
 - Transaction class, shape, and record-role filters reproduce the service-owned derived role rules in SQL; transfer shape requires balance records of both signs.
 - Month totals aggregate only categorized `flow` records: expense-intent records net spend/refunds and income-intent records net income/clawbacks.
-- Record searches exclude expected records by default; explicit `posting_status=expected` filters or `include_expected=true` include them.
-- Account balance aggregation reads active transactions and journal records only, includes pending records in current balances, excludes cancelled and expected records, and casts aggregate sums to `DECIMAL(18,8)` in SQL.
-- Account-record running balances are computed over full active account history, exclude cancelled and expected record amounts, and cast aggregate sums to `DECIMAL(18,8)` in SQL.
+- Settlement filters derive pending/posted from dates on owned/party records; lifecycle filters read the transaction value.
+- Account balance aggregation reads active transactions only, includes pending and posted owned/party records, and casts aggregate sums to `DECIMAL(18,8)` in SQL.
+- Account-record running balances are computed over full active transaction history and cast aggregate sums to `DECIMAL(18,8)` in SQL.
 - Active uniqueness is enforced by DuckDB expression indexes that index only non-tombstoned rows; account/category/tag/template creates map index violations after service path checks, while member and exchange-rate writes pre-check uniqueness for stable conflict messages.
 - FQN restructure writes rely on service check-then-write validation and map DuckDB uniqueness conflicts.
 - Path-addressed account/category/tag hidden updates rely on service check-then-write validation and issue one bulk `is_hidden` update against active leaves.

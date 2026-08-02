@@ -81,20 +81,26 @@ func Operations() []Operation {
 							Array:       true,
 							ItemType:    "integer",
 						},
+						{
+							Name:        "settlement",
+							Type:        "",
+							Description: "Required when the target is owned or party and existing dates cannot supply a valid settlement; omit for flow or system.",
+							Required:    false,
+						},
 					},
 					RequiredProperties: []string{"account_id", "record_ids"},
-					Simple:             true,
+					Simple:             false,
 				},
 			},
 			Invoke: invokeBulkReassignJournalRecordAccount,
 		},
 		{
-			ID:          "bulkUpdateJournalRecordStatuses",
+			ID:          "bulkSetJournalRecordReconciliation",
 			Method:      "POST",
-			Path:        "/api/records/bulk/status",
-			Summary:     "Update posting and reconciliation statuses on selected journal records.",
-			Description: "Changing posting_status to pending stamps a missing pending_date with the current UTC time and clears posted_date. Changing posting_status to posted stamps a missing posted_date with the current UTC time. Updates are rejected when they would leave any transaction with a mix of cancelled and non-cancelled active journal records, or with a mix of expected and non-expected active journal records.",
-			CLI:         CLIOperation{Area: "records", Name: "bulk-update-statuses"},
+			Path:        "/api/records/bulk/reconciliation",
+			Summary:     "Set reconciliation on selected active journal records.",
+			Description: "",
+			CLI:         CLIOperation{Area: "records", Name: "bulk-set-reconciliation"},
 			Input: InputDescriptor{
 				Body: BodyDescriptor{
 					Present:  true,
@@ -102,17 +108,10 @@ func Operations() []Operation {
 					Type:     "object",
 					Properties: []BodyPropertyDescriptor{
 						{
-							Name:        "posting_status",
-							Type:        "string",
-							Description: "Non-expected posting status accepted by bulk status updates.",
-							Required:    false,
-							Enum:        []string{"pending", "posted", "cancelled"},
-						},
-						{
 							Name:        "reconciliation_status",
 							Type:        "string",
 							Description: "Whether a journal record has been reconciled with its external or expected source.",
-							Required:    false,
+							Required:    true,
 							Enum:        []string{"reconciled", "unreconciled"},
 						},
 						{
@@ -124,11 +123,46 @@ func Operations() []Operation {
 							ItemType:    "integer",
 						},
 					},
-					RequiredProperties: []string{"record_ids"},
+					RequiredProperties: []string{"reconciliation_status", "record_ids"},
 					Simple:             true,
 				},
 			},
-			Invoke: invokeBulkUpdateJournalRecordStatuses,
+			Invoke: invokeBulkSetJournalRecordReconciliation,
+		},
+		{
+			ID:          "bulkSetJournalRecordSettlement",
+			Method:      "POST",
+			Path:        "/api/records/bulk/settlement",
+			Summary:     "Set settlement on selected active owned or party records.",
+			Description: "",
+			CLI:         CLIOperation{Area: "records", Name: "bulk-set-settlement"},
+			Input: InputDescriptor{
+				Body: BodyDescriptor{
+					Present:  true,
+					Required: true,
+					Type:     "object",
+					Properties: []BodyPropertyDescriptor{
+						{
+							Name:        "record_ids",
+							Type:        "array",
+							Description: "Journal-record identifiers to update.",
+							Required:    true,
+							Array:       true,
+							ItemType:    "integer",
+						},
+						{
+							Name:        "settlement",
+							Type:        "string",
+							Description: "Server-derived balance-record settlement.",
+							Required:    true,
+							Enum:        []string{"pending", "posted"},
+						},
+					},
+					RequiredProperties: []string{"record_ids", "settlement"},
+					Simple:             true,
+				},
+			},
+			Invoke: invokeBulkSetJournalRecordSettlement,
 		},
 		{
 			ID:          "bulkUpdateJournalRecordTags",
@@ -179,7 +213,7 @@ func Operations() []Operation {
 			Method:      "POST",
 			Path:        "/api/transactions/{transaction_id}/cancel",
 			Summary:     "Cancel a transaction.",
-			Description: "Sets posting_status to cancelled on all active journal records for the transaction. The operation is idempotent for an already-cancelled transaction and does not change dates or reconciliation status.",
+			Description: "Changes a wholly pending active transaction to cancelled. The operation is idempotent and preserves record dates and reconciliation.",
 			CLI:         CLIOperation{Area: "transactions", Name: "cancel"},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -237,6 +271,34 @@ func Operations() []Operation {
 						Required:    true,
 					},
 				},
+				Body: BodyDescriptor{
+					Present:  true,
+					Required: true,
+					Type:     "object",
+					Properties: []BodyPropertyDescriptor{
+						{
+							Name:        "pending_date",
+							Type:        "string",
+							Description: "Exact UTC time the balance record entered pending; omitted manual values are derived by the service.",
+							Required:    false,
+						},
+						{
+							Name:        "posted_date",
+							Type:        "string",
+							Description: "Exact UTC time the balance record posted; omitted manual values are derived by the service.",
+							Required:    false,
+						},
+						{
+							Name:        "status",
+							Type:        "string",
+							Description: "Server-derived balance-record settlement.",
+							Required:    true,
+							Enum:        []string{"pending", "posted"},
+						},
+					},
+					RequiredProperties: []string{"status"},
+					Simple:             false,
+				},
 			},
 			Invoke: invokeConfirmNextRecurringDefinition,
 		},
@@ -255,6 +317,34 @@ func Operations() []Operation {
 						Description: "Numeric identifier of the recurring occurrence.",
 						Required:    true,
 					},
+				},
+				Body: BodyDescriptor{
+					Present:  true,
+					Required: true,
+					Type:     "object",
+					Properties: []BodyPropertyDescriptor{
+						{
+							Name:        "pending_date",
+							Type:        "string",
+							Description: "Exact UTC time the balance record entered pending; omitted manual values are derived by the service.",
+							Required:    false,
+						},
+						{
+							Name:        "posted_date",
+							Type:        "string",
+							Description: "Exact UTC time the balance record posted; omitted manual values are derived by the service.",
+							Required:    false,
+						},
+						{
+							Name:        "status",
+							Type:        "string",
+							Description: "Server-derived balance-record settlement.",
+							Required:    true,
+							Enum:        []string{"pending", "posted"},
+						},
+					},
+					RequiredProperties: []string{"status"},
+					Simple:             false,
 				},
 			},
 			Invoke: invokeConfirmRecurringOccurrence,
@@ -501,30 +591,17 @@ func Operations() []Operation {
 							Required:    false,
 						},
 						{
-							Name:        "pending_date",
-							Type:        "string",
-							Description: "UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.",
-							Required:    false,
-						},
-						{
-							Name:        "posted_date",
-							Type:        "string",
-							Description: "UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.",
-							Required:    false,
-						},
-						{
-							Name:        "posting_status",
-							Type:        "string",
-							Description: "Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.",
-							Required:    false,
-							Enum:        []string{"expected", "pending", "posted", "cancelled"},
-						},
-						{
 							Name:        "reconciliation_status",
 							Type:        "string",
 							Description: "Whether a journal record has been reconciled with its external or expected source.",
 							Required:    false,
 							Enum:        []string{"reconciled", "unreconciled"},
+						},
+						{
+							Name:        "settlement",
+							Type:        "object",
+							Description: "",
+							Required:    false,
 						},
 						{
 							Name:        "sold_account_id",
@@ -615,30 +692,17 @@ func Operations() []Operation {
 							Required:    false,
 						},
 						{
-							Name:        "pending_date",
-							Type:        "string",
-							Description: "UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.",
-							Required:    false,
-						},
-						{
-							Name:        "posted_date",
-							Type:        "string",
-							Description: "UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.",
-							Required:    false,
-						},
-						{
-							Name:        "posting_status",
-							Type:        "string",
-							Description: "Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.",
-							Required:    false,
-							Enum:        []string{"expected", "pending", "posted", "cancelled"},
-						},
-						{
 							Name:        "reconciliation_status",
 							Type:        "string",
 							Description: "Whether a journal record has been reconciled with its external or expected source.",
 							Required:    false,
 							Enum:        []string{"reconciled", "unreconciled"},
+						},
+						{
+							Name:        "settlement",
+							Type:        "object",
+							Description: "",
+							Required:    false,
 						},
 						{
 							Name:        "source_account_id",
@@ -801,30 +865,17 @@ func Operations() []Operation {
 							Required:    false,
 						},
 						{
-							Name:        "pending_date",
-							Type:        "string",
-							Description: "UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.",
-							Required:    false,
-						},
-						{
-							Name:        "posted_date",
-							Type:        "string",
-							Description: "UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.",
-							Required:    false,
-						},
-						{
-							Name:        "posting_status",
-							Type:        "string",
-							Description: "Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.",
-							Required:    false,
-							Enum:        []string{"expected", "pending", "posted", "cancelled"},
-						},
-						{
 							Name:        "reconciliation_status",
 							Type:        "string",
 							Description: "Whether a journal record has been reconciled with its external or expected source.",
 							Required:    false,
 							Enum:        []string{"reconciled", "unreconciled"},
+						},
+						{
+							Name:        "settlement",
+							Type:        "object",
+							Description: "",
+							Required:    false,
 						},
 						{
 							Name:        "tag_ids",
@@ -903,30 +954,17 @@ func Operations() []Operation {
 							Required:    false,
 						},
 						{
-							Name:        "pending_date",
-							Type:        "string",
-							Description: "UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.",
-							Required:    false,
-						},
-						{
-							Name:        "posted_date",
-							Type:        "string",
-							Description: "UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.",
-							Required:    false,
-						},
-						{
-							Name:        "posting_status",
-							Type:        "string",
-							Description: "Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.",
-							Required:    false,
-							Enum:        []string{"expected", "pending", "posted", "cancelled"},
-						},
-						{
 							Name:        "reconciliation_status",
 							Type:        "string",
 							Description: "Whether a journal record has been reconciled with its external or expected source.",
 							Required:    false,
 							Enum:        []string{"reconciled", "unreconciled"},
+						},
+						{
+							Name:        "settlement",
+							Type:        "object",
+							Description: "",
+							Required:    false,
 						},
 						{
 							Name:        "tag_ids",
@@ -1099,30 +1137,17 @@ func Operations() []Operation {
 							Required:    false,
 						},
 						{
-							Name:        "pending_date",
-							Type:        "string",
-							Description: "UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.",
-							Required:    false,
-						},
-						{
-							Name:        "posted_date",
-							Type:        "string",
-							Description: "UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.",
-							Required:    false,
-						},
-						{
-							Name:        "posting_status",
-							Type:        "string",
-							Description: "Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.",
-							Required:    false,
-							Enum:        []string{"expected", "pending", "posted", "cancelled"},
-						},
-						{
 							Name:        "reconciliation_status",
 							Type:        "string",
 							Description: "Whether a journal record has been reconciled with its external or expected source.",
 							Required:    false,
 							Enum:        []string{"reconciled", "unreconciled"},
+						},
+						{
+							Name:        "settlement",
+							Type:        "object",
+							Description: "",
+							Required:    false,
 						},
 						{
 							Name:        "source_account_id",
@@ -1658,7 +1683,7 @@ func Operations() []Operation {
 			Method:      "GET",
 			Path:        "/api/transactions/month-totals",
 			Summary:     "Get server-computed spend and income totals for a civil month.",
-			Description: "Aggregates active journal records with posting_status pending or posted by transaction initiated_date for the requested YYYY-MM month. Expected and cancelled records are excluded. Expense-role records increase spend, refund-role records net against spend, income-role records increase income, and clawback-role records net against income. Balance, adjustment, and exchange roles are excluded. Totals are USD equivalents; records without amount_usd are counted as unconverted for their total.",
+			Description: "Aggregates records from active transactions by initiated_date for the requested YYYY-MM month. Expected and cancelled transactions are excluded. Expense-role records increase spend, refund-role records net against spend, income-role records increase income, and clawback-role records net against income. Balance, adjustment, and exchange roles are excluded. Totals are USD equivalents; records without amount_usd are counted as unconverted for their total.",
 			CLI:         CLIOperation{Area: "transactions", Name: "month-totals"},
 			Input: InputDescriptor{
 				Query: []ParameterDescriptor{
@@ -2377,13 +2402,22 @@ func Operations() []Operation {
 						ItemType:    "integer",
 					},
 					{
-						Name:        "posting_status",
+						Name:        "lifecycle_status",
 						Type:        "array",
-						Description: "Filters transactions by active record posting status. Expected transactions are excluded by default and returned only when this filter explicitly includes `expected`.",
+						Description: "Filters transactions by lifecycle. Expected transactions are excluded by default and returned only when this filter explicitly includes `expected`.",
 						Required:    false,
 						Array:       true,
 						ItemType:    "string",
-						Enum:        []string{"expected", "pending", "posted", "cancelled"},
+						Enum:        []string{"active", "expected", "cancelled"},
+					},
+					{
+						Name:        "settlement",
+						Type:        "array",
+						Description: "Filters transactions by server-derived settlement summary.",
+						Required:    false,
+						Array:       true,
+						ItemType:    "string",
+						Enum:        []string{"pending", "posted", "mixed", "not_applicable"},
 					},
 					{
 						Name:        "transaction_class",
@@ -2646,6 +2680,25 @@ func Operations() []Operation {
 			Invoke: invokeReplaceTransactionTemplate,
 		},
 		{
+			ID:          "restoreTransaction",
+			Method:      "POST",
+			Path:        "/api/transactions/{transaction_id}/restore",
+			Summary:     "Restore a cancelled transaction to active.",
+			Description: "",
+			CLI:         CLIOperation{Area: "transactions", Name: "restore"},
+			Input: InputDescriptor{
+				Path: []ParameterDescriptor{
+					{
+						Name:        "transaction_id",
+						Type:        "integer",
+						Description: "Numeric identifier of the transaction.",
+						Required:    true,
+					},
+				},
+			},
+			Invoke: invokeRestoreTransaction,
+		},
+		{
 			ID:          "restructureAccounts",
 			Method:      "POST",
 			Path:        "/api/accounts/restructure",
@@ -2828,17 +2881,18 @@ func Operations() []Operation {
 						Required:    false,
 					},
 					{
-						Name:        "posting_status",
+						Name:        "lifecycle_status",
 						Type:        "string",
-						Description: "Filters account register records by posting status. Expected records are excluded by default and returned when this filter is explicitly `expected` or when `include_expected=true`.",
+						Description: "Filters account register records by inherited transaction lifecycle. Expected records are excluded by default.",
 						Required:    false,
-						Enum:        []string{"expected", "pending", "posted", "cancelled"},
+						Enum:        []string{"active", "expected", "cancelled"},
 					},
 					{
-						Name:        "include_expected",
-						Type:        "boolean",
-						Description: "Includes expected records alongside ordinary matching records. Expected records remain excluded from running balances.",
+						Name:        "settlement",
+						Type:        "string",
+						Description: "Filters account register records by server-derived settlement.",
 						Required:    false,
+						Enum:        []string{"pending", "posted"},
 					},
 					{
 						Name:        "reconciliation_status",
@@ -2989,17 +3043,18 @@ func Operations() []Operation {
 						Required:    false,
 					},
 					{
-						Name:        "posting_status",
+						Name:        "lifecycle_status",
 						Type:        "string",
-						Description: "Filters records by posting status. Expected records are excluded by default and returned when this filter is explicitly `expected` or when `include_expected=true`.",
+						Description: "Filters records by inherited transaction lifecycle. Expected records are excluded by default.",
 						Required:    false,
-						Enum:        []string{"expected", "pending", "posted", "cancelled"},
+						Enum:        []string{"active", "expected", "cancelled"},
 					},
 					{
-						Name:        "include_expected",
-						Type:        "boolean",
-						Description: "Includes expected records alongside ordinary matching records. Expected records remain excluded from running balances.",
+						Name:        "settlement",
+						Type:        "string",
+						Description: "Filters owned and party records by server-derived settlement.",
 						Required:    false,
+						Enum:        []string{"pending", "posted"},
 					},
 					{
 						Name:        "reconciliation_status",
@@ -3612,11 +3667,25 @@ func invokeBulkReassignJournalRecordAccount(ctx context.Context, client httpclie
 	return normalizeInvocationResult(response.Body, response.HTTPResponse)
 }
 
-func invokeBulkUpdateJournalRecordStatuses(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
+func invokeBulkSetJournalRecordReconciliation(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
 	if err := validateInvocationInput(input, nil, nil, true, true); err != nil {
 		return InvocationResult{}, err
 	}
-	response, err := client.BulkUpdateJournalRecordStatusesWithBodyWithResponse(ctx, "application/json", bytes.NewReader(input.Body))
+	response, err := client.BulkSetJournalRecordReconciliationWithBodyWithResponse(ctx, "application/json", bytes.NewReader(input.Body))
+	if err != nil {
+		return InvocationResult{}, err
+	}
+	if response == nil {
+		return InvocationResult{}, errors.New("generated client returned no operation response")
+	}
+	return normalizeInvocationResult(response.Body, response.HTTPResponse)
+}
+
+func invokeBulkSetJournalRecordSettlement(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
+	if err := validateInvocationInput(input, nil, nil, true, true); err != nil {
+		return InvocationResult{}, err
+	}
+	response, err := client.BulkSetJournalRecordSettlementWithBodyWithResponse(ctx, "application/json", bytes.NewReader(input.Body))
 	if err != nil {
 		return InvocationResult{}, err
 	}
@@ -3678,7 +3747,7 @@ func invokeClassifyTransaction(ctx context.Context, client httpclient.ClientWith
 }
 
 func invokeConfirmNextRecurringDefinition(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"recurring_definition_id"}, nil, false, false); err != nil {
+	if err := validateInvocationInput(input, []string{"recurring_definition_id"}, nil, true, true); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -3690,7 +3759,7 @@ func invokeConfirmNextRecurringDefinition(ctx context.Context, client httpclient
 			Err:      err,
 		}
 	}
-	response, err := client.ConfirmNextRecurringDefinitionWithResponse(ctx, pathValue0)
+	response, err := client.ConfirmNextRecurringDefinitionWithBodyWithResponse(ctx, pathValue0, "application/json", bytes.NewReader(input.Body))
 	if err != nil {
 		return InvocationResult{}, err
 	}
@@ -3701,7 +3770,7 @@ func invokeConfirmNextRecurringDefinition(ctx context.Context, client httpclient
 }
 
 func invokeConfirmRecurringOccurrence(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"recurring_occurrence_id"}, nil, false, false); err != nil {
+	if err := validateInvocationInput(input, []string{"recurring_occurrence_id"}, nil, true, true); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -3713,7 +3782,7 @@ func invokeConfirmRecurringOccurrence(ctx context.Context, client httpclient.Cli
 			Err:      err,
 		}
 	}
-	response, err := client.ConfirmRecurringOccurrenceWithResponse(ctx, pathValue0)
+	response, err := client.ConfirmRecurringOccurrenceWithBodyWithResponse(ctx, pathValue0, "application/json", bytes.NewReader(input.Body))
 	if err != nil {
 		return InvocationResult{}, err
 	}
@@ -6178,7 +6247,7 @@ func invokeListTransactionTemplates(ctx context.Context, client httpclient.Clien
 }
 
 func invokeListTransactions(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, []string{"account_id", "amount_max", "amount_min", "amount_usd_max", "amount_usd_min", "anchor_date", "category_id", "initiated_date_from", "initiated_date_to", "limit", "member_id", "offset", "pending_date_from", "pending_date_to", "posted_date_from", "posted_date_to", "posting_status", "record_role", "search", "sort", "sort_dir", "tag_id", "transaction_class", "transaction_shape"}, false, false); err != nil {
+	if err := validateInvocationInput(input, nil, []string{"account_id", "amount_max", "amount_min", "amount_usd_max", "amount_usd_min", "anchor_date", "category_id", "initiated_date_from", "initiated_date_to", "lifecycle_status", "limit", "member_id", "offset", "pending_date_from", "pending_date_to", "posted_date_from", "posted_date_to", "record_role", "search", "settlement", "sort", "sort_dir", "tag_id", "transaction_class", "transaction_shape"}, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	params := &httpclient.ListTransactionsParams{}
@@ -6370,40 +6439,62 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 		}
 		params.MemberId = &queryValue8
 	}
-	queryValues9, querySupplied9 := input.Query["posting_status"]
+	queryValues9, querySupplied9 := input.Query["lifecycle_status"]
 	if querySupplied9 {
 		if len(queryValues9) == 0 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "posting_status",
+				Name:     "lifecycle_status",
 				Err:      errors.New("value is required"),
 			}
 		}
-		queryValue9 := make([]httpclient.PostingStatus, len(queryValues9))
+		queryValue9 := make([]httpclient.TransactionLifecycleStatus, len(queryValues9))
 		for valueIndex, raw := range queryValues9 {
 			if err := parseInvocationValue(raw, true, &queryValue9[valueIndex]); err != nil {
 				return InvocationResult{}, &InvocationInputError{
 					Location: "query",
-					Name:     "posting_status",
+					Name:     "lifecycle_status",
 					Value:    raw,
 					Err:      err,
 				}
 			}
 		}
-		params.PostingStatus = &queryValue9
+		params.LifecycleStatus = &queryValue9
 	}
-	queryValues10, querySupplied10 := input.Query["transaction_class"]
+	queryValues10, querySupplied10 := input.Query["settlement"]
 	if querySupplied10 {
 		if len(queryValues10) == 0 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "settlement",
+				Err:      errors.New("value is required"),
+			}
+		}
+		queryValue10 := make([]httpclient.TransactionSettlement, len(queryValues10))
+		for valueIndex, raw := range queryValues10 {
+			if err := parseInvocationValue(raw, true, &queryValue10[valueIndex]); err != nil {
+				return InvocationResult{}, &InvocationInputError{
+					Location: "query",
+					Name:     "settlement",
+					Value:    raw,
+					Err:      err,
+				}
+			}
+		}
+		params.Settlement = &queryValue10
+	}
+	queryValues11, querySupplied11 := input.Query["transaction_class"]
+	if querySupplied11 {
+		if len(queryValues11) == 0 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
 				Name:     "transaction_class",
 				Err:      errors.New("value is required"),
 			}
 		}
-		queryValue10 := make([]httpclient.TransactionClass, len(queryValues10))
-		for valueIndex, raw := range queryValues10 {
-			if err := parseInvocationValue(raw, true, &queryValue10[valueIndex]); err != nil {
+		queryValue11 := make([]httpclient.TransactionClass, len(queryValues11))
+		for valueIndex, raw := range queryValues11 {
+			if err := parseInvocationValue(raw, true, &queryValue11[valueIndex]); err != nil {
 				return InvocationResult{}, &InvocationInputError{
 					Location: "query",
 					Name:     "transaction_class",
@@ -6412,20 +6503,20 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 				}
 			}
 		}
-		params.TransactionClass = &queryValue10
+		params.TransactionClass = &queryValue11
 	}
-	queryValues11, querySupplied11 := input.Query["transaction_shape"]
-	if querySupplied11 {
-		if len(queryValues11) == 0 {
+	queryValues12, querySupplied12 := input.Query["transaction_shape"]
+	if querySupplied12 {
+		if len(queryValues12) == 0 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
 				Name:     "transaction_shape",
 				Err:      errors.New("value is required"),
 			}
 		}
-		queryValue11 := make([]httpclient.TransactionShapeType, len(queryValues11))
-		for valueIndex, raw := range queryValues11 {
-			if err := parseInvocationValue(raw, true, &queryValue11[valueIndex]); err != nil {
+		queryValue12 := make([]httpclient.TransactionShapeType, len(queryValues12))
+		for valueIndex, raw := range queryValues12 {
+			if err := parseInvocationValue(raw, true, &queryValue12[valueIndex]); err != nil {
 				return InvocationResult{}, &InvocationInputError{
 					Location: "query",
 					Name:     "transaction_shape",
@@ -6434,20 +6525,20 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 				}
 			}
 		}
-		params.TransactionShape = &queryValue11
+		params.TransactionShape = &queryValue12
 	}
-	queryValues12, querySupplied12 := input.Query["record_role"]
-	if querySupplied12 {
-		if len(queryValues12) == 0 {
+	queryValues13, querySupplied13 := input.Query["record_role"]
+	if querySupplied13 {
+		if len(queryValues13) == 0 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
 				Name:     "record_role",
 				Err:      errors.New("value is required"),
 			}
 		}
-		queryValue12 := make([]httpclient.RecordRole, len(queryValues12))
-		for valueIndex, raw := range queryValues12 {
-			if err := parseInvocationValue(raw, true, &queryValue12[valueIndex]); err != nil {
+		queryValue13 := make([]httpclient.RecordRole, len(queryValues13))
+		for valueIndex, raw := range queryValues13 {
+			if err := parseInvocationValue(raw, true, &queryValue13[valueIndex]); err != nil {
 				return InvocationResult{}, &InvocationInputError{
 					Location: "query",
 					Name:     "record_role",
@@ -6456,34 +6547,14 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 				}
 			}
 		}
-		params.RecordRole = &queryValue12
+		params.RecordRole = &queryValue13
 	}
-	queryValues13, querySupplied13 := input.Query["amount_min"]
-	if querySupplied13 {
-		if len(queryValues13) != 1 {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "amount_min",
-				Err:      fmt.Errorf("got %d values, want 1", len(queryValues13)),
-			}
-		}
-		var queryValue13 string
-		if err := parseInvocationValue(queryValues13[0], true, &queryValue13); err != nil {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "amount_min",
-				Value:    queryValues13[0],
-				Err:      err,
-			}
-		}
-		params.AmountMin = &queryValue13
-	}
-	queryValues14, querySupplied14 := input.Query["amount_max"]
+	queryValues14, querySupplied14 := input.Query["amount_min"]
 	if querySupplied14 {
 		if len(queryValues14) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "amount_max",
+				Name:     "amount_min",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues14)),
 			}
 		}
@@ -6491,19 +6562,19 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 		if err := parseInvocationValue(queryValues14[0], true, &queryValue14); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "amount_max",
+				Name:     "amount_min",
 				Value:    queryValues14[0],
 				Err:      err,
 			}
 		}
-		params.AmountMax = &queryValue14
+		params.AmountMin = &queryValue14
 	}
-	queryValues15, querySupplied15 := input.Query["amount_usd_min"]
+	queryValues15, querySupplied15 := input.Query["amount_max"]
 	if querySupplied15 {
 		if len(queryValues15) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "amount_usd_min",
+				Name:     "amount_max",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues15)),
 			}
 		}
@@ -6511,19 +6582,19 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 		if err := parseInvocationValue(queryValues15[0], true, &queryValue15); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "amount_usd_min",
+				Name:     "amount_max",
 				Value:    queryValues15[0],
 				Err:      err,
 			}
 		}
-		params.AmountUsdMin = &queryValue15
+		params.AmountMax = &queryValue15
 	}
-	queryValues16, querySupplied16 := input.Query["amount_usd_max"]
+	queryValues16, querySupplied16 := input.Query["amount_usd_min"]
 	if querySupplied16 {
 		if len(queryValues16) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "amount_usd_max",
+				Name:     "amount_usd_min",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues16)),
 			}
 		}
@@ -6531,39 +6602,39 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 		if err := parseInvocationValue(queryValues16[0], true, &queryValue16); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "amount_usd_max",
+				Name:     "amount_usd_min",
 				Value:    queryValues16[0],
 				Err:      err,
 			}
 		}
-		params.AmountUsdMax = &queryValue16
+		params.AmountUsdMin = &queryValue16
 	}
-	queryValues17, querySupplied17 := input.Query["initiated_date_from"]
+	queryValues17, querySupplied17 := input.Query["amount_usd_max"]
 	if querySupplied17 {
 		if len(queryValues17) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "initiated_date_from",
+				Name:     "amount_usd_max",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues17)),
 			}
 		}
-		var queryValue17 openapi_types.Date
+		var queryValue17 string
 		if err := parseInvocationValue(queryValues17[0], true, &queryValue17); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "initiated_date_from",
+				Name:     "amount_usd_max",
 				Value:    queryValues17[0],
 				Err:      err,
 			}
 		}
-		params.InitiatedDateFrom = &queryValue17
+		params.AmountUsdMax = &queryValue17
 	}
-	queryValues18, querySupplied18 := input.Query["initiated_date_to"]
+	queryValues18, querySupplied18 := input.Query["initiated_date_from"]
 	if querySupplied18 {
 		if len(queryValues18) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "initiated_date_to",
+				Name:     "initiated_date_from",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues18)),
 			}
 		}
@@ -6571,39 +6642,39 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 		if err := parseInvocationValue(queryValues18[0], true, &queryValue18); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "initiated_date_to",
+				Name:     "initiated_date_from",
 				Value:    queryValues18[0],
 				Err:      err,
 			}
 		}
-		params.InitiatedDateTo = &queryValue18
+		params.InitiatedDateFrom = &queryValue18
 	}
-	queryValues19, querySupplied19 := input.Query["pending_date_from"]
+	queryValues19, querySupplied19 := input.Query["initiated_date_to"]
 	if querySupplied19 {
 		if len(queryValues19) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "pending_date_from",
+				Name:     "initiated_date_to",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues19)),
 			}
 		}
-		var queryValue19 time.Time
+		var queryValue19 openapi_types.Date
 		if err := parseInvocationValue(queryValues19[0], true, &queryValue19); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "pending_date_from",
+				Name:     "initiated_date_to",
 				Value:    queryValues19[0],
 				Err:      err,
 			}
 		}
-		params.PendingDateFrom = &queryValue19
+		params.InitiatedDateTo = &queryValue19
 	}
-	queryValues20, querySupplied20 := input.Query["pending_date_to"]
+	queryValues20, querySupplied20 := input.Query["pending_date_from"]
 	if querySupplied20 {
 		if len(queryValues20) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "pending_date_to",
+				Name:     "pending_date_from",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues20)),
 			}
 		}
@@ -6611,19 +6682,19 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 		if err := parseInvocationValue(queryValues20[0], true, &queryValue20); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "pending_date_to",
+				Name:     "pending_date_from",
 				Value:    queryValues20[0],
 				Err:      err,
 			}
 		}
-		params.PendingDateTo = &queryValue20
+		params.PendingDateFrom = &queryValue20
 	}
-	queryValues21, querySupplied21 := input.Query["posted_date_from"]
+	queryValues21, querySupplied21 := input.Query["pending_date_to"]
 	if querySupplied21 {
 		if len(queryValues21) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "posted_date_from",
+				Name:     "pending_date_to",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues21)),
 			}
 		}
@@ -6631,19 +6702,19 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 		if err := parseInvocationValue(queryValues21[0], true, &queryValue21); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "posted_date_from",
+				Name:     "pending_date_to",
 				Value:    queryValues21[0],
 				Err:      err,
 			}
 		}
-		params.PostedDateFrom = &queryValue21
+		params.PendingDateTo = &queryValue21
 	}
-	queryValues22, querySupplied22 := input.Query["posted_date_to"]
+	queryValues22, querySupplied22 := input.Query["posted_date_from"]
 	if querySupplied22 {
 		if len(queryValues22) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "posted_date_to",
+				Name:     "posted_date_from",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues22)),
 			}
 		}
@@ -6651,32 +6722,52 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 		if err := parseInvocationValue(queryValues22[0], true, &queryValue22); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "posted_date_to",
+				Name:     "posted_date_from",
 				Value:    queryValues22[0],
 				Err:      err,
 			}
 		}
-		params.PostedDateTo = &queryValue22
+		params.PostedDateFrom = &queryValue22
 	}
-	queryValues23, querySupplied23 := input.Query["search"]
+	queryValues23, querySupplied23 := input.Query["posted_date_to"]
 	if querySupplied23 {
 		if len(queryValues23) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "search",
+				Name:     "posted_date_to",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues23)),
 			}
 		}
-		var queryValue23 string
+		var queryValue23 time.Time
 		if err := parseInvocationValue(queryValues23[0], true, &queryValue23); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "search",
+				Name:     "posted_date_to",
 				Value:    queryValues23[0],
 				Err:      err,
 			}
 		}
-		params.Search = &queryValue23
+		params.PostedDateTo = &queryValue23
+	}
+	queryValues24, querySupplied24 := input.Query["search"]
+	if querySupplied24 {
+		if len(queryValues24) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "search",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues24)),
+			}
+		}
+		var queryValue24 string
+		if err := parseInvocationValue(queryValues24[0], true, &queryValue24); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "search",
+				Value:    queryValues24[0],
+				Err:      err,
+			}
+		}
+		params.Search = &queryValue24
 	}
 	response, err := client.ListTransactionsWithResponse(ctx, params)
 	if err != nil {
@@ -6780,6 +6871,29 @@ func invokeReplaceTransactionTemplate(ctx context.Context, client httpclient.Cli
 	return normalizeInvocationResult(response.Body, response.HTTPResponse)
 }
 
+func invokeRestoreTransaction(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
+	if err := validateInvocationInput(input, []string{"transaction_id"}, nil, false, false); err != nil {
+		return InvocationResult{}, err
+	}
+	var pathValue0 int64
+	if err := parseInvocationValue(input.Path[0], false, &pathValue0); err != nil {
+		return InvocationResult{}, &InvocationInputError{
+			Location: "path",
+			Name:     "transaction_id",
+			Value:    input.Path[0],
+			Err:      err,
+		}
+	}
+	response, err := client.RestoreTransactionWithResponse(ctx, pathValue0)
+	if err != nil {
+		return InvocationResult{}, err
+	}
+	if response == nil {
+		return InvocationResult{}, errors.New("generated client returned no operation response")
+	}
+	return normalizeInvocationResult(response.Body, response.HTTPResponse)
+}
+
 func invokeRestructureAccounts(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
 	if err := validateInvocationInput(input, nil, nil, true, true); err != nil {
 		return InvocationResult{}, err
@@ -6860,7 +6974,7 @@ func invokeResumeRecurringDefinition(ctx context.Context, client httpclient.Clie
 }
 
 func invokeSearchAccountJournalRecords(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"account_id"}, []string{"amount_max", "amount_min", "amount_usd_max", "amount_usd_min", "category_id", "include_expected", "include_running_balance", "initiated_date_from", "initiated_date_to", "limit", "member_id", "memo_contains", "offset", "pending_date_from", "pending_date_to", "posted_date_from", "posted_date_to", "posting_status", "reconciliation_status", "sort", "sort_dir", "tag_id"}, false, false); err != nil {
+	if err := validateInvocationInput(input, []string{"account_id"}, []string{"amount_max", "amount_min", "amount_usd_max", "amount_usd_min", "category_id", "include_running_balance", "initiated_date_from", "initiated_date_to", "lifecycle_status", "limit", "member_id", "memo_contains", "offset", "pending_date_from", "pending_date_to", "posted_date_from", "posted_date_to", "reconciliation_status", "settlement", "sort", "sort_dir", "tag_id"}, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -6933,45 +7047,45 @@ func invokeSearchAccountJournalRecords(ctx context.Context, client httpclient.Cl
 		}
 		params.MemberId = &queryValue2
 	}
-	queryValues3, querySupplied3 := input.Query["posting_status"]
+	queryValues3, querySupplied3 := input.Query["lifecycle_status"]
 	if querySupplied3 {
 		if len(queryValues3) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "posting_status",
+				Name:     "lifecycle_status",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues3)),
 			}
 		}
-		var queryValue3 httpclient.PostingStatus
+		var queryValue3 httpclient.TransactionLifecycleStatus
 		if err := parseInvocationValue(queryValues3[0], true, &queryValue3); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "posting_status",
+				Name:     "lifecycle_status",
 				Value:    queryValues3[0],
 				Err:      err,
 			}
 		}
-		params.PostingStatus = &queryValue3
+		params.LifecycleStatus = &queryValue3
 	}
-	queryValues4, querySupplied4 := input.Query["include_expected"]
+	queryValues4, querySupplied4 := input.Query["settlement"]
 	if querySupplied4 {
 		if len(queryValues4) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "include_expected",
+				Name:     "settlement",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues4)),
 			}
 		}
-		var queryValue4 bool
-		if err := parseInvocationValue(queryValues4[0], false, &queryValue4); err != nil {
+		var queryValue4 httpclient.SettlementStatus
+		if err := parseInvocationValue(queryValues4[0], true, &queryValue4); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "include_expected",
+				Name:     "settlement",
 				Value:    queryValues4[0],
 				Err:      err,
 			}
 		}
-		params.IncludeExpected = &queryValue4
+		params.Settlement = &queryValue4
 	}
 	queryValues5, querySupplied5 := input.Query["reconciliation_status"]
 	if querySupplied5 {
@@ -7324,7 +7438,7 @@ func invokeSearchAccountJournalRecords(ctx context.Context, client httpclient.Cl
 }
 
 func invokeSearchJournalRecords(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, []string{"account_fqn_prefix", "account_id", "amount_max", "amount_min", "amount_usd_max", "amount_usd_min", "category_id", "include_expected", "initiated_date_from", "initiated_date_to", "limit", "member_id", "memo_contains", "offset", "pending_date_from", "pending_date_to", "posted_date_from", "posted_date_to", "posting_status", "reconciliation_status", "record_role", "sort", "sort_dir", "tag_id"}, false, false); err != nil {
+	if err := validateInvocationInput(input, nil, []string{"account_fqn_prefix", "account_id", "amount_max", "amount_min", "amount_usd_max", "amount_usd_min", "category_id", "initiated_date_from", "initiated_date_to", "lifecycle_status", "limit", "member_id", "memo_contains", "offset", "pending_date_from", "pending_date_to", "posted_date_from", "posted_date_to", "reconciliation_status", "record_role", "settlement", "sort", "sort_dir", "tag_id"}, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	params := &httpclient.SearchJournalRecordsParams{}
@@ -7428,45 +7542,45 @@ func invokeSearchJournalRecords(ctx context.Context, client httpclient.ClientWit
 		}
 		params.MemberId = &queryValue4
 	}
-	queryValues5, querySupplied5 := input.Query["posting_status"]
+	queryValues5, querySupplied5 := input.Query["lifecycle_status"]
 	if querySupplied5 {
 		if len(queryValues5) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "posting_status",
+				Name:     "lifecycle_status",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues5)),
 			}
 		}
-		var queryValue5 httpclient.PostingStatus
+		var queryValue5 httpclient.TransactionLifecycleStatus
 		if err := parseInvocationValue(queryValues5[0], true, &queryValue5); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "posting_status",
+				Name:     "lifecycle_status",
 				Value:    queryValues5[0],
 				Err:      err,
 			}
 		}
-		params.PostingStatus = &queryValue5
+		params.LifecycleStatus = &queryValue5
 	}
-	queryValues6, querySupplied6 := input.Query["include_expected"]
+	queryValues6, querySupplied6 := input.Query["settlement"]
 	if querySupplied6 {
 		if len(queryValues6) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "include_expected",
+				Name:     "settlement",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues6)),
 			}
 		}
-		var queryValue6 bool
-		if err := parseInvocationValue(queryValues6[0], false, &queryValue6); err != nil {
+		var queryValue6 httpclient.SettlementStatus
+		if err := parseInvocationValue(queryValues6[0], true, &queryValue6); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "include_expected",
+				Name:     "settlement",
 				Value:    queryValues6[0],
 				Err:      err,
 			}
 		}
-		params.IncludeExpected = &queryValue6
+		params.Settlement = &queryValue6
 	}
 	queryValues7, querySupplied7 := input.Query["reconciliation_status"]
 	if querySupplied7 {

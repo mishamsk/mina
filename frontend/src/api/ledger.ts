@@ -1,8 +1,7 @@
 import {
-  defaultTransactionPostingStatuses,
   normalizeTransactionFilters,
   type TransactionFilters,
-  transactionPostingStatuses,
+  transactionLifecycleStatuses,
 } from "@/models/transaction-filters";
 
 import type {
@@ -19,9 +18,11 @@ import type {
   CreateTagRequest,
   CreateTransactionRequest,
   CreateTransferTransactionRequest,
+  ReconciliationStatus,
   RecurringOccurrence,
   RestructureRequest,
   SetHiddenByPathRequest,
+  SettlementStatus,
   Transaction,
   UpdateAccountRequest,
   UpdateCategoryRequest,
@@ -32,8 +33,10 @@ import type {
 } from "./generated";
 import {
   bulkCategorizeJournalRecords,
-  bulkUpdateJournalRecordStatuses,
+  bulkSetJournalRecordReconciliation,
+  bulkSetJournalRecordSettlement,
   bulkUpdateJournalRecordTags,
+  cancelTransaction,
   classifyTransaction,
   confirmRecurringOccurrence as confirmGeneratedRecurringOccurrence,
   createAccount as createGeneratedAccount,
@@ -70,6 +73,7 @@ import {
   listTags,
   listTransactions,
   replaceTransaction as replaceGeneratedTransaction,
+  restoreTransaction,
   restructureAccounts as restructureGeneratedAccounts,
   restructureCategories as restructureGeneratedCategories,
   restructureTags as restructureGeneratedTags,
@@ -93,7 +97,6 @@ export interface TransactionPageParams {
 }
 
 export interface AccountRecordsPageParams {
-  readonly includeExpected: boolean;
   readonly includeRunningBalance: boolean;
   readonly limit: number;
   readonly offset: number;
@@ -101,7 +104,6 @@ export interface AccountRecordsPageParams {
 
 export interface GroupRecordsPageParams {
   readonly accountFqnPrefix: string;
-  readonly includeExpected: boolean;
   readonly limit: number;
   readonly offset: number;
 }
@@ -151,25 +153,10 @@ const listAllAccountsForLookups = async () => {
   };
 };
 
-const dateTimeBound = (date: string, boundary: "end" | "start"): string => {
-  const [year = "0", month = "1", day = "1"] = date.split("-");
-  const localDate =
-    boundary === "start"
-      ? new Date(Number(year), Number(month) - 1, Number(day), 0, 0, 0, 0)
-      : new Date(Number(year), Number(month) - 1, Number(day), 23, 59, 59, 999);
-  return localDate.toISOString();
-};
-
 const transactionFilterQuery = (
   filters: Partial<TransactionFilters> | undefined,
 ) => {
   const normalized = normalizeTransactionFilters(filters);
-  const postingStatuses =
-    normalized.statuses.length > 0
-      ? normalized.statuses
-      : filters === undefined || normalized.hideExpected
-        ? transactionPostingStatuses
-        : defaultTransactionPostingStatuses;
   return {
     ...(normalized.accountIds.length > 0
       ? { account_id: [...normalized.accountIds] }
@@ -203,20 +190,18 @@ const transactionFilterQuery = (
     ...(normalized.memberIds.length > 0
       ? { member_id: [...normalized.memberIds] }
       : {}),
-    ...(normalized.pendingFrom
-      ? { pending_date_from: dateTimeBound(normalized.pendingFrom, "start") }
-      : {}),
-    ...(normalized.pendingTo
-      ? { pending_date_to: dateTimeBound(normalized.pendingTo, "end") }
-      : {}),
-    ...(normalized.postedFrom
-      ? { posted_date_from: dateTimeBound(normalized.postedFrom, "start") }
-      : {}),
-    ...(normalized.postedTo
-      ? { posted_date_to: dateTimeBound(normalized.postedTo, "end") }
-      : {}),
     ...(normalized.search ? { search: normalized.search } : {}),
-    posting_status: [...postingStatuses],
+    ...(filters
+      ? {
+          lifecycle_status:
+            normalized.lifecycleStatuses.length > 0
+              ? [...normalized.lifecycleStatuses]
+              : [...transactionLifecycleStatuses],
+        }
+      : {}),
+    ...(normalized.settlements.length > 0
+      ? { settlement: [...normalized.settlements] }
+      : {}),
     ...(normalized.tagIds.length > 0 ? { tag_id: [...normalized.tagIds] } : {}),
   };
 };
@@ -258,7 +243,6 @@ export const fetchAccountRecordsPage = (
       account_id: accountId,
     },
     query: {
-      include_expected: params.includeExpected,
       include_running_balance: params.includeRunningBalance,
       limit: params.limit,
       offset: params.offset,
@@ -271,7 +255,6 @@ export const fetchGroupRecordsPage = (params: GroupRecordsPageParams) =>
   searchJournalRecords({
     query: {
       account_fqn_prefix: params.accountFqnPrefix,
-      include_expected: params.includeExpected,
       limit: params.limit,
       offset: params.offset,
       sort: "initiated_date",
@@ -315,6 +298,12 @@ export const deleteTransactionById = (transactionId: number) =>
       transaction_id: transactionId,
     },
   });
+
+export const cancelTransactionById = (transactionId: number) =>
+  cancelTransaction({ path: { transaction_id: transactionId } });
+
+export const restoreTransactionById = (transactionId: number) =>
+  restoreTransaction({ path: { transaction_id: transactionId } });
 
 export const fetchLedgerLookups = async () => {
   const [accounts, categories, tags, members] = await Promise.all([
@@ -739,6 +728,7 @@ export const confirmRecurringOccurrenceById = (
   occurrence: Pick<RecurringOccurrence, "recurring_occurrence_id">,
 ) =>
   confirmGeneratedRecurringOccurrence({
+    body: { status: "posted" },
     path: {
       recurring_occurrence_id: occurrence.recurring_occurrence_id,
     },
@@ -1024,13 +1014,32 @@ export const updateJournalRecordsTags = (
   });
 };
 
-export const updateJournalRecordPostingStatus = (
+export const updateJournalRecordSettlement = (
   recordId: number,
-  postingStatus: "cancelled" | "pending" | "posted",
+  settlement: SettlementStatus,
 ) =>
-  bulkUpdateJournalRecordStatuses({
+  bulkSetJournalRecordSettlement({
     body: {
-      posting_status: postingStatus,
       record_ids: [recordId],
+      settlement,
+    },
+  });
+
+export const updateJournalRecordsSettlement = (
+  recordIds: readonly number[],
+  settlement: SettlementStatus,
+) =>
+  bulkSetJournalRecordSettlement({
+    body: { record_ids: [...recordIds], settlement },
+  });
+
+export const updateJournalRecordsReconciliation = (
+  recordIds: readonly number[],
+  reconciliationStatus: ReconciliationStatus,
+) =>
+  bulkSetJournalRecordReconciliation({
+    body: {
+      reconciliation_status: reconciliationStatus,
+      record_ids: [...recordIds],
     },
   });

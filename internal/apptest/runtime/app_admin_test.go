@@ -222,7 +222,6 @@ func TestSeedDemoRefreshesWarmedReferenceCaches(t *testing.T) {
 				CategoryId:           apptest.Int64Ptr(900003),
 				Currency:             "USD",
 				MemberId:             &missingMemberID,
-				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.WritableSourceManual,
 				TagIds:               apptest.Int64SlicePtr(900005),
@@ -232,7 +231,6 @@ func TestSeedDemoRefreshesWarmedReferenceCaches(t *testing.T) {
 				Amount:               "12.34",
 				CategoryId:           apptest.Int64Ptr(900003),
 				Currency:             "USD",
-				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.WritableSourceManual,
 			},
@@ -263,7 +261,7 @@ func TestSeedDemoRefreshesWarmedReferenceCaches(t *testing.T) {
 				Amount:               "-12.34",
 				Currency:             "USD",
 				MemberId:             &refs.memberID,
-				PostingStatus:        httpclient.PostingStatusPosted,
+				Settlement:           apptest.PostedSettlement(),
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.WritableSourceManual,
 				TagIds:               &tagIDs,
@@ -273,7 +271,6 @@ func TestSeedDemoRefreshesWarmedReferenceCaches(t *testing.T) {
 				Amount:               "12.34",
 				CategoryId:           apptest.Int64Ptr(refs.categoryID),
 				Currency:             "USD",
-				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.WritableSourceManual,
 			},
@@ -417,8 +414,8 @@ func assertSeededRecurringDemoData(t *testing.T, client *apptest.Client, seeded 
 		t.Fatalf("listed recurring definitions = %d, want %d", len(definitions.JSON200.RecurringDefinitions), seeded.RecurringDefinitions)
 	}
 
-	expectedStatus := []httpclient.PostingStatus{httpclient.PostingStatusExpected}
-	expectedTransactions, err := client.REST().ListTransactionsWithResponse(ctx, &httpclient.ListTransactionsParams{PostingStatus: &expectedStatus})
+	expectedStatus := []httpclient.TransactionLifecycleStatus{httpclient.TransactionLifecycleStatusExpected}
+	expectedTransactions, err := client.REST().ListTransactionsWithResponse(ctx, &httpclient.ListTransactionsParams{LifecycleStatus: &expectedStatus})
 	if err != nil {
 		t.Fatalf("list expected seeded transactions request: %v", err)
 	}
@@ -432,8 +429,11 @@ func assertSeededRecurringDemoData(t *testing.T, client *apptest.Client, seeded 
 		if transaction.RecurringOccurrenceId == nil {
 			t.Fatalf("expected seeded transaction %d missing recurring occurrence", transaction.TransactionId)
 		}
+		if transaction.LifecycleStatus != httpclient.TransactionLifecycleStatusExpected {
+			t.Fatalf("expected seeded transaction lifecycle = %q, want expected", transaction.LifecycleStatus)
+		}
 		for _, record := range transaction.Records {
-			if record.PostingStatus != httpclient.PostingStatusExpected || record.Source != httpclient.RecurringTemplate {
+			if record.LifecycleStatus != httpclient.TransactionLifecycleStatusExpected || record.Source != httpclient.RecurringTemplate {
 				t.Fatalf("expected seeded transaction record = %+v, want expected recurring-template record", record)
 			}
 		}
@@ -517,7 +517,7 @@ func assertSeededRecurringDemoSeries(t *testing.T, definitions []httpclient.Recu
 	}
 	occurrenceDatesByDefinitionFQN := map[string][]string{}
 	for _, occurrence := range occurrences {
-		if occurrence.Status != httpclient.Expected {
+		if occurrence.Status != httpclient.RecurringOccurrenceStatusExpected {
 			t.Fatalf("seeded recurring occurrence = %+v, want EXPECTED status", occurrence)
 		}
 		if occurrence.GeneratedTransactionId == nil {
@@ -782,10 +782,15 @@ func assertDemoSemanticCoverage(
 		hasClawbackOutflow := false
 		wantPostedDate := transaction.InitiatedDate.Add(24*time.Hour - time.Second)
 		for _, record := range transaction.Records {
-			if record.PostedDate == nil || !record.PostedDate.Equal(wantPostedDate) {
+			if record.Settlement == nil {
+				if record.PendingDate != nil || record.PostedDate != nil {
+					t.Fatalf("seeded non-balance record %d dates = %v/%v, want nil/nil", record.RecordId, record.PendingDate, record.PostedDate)
+				}
+			} else if *record.Settlement != httpclient.SettlementStatusPosted || record.PostedDate == nil || !record.PostedDate.Equal(wantPostedDate) {
 				t.Fatalf(
-					"seeded record %d posted_date = %v, want initiated-date end-of-day %v",
+					"seeded balance record %d settlement/posted_date = %v/%v, want posted/initiated-date end-of-day %v",
 					record.RecordId,
+					record.Settlement,
 					record.PostedDate,
 					wantPostedDate,
 				)

@@ -21,8 +21,7 @@ export interface SpendMerchantDraft {
   readonly sourceRecordId?: number;
 }
 
-export type JournalRecordDraftPostingStatus =
-  "cancelled" | "expected" | "pending" | "posted";
+export type JournalRecordDraftSettlement = "pending" | "posted";
 
 export type JournalRecordDraftReconciliationStatus =
   "reconciled" | "unreconciled";
@@ -63,11 +62,11 @@ export interface JournalRecordRowDraft {
   readonly sourceCurrency: string | undefined;
   readonly sourceExternalId: string | null | undefined;
   readonly sourceExternalSystem: string | null | undefined;
-  readonly pendingDateTime: string;
-  readonly postedDateTime: string;
-  readonly postingStatus: JournalRecordDraftPostingStatus;
+  readonly sourcePendingDate: string | null | undefined;
+  readonly sourcePostedDate: string | null | undefined;
+  readonly sourceSettlement: JournalRecordDraftSettlement | null | undefined;
+  readonly settlement: JournalRecordDraftSettlement;
   readonly reconciliationStatus: JournalRecordDraftReconciliationStatus;
-  readonly showDates: boolean;
   readonly source: "imported" | "manual";
   readonly tagIds: readonly number[];
 }

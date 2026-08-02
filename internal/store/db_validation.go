@@ -15,12 +15,11 @@ import (
 
 	"github.com/mishamsk/mina/internal/services"
 	"github.com/mishamsk/mina/internal/services/dbvalidation"
-	"github.com/mishamsk/mina/internal/services/transactions"
 	"github.com/mishamsk/mina/internal/services/values"
 )
 
 // PinnedMigrationContentHash is the validator-reviewed sha256 of embedded migration SQL.
-const PinnedMigrationContentHash = "fa5c2918db86a99a64d01ed10d85bb53906a350c40e000dd9fc5931a040a4cc5"
+const PinnedMigrationContentHash = "4b8c4d56dafbbed4eedb5d20c318787e71241780c791d7f075a914c2a40f52c5"
 
 const validationTrimSpaceCharactersSQL = `' ' || ` +
 	`chr(9) || chr(10) || chr(11) || chr(12) || chr(13) || ` +
@@ -194,8 +193,8 @@ func (s *DBValidationStore) InvariantFindings(ctx context.Context, missingUnique
 		s.fixedSystemAccountFindings,
 		s.unbalancedTransactionFindings,
 		s.shortTransactionFindings,
-		s.mixedCancellationTransactionFindings,
-		s.mixedExpectedTransactionFindings,
+		s.lifecycleSettlementFindings,
+		s.cancelledTransactionSettlementFindings,
 		s.accountCurrencyFindings,
 		s.unbalancedRecurringDefinitionFindings,
 		s.shortRecurringDefinitionFindings,
@@ -504,16 +503,28 @@ ORDER BY rd.recurring_definition_id`,
 func (s *DBValidationStore) expectedTransactionOccurrenceFindings(ctx context.Context) ([]dbvalidation.Finding, error) {
 	rows, err := s.db.query().QueryContext(
 		ctx,
-		`SELECT t.transaction_id
+		`SELECT t.transaction_id,
+	CASE
+		WHEN t.lifecycle_status = CAST('EXPECTED' AS `+s.db.accountingName("transaction_lifecycle_status")+`)
+			AND ro.recurring_occurrence_id IS NULL THEN 'expected lifecycle has no recurring occurrence'
+		WHEN t.lifecycle_status = CAST('EXPECTED' AS `+s.db.accountingName("transaction_lifecycle_status")+`)
+			AND ro.status <> CAST('EXPECTED' AS `+s.db.accountingName("recurring_occurrence_status")+`) THEN 'expected lifecycle disagrees with occurrence status'
+		WHEN t.lifecycle_status IN (
+				CAST('ACTIVE' AS `+s.db.accountingName("transaction_lifecycle_status")+`),
+				CAST('CANCELLED' AS `+s.db.accountingName("transaction_lifecycle_status")+`)
+			)
+			AND ro.status <> CAST('CONFIRMED' AS `+s.db.accountingName("recurring_occurrence_status")+`) THEN 'reviewed lifecycle disagrees with occurrence status'
+		ELSE NULL
+	END AS violation
 FROM `+s.db.accountingName("transaction")+` AS t
-JOIN `+s.db.accountingName("journal_record")+` AS jr
-  ON jr.transaction_id = t.transaction_id
+LEFT JOIN `+s.db.accountingName("recurring_occurrence")+` AS ro
+  ON ro.recurring_occurrence_id = t.recurring_occurrence_id
 WHERE t.tombstoned_at IS NULL
-  AND t.recurring_occurrence_id IS NULL
-  AND jr.tombstoned_at IS NULL
-  AND jr.posting_status = CAST('EXPECTED' AS `+s.db.accountingName("posting_status")+`)
-  AND jr.source = CAST('RECURRING_TEMPLATE' AS `+s.db.accountingName("source")+`)
-GROUP BY t.transaction_id
+	AND (
+		t.recurring_occurrence_id IS NOT NULL
+		OR t.lifecycle_status = CAST('EXPECTED' AS `+s.db.accountingName("transaction_lifecycle_status")+`)
+	)
+	AND violation IS NOT NULL
 ORDER BY t.transaction_id`)
 	if err != nil {
 		return nil, fmt.Errorf("check expected transaction occurrence references: %w", err)
@@ -525,10 +536,11 @@ ORDER BY t.transaction_id`)
 	findings := []dbvalidation.Finding{}
 	for rows.Next() {
 		var transactionID int64
-		if err := rows.Scan(&transactionID); err != nil {
+		var violation string
+		if err := rows.Scan(&transactionID, &violation); err != nil {
 			return nil, fmt.Errorf("scan expected transaction occurrence finding: %w", err)
 		}
-		findings = append(findings, invariantFinding(dbvalidation.SeverityError, fmt.Sprintf("expected transaction %d has no recurring occurrence", transactionID)))
+		findings = append(findings, invariantFinding(dbvalidation.SeverityError, fmt.Sprintf("transaction %d %s", transactionID, violation)))
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate expected transaction occurrence findings: %w", err)
@@ -537,57 +549,28 @@ ORDER BY t.transaction_id`)
 	return findings, nil
 }
 
-func (s *DBValidationStore) mixedCancellationTransactionFindings(ctx context.Context) ([]dbvalidation.Finding, error) {
-	return s.mixedPostingStatusTransactionFindings(
-		ctx,
-		transactions.PostingStatusCancelled,
-		"check transaction cancellation statuses",
-		"scan transaction cancellation-status finding",
-		"iterate transaction cancellation-status findings",
-		func(transactionID int64) string {
-			return fmt.Sprintf("transaction %d mixes cancelled and non-cancelled active records", transactionID)
-		},
-	)
-}
-
-func (s *DBValidationStore) mixedExpectedTransactionFindings(ctx context.Context) ([]dbvalidation.Finding, error) {
-	return s.mixedPostingStatusTransactionFindings(
-		ctx,
-		transactions.PostingStatusExpected,
-		"check transaction expected statuses",
-		"scan transaction expected-status finding",
-		"iterate transaction expected-status findings",
-		func(transactionID int64) string {
-			return fmt.Sprintf("transaction %d mixes expected and non-expected active records", transactionID)
-		},
-	)
-}
-
-func (s *DBValidationStore) mixedPostingStatusTransactionFindings(
-	ctx context.Context,
-	status transactions.PostingStatus,
-	checkErr string,
-	scanErr string,
-	iterateErr string,
-	message func(int64) string,
-) ([]dbvalidation.Finding, error) {
+func (s *DBValidationStore) cancelledTransactionSettlementFindings(ctx context.Context) ([]dbvalidation.Finding, error) {
 	rows, err := s.db.query().QueryContext(
 		ctx,
 		`SELECT t.transaction_id
 FROM `+s.db.accountingName("transaction")+` AS t
-JOIN `+s.db.accountingName("journal_record")+` AS jr
+LEFT JOIN `+s.db.accountingName("journal_record")+` AS jr
   ON jr.transaction_id = t.transaction_id
+ AND jr.tombstoned_at IS NULL
+LEFT JOIN `+s.db.accountingName("account")+` AS a
+  ON a.account_id = jr.account_id
 WHERE t.tombstoned_at IS NULL
-  AND jr.tombstoned_at IS NULL
+  AND t.lifecycle_status = CAST('CANCELLED' AS `+s.db.accountingName("transaction_lifecycle_status")+`)
 GROUP BY t.transaction_id
-HAVING COUNT(*) FILTER (WHERE jr.posting_status = CAST(? AS `+s.db.accountingName("posting_status")+`)) > 0
-   AND COUNT(*) FILTER (WHERE jr.posting_status <> CAST(? AS `+s.db.accountingName("posting_status")+`)) > 0
-ORDER BY t.transaction_id`,
-		enumValue(status),
-		enumValue(status),
-	)
+HAVING COUNT(*) FILTER (
+  WHERE a.account_type IN (
+    CAST('OWNED' AS `+s.db.accountingName("account_type")+`),
+    CAST('PARTY' AS `+s.db.accountingName("account_type")+`)
+  )
+) = 0
+ORDER BY t.transaction_id`)
 	if err != nil {
-		return nil, fmt.Errorf("%s: %w", checkErr, err)
+		return nil, fmt.Errorf("check cancelled transaction settlement: %w", err)
 	}
 	defer func() {
 		_ = rows.Close()
@@ -597,12 +580,64 @@ ORDER BY t.transaction_id`,
 	for rows.Next() {
 		var transactionID int64
 		if err := rows.Scan(&transactionID); err != nil {
-			return nil, fmt.Errorf("%s: %w", scanErr, err)
+			return nil, fmt.Errorf("scan cancelled transaction settlement finding: %w", err)
 		}
-		findings = append(findings, invariantFinding(dbvalidation.SeverityError, message(transactionID)))
+		findings = append(findings, invariantFinding(dbvalidation.SeverityError, fmt.Sprintf("cancelled transaction %d has no balance records", transactionID)))
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("%s: %w", iterateErr, err)
+		return nil, fmt.Errorf("iterate cancelled transaction settlement findings: %w", err)
+	}
+
+	return findings, nil
+}
+
+func (s *DBValidationStore) lifecycleSettlementFindings(ctx context.Context) ([]dbvalidation.Finding, error) {
+	rows, err := s.db.query().QueryContext(
+		ctx,
+		`SELECT t.transaction_id, jr.record_id,
+	CASE
+		WHEN a.account_type IN (CAST('FLOW' AS `+s.db.accountingName("account_type")+`), CAST('SYSTEM' AS `+s.db.accountingName("account_type")+`))
+			AND (jr.pending_date IS NOT NULL OR jr.posted_date IS NOT NULL) THEN 'flow/system record has settlement dates'
+		WHEN t.lifecycle_status = CAST('EXPECTED' AS `+s.db.accountingName("transaction_lifecycle_status")+`)
+			AND a.account_type IN (CAST('OWNED' AS `+s.db.accountingName("account_type")+`), CAST('PARTY' AS `+s.db.accountingName("account_type")+`))
+			AND (jr.pending_date IS NOT NULL OR jr.posted_date IS NOT NULL) THEN 'expected balance record has settlement dates'
+		WHEN t.lifecycle_status = CAST('ACTIVE' AS `+s.db.accountingName("transaction_lifecycle_status")+`)
+			AND a.account_type IN (CAST('OWNED' AS `+s.db.accountingName("account_type")+`), CAST('PARTY' AS `+s.db.accountingName("account_type")+`))
+			AND jr.pending_date IS NULL AND jr.posted_date IS NULL THEN 'active balance record has no settlement date'
+		WHEN t.lifecycle_status = CAST('CANCELLED' AS `+s.db.accountingName("transaction_lifecycle_status")+`)
+			AND a.account_type IN (CAST('OWNED' AS `+s.db.accountingName("account_type")+`), CAST('PARTY' AS `+s.db.accountingName("account_type")+`))
+			AND (jr.pending_date IS NULL OR jr.posted_date IS NOT NULL) THEN 'cancelled balance record is not pending'
+		WHEN jr.pending_date IS NOT NULL AND jr.posted_date IS NOT NULL AND jr.posted_date < jr.pending_date THEN 'posted_date precedes pending_date'
+		ELSE NULL
+	END AS violation
+FROM `+s.db.accountingName("transaction")+` AS t
+JOIN `+s.db.accountingName("journal_record")+` AS jr
+  ON jr.transaction_id = t.transaction_id
+JOIN `+s.db.accountingName("account")+` AS a
+  ON a.account_id = jr.account_id
+WHERE t.tombstoned_at IS NULL
+  AND jr.tombstoned_at IS NULL
+	  AND violation IS NOT NULL
+ORDER BY t.transaction_id, jr.record_id`)
+	if err != nil {
+		return nil, fmt.Errorf("check lifecycle settlement invariants: %w", err)
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	findings := []dbvalidation.Finding{}
+	for rows.Next() {
+		var transactionID int64
+		var recordID int64
+		var violation string
+		if err := rows.Scan(&transactionID, &recordID, &violation); err != nil {
+			return nil, fmt.Errorf("scan lifecycle settlement finding: %w", err)
+		}
+		findings = append(findings, invariantFinding(dbvalidation.SeverityError, fmt.Sprintf("transaction %d record %d %s", transactionID, recordID, violation)))
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate lifecycle settlement findings: %w", err)
 	}
 
 	return findings, nil

@@ -463,6 +463,7 @@ export const RecurringPageContent = ({
                           opener,
                           () =>
                             confirmNextRecurringDefinition({
+                              body: { status: "posted" },
                               path: {
                                 recurring_definition_id:
                                   definition.recurring_definition_id,

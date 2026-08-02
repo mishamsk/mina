@@ -159,13 +159,12 @@ func (s *AccountStore) ListBalances(ctx context.Context, opts accounts.BalanceLi
 	rows, err := s.db.query().QueryContext(
 		ctx,
 		`WITH active_records AS (
-	SELECT jr.account_id, jr.currency, jr.amount, jr.amount_usd, jr.posting_status
+	SELECT jr.account_id, jr.currency, jr.amount, jr.amount_usd, jr.posted_date
 	FROM `+s.db.accountingName("journal_record")+` jr
 	JOIN `+s.db.accountingName("transaction")+` tx ON tx.transaction_id = jr.transaction_id
 	WHERE jr.tombstoned_at IS NULL
 	  AND tx.tombstoned_at IS NULL
-	  AND jr.posting_status <> CAST('CANCELLED' AS `+s.db.accountingName("posting_status")+`)
-	  AND jr.posting_status <> CAST('EXPECTED' AS `+s.db.accountingName("posting_status")+`)
+	  AND tx.lifecycle_status = CAST('ACTIVE' AS `+s.db.accountingName("transaction_lifecycle_status")+`)
 )
 SELECT a.account_id,
        COALESCE(ar.currency, a.currency) AS currency,
@@ -175,7 +174,7 @@ SELECT a.account_id,
            ELSE CAST(0 AS DECIMAL(18,8))
        END) AS DECIMAL(18,8)), CAST(0 AS DECIMAL(18,8))) AS current_balance_usd,
        COALESCE(CAST(SUM(CASE
-           WHEN ar.posting_status = CAST('POSTED' AS `+s.db.accountingName("posting_status")+`) THEN ar.amount
+	           WHEN ar.posted_date IS NOT NULL THEN ar.amount
            ELSE CAST(0 AS DECIMAL(18,8))
        END) AS DECIMAL(18,8)), CAST(0 AS DECIMAL(18,8))) AS posted_balance,
        COALESCE(CAST(SUM(CASE

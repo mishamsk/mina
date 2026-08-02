@@ -2101,6 +2101,12 @@ paths:
       tags:
         - recurring
       summary: Confirm the next recurring occurrence early.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SettlementIntent"
       responses:
         "401":
           $ref: "#/components/responses/Unauthenticated"
@@ -2311,13 +2317,19 @@ paths:
       tags:
         - recurring
       summary: Confirm a recurring occurrence.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SettlementIntent"
       responses:
         "401":
           $ref: "#/components/responses/Unauthenticated"
         "403":
           $ref: "#/components/responses/Forbidden"
         "200":
-          description: Occurrence confirmed and generated records posted.
+          description: Occurrence confirmed and generated balance records settled.
           content:
             application/json:
               schema:
@@ -2457,16 +2469,26 @@ paths:
               type: integer
               format: int64
               minimum: 1
-        - name: posting_status
+        - name: lifecycle_status
           in: query
           required: false
-          description: Filters transactions by active record posting status. Expected transactions are excluded by default and returned only when this filter explicitly includes `expected`.
+          description: Filters transactions by lifecycle. Expected transactions are excluded by default and returned only when this filter explicitly includes `expected`.
           style: form
           explode: true
           schema:
             type: array
             items:
-              $ref: "#/components/schemas/PostingStatus"
+              $ref: "#/components/schemas/TransactionLifecycleStatus"
+        - name: settlement
+          in: query
+          required: false
+          description: Filters transactions by server-derived settlement summary.
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/TransactionSettlement"
         - name: transaction_class
           description: "Filter by one or more server-derived transaction classes."
           in: query
@@ -2672,7 +2694,7 @@ paths:
       tags:
         - transactions
       summary: Get server-computed spend and income totals for a civil month.
-      description: Aggregates active journal records with posting_status pending or posted by transaction initiated_date for the requested YYYY-MM month. Expected and cancelled records are excluded. Expense-role records increase spend, refund-role records net against spend, income-role records increase income, and clawback-role records net against income. Balance, adjustment, and exchange roles are excluded. Totals are USD equivalents; records without amount_usd are counted as unconverted for their total.
+      description: Aggregates records from active transactions by initiated_date for the requested YYYY-MM month. Expected and cancelled transactions are excluded. Expense-role records increase spend, refund-role records net against spend, income-role records increase income, and clawback-role records net against income. Balance, adjustment, and exchange roles are excluded. Totals are USD equivalents; records without amount_usd are counted as unconverted for their total.
       parameters:
         - name: month
           description: "Civil month to aggregate in YYYY-MM format."
@@ -2837,19 +2859,18 @@ paths:
             type: integer
             format: int64
             minimum: 1
-        - name: posting_status
+        - name: lifecycle_status
           in: query
           required: false
-          description: Filters records by posting status. Expected records are excluded by default and returned when this filter is explicitly `expected` or when `include_expected=true`.
+          description: Filters records by inherited transaction lifecycle. Expected records are excluded by default.
           schema:
-            $ref: "#/components/schemas/PostingStatus"
-        - name: include_expected
+            $ref: "#/components/schemas/TransactionLifecycleStatus"
+        - name: settlement
           in: query
           required: false
-          description: Includes expected records alongside ordinary matching records. Expected records remain excluded from running balances.
+          description: Filters owned and party records by server-derived settlement.
           schema:
-            type: boolean
-            default: false
+            $ref: "#/components/schemas/SettlementStatus"
         - name: reconciliation_status
           description: "Filter by reconciled or unreconciled journal-record status."
           in: query
@@ -3029,19 +3050,18 @@ paths:
             type: integer
             format: int64
             minimum: 1
-        - name: posting_status
+        - name: lifecycle_status
           in: query
           required: false
-          description: Filters account register records by posting status. Expected records are excluded by default and returned when this filter is explicitly `expected` or when `include_expected=true`.
+          description: Filters account register records by inherited transaction lifecycle. Expected records are excluded by default.
           schema:
-            $ref: "#/components/schemas/PostingStatus"
-        - name: include_expected
+            $ref: "#/components/schemas/TransactionLifecycleStatus"
+        - name: settlement
           in: query
           required: false
-          description: Includes expected records alongside ordinary matching records. Expected records remain excluded from running balances.
+          description: Filters account register records by server-derived settlement.
           schema:
-            type: boolean
-            default: false
+            $ref: "#/components/schemas/SettlementStatus"
         - name: reconciliation_status
           description: "Filter by reconciled or unreconciled journal-record status."
           in: query
@@ -3259,26 +3279,50 @@ paths:
                 $ref: "#/components/schemas/BulkRecordOperationResponse"
         "400":
           $ref: "#/components/responses/InvalidRequest"
-  /api/records/bulk/status:
+  /api/records/bulk/settlement:
     post:
-      operationId: bulkUpdateJournalRecordStatuses
+      operationId: bulkSetJournalRecordSettlement
       tags:
         - records
-      summary: Update posting and reconciliation statuses on selected journal records.
-      description: Changing posting_status to pending stamps a missing pending_date with the current UTC time and clears posted_date. Changing posting_status to posted stamps a missing posted_date with the current UTC time. Updates are rejected when they would leave any transaction with a mix of cancelled and non-cancelled active journal records, or with a mix of expected and non-expected active journal records.
+      summary: Set settlement on selected active owned or party records.
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/BulkUpdateRecordStatusRequest"
+              $ref: "#/components/schemas/BulkSetRecordSettlementRequest"
       responses:
         "401":
           $ref: "#/components/responses/Unauthenticated"
         "403":
           $ref: "#/components/responses/Forbidden"
         "200":
-          description: Record statuses updated.
+          description: Record settlement updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkRecordOperationResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+  /api/records/bulk/reconciliation:
+    post:
+      operationId: bulkSetJournalRecordReconciliation
+      tags:
+        - records
+      summary: Set reconciliation on selected active journal records.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkSetRecordReconciliationRequest"
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "200":
+          description: Record reconciliation updated.
           content:
             application/json:
               schema:
@@ -3371,7 +3415,7 @@ paths:
       tags:
         - transactions
       summary: Cancel a transaction.
-      description: Sets posting_status to cancelled on all active journal records for the transaction. The operation is idempotent for an already-cancelled transaction and does not change dates or reconciliation status.
+      description: Changes a wholly pending active transaction to cancelled. The operation is idempotent and preserves record dates and reconciliation.
       responses:
         "401":
           $ref: "#/components/responses/Unauthenticated"
@@ -3379,6 +3423,36 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "200":
           description: Transaction cancelled.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/transactions/{transaction_id}/restore:
+    parameters:
+      - name: transaction_id
+        description: "Numeric identifier of the transaction."
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+    post:
+      operationId: restoreTransaction
+      tags:
+        - transactions
+      summary: Restore a cancelled transaction to active.
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "200":
+          description: Transaction restored.
           content:
             application/json:
               schema:
@@ -4059,7 +4133,7 @@ components:
         - account_id
         - currency
         - amount
-        - posting_status
+        - settlement
         - reconciliation_status
         - source
       properties:
@@ -4106,18 +4180,11 @@ components:
           description: "Optional memo text for the journal records."
           type: string
           nullable: true
-        pending_date:
-          type: string
-          description: UTC timestamp when the record entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.
+        settlement:
+          description: Settlement intent for owned and party records; use null for flow and system records.
+          allOf:
+            - $ref: "#/components/schemas/SettlementIntent"
           nullable: true
-          format: date-time
-        posted_date:
-          type: string
-          description: UTC timestamp when the record posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.
-          nullable: true
-          format: date-time
-        posting_status:
-          $ref: "#/components/schemas/PostingStatus"
         reconciliation_status:
           $ref: "#/components/schemas/ReconciliationStatus"
         source:
@@ -4207,13 +4274,17 @@ components:
           type: integer
           format: int64
           minimum: 1
-    BulkUpdateRecordStatusRequest:
+        settlement:
+          description: Required when the target is owned or party and existing dates cannot supply a valid settlement; omit for flow or system.
+          allOf:
+            - $ref: "#/components/schemas/SettlementIntent"
+          nullable: true
+    BulkSetRecordSettlementRequest:
       type: object
       additionalProperties: false
-      minProperties: 2
-      description: Provide posting_status, reconciliation_status, or both.
       required:
         - record_ids
+        - settlement
       properties:
         record_ids:
           description: "Journal-record identifiers to update."
@@ -4224,8 +4295,24 @@ components:
             type: integer
             format: int64
             minimum: 1
-        posting_status:
-          $ref: "#/components/schemas/NonExpectedPostingStatus"
+        settlement:
+          $ref: "#/components/schemas/SettlementStatus"
+    BulkSetRecordReconciliationRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - record_ids
+        - reconciliation_status
+      properties:
+        record_ids:
+          description: "Journal-record identifiers to update."
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: integer
+            format: int64
+            minimum: 1
         reconciliation_status:
           $ref: "#/components/schemas/ReconciliationStatus"
     BulkRecordOperationResponse:
@@ -4303,18 +4390,8 @@ components:
           description: "Optional memo text for the journal records."
           type: string
           nullable: true
-        pending_date:
-          type: string
-          description: UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.
-          nullable: true
-          format: date-time
-        posted_date:
-          type: string
-          description: UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.
-          nullable: true
-          format: date-time
-        posting_status:
-          $ref: "#/components/schemas/PostingStatus"
+        settlement:
+          $ref: "#/components/schemas/SettlementIntent"
         reconciliation_status:
           $ref: "#/components/schemas/ReconciliationStatus"
     CreateIncomeTransactionRequest:
@@ -4377,18 +4454,8 @@ components:
           description: "Optional memo text for the journal records."
           type: string
           nullable: true
-        pending_date:
-          type: string
-          description: UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.
-          nullable: true
-          format: date-time
-        posted_date:
-          type: string
-          description: UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.
-          nullable: true
-          format: date-time
-        posting_status:
-          $ref: "#/components/schemas/PostingStatus"
+        settlement:
+          $ref: "#/components/schemas/SettlementIntent"
         reconciliation_status:
           $ref: "#/components/schemas/ReconciliationStatus"
     CreateRefundTransactionRequest:
@@ -4451,18 +4518,8 @@ components:
           description: "Optional memo text for the journal records."
           type: string
           nullable: true
-        pending_date:
-          type: string
-          description: UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.
-          nullable: true
-          format: date-time
-        posted_date:
-          type: string
-          description: UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.
-          nullable: true
-          format: date-time
-        posting_status:
-          $ref: "#/components/schemas/PostingStatus"
+        settlement:
+          $ref: "#/components/schemas/SettlementIntent"
         reconciliation_status:
           $ref: "#/components/schemas/ReconciliationStatus"
     CreateTransferTransactionRequest:
@@ -4519,18 +4576,8 @@ components:
           description: "Optional memo text for the journal records."
           type: string
           nullable: true
-        pending_date:
-          type: string
-          description: UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.
-          nullable: true
-          format: date-time
-        posted_date:
-          type: string
-          description: UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.
-          nullable: true
-          format: date-time
-        posting_status:
-          $ref: "#/components/schemas/PostingStatus"
+        settlement:
+          $ref: "#/components/schemas/SettlementIntent"
         reconciliation_status:
           $ref: "#/components/schemas/ReconciliationStatus"
     CreateExchangeTransactionRequest:
@@ -4598,18 +4645,8 @@ components:
           description: "Optional memo text for the journal records."
           type: string
           nullable: true
-        pending_date:
-          type: string
-          description: UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.
-          nullable: true
-          format: date-time
-        posted_date:
-          type: string
-          description: UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.
-          nullable: true
-          format: date-time
-        posting_status:
-          $ref: "#/components/schemas/PostingStatus"
+        settlement:
+          $ref: "#/components/schemas/SettlementIntent"
         reconciliation_status:
           $ref: "#/components/schemas/ReconciliationStatus"
     CreateTransactionRequest:
@@ -4903,11 +4940,6 @@ components:
         memo:
           description: "Optional memo text for the journal records."
           type: string
-          nullable: true
-        posting_status:
-          description: "Posting-status value or optional template default for the journal record."
-          allOf:
-            - $ref: "#/components/schemas/NonExpectedPostingStatus"
           nullable: true
         reconciliation_status:
           description: "Reconciliation-status value or optional template default for the journal record."
@@ -5466,7 +5498,8 @@ components:
         - category_id
         - record_role
         - tag_ids
-        - posting_status
+        - lifecycle_status
+        - settlement
         - reconciliation_status
         - source
         - created_at
@@ -5535,8 +5568,13 @@ components:
           description: UTC timestamp when the record posted; null until the record reaches the posted stage.
           nullable: true
           format: date-time
-        posting_status:
-          $ref: "#/components/schemas/PostingStatus"
+        lifecycle_status:
+          $ref: "#/components/schemas/TransactionLifecycleStatus"
+        settlement:
+          description: Server-derived settlement for owned and party records; null for flow and system records and date-free expected records.
+          allOf:
+            - $ref: "#/components/schemas/SettlementStatus"
+          nullable: true
         reconciliation_status:
           $ref: "#/components/schemas/ReconciliationStatus"
         source:
@@ -5573,21 +5611,45 @@ components:
           format: int64
           minimum: 0
           description: Count of matching journal records before limit and offset are applied.
-    PostingStatus:
-      description: "Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates."
+    TransactionLifecycleStatus:
+      description: "Transaction lifecycle, independent from balance-record settlement and tombstoning."
       type: string
       enum:
+        - active
         - expected
-        - pending
-        - posted
         - cancelled
-    NonExpectedPostingStatus:
-      description: "Non-expected posting status accepted by bulk status updates."
+    SettlementStatus:
+      description: "Server-derived balance-record settlement."
       type: string
       enum:
         - pending
         - posted
-        - cancelled
+    TransactionSettlement:
+      description: "Server-derived settlement summary across a transaction's balance records."
+      type: string
+      enum:
+        - pending
+        - posted
+        - mixed
+        - not_applicable
+    SettlementIntent:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+      properties:
+        status:
+          $ref: "#/components/schemas/SettlementStatus"
+        pending_date:
+          type: string
+          description: Exact UTC time the balance record entered pending; omitted manual values are derived by the service.
+          nullable: true
+          format: date-time
+        posted_date:
+          type: string
+          description: Exact UTC time the balance record posted; omitted manual values are derived by the service.
+          nullable: true
+          format: date-time
     ReconciliationStatus:
       description: "Whether a journal record has been reconciled with its external or expected source."
       type: string
@@ -5726,7 +5788,6 @@ components:
         - amount
         - tag_ids
         - memo
-        - posting_status
         - reconciliation_status
         - created_at
         - updated_at
@@ -5766,10 +5827,6 @@ components:
             format: int64
         memo:
           type: string
-          nullable: true
-        posting_status:
-          allOf:
-            - $ref: "#/components/schemas/PostingStatus"
           nullable: true
         reconciliation_status:
           allOf:
@@ -6037,6 +6094,8 @@ components:
         - transaction_id
         - initiated_date
         - recurring_occurrence_id
+        - lifecycle_status
+        - settlement
         - transaction_class
         - display_title
         - primary_amounts
@@ -6056,6 +6115,10 @@ components:
           format: int64
           nullable: true
           description: Occurrence this transaction was generated from; null for non-recurring transactions; the definition is reached via the occurrence.
+        lifecycle_status:
+          $ref: "#/components/schemas/TransactionLifecycleStatus"
+        settlement:
+          $ref: "#/components/schemas/TransactionSettlement"
         transaction_class:
           $ref: "#/components/schemas/TransactionClass"
         display_title:

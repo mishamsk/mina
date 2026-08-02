@@ -15,17 +15,21 @@ import {
 
 import {
   apiErrorMessage,
+  cancelTransactionById,
   confirmRecurringOccurrenceById,
   deleteTransactionById,
   dismissRecurringOccurrenceById,
   fetchTransactionById,
   type JournalRecord,
   replaceLedgerTransaction,
+  restoreTransactionById,
   type Transaction,
   type TransactionPageParams,
   updateJournalRecordCategory,
-  updateJournalRecordPostingStatus,
   updateJournalRecordsCategory,
+  updateJournalRecordSettlement,
+  updateJournalRecordsReconciliation,
+  updateJournalRecordsSettlement,
   updateJournalRecordsTags,
   updateJournalRecordTags,
 } from "@/api";
@@ -44,7 +48,6 @@ import {
   predictBulkEdit,
   summarizeBulkEditSkips,
 } from "./bulk-edit-prediction";
-import { linePostingStatus } from "./format";
 import { useInlineEditCoordinator } from "./inline-editing";
 import {
   type InlineSavePageRefresh,
@@ -265,7 +268,7 @@ export const useTransactionBrowserPage = ({
   const selectableTransactions = useMemo(
     () =>
       (transactions ?? []).filter(
-        (transaction) => linePostingStatus(transaction) !== "expected",
+        (transaction) => transaction.lifecycle_status === "active",
       ),
     [transactions],
   );
@@ -353,6 +356,35 @@ export const useTransactionBrowserPage = ({
         { pageRefreshMode: "blocking" },
       );
       showNotice("Transaction deleted.");
+    },
+    [detail, displayedPageParams, showNotice],
+  );
+
+  const changeTransactionLifecycle = useCallback(
+    async (transaction: Transaction, action: "cancel" | "restore") => {
+      const result =
+        action === "cancel"
+          ? await cancelTransactionById(transaction.transaction_id)
+          : await restoreTransactionById(transaction.transaction_id);
+      if (!result.data) {
+        throw new Error(apiErrorMessage(result.error));
+      }
+      await refreshTransactionPageAfterSave(
+        displayedPageParams,
+        transaction.transaction_id,
+        result.data,
+        transaction,
+        { pageRefreshMode: "blocking" },
+      );
+      await detail.refreshSelectedTransactionDetail(
+        transaction.transaction_id,
+        result.data,
+      );
+      showNotice(
+        action === "cancel"
+          ? "Transaction cancelled."
+          : "Transaction restored.",
+      );
     },
     [detail, displayedPageParams, showNotice],
   );
@@ -460,10 +492,10 @@ export const useTransactionBrowserPage = ({
           [record.record_id],
           update,
         );
-      } else if (update.kind === "postingStatus") {
-        const result = await updateJournalRecordPostingStatus(
+      } else if (update.kind === "settlement") {
+        const result = await updateJournalRecordSettlement(
           record.record_id,
-          update.postingStatus,
+          update.settlement,
         );
         if (result.error) {
           throw new Error(apiErrorMessage(result.error));
@@ -799,6 +831,77 @@ export const useTransactionBrowserPage = ({
     [displayedPageParams, lookups.snapshot?.accounts, showNotice],
   );
 
+  const updateTransactionsBulkRecordState = useCallback(
+    async (
+      selected: readonly Transaction[],
+      update:
+        | {
+            readonly kind: "reconciliation";
+            readonly value: "reconciled" | "unreconciled";
+          }
+        | { readonly kind: "settlement"; readonly value: "pending" | "posted" },
+    ) => {
+      const accountsById = new Map(
+        lookups.snapshot?.accounts.map((account) => [
+          account.account_id,
+          account,
+        ]),
+      );
+      const recordIds = selected.flatMap((transaction) =>
+        transaction.records
+          .filter((record) => {
+            if (update.kind === "reconciliation") {
+              return true;
+            }
+            const accountType = accountsById.get(
+              record.account_id,
+            )?.account_type;
+            return accountType === "owned" || accountType === "party";
+          })
+          .map((record) => record.record_id),
+      );
+      if (recordIds.length === 0) {
+        throw new Error("The selection has no applicable records.");
+      }
+      const result =
+        update.kind === "settlement"
+          ? await updateJournalRecordsSettlement(recordIds, update.value)
+          : await updateJournalRecordsReconciliation(recordIds, update.value);
+      if (result.error) {
+        throw new Error(apiErrorMessage(result.error));
+      }
+
+      const updatedTransactions = await Promise.all(
+        selected.map(async (transaction) => {
+          const refreshed = await fetchTransactionById(
+            transaction.transaction_id,
+          );
+          if (!refreshed.data) {
+            throw new Error(apiErrorMessage(refreshed.error));
+          }
+          return refreshed.data;
+        }),
+      );
+      await refreshTransactionPageAfterBulkSave(
+        displayedPageParams,
+        updatedTransactions,
+      );
+      setSelectedTransactionsById((current) => {
+        const next = new Map(current);
+        for (const transaction of updatedTransactions) {
+          if (next.has(transaction.transaction_id)) {
+            next.set(transaction.transaction_id, transaction);
+          }
+        }
+        return next;
+      });
+      showNotice(
+        `${recordIds.length} record${recordIds.length === 1 ? "" : "s"} updated.`,
+      );
+    },
+    [displayedPageParams, lookups.snapshot?.accounts, showNotice],
+  );
+
   const setPage = useCallback(
     (nextPage: number) => {
       cancelDateJump();
@@ -863,6 +966,7 @@ export const useTransactionBrowserPage = ({
     bulkEditMode,
     cancelDateJump,
     changeDateJumpValue,
+    changeTransactionLifecycle,
     clearTransactionSelection,
     confirmRecurringOccurrenceFromRow,
     dateJumpAnchor,
@@ -901,6 +1005,7 @@ export const useTransactionBrowserPage = ({
     updateRecord,
     updateTransactionAmount,
     updateTransactionsBulkReferences,
+    updateTransactionsBulkRecordState,
     updateTransactionRecordReferences,
   };
 };

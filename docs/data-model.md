@@ -9,10 +9,9 @@ This file is the target accounting-state data model. Keep it aligned with implem
 CREATE SEQUENCE primary_key_gen_seq START 1;
 
 -- ENUM types for status tracking
-CREATE TYPE posting_status AS ENUM (
+CREATE TYPE transaction_lifecycle_status AS ENUM (
+    'ACTIVE',
     'EXPECTED',
-    'PENDING',
-    'POSTED',
     'CANCELLED'
 );
 
@@ -212,12 +211,15 @@ CREATE TABLE "transaction" (
     initiated_date DATE NOT NULL,
     -- Occurrence this transaction was generated from; NULL for non-recurring transactions; the definition is reached via the occurrence.
     recurring_occurrence_id INTEGER,
+    -- Transaction lifecycle, independent from balance-record settlement and tombstoning.
+    lifecycle_status transaction_lifecycle_status NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     tombstoned_at TIMESTAMP
 );
 
 COMMENT ON COLUMN "transaction".initiated_date IS 'Human-facing calendar date the transaction happened, distinct from formal banking timestamps on records that may be future dated.';
 COMMENT ON COLUMN "transaction".recurring_occurrence_id IS 'Occurrence this transaction was generated from; NULL for non-recurring transactions; the definition is reached via the occurrence.';
+COMMENT ON COLUMN "transaction".lifecycle_status IS 'Transaction lifecycle, independent from balance-record settlement and tombstoning.';
 
 -- Journal record table for individual debit/credit entries
 CREATE TABLE journal_record (
@@ -246,8 +248,6 @@ CREATE TABLE journal_record (
     -- UTC timestamp when the record posted; NULL until the record reaches the posted stage.
     posted_date TIMESTAMP DEFAULT NULL,
 
-    -- Banking lifecycle state for this record.
-    posting_status posting_status NOT NULL,
     -- Import/reconciliation matching state.
     reconciliation_status reconciliation_status NOT NULL DEFAULT 'RECONCILED',
 
@@ -272,7 +272,6 @@ COMMENT ON COLUMN journal_record.tag_ids IS 'Tag IDs assigned to this record for
 COMMENT ON COLUMN journal_record.memo IS 'Optional record note or description.';
 COMMENT ON COLUMN journal_record.pending_date IS 'UTC timestamp when the record entered pending; NULL when the record never had a pending stage.';
 COMMENT ON COLUMN journal_record.posted_date IS 'UTC timestamp when the record posted; NULL until the record reaches the posted stage.';
-COMMENT ON COLUMN journal_record.posting_status IS 'Banking lifecycle state for this record.';
 COMMENT ON COLUMN journal_record.reconciliation_status IS 'Import/reconciliation matching state.';
 COMMENT ON COLUMN journal_record.source IS 'Origin of this record.';
 COMMENT ON COLUMN journal_record.external_id IS 'Identifier assigned by an external system when this record is linked outside Mina.';
@@ -402,7 +401,6 @@ CREATE TABLE transaction_template_record (
     amount DECIMAL(18,8),
     tag_ids INTEGER[] NOT NULL DEFAULT [],
     memo TEXT,
-    posting_status posting_status,
     reconciliation_status reconciliation_status,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

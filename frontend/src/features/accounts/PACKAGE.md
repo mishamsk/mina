@@ -9,7 +9,7 @@
 - The Accounts page uses one bounded accounts fetch joined with balances for `owned` and `party` accounts and filters that snapshot client-side.
 - Mutations refresh Accounts, featured balances, Overview, and ledger lookups so account pickers see current account state.
 - Account register and header snapshots discard fetch writes that predate invalidation; single-account metadata responses may merge into a mounted header instead.
-- Account and group registers include expected recurring records after one occurrence catch-up read per mounted register; expected records stay excluded from running balances.
+- Account and group registers run one occurrence catch-up read per mount, then use the default record query that excludes expected recurring records.
 - Account deletion controls consume the API `deletable` signal verbatim; eligibility rules remain backend-owned.
 - Accounts-tree credit-limit indicators consume the API `has_credit_limit_history` signal rather than inferring history from balance rows.
 - Fixed `system` accounts remain visible and selectable where ledger references are allowed, but Accounts and account-detail surfaces expose no mutation controls for them.

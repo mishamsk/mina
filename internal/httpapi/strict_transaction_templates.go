@@ -106,7 +106,6 @@ func transactionTemplateRecordAPIInputs(records []openapi.TransactionTemplateRec
 			Amount:               amount,
 			TagIDs:               cloneOptionalInt64Slice(record.TagIds),
 			Memo:                 record.Memo,
-			PostingStatus:        transactionAPINonExpectedPostingStatusPtr(record.PostingStatus),
 			ReconciliationStatus: transactionAPIReconciliationStatusPtr(record.ReconciliationStatus),
 		})
 	}
@@ -148,7 +147,6 @@ func transactionTemplateRecordAPIResponse(record transactiontemplates.TemplateRe
 		Amount:                      nullableDecimalString(record.Amount),
 		TagIds:                      cloneInt64Slice(record.TagIDs),
 		Memo:                        record.Memo,
-		PostingStatus:               transactionTemplatePostingStatusAPIResponse(record.PostingStatus),
 		ReconciliationStatus:        transactionTemplateReconciliationStatusAPIResponse(record.ReconciliationStatus),
 		CreatedAt:                   record.CreatedAt.UTC(),
 		UpdatedAt:                   record.UpdatedAt.UTC(),
@@ -163,15 +161,6 @@ func transactionTemplateRecordAPIResponses(records []transactiontemplates.Templa
 	}
 
 	return responses
-}
-
-func transactionTemplatePostingStatusAPIResponse(status *transactions.PostingStatus) *openapi.PostingStatus {
-	if status == nil {
-		return nil
-	}
-	value := openapi.PostingStatus(*status)
-
-	return &value
 }
 
 func transactionTemplateReconciliationStatusAPIResponse(status *transactions.ReconciliationStatus) *openapi.ReconciliationStatus {

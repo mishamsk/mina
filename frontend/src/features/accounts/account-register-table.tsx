@@ -1,18 +1,9 @@
-import {
-  Check,
-  Close,
-  Plus,
-  Reload,
-  WarningDiamond,
-} from "pixelarticons/react";
-import { type KeyboardEvent, useRef, useState } from "react";
+import { Plus, Reload } from "pixelarticons/react";
+import { type KeyboardEvent, useRef } from "react";
 
 import type { DisplayAmount, JournalRecord, Transaction } from "@/api";
-import { ConfirmationDialog } from "@/components/confirmation-dialog";
-import { RowActions } from "@/components/row-actions";
 import { Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -23,32 +14,21 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   AmountText,
+  displayStatusLabel,
   FqnPath,
   type LookupMaps,
-  postingStatusLabel,
+  recordStatus,
   StatusIcon,
 } from "@/features/ledger";
 import { cn } from "@/lib/utils";
-import {
-  formatLocalCivilDate,
-  formatLocalCivilDateParts,
-  localTodayISODate,
-} from "@/utils/date";
+import { formatLocalCivilDateParts } from "@/utils/date";
 
 interface AccountRegisterTableProps {
   readonly errorMessage: string | undefined;
-  readonly hideExpected: boolean;
   readonly loading: boolean;
   readonly lookupErrorMessage: string | undefined;
   readonly lookupsLoaded: boolean;
   readonly maps: LookupMaps;
-  readonly onConfirmRecurringOccurrence?: (
-    transaction: Transaction,
-  ) => Promise<void>;
-  readonly onDismissRecurringOccurrence?: (
-    transaction: Transaction,
-  ) => Promise<void>;
-  readonly onHideExpectedChange: (hideExpected: boolean) => void;
   readonly onNewTransaction: () => void;
   readonly onNextPage: () => void;
   readonly onOpenRecord: (record: JournalRecord, opener: HTMLElement) => void;
@@ -66,12 +46,6 @@ interface AccountRegisterTableProps {
   readonly totalCount: number | undefined;
   readonly transactionErrorsById: Readonly<Record<number, string>>;
   readonly transactionsById: Readonly<Record<number, Transaction>>;
-}
-
-interface DismissOccurrenceDialog {
-  readonly opener: HTMLElement;
-  readonly rowIndex: number;
-  readonly transaction: Transaction;
 }
 
 const interactiveTargetSelector =
@@ -105,15 +79,15 @@ const skeletonTemplate = (
   showRunningBalance: boolean,
 ): string => {
   if (showAccount && showRunningBalance) {
-    return "grid-cols-[7rem_minmax(9rem,1fr)_minmax(10rem,1.2fr)_minmax(8rem,1fr)_minmax(8rem,1fr)_6rem_8rem_8rem_5.5rem]";
+    return "grid-cols-[7rem_minmax(9rem,1fr)_minmax(10rem,1.2fr)_minmax(8rem,1fr)_minmax(8rem,1fr)_6rem_8rem_8rem]";
   }
   if (showAccount) {
-    return "grid-cols-[7rem_minmax(10rem,1fr)_minmax(10rem,1.2fr)_minmax(8rem,1fr)_minmax(8rem,1fr)_6rem_8rem_5.5rem]";
+    return "grid-cols-[7rem_minmax(10rem,1fr)_minmax(10rem,1.2fr)_minmax(8rem,1fr)_minmax(8rem,1fr)_6rem_8rem]";
   }
   if (showRunningBalance) {
-    return "grid-cols-[7rem_minmax(10rem,1.4fr)_minmax(8rem,1fr)_minmax(8rem,1fr)_6rem_8rem_8rem_5.5rem]";
+    return "grid-cols-[7rem_minmax(10rem,1.4fr)_minmax(8rem,1fr)_minmax(8rem,1fr)_6rem_8rem_8rem]";
   }
-  return "grid-cols-[7rem_minmax(10rem,1.5fr)_minmax(8rem,1fr)_minmax(8rem,1fr)_6rem_8rem_5.5rem]";
+  return "grid-cols-[7rem_minmax(10rem,1.5fr)_minmax(8rem,1fr)_minmax(8rem,1fr)_6rem_8rem]";
 };
 
 const AccountRegisterSkeleton = ({
@@ -124,7 +98,7 @@ const AccountRegisterSkeleton = ({
   readonly showRunningBalance: boolean;
 }) => {
   const template = skeletonTemplate(showAccount, showRunningBalance);
-  const columnCount = 7 + (showAccount ? 1 : 0) + (showRunningBalance ? 1 : 0);
+  const columnCount = 6 + (showAccount ? 1 : 0) + (showRunningBalance ? 1 : 0);
 
   return (
     <div
@@ -159,37 +133,12 @@ const AccountRegisterSkeleton = ({
   );
 };
 
-const AccountRegisterControls = ({
-  hideExpected,
-  onHideExpectedChange,
-}: {
-  readonly hideExpected: boolean;
-  readonly onHideExpectedChange: (hideExpected: boolean) => void;
-}) => (
-  <div className="bg-card flex shrink-0 justify-end border-2 border-[var(--border-ink)] px-3 py-2 shadow-[var(--shadow-pixel)]">
-    <label className="font-heading inline-flex min-h-9 items-center gap-2 text-xs font-semibold uppercase">
-      <Checkbox
-        data-account-register-focus-fallback="true"
-        checked={hideExpected}
-        onCheckedChange={(checked) => {
-          onHideExpectedChange(checked === true);
-        }}
-      />
-      Hide expected
-    </label>
-  </div>
-);
-
 export const AccountRegisterTable = ({
   errorMessage,
-  hideExpected,
   loading,
   lookupErrorMessage,
   lookupsLoaded,
   maps,
-  onConfirmRecurringOccurrence,
-  onDismissRecurringOccurrence,
-  onHideExpectedChange,
   onNewTransaction,
   onNextPage,
   onOpenRecord,
@@ -208,106 +157,11 @@ export const AccountRegisterTable = ({
   transactionErrorsById,
   transactionsById,
 }: AccountRegisterTableProps) => {
-  const today = localTodayISODate();
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const [busyOccurrenceId, setBusyOccurrenceId] = useState<
-    number | undefined
-  >();
-  const [dismissDialog, setDismissDialog] = useState<
-    DismissOccurrenceDialog | undefined
-  >();
-  const [occurrenceActionErrorMessage, setOccurrenceActionErrorMessage] =
-    useState<string | undefined>();
-  const [dismissActionErrorMessage, setDismissActionErrorMessage] = useState<
-    string | undefined
-  >();
-  const runOccurrenceAction = async (
-    action: ((transaction: Transaction) => Promise<void>) | undefined,
-    transaction: Transaction | undefined,
-    setErrorMessage: (message: string | undefined) => void,
-  ): Promise<boolean> => {
-    if (
-      !action ||
-      !transaction ||
-      transaction.recurring_occurrence_id === null
-    ) {
-      return false;
-    }
-
-    setBusyOccurrenceId(transaction.recurring_occurrence_id);
-    setErrorMessage(undefined);
-    try {
-      await action(transaction);
-      return true;
-    } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : "The API request failed.",
-      );
-      return false;
-    } finally {
-      setBusyOccurrenceId(undefined);
-    }
-  };
-  const closeDismissConfirmation = () => {
-    setDismissDialog(undefined);
-    setDismissActionErrorMessage(undefined);
-  };
-  const restoreOccurrenceActionFocus = (
-    opener: HTMLElement,
-    rowIndex: number,
-  ) => {
-    window.requestAnimationFrame(() => {
-      const activeElement = document.activeElement;
-      if (
-        activeElement instanceof HTMLElement &&
-        activeElement !== document.body &&
-        activeElement.isConnected
-      ) {
-        return;
-      }
-
-      if (opener.isConnected) {
-        opener.focus({ preventScroll: true });
-        return;
-      }
-
-      const rows = Array.from(
-        rootRef.current?.querySelectorAll<HTMLTableRowElement>(
-          "[data-testid='account-register-row']",
-        ) ?? [],
-      );
-      const targetRow = rows[rowIndex] ?? rows[rowIndex - 1] ?? rows[0];
-      if (targetRow) {
-        targetRow.scrollIntoView({ block: "nearest" });
-        targetRow.focus({ preventScroll: true });
-        return;
-      }
-
-      rootRef.current
-        ?.querySelector<HTMLElement>("[data-account-register-focus-fallback]")
-        ?.focus({ preventScroll: true });
-    });
-  };
-  const confirmDismissOccurrence = async () => {
-    const dialog = dismissDialog;
-    const dismissed = await runOccurrenceAction(
-      onDismissRecurringOccurrence,
-      dialog?.transaction,
-      setDismissActionErrorMessage,
-    );
-    if (dismissed && dialog) {
-      closeDismissConfirmation();
-      restoreOccurrenceActionFocus(dialog.opener, dialog.rowIndex);
-    }
-  };
 
   if (loading && !records) {
     return (
       <div ref={rootRef} className="flex h-full min-h-0 flex-col gap-3">
-        <AccountRegisterControls
-          hideExpected={hideExpected}
-          onHideExpectedChange={onHideExpectedChange}
-        />
         <AccountRegisterSkeleton
           showAccount={showAccount}
           showRunningBalance={showRunningBalance}
@@ -350,10 +204,6 @@ export const AccountRegisterTable = ({
   if (!records || records.length === 0) {
     return (
       <div ref={rootRef} className="flex h-full min-h-0 flex-col gap-3">
-        <AccountRegisterControls
-          hideExpected={hideExpected}
-          onHideExpectedChange={onHideExpectedChange}
-        />
         <div className="bg-card flex flex-col items-start gap-3 border-2 border-[var(--border-ink)] p-6 shadow-[var(--shadow-pixel)]">
           <div className="space-y-1">
             <p className="font-heading text-base font-semibold uppercase">
@@ -379,18 +229,6 @@ export const AccountRegisterTable = ({
       className="flex h-full min-h-0 flex-col gap-3"
       aria-busy={loading ? "true" : undefined}
     >
-      <AccountRegisterControls
-        hideExpected={hideExpected}
-        onHideExpectedChange={onHideExpectedChange}
-      />
-      {occurrenceActionErrorMessage ? (
-        <div
-          className="border-destructive bg-card text-destructive border-2 p-3 text-sm shadow-[var(--shadow-pixel)]"
-          role="alert"
-        >
-          {occurrenceActionErrorMessage}
-        </div>
-      ) : null}
       <div
         className="account-register-table-scroll bg-card min-h-0 flex-1 overflow-x-hidden overflow-y-auto border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]"
         data-testid="account-register-table-scroll"
@@ -425,8 +263,6 @@ export const AccountRegisterTable = ({
           className={cn(
             "account-register-table w-full table-fixed border-collapse text-sm",
             showAccount && "account-register-table--with-account",
-            records.some((record) => record.posting_status === "expected") &&
-              "account-register-table--has-expected",
             !showRunningBalance && "account-register-table--without-running",
           )}
         >
@@ -443,7 +279,6 @@ export const AccountRegisterTable = ({
             {showRunningBalance ? (
               <col className="account-register-running-column" />
             ) : null}
-            <col className="account-register-actions-column" />
           </colgroup>
           <thead className="sticky top-0 z-10 bg-[var(--table-header)]">
             <tr className="font-heading text-foreground border-b-2 border-[var(--border-ink)] text-left text-xs font-semibold uppercase">
@@ -471,7 +306,6 @@ export const AccountRegisterTable = ({
                   Running
                 </th>
               ) : null}
-              <th className="account-register-actions-column px-3 py-2 text-right" />
             </tr>
           </thead>
           <tbody>
@@ -490,19 +324,11 @@ export const AccountRegisterTable = ({
                 record.running_balance,
                 record.currency,
               );
-              const inactive = record.posting_status === "cancelled";
-              const pending = record.posting_status === "pending";
-              const expected = record.posting_status === "expected";
-              const expectedOccurrence =
-                expected &&
-                transaction !== undefined &&
-                transaction.recurring_occurrence_id !== null;
-              const occurrenceActionBusy =
-                transaction !== undefined &&
-                transaction.recurring_occurrence_id !== null &&
-                busyOccurrenceId === transaction.recurring_occurrence_id;
-              const overdueExpected = expected && record.initiated_date < today;
-              const showStatus = record.posting_status !== "posted";
+              const displayStatus = recordStatus(record);
+              const inactive = displayStatus === "cancelled";
+              const pending = displayStatus === "pending";
+              const expected = displayStatus === "expected";
+              const showStatus = displayStatus !== undefined;
               const selected = selectedRecordId === record.record_id;
               const walkRowFocus = (
                 event: KeyboardEvent<HTMLTableRowElement>,
@@ -643,24 +469,13 @@ export const AccountRegisterTable = ({
                   <td className="account-register-status-column px-3 py-2">
                     {showStatus ? (
                       <div className="flex items-center gap-1">
-                        {overdueExpected ? (
-                          <Tooltip label="Overdue occurrence">
-                            <span
-                              aria-label="Overdue"
-                              className="inline-flex size-6 items-center justify-center border border-[var(--border-ink)] bg-[var(--color-class-adjustment-bright)] text-[var(--color-class-adjustment-ink)] shadow-[var(--shadow-chip)]"
-                              data-testid="recurring-overdue-marker"
-                              role="img"
-                            >
-                              <WarningDiamond
-                                aria-hidden="true"
-                                className="size-4"
-                              />
-                            </span>
-                          </Tooltip>
+                        {displayStatus ? (
+                          <StatusIcon status={displayStatus} />
                         ) : null}
-                        {<StatusIcon status={record.posting_status} />}
                         <span className="font-mono text-xs">
-                          {postingStatusLabel(record.posting_status)}
+                          {displayStatus
+                            ? displayStatusLabel(displayStatus)
+                            : null}
                         </span>
                       </div>
                     ) : null}
@@ -695,57 +510,6 @@ export const AccountRegisterTable = ({
                       )}
                     </td>
                   ) : null}
-                  <td className="account-register-actions-column px-3 py-2 text-right align-middle">
-                    {expectedOccurrence ? (
-                      <RowActions
-                        foldable
-                        actions={[
-                          {
-                            disabled:
-                              occurrenceActionBusy ||
-                              !onConfirmRecurringOccurrence,
-                            disabledReason: occurrenceActionBusy
-                              ? "Occurrence action in progress."
-                              : "Occurrence confirmation is unavailable.",
-                            icon: <Check aria-hidden="true" />,
-                            label: occurrenceActionBusy
-                              ? "Confirming"
-                              : "Confirm occurrence",
-                            onSelect: (opener) => {
-                              void (async () => {
-                                const confirmed = await runOccurrenceAction(
-                                  onConfirmRecurringOccurrence,
-                                  transaction,
-                                  setOccurrenceActionErrorMessage,
-                                );
-                                if (confirmed) {
-                                  restoreOccurrenceActionFocus(opener, index);
-                                }
-                              })();
-                            },
-                          },
-                          {
-                            disabled:
-                              occurrenceActionBusy ||
-                              !onDismissRecurringOccurrence,
-                            disabledReason: occurrenceActionBusy
-                              ? "Occurrence action in progress."
-                              : "Occurrence dismissal is unavailable.",
-                            icon: <Close aria-hidden="true" />,
-                            label: "Dismiss occurrence",
-                            onSelect: (opener) => {
-                              setDismissActionErrorMessage(undefined);
-                              setDismissDialog({
-                                opener,
-                                rowIndex: index,
-                                transaction,
-                              });
-                            },
-                          },
-                        ]}
-                      />
-                    ) : null}
-                  </td>
                 </tr>
               );
             })}
@@ -812,32 +576,6 @@ export const AccountRegisterTable = ({
           </Button>
         </div>
       </div>
-      <ConfirmationDialog
-        confirmIcon={<Close aria-hidden="true" />}
-        confirmLabel="Dismiss occurrence"
-        errorMessage={dismissActionErrorMessage}
-        onConfirm={() => {
-          void confirmDismissOccurrence();
-        }}
-        onOpenChange={(open) => {
-          if (!open) {
-            closeDismissConfirmation();
-          }
-        }}
-        open={dismissDialog !== undefined}
-        pending={busyOccurrenceId !== undefined}
-        pendingLabel="Dismissing"
-        title="Dismiss occurrence"
-      >
-        <p>
-          {dismissDialog
-            ? `${dismissDialog.transaction.display_title} scheduled ${formatLocalCivilDate(
-                dismissDialog.transaction.initiated_date,
-              )}`
-            : ""}
-        </p>
-        <p>This skips only this scheduled occurrence.</p>
-      </ConfirmationDialog>
     </div>
   );
 };

@@ -1,22 +1,23 @@
 import type {
-  PostingStatus,
   RecordRole,
   TransactionClass,
+  TransactionLifecycleStatus,
+  TransactionSettlement,
   TransactionShapeType,
 } from "@/api/generated";
 
-export const transactionPostingStatuses = [
-  "pending",
-  "posted",
-  "cancelled",
-] as const satisfies readonly PostingStatus[];
-
-export const defaultTransactionPostingStatuses = [
+export const transactionLifecycleStatuses = [
+  "active",
   "expected",
+  "cancelled",
+] as const satisfies readonly TransactionLifecycleStatus[];
+
+export const transactionSettlements = [
   "pending",
   "posted",
-  "cancelled",
-] as const satisfies readonly PostingStatus[];
+  "mixed",
+  "not_applicable",
+] as const satisfies readonly TransactionSettlement[];
 
 export const transactionClasses = [
   "spend",
@@ -59,18 +60,14 @@ export interface TransactionFilters {
   readonly amountUsdMin?: string;
   readonly categoryIds: readonly number[];
   readonly classes: readonly TransactionClass[];
-  readonly hideExpected: boolean;
+  readonly lifecycleStatuses: readonly TransactionLifecycleStatus[];
   readonly initiatedFrom?: string;
   readonly initiatedTo?: string;
   readonly memberIds: readonly number[];
-  readonly pendingFrom?: string;
-  readonly pendingTo?: string;
-  readonly postedFrom?: string;
-  readonly postedTo?: string;
   readonly recordRoles: readonly RecordRole[];
   readonly search?: string;
   readonly shapes: readonly TransactionShapeType[];
-  readonly statuses: readonly PostingStatus[];
+  readonly settlements: readonly TransactionSettlement[];
   readonly tagIds: readonly number[];
 }
 
@@ -78,11 +75,11 @@ export const emptyTransactionFilters: TransactionFilters = {
   accountIds: [],
   categoryIds: [],
   classes: [],
-  hideExpected: false,
+  lifecycleStatuses: [],
   memberIds: [],
   recordRoles: [],
   shapes: [],
-  statuses: [],
+  settlements: [],
   tagIds: [],
 };
 
@@ -116,20 +113,19 @@ export const normalizeTransactionFilters = (
   amountUsdMin: trimmedValue(filters.amountUsdMin),
   categoryIds: uniqueSortedNumbers(filters.categoryIds ?? []),
   classes: uniqueAllowedValues(filters.classes ?? [], transactionClasses),
-  hideExpected: filters.hideExpected === true,
+  lifecycleStatuses: uniqueAllowedValues(
+    filters.lifecycleStatuses ?? [],
+    transactionLifecycleStatuses,
+  ),
   initiatedFrom: trimmedValue(filters.initiatedFrom),
   initiatedTo: trimmedValue(filters.initiatedTo),
   memberIds: uniqueSortedNumbers(filters.memberIds ?? []),
-  pendingFrom: trimmedValue(filters.pendingFrom),
-  pendingTo: trimmedValue(filters.pendingTo),
-  postedFrom: trimmedValue(filters.postedFrom),
-  postedTo: trimmedValue(filters.postedTo),
   recordRoles: uniqueAllowedValues(filters.recordRoles ?? [], recordRoles),
   search: trimmedValue(filters.search),
   shapes: uniqueAllowedValues(filters.shapes ?? [], transactionShapes),
-  statuses: uniqueAllowedValues(
-    filters.statuses ?? [],
-    transactionPostingStatuses,
+  settlements: uniqueAllowedValues(
+    filters.settlements ?? [],
+    transactionSettlements,
   ),
   tagIds: uniqueSortedNumbers(filters.tagIds ?? []),
 });
@@ -143,21 +139,17 @@ export const transactionFilterSignature = (
     `category=${normalized.categoryIds.join(",")}`,
     `tag=${normalized.tagIds.join(",")}`,
     `member=${normalized.memberIds.join(",")}`,
-    `status=${normalized.statuses.join(",")}`,
+    `lifecycle=${normalized.lifecycleStatuses.join(",")}`,
+    `settlement=${normalized.settlements.join(",")}`,
     `class=${normalized.classes.join(",")}`,
     `shape=${normalized.shapes.join(",")}`,
     `role=${normalized.recordRoles.join(",")}`,
-    `hideExpected=${normalized.hideExpected}`,
     `amountMin=${normalized.amountMin ?? ""}`,
     `amountMax=${normalized.amountMax ?? ""}`,
     `amountUsdMin=${normalized.amountUsdMin ?? ""}`,
     `amountUsdMax=${normalized.amountUsdMax ?? ""}`,
     `initiatedFrom=${normalized.initiatedFrom ?? ""}`,
     `initiatedTo=${normalized.initiatedTo ?? ""}`,
-    `pendingFrom=${normalized.pendingFrom ?? ""}`,
-    `pendingTo=${normalized.pendingTo ?? ""}`,
-    `postedFrom=${normalized.postedFrom ?? ""}`,
-    `postedTo=${normalized.postedTo ?? ""}`,
     `q=${normalized.search ?? ""}`,
   ].join("|");
 };

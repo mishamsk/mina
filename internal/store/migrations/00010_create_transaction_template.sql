@@ -37,7 +37,6 @@ CREATE TABLE transaction_template_record (
 	amount DECIMAL(18,8),
 	tag_ids INTEGER[] NOT NULL DEFAULT [],
 	memo TEXT,
-	posting_status posting_status,
 	reconciliation_status reconciliation_status,
 	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

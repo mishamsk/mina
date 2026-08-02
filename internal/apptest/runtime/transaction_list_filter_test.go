@@ -17,68 +17,68 @@ func TestTransactionListFiltersBoundary(t *testing.T) {
 	otherMerchant := client.Scenario().Account("expense:OtherMerchant")
 
 	first := createTransaction(t, client, transactionListFilterRequest(transactionListFilterInput{
-		Date:          "2024-01-01",
-		BalanceID:     refs.CheckingAccountId,
-		FlowID:        refs.MerchantAccountId,
-		CategoryID:    refs.CategoryId,
-		TagID:         refs.TagId,
-		MemberID:      &refs.MemberId,
-		Memo:          "Lunch 100%_marker",
-		Amount:        "12.34",
-		PendingDate:   "2024-01-01T00:00:00Z",
-		PostedDate:    ptrTo("2024-01-02T00:00:00Z"),
-		PostingStatus: httpclient.PostingStatusPosted,
+		Date:        "2024-01-01",
+		BalanceID:   refs.CheckingAccountId,
+		FlowID:      refs.MerchantAccountId,
+		CategoryID:  refs.CategoryId,
+		TagID:       refs.TagId,
+		MemberID:    &refs.MemberId,
+		Memo:        "Lunch 100%_marker",
+		Amount:      "12.34",
+		PendingDate: "2024-01-01T00:00:00Z",
+		PostedDate:  ptrTo("2024-01-02T00:00:00Z"),
+		Settlement:  apptest.PostedSettlement(),
 	}))
 	second := createTransaction(t, client, transactionListFilterRequest(transactionListFilterInput{
-		Date:          "2024-01-02",
-		BalanceID:     refs.SavingsAccountId,
-		FlowID:        landlord.AccountId,
-		CategoryID:    refs.SecondCategoryId,
-		TagID:         refs.SecondTagId,
-		MemberID:      &refs.SecondMemberId,
-		Memo:          "Rent",
-		Amount:        "50.00",
-		PendingDate:   "2024-01-05T00:00:00Z",
-		PostingStatus: httpclient.PostingStatusPending,
+		Date:        "2024-01-02",
+		BalanceID:   refs.SavingsAccountId,
+		FlowID:      landlord.AccountId,
+		CategoryID:  refs.SecondCategoryId,
+		TagID:       refs.SecondTagId,
+		MemberID:    &refs.SecondMemberId,
+		Memo:        "Rent",
+		Amount:      "50.00",
+		PendingDate: "2024-01-05T00:00:00Z",
+		Settlement:  apptest.PendingSettlement(),
 	}))
 	third := createTransaction(t, client, transactionListFilterRequest(transactionListFilterInput{
-		Date:          "2024-01-03",
-		BalanceID:     refs.CheckingAccountId,
-		FlowID:        refs.MerchantAccountId,
-		CategoryID:    refs.CategoryId,
-		TagID:         refs.TagId,
-		MemberID:      &refs.MemberId,
-		Memo:          "Cafe 100XX marker",
-		Amount:        "75.00",
-		PendingDate:   "2024-01-03T00:00:00Z",
-		PostedDate:    ptrTo("2024-01-04T00:00:00Z"),
-		PostingStatus: httpclient.PostingStatusPosted,
+		Date:        "2024-01-03",
+		BalanceID:   refs.CheckingAccountId,
+		FlowID:      refs.MerchantAccountId,
+		CategoryID:  refs.CategoryId,
+		TagID:       refs.TagId,
+		MemberID:    &refs.MemberId,
+		Memo:        "Cafe 100XX marker",
+		Amount:      "75.00",
+		PendingDate: "2024-01-03T00:00:00Z",
+		PostedDate:  ptrTo("2024-01-04T00:00:00Z"),
+		Settlement:  apptest.PostedSettlement(),
 	}))
 	fourth := createTransaction(t, client, transactionListFilterRequest(transactionListFilterInput{
-		Date:          "2024-01-04",
-		BalanceID:     refs.CheckingAccountId,
-		FlowID:        refs.MerchantAccountId,
-		CategoryID:    refs.CategoryId,
-		TagID:         refs.TagId,
-		MemberID:      &refs.MemberId,
-		Memo:          "Groceries",
-		Amount:        "20.00",
-		PendingDate:   "2024-01-04T00:00:00Z",
-		PostedDate:    ptrTo("2024-01-06T00:00:00Z"),
-		PostingStatus: httpclient.PostingStatusPosted,
+		Date:        "2024-01-04",
+		BalanceID:   refs.CheckingAccountId,
+		FlowID:      refs.MerchantAccountId,
+		CategoryID:  refs.CategoryId,
+		TagID:       refs.TagId,
+		MemberID:    &refs.MemberId,
+		Memo:        "Groceries",
+		Amount:      "20.00",
+		PendingDate: "2024-01-04T00:00:00Z",
+		PostedDate:  ptrTo("2024-01-06T00:00:00Z"),
+		Settlement:  apptest.PostedSettlement(),
 	}))
 	fifth := createTransaction(t, client, transactionListFilterRequest(transactionListFilterInput{
-		Date:          "2024-01-05",
-		BalanceID:     refs.SavingsAccountId,
-		FlowID:        otherMerchant.AccountId,
-		CategoryID:    refs.SecondCategoryId,
-		TagID:         refs.SecondTagId,
-		MemberID:      &refs.SecondMemberId,
-		Memo:          "Utilities",
-		Amount:        "35.00",
-		PendingDate:   "2024-01-05T12:00:00Z",
-		PostedDate:    ptrTo("2024-01-07T00:00:00Z"),
-		PostingStatus: httpclient.PostingStatusPosted,
+		Date:        "2024-01-05",
+		BalanceID:   refs.SavingsAccountId,
+		FlowID:      otherMerchant.AccountId,
+		CategoryID:  refs.SecondCategoryId,
+		TagID:       refs.SecondTagId,
+		MemberID:    &refs.SecondMemberId,
+		Memo:        "Utilities",
+		Amount:      "35.00",
+		PendingDate: "2024-01-05T12:00:00Z",
+		PostedDate:  ptrTo("2024-01-07T00:00:00Z"),
+		Settlement:  apptest.PostedSettlement(),
 	}))
 
 	cases := []struct {
@@ -93,7 +93,7 @@ func TestTransactionListFiltersBoundary(t *testing.T) {
 		{name: "category", params: &httpclient.ListTransactionsParams{CategoryId: ptrTo([]int64{refs.SecondCategoryId})}, want: []int64{fifth.JSON201.TransactionId, second.JSON201.TransactionId}, total: 2},
 		{name: "tag", params: &httpclient.ListTransactionsParams{TagId: ptrTo([]int64{refs.SecondTagId})}, want: []int64{fifth.JSON201.TransactionId, second.JSON201.TransactionId}, total: 2},
 		{name: "member", params: &httpclient.ListTransactionsParams{MemberId: ptrTo([]int64{refs.SecondMemberId})}, want: []int64{fifth.JSON201.TransactionId, second.JSON201.TransactionId}, total: 2},
-		{name: "posting status", params: &httpclient.ListTransactionsParams{PostingStatus: ptrTo([]httpclient.PostingStatus{httpclient.PostingStatusPending})}, want: []int64{second.JSON201.TransactionId}, total: 1},
+		{name: "settlement", params: &httpclient.ListTransactionsParams{Settlement: ptrTo([]httpclient.TransactionSettlement{httpclient.TransactionSettlementPending})}, want: []int64{second.JSON201.TransactionId}, total: 1},
 		{name: "amount min", params: &httpclient.ListTransactionsParams{AmountMin: apptest.StringPtr("70.00")}, want: []int64{third.JSON201.TransactionId}, total: 1},
 		{name: "amount max", params: &httpclient.ListTransactionsParams{AmountMax: apptest.StringPtr("-70.00")}, want: []int64{third.JSON201.TransactionId}, total: 1},
 		{name: "amount usd min", params: &httpclient.ListTransactionsParams{AmountUsdMin: apptest.StringPtr("70.00")}, want: []int64{third.JSON201.TransactionId}, total: 1},
@@ -137,7 +137,7 @@ func TestTransactionListFiltersComposeAcrossActiveRecordsBoundary(t *testing.T) 
 				Amount:               "-30.00",
 				AmountUsd:            apptest.StringPtr("-30.00"),
 				Memo:                 &accountMemo,
-				PostingStatus:        httpclient.PostingStatusPosted,
+				Settlement:           apptest.PostedSettlement(),
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.WritableSourceManual,
 			},
@@ -148,7 +148,6 @@ func TestTransactionListFiltersComposeAcrossActiveRecordsBoundary(t *testing.T) 
 				AmountUsd:            apptest.StringPtr("10.00"),
 				CategoryId:           apptest.Int64Ptr(refs.SecondCategoryId),
 				Memo:                 &categoryMemo,
-				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.WritableSourceManual,
 			},
@@ -159,7 +158,6 @@ func TestTransactionListFiltersComposeAcrossActiveRecordsBoundary(t *testing.T) 
 				AmountUsd:            apptest.StringPtr("20.00"),
 				CategoryId:           apptest.Int64Ptr(refs.CategoryId),
 				Memo:                 &searchMemo,
-				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.WritableSourceManual,
 			},
@@ -212,8 +210,8 @@ func TestDerivedTransactionAndRecordFiltersBoundary(t *testing.T) {
 	))
 	createDatedClassificationTransaction(t, client, "2024-02-05", classificationRequest(
 		semanticRecord(fixture.checking.AccountId, "-110.00", "USD", nil),
-		semanticRecord(fixture.exchange.AccountId, "110.00", "USD", nil),
-		semanticRecord(fixture.exchange.AccountId, "-100.00", "EUR", nil),
+		semanticRecordWithoutSettlement(fixture.exchange.AccountId, "110.00", "USD", nil),
+		semanticRecordWithoutSettlement(fixture.exchange.AccountId, "-100.00", "EUR", nil),
 		semanticRecord(fixture.cashEUR.AccountId, "100.00", "EUR", nil),
 	))
 	mixed := createDatedClassificationTransaction(t, client, "2024-02-04", classificationRequest(
@@ -353,52 +351,52 @@ func TestTransactionListReferenceMetadataSearchBoundary(t *testing.T) {
 	merchant := scenario.Account("expense:ReferenceSearch:MerchantFqn")
 
 	first := createTransaction(t, client, transactionListFilterRequest(transactionListFilterInput{
-		Date:          "2024-04-01",
-		BalanceID:     checking.AccountId,
-		FlowID:        merchant.AccountId,
-		CategoryID:    category.CategoryId,
-		TagID:         tag.TagId,
-		MemberID:      &member.MemberId,
-		Memo:          "Reference metadata first",
-		Amount:        "12.00",
-		PendingDate:   "2024-04-01T00:00:00Z",
-		PostingStatus: httpclient.PostingStatusPosted,
+		Date:        "2024-04-01",
+		BalanceID:   checking.AccountId,
+		FlowID:      merchant.AccountId,
+		CategoryID:  category.CategoryId,
+		TagID:       tag.TagId,
+		MemberID:    &member.MemberId,
+		Memo:        "Reference metadata first",
+		Amount:      "12.00",
+		PendingDate: "2024-04-01T00:00:00Z",
+		Settlement:  apptest.PostedSettlement(),
 	}))
 	second := createTransaction(t, client, transactionListFilterRequest(transactionListFilterInput{
-		Date:          "2024-04-02",
-		BalanceID:     scenario.AccountWithCurrency("checking:ReferenceSearch:Second", "USD").AccountId,
-		FlowID:        scenario.Account("expense:ReferenceSearch:SecondMerchant").AccountId,
-		CategoryID:    secondCategory.CategoryId,
-		TagID:         tag.TagId,
-		Memo:          "Reference metadata second",
-		Amount:        "13.00",
-		PendingDate:   "2024-04-02T00:00:00Z",
-		PostingStatus: httpclient.PostingStatusPosted,
+		Date:        "2024-04-02",
+		BalanceID:   scenario.AccountWithCurrency("checking:ReferenceSearch:Second", "USD").AccountId,
+		FlowID:      scenario.Account("expense:ReferenceSearch:SecondMerchant").AccountId,
+		CategoryID:  secondCategory.CategoryId,
+		TagID:       tag.TagId,
+		Memo:        "Reference metadata second",
+		Amount:      "13.00",
+		PendingDate: "2024-04-02T00:00:00Z",
+		Settlement:  apptest.PostedSettlement(),
 	}))
 	third := createTransaction(t, client, transactionListFilterRequest(transactionListFilterInput{
-		Date:          "2024-04-03",
-		BalanceID:     scenario.AccountWithCurrency("checking:ReferenceSearch:Third", "USD").AccountId,
-		FlowID:        scenario.Account("expense:ReferenceSearch:ThirdMerchant").AccountId,
-		CategoryID:    thirdCategory.CategoryId,
-		TagID:         tag.TagId,
-		Memo:          "Reference metadata third",
-		Amount:        "14.00",
-		PendingDate:   "2024-04-03T00:00:00Z",
-		PostingStatus: httpclient.PostingStatusPosted,
+		Date:        "2024-04-03",
+		BalanceID:   scenario.AccountWithCurrency("checking:ReferenceSearch:Third", "USD").AccountId,
+		FlowID:      scenario.Account("expense:ReferenceSearch:ThirdMerchant").AccountId,
+		CategoryID:  thirdCategory.CategoryId,
+		TagID:       tag.TagId,
+		Memo:        "Reference metadata third",
+		Amount:      "14.00",
+		PendingDate: "2024-04-03T00:00:00Z",
+		Settlement:  apptest.PostedSettlement(),
 	}))
 	jpyAccount := scenario.AccountWithCurrency("checking:ReferenceSearch:YenBalance", "JPY")
 	jpyMerchant := scenario.Account("expense:ReferenceSearch:YenMerchant")
 	jpyTransaction := createTransaction(t, client, transactionListFilterRequest(transactionListFilterInput{
-		Date:          "2024-04-04",
-		BalanceID:     jpyAccount.AccountId,
-		FlowID:        jpyMerchant.AccountId,
-		CategoryID:    secondCategory.CategoryId,
-		TagID:         tag.TagId,
-		Memo:          "Reference metadata yen",
-		Amount:        "1500.00",
-		Currency:      "JPY",
-		PendingDate:   "2024-04-04T00:00:00Z",
-		PostingStatus: httpclient.PostingStatusPosted,
+		Date:        "2024-04-04",
+		BalanceID:   jpyAccount.AccountId,
+		FlowID:      jpyMerchant.AccountId,
+		CategoryID:  secondCategory.CategoryId,
+		TagID:       tag.TagId,
+		Memo:        "Reference metadata yen",
+		Amount:      "1500.00",
+		Currency:    "JPY",
+		PendingDate: "2024-04-04T00:00:00Z",
+		Settlement:  apptest.PostedSettlement(),
 	}))
 	eurMetadataAccount := createSearchAccount(t, client, httpclient.CreateAccountRequest{
 		Fqn:         "checking:ReferenceSearch:EuroRecord",
@@ -407,16 +405,16 @@ func TestTransactionListReferenceMetadataSearchBoundary(t *testing.T) {
 	eurMerchant := scenario.Account("expense:ReferenceSearch:EuroMerchant")
 	currencyOnlyTag := scenario.Tag("ReferenceSearch:Tags:CurrencyOnly")
 	eurTransaction := createTransaction(t, client, transactionListFilterRequest(transactionListFilterInput{
-		Date:          "2024-04-05",
-		BalanceID:     eurMetadataAccount.AccountId,
-		FlowID:        eurMerchant.AccountId,
-		CategoryID:    secondCategory.CategoryId,
-		TagID:         currencyOnlyTag.TagId,
-		Memo:          "Reference metadata euro record",
-		Amount:        "15.00",
-		Currency:      "EUR",
-		PendingDate:   "2024-04-05T00:00:00Z",
-		PostingStatus: httpclient.PostingStatusPosted,
+		Date:        "2024-04-05",
+		BalanceID:   eurMetadataAccount.AccountId,
+		FlowID:      eurMerchant.AccountId,
+		CategoryID:  secondCategory.CategoryId,
+		TagID:       currencyOnlyTag.TagId,
+		Memo:        "Reference metadata euro record",
+		Amount:      "15.00",
+		Currency:    "EUR",
+		PendingDate: "2024-04-05T00:00:00Z",
+		Settlement:  apptest.PostedSettlement(),
 	}))
 
 	limitTwo := 2
@@ -470,7 +468,7 @@ func TestTransactionListReferenceMetadataSearchDoesNotDuplicateMultiTagMatchesBo
 				AmountUsd:            apptest.StringPtr("-12.00"),
 				TagIds:               &tagIDs,
 				Memo:                 &firstMemo,
-				PostingStatus:        httpclient.PostingStatusPosted,
+				Settlement:           apptest.PostedSettlement(),
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.WritableSourceManual,
 			},
@@ -482,7 +480,6 @@ func TestTransactionListReferenceMetadataSearchDoesNotDuplicateMultiTagMatchesBo
 				CategoryId:           apptest.Int64Ptr(category.CategoryId),
 				TagIds:               &tagIDs,
 				Memo:                 &secondMemo,
-				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.WritableSourceManual,
 			},
@@ -530,29 +527,29 @@ func TestTransactionListReferenceMetadataSearchIgnoresReplacedRecordsBoundary(t 
 	activeMerchant := scenario.Account("expense:ReferenceSearchReplaced:ActiveMerchant")
 
 	created := createTransaction(t, client, transactionListFilterRequest(transactionListFilterInput{
-		Date:          "2024-05-01",
-		BalanceID:     oldAccount.AccountId,
-		FlowID:        oldMerchant.AccountId,
-		CategoryID:    oldCategory.CategoryId,
-		TagID:         oldTag.TagId,
-		MemberID:      &oldMember.MemberId,
-		Memo:          "Old metadata before replacement",
-		Amount:        "20.00",
-		Currency:      "CHF",
-		PendingDate:   "2024-05-01T00:00:00Z",
-		PostingStatus: httpclient.PostingStatusPosted,
+		Date:        "2024-05-01",
+		BalanceID:   oldAccount.AccountId,
+		FlowID:      oldMerchant.AccountId,
+		CategoryID:  oldCategory.CategoryId,
+		TagID:       oldTag.TagId,
+		MemberID:    &oldMember.MemberId,
+		Memo:        "Old metadata before replacement",
+		Amount:      "20.00",
+		Currency:    "CHF",
+		PendingDate: "2024-05-01T00:00:00Z",
+		Settlement:  apptest.PostedSettlement(),
 	}))
 	replacement := transactionListFilterRequest(transactionListFilterInput{
-		Date:          "2024-05-02",
-		BalanceID:     activeAccount.AccountId,
-		FlowID:        activeMerchant.AccountId,
-		CategoryID:    activeCategory.CategoryId,
-		TagID:         activeTag.TagId,
-		MemberID:      &activeMember.MemberId,
-		Memo:          "Active metadata after replacement",
-		Amount:        "21.00",
-		PendingDate:   "2024-05-02T00:00:00Z",
-		PostingStatus: httpclient.PostingStatusPosted,
+		Date:        "2024-05-02",
+		BalanceID:   activeAccount.AccountId,
+		FlowID:      activeMerchant.AccountId,
+		CategoryID:  activeCategory.CategoryId,
+		TagID:       activeTag.TagId,
+		MemberID:    &activeMember.MemberId,
+		Memo:        "Active metadata after replacement",
+		Amount:      "21.00",
+		PendingDate: "2024-05-02T00:00:00Z",
+		Settlement:  apptest.PostedSettlement(),
 	})
 	replaced, err := client.REST().ReplaceTransactionWithResponse(
 		context.Background(),
@@ -593,17 +590,17 @@ func TestTransactionListFiltersComposeWithAnchorBoundary(t *testing.T) {
 
 	first := createTransactionForDate(t, client, refs.transactionRefs, "2024-01-01", "First")
 	createTransaction(t, client, transactionListFilterRequest(transactionListFilterInput{
-		Date:          "2024-01-05",
-		BalanceID:     refs.SavingsAccountId,
-		FlowID:        otherMerchant.AccountId,
-		CategoryID:    refs.SecondCategoryId,
-		TagID:         refs.SecondTagId,
-		MemberID:      &refs.SecondMemberId,
-		Memo:          "Filtered out",
-		Amount:        "9.00",
-		PendingDate:   "2024-01-05T00:00:00Z",
-		PostedDate:    ptrTo("2024-01-06T00:00:00Z"),
-		PostingStatus: httpclient.PostingStatusPosted,
+		Date:        "2024-01-05",
+		BalanceID:   refs.SavingsAccountId,
+		FlowID:      otherMerchant.AccountId,
+		CategoryID:  refs.SecondCategoryId,
+		TagID:       refs.SecondTagId,
+		MemberID:    &refs.SecondMemberId,
+		Memo:        "Filtered out",
+		Amount:      "9.00",
+		PendingDate: "2024-01-05T00:00:00Z",
+		PostedDate:  ptrTo("2024-01-06T00:00:00Z"),
+		Settlement:  apptest.PostedSettlement(),
 	}))
 	third := createTransactionForDate(t, client, refs.transactionRefs, "2024-01-03", "Third")
 	fourth := createTransactionForDate(t, client, refs.transactionRefs, "2024-01-04", "Fourth")
@@ -647,30 +644,29 @@ func TestTransactionListFiltersIgnoreReplacedRecordsBoundary(t *testing.T) {
 	updatedMerchant := client.Scenario().Account("expense:UpdatedMerchant")
 
 	created := createTransaction(t, client, transactionListFilterRequest(transactionListFilterInput{
-		Date:          "2024-02-01",
-		BalanceID:     refs.CheckingAccountId,
-		FlowID:        refs.MerchantAccountId,
-		CategoryID:    refs.CategoryId,
-		TagID:         refs.TagId,
-		MemberID:      &refs.MemberId,
-		Memo:          "edited away memo",
-		Amount:        "12.34",
-		PendingDate:   "2024-02-01T00:00:00Z",
-		PostedDate:    ptrTo("2024-02-02T00:00:00Z"),
-		PostingStatus: httpclient.PostingStatusPending,
+		Date:        "2024-02-01",
+		BalanceID:   refs.CheckingAccountId,
+		FlowID:      refs.MerchantAccountId,
+		CategoryID:  refs.CategoryId,
+		TagID:       refs.TagId,
+		MemberID:    &refs.MemberId,
+		Memo:        "edited away memo",
+		Amount:      "12.34",
+		PendingDate: "2024-02-01T00:00:00Z",
+		Settlement:  apptest.PendingSettlement(),
 	}))
 	replacement := transactionListFilterRequest(transactionListFilterInput{
-		Date:          "2024-02-03",
-		BalanceID:     refs.SavingsAccountId,
-		FlowID:        updatedMerchant.AccountId,
-		CategoryID:    refs.SecondCategoryId,
-		TagID:         refs.SecondTagId,
-		MemberID:      &refs.SecondMemberId,
-		Memo:          "active replacement memo",
-		Amount:        "56.78",
-		PendingDate:   "2024-02-03T00:00:00Z",
-		PostedDate:    ptrTo("2024-02-04T00:00:00Z"),
-		PostingStatus: httpclient.PostingStatusPosted,
+		Date:        "2024-02-03",
+		BalanceID:   refs.SavingsAccountId,
+		FlowID:      updatedMerchant.AccountId,
+		CategoryID:  refs.SecondCategoryId,
+		TagID:       refs.SecondTagId,
+		MemberID:    &refs.SecondMemberId,
+		Memo:        "active replacement memo",
+		Amount:      "56.78",
+		PendingDate: "2024-02-03T00:00:00Z",
+		PostedDate:  ptrTo("2024-02-04T00:00:00Z"),
+		Settlement:  apptest.PostedSettlement(),
 	})
 	replaced, err := client.REST().ReplaceTransactionWithResponse(
 		context.Background(),
@@ -757,9 +753,9 @@ func TestTransactionListFiltersIgnoreReplacedRecordsBoundary(t *testing.T) {
 			},
 		},
 		{
-			name:   "posting status",
-			old:    &httpclient.ListTransactionsParams{PostingStatus: ptrTo([]httpclient.PostingStatus{httpclient.PostingStatusPending})},
-			active: &httpclient.ListTransactionsParams{PostingStatus: ptrTo([]httpclient.PostingStatus{httpclient.PostingStatusPosted})},
+			name:   "settlement",
+			old:    &httpclient.ListTransactionsParams{Settlement: ptrTo([]httpclient.TransactionSettlement{httpclient.TransactionSettlementPending})},
+			active: &httpclient.ListTransactionsParams{Settlement: ptrTo([]httpclient.TransactionSettlement{httpclient.TransactionSettlementPosted})},
 		},
 	}
 
@@ -785,7 +781,7 @@ func TestTransactionListFilterValidationBoundary(t *testing.T) {
 		"category_id=0",
 		"tag_id=0",
 		"member_id=0",
-		"posting_status=unknown",
+		"settlement=unknown",
 		"amount_min=not-a-decimal",
 		"amount_usd_max=100000000000.00",
 		"initiated_date_from=2024-02-30",
@@ -870,18 +866,18 @@ func TestTransactionListDictionaryFilterReferencesBoundary(t *testing.T) {
 }
 
 type transactionListFilterInput struct {
-	Date          string
-	BalanceID     int64
-	FlowID        int64
-	CategoryID    int64
-	TagID         int64
-	MemberID      *int64
-	Memo          string
-	Amount        string
-	Currency      string
-	PendingDate   string
-	PostedDate    *string
-	PostingStatus httpclient.PostingStatus
+	Date        string
+	BalanceID   int64
+	FlowID      int64
+	CategoryID  int64
+	TagID       int64
+	MemberID    *int64
+	Memo        string
+	Amount      string
+	Currency    string
+	PendingDate string
+	PostedDate  *string
+	Settlement  *httpclient.SettlementIntent
 }
 
 func transactionListFilterRequest(input transactionListFilterInput) httpclient.CreateTransactionRequest {
@@ -895,6 +891,9 @@ func transactionListFilterRequest(input transactionListFilterInput) httpclient.C
 	if input.PostedDate != nil {
 		postedDate = apptest.TimestampPtr(*input.PostedDate)
 	}
+	settlement := *input.Settlement
+	settlement.PendingDate = &pendingDate
+	settlement.PostedDate = postedDate
 
 	return httpclient.CreateTransactionRequest{
 		InitiatedDate: apptest.Date(input.Date),
@@ -907,9 +906,7 @@ func transactionListFilterRequest(input transactionListFilterInput) httpclient.C
 				AmountUsd:            apptest.StringPtr("-" + input.Amount),
 				TagIds:               &tagIDs,
 				Memo:                 &input.Memo,
-				PendingDate:          &pendingDate,
-				PostedDate:           postedDate,
-				PostingStatus:        input.PostingStatus,
+				Settlement:           &settlement,
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.WritableSourceManual,
 			},
@@ -919,9 +916,7 @@ func transactionListFilterRequest(input transactionListFilterInput) httpclient.C
 				Amount:               input.Amount,
 				AmountUsd:            apptest.StringPtr(input.Amount),
 				CategoryId:           apptest.Int64Ptr(input.CategoryID),
-				PendingDate:          &pendingDate,
-				PostedDate:           postedDate,
-				PostingStatus:        input.PostingStatus,
+				Settlement:           nil,
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.WritableSourceManual,
 			},

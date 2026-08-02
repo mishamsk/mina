@@ -1,6 +1,5 @@
 import {
   Calendar,
-  CalendarWeeks,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -25,7 +24,6 @@ import {
 } from "@/models/transaction-filters";
 
 import { transactionClassLabel } from "./format";
-import { CalendarWeeksOff } from "./line-icons";
 import { TransactionSearchInput } from "./transaction-search-input";
 
 interface TransactionBrowserToolbarProps {
@@ -44,7 +42,6 @@ interface TransactionBrowserToolbarProps {
   readonly onDateJumpPrevious: (trigger: HTMLButtonElement) => void;
   readonly onDateJumpToday: (trigger: HTMLButtonElement) => void;
   readonly onDateJumpValueChange: (value: string) => void;
-  readonly onHideExpectedChange: (hideExpected: boolean) => void;
   readonly onSelectPage: () => void;
   readonly onSearchChange: (value: string) => void;
   readonly onSetBulkEditMode: (enabled: boolean) => void;
@@ -69,7 +66,6 @@ export const TransactionBrowserToolbar = ({
   onDateJumpPrevious,
   onDateJumpToday,
   onDateJumpValueChange,
-  onHideExpectedChange,
   onSelectPage,
   onSearchChange,
   onSetBulkEditMode,
@@ -285,40 +281,6 @@ export const TransactionBrowserToolbar = ({
                 ))}
               </SelectContent>
             </Select>
-          </div>
-          <div className="flex h-9 items-end">
-            <AppTooltip
-              asChild
-              label={
-                filters.hideExpected
-                  ? "Expected hidden — show"
-                  : "Hide expected transactions"
-              }
-            >
-              <Button
-                type="button"
-                variant="outline"
-                size="icon-lg"
-                aria-label="Hide expected"
-                aria-pressed={filters.hideExpected}
-                className="aria-pressed:bg-[var(--table-header)]"
-                onClick={() => {
-                  onHideExpectedChange(!filters.hideExpected);
-                }}
-              >
-                {filters.hideExpected ? (
-                  <CalendarWeeksOff
-                    aria-hidden="true"
-                    data-icon="calendar-weeks-off"
-                  />
-                ) : (
-                  <CalendarWeeks
-                    aria-hidden="true"
-                    data-icon="calendar-weeks"
-                  />
-                )}
-              </Button>
-            </AppTooltip>
           </div>
           {extraControls}
           <div

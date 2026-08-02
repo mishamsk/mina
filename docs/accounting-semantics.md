@@ -135,25 +135,66 @@ A journal record combines:
 - signed amount and currency,
 - an optional category and its economic intent,
 - optional USD value,
-- member, tags, memo, dates, statuses, source, and external identifiers.
+- member, tags, memo, lifecycle-independent event dates, source, and external
+  identifiers.
 
 **Category rule:** a record has a category if and only if it is a `flow` record.
 Records violating this are invalid. The rule has no exceptions and does not
 depend on anything outside the record itself.
 
 Transactions must balance to zero by currency across active records. USD values
-are stored on records when supplied.
+are stored on records when supplied. Any missing USD value is inferred at the
+transaction's `initiated_date` for every record; pending and posted event dates
+do not change valuation.
 
 Record sign follows the journal convention: positive amounts debit an account
 and negative amounts credit an account. For `owned` and `party` accounts, the
 resulting balance is interpreted directly as household state.
 
-Expected and cancellation are transaction-level posting states. Among a
-transaction's active records, either all posting statuses are `expected` or none
-are, and either all are `cancelled` or none are. Pending and posted records may
-mix within the same non-expected, non-cancelled transaction. Balance validation
-includes expected and cancelled records; aggregate surfaces such as account
-balances, month totals, and running balances exclude them.
+## Transaction Lifecycle and Balance Settlement
+
+Lifecycle belongs to the transaction:
+
+- `ACTIVE` is ordinary accounting activity and is the only lifecycle accepted
+  by generic create and replace workflows.
+- `EXPECTED` is an unconfirmed recurring occurrence. Recurring materialization
+  is its only creator.
+- `CANCELLED` is preserved history that no longer affects accounting. It is
+  reached only by cancelling an active transaction.
+
+Lifecycle is separate from tombstoning. Tombstoning deletes a transaction from
+active persistence views; cancellation keeps it reviewable and reversible.
+Expected and cancelled transactions remain structurally balanced, but balances,
+running balances, month totals, and reports include only active transactions.
+Default transaction and record listings omit expected transactions; explicit
+lifecycle filters may request any lifecycle.
+
+Settlement applies only to `owned` and `party` records and is derived from event
+dates:
+
+- `posted_date != NULL` is `posted`, including when `pending_date` is retained.
+- Otherwise `pending_date != NULL` is `pending`.
+- If both dates exist, posted cannot precede pending.
+- `flow` and `system` records always have neither date and no settlement.
+
+Every balance record on an active transaction has a valid pending or posted
+settlement. Balance records on an expected transaction have neither date.
+Settlement intent is therefore supplied only when an expected transaction is
+confirmed or when active balance records are created or changed. Exact provider
+event times are preserved; omitted manual times use the transaction initiated
+date on creation and the operation time on later settlement changes.
+
+A transaction's derived settlement summary is `pending` when all settled
+balance records are pending, `posted` when all are posted, `mixed` when both are
+present, and `not_applicable` when no record has settlement. The last case
+includes transactions with no balance records and expected transactions.
+
+Cancellation is idempotent and valid only for an active transaction whose
+settlement is wholly pending. Expected, posted, mixed, and no-balance
+transactions cannot be cancelled; posted activity is corrected by a reversal.
+Cancellation preserves event dates and reconciliation. Restoration is an
+explicit transaction operation that changes only lifecycle back to `ACTIVE`.
+Generic replacement is limited to active transactions.
 
 ## Currencies and Exchanges
 

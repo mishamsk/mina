@@ -67,7 +67,7 @@ func Operations() []Operation {
 			MCP: MCPOperation{
 				Group: "records", Name: "bulk_reassign_account",
 				ReadOnly: false, Destructive: true, Idempotent: true, OpenWorld: false,
-				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"account_id\":{\"description\":\"Account identifier for this journal record or request.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"record_ids\":{\"description\":\"Journal-record identifiers to update.\",\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"minItems\":1,\"type\":\"array\",\"uniqueItems\":true}},\"required\":[\"account_id\",\"record_ids\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"account_id\":{\"description\":\"Account identifier for this journal record or request.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"record_ids\":{\"description\":\"Journal-record identifiers to update.\",\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"minItems\":1,\"type\":\"array\",\"uniqueItems\":true},\"settlement\":{\"anyOf\":[{\"allOf\":[{\"additionalProperties\":false,\"properties\":{\"pending_date\":{\"anyOf\":[{\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Exact UTC time the balance record entered pending; omitted manual values are derived by the service.\"},\"posted_date\":{\"anyOf\":[{\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Exact UTC time the balance record posted; omitted manual values are derived by the service.\"},\"status\":{\"description\":\"Server-derived balance-record settlement.\",\"enum\":[\"pending\",\"posted\"],\"type\":\"string\"}},\"required\":[\"status\"],\"type\":\"object\"}]},{\"type\":\"null\"}],\"description\":\"Required when the target is owned or party and existing dates cannot supply a valid settlement; omit for flow or system.\"}},\"required\":[\"account_id\",\"record_ids\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Body: BodyDescriptor{
@@ -89,23 +89,29 @@ func Operations() []Operation {
 							Array:       true,
 							ItemType:    "integer",
 						},
+						{
+							Name:        "settlement",
+							Type:        "",
+							Description: "Required when the target is owned or party and existing dates cannot supply a valid settlement; omit for flow or system.",
+							Required:    false,
+						},
 					},
 					RequiredProperties: []string{"account_id", "record_ids"},
-					Simple:             true,
+					Simple:             false,
 				},
 			},
 			Invoke: invokeBulkReassignJournalRecordAccount,
 		},
 		{
-			ID:          "bulkUpdateJournalRecordStatuses",
+			ID:          "bulkSetJournalRecordReconciliation",
 			Method:      "POST",
-			Path:        "/api/records/bulk/status",
-			Summary:     "Update posting and reconciliation statuses on selected journal records.",
-			Description: "Update posting and/or reconciliation status on selected record IDs while preserving transaction-wide expected/cancelled invariants. This is a bulk mutation and requires explicit user intent.",
+			Path:        "/api/records/bulk/reconciliation",
+			Summary:     "Set reconciliation on selected active journal records.",
+			Description: "Set reconciliation on selected active journal-record IDs. This is a bulk mutation and requires explicit user intent.",
 			MCP: MCPOperation{
-				Group: "records", Name: "bulk_update_statuses",
+				Group: "records", Name: "bulk_set_reconciliation",
 				ReadOnly: false, Destructive: true, Idempotent: true, OpenWorld: false,
-				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"description\":\"Provide posting_status, reconciliation_status, or both.\",\"minProperties\":2,\"properties\":{\"posting_status\":{\"description\":\"Non-expected posting status accepted by bulk status updates.\",\"enum\":[\"pending\",\"posted\",\"cancelled\"],\"type\":\"string\"},\"reconciliation_status\":{\"description\":\"Whether a journal record has been reconciled with its external or expected source.\",\"enum\":[\"reconciled\",\"unreconciled\"],\"type\":\"string\"},\"record_ids\":{\"description\":\"Journal-record identifiers to update.\",\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"minItems\":1,\"type\":\"array\",\"uniqueItems\":true}},\"required\":[\"record_ids\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"reconciliation_status\":{\"description\":\"Whether a journal record has been reconciled with its external or expected source.\",\"enum\":[\"reconciled\",\"unreconciled\"],\"type\":\"string\"},\"record_ids\":{\"description\":\"Journal-record identifiers to update.\",\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"minItems\":1,\"type\":\"array\",\"uniqueItems\":true}},\"required\":[\"reconciliation_status\",\"record_ids\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Body: BodyDescriptor{
@@ -114,17 +120,10 @@ func Operations() []Operation {
 					Type:     "object",
 					Properties: []BodyPropertyDescriptor{
 						{
-							Name:        "posting_status",
-							Type:        "string",
-							Description: "Non-expected posting status accepted by bulk status updates.",
-							Required:    false,
-							Enum:        []string{"pending", "posted", "cancelled"},
-						},
-						{
 							Name:        "reconciliation_status",
 							Type:        "string",
 							Description: "Whether a journal record has been reconciled with its external or expected source.",
-							Required:    false,
+							Required:    true,
 							Enum:        []string{"reconciled", "unreconciled"},
 						},
 						{
@@ -136,11 +135,50 @@ func Operations() []Operation {
 							ItemType:    "integer",
 						},
 					},
-					RequiredProperties: []string{"record_ids"},
+					RequiredProperties: []string{"reconciliation_status", "record_ids"},
 					Simple:             true,
 				},
 			},
-			Invoke: invokeBulkUpdateJournalRecordStatuses,
+			Invoke: invokeBulkSetJournalRecordReconciliation,
+		},
+		{
+			ID:          "bulkSetJournalRecordSettlement",
+			Method:      "POST",
+			Path:        "/api/records/bulk/settlement",
+			Summary:     "Set settlement on selected active owned or party records.",
+			Description: "Set pending or posted settlement on selected active owned or party record IDs. This is a bulk mutation and requires explicit user intent.",
+			MCP: MCPOperation{
+				Group: "records", Name: "bulk_set_settlement",
+				ReadOnly: false, Destructive: true, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"record_ids\":{\"description\":\"Journal-record identifiers to update.\",\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"minItems\":1,\"type\":\"array\",\"uniqueItems\":true},\"settlement\":{\"description\":\"Server-derived balance-record settlement.\",\"enum\":[\"pending\",\"posted\"],\"type\":\"string\"}},\"required\":[\"record_ids\",\"settlement\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
+			},
+			Input: InputDescriptor{
+				Body: BodyDescriptor{
+					Present:  true,
+					Required: true,
+					Type:     "object",
+					Properties: []BodyPropertyDescriptor{
+						{
+							Name:        "record_ids",
+							Type:        "array",
+							Description: "Journal-record identifiers to update.",
+							Required:    true,
+							Array:       true,
+							ItemType:    "integer",
+						},
+						{
+							Name:        "settlement",
+							Type:        "string",
+							Description: "Server-derived balance-record settlement.",
+							Required:    true,
+							Enum:        []string{"pending", "posted"},
+						},
+					},
+					RequiredProperties: []string{"record_ids", "settlement"},
+					Simple:             true,
+				},
+			},
+			Invoke: invokeBulkSetJournalRecordSettlement,
 		},
 		{
 			ID:          "bulkUpdateJournalRecordTags",
@@ -195,7 +233,7 @@ func Operations() []Operation {
 			Method:      "POST",
 			Path:        "/api/transactions/{transaction_id}/cancel",
 			Summary:     "Cancel a transaction.",
-			Description: "Mark every active record in one transaction cancelled without tombstoning it. This is destructive, excludes it from aggregates, and requires explicit user intent; use transactions_delete for tombstoning.",
+			Description: "Change a wholly pending active transaction to cancelled without changing its record history. This excludes it from aggregates and requires explicit user intent; use transactions_delete for tombstoning.",
 			MCP: MCPOperation{
 				Group: "transactions", Name: "cancel",
 				ReadOnly: false, Destructive: true, Idempotent: true, OpenWorld: false,
@@ -254,7 +292,7 @@ func Operations() []Operation {
 			MCP: MCPOperation{
 				Group: "recurring", Name: "confirm_next",
 				ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: false,
-				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"recurring_definition_id\":{\"description\":\"Numeric identifier of the recurring definition to target or filter by.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"recurring_definition_id\"],\"type\":\"object\"}"),
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"pending_date\":{\"anyOf\":[{\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Exact UTC time the balance record entered pending; omitted manual values are derived by the service.\"},\"posted_date\":{\"anyOf\":[{\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Exact UTC time the balance record posted; omitted manual values are derived by the service.\"},\"status\":{\"description\":\"Server-derived balance-record settlement.\",\"enum\":[\"pending\",\"posted\"],\"type\":\"string\"}},\"required\":[\"status\"],\"type\":\"object\"},\"recurring_definition_id\":{\"description\":\"Numeric identifier of the recurring definition to target or filter by.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"body\",\"recurring_definition_id\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -264,6 +302,34 @@ func Operations() []Operation {
 						Description: "Numeric identifier of the recurring definition to target or filter by.",
 						Required:    true,
 					},
+				},
+				Body: BodyDescriptor{
+					Present:  true,
+					Required: true,
+					Type:     "object",
+					Properties: []BodyPropertyDescriptor{
+						{
+							Name:        "pending_date",
+							Type:        "string",
+							Description: "Exact UTC time the balance record entered pending; omitted manual values are derived by the service.",
+							Required:    false,
+						},
+						{
+							Name:        "posted_date",
+							Type:        "string",
+							Description: "Exact UTC time the balance record posted; omitted manual values are derived by the service.",
+							Required:    false,
+						},
+						{
+							Name:        "status",
+							Type:        "string",
+							Description: "Server-derived balance-record settlement.",
+							Required:    true,
+							Enum:        []string{"pending", "posted"},
+						},
+					},
+					RequiredProperties: []string{"status"},
+					Simple:             false,
 				},
 			},
 			Invoke: invokeConfirmNextRecurringDefinition,
@@ -277,7 +343,7 @@ func Operations() []Operation {
 			MCP: MCPOperation{
 				Group: "recurring", Name: "confirm_occurrence",
 				ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: false,
-				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"recurring_occurrence_id\":{\"description\":\"Numeric identifier of the recurring occurrence.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"recurring_occurrence_id\"],\"type\":\"object\"}"),
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"pending_date\":{\"anyOf\":[{\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Exact UTC time the balance record entered pending; omitted manual values are derived by the service.\"},\"posted_date\":{\"anyOf\":[{\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Exact UTC time the balance record posted; omitted manual values are derived by the service.\"},\"status\":{\"description\":\"Server-derived balance-record settlement.\",\"enum\":[\"pending\",\"posted\"],\"type\":\"string\"}},\"required\":[\"status\"],\"type\":\"object\"},\"recurring_occurrence_id\":{\"description\":\"Numeric identifier of the recurring occurrence.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"body\",\"recurring_occurrence_id\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -287,6 +353,34 @@ func Operations() []Operation {
 						Description: "Numeric identifier of the recurring occurrence.",
 						Required:    true,
 					},
+				},
+				Body: BodyDescriptor{
+					Present:  true,
+					Required: true,
+					Type:     "object",
+					Properties: []BodyPropertyDescriptor{
+						{
+							Name:        "pending_date",
+							Type:        "string",
+							Description: "Exact UTC time the balance record entered pending; omitted manual values are derived by the service.",
+							Required:    false,
+						},
+						{
+							Name:        "posted_date",
+							Type:        "string",
+							Description: "Exact UTC time the balance record posted; omitted manual values are derived by the service.",
+							Required:    false,
+						},
+						{
+							Name:        "status",
+							Type:        "string",
+							Description: "Server-derived balance-record settlement.",
+							Required:    true,
+							Enum:        []string{"pending", "posted"},
+						},
+					},
+					RequiredProperties: []string{"status"},
+					Simple:             false,
 				},
 			},
 			Invoke: invokeConfirmRecurringOccurrence,
@@ -508,7 +602,7 @@ func Operations() []Operation {
 			MCP: MCPOperation{
 				Group: "transactions", Name: "create_exchange",
 				ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: false,
-				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"bought_account_id\":{\"description\":\"Owned or party account into which currency is bought.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"bought_amount\":{\"description\":\"JSON string, not a JSON number. Positive amount denominated in the resolved bought currency.\",\"maxLength\":19,\"not\":{\"pattern\":\"^0{1,10}(\\\\.0{1,8})?$\"},\"pattern\":\"^[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"bought_currency\":{\"description\":\"Currency bought. Optional for a single-currency bought account and required for a multi-currency bought account; an explicit value must match a single-currency account.\",\"pattern\":\"^([A-Z]{3}|C::.+)$\",\"type\":\"string\"},\"initiated_date\":{\"description\":\"Human-facing transaction date in YYYY-MM-DD format.\",\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"member_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}],\"description\":\"Optional household-member identifier for the journal records.\"},\"memo\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Optional memo text for the journal records.\"},\"pending_date\":{\"anyOf\":[{\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.\"},\"posted_date\":{\"anyOf\":[{\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.\"},\"posting_status\":{\"description\":\"Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.\",\"enum\":[\"expected\",\"pending\",\"posted\",\"cancelled\"],\"type\":\"string\"},\"reconciliation_status\":{\"description\":\"Whether a journal record has been reconciled with its external or expected source.\",\"enum\":[\"reconciled\",\"unreconciled\"],\"type\":\"string\"},\"sold_account_id\":{\"description\":\"Owned or party account from which currency is sold.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"sold_amount\":{\"description\":\"JSON string, not a JSON number. Positive amount denominated in the resolved sold currency.\",\"maxLength\":19,\"not\":{\"pattern\":\"^0{1,10}(\\\\.0{1,8})?$\"},\"pattern\":\"^[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"sold_currency\":{\"description\":\"Currency sold. Optional for a single-currency sold account and required for a multi-currency sold account; an explicit value must match a single-currency account.\",\"pattern\":\"^([A-Z]{3}|C::.+)$\",\"type\":\"string\"},\"tag_ids\":{\"description\":\"Tag identifiers to assign to the journal records.\",\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\",\"uniqueItems\":true}},\"required\":[\"bought_account_id\",\"bought_amount\",\"initiated_date\",\"sold_account_id\",\"sold_amount\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"bought_account_id\":{\"description\":\"Owned or party account into which currency is bought.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"bought_amount\":{\"description\":\"JSON string, not a JSON number. Positive amount denominated in the resolved bought currency.\",\"maxLength\":19,\"not\":{\"pattern\":\"^0{1,10}(\\\\.0{1,8})?$\"},\"pattern\":\"^[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"bought_currency\":{\"description\":\"Currency bought. Optional for a single-currency bought account and required for a multi-currency bought account; an explicit value must match a single-currency account.\",\"pattern\":\"^([A-Z]{3}|C::.+)$\",\"type\":\"string\"},\"initiated_date\":{\"description\":\"Human-facing transaction date in YYYY-MM-DD format.\",\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"member_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}],\"description\":\"Optional household-member identifier for the journal records.\"},\"memo\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Optional memo text for the journal records.\"},\"reconciliation_status\":{\"description\":\"Whether a journal record has been reconciled with its external or expected source.\",\"enum\":[\"reconciled\",\"unreconciled\"],\"type\":\"string\"},\"settlement\":{\"additionalProperties\":false,\"properties\":{\"pending_date\":{\"anyOf\":[{\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Exact UTC time the balance record entered pending; omitted manual values are derived by the service.\"},\"posted_date\":{\"anyOf\":[{\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Exact UTC time the balance record posted; omitted manual values are derived by the service.\"},\"status\":{\"description\":\"Server-derived balance-record settlement.\",\"enum\":[\"pending\",\"posted\"],\"type\":\"string\"}},\"required\":[\"status\"],\"type\":\"object\"},\"sold_account_id\":{\"description\":\"Owned or party account from which currency is sold.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"sold_amount\":{\"description\":\"JSON string, not a JSON number. Positive amount denominated in the resolved sold currency.\",\"maxLength\":19,\"not\":{\"pattern\":\"^0{1,10}(\\\\.0{1,8})?$\"},\"pattern\":\"^[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"sold_currency\":{\"description\":\"Currency sold. Optional for a single-currency sold account and required for a multi-currency sold account; an explicit value must match a single-currency account.\",\"pattern\":\"^([A-Z]{3}|C::.+)$\",\"type\":\"string\"},\"tag_ids\":{\"description\":\"Tag identifiers to assign to the journal records.\",\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\",\"uniqueItems\":true}},\"required\":[\"bought_account_id\",\"bought_amount\",\"initiated_date\",\"sold_account_id\",\"sold_amount\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Body: BodyDescriptor{
@@ -553,30 +647,17 @@ func Operations() []Operation {
 							Required:    false,
 						},
 						{
-							Name:        "pending_date",
-							Type:        "string",
-							Description: "UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.",
-							Required:    false,
-						},
-						{
-							Name:        "posted_date",
-							Type:        "string",
-							Description: "UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.",
-							Required:    false,
-						},
-						{
-							Name:        "posting_status",
-							Type:        "string",
-							Description: "Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.",
-							Required:    false,
-							Enum:        []string{"expected", "pending", "posted", "cancelled"},
-						},
-						{
 							Name:        "reconciliation_status",
 							Type:        "string",
 							Description: "Whether a journal record has been reconciled with its external or expected source.",
 							Required:    false,
 							Enum:        []string{"reconciled", "unreconciled"},
+						},
+						{
+							Name:        "settlement",
+							Type:        "object",
+							Description: "",
+							Required:    false,
 						},
 						{
 							Name:        "sold_account_id",
@@ -620,7 +701,7 @@ func Operations() []Operation {
 			MCP: MCPOperation{
 				Group: "transactions", Name: "create_income",
 				ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: false,
-				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"amount\":{\"description\":\"JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":19,\"not\":{\"pattern\":\"^0{1,10}(\\\\.0{1,8})?$\"},\"pattern\":\"^[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"category_id\":{\"description\":\"Category identifier for this journal record or shorthand transaction.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"currency\":{\"description\":\"Currency code using ISO 4217 or the `C::` crypto prefix; must match every referenced single-currency account.\",\"pattern\":\"^([A-Z]{3}|C::.+)$\",\"type\":\"string\"},\"destination_account_id\":{\"description\":\"Destination balance-account identifier for the income, refund, or transfer.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"initiated_date\":{\"description\":\"Human-facing transaction date in YYYY-MM-DD format.\",\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"member_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}],\"description\":\"Optional household-member identifier for the journal records.\"},\"memo\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Optional memo text for the journal records.\"},\"pending_date\":{\"anyOf\":[{\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.\"},\"posted_date\":{\"anyOf\":[{\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.\"},\"posting_status\":{\"description\":\"Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.\",\"enum\":[\"expected\",\"pending\",\"posted\",\"cancelled\"],\"type\":\"string\"},\"reconciliation_status\":{\"description\":\"Whether a journal record has been reconciled with its external or expected source.\",\"enum\":[\"reconciled\",\"unreconciled\"],\"type\":\"string\"},\"source_account_id\":{\"description\":\"Source account identifier for the income or transfer.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"tag_ids\":{\"description\":\"Tag identifiers to assign to the journal records.\",\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\",\"uniqueItems\":true}},\"required\":[\"amount\",\"category_id\",\"currency\",\"destination_account_id\",\"initiated_date\",\"source_account_id\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"amount\":{\"description\":\"JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":19,\"not\":{\"pattern\":\"^0{1,10}(\\\\.0{1,8})?$\"},\"pattern\":\"^[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"category_id\":{\"description\":\"Category identifier for this journal record or shorthand transaction.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"currency\":{\"description\":\"Currency code using ISO 4217 or the `C::` crypto prefix; must match every referenced single-currency account.\",\"pattern\":\"^([A-Z]{3}|C::.+)$\",\"type\":\"string\"},\"destination_account_id\":{\"description\":\"Destination balance-account identifier for the income, refund, or transfer.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"initiated_date\":{\"description\":\"Human-facing transaction date in YYYY-MM-DD format.\",\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"member_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}],\"description\":\"Optional household-member identifier for the journal records.\"},\"memo\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Optional memo text for the journal records.\"},\"reconciliation_status\":{\"description\":\"Whether a journal record has been reconciled with its external or expected source.\",\"enum\":[\"reconciled\",\"unreconciled\"],\"type\":\"string\"},\"settlement\":{\"additionalProperties\":false,\"properties\":{\"pending_date\":{\"anyOf\":[{\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Exact UTC time the balance record entered pending; omitted manual values are derived by the service.\"},\"posted_date\":{\"anyOf\":[{\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Exact UTC time the balance record posted; omitted manual values are derived by the service.\"},\"status\":{\"description\":\"Server-derived balance-record settlement.\",\"enum\":[\"pending\",\"posted\"],\"type\":\"string\"}},\"required\":[\"status\"],\"type\":\"object\"},\"source_account_id\":{\"description\":\"Source account identifier for the income or transfer.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"tag_ids\":{\"description\":\"Tag identifiers to assign to the journal records.\",\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\",\"uniqueItems\":true}},\"required\":[\"amount\",\"category_id\",\"currency\",\"destination_account_id\",\"initiated_date\",\"source_account_id\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Body: BodyDescriptor{
@@ -671,30 +752,17 @@ func Operations() []Operation {
 							Required:    false,
 						},
 						{
-							Name:        "pending_date",
-							Type:        "string",
-							Description: "UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.",
-							Required:    false,
-						},
-						{
-							Name:        "posted_date",
-							Type:        "string",
-							Description: "UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.",
-							Required:    false,
-						},
-						{
-							Name:        "posting_status",
-							Type:        "string",
-							Description: "Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.",
-							Required:    false,
-							Enum:        []string{"expected", "pending", "posted", "cancelled"},
-						},
-						{
 							Name:        "reconciliation_status",
 							Type:        "string",
 							Description: "Whether a journal record has been reconciled with its external or expected source.",
 							Required:    false,
 							Enum:        []string{"reconciled", "unreconciled"},
+						},
+						{
+							Name:        "settlement",
+							Type:        "object",
+							Description: "",
+							Required:    false,
 						},
 						{
 							Name:        "source_account_id",
@@ -812,7 +880,7 @@ func Operations() []Operation {
 			MCP: MCPOperation{
 				Group: "transactions", Name: "create_refund",
 				ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: false,
-				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"amount\":{\"description\":\"JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":19,\"not\":{\"pattern\":\"^0{1,10}(\\\\.0{1,8})?$\"},\"pattern\":\"^[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"category_id\":{\"description\":\"Category identifier for this journal record or shorthand transaction.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"counterparty_account_id\":{\"description\":\"Flow-account identifier for the spend or refund counterparty record.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"currency\":{\"description\":\"Currency code using ISO 4217 or the `C::` crypto prefix; must match every referenced single-currency account.\",\"pattern\":\"^([A-Z]{3}|C::.+)$\",\"type\":\"string\"},\"destination_account_id\":{\"description\":\"Destination balance-account identifier for the income, refund, or transfer.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"initiated_date\":{\"description\":\"Human-facing transaction date in YYYY-MM-DD format.\",\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"member_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}],\"description\":\"Optional household-member identifier for the journal records.\"},\"memo\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Optional memo text for the journal records.\"},\"pending_date\":{\"anyOf\":[{\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.\"},\"posted_date\":{\"anyOf\":[{\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.\"},\"posting_status\":{\"description\":\"Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.\",\"enum\":[\"expected\",\"pending\",\"posted\",\"cancelled\"],\"type\":\"string\"},\"reconciliation_status\":{\"description\":\"Whether a journal record has been reconciled with its external or expected source.\",\"enum\":[\"reconciled\",\"unreconciled\"],\"type\":\"string\"},\"tag_ids\":{\"description\":\"Tag identifiers to assign to the journal records.\",\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\",\"uniqueItems\":true}},\"required\":[\"amount\",\"category_id\",\"counterparty_account_id\",\"currency\",\"destination_account_id\",\"initiated_date\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"amount\":{\"description\":\"JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":19,\"not\":{\"pattern\":\"^0{1,10}(\\\\.0{1,8})?$\"},\"pattern\":\"^[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"category_id\":{\"description\":\"Category identifier for this journal record or shorthand transaction.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"counterparty_account_id\":{\"description\":\"Flow-account identifier for the spend or refund counterparty record.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"currency\":{\"description\":\"Currency code using ISO 4217 or the `C::` crypto prefix; must match every referenced single-currency account.\",\"pattern\":\"^([A-Z]{3}|C::.+)$\",\"type\":\"string\"},\"destination_account_id\":{\"description\":\"Destination balance-account identifier for the income, refund, or transfer.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"initiated_date\":{\"description\":\"Human-facing transaction date in YYYY-MM-DD format.\",\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"member_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}],\"description\":\"Optional household-member identifier for the journal records.\"},\"memo\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Optional memo text for the journal records.\"},\"reconciliation_status\":{\"description\":\"Whether a journal record has been reconciled with its external or expected source.\",\"enum\":[\"reconciled\",\"unreconciled\"],\"type\":\"string\"},\"settlement\":{\"additionalProperties\":false,\"properties\":{\"pending_date\":{\"anyOf\":[{\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Exact UTC time the balance record entered pending; omitted manual values are derived by the service.\"},\"posted_date\":{\"anyOf\":[{\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Exact UTC time the balance record posted; omitted manual values are derived by the service.\"},\"status\":{\"description\":\"Server-derived balance-record settlement.\",\"enum\":[\"pending\",\"posted\"],\"type\":\"string\"}},\"required\":[\"status\"],\"type\":\"object\"},\"tag_ids\":{\"description\":\"Tag identifiers to assign to the journal records.\",\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\",\"uniqueItems\":true}},\"required\":[\"amount\",\"category_id\",\"counterparty_account_id\",\"currency\",\"destination_account_id\",\"initiated_date\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Body: BodyDescriptor{
@@ -869,30 +937,17 @@ func Operations() []Operation {
 							Required:    false,
 						},
 						{
-							Name:        "pending_date",
-							Type:        "string",
-							Description: "UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.",
-							Required:    false,
-						},
-						{
-							Name:        "posted_date",
-							Type:        "string",
-							Description: "UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.",
-							Required:    false,
-						},
-						{
-							Name:        "posting_status",
-							Type:        "string",
-							Description: "Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.",
-							Required:    false,
-							Enum:        []string{"expected", "pending", "posted", "cancelled"},
-						},
-						{
 							Name:        "reconciliation_status",
 							Type:        "string",
 							Description: "Whether a journal record has been reconciled with its external or expected source.",
 							Required:    false,
 							Enum:        []string{"reconciled", "unreconciled"},
+						},
+						{
+							Name:        "settlement",
+							Type:        "object",
+							Description: "",
+							Required:    false,
 						},
 						{
 							Name:        "tag_ids",
@@ -918,7 +973,7 @@ func Operations() []Operation {
 			MCP: MCPOperation{
 				Group: "transactions", Name: "create_spend",
 				ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: false,
-				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"amount\":{\"description\":\"JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":19,\"not\":{\"pattern\":\"^0{1,10}(\\\\.0{1,8})?$\"},\"pattern\":\"^[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"category_id\":{\"description\":\"Category identifier for this journal record or shorthand transaction.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"counterparty_account_id\":{\"description\":\"Flow-account identifier for the spend or refund counterparty record.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"currency\":{\"description\":\"Currency code using ISO 4217 or the `C::` crypto prefix; must match every referenced single-currency account.\",\"pattern\":\"^([A-Z]{3}|C::.+)$\",\"type\":\"string\"},\"funding_account_id\":{\"description\":\"Balance-account identifier that funds the spend.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"initiated_date\":{\"description\":\"Human-facing transaction date in YYYY-MM-DD format.\",\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"member_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}],\"description\":\"Optional household-member identifier for the journal records.\"},\"memo\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Optional memo text for the journal records.\"},\"pending_date\":{\"anyOf\":[{\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.\"},\"posted_date\":{\"anyOf\":[{\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.\"},\"posting_status\":{\"description\":\"Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.\",\"enum\":[\"expected\",\"pending\",\"posted\",\"cancelled\"],\"type\":\"string\"},\"reconciliation_status\":{\"description\":\"Whether a journal record has been reconciled with its external or expected source.\",\"enum\":[\"reconciled\",\"unreconciled\"],\"type\":\"string\"},\"tag_ids\":{\"description\":\"Tag identifiers to assign to the journal records.\",\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\",\"uniqueItems\":true}},\"required\":[\"amount\",\"category_id\",\"counterparty_account_id\",\"currency\",\"funding_account_id\",\"initiated_date\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"amount\":{\"description\":\"JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":19,\"not\":{\"pattern\":\"^0{1,10}(\\\\.0{1,8})?$\"},\"pattern\":\"^[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"category_id\":{\"description\":\"Category identifier for this journal record or shorthand transaction.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"counterparty_account_id\":{\"description\":\"Flow-account identifier for the spend or refund counterparty record.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"currency\":{\"description\":\"Currency code using ISO 4217 or the `C::` crypto prefix; must match every referenced single-currency account.\",\"pattern\":\"^([A-Z]{3}|C::.+)$\",\"type\":\"string\"},\"funding_account_id\":{\"description\":\"Balance-account identifier that funds the spend.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"initiated_date\":{\"description\":\"Human-facing transaction date in YYYY-MM-DD format.\",\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"member_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}],\"description\":\"Optional household-member identifier for the journal records.\"},\"memo\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Optional memo text for the journal records.\"},\"reconciliation_status\":{\"description\":\"Whether a journal record has been reconciled with its external or expected source.\",\"enum\":[\"reconciled\",\"unreconciled\"],\"type\":\"string\"},\"settlement\":{\"additionalProperties\":false,\"properties\":{\"pending_date\":{\"anyOf\":[{\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Exact UTC time the balance record entered pending; omitted manual values are derived by the service.\"},\"posted_date\":{\"anyOf\":[{\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Exact UTC time the balance record posted; omitted manual values are derived by the service.\"},\"status\":{\"description\":\"Server-derived balance-record settlement.\",\"enum\":[\"pending\",\"posted\"],\"type\":\"string\"}},\"required\":[\"status\"],\"type\":\"object\"},\"tag_ids\":{\"description\":\"Tag identifiers to assign to the journal records.\",\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\",\"uniqueItems\":true}},\"required\":[\"amount\",\"category_id\",\"counterparty_account_id\",\"currency\",\"funding_account_id\",\"initiated_date\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Body: BodyDescriptor{
@@ -975,30 +1030,17 @@ func Operations() []Operation {
 							Required:    false,
 						},
 						{
-							Name:        "pending_date",
-							Type:        "string",
-							Description: "UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.",
-							Required:    false,
-						},
-						{
-							Name:        "posted_date",
-							Type:        "string",
-							Description: "UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.",
-							Required:    false,
-						},
-						{
-							Name:        "posting_status",
-							Type:        "string",
-							Description: "Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.",
-							Required:    false,
-							Enum:        []string{"expected", "pending", "posted", "cancelled"},
-						},
-						{
 							Name:        "reconciliation_status",
 							Type:        "string",
 							Description: "Whether a journal record has been reconciled with its external or expected source.",
 							Required:    false,
 							Enum:        []string{"reconciled", "unreconciled"},
+						},
+						{
+							Name:        "settlement",
+							Type:        "object",
+							Description: "",
+							Required:    false,
 						},
 						{
 							Name:        "tag_ids",
@@ -1066,7 +1108,7 @@ func Operations() []Operation {
 			MCP: MCPOperation{
 				Group: "transactions", Name: "create",
 				ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: false,
-				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"initiated_date\":{\"description\":\"Human-facing transaction date in YYYY-MM-DD format.\",\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"records\":{\"description\":\"Complete journal-record set; active records must balance to zero within each currency.\",\"items\":{\"additionalProperties\":false,\"properties\":{\"account_id\":{\"description\":\"Account identifier for this journal record or request.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"amount\":{\"description\":\"JSON string, not a JSON number. Signed non-zero DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_usd\":{\"anyOf\":[{\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.\"},\"category_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}],\"description\":\"Category identifier for a flow record; omit or use null for every other account type.\"},\"currency\":{\"description\":\"Record currency using ISO 4217 or the `C::` crypto prefix; it must match the referenced account when that account is single-currency.\",\"pattern\":\"^([A-Z]{3}|C::.+)$\",\"type\":\"string\"},\"external_id\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Optional identifier assigned by an external system.\"},\"external_system\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Optional namespace for `external_id`, such as a provider name.\"},\"member_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}],\"description\":\"Optional household-member identifier for the journal records.\"},\"memo\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Optional memo text for the journal records.\"},\"pending_date\":{\"anyOf\":[{\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"UTC timestamp when the record entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.\"},\"posted_date\":{\"anyOf\":[{\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"UTC timestamp when the record posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.\"},\"posting_status\":{\"description\":\"Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.\",\"enum\":[\"expected\",\"pending\",\"posted\",\"cancelled\"],\"type\":\"string\"},\"reconciliation_status\":{\"description\":\"Whether a journal record has been reconciled with its external or expected source.\",\"enum\":[\"reconciled\",\"unreconciled\"],\"type\":\"string\"},\"source\":{\"description\":\"User-writable journal-record origin. Recurring-template records are created only by Mina.\",\"enum\":[\"manual\",\"imported\"],\"type\":\"string\"},\"tag_ids\":{\"description\":\"Tag identifiers to assign to the journal records.\",\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\"}},\"required\":[\"account_id\",\"amount\",\"currency\",\"posting_status\",\"reconciliation_status\",\"source\"],\"type\":\"object\"},\"minItems\":2,\"type\":\"array\"}},\"required\":[\"initiated_date\",\"records\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"initiated_date\":{\"description\":\"Human-facing transaction date in YYYY-MM-DD format.\",\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"records\":{\"description\":\"Complete journal-record set; active records must balance to zero within each currency.\",\"items\":{\"additionalProperties\":false,\"properties\":{\"account_id\":{\"description\":\"Account identifier for this journal record or request.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"amount\":{\"description\":\"JSON string, not a JSON number. Signed non-zero DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_usd\":{\"anyOf\":[{\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.\"},\"category_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}],\"description\":\"Category identifier for a flow record; omit or use null for every other account type.\"},\"currency\":{\"description\":\"Record currency using ISO 4217 or the `C::` crypto prefix; it must match the referenced account when that account is single-currency.\",\"pattern\":\"^([A-Z]{3}|C::.+)$\",\"type\":\"string\"},\"external_id\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Optional identifier assigned by an external system.\"},\"external_system\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Optional namespace for `external_id`, such as a provider name.\"},\"member_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}],\"description\":\"Optional household-member identifier for the journal records.\"},\"memo\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Optional memo text for the journal records.\"},\"reconciliation_status\":{\"description\":\"Whether a journal record has been reconciled with its external or expected source.\",\"enum\":[\"reconciled\",\"unreconciled\"],\"type\":\"string\"},\"settlement\":{\"anyOf\":[{\"allOf\":[{\"additionalProperties\":false,\"properties\":{\"pending_date\":{\"anyOf\":[{\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Exact UTC time the balance record entered pending; omitted manual values are derived by the service.\"},\"posted_date\":{\"anyOf\":[{\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Exact UTC time the balance record posted; omitted manual values are derived by the service.\"},\"status\":{\"description\":\"Server-derived balance-record settlement.\",\"enum\":[\"pending\",\"posted\"],\"type\":\"string\"}},\"required\":[\"status\"],\"type\":\"object\"}]},{\"type\":\"null\"}],\"description\":\"Settlement intent for owned and party records; use null for flow and system records.\"},\"source\":{\"description\":\"User-writable journal-record origin. Recurring-template records are created only by Mina.\",\"enum\":[\"manual\",\"imported\"],\"type\":\"string\"},\"tag_ids\":{\"description\":\"Tag identifiers to assign to the journal records.\",\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\"}},\"required\":[\"account_id\",\"amount\",\"currency\",\"reconciliation_status\",\"settlement\",\"source\"],\"type\":\"object\"},\"minItems\":2,\"type\":\"array\"}},\"required\":[\"initiated_date\",\"records\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Body: BodyDescriptor{
@@ -1104,7 +1146,7 @@ func Operations() []Operation {
 			MCP: MCPOperation{
 				Group: "transaction_templates", Name: "create",
 				ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: false,
-				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"fqn\":{\"description\":\"Colon-separated hierarchical FQN for the transaction template leaf.\",\"type\":\"string\"},\"records\":{\"description\":\"Partial date-free record defaults; template records do not need to balance.\",\"items\":{\"additionalProperties\":false,\"properties\":{\"account_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}],\"description\":\"Account identifier for this journal record or request.\"},\"amount\":{\"anyOf\":[{\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.\"},\"category_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}],\"description\":\"Optional category default for a flow-account record.\"},\"currency\":{\"anyOf\":[{\"pattern\":\"^([A-Z]{3}|C::.+)$\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Currency code using ISO 4217 or the `C::` crypto prefix.\"},\"member_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}],\"description\":\"Optional household-member identifier for the journal records.\"},\"memo\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Optional memo text for the journal records.\"},\"posting_status\":{\"anyOf\":[{\"allOf\":[{\"description\":\"Non-expected posting status accepted by bulk status updates.\",\"enum\":[\"pending\",\"posted\",\"cancelled\"],\"type\":\"string\"}]},{\"type\":\"null\"}],\"description\":\"Posting-status value or optional template default for the journal record.\"},\"reconciliation_status\":{\"anyOf\":[{\"allOf\":[{\"description\":\"Whether a journal record has been reconciled with its external or expected source.\",\"enum\":[\"reconciled\",\"unreconciled\"],\"type\":\"string\"}]},{\"type\":\"null\"}],\"description\":\"Reconciliation-status value or optional template default for the journal record.\"},\"tag_ids\":{\"description\":\"Tag identifiers to assign to the journal records.\",\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\",\"uniqueItems\":true}},\"type\":\"object\"},\"minItems\":1,\"type\":\"array\"}},\"required\":[\"fqn\",\"records\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"fqn\":{\"description\":\"Colon-separated hierarchical FQN for the transaction template leaf.\",\"type\":\"string\"},\"records\":{\"description\":\"Partial date-free record defaults; template records do not need to balance.\",\"items\":{\"additionalProperties\":false,\"properties\":{\"account_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}],\"description\":\"Account identifier for this journal record or request.\"},\"amount\":{\"anyOf\":[{\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.\"},\"category_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}],\"description\":\"Optional category default for a flow-account record.\"},\"currency\":{\"anyOf\":[{\"pattern\":\"^([A-Z]{3}|C::.+)$\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Currency code using ISO 4217 or the `C::` crypto prefix.\"},\"member_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}],\"description\":\"Optional household-member identifier for the journal records.\"},\"memo\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Optional memo text for the journal records.\"},\"reconciliation_status\":{\"anyOf\":[{\"allOf\":[{\"description\":\"Whether a journal record has been reconciled with its external or expected source.\",\"enum\":[\"reconciled\",\"unreconciled\"],\"type\":\"string\"}]},{\"type\":\"null\"}],\"description\":\"Reconciliation-status value or optional template default for the journal record.\"},\"tag_ids\":{\"description\":\"Tag identifiers to assign to the journal records.\",\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\",\"uniqueItems\":true}},\"type\":\"object\"},\"minItems\":1,\"type\":\"array\"}},\"required\":[\"fqn\",\"records\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Body: BodyDescriptor{
@@ -1142,7 +1184,7 @@ func Operations() []Operation {
 			MCP: MCPOperation{
 				Group: "transactions", Name: "create_transfer",
 				ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: false,
-				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"amount\":{\"description\":\"JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":19,\"not\":{\"pattern\":\"^0{1,10}(\\\\.0{1,8})?$\"},\"pattern\":\"^[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"currency\":{\"description\":\"Currency code using ISO 4217 or the `C::` crypto prefix; must match every referenced single-currency account.\",\"pattern\":\"^([A-Z]{3}|C::.+)$\",\"type\":\"string\"},\"destination_account_id\":{\"description\":\"Destination balance-account identifier for the income, refund, or transfer.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"initiated_date\":{\"description\":\"Human-facing transaction date in YYYY-MM-DD format.\",\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"member_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}],\"description\":\"Optional household-member identifier for the journal records.\"},\"memo\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Optional memo text for the journal records.\"},\"pending_date\":{\"anyOf\":[{\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.\"},\"posted_date\":{\"anyOf\":[{\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.\"},\"posting_status\":{\"description\":\"Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.\",\"enum\":[\"expected\",\"pending\",\"posted\",\"cancelled\"],\"type\":\"string\"},\"reconciliation_status\":{\"description\":\"Whether a journal record has been reconciled with its external or expected source.\",\"enum\":[\"reconciled\",\"unreconciled\"],\"type\":\"string\"},\"source_account_id\":{\"description\":\"Source account identifier for the income or transfer.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"tag_ids\":{\"description\":\"Tag identifiers to assign to the journal records.\",\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\",\"uniqueItems\":true}},\"required\":[\"amount\",\"currency\",\"destination_account_id\",\"initiated_date\",\"source_account_id\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"amount\":{\"description\":\"JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":19,\"not\":{\"pattern\":\"^0{1,10}(\\\\.0{1,8})?$\"},\"pattern\":\"^[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"currency\":{\"description\":\"Currency code using ISO 4217 or the `C::` crypto prefix; must match every referenced single-currency account.\",\"pattern\":\"^([A-Z]{3}|C::.+)$\",\"type\":\"string\"},\"destination_account_id\":{\"description\":\"Destination balance-account identifier for the income, refund, or transfer.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"initiated_date\":{\"description\":\"Human-facing transaction date in YYYY-MM-DD format.\",\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"member_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}],\"description\":\"Optional household-member identifier for the journal records.\"},\"memo\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Optional memo text for the journal records.\"},\"reconciliation_status\":{\"description\":\"Whether a journal record has been reconciled with its external or expected source.\",\"enum\":[\"reconciled\",\"unreconciled\"],\"type\":\"string\"},\"settlement\":{\"additionalProperties\":false,\"properties\":{\"pending_date\":{\"anyOf\":[{\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Exact UTC time the balance record entered pending; omitted manual values are derived by the service.\"},\"posted_date\":{\"anyOf\":[{\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Exact UTC time the balance record posted; omitted manual values are derived by the service.\"},\"status\":{\"description\":\"Server-derived balance-record settlement.\",\"enum\":[\"pending\",\"posted\"],\"type\":\"string\"}},\"required\":[\"status\"],\"type\":\"object\"},\"source_account_id\":{\"description\":\"Source account identifier for the income or transfer.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"tag_ids\":{\"description\":\"Tag identifiers to assign to the journal records.\",\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\",\"uniqueItems\":true}},\"required\":[\"amount\",\"currency\",\"destination_account_id\",\"initiated_date\",\"source_account_id\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Body: BodyDescriptor{
@@ -1187,30 +1229,17 @@ func Operations() []Operation {
 							Required:    false,
 						},
 						{
-							Name:        "pending_date",
-							Type:        "string",
-							Description: "UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.",
-							Required:    false,
-						},
-						{
-							Name:        "posted_date",
-							Type:        "string",
-							Description: "UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.",
-							Required:    false,
-						},
-						{
-							Name:        "posting_status",
-							Type:        "string",
-							Description: "Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.",
-							Required:    false,
-							Enum:        []string{"expected", "pending", "posted", "cancelled"},
-						},
-						{
 							Name:        "reconciliation_status",
 							Type:        "string",
 							Description: "Whether a journal record has been reconciled with its external or expected source.",
 							Required:    false,
 							Enum:        []string{"reconciled", "unreconciled"},
+						},
+						{
+							Name:        "settlement",
+							Type:        "object",
+							Description: "",
+							Required:    false,
 						},
 						{
 							Name:        "source_account_id",
@@ -2554,7 +2583,7 @@ func Operations() []Operation {
 			MCP: MCPOperation{
 				Group: "transactions", Name: "list",
 				ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false,
-				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"account_id\":{\"description\":\"Account identifier to target or filter by.\",\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\"},\"amount_max\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) maximum filter; use at most 10 integer digits and 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_min\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) minimum filter; use at most 10 integer digits and 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_usd_max\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) USD maximum filter; use at most 10 integer digits and 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_usd_min\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) USD minimum filter; use at most 10 integer digits and 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"anchor_date\":{\"description\":\"Date-only anchor that returns the page containing the first transaction at or before this initiated date. If the anchor is older than every transaction, the page clamps to the oldest transaction page. Valid only with initiated_date descending ordering and overrides offset when present.\",\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"category_id\":{\"description\":\"Category identifier to target or filter by.\",\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\"},\"initiated_date_from\":{\"description\":\"Minimum transaction initiated date in YYYY-MM-DD format.\",\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"initiated_date_to\":{\"description\":\"Maximum transaction initiated date in YYYY-MM-DD format.\",\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"limit\":{\"description\":\"Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.\",\"maximum\":500,\"minimum\":1,\"type\":\"integer\"},\"member_id\":{\"description\":\"Household-member identifier to target or filter by.\",\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\"},\"offset\":{\"description\":\"Zero-based number of matching results to skip.\",\"minimum\":0,\"type\":\"integer\"},\"pending_date_from\":{\"description\":\"Minimum pending timestamp in ISO 8601 format; records without a pending timestamp do not match.\",\"format\":\"date-time\",\"type\":\"string\"},\"pending_date_to\":{\"description\":\"Maximum pending timestamp in ISO 8601 format; records without a pending timestamp do not match.\",\"format\":\"date-time\",\"type\":\"string\"},\"posted_date_from\":{\"description\":\"Minimum posted timestamp in ISO 8601 format.\",\"format\":\"date-time\",\"type\":\"string\"},\"posted_date_to\":{\"description\":\"Maximum posted timestamp in ISO 8601 format.\",\"format\":\"date-time\",\"type\":\"string\"},\"posting_status\":{\"description\":\"Filters transactions by active record posting status. Expected transactions are excluded by default and returned only when this filter explicitly includes `expected`.\",\"items\":{\"description\":\"Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.\",\"enum\":[\"expected\",\"pending\",\"posted\",\"cancelled\"],\"type\":\"string\"},\"type\":\"array\"},\"record_role\":{\"description\":\"Filter by one or more server-derived record roles present in a transaction.\",\"items\":{\"description\":\"Accounting role derived independently from one record's account, sign, and category intent.\",\"enum\":[\"expense\",\"refund\",\"income\",\"clawback\",\"exchange\",\"adjustment\",\"balance\"],\"type\":\"string\"},\"type\":\"array\"},\"search\":{\"description\":\"Case-insensitive search over active journal records. Contains-match fields are record memo, counterparty account name, account FQN, category FQN, tag FQN, member name, and account external_id. Record currency matches by exact case-insensitive code equality. Account external_system is intentionally excluded to avoid broad system-label matches.\",\"type\":\"string\"},\"sort\":{\"default\":\"initiated_date\",\"description\":\"Field used to sort matching results; defaults to `initiated_date`.\",\"enum\":[\"initiated_date\",\"created_at\"],\"type\":\"string\"},\"sort_dir\":{\"default\":\"desc\",\"description\":\"Sort direction for matching results; defaults to `desc`.\",\"enum\":[\"asc\",\"desc\"],\"type\":\"string\"},\"tag_id\":{\"description\":\"Tag identifier to target or filter by.\",\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\"},\"transaction_class\":{\"description\":\"Filter by one or more server-derived transaction classes.\",\"items\":{\"enum\":[\"spend\",\"income\",\"refund\",\"clawback\",\"transfer\",\"currency_exchange\",\"adjustment\",\"mixed\"],\"type\":\"string\"},\"type\":\"array\"},\"transaction_shape\":{\"description\":\"Filter by one or more server-derived transaction shapes.\",\"items\":{\"description\":\"One independently present kind of transaction activity.\",\"enum\":[\"spend\",\"refund\",\"income\",\"clawback\",\"adjustment\",\"exchange\",\"transfer\"],\"type\":\"string\"},\"type\":\"array\"}},\"type\":\"object\"}"),
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"account_id\":{\"description\":\"Account identifier to target or filter by.\",\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\"},\"amount_max\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) maximum filter; use at most 10 integer digits and 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_min\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) minimum filter; use at most 10 integer digits and 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_usd_max\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) USD maximum filter; use at most 10 integer digits and 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_usd_min\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) USD minimum filter; use at most 10 integer digits and 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"anchor_date\":{\"description\":\"Date-only anchor that returns the page containing the first transaction at or before this initiated date. If the anchor is older than every transaction, the page clamps to the oldest transaction page. Valid only with initiated_date descending ordering and overrides offset when present.\",\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"category_id\":{\"description\":\"Category identifier to target or filter by.\",\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\"},\"initiated_date_from\":{\"description\":\"Minimum transaction initiated date in YYYY-MM-DD format.\",\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"initiated_date_to\":{\"description\":\"Maximum transaction initiated date in YYYY-MM-DD format.\",\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"lifecycle_status\":{\"description\":\"Filters transactions by lifecycle. Expected transactions are excluded by default and returned only when this filter explicitly includes `expected`.\",\"items\":{\"description\":\"Transaction lifecycle, independent from balance-record settlement and tombstoning.\",\"enum\":[\"active\",\"expected\",\"cancelled\"],\"type\":\"string\"},\"type\":\"array\"},\"limit\":{\"description\":\"Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.\",\"maximum\":500,\"minimum\":1,\"type\":\"integer\"},\"member_id\":{\"description\":\"Household-member identifier to target or filter by.\",\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\"},\"offset\":{\"description\":\"Zero-based number of matching results to skip.\",\"minimum\":0,\"type\":\"integer\"},\"pending_date_from\":{\"description\":\"Minimum pending timestamp in ISO 8601 format; records without a pending timestamp do not match.\",\"format\":\"date-time\",\"type\":\"string\"},\"pending_date_to\":{\"description\":\"Maximum pending timestamp in ISO 8601 format; records without a pending timestamp do not match.\",\"format\":\"date-time\",\"type\":\"string\"},\"posted_date_from\":{\"description\":\"Minimum posted timestamp in ISO 8601 format.\",\"format\":\"date-time\",\"type\":\"string\"},\"posted_date_to\":{\"description\":\"Maximum posted timestamp in ISO 8601 format.\",\"format\":\"date-time\",\"type\":\"string\"},\"record_role\":{\"description\":\"Filter by one or more server-derived record roles present in a transaction.\",\"items\":{\"description\":\"Accounting role derived independently from one record's account, sign, and category intent.\",\"enum\":[\"expense\",\"refund\",\"income\",\"clawback\",\"exchange\",\"adjustment\",\"balance\"],\"type\":\"string\"},\"type\":\"array\"},\"search\":{\"description\":\"Case-insensitive search over active journal records. Contains-match fields are record memo, counterparty account name, account FQN, category FQN, tag FQN, member name, and account external_id. Record currency matches by exact case-insensitive code equality. Account external_system is intentionally excluded to avoid broad system-label matches.\",\"type\":\"string\"},\"settlement\":{\"description\":\"Filters transactions by server-derived settlement summary.\",\"items\":{\"description\":\"Server-derived settlement summary across a transaction's balance records.\",\"enum\":[\"pending\",\"posted\",\"mixed\",\"not_applicable\"],\"type\":\"string\"},\"type\":\"array\"},\"sort\":{\"default\":\"initiated_date\",\"description\":\"Field used to sort matching results; defaults to `initiated_date`.\",\"enum\":[\"initiated_date\",\"created_at\"],\"type\":\"string\"},\"sort_dir\":{\"default\":\"desc\",\"description\":\"Sort direction for matching results; defaults to `desc`.\",\"enum\":[\"asc\",\"desc\"],\"type\":\"string\"},\"tag_id\":{\"description\":\"Tag identifier to target or filter by.\",\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\"},\"transaction_class\":{\"description\":\"Filter by one or more server-derived transaction classes.\",\"items\":{\"enum\":[\"spend\",\"income\",\"refund\",\"clawback\",\"transfer\",\"currency_exchange\",\"adjustment\",\"mixed\"],\"type\":\"string\"},\"type\":\"array\"},\"transaction_shape\":{\"description\":\"Filter by one or more server-derived transaction shapes.\",\"items\":{\"description\":\"One independently present kind of transaction activity.\",\"enum\":[\"spend\",\"refund\",\"income\",\"clawback\",\"adjustment\",\"exchange\",\"transfer\"],\"type\":\"string\"},\"type\":\"array\"}},\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Query: []ParameterDescriptor{
@@ -2623,13 +2652,22 @@ func Operations() []Operation {
 						ItemType:    "integer",
 					},
 					{
-						Name:        "posting_status",
+						Name:        "lifecycle_status",
 						Type:        "array",
-						Description: "Filters transactions by active record posting status. Expected transactions are excluded by default and returned only when this filter explicitly includes `expected`.",
+						Description: "Filters transactions by lifecycle. Expected transactions are excluded by default and returned only when this filter explicitly includes `expected`.",
 						Required:    false,
 						Array:       true,
 						ItemType:    "string",
-						Enum:        []string{"expected", "pending", "posted", "cancelled"},
+						Enum:        []string{"active", "expected", "cancelled"},
+					},
+					{
+						Name:        "settlement",
+						Type:        "array",
+						Description: "Filters transactions by server-derived settlement summary.",
+						Required:    false,
+						Array:       true,
+						ItemType:    "string",
+						Enum:        []string{"pending", "posted", "mixed", "not_applicable"},
 					},
 					{
 						Name:        "transaction_class",
@@ -2824,7 +2862,7 @@ func Operations() []Operation {
 			MCP: MCPOperation{
 				Group: "transactions", Name: "replace",
 				ReadOnly: false, Destructive: false, Idempotent: true, OpenWorld: false,
-				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"initiated_date\":{\"description\":\"Human-facing transaction date in YYYY-MM-DD format.\",\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"records\":{\"description\":\"Complete journal-record set; active records must balance to zero within each currency.\",\"items\":{\"additionalProperties\":false,\"properties\":{\"account_id\":{\"description\":\"Account identifier for this journal record or request.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"amount\":{\"description\":\"JSON string, not a JSON number. Signed non-zero DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_usd\":{\"anyOf\":[{\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.\"},\"category_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}],\"description\":\"Category identifier for a flow record; omit or use null for every other account type.\"},\"currency\":{\"description\":\"Record currency using ISO 4217 or the `C::` crypto prefix; it must match the referenced account when that account is single-currency.\",\"pattern\":\"^([A-Z]{3}|C::.+)$\",\"type\":\"string\"},\"external_id\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Optional identifier assigned by an external system.\"},\"external_system\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Optional namespace for `external_id`, such as a provider name.\"},\"member_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}],\"description\":\"Optional household-member identifier for the journal records.\"},\"memo\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Optional memo text for the journal records.\"},\"pending_date\":{\"anyOf\":[{\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"UTC timestamp when the record entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.\"},\"posted_date\":{\"anyOf\":[{\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"UTC timestamp when the record posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.\"},\"posting_status\":{\"description\":\"Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.\",\"enum\":[\"expected\",\"pending\",\"posted\",\"cancelled\"],\"type\":\"string\"},\"reconciliation_status\":{\"description\":\"Whether a journal record has been reconciled with its external or expected source.\",\"enum\":[\"reconciled\",\"unreconciled\"],\"type\":\"string\"},\"source\":{\"description\":\"User-writable journal-record origin. Recurring-template records are created only by Mina.\",\"enum\":[\"manual\",\"imported\"],\"type\":\"string\"},\"tag_ids\":{\"description\":\"Tag identifiers to assign to the journal records.\",\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\"}},\"required\":[\"account_id\",\"amount\",\"currency\",\"posting_status\",\"reconciliation_status\",\"source\"],\"type\":\"object\"},\"minItems\":2,\"type\":\"array\"}},\"required\":[\"initiated_date\",\"records\"],\"type\":\"object\"},\"transaction_id\":{\"description\":\"Numeric identifier of the transaction.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"body\",\"transaction_id\"],\"type\":\"object\"}"),
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"initiated_date\":{\"description\":\"Human-facing transaction date in YYYY-MM-DD format.\",\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"records\":{\"description\":\"Complete journal-record set; active records must balance to zero within each currency.\",\"items\":{\"additionalProperties\":false,\"properties\":{\"account_id\":{\"description\":\"Account identifier for this journal record or request.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"amount\":{\"description\":\"JSON string, not a JSON number. Signed non-zero DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_usd\":{\"anyOf\":[{\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.\"},\"category_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}],\"description\":\"Category identifier for a flow record; omit or use null for every other account type.\"},\"currency\":{\"description\":\"Record currency using ISO 4217 or the `C::` crypto prefix; it must match the referenced account when that account is single-currency.\",\"pattern\":\"^([A-Z]{3}|C::.+)$\",\"type\":\"string\"},\"external_id\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Optional identifier assigned by an external system.\"},\"external_system\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Optional namespace for `external_id`, such as a provider name.\"},\"member_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}],\"description\":\"Optional household-member identifier for the journal records.\"},\"memo\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Optional memo text for the journal records.\"},\"reconciliation_status\":{\"description\":\"Whether a journal record has been reconciled with its external or expected source.\",\"enum\":[\"reconciled\",\"unreconciled\"],\"type\":\"string\"},\"settlement\":{\"anyOf\":[{\"allOf\":[{\"additionalProperties\":false,\"properties\":{\"pending_date\":{\"anyOf\":[{\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Exact UTC time the balance record entered pending; omitted manual values are derived by the service.\"},\"posted_date\":{\"anyOf\":[{\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Exact UTC time the balance record posted; omitted manual values are derived by the service.\"},\"status\":{\"description\":\"Server-derived balance-record settlement.\",\"enum\":[\"pending\",\"posted\"],\"type\":\"string\"}},\"required\":[\"status\"],\"type\":\"object\"}]},{\"type\":\"null\"}],\"description\":\"Settlement intent for owned and party records; use null for flow and system records.\"},\"source\":{\"description\":\"User-writable journal-record origin. Recurring-template records are created only by Mina.\",\"enum\":[\"manual\",\"imported\"],\"type\":\"string\"},\"tag_ids\":{\"description\":\"Tag identifiers to assign to the journal records.\",\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\"}},\"required\":[\"account_id\",\"amount\",\"currency\",\"reconciliation_status\",\"settlement\",\"source\"],\"type\":\"object\"},\"minItems\":2,\"type\":\"array\"}},\"required\":[\"initiated_date\",\"records\"],\"type\":\"object\"},\"transaction_id\":{\"description\":\"Numeric identifier of the transaction.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"body\",\"transaction_id\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -2870,7 +2908,7 @@ func Operations() []Operation {
 			MCP: MCPOperation{
 				Group: "transaction_templates", Name: "replace",
 				ReadOnly: false, Destructive: false, Idempotent: true, OpenWorld: false,
-				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"fqn\":{\"description\":\"Colon-separated hierarchical FQN for the transaction template leaf.\",\"type\":\"string\"},\"records\":{\"description\":\"Partial date-free record defaults; template records do not need to balance.\",\"items\":{\"additionalProperties\":false,\"properties\":{\"account_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}],\"description\":\"Account identifier for this journal record or request.\"},\"amount\":{\"anyOf\":[{\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.\"},\"category_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}],\"description\":\"Optional category default for a flow-account record.\"},\"currency\":{\"anyOf\":[{\"pattern\":\"^([A-Z]{3}|C::.+)$\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Currency code using ISO 4217 or the `C::` crypto prefix.\"},\"member_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}],\"description\":\"Optional household-member identifier for the journal records.\"},\"memo\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Optional memo text for the journal records.\"},\"posting_status\":{\"anyOf\":[{\"allOf\":[{\"description\":\"Non-expected posting status accepted by bulk status updates.\",\"enum\":[\"pending\",\"posted\",\"cancelled\"],\"type\":\"string\"}]},{\"type\":\"null\"}],\"description\":\"Posting-status value or optional template default for the journal record.\"},\"reconciliation_status\":{\"anyOf\":[{\"allOf\":[{\"description\":\"Whether a journal record has been reconciled with its external or expected source.\",\"enum\":[\"reconciled\",\"unreconciled\"],\"type\":\"string\"}]},{\"type\":\"null\"}],\"description\":\"Reconciliation-status value or optional template default for the journal record.\"},\"tag_ids\":{\"description\":\"Tag identifiers to assign to the journal records.\",\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\",\"uniqueItems\":true}},\"type\":\"object\"},\"minItems\":1,\"type\":\"array\"}},\"required\":[\"fqn\",\"records\"],\"type\":\"object\"},\"transaction_template_id\":{\"description\":\"Numeric identifier of the transaction template.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"body\",\"transaction_template_id\"],\"type\":\"object\"}"),
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"fqn\":{\"description\":\"Colon-separated hierarchical FQN for the transaction template leaf.\",\"type\":\"string\"},\"records\":{\"description\":\"Partial date-free record defaults; template records do not need to balance.\",\"items\":{\"additionalProperties\":false,\"properties\":{\"account_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}],\"description\":\"Account identifier for this journal record or request.\"},\"amount\":{\"anyOf\":[{\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.\"},\"category_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}],\"description\":\"Optional category default for a flow-account record.\"},\"currency\":{\"anyOf\":[{\"pattern\":\"^([A-Z]{3}|C::.+)$\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Currency code using ISO 4217 or the `C::` crypto prefix.\"},\"member_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}],\"description\":\"Optional household-member identifier for the journal records.\"},\"memo\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Optional memo text for the journal records.\"},\"reconciliation_status\":{\"anyOf\":[{\"allOf\":[{\"description\":\"Whether a journal record has been reconciled with its external or expected source.\",\"enum\":[\"reconciled\",\"unreconciled\"],\"type\":\"string\"}]},{\"type\":\"null\"}],\"description\":\"Reconciliation-status value or optional template default for the journal record.\"},\"tag_ids\":{\"description\":\"Tag identifiers to assign to the journal records.\",\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\",\"uniqueItems\":true}},\"type\":\"object\"},\"minItems\":1,\"type\":\"array\"}},\"required\":[\"fqn\",\"records\"],\"type\":\"object\"},\"transaction_template_id\":{\"description\":\"Numeric identifier of the transaction template.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"body\",\"transaction_template_id\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -2906,6 +2944,29 @@ func Operations() []Operation {
 				},
 			},
 			Invoke: invokeReplaceTransactionTemplate,
+		},
+		{
+			ID:          "restoreTransaction",
+			Method:      "POST",
+			Path:        "/api/transactions/{transaction_id}/restore",
+			Summary:     "Restore a cancelled transaction to active.",
+			Description: "Restore one cancelled transaction to active without changing its record dates or reconciliation.",
+			MCP: MCPOperation{
+				Group: "transactions", Name: "restore",
+				ReadOnly: false, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"transaction_id\":{\"description\":\"Numeric identifier of the transaction.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"transaction_id\"],\"type\":\"object\"}"),
+			},
+			Input: InputDescriptor{
+				Path: []ParameterDescriptor{
+					{
+						Name:        "transaction_id",
+						Type:        "integer",
+						Description: "Numeric identifier of the transaction.",
+						Required:    true,
+					},
+				},
+			},
+			Invoke: invokeRestoreTransaction,
 		},
 		{
 			ID:          "restructureAccounts",
@@ -3083,7 +3144,7 @@ func Operations() []Operation {
 			MCP: MCPOperation{
 				Group: "records", Name: "search_account",
 				ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false,
-				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"account_id\":{\"description\":\"Account identifier to target or filter by.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"amount_max\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) maximum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_min\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) minimum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_usd_max\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) USD maximum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_usd_min\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) USD minimum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"category_id\":{\"description\":\"Category identifier to target or filter by.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"include_expected\":{\"default\":false,\"description\":\"Includes expected records alongside ordinary matching records. Expected records remain excluded from running balances.\",\"type\":\"boolean\"},\"include_running_balance\":{\"default\":false,\"description\":\"When true, each returned account record includes the account balance after that record in chronological order. The running balance is computed over the account's full active history in that record's currency; pending and posted records contribute, cancelled records do not.\",\"type\":\"boolean\"},\"initiated_date_from\":{\"description\":\"Minimum transaction initiated date in YYYY-MM-DD format.\",\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"initiated_date_to\":{\"description\":\"Maximum transaction initiated date in YYYY-MM-DD format.\",\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"limit\":{\"description\":\"Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.\",\"maximum\":500,\"minimum\":1,\"type\":\"integer\"},\"member_id\":{\"description\":\"Household-member identifier to target or filter by.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"memo_contains\":{\"description\":\"Memo substring filter for matching journal records.\",\"type\":\"string\"},\"offset\":{\"description\":\"Zero-based number of matching results to skip.\",\"minimum\":0,\"type\":\"integer\"},\"pending_date_from\":{\"description\":\"Minimum pending timestamp in ISO 8601 format; records without a pending timestamp do not match.\",\"format\":\"date-time\",\"type\":\"string\"},\"pending_date_to\":{\"description\":\"Maximum pending timestamp in ISO 8601 format; records without a pending timestamp do not match.\",\"format\":\"date-time\",\"type\":\"string\"},\"posted_date_from\":{\"description\":\"Minimum posted timestamp in ISO 8601 format.\",\"format\":\"date-time\",\"type\":\"string\"},\"posted_date_to\":{\"description\":\"Maximum posted timestamp in ISO 8601 format.\",\"format\":\"date-time\",\"type\":\"string\"},\"posting_status\":{\"description\":\"Filters account register records by posting status. Expected records are excluded by default and returned when this filter is explicitly `expected` or when `include_expected=true`.\",\"enum\":[\"expected\",\"pending\",\"posted\",\"cancelled\"],\"type\":\"string\"},\"reconciliation_status\":{\"description\":\"Filter by reconciled or unreconciled journal-record status.\",\"enum\":[\"reconciled\",\"unreconciled\"],\"type\":\"string\"},\"sort\":{\"default\":\"initiated_date\",\"description\":\"Field used to sort matching results; defaults to `initiated_date`.\",\"enum\":[\"initiated_date\"],\"type\":\"string\"},\"sort_dir\":{\"default\":\"asc\",\"description\":\"Sort direction for matching results; defaults to `asc`.\",\"enum\":[\"asc\",\"desc\"],\"type\":\"string\"},\"tag_id\":{\"description\":\"Tag identifier to target or filter by.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"account_id\"],\"type\":\"object\"}"),
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"account_id\":{\"description\":\"Account identifier to target or filter by.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"amount_max\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) maximum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_min\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) minimum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_usd_max\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) USD maximum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_usd_min\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) USD minimum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"category_id\":{\"description\":\"Category identifier to target or filter by.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"include_running_balance\":{\"default\":false,\"description\":\"When true, each returned account record includes the account balance after that record in chronological order. The running balance is computed over the account's full active history in that record's currency; pending and posted records contribute, cancelled records do not.\",\"type\":\"boolean\"},\"initiated_date_from\":{\"description\":\"Minimum transaction initiated date in YYYY-MM-DD format.\",\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"initiated_date_to\":{\"description\":\"Maximum transaction initiated date in YYYY-MM-DD format.\",\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"lifecycle_status\":{\"description\":\"Filters account register records by inherited transaction lifecycle. Expected records are excluded by default.\",\"enum\":[\"active\",\"expected\",\"cancelled\"],\"type\":\"string\"},\"limit\":{\"description\":\"Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.\",\"maximum\":500,\"minimum\":1,\"type\":\"integer\"},\"member_id\":{\"description\":\"Household-member identifier to target or filter by.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"memo_contains\":{\"description\":\"Memo substring filter for matching journal records.\",\"type\":\"string\"},\"offset\":{\"description\":\"Zero-based number of matching results to skip.\",\"minimum\":0,\"type\":\"integer\"},\"pending_date_from\":{\"description\":\"Minimum pending timestamp in ISO 8601 format; records without a pending timestamp do not match.\",\"format\":\"date-time\",\"type\":\"string\"},\"pending_date_to\":{\"description\":\"Maximum pending timestamp in ISO 8601 format; records without a pending timestamp do not match.\",\"format\":\"date-time\",\"type\":\"string\"},\"posted_date_from\":{\"description\":\"Minimum posted timestamp in ISO 8601 format.\",\"format\":\"date-time\",\"type\":\"string\"},\"posted_date_to\":{\"description\":\"Maximum posted timestamp in ISO 8601 format.\",\"format\":\"date-time\",\"type\":\"string\"},\"reconciliation_status\":{\"description\":\"Filter by reconciled or unreconciled journal-record status.\",\"enum\":[\"reconciled\",\"unreconciled\"],\"type\":\"string\"},\"settlement\":{\"description\":\"Filters account register records by server-derived settlement.\",\"enum\":[\"pending\",\"posted\"],\"type\":\"string\"},\"sort\":{\"default\":\"initiated_date\",\"description\":\"Field used to sort matching results; defaults to `initiated_date`.\",\"enum\":[\"initiated_date\"],\"type\":\"string\"},\"sort_dir\":{\"default\":\"asc\",\"description\":\"Sort direction for matching results; defaults to `asc`.\",\"enum\":[\"asc\",\"desc\"],\"type\":\"string\"},\"tag_id\":{\"description\":\"Tag identifier to target or filter by.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"account_id\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -3114,17 +3175,18 @@ func Operations() []Operation {
 						Required:    false,
 					},
 					{
-						Name:        "posting_status",
+						Name:        "lifecycle_status",
 						Type:        "string",
-						Description: "Filters account register records by posting status. Expected records are excluded by default and returned when this filter is explicitly `expected` or when `include_expected=true`.",
+						Description: "Filters account register records by inherited transaction lifecycle. Expected records are excluded by default.",
 						Required:    false,
-						Enum:        []string{"expected", "pending", "posted", "cancelled"},
+						Enum:        []string{"active", "expected", "cancelled"},
 					},
 					{
-						Name:        "include_expected",
-						Type:        "boolean",
-						Description: "Includes expected records alongside ordinary matching records. Expected records remain excluded from running balances.",
+						Name:        "settlement",
+						Type:        "string",
+						Description: "Filters account register records by server-derived settlement.",
 						Required:    false,
+						Enum:        []string{"pending", "posted"},
 					},
 					{
 						Name:        "reconciliation_status",
@@ -3244,7 +3306,7 @@ func Operations() []Operation {
 			MCP: MCPOperation{
 				Group: "records", Name: "search",
 				ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false,
-				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"account_fqn_prefix\":{\"description\":\"Account FQN prefix for a grouped register. Matches records whose account FQN equals the prefix or is a descendant below it, including balance and flow accounts. Mutually exclusive with account_id.\",\"type\":\"string\"},\"account_id\":{\"description\":\"Account identifier to target or filter by.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"amount_max\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) maximum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_min\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) minimum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_usd_max\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) USD maximum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_usd_min\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) USD minimum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"category_id\":{\"description\":\"Category identifier to target or filter by.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"include_expected\":{\"default\":false,\"description\":\"Includes expected records alongside ordinary matching records. Expected records remain excluded from running balances.\",\"type\":\"boolean\"},\"initiated_date_from\":{\"description\":\"Minimum transaction initiated date in YYYY-MM-DD format.\",\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"initiated_date_to\":{\"description\":\"Maximum transaction initiated date in YYYY-MM-DD format.\",\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"limit\":{\"description\":\"Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.\",\"maximum\":500,\"minimum\":1,\"type\":\"integer\"},\"member_id\":{\"description\":\"Household-member identifier to target or filter by.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"memo_contains\":{\"description\":\"Memo substring filter for matching journal records.\",\"type\":\"string\"},\"offset\":{\"description\":\"Zero-based number of matching results to skip.\",\"minimum\":0,\"type\":\"integer\"},\"pending_date_from\":{\"description\":\"Minimum pending timestamp in ISO 8601 format; records without a pending timestamp do not match.\",\"format\":\"date-time\",\"type\":\"string\"},\"pending_date_to\":{\"description\":\"Maximum pending timestamp in ISO 8601 format; records without a pending timestamp do not match.\",\"format\":\"date-time\",\"type\":\"string\"},\"posted_date_from\":{\"description\":\"Minimum posted timestamp in ISO 8601 format.\",\"format\":\"date-time\",\"type\":\"string\"},\"posted_date_to\":{\"description\":\"Maximum posted timestamp in ISO 8601 format.\",\"format\":\"date-time\",\"type\":\"string\"},\"posting_status\":{\"description\":\"Filters records by posting status. Expected records are excluded by default and returned when this filter is explicitly `expected` or when `include_expected=true`.\",\"enum\":[\"expected\",\"pending\",\"posted\",\"cancelled\"],\"type\":\"string\"},\"reconciliation_status\":{\"description\":\"Filter by reconciled or unreconciled journal-record status.\",\"enum\":[\"reconciled\",\"unreconciled\"],\"type\":\"string\"},\"record_role\":{\"description\":\"Filters records by their server-derived accounting role.\",\"enum\":[\"expense\",\"refund\",\"income\",\"clawback\",\"exchange\",\"adjustment\",\"balance\"],\"type\":\"string\"},\"sort\":{\"default\":\"initiated_date\",\"description\":\"Field used to sort matching results; defaults to `initiated_date`.\",\"enum\":[\"initiated_date\"],\"type\":\"string\"},\"sort_dir\":{\"default\":\"asc\",\"description\":\"Sort direction for matching results; defaults to `asc`.\",\"enum\":[\"asc\",\"desc\"],\"type\":\"string\"},\"tag_id\":{\"description\":\"Tag identifier to target or filter by.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"type\":\"object\"}"),
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"account_fqn_prefix\":{\"description\":\"Account FQN prefix for a grouped register. Matches records whose account FQN equals the prefix or is a descendant below it, including balance and flow accounts. Mutually exclusive with account_id.\",\"type\":\"string\"},\"account_id\":{\"description\":\"Account identifier to target or filter by.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"amount_max\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) maximum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_min\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) minimum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_usd_max\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) USD maximum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_usd_min\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) USD minimum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"category_id\":{\"description\":\"Category identifier to target or filter by.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"initiated_date_from\":{\"description\":\"Minimum transaction initiated date in YYYY-MM-DD format.\",\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"initiated_date_to\":{\"description\":\"Maximum transaction initiated date in YYYY-MM-DD format.\",\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"lifecycle_status\":{\"description\":\"Filters records by inherited transaction lifecycle. Expected records are excluded by default.\",\"enum\":[\"active\",\"expected\",\"cancelled\"],\"type\":\"string\"},\"limit\":{\"description\":\"Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.\",\"maximum\":500,\"minimum\":1,\"type\":\"integer\"},\"member_id\":{\"description\":\"Household-member identifier to target or filter by.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"memo_contains\":{\"description\":\"Memo substring filter for matching journal records.\",\"type\":\"string\"},\"offset\":{\"description\":\"Zero-based number of matching results to skip.\",\"minimum\":0,\"type\":\"integer\"},\"pending_date_from\":{\"description\":\"Minimum pending timestamp in ISO 8601 format; records without a pending timestamp do not match.\",\"format\":\"date-time\",\"type\":\"string\"},\"pending_date_to\":{\"description\":\"Maximum pending timestamp in ISO 8601 format; records without a pending timestamp do not match.\",\"format\":\"date-time\",\"type\":\"string\"},\"posted_date_from\":{\"description\":\"Minimum posted timestamp in ISO 8601 format.\",\"format\":\"date-time\",\"type\":\"string\"},\"posted_date_to\":{\"description\":\"Maximum posted timestamp in ISO 8601 format.\",\"format\":\"date-time\",\"type\":\"string\"},\"reconciliation_status\":{\"description\":\"Filter by reconciled or unreconciled journal-record status.\",\"enum\":[\"reconciled\",\"unreconciled\"],\"type\":\"string\"},\"record_role\":{\"description\":\"Filters records by their server-derived accounting role.\",\"enum\":[\"expense\",\"refund\",\"income\",\"clawback\",\"exchange\",\"adjustment\",\"balance\"],\"type\":\"string\"},\"settlement\":{\"description\":\"Filters owned and party records by server-derived settlement.\",\"enum\":[\"pending\",\"posted\"],\"type\":\"string\"},\"sort\":{\"default\":\"initiated_date\",\"description\":\"Field used to sort matching results; defaults to `initiated_date`.\",\"enum\":[\"initiated_date\"],\"type\":\"string\"},\"sort_dir\":{\"default\":\"asc\",\"description\":\"Sort direction for matching results; defaults to `asc`.\",\"enum\":[\"asc\",\"desc\"],\"type\":\"string\"},\"tag_id\":{\"description\":\"Tag identifier to target or filter by.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Query: []ParameterDescriptor{
@@ -3279,17 +3341,18 @@ func Operations() []Operation {
 						Required:    false,
 					},
 					{
-						Name:        "posting_status",
+						Name:        "lifecycle_status",
 						Type:        "string",
-						Description: "Filters records by posting status. Expected records are excluded by default and returned when this filter is explicitly `expected` or when `include_expected=true`.",
+						Description: "Filters records by inherited transaction lifecycle. Expected records are excluded by default.",
 						Required:    false,
-						Enum:        []string{"expected", "pending", "posted", "cancelled"},
+						Enum:        []string{"active", "expected", "cancelled"},
 					},
 					{
-						Name:        "include_expected",
-						Type:        "boolean",
-						Description: "Includes expected records alongside ordinary matching records. Expected records remain excluded from running balances.",
+						Name:        "settlement",
+						Type:        "string",
+						Description: "Filters owned and party records by server-derived settlement.",
 						Required:    false,
+						Enum:        []string{"pending", "posted"},
 					},
 					{
 						Name:        "reconciliation_status",
@@ -3901,11 +3964,25 @@ func invokeBulkReassignJournalRecordAccount(ctx context.Context, client httpclie
 	return normalizeInvocationResult(response.Body, response.HTTPResponse)
 }
 
-func invokeBulkUpdateJournalRecordStatuses(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
+func invokeBulkSetJournalRecordReconciliation(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
 	if err := validateInvocationInput(input, nil, nil, true, true); err != nil {
 		return InvocationResult{}, err
 	}
-	response, err := client.BulkUpdateJournalRecordStatusesWithBodyWithResponse(ctx, "application/json", bytes.NewReader(input.Body))
+	response, err := client.BulkSetJournalRecordReconciliationWithBodyWithResponse(ctx, "application/json", bytes.NewReader(input.Body))
+	if err != nil {
+		return InvocationResult{}, err
+	}
+	if response == nil {
+		return InvocationResult{}, errors.New("generated client returned no operation response")
+	}
+	return normalizeInvocationResult(response.Body, response.HTTPResponse)
+}
+
+func invokeBulkSetJournalRecordSettlement(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
+	if err := validateInvocationInput(input, nil, nil, true, true); err != nil {
+		return InvocationResult{}, err
+	}
+	response, err := client.BulkSetJournalRecordSettlementWithBodyWithResponse(ctx, "application/json", bytes.NewReader(input.Body))
 	if err != nil {
 		return InvocationResult{}, err
 	}
@@ -3967,7 +4044,7 @@ func invokeClassifyTransaction(ctx context.Context, client httpclient.ClientWith
 }
 
 func invokeConfirmNextRecurringDefinition(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"recurring_definition_id"}, nil, false, false); err != nil {
+	if err := validateInvocationInput(input, []string{"recurring_definition_id"}, nil, true, true); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -3979,7 +4056,7 @@ func invokeConfirmNextRecurringDefinition(ctx context.Context, client httpclient
 			Err:      err,
 		}
 	}
-	response, err := client.ConfirmNextRecurringDefinitionWithResponse(ctx, pathValue0)
+	response, err := client.ConfirmNextRecurringDefinitionWithBodyWithResponse(ctx, pathValue0, "application/json", bytes.NewReader(input.Body))
 	if err != nil {
 		return InvocationResult{}, err
 	}
@@ -3990,7 +4067,7 @@ func invokeConfirmNextRecurringDefinition(ctx context.Context, client httpclient
 }
 
 func invokeConfirmRecurringOccurrence(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"recurring_occurrence_id"}, nil, false, false); err != nil {
+	if err := validateInvocationInput(input, []string{"recurring_occurrence_id"}, nil, true, true); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -4002,7 +4079,7 @@ func invokeConfirmRecurringOccurrence(ctx context.Context, client httpclient.Cli
 			Err:      err,
 		}
 	}
-	response, err := client.ConfirmRecurringOccurrenceWithResponse(ctx, pathValue0)
+	response, err := client.ConfirmRecurringOccurrenceWithBodyWithResponse(ctx, pathValue0, "application/json", bytes.NewReader(input.Body))
 	if err != nil {
 		return InvocationResult{}, err
 	}
@@ -6453,7 +6530,7 @@ func invokeListTransactionTemplates(ctx context.Context, client httpclient.Clien
 }
 
 func invokeListTransactions(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, []string{"account_id", "amount_max", "amount_min", "amount_usd_max", "amount_usd_min", "anchor_date", "category_id", "initiated_date_from", "initiated_date_to", "limit", "member_id", "offset", "pending_date_from", "pending_date_to", "posted_date_from", "posted_date_to", "posting_status", "record_role", "search", "sort", "sort_dir", "tag_id", "transaction_class", "transaction_shape"}, false, false); err != nil {
+	if err := validateInvocationInput(input, nil, []string{"account_id", "amount_max", "amount_min", "amount_usd_max", "amount_usd_min", "anchor_date", "category_id", "initiated_date_from", "initiated_date_to", "lifecycle_status", "limit", "member_id", "offset", "pending_date_from", "pending_date_to", "posted_date_from", "posted_date_to", "record_role", "search", "settlement", "sort", "sort_dir", "tag_id", "transaction_class", "transaction_shape"}, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	params := &httpclient.ListTransactionsParams{}
@@ -6645,40 +6722,62 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 		}
 		params.MemberId = &queryValue8
 	}
-	queryValues9, querySupplied9 := input.Query["posting_status"]
+	queryValues9, querySupplied9 := input.Query["lifecycle_status"]
 	if querySupplied9 {
 		if len(queryValues9) == 0 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "posting_status",
+				Name:     "lifecycle_status",
 				Err:      errors.New("value is required"),
 			}
 		}
-		queryValue9 := make([]httpclient.PostingStatus, len(queryValues9))
+		queryValue9 := make([]httpclient.TransactionLifecycleStatus, len(queryValues9))
 		for valueIndex, raw := range queryValues9 {
 			if err := parseInvocationValue(raw, true, &queryValue9[valueIndex]); err != nil {
 				return InvocationResult{}, &InvocationInputError{
 					Location: "query",
-					Name:     "posting_status",
+					Name:     "lifecycle_status",
 					Value:    raw,
 					Err:      err,
 				}
 			}
 		}
-		params.PostingStatus = &queryValue9
+		params.LifecycleStatus = &queryValue9
 	}
-	queryValues10, querySupplied10 := input.Query["transaction_class"]
+	queryValues10, querySupplied10 := input.Query["settlement"]
 	if querySupplied10 {
 		if len(queryValues10) == 0 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "settlement",
+				Err:      errors.New("value is required"),
+			}
+		}
+		queryValue10 := make([]httpclient.TransactionSettlement, len(queryValues10))
+		for valueIndex, raw := range queryValues10 {
+			if err := parseInvocationValue(raw, true, &queryValue10[valueIndex]); err != nil {
+				return InvocationResult{}, &InvocationInputError{
+					Location: "query",
+					Name:     "settlement",
+					Value:    raw,
+					Err:      err,
+				}
+			}
+		}
+		params.Settlement = &queryValue10
+	}
+	queryValues11, querySupplied11 := input.Query["transaction_class"]
+	if querySupplied11 {
+		if len(queryValues11) == 0 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
 				Name:     "transaction_class",
 				Err:      errors.New("value is required"),
 			}
 		}
-		queryValue10 := make([]httpclient.TransactionClass, len(queryValues10))
-		for valueIndex, raw := range queryValues10 {
-			if err := parseInvocationValue(raw, true, &queryValue10[valueIndex]); err != nil {
+		queryValue11 := make([]httpclient.TransactionClass, len(queryValues11))
+		for valueIndex, raw := range queryValues11 {
+			if err := parseInvocationValue(raw, true, &queryValue11[valueIndex]); err != nil {
 				return InvocationResult{}, &InvocationInputError{
 					Location: "query",
 					Name:     "transaction_class",
@@ -6687,20 +6786,20 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 				}
 			}
 		}
-		params.TransactionClass = &queryValue10
+		params.TransactionClass = &queryValue11
 	}
-	queryValues11, querySupplied11 := input.Query["transaction_shape"]
-	if querySupplied11 {
-		if len(queryValues11) == 0 {
+	queryValues12, querySupplied12 := input.Query["transaction_shape"]
+	if querySupplied12 {
+		if len(queryValues12) == 0 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
 				Name:     "transaction_shape",
 				Err:      errors.New("value is required"),
 			}
 		}
-		queryValue11 := make([]httpclient.TransactionShapeType, len(queryValues11))
-		for valueIndex, raw := range queryValues11 {
-			if err := parseInvocationValue(raw, true, &queryValue11[valueIndex]); err != nil {
+		queryValue12 := make([]httpclient.TransactionShapeType, len(queryValues12))
+		for valueIndex, raw := range queryValues12 {
+			if err := parseInvocationValue(raw, true, &queryValue12[valueIndex]); err != nil {
 				return InvocationResult{}, &InvocationInputError{
 					Location: "query",
 					Name:     "transaction_shape",
@@ -6709,20 +6808,20 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 				}
 			}
 		}
-		params.TransactionShape = &queryValue11
+		params.TransactionShape = &queryValue12
 	}
-	queryValues12, querySupplied12 := input.Query["record_role"]
-	if querySupplied12 {
-		if len(queryValues12) == 0 {
+	queryValues13, querySupplied13 := input.Query["record_role"]
+	if querySupplied13 {
+		if len(queryValues13) == 0 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
 				Name:     "record_role",
 				Err:      errors.New("value is required"),
 			}
 		}
-		queryValue12 := make([]httpclient.RecordRole, len(queryValues12))
-		for valueIndex, raw := range queryValues12 {
-			if err := parseInvocationValue(raw, true, &queryValue12[valueIndex]); err != nil {
+		queryValue13 := make([]httpclient.RecordRole, len(queryValues13))
+		for valueIndex, raw := range queryValues13 {
+			if err := parseInvocationValue(raw, true, &queryValue13[valueIndex]); err != nil {
 				return InvocationResult{}, &InvocationInputError{
 					Location: "query",
 					Name:     "record_role",
@@ -6731,34 +6830,14 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 				}
 			}
 		}
-		params.RecordRole = &queryValue12
+		params.RecordRole = &queryValue13
 	}
-	queryValues13, querySupplied13 := input.Query["amount_min"]
-	if querySupplied13 {
-		if len(queryValues13) != 1 {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "amount_min",
-				Err:      fmt.Errorf("got %d values, want 1", len(queryValues13)),
-			}
-		}
-		var queryValue13 string
-		if err := parseInvocationValue(queryValues13[0], true, &queryValue13); err != nil {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "amount_min",
-				Value:    queryValues13[0],
-				Err:      err,
-			}
-		}
-		params.AmountMin = &queryValue13
-	}
-	queryValues14, querySupplied14 := input.Query["amount_max"]
+	queryValues14, querySupplied14 := input.Query["amount_min"]
 	if querySupplied14 {
 		if len(queryValues14) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "amount_max",
+				Name:     "amount_min",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues14)),
 			}
 		}
@@ -6766,19 +6845,19 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 		if err := parseInvocationValue(queryValues14[0], true, &queryValue14); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "amount_max",
+				Name:     "amount_min",
 				Value:    queryValues14[0],
 				Err:      err,
 			}
 		}
-		params.AmountMax = &queryValue14
+		params.AmountMin = &queryValue14
 	}
-	queryValues15, querySupplied15 := input.Query["amount_usd_min"]
+	queryValues15, querySupplied15 := input.Query["amount_max"]
 	if querySupplied15 {
 		if len(queryValues15) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "amount_usd_min",
+				Name:     "amount_max",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues15)),
 			}
 		}
@@ -6786,19 +6865,19 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 		if err := parseInvocationValue(queryValues15[0], true, &queryValue15); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "amount_usd_min",
+				Name:     "amount_max",
 				Value:    queryValues15[0],
 				Err:      err,
 			}
 		}
-		params.AmountUsdMin = &queryValue15
+		params.AmountMax = &queryValue15
 	}
-	queryValues16, querySupplied16 := input.Query["amount_usd_max"]
+	queryValues16, querySupplied16 := input.Query["amount_usd_min"]
 	if querySupplied16 {
 		if len(queryValues16) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "amount_usd_max",
+				Name:     "amount_usd_min",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues16)),
 			}
 		}
@@ -6806,39 +6885,39 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 		if err := parseInvocationValue(queryValues16[0], true, &queryValue16); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "amount_usd_max",
+				Name:     "amount_usd_min",
 				Value:    queryValues16[0],
 				Err:      err,
 			}
 		}
-		params.AmountUsdMax = &queryValue16
+		params.AmountUsdMin = &queryValue16
 	}
-	queryValues17, querySupplied17 := input.Query["initiated_date_from"]
+	queryValues17, querySupplied17 := input.Query["amount_usd_max"]
 	if querySupplied17 {
 		if len(queryValues17) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "initiated_date_from",
+				Name:     "amount_usd_max",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues17)),
 			}
 		}
-		var queryValue17 openapi_types.Date
+		var queryValue17 string
 		if err := parseInvocationValue(queryValues17[0], true, &queryValue17); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "initiated_date_from",
+				Name:     "amount_usd_max",
 				Value:    queryValues17[0],
 				Err:      err,
 			}
 		}
-		params.InitiatedDateFrom = &queryValue17
+		params.AmountUsdMax = &queryValue17
 	}
-	queryValues18, querySupplied18 := input.Query["initiated_date_to"]
+	queryValues18, querySupplied18 := input.Query["initiated_date_from"]
 	if querySupplied18 {
 		if len(queryValues18) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "initiated_date_to",
+				Name:     "initiated_date_from",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues18)),
 			}
 		}
@@ -6846,39 +6925,39 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 		if err := parseInvocationValue(queryValues18[0], true, &queryValue18); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "initiated_date_to",
+				Name:     "initiated_date_from",
 				Value:    queryValues18[0],
 				Err:      err,
 			}
 		}
-		params.InitiatedDateTo = &queryValue18
+		params.InitiatedDateFrom = &queryValue18
 	}
-	queryValues19, querySupplied19 := input.Query["pending_date_from"]
+	queryValues19, querySupplied19 := input.Query["initiated_date_to"]
 	if querySupplied19 {
 		if len(queryValues19) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "pending_date_from",
+				Name:     "initiated_date_to",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues19)),
 			}
 		}
-		var queryValue19 time.Time
+		var queryValue19 openapi_types.Date
 		if err := parseInvocationValue(queryValues19[0], true, &queryValue19); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "pending_date_from",
+				Name:     "initiated_date_to",
 				Value:    queryValues19[0],
 				Err:      err,
 			}
 		}
-		params.PendingDateFrom = &queryValue19
+		params.InitiatedDateTo = &queryValue19
 	}
-	queryValues20, querySupplied20 := input.Query["pending_date_to"]
+	queryValues20, querySupplied20 := input.Query["pending_date_from"]
 	if querySupplied20 {
 		if len(queryValues20) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "pending_date_to",
+				Name:     "pending_date_from",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues20)),
 			}
 		}
@@ -6886,19 +6965,19 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 		if err := parseInvocationValue(queryValues20[0], true, &queryValue20); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "pending_date_to",
+				Name:     "pending_date_from",
 				Value:    queryValues20[0],
 				Err:      err,
 			}
 		}
-		params.PendingDateTo = &queryValue20
+		params.PendingDateFrom = &queryValue20
 	}
-	queryValues21, querySupplied21 := input.Query["posted_date_from"]
+	queryValues21, querySupplied21 := input.Query["pending_date_to"]
 	if querySupplied21 {
 		if len(queryValues21) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "posted_date_from",
+				Name:     "pending_date_to",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues21)),
 			}
 		}
@@ -6906,19 +6985,19 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 		if err := parseInvocationValue(queryValues21[0], true, &queryValue21); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "posted_date_from",
+				Name:     "pending_date_to",
 				Value:    queryValues21[0],
 				Err:      err,
 			}
 		}
-		params.PostedDateFrom = &queryValue21
+		params.PendingDateTo = &queryValue21
 	}
-	queryValues22, querySupplied22 := input.Query["posted_date_to"]
+	queryValues22, querySupplied22 := input.Query["posted_date_from"]
 	if querySupplied22 {
 		if len(queryValues22) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "posted_date_to",
+				Name:     "posted_date_from",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues22)),
 			}
 		}
@@ -6926,32 +7005,52 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 		if err := parseInvocationValue(queryValues22[0], true, &queryValue22); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "posted_date_to",
+				Name:     "posted_date_from",
 				Value:    queryValues22[0],
 				Err:      err,
 			}
 		}
-		params.PostedDateTo = &queryValue22
+		params.PostedDateFrom = &queryValue22
 	}
-	queryValues23, querySupplied23 := input.Query["search"]
+	queryValues23, querySupplied23 := input.Query["posted_date_to"]
 	if querySupplied23 {
 		if len(queryValues23) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "search",
+				Name:     "posted_date_to",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues23)),
 			}
 		}
-		var queryValue23 string
+		var queryValue23 time.Time
 		if err := parseInvocationValue(queryValues23[0], true, &queryValue23); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "search",
+				Name:     "posted_date_to",
 				Value:    queryValues23[0],
 				Err:      err,
 			}
 		}
-		params.Search = &queryValue23
+		params.PostedDateTo = &queryValue23
+	}
+	queryValues24, querySupplied24 := input.Query["search"]
+	if querySupplied24 {
+		if len(queryValues24) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "search",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues24)),
+			}
+		}
+		var queryValue24 string
+		if err := parseInvocationValue(queryValues24[0], true, &queryValue24); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "search",
+				Value:    queryValues24[0],
+				Err:      err,
+			}
+		}
+		params.Search = &queryValue24
 	}
 	response, err := client.ListTransactionsWithResponse(ctx, params)
 	if err != nil {
@@ -7055,6 +7154,29 @@ func invokeReplaceTransactionTemplate(ctx context.Context, client httpclient.Cli
 	return normalizeInvocationResult(response.Body, response.HTTPResponse)
 }
 
+func invokeRestoreTransaction(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
+	if err := validateInvocationInput(input, []string{"transaction_id"}, nil, false, false); err != nil {
+		return InvocationResult{}, err
+	}
+	var pathValue0 int64
+	if err := parseInvocationValue(input.Path[0], false, &pathValue0); err != nil {
+		return InvocationResult{}, &InvocationInputError{
+			Location: "path",
+			Name:     "transaction_id",
+			Value:    input.Path[0],
+			Err:      err,
+		}
+	}
+	response, err := client.RestoreTransactionWithResponse(ctx, pathValue0)
+	if err != nil {
+		return InvocationResult{}, err
+	}
+	if response == nil {
+		return InvocationResult{}, errors.New("generated client returned no operation response")
+	}
+	return normalizeInvocationResult(response.Body, response.HTTPResponse)
+}
+
 func invokeRestructureAccounts(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
 	if err := validateInvocationInput(input, nil, nil, true, true); err != nil {
 		return InvocationResult{}, err
@@ -7135,7 +7257,7 @@ func invokeResumeRecurringDefinition(ctx context.Context, client httpclient.Clie
 }
 
 func invokeSearchAccountJournalRecords(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"account_id"}, []string{"amount_max", "amount_min", "amount_usd_max", "amount_usd_min", "category_id", "include_expected", "include_running_balance", "initiated_date_from", "initiated_date_to", "limit", "member_id", "memo_contains", "offset", "pending_date_from", "pending_date_to", "posted_date_from", "posted_date_to", "posting_status", "reconciliation_status", "sort", "sort_dir", "tag_id"}, false, false); err != nil {
+	if err := validateInvocationInput(input, []string{"account_id"}, []string{"amount_max", "amount_min", "amount_usd_max", "amount_usd_min", "category_id", "include_running_balance", "initiated_date_from", "initiated_date_to", "lifecycle_status", "limit", "member_id", "memo_contains", "offset", "pending_date_from", "pending_date_to", "posted_date_from", "posted_date_to", "reconciliation_status", "settlement", "sort", "sort_dir", "tag_id"}, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -7208,45 +7330,45 @@ func invokeSearchAccountJournalRecords(ctx context.Context, client httpclient.Cl
 		}
 		params.MemberId = &queryValue2
 	}
-	queryValues3, querySupplied3 := input.Query["posting_status"]
+	queryValues3, querySupplied3 := input.Query["lifecycle_status"]
 	if querySupplied3 {
 		if len(queryValues3) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "posting_status",
+				Name:     "lifecycle_status",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues3)),
 			}
 		}
-		var queryValue3 httpclient.PostingStatus
+		var queryValue3 httpclient.TransactionLifecycleStatus
 		if err := parseInvocationValue(queryValues3[0], true, &queryValue3); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "posting_status",
+				Name:     "lifecycle_status",
 				Value:    queryValues3[0],
 				Err:      err,
 			}
 		}
-		params.PostingStatus = &queryValue3
+		params.LifecycleStatus = &queryValue3
 	}
-	queryValues4, querySupplied4 := input.Query["include_expected"]
+	queryValues4, querySupplied4 := input.Query["settlement"]
 	if querySupplied4 {
 		if len(queryValues4) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "include_expected",
+				Name:     "settlement",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues4)),
 			}
 		}
-		var queryValue4 bool
-		if err := parseInvocationValue(queryValues4[0], false, &queryValue4); err != nil {
+		var queryValue4 httpclient.SettlementStatus
+		if err := parseInvocationValue(queryValues4[0], true, &queryValue4); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "include_expected",
+				Name:     "settlement",
 				Value:    queryValues4[0],
 				Err:      err,
 			}
 		}
-		params.IncludeExpected = &queryValue4
+		params.Settlement = &queryValue4
 	}
 	queryValues5, querySupplied5 := input.Query["reconciliation_status"]
 	if querySupplied5 {
@@ -7599,7 +7721,7 @@ func invokeSearchAccountJournalRecords(ctx context.Context, client httpclient.Cl
 }
 
 func invokeSearchJournalRecords(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, []string{"account_fqn_prefix", "account_id", "amount_max", "amount_min", "amount_usd_max", "amount_usd_min", "category_id", "include_expected", "initiated_date_from", "initiated_date_to", "limit", "member_id", "memo_contains", "offset", "pending_date_from", "pending_date_to", "posted_date_from", "posted_date_to", "posting_status", "reconciliation_status", "record_role", "sort", "sort_dir", "tag_id"}, false, false); err != nil {
+	if err := validateInvocationInput(input, nil, []string{"account_fqn_prefix", "account_id", "amount_max", "amount_min", "amount_usd_max", "amount_usd_min", "category_id", "initiated_date_from", "initiated_date_to", "lifecycle_status", "limit", "member_id", "memo_contains", "offset", "pending_date_from", "pending_date_to", "posted_date_from", "posted_date_to", "reconciliation_status", "record_role", "settlement", "sort", "sort_dir", "tag_id"}, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	params := &httpclient.SearchJournalRecordsParams{}
@@ -7703,45 +7825,45 @@ func invokeSearchJournalRecords(ctx context.Context, client httpclient.ClientWit
 		}
 		params.MemberId = &queryValue4
 	}
-	queryValues5, querySupplied5 := input.Query["posting_status"]
+	queryValues5, querySupplied5 := input.Query["lifecycle_status"]
 	if querySupplied5 {
 		if len(queryValues5) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "posting_status",
+				Name:     "lifecycle_status",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues5)),
 			}
 		}
-		var queryValue5 httpclient.PostingStatus
+		var queryValue5 httpclient.TransactionLifecycleStatus
 		if err := parseInvocationValue(queryValues5[0], true, &queryValue5); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "posting_status",
+				Name:     "lifecycle_status",
 				Value:    queryValues5[0],
 				Err:      err,
 			}
 		}
-		params.PostingStatus = &queryValue5
+		params.LifecycleStatus = &queryValue5
 	}
-	queryValues6, querySupplied6 := input.Query["include_expected"]
+	queryValues6, querySupplied6 := input.Query["settlement"]
 	if querySupplied6 {
 		if len(queryValues6) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "include_expected",
+				Name:     "settlement",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues6)),
 			}
 		}
-		var queryValue6 bool
-		if err := parseInvocationValue(queryValues6[0], false, &queryValue6); err != nil {
+		var queryValue6 httpclient.SettlementStatus
+		if err := parseInvocationValue(queryValues6[0], true, &queryValue6); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "include_expected",
+				Name:     "settlement",
 				Value:    queryValues6[0],
 				Err:      err,
 			}
 		}
-		params.IncludeExpected = &queryValue6
+		params.Settlement = &queryValue6
 	}
 	queryValues7, querySupplied7 := input.Query["reconciliation_status"]
 	if querySupplied7 {

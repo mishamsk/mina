@@ -39,19 +39,20 @@ from these semantics.
 
 ## Occurrence Lifecycle
 
-- Occurrences **auto-materialize when due**, unposted, with a distinct status
-  that excludes them from balances, aggregates, reports, and default API
-  transaction listings. Whether a view shows expected occurrences is a
-  presentation choice owned by the web UI design doc; showing them never
-  changes their aggregate exclusion.
+- Occurrences **auto-materialize when due** as `EXPECTED` transactions. Their
+  owned and party records have no settlement dates, and flow and system records
+  are always date-free. Expected transactions are excluded from balances,
+  aggregates, reports, and default API transaction listings. Whether a view
+  shows them is a presentation choice owned by the web UI design doc; showing
+  them never changes their aggregate exclusion.
 - Materialization is a catch-up computation triggered by occurrence-facing
   reads and lifecycle actions; there is no background scheduler. Any workflow
   that consumes the occurrence queue — including future automated ingestion
   and imported-transaction matching — must run catch-up materialization
   first, so matching always sees fully backfilled occurrences.
 - The next or due occurrence can be **confirmed early** from the UI. An early
-  manual confirm sets the transaction date to the current date, as that is
-  almost certainly the intent.
+  manual confirm sets the transaction initiated date to the current date, as
+  that is almost certainly the intent.
 - Occurrences that came due while unattended (app not running, user inaction)
   each become **individually reviewable**. Nothing is silently created and
   nothing is silently skipped.
@@ -59,8 +60,13 @@ from these semantics.
   dismissed status and never reappears. This holds for manual dismissal and
   for automatic dismissal (e.g. LLM helpers, external-source sync).
 - Actions on a due occurrence:
-  - **Confirm as-is**: the occurrence becomes a normal transaction.
-  - **Dismiss**: skip this one occurrence; the schedule anchor is unchanged.
+  - **Confirm as-is**: apply an explicit pending or posted settlement intent to
+    owned and party records, change the transaction lifecycle to `ACTIVE`, and
+    mark the occurrence confirmed atomically. Exact event timestamps may be
+    supplied; otherwise Mina chooses them at the service boundary. Flow and
+    system records remain date-free.
+  - **Dismiss**: tombstone the expected transaction and mark the occurrence
+    dismissed atomically; the schedule anchor is unchanged.
   - **Cancel**: stop the whole definition (see definition lifecycle).
 - **Defer** (interval schedules only) acts on the schedule, not on a
   materialized occurrence: it re-anchors the whole schedule so the next
@@ -74,6 +80,12 @@ from these semantics.
   same contract applies to future automatic confirmation on a match to an
   externally imported transaction: the match confirms the occurrence, and
   actual values live on the transaction.
+
+Expected transaction lifecycle, confirmed active lifecycle, and dismissed
+tombstoning are distinct from cancelling an active transaction. A confirmed
+occurrence may later be cancelled only under the pending-only transaction rules
+in `docs/accounting-semantics.md`; restoring it changes only lifecycle and does
+not reopen the occurrence.
 
 ## Definition Lifecycle
 

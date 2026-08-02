@@ -66,7 +66,7 @@ const firstRecordDisclosure = async (panel: Locator): Promise<Locator> => {
   return disclosure;
 };
 
-test("end-of-day lifecycle stamps stay on the initiated day while exact instants render locally", async ({
+test("settlement timestamps stay hidden while initiated dates remain civil", async ({
   page,
 }, testInfo) => {
   const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
@@ -108,9 +108,11 @@ test("end-of-day lifecycle stamps stay on the initiated day while exact instants
           category_id: null,
           currency: "USD",
           memo: `E2E lifecycle real instant ${unique}`,
-          pending_date: realInstant,
-          posted_date: null,
-          posting_status: "pending",
+          settlement: {
+            pending_date: realInstant,
+            posted_date: null,
+            status: "pending",
+          },
           reconciliation_status: "unreconciled",
           source: "manual",
           tag_ids: [],
@@ -121,9 +123,7 @@ test("end-of-day lifecycle stamps stay on the initiated day while exact instants
           category_id: category.category_id,
           currency: "USD",
           memo: `E2E lifecycle real instant ${unique}`,
-          pending_date: realInstant,
-          posted_date: null,
-          posting_status: "pending",
+          settlement: null,
           reconciliation_status: "unreconciled",
           source: "manual",
           tag_ids: [],
@@ -135,22 +135,7 @@ test("end-of-day lifecycle stamps stay on the initiated day while exact instants
   expect(instantResponse.ok(), instantBody).toBe(true);
   const instant = JSON.parse(instantBody) as TransactionFixture;
 
-  const derivedStamp = `${initiatedDate}T23:59:59Z`;
-  const labels = await page.evaluate(
-    ({ derivedValue, instantValue }) => ({
-      derivedInstant: new Intl.DateTimeFormat(undefined, {
-        dateStyle: "medium",
-        timeStyle: "medium",
-      }).format(new Date(derivedValue)),
-      exactInstant: new Intl.DateTimeFormat(undefined, {
-        dateStyle: "medium",
-        timeStyle: "medium",
-      }).format(new Date(instantValue)),
-    }),
-    { derivedValue: derivedStamp, instantValue: realInstant },
-  );
-
-  await page.goto("/transactions?page=1&pageSize=50&hideExpected=true");
+  await page.goto("/transactions?page=1&pageSize=50");
   const directRow = page
     .locator("[data-transaction-row='true']")
     .filter({ hasText: `E2E lifecycle end of day ${unique}` });
@@ -169,7 +154,7 @@ test("end-of-day lifecycle stamps stay on the initiated day while exact instants
     "transaction-status-indicators",
   );
   await expect(pendingIndicators).toHaveAttribute(
-    "data-posting-status",
+    "data-display-status",
     "pending",
   );
   await expect(
@@ -196,8 +181,8 @@ test("end-of-day lifecycle stamps stay on the initiated day while exact instants
     directLifecycle.locator("[data-slot='tooltip-trigger']"),
   ).toHaveCount(0);
   const derivedDisclosure = await firstRecordDisclosure(directPanel);
-  await expect(derivedDisclosure).toContainText(labels.derivedInstant);
-  await expect(derivedDisclosure).toContainText(/\d{1,2}:\d{2}:\d{2}/);
+  await expect(derivedDisclosure).toContainText(/Settlement\s*Posted/);
+  await expect(derivedDisclosure).not.toContainText(/\d{1,2}:\d{2}:\d{2}/);
   await expect(directPanel).not.toContainText("Invalid Date");
 
   const instantPanel = await openTransactionDetail(
@@ -205,10 +190,10 @@ test("end-of-day lifecycle stamps stay on the initiated day while exact instants
     instant.transaction_id,
   );
   const instantLifecycle = instantPanel.getByTestId("transaction-lifecycle");
-  await expect(instantLifecycle).toHaveText(/Initiated\s*Jul 27\s*pending/);
+  await expect(instantLifecycle).toHaveText(/Initiated\s*Jul 27\s*Pending/);
   await expect(instantLifecycle).not.toContainText(/Jul 26|Posted|varies|→|–/);
   const instantDisclosure = await firstRecordDisclosure(instantPanel);
-  await expect(instantDisclosure).toContainText(labels.exactInstant);
-  await expect(instantDisclosure).toContainText(/\d{1,2}:\d{2}:\d{2}/);
+  await expect(instantDisclosure).toContainText(/Settlement\s*Pending/);
+  await expect(instantDisclosure).not.toContainText(/\d{1,2}:\d{2}:\d{2}/);
   await expect(instantPanel).not.toContainText("Invalid Date");
 });

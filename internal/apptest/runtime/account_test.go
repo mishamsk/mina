@@ -517,11 +517,12 @@ func accountTypeChangeTransactionRequest(fundingAccountID int64, counterpartyAcc
 		Records: []httpclient.CreateJournalRecordRequest{
 			{
 				AccountId: fundingAccountID, Currency: "USD", Amount: fundingAmount,
-				PostingStatus: httpclient.PostingStatusPosted, ReconciliationStatus: httpclient.Reconciled, Source: httpclient.WritableSourceManual,
+				Settlement:           apptest.PostedSettlement(),
+				ReconciliationStatus: httpclient.Reconciled, Source: httpclient.WritableSourceManual,
 			},
 			{
 				AccountId: counterpartyAccountID, CategoryId: apptest.Int64Ptr(categoryID), Currency: "USD", Amount: counterpartyAmount,
-				PostingStatus: httpclient.PostingStatusPosted, ReconciliationStatus: httpclient.Reconciled, Source: httpclient.WritableSourceManual,
+				ReconciliationStatus: httpclient.Reconciled, Source: httpclient.WritableSourceManual,
 			},
 		},
 	}
@@ -558,7 +559,7 @@ func TestAccountCurrencyTransitionsBoundary(t *testing.T) {
 		"USD",
 		"-10.00",
 		"10.00",
-		httpclient.PostingStatusPosted,
+		balanceStatePosted,
 	)
 	client.SetAccountCurrency(account.AccountId, &usd)
 
@@ -700,19 +701,19 @@ func TestAccountBalancesBoundary(t *testing.T) {
 		t.Fatalf("hidden balance account status = %d, want %d; body %s", hidden.StatusCode(), http.StatusCreated, hidden.Body)
 	}
 
-	createBalanceTransactionWithAmountUSD(t, client, checking.AccountId, merchant.AccountId, expenseCategory.CategoryId, "EUR", "-100.00", "100.00", "-110.00", "110.00", httpclient.PostingStatusPosted)
-	createBalanceTransactionWithAmountUSD(t, client, checking.AccountId, merchant.AccountId, expenseCategory.CategoryId, "EUR", "-25.00", "25.00", "-27.50", "27.50", httpclient.PostingStatusPending)
-	createBalanceTransaction(t, client, checking.AccountId, merchant.AccountId, expenseCategory.CategoryId, "EUR", "-10.00", "10.00", httpclient.PostingStatusPosted)
-	createBalanceTransaction(t, client, checking.AccountId, merchant.AccountId, expenseCategory.CategoryId, "EUR", "-5.00", "5.00", httpclient.PostingStatusCancelled)
-	createBalanceTransactionWithAmountUSD(t, client, travel.AccountId, merchant.AccountId, incomeCategory.CategoryId, "USD", "2.00", "-2.00", "2.50", "-2.50", httpclient.PostingStatusPosted)
-	createBalanceTransactionWithAmountUSD(t, client, travel.AccountId, merchant.AccountId, incomeCategory.CategoryId, "EUR", "3.00", "-3.00", "3.30", "-3.30", httpclient.PostingStatusPosted)
-	createBalanceTransaction(t, client, savings.AccountId, merchant.AccountId, expenseCategory.CategoryId, "EUR", "-7.00", "7.00", httpclient.PostingStatusCancelled)
-	createBalanceTransactionWithAmountUSD(t, client, hidden.JSON201.AccountId, merchant.AccountId, expenseCategory.CategoryId, "USD", "-9.00", "9.00", "-9.00", "9.00", httpclient.PostingStatusPosted)
+	createBalanceTransactionWithAmountUSD(t, client, checking.AccountId, merchant.AccountId, expenseCategory.CategoryId, "EUR", "-100.00", "100.00", "-110.00", "110.00", balanceStatePosted)
+	createBalanceTransactionWithAmountUSD(t, client, checking.AccountId, merchant.AccountId, expenseCategory.CategoryId, "EUR", "-25.00", "25.00", "-27.50", "27.50", balanceStatePending)
+	createBalanceTransaction(t, client, checking.AccountId, merchant.AccountId, expenseCategory.CategoryId, "EUR", "-10.00", "10.00", balanceStatePosted)
+	createBalanceTransaction(t, client, checking.AccountId, merchant.AccountId, expenseCategory.CategoryId, "EUR", "-5.00", "5.00", balanceStateCancelled)
+	createBalanceTransactionWithAmountUSD(t, client, travel.AccountId, merchant.AccountId, incomeCategory.CategoryId, "USD", "2.00", "-2.00", "2.50", "-2.50", balanceStatePosted)
+	createBalanceTransactionWithAmountUSD(t, client, travel.AccountId, merchant.AccountId, incomeCategory.CategoryId, "EUR", "3.00", "-3.00", "3.30", "-3.30", balanceStatePosted)
+	createBalanceTransaction(t, client, savings.AccountId, merchant.AccountId, expenseCategory.CategoryId, "EUR", "-7.00", "7.00", balanceStateCancelled)
+	createBalanceTransactionWithAmountUSD(t, client, hidden.JSON201.AccountId, merchant.AccountId, expenseCategory.CategoryId, "USD", "-9.00", "9.00", "-9.00", "9.00", balanceStatePosted)
 	createTransaction(t, client, classificationRequest(
 		semanticRecord(savings.AccountId, "-4.00", "USD", nil),
 		semanticRecord(party.AccountId, "4.00", "USD", nil),
 	))
-	deletedTransaction := createBalanceTransaction(t, client, checking.AccountId, merchant.AccountId, expenseCategory.CategoryId, "EUR", "-11.00", "11.00", httpclient.PostingStatusPosted)
+	deletedTransaction := createBalanceTransaction(t, client, checking.AccountId, merchant.AccountId, expenseCategory.CategoryId, "EUR", "-11.00", "11.00", balanceStatePosted)
 	deleted, err := client.REST().DeleteTransactionWithResponse(context.Background(), deletedTransaction.JSON201.TransactionId)
 	if err != nil {
 		t.Fatalf("delete balance transaction request: %v", err)
@@ -1341,6 +1342,14 @@ func assertAccountFeatured(t *testing.T, accounts []httpclient.Account, want []b
 	}
 }
 
+type balanceTransactionState string
+
+const (
+	balanceStatePosted    balanceTransactionState = "posted"
+	balanceStatePending   balanceTransactionState = "pending"
+	balanceStateCancelled balanceTransactionState = "cancelled"
+)
+
 func createBalanceTransaction(
 	t *testing.T,
 	client *apptest.Client,
@@ -1350,7 +1359,7 @@ func createBalanceTransaction(
 	currency string,
 	balanceAmount string,
 	counterAmount string,
-	postingStatus httpclient.PostingStatus,
+	state balanceTransactionState,
 ) *httpclient.CreateTransactionResponse {
 	t.Helper()
 
@@ -1365,7 +1374,7 @@ func createBalanceTransaction(
 		counterAmount,
 		nil,
 		nil,
-		postingStatus,
+		state,
 	)
 }
 
@@ -1380,7 +1389,7 @@ func createBalanceTransactionWithAmountUSD(
 	counterAmount string,
 	balanceAmountUSD string,
 	counterAmountUSD string,
-	postingStatus httpclient.PostingStatus,
+	state balanceTransactionState,
 ) *httpclient.CreateTransactionResponse {
 	t.Helper()
 
@@ -1395,7 +1404,7 @@ func createBalanceTransactionWithAmountUSD(
 		counterAmount,
 		&balanceAmountUSD,
 		&counterAmountUSD,
-		postingStatus,
+		state,
 	)
 }
 
@@ -1410,9 +1419,14 @@ func createBalanceTransactionWithOptionalAmountUSD(
 	counterAmount string,
 	balanceAmountUSD *string,
 	counterAmountUSD *string,
-	postingStatus httpclient.PostingStatus,
+	state balanceTransactionState,
 ) *httpclient.CreateTransactionResponse {
 	t.Helper()
+
+	settlement := apptest.PostedSettlement()
+	if state == balanceStatePending || state == balanceStateCancelled {
+		settlement = apptest.PendingSettlement()
+	}
 
 	created, err := client.REST().CreateTransactionWithResponse(context.Background(), httpclient.CreateTransactionRequest{
 		InitiatedDate: apptest.Date("2024-03-10"),
@@ -1422,7 +1436,7 @@ func createBalanceTransactionWithOptionalAmountUSD(
 				Currency:             currency,
 				Amount:               balanceAmount,
 				AmountUsd:            balanceAmountUSD,
-				PostingStatus:        postingStatus,
+				Settlement:           settlement,
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.WritableSourceManual,
 			},
@@ -1432,7 +1446,6 @@ func createBalanceTransactionWithOptionalAmountUSD(
 				Amount:               counterAmount,
 				AmountUsd:            counterAmountUSD,
 				CategoryId:           apptest.Int64Ptr(categoryID),
-				PostingStatus:        postingStatus,
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.WritableSourceManual,
 			},
@@ -1443,6 +1456,15 @@ func createBalanceTransactionWithOptionalAmountUSD(
 	}
 	if created.StatusCode() != http.StatusCreated {
 		t.Fatalf("create balance transaction status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
+	}
+	if state == balanceStateCancelled {
+		cancelled, cancelErr := client.REST().CancelTransactionWithResponse(context.Background(), created.JSON201.TransactionId)
+		if cancelErr != nil {
+			t.Fatalf("cancel balance transaction request: %v", cancelErr)
+		}
+		if cancelled.StatusCode() != http.StatusOK {
+			t.Fatalf("cancel balance transaction status = %d, want %d; body %s", cancelled.StatusCode(), http.StatusOK, cancelled.Body)
+		}
 	}
 
 	return created

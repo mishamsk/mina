@@ -353,6 +353,7 @@ func (s *RecurringStore) CreateExpectedOccurrences(ctx context.Context, inputs [
 				input.ScheduledDate,
 				recurring.OccurrenceStatusExpected,
 				input.Records,
+				nil,
 			); err != nil {
 				if errors.Is(err, services.ErrConflict) || errors.Is(err, services.ErrNotFound) {
 					continue
@@ -371,10 +372,10 @@ func (s *RecurringStore) CreateConfirmedOccurrence(
 	definition recurring.Definition,
 	scheduledDate values.CivilDate,
 	initiatedDate values.CivilDate,
-	records []transactions.JournalRecordInput,
+	records []transactions.PersistJournalRecordInput,
+	reviewedAt time.Time,
 ) (recurring.Occurrence, error) {
-	posted := postedJournalRecords(records, transactions.LifecycleTimestampFromInitiatedDate(initiatedDate))
-	return s.createOccurrenceWithTransaction(ctx, definition, scheduledDate, initiatedDate, recurring.OccurrenceStatusConfirmed, posted)
+	return s.createOccurrenceWithTransaction(ctx, definition, scheduledDate, initiatedDate, recurring.OccurrenceStatusConfirmed, records, &reviewedAt)
 }
 
 func (s *RecurringStore) createOccurrenceWithTransaction(
@@ -383,11 +384,12 @@ func (s *RecurringStore) createOccurrenceWithTransaction(
 	scheduledDate values.CivilDate,
 	initiatedDate values.CivilDate,
 	status recurring.OccurrenceStatus,
-	records []transactions.JournalRecordInput,
+	records []transactions.PersistJournalRecordInput,
+	reviewedAt *time.Time,
 ) (recurring.Occurrence, error) {
 	var occurrence recurring.Occurrence
 	err := s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
-		created, err := createOccurrenceWithTransactionTx(ctx, tx, s.db, definition, scheduledDate, initiatedDate, status, records)
+		created, err := createOccurrenceWithTransactionTx(ctx, tx, s.db, definition, scheduledDate, initiatedDate, status, records, reviewedAt)
 		if err != nil {
 			return err
 		}
@@ -410,14 +412,15 @@ func createOccurrenceWithTransactionTx(
 	scheduledDate values.CivilDate,
 	initiatedDate values.CivilDate,
 	status recurring.OccurrenceStatus,
-	records []transactions.JournalRecordInput,
+	records []transactions.PersistJournalRecordInput,
+	reviewedAt *time.Time,
 ) (recurring.Occurrence, error) {
 	occurrence, err := scanMaterializedRecurringOccurrence(tx.QueryRowContext(
 		ctx,
 		`INSERT INTO `+db.accountingName("recurring_occurrence")+` (
 	recurring_definition_id, scheduled_date, status, materialized_definition_version, reviewed_at
 )
-SELECT ?, ?, CAST(? AS `+db.accountingName("recurring_occurrence_status")+`), ?, CASE WHEN ? = 'EXPECTED' THEN NULL ELSE CURRENT_TIMESTAMP END
+SELECT ?, ?, CAST(? AS `+db.accountingName("recurring_occurrence_status")+`), ?, ?
 WHERE EXISTS (
 	SELECT 1
 	FROM `+db.accountingName("recurring_definition")+`
@@ -431,7 +434,7 @@ RETURNING recurring_occurrence_id, recurring_definition_id, scheduled_date, CAST
 		civilDateArg(scheduledDate),
 		enumValue(status),
 		definition.DefinitionVersion,
-		enumValue(status),
+		nullableTimestampArg(reviewedAt),
 		definition.ID,
 	), definition.FQN)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -444,7 +447,11 @@ RETURNING recurring_occurrence_id, recurring_definition_id, scheduled_date, CAST
 		return recurring.Occurrence{}, fmt.Errorf("insert recurring occurrence: %w", err)
 	}
 
-	transaction, err := insertGeneratedRecurringTransaction(ctx, tx, db, occurrence.ID, initiatedDate, records)
+	lifecycle := transactions.LifecycleStatusExpected
+	if status == recurring.OccurrenceStatusConfirmed {
+		lifecycle = transactions.LifecycleStatusActive
+	}
+	transaction, err := insertGeneratedRecurringTransaction(ctx, tx, db, occurrence.ID, initiatedDate, lifecycle, records)
 	if err != nil {
 		return recurring.Occurrence{}, err
 	}
@@ -516,8 +523,8 @@ WHERE 1 = 1`
 	}, nil
 }
 
-// ConfirmOccurrence posts an EXPECTED occurrence's generated transaction records.
-func (s *RecurringStore) ConfirmOccurrence(ctx context.Context, id int64) (recurring.Occurrence, error) {
+// ConfirmOccurrence activates an expected transaction and stamps balance records atomically.
+func (s *RecurringStore) ConfirmOccurrence(ctx context.Context, id int64, pendingDate *time.Time, postedDate *time.Time, reviewedAt time.Time) (recurring.Occurrence, error) {
 	var occurrence recurring.Occurrence
 	err := s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
 		current, err := selectRecurringOccurrenceByID(ctx, tx, s.db, id)
@@ -532,33 +539,43 @@ func (s *RecurringStore) ConfirmOccurrence(ctx context.Context, id int64) (recur
 		}
 		result, err := tx.ExecContext(
 			ctx,
-			`UPDATE `+s.db.accountingName("journal_record")+`
-SET posting_status = CAST('POSTED' AS `+s.db.accountingName("posting_status")+`),
-    posted_date = timezone('UTC', CURRENT_TIMESTAMP),
-    updated_at = CURRENT_TIMESTAMP
+			`UPDATE `+s.db.accountingName("transaction")+`
+SET lifecycle_status = CAST('ACTIVE' AS `+s.db.accountingName("transaction_lifecycle_status")+`)
 WHERE transaction_id = ?
   AND tombstoned_at IS NULL
-  AND posting_status = CAST('EXPECTED' AS `+s.db.accountingName("posting_status")+`)
-  AND source = CAST('RECURRING_TEMPLATE' AS `+s.db.accountingName("source")+`)`,
+  AND lifecycle_status = CAST('EXPECTED' AS `+s.db.accountingName("transaction_lifecycle_status")+`)`,
 			*current.GeneratedTransactionID,
 		)
 		if err != nil {
-			return fmt.Errorf("confirm recurring occurrence journal records: %w", err)
+			return fmt.Errorf("activate recurring occurrence transaction: %w", err)
 		}
 		updated, err := result.RowsAffected()
 		if err != nil {
-			return fmt.Errorf("confirm recurring occurrence journal records affected rows: %w", err)
+			return fmt.Errorf("activate recurring occurrence transaction affected rows: %w", err)
 		}
 		if updated == 0 {
 			return services.ErrConflict
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE `+s.db.accountingName("journal_record")+` AS jr
+SET pending_date = ?,
+    posted_date = ?,
+    updated_at = CURRENT_TIMESTAMP
+FROM `+s.db.accountingName("account")+` AS a
+WHERE jr.account_id = a.account_id
+  AND jr.transaction_id = ?
+  AND jr.tombstoned_at IS NULL
+  AND a.account_type IN (CAST('OWNED' AS `+s.db.accountingName("account_type")+`), CAST('PARTY' AS `+s.db.accountingName("account_type")+`))`,
+			nullableTimestampArg(pendingDate), nullableTimestampArg(postedDate), *current.GeneratedTransactionID); err != nil {
+			return fmt.Errorf("stamp recurring occurrence balance records: %w", err)
 		}
 		if _, err := tx.ExecContext(
 			ctx,
 			`UPDATE `+s.db.accountingName("recurring_occurrence")+`
 SET status = CAST('CONFIRMED' AS `+s.db.accountingName("recurring_occurrence_status")+`),
-    reviewed_at = CURRENT_TIMESTAMP,
+    reviewed_at = ?,
     updated_at = CURRENT_TIMESTAMP
 WHERE recurring_occurrence_id = ?`,
+			timestampArg(reviewedAt),
 			id,
 		); err != nil {
 			return fmt.Errorf("confirm recurring occurrence: %w", err)
@@ -579,7 +596,7 @@ WHERE recurring_occurrence_id = ?`,
 }
 
 // DismissOccurrence tombstones an EXPECTED occurrence's generated transaction and marks the slot dismissed.
-func (s *RecurringStore) DismissOccurrence(ctx context.Context, id int64) (recurring.Occurrence, error) {
+func (s *RecurringStore) DismissOccurrence(ctx context.Context, id int64, dismissedAt time.Time) (recurring.Occurrence, error) {
 	var occurrence recurring.Occurrence
 	err := s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
 		current, err := selectRecurringOccurrenceByID(ctx, tx, s.db, id)
@@ -595,11 +612,13 @@ func (s *RecurringStore) DismissOccurrence(ctx context.Context, id int64) (recur
 		result, err := tx.ExecContext(
 			ctx,
 			`UPDATE `+s.db.accountingName("journal_record")+`
-SET tombstoned_at = CURRENT_TIMESTAMP,
-    updated_at = CURRENT_TIMESTAMP
+SET tombstoned_at = ?,
+    updated_at = ?
 WHERE transaction_id = ?
   AND tombstoned_at IS NULL
   AND source = CAST('RECURRING_TEMPLATE' AS `+s.db.accountingName("source")+`)`,
+			timestampArg(dismissedAt),
+			timestampArg(dismissedAt),
 			*current.GeneratedTransactionID,
 		)
 		if err != nil {
@@ -615,8 +634,9 @@ WHERE transaction_id = ?
 		result, err = tx.ExecContext(
 			ctx,
 			`UPDATE `+s.db.accountingName("transaction")+`
-SET tombstoned_at = CURRENT_TIMESTAMP
+SET tombstoned_at = ?
 WHERE transaction_id = ? AND tombstoned_at IS NULL`,
+			timestampArg(dismissedAt),
 			*current.GeneratedTransactionID,
 		)
 		if err != nil {
@@ -633,9 +653,11 @@ WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 			ctx,
 			`UPDATE `+s.db.accountingName("recurring_occurrence")+`
 SET status = CAST('DISMISSED' AS `+s.db.accountingName("recurring_occurrence_status")+`),
-    reviewed_at = CURRENT_TIMESTAMP,
-    updated_at = CURRENT_TIMESTAMP
+    reviewed_at = ?,
+    updated_at = ?
 WHERE recurring_occurrence_id = ?`,
+			timestampArg(dismissedAt),
+			timestampArg(dismissedAt),
 			id,
 		); err != nil {
 			return fmt.Errorf("dismiss recurring occurrence: %w", err)
@@ -853,15 +875,17 @@ func insertGeneratedRecurringTransaction(
 	db *AppDB,
 	occurrenceID int64,
 	initiatedDate values.CivilDate,
-	records []transactions.JournalRecordInput,
+	lifecycle transactions.LifecycleStatus,
+	records []transactions.PersistJournalRecordInput,
 ) (transactions.Transaction, error) {
 	transaction, err := scanTransaction(tx.QueryRowContext(
 		ctx,
-		`INSERT INTO `+db.accountingName("transaction")+` (initiated_date, recurring_occurrence_id)
-VALUES (?, ?)
-RETURNING transaction_id, initiated_date, recurring_occurrence_id, created_at, tombstoned_at`,
+		`INSERT INTO `+db.accountingName("transaction")+` (initiated_date, recurring_occurrence_id, lifecycle_status)
+VALUES (?, ?, CAST(? AS `+db.accountingName("transaction_lifecycle_status")+`))
+RETURNING transaction_id, initiated_date, recurring_occurrence_id, CAST(lifecycle_status AS VARCHAR), created_at, tombstoned_at`,
 		civilDateArg(initiatedDate),
 		occurrenceID,
+		enumValue(lifecycle),
 	))
 	if err != nil {
 		return transactions.Transaction{}, fmt.Errorf("insert recurring generated transaction: %w", err)
@@ -987,19 +1011,6 @@ WHERE o.recurring_occurrence_id = ?`,
 	}
 
 	return occurrence, nil
-}
-
-func postedJournalRecords(records []transactions.JournalRecordInput, postedAt time.Time) []transactions.JournalRecordInput {
-	posted := make([]transactions.JournalRecordInput, 0, len(records))
-	for _, record := range records {
-		next := record
-		next.TagIDs = slices.Clone(record.TagIDs)
-		next.PostingStatus = transactions.PostingStatusPosted
-		next.PostedDate = &postedAt
-		posted = append(posted, next)
-	}
-
-	return posted
 }
 
 func insertRecurringDefinitionRecord(

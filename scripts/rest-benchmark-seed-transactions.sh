@@ -160,14 +160,14 @@ JOIN seed_balance_account ba ON ba.rn = g.balance_account_rn
 JOIN seed_flow_account fa ON fa.rn = g.flow_account_rn
 JOIN seed_tag t ON t.rn = g.tag_rn;
 
-INSERT INTO "transaction" (transaction_id, initiated_date)
-SELECT transaction_id, initiated_date
+INSERT INTO "transaction" (transaction_id, initiated_date, lifecycle_status)
+SELECT transaction_id, initiated_date, 'ACTIVE'
 FROM seed_transaction_rows
 ORDER BY i;
 
 INSERT INTO journal_record (
   transaction_id, account_id, member_id, currency, amount, amount_usd, category_id, tag_ids,
-  memo, pending_date, posted_date, posting_status, reconciliation_status, source
+  memo, pending_date, posted_date, reconciliation_status, source
 )
 SELECT
   transaction_id,
@@ -181,7 +181,6 @@ SELECT
   printf('benchmark transaction %06d', i),
   CAST(initiated_date AS TIMESTAMP),
   CAST(initiated_date AS TIMESTAMP),
-  CAST('POSTED' AS posting_status),
   CAST('RECONCILED' AS reconciliation_status),
   CAST('MANUAL' AS source)
 FROM seed_transaction_rows
@@ -196,9 +195,8 @@ SELECT
   category_id,
   [tag_id],
   printf('benchmark transaction %06d', i),
-  CAST(initiated_date AS TIMESTAMP),
-  CAST(initiated_date AS TIMESTAMP),
-  CAST('POSTED' AS posting_status),
+  NULL,
+  NULL,
   CAST('RECONCILED' AS reconciliation_status),
   CAST('MANUAL' AS source)
 FROM seed_transaction_rows;

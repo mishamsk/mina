@@ -40,8 +40,8 @@ func TestTransactionMonthTotalsBoundary(t *testing.T) {
 	)
 	createMonthTotalsTransaction(t, client, "2024-06-08",
 		balanceRecord(fixture.checking.AccountId, "USD", "-110.00"),
-		balanceRecord(fixture.exchangeProvider.AccountId, "USD", "110.00"),
-		balanceRecord(fixture.exchangeProvider.AccountId, "EUR", "-100.00"),
+		semanticRecordWithoutSettlement(fixture.exchangeProvider.AccountId, "110.00", "USD", nil),
+		semanticRecordWithoutSettlement(fixture.exchangeProvider.AccountId, "-100.00", "EUR", nil),
 		balanceRecord(fixture.cashEUR.AccountId, "EUR", "100.00"),
 	)
 	createMonthTotalsTransaction(t, client, "2024-06-08",
@@ -68,11 +68,11 @@ func TestTransactionMonthTotalsBoundary(t *testing.T) {
 	)
 	createMonthTotalsTransaction(t, client, "2024-06-12",
 		balanceRecord(fixture.checking.AccountId, "USD", "40.00"),
-		balanceRecord(fixture.openingSystem.AccountId, "USD", "-40.00"),
+		semanticRecordWithoutSettlement(fixture.openingSystem.AccountId, "-40.00", "USD", nil),
 	)
 	createMonthTotalsTransaction(t, client, "2024-06-13",
 		balanceRecord(fixture.checking.AccountId, "USD", "3.00"),
-		balanceRecord(fixture.correctionSystem.AccountId, "USD", "-3.00"),
+		semanticRecordWithoutSettlement(fixture.correctionSystem.AccountId, "-3.00", "USD", nil),
 	)
 	createMonthTotalsTransaction(t, client, "2024-05-31",
 		balanceRecord(fixture.checking.AccountId, "USD", "-999.00"),
@@ -149,18 +149,26 @@ func cancelTransactionRecords(t *testing.T, client *apptest.Client, transaction 
 
 	recordIDs := make([]int64, 0, len(transaction.Records))
 	for _, record := range transaction.Records {
-		recordIDs = append(recordIDs, record.RecordId)
+		if record.Settlement != nil {
+			recordIDs = append(recordIDs, record.RecordId)
+		}
 	}
-	postingStatus := httpclient.NonExpectedPostingStatusCancelled
-	response, err := client.REST().BulkUpdateJournalRecordStatusesWithResponse(context.Background(), httpclient.BulkUpdateRecordStatusRequest{
-		RecordIds:     recordIDs,
-		PostingStatus: &postingStatus,
+	settled, err := client.REST().BulkSetJournalRecordSettlementWithResponse(context.Background(), httpclient.BulkSetRecordSettlementRequest{
+		RecordIds:  recordIDs,
+		Settlement: httpclient.SettlementStatusPending,
 	})
 	if err != nil {
-		t.Fatalf("cancel month totals transaction records request: %v", err)
+		t.Fatalf("set month totals transaction pending request: %v", err)
+	}
+	if settled.StatusCode() != http.StatusOK {
+		t.Fatalf("set month totals transaction pending status = %d, want %d; body %s", settled.StatusCode(), http.StatusOK, settled.Body)
+	}
+	response, err := client.REST().CancelTransactionWithResponse(context.Background(), transaction.TransactionId)
+	if err != nil {
+		t.Fatalf("cancel month totals transaction request: %v", err)
 	}
 	if response.StatusCode() != http.StatusOK {
-		t.Fatalf("cancel month totals transaction records status = %d, want %d; body %s", response.StatusCode(), http.StatusOK, response.Body)
+		t.Fatalf("cancel month totals transaction status = %d, want %d; body %s", response.StatusCode(), http.StatusOK, response.Body)
 	}
 }
 

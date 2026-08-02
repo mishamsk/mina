@@ -1,4 +1,4 @@
-import { Bookmark, Close, User } from "pixelarticons/react";
+import { Bookmark, Check, Clock, Close, User } from "pixelarticons/react";
 import { type KeyboardEvent, useRef, useState } from "react";
 
 import { focusWithoutTooltip, Tooltip } from "@/components/tooltip";
@@ -273,6 +273,10 @@ interface BulkActionBarProps {
   readonly maps: LookupMaps;
   readonly onApply: (update: RecordReferenceUpdate) => Promise<void>;
   readonly onEditorChange: (editor: ActiveBulkEditor | undefined) => void;
+  readonly onSetReconciliation: (
+    value: "reconciled" | "unreconciled",
+  ) => Promise<void>;
+  readonly onSetSettlement: (value: "pending" | "posted") => Promise<void>;
   readonly selectedCount: number;
   readonly skipSummary: BulkEditSkipSummary;
 }
@@ -282,12 +286,16 @@ export const BulkActionBar = ({
   maps,
   onApply,
   onEditorChange,
+  onSetReconciliation,
+  onSetSettlement,
   selectedCount,
   skipSummary,
 }: BulkActionBarProps) => {
   const categoryButtonRef = useRef<HTMLButtonElement>(null);
   const memberButtonRef = useRef<HTMLButtonElement>(null);
   const tagsButtonRef = useRef<HTMLButtonElement>(null);
+  const [recordStateSaving, setRecordStateSaving] = useState(false);
+  const [recordStateError, setRecordStateError] = useState<string>();
   const activeAction =
     activeEditor?.source === "bar" ? activeEditor.action : undefined;
   const openEditor = (action: BulkReferenceAction) => {
@@ -306,6 +314,47 @@ export const BulkActionBar = ({
       focusWithoutTooltip(target, { preventScroll: true });
     });
   };
+  const applyRecordState = async (
+    action: () => Promise<void>,
+    focusKey: string,
+  ) => {
+    setRecordStateSaving(true);
+    setRecordStateError(undefined);
+    try {
+      await action();
+    } catch (error) {
+      setRecordStateError(
+        error instanceof Error ? error.message : "The API request failed.",
+      );
+    } finally {
+      setRecordStateSaving(false);
+      let attemptsRemaining = 8;
+      let focusedOnce = false;
+      const restoreFocus = () => {
+        window.requestAnimationFrame(() => {
+          attemptsRemaining -= 1;
+          const focusTarget = document.querySelector<HTMLButtonElement>(
+            `[data-bulk-record-state="${focusKey}"]`,
+          );
+          const alreadyFocused = document.activeElement === focusTarget;
+          if (focusTarget && !focusTarget.disabled && !alreadyFocused) {
+            focusWithoutTooltip(focusTarget, { preventScroll: true });
+          }
+          if (attemptsRemaining > 0 && (!alreadyFocused || !focusedOnce)) {
+            focusedOnce = true;
+            restoreFocus();
+          }
+        });
+      };
+      restoreFocus();
+    }
+  };
+  const recordStateDisabledReason =
+    selectedCount === 0
+      ? "Select transactions first"
+      : recordStateSaving
+        ? "Record state update in progress."
+        : undefined;
 
   return (
     <section
@@ -345,6 +394,103 @@ export const BulkActionBar = ({
           Categorize
         </Button>
       </Tooltip>
+      <Tooltip
+        label={recordStateDisabledReason ?? ""}
+        className={recordStateDisabledReason ? "cursor-not-allowed" : undefined}
+        disabled={!recordStateDisabledReason}
+        focusable={Boolean(recordStateDisabledReason)}
+      >
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          data-bulk-record-state="settlement-pending"
+          disabled={Boolean(recordStateDisabledReason)}
+          onClick={() =>
+            void applyRecordState(
+              () => onSetSettlement("pending"),
+              "settlement-pending",
+            )
+          }
+        >
+          <Clock aria-hidden="true" />
+          Pending
+        </Button>
+      </Tooltip>
+      <Tooltip
+        label={recordStateDisabledReason ?? ""}
+        className={recordStateDisabledReason ? "cursor-not-allowed" : undefined}
+        disabled={!recordStateDisabledReason}
+        focusable={Boolean(recordStateDisabledReason)}
+      >
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          data-bulk-record-state="settlement-posted"
+          disabled={Boolean(recordStateDisabledReason)}
+          onClick={() =>
+            void applyRecordState(
+              () => onSetSettlement("posted"),
+              "settlement-posted",
+            )
+          }
+        >
+          <Check aria-hidden="true" />
+          Posted
+        </Button>
+      </Tooltip>
+      <Tooltip
+        label={recordStateDisabledReason ?? ""}
+        className={recordStateDisabledReason ? "cursor-not-allowed" : undefined}
+        disabled={!recordStateDisabledReason}
+        focusable={Boolean(recordStateDisabledReason)}
+      >
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          data-bulk-record-state="reconciliation-reconciled"
+          disabled={Boolean(recordStateDisabledReason)}
+          onClick={() =>
+            void applyRecordState(
+              () => onSetReconciliation("reconciled"),
+              "reconciliation-reconciled",
+            )
+          }
+        >
+          <Check aria-hidden="true" />
+          Reconcile
+        </Button>
+      </Tooltip>
+      <Tooltip
+        label={recordStateDisabledReason ?? ""}
+        className={recordStateDisabledReason ? "cursor-not-allowed" : undefined}
+        disabled={!recordStateDisabledReason}
+        focusable={Boolean(recordStateDisabledReason)}
+      >
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          data-bulk-record-state="reconciliation-unreconciled"
+          disabled={Boolean(recordStateDisabledReason)}
+          onClick={() =>
+            void applyRecordState(
+              () => onSetReconciliation("unreconciled"),
+              "reconciliation-unreconciled",
+            )
+          }
+        >
+          <Close aria-hidden="true" />
+          Unreconcile
+        </Button>
+      </Tooltip>
+      {recordStateError ? (
+        <p className="text-destructive basis-full text-xs" role="alert">
+          {recordStateError}
+        </p>
+      ) : null}
       <Tooltip
         label="Select transactions first"
         className={selectedCount === 0 ? "cursor-not-allowed" : undefined}

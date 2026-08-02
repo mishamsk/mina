@@ -10,6 +10,7 @@ import (
 	"github.com/mishamsk/mina/internal/httpapi/openapi"
 	"github.com/mishamsk/mina/internal/services"
 	"github.com/mishamsk/mina/internal/services/recurring"
+	"github.com/mishamsk/mina/internal/services/transactions"
 	"github.com/mishamsk/mina/internal/services/values"
 )
 
@@ -59,6 +60,7 @@ func (s *strictServer) ConfirmNextRecurringDefinition(ctx context.Context, reque
 		ctx,
 		request.RecurringDefinitionId,
 		values.LocalCivilDateFromTime(s.deps.clock().Now()),
+		recurringConfirmationAPIInput(*request.Body),
 	)
 	if err != nil {
 		return nil, err
@@ -105,12 +107,20 @@ func (s *strictServer) ReplaceRecurringDefinition(ctx context.Context, request o
 }
 
 func (s *strictServer) ConfirmRecurringOccurrence(ctx context.Context, request openapi.ConfirmRecurringOccurrenceRequestObject) (openapi.ConfirmRecurringOccurrenceResponseObject, error) {
-	occurrence, err := s.deps.Recurring.ConfirmOccurrence(ctx, request.RecurringOccurrenceId)
+	occurrence, err := s.deps.Recurring.ConfirmOccurrence(ctx, request.RecurringOccurrenceId, recurringConfirmationAPIInput(*request.Body))
 	if err != nil {
 		return nil, err
 	}
 
 	return openapi.ConfirmRecurringOccurrence200JSONResponse(recurringOccurrenceAPIResponse(occurrence)), nil
+}
+
+func recurringConfirmationAPIInput(input openapi.SettlementIntent) transactions.SettlementIntent {
+	return transactions.SettlementIntent{
+		Status:      transactions.SettlementStatus(input.Status),
+		PendingDate: nullableTimestampFromOpenAPI(input.PendingDate),
+		PostedDate:  nullableTimestampFromOpenAPI(input.PostedDate),
+	}
 }
 
 func (s *strictServer) DismissRecurringOccurrence(ctx context.Context, request openapi.DismissRecurringOccurrenceRequestObject) (openapi.DismissRecurringOccurrenceResponseObject, error) {

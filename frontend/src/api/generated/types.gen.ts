@@ -332,14 +332,9 @@ export type CreateJournalRecordRequest = {
      */
     memo?: string | null;
     /**
-     * UTC timestamp when the record entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.
+     * Settlement intent for owned and party records; use null for flow and system records.
      */
-    pending_date?: string | null;
-    /**
-     * UTC timestamp when the record posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.
-     */
-    posted_date?: string | null;
-    posting_status: PostingStatus;
+    settlement: SettlementIntent | null;
     reconciliation_status: ReconciliationStatus;
     source: WritableSource;
     /**
@@ -390,18 +385,26 @@ export type BulkReassignRecordsAccountRequest = {
      * Account identifier for this journal record or request.
      */
     account_id: number;
+    /**
+     * Required when the target is owned or party and existing dates cannot supply a valid settlement; omit for flow or system.
+     */
+    settlement?: SettlementIntent | null;
 };
 
-/**
- * Provide posting_status, reconciliation_status, or both.
- */
-export type BulkUpdateRecordStatusRequest = {
+export type BulkSetRecordSettlementRequest = {
     /**
      * Journal-record identifiers to update.
      */
     record_ids: Array<number>;
-    posting_status?: NonExpectedPostingStatus;
-    reconciliation_status?: ReconciliationStatus;
+    settlement: SettlementStatus;
+};
+
+export type BulkSetRecordReconciliationRequest = {
+    /**
+     * Journal-record identifiers to update.
+     */
+    record_ids: Array<number>;
+    reconciliation_status: ReconciliationStatus;
 };
 
 export type BulkRecordOperationResponse = {
@@ -446,15 +449,7 @@ export type CreateSpendTransactionRequest = {
      * Optional memo text for the journal records.
      */
     memo?: string | null;
-    /**
-     * UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.
-     */
-    pending_date?: string | null;
-    /**
-     * UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.
-     */
-    posted_date?: string | null;
-    posting_status?: PostingStatus;
+    settlement?: SettlementIntent;
     reconciliation_status?: ReconciliationStatus;
 };
 
@@ -495,15 +490,7 @@ export type CreateIncomeTransactionRequest = {
      * Optional memo text for the journal records.
      */
     memo?: string | null;
-    /**
-     * UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.
-     */
-    pending_date?: string | null;
-    /**
-     * UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.
-     */
-    posted_date?: string | null;
-    posting_status?: PostingStatus;
+    settlement?: SettlementIntent;
     reconciliation_status?: ReconciliationStatus;
 };
 
@@ -544,15 +531,7 @@ export type CreateRefundTransactionRequest = {
      * Optional memo text for the journal records.
      */
     memo?: string | null;
-    /**
-     * UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.
-     */
-    pending_date?: string | null;
-    /**
-     * UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.
-     */
-    posted_date?: string | null;
-    posting_status?: PostingStatus;
+    settlement?: SettlementIntent;
     reconciliation_status?: ReconciliationStatus;
 };
 
@@ -589,15 +568,7 @@ export type CreateTransferTransactionRequest = {
      * Optional memo text for the journal records.
      */
     memo?: string | null;
-    /**
-     * UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.
-     */
-    pending_date?: string | null;
-    /**
-     * UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.
-     */
-    posted_date?: string | null;
-    posting_status?: PostingStatus;
+    settlement?: SettlementIntent;
     reconciliation_status?: ReconciliationStatus;
 };
 
@@ -642,15 +613,7 @@ export type CreateExchangeTransactionRequest = {
      * Optional memo text for the journal records.
      */
     memo?: string | null;
-    /**
-     * UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.
-     */
-    pending_date?: string | null;
-    /**
-     * UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.
-     */
-    posted_date?: string | null;
-    posting_status?: PostingStatus;
+    settlement?: SettlementIntent;
     reconciliation_status?: ReconciliationStatus;
 };
 
@@ -812,10 +775,6 @@ export type TransactionTemplateRecordRequest = {
      * Optional memo text for the journal records.
      */
     memo?: string | null;
-    /**
-     * Posting-status value or optional template default for the journal record.
-     */
-    posting_status?: NonExpectedPostingStatus | null;
     /**
      * Reconciliation-status value or optional template default for the journal record.
      */
@@ -1104,7 +1063,11 @@ export type JournalRecord = {
      * UTC timestamp when the record posted; null until the record reaches the posted stage.
      */
     posted_date?: string | null;
-    posting_status: PostingStatus;
+    lifecycle_status: TransactionLifecycleStatus;
+    /**
+     * Server-derived settlement for owned and party records; null for flow and system records and date-free expected records.
+     */
+    settlement: SettlementStatus | null;
     reconciliation_status: ReconciliationStatus;
     source: Source;
     external_id?: string | null;
@@ -1123,14 +1086,31 @@ export type JournalRecordSearchResponse = {
 };
 
 /**
- * Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.
+ * Transaction lifecycle, independent from balance-record settlement and tombstoning.
  */
-export type PostingStatus = 'expected' | 'pending' | 'posted' | 'cancelled';
+export type TransactionLifecycleStatus = 'active' | 'expected' | 'cancelled';
 
 /**
- * Non-expected posting status accepted by bulk status updates.
+ * Server-derived balance-record settlement.
  */
-export type NonExpectedPostingStatus = 'pending' | 'posted' | 'cancelled';
+export type SettlementStatus = 'pending' | 'posted';
+
+/**
+ * Server-derived settlement summary across a transaction's balance records.
+ */
+export type TransactionSettlement = 'pending' | 'posted' | 'mixed' | 'not_applicable';
+
+export type SettlementIntent = {
+    status: SettlementStatus;
+    /**
+     * Exact UTC time the balance record entered pending; omitted manual values are derived by the service.
+     */
+    pending_date?: string | null;
+    /**
+     * Exact UTC time the balance record posted; omitted manual values are derived by the service.
+     */
+    posted_date?: string | null;
+};
 
 /**
  * Whether a journal record has been reconciled with its external or expected source.
@@ -1200,7 +1180,6 @@ export type TransactionTemplateRecord = {
     amount: string | null;
     tag_ids: Array<number>;
     memo: string | null;
-    posting_status: PostingStatus | null;
     reconciliation_status: ReconciliationStatus | null;
     created_at: string;
     updated_at: string;
@@ -1297,6 +1276,8 @@ export type Transaction = {
      * Occurrence this transaction was generated from; null for non-recurring transactions; the definition is reached via the occurrence.
      */
     recurring_occurrence_id: number | null;
+    lifecycle_status: TransactionLifecycleStatus;
+    settlement: TransactionSettlement;
     transaction_class: TransactionClass;
     /**
      * Server-derived transaction summary title for transaction lines.
@@ -4079,7 +4060,7 @@ export type ReplaceRecurringDefinitionResponses = {
 export type ReplaceRecurringDefinitionResponse = ReplaceRecurringDefinitionResponses[keyof ReplaceRecurringDefinitionResponses];
 
 export type ConfirmNextRecurringDefinitionData = {
-    body?: never;
+    body: SettlementIntent;
     path: {
         /**
          * Numeric identifier of the recurring definition to target or filter by.
@@ -4309,7 +4290,7 @@ export type ListRecurringOccurrencesResponses = {
 export type ListRecurringOccurrencesResponse = ListRecurringOccurrencesResponses[keyof ListRecurringOccurrencesResponses];
 
 export type ConfirmRecurringOccurrenceData = {
-    body?: never;
+    body: SettlementIntent;
     path: {
         /**
          * Numeric identifier of the recurring occurrence.
@@ -4343,7 +4324,7 @@ export type ConfirmRecurringOccurrenceError = ConfirmRecurringOccurrenceErrors[k
 
 export type ConfirmRecurringOccurrenceResponses = {
     /**
-     * Occurrence confirmed and generated records posted.
+     * Occurrence confirmed and generated balance records settled.
      */
     200: RecurringOccurrence;
 };
@@ -4433,9 +4414,13 @@ export type ListTransactionsData = {
          */
         member_id?: Array<number>;
         /**
-         * Filters transactions by active record posting status. Expected transactions are excluded by default and returned only when this filter explicitly includes `expected`.
+         * Filters transactions by lifecycle. Expected transactions are excluded by default and returned only when this filter explicitly includes `expected`.
          */
-        posting_status?: Array<PostingStatus>;
+        lifecycle_status?: Array<TransactionLifecycleStatus>;
+        /**
+         * Filters transactions by server-derived settlement summary.
+         */
+        settlement?: Array<TransactionSettlement>;
         /**
          * Filter by one or more server-derived transaction classes.
          */
@@ -4808,13 +4793,13 @@ export type SearchJournalRecordsData = {
          */
         member_id?: number;
         /**
-         * Filters records by posting status. Expected records are excluded by default and returned when this filter is explicitly `expected` or when `include_expected=true`.
+         * Filters records by inherited transaction lifecycle. Expected records are excluded by default.
          */
-        posting_status?: PostingStatus;
+        lifecycle_status?: TransactionLifecycleStatus;
         /**
-         * Includes expected records alongside ordinary matching records. Expected records remain excluded from running balances.
+         * Filters owned and party records by server-derived settlement.
          */
-        include_expected?: boolean;
+        settlement?: SettlementStatus;
         /**
          * Filter by reconciled or unreconciled journal-record status.
          */
@@ -4931,13 +4916,13 @@ export type SearchAccountJournalRecordsData = {
          */
         member_id?: number;
         /**
-         * Filters account register records by posting status. Expected records are excluded by default and returned when this filter is explicitly `expected` or when `include_expected=true`.
+         * Filters account register records by inherited transaction lifecycle. Expected records are excluded by default.
          */
-        posting_status?: PostingStatus;
+        lifecycle_status?: TransactionLifecycleStatus;
         /**
-         * Includes expected records alongside ordinary matching records. Expected records remain excluded from running balances.
+         * Filters account register records by server-derived settlement.
          */
-        include_expected?: boolean;
+        settlement?: SettlementStatus;
         /**
          * Filter by reconciled or unreconciled journal-record status.
          */
@@ -5135,14 +5120,14 @@ export type BulkReassignJournalRecordAccountResponses = {
 
 export type BulkReassignJournalRecordAccountResponse = BulkReassignJournalRecordAccountResponses[keyof BulkReassignJournalRecordAccountResponses];
 
-export type BulkUpdateJournalRecordStatusesData = {
-    body: BulkUpdateRecordStatusRequest;
+export type BulkSetJournalRecordSettlementData = {
+    body: BulkSetRecordSettlementRequest;
     path?: never;
     query?: never;
-    url: '/api/records/bulk/status';
+    url: '/api/records/bulk/settlement';
 };
 
-export type BulkUpdateJournalRecordStatusesErrors = {
+export type BulkSetJournalRecordSettlementErrors = {
     /**
      * The request is invalid.
      */
@@ -5157,16 +5142,49 @@ export type BulkUpdateJournalRecordStatusesErrors = {
     403: ErrorResponse;
 };
 
-export type BulkUpdateJournalRecordStatusesError = BulkUpdateJournalRecordStatusesErrors[keyof BulkUpdateJournalRecordStatusesErrors];
+export type BulkSetJournalRecordSettlementError = BulkSetJournalRecordSettlementErrors[keyof BulkSetJournalRecordSettlementErrors];
 
-export type BulkUpdateJournalRecordStatusesResponses = {
+export type BulkSetJournalRecordSettlementResponses = {
     /**
-     * Record statuses updated.
+     * Record settlement updated.
      */
     200: BulkRecordOperationResponse;
 };
 
-export type BulkUpdateJournalRecordStatusesResponse = BulkUpdateJournalRecordStatusesResponses[keyof BulkUpdateJournalRecordStatusesResponses];
+export type BulkSetJournalRecordSettlementResponse = BulkSetJournalRecordSettlementResponses[keyof BulkSetJournalRecordSettlementResponses];
+
+export type BulkSetJournalRecordReconciliationData = {
+    body: BulkSetRecordReconciliationRequest;
+    path?: never;
+    query?: never;
+    url: '/api/records/bulk/reconciliation';
+};
+
+export type BulkSetJournalRecordReconciliationErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
+};
+
+export type BulkSetJournalRecordReconciliationError = BulkSetJournalRecordReconciliationErrors[keyof BulkSetJournalRecordReconciliationErrors];
+
+export type BulkSetJournalRecordReconciliationResponses = {
+    /**
+     * Record reconciliation updated.
+     */
+    200: BulkRecordOperationResponse;
+};
+
+export type BulkSetJournalRecordReconciliationResponse = BulkSetJournalRecordReconciliationResponses[keyof BulkSetJournalRecordReconciliationResponses];
 
 export type DeleteTransactionData = {
     body?: never;
@@ -5331,3 +5349,45 @@ export type CancelTransactionResponses = {
 };
 
 export type CancelTransactionResponse = CancelTransactionResponses[keyof CancelTransactionResponses];
+
+export type RestoreTransactionData = {
+    body?: never;
+    path: {
+        /**
+         * Numeric identifier of the transaction.
+         */
+        transaction_id: number;
+    };
+    query?: never;
+    url: '/api/transactions/{transaction_id}/restore';
+};
+
+export type RestoreTransactionErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
+    /**
+     * The requested resource was not found.
+     */
+    404: ErrorResponse;
+};
+
+export type RestoreTransactionError = RestoreTransactionErrors[keyof RestoreTransactionErrors];
+
+export type RestoreTransactionResponses = {
+    /**
+     * Transaction restored.
+     */
+    200: Transaction;
+};
+
+export type RestoreTransactionResponse = RestoreTransactionResponses[keyof RestoreTransactionResponses];

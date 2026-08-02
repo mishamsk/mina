@@ -10,13 +10,13 @@ import {
   AmountText,
   ApproximateUsdAmount,
   ClassIcon,
+  displayStatusLabel,
   formatInitiatedDateParts,
   FqnPath,
   lineDisplayAmounts,
   lineMemo,
-  linePostingStatus,
+  lineStatus,
   MorePartsIndicator,
-  postingStatusLabel,
   StatusIcon,
   sumDecimalStrings,
   transactionClassLabel,
@@ -342,11 +342,11 @@ const PulseTile = ({
 const recentActivityTooltipLabel = (
   transaction: Transaction,
   memo: string | undefined,
-  postingStatus: ReturnType<typeof linePostingStatus>,
+  displayStatus: ReturnType<typeof lineStatus>,
 ): string =>
   [
     `Class ${transactionClassLabel(transaction.transaction_class)}`,
-    `Status ${postingStatusLabel(postingStatus)}`,
+    displayStatus ? `Status ${displayStatusLabel(displayStatus)}` : undefined,
     `Description ${transaction.display_title}`,
     memo ? `Memo ${memo}` : undefined,
     transactionHasMoreParts(transaction)
@@ -363,18 +363,20 @@ const RecentActivityLine = ({
 }) => {
   const memo = lineMemo(transaction);
   const dateParts = formatInitiatedDateParts(transaction.initiated_date);
-  const postingStatus = linePostingStatus(transaction);
+  const displayStatus = lineStatus(transaction);
   const amounts = lineDisplayAmounts(transaction);
   const hasMoreParts = transactionHasMoreParts(transaction);
   const amountDeemphasized =
-    postingStatus === "pending" || postingStatus === "cancelled";
-  const lineInactive = postingStatus === "cancelled";
+    displayStatus === "pending" ||
+    displayStatus === "mixed" ||
+    displayStatus === "cancelled";
+  const lineInactive = displayStatus === "cancelled";
 
   return (
     <li>
       <Tooltip
         asChild
-        label={recentActivityTooltipLabel(transaction, memo, postingStatus)}
+        label={recentActivityTooltipLabel(transaction, memo, displayStatus)}
       >
         <Link
           to={`/transactions?transaction=${transaction.transaction_id}`}
@@ -396,7 +398,9 @@ const RecentActivityLine = ({
             </span>
           </span>
           <span className="inline-grid size-6 place-items-center">
-            <StatusIcon focusable={false} status={postingStatus} />
+            {displayStatus ? (
+              <StatusIcon focusable={false} status={displayStatus} />
+            ) : null}
           </span>
           <span className="min-w-0">
             <Tooltip

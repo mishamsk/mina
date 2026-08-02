@@ -383,7 +383,7 @@ test("constrained inline category picker renders an unsliced level and selects i
   const transaction = (await createResponse.json()) as TransactionFixture;
 
   await page.goto(
-    `/transactions?q=${encodeURIComponent(memo)}&page=1&pageSize=50&hideExpected=true`,
+    `/transactions?q=${encodeURIComponent(memo)}&page=1&pageSize=50`,
   );
   const row = page
     .locator(`[data-transaction-id="${transaction.transaction_id}"]`)

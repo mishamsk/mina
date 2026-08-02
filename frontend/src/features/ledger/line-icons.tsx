@@ -13,31 +13,18 @@ import {
 } from "pixelarticons/react";
 import type { ComponentType, SVGProps } from "react";
 
-import type { PostingStatus, RecordRole, TransactionClass } from "@/api";
+import type { RecordRole, TransactionClass } from "@/api";
 import { Tooltip } from "@/components/tooltip";
 import { cn } from "@/lib/utils";
 
 import {
-  postingStatusLabel,
+  displayStatusLabel,
   recordRoleLabel,
   transactionClassLabel,
+  type TransactionDisplayStatus,
 } from "./format";
 
 type PixelIcon = ComponentType<SVGProps<SVGSVGElement>>;
-
-export const CalendarWeeksOff = (props: SVGProps<SVGSVGElement>) => (
-  <svg
-    viewBox="0 0 24 24"
-    width="24"
-    height="24"
-    fill="currentColor"
-    xmlns="http://www.w3.org/2000/svg"
-    {...props}
-  >
-    <path d="M7 4h12v2H7zm-2 16h14v2H5zM3 10h2v10H3zm0-4h2v2H3zm16 0h2v2h-2zm0 4h2v8h-2zM3 8h5v2H3zm7 0h11v2H10zm5-6h2v2h-2zM7 2h2v2H7zm0 10h5v2H7zm7 0h3v2h-3zm-7 4h9v2H7z" />
-    <path d="M2 2h2v2H2zm2 2h2v2H4zm2 2h2v2H6zm2 2h2v2H8zm2 2h2v2h-2zm2 2h2v2h-2zm2 2h2v2h-2zm2 2h2v2h-2zm2 2h2v2h-2zm2 2h2v2h-2z" />
-  </svg>
-);
 
 interface ClassIconProps {
   readonly className?: string;
@@ -145,7 +132,7 @@ export const RecordRoleIcon = ({
 interface StatusIconProps {
   readonly className?: string;
   readonly focusable?: boolean;
-  readonly status: PostingStatus | "mixed";
+  readonly status: TransactionDisplayStatus;
 }
 
 export const StatusIcon = ({
@@ -153,10 +140,6 @@ export const StatusIcon = ({
   focusable = true,
   status,
 }: StatusIconProps) => {
-  if (status === "posted") {
-    return null;
-  }
-
   const Icon =
     status === "expected"
       ? Calendar
@@ -165,7 +148,7 @@ export const StatusIcon = ({
         : status === "mixed"
           ? Switch
           : Cancel;
-  const label = postingStatusLabel(status);
+  const label = displayStatusLabel(status);
 
   return (
     <Tooltip
@@ -178,10 +161,11 @@ export const StatusIcon = ({
           aria-hidden="true"
           className={cn(
             "size-5",
-            (status === "expected" || status === "pending") &&
+            (status === "expected" ||
+              status === "pending" ||
+              status === "mixed") &&
               "text-[var(--color-status-pending-ink)]",
-            (status === "cancelled" || status === "mixed") &&
-              "text-muted-foreground",
+            status === "cancelled" && "text-muted-foreground",
           )}
         />
       </span>

@@ -5,12 +5,15 @@ CREATE TABLE transaction (
 	initiated_date DATE NOT NULL,
 	-- Occurrence this transaction was generated from; NULL for non-recurring transactions; the definition is reached via the occurrence.
 	recurring_occurrence_id INTEGER,
+	-- Transaction lifecycle, independent from balance-record settlement and tombstoning.
+	lifecycle_status transaction_lifecycle_status NOT NULL,
 	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	tombstoned_at TIMESTAMP
 );
 
 COMMENT ON COLUMN transaction.initiated_date IS 'Human-facing calendar date the transaction happened, distinct from formal banking timestamps on records that may be future dated.';
 COMMENT ON COLUMN transaction.recurring_occurrence_id IS 'Occurrence this transaction was generated from; NULL for non-recurring transactions; the definition is reached via the occurrence.';
+COMMENT ON COLUMN transaction.lifecycle_status IS 'Transaction lifecycle, independent from balance-record settlement and tombstoning.';
 
 CREATE TABLE journal_record (
 	record_id INTEGER PRIMARY KEY DEFAULT nextval('primary_key_gen_seq'),
@@ -33,8 +36,6 @@ CREATE TABLE journal_record (
 	pending_date TIMESTAMP,
 	-- UTC timestamp when the record posted; NULL until the record reaches the posted stage.
 	posted_date TIMESTAMP DEFAULT NULL,
-	-- Banking lifecycle state for this record.
-	posting_status posting_status NOT NULL,
 	-- Import/reconciliation matching state.
 	reconciliation_status reconciliation_status NOT NULL DEFAULT 'RECONCILED',
 	-- Origin of this record.
@@ -56,7 +57,6 @@ COMMENT ON COLUMN journal_record.tag_ids IS 'Tag IDs assigned to this record for
 COMMENT ON COLUMN journal_record.memo IS 'Optional record note or description.';
 COMMENT ON COLUMN journal_record.pending_date IS 'UTC timestamp when the record entered pending; NULL when the record never had a pending stage.';
 COMMENT ON COLUMN journal_record.posted_date IS 'UTC timestamp when the record posted; NULL until the record reaches the posted stage.';
-COMMENT ON COLUMN journal_record.posting_status IS 'Banking lifecycle state for this record.';
 COMMENT ON COLUMN journal_record.reconciliation_status IS 'Import/reconciliation matching state.';
 COMMENT ON COLUMN journal_record.source IS 'Origin of this record.';
 COMMENT ON COLUMN journal_record.external_id IS 'Identifier assigned by an external system when this record is linked outside Mina.';

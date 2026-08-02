@@ -738,7 +738,7 @@ test("spend entry escalates to matching journal records", async ({
       funding_account_id: fundingAccount.account_id,
       initiated_date: "2026-05-31",
       memo,
-      posting_status: "posted",
+      settlement: { status: "posted" },
       reconciliation_status: "unreconciled",
       tag_ids: [],
     },

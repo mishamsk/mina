@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/mishamsk/mina/internal/services"
@@ -868,6 +869,10 @@ func (b *seedBuilder) rec(
 		id := b.cats[categoryFQN]
 		categoryID = &id
 	}
+	var settlement *transactions.SettlementIntent
+	if categoryID == nil && !strings.HasPrefix(accountFQN, "system:") {
+		settlement = &transactions.SettlementIntent{Status: transactions.SettlementStatusPosted}
+	}
 
 	return transactions.JournalRecordInput{
 		AccountID:            b.accounts[accountFQN],
@@ -878,7 +883,7 @@ func (b *seedBuilder) rec(
 		CategoryID:           categoryID,
 		TagIDs:               tagIDs,
 		Memo:                 strPtr(memo),
-		PostingStatus:        transactions.PostingStatusPosted,
+		Settlement:           settlement,
 		ReconciliationStatus: transactions.ReconciliationStatusReconciled,
 		Source:               transactions.SourceManual,
 	}

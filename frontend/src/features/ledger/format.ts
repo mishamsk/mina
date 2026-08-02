@@ -4,11 +4,12 @@ import type {
   DisplayAmount,
   JournalRecord,
   Member,
-  PostingStatus,
   RecordRole,
+  SettlementStatus,
   Tag,
   Transaction,
   TransactionClass,
+  TransactionLifecycleStatus,
 } from "@/api";
 import type { LedgerLookupsSnapshot } from "@/store";
 import { formatLocalCivilDate, formatLocalCivilDateParts } from "@/utils/date";
@@ -50,15 +51,29 @@ export const compactTransactionClassLabel = (
   transactionClass: TransactionClass,
 ): string => compactClassLabels[transactionClass];
 
-const postingStatusLabels: Record<PostingStatus, string> = {
+const lifecycleStatusLabels: Record<TransactionLifecycleStatus, string> = {
+  active: "Active",
   cancelled: "Cancelled",
   expected: "Expected",
+};
+
+const settlementStatusLabels: Record<SettlementStatus, string> = {
   pending: "Pending",
   posted: "Posted",
 };
 
-export const postingStatusLabel = (status: PostingStatus | "mixed"): string =>
-  status === "mixed" ? "Mixed posting status" : postingStatusLabels[status];
+export const lifecycleStatusLabel = (
+  status: TransactionLifecycleStatus,
+): string => lifecycleStatusLabels[status];
+
+export const settlementStatusLabel = (
+  status: SettlementStatus | "mixed" | "not_applicable",
+): string =>
+  status === "mixed"
+    ? "Mixed settlement"
+    : status === "not_applicable"
+      ? "No settlement"
+      : settlementStatusLabels[status];
 
 const recordRoleLabels: Record<RecordRole, string> = {
   adjustment: "Adjustment",
@@ -164,15 +179,6 @@ export const formatDecimalAmount = (
 export const displayAmountKey = (displayAmount: DisplayAmount): string =>
   `${displayAmount.currency}:${displayAmount.amount}`;
 
-export const activeTransactionRecords = (
-  transaction: Transaction,
-): readonly JournalRecord[] => {
-  const records = transaction.records.filter(
-    (record) => record.posting_status !== "cancelled",
-  );
-  return records.length > 0 ? records : transaction.records;
-};
-
 export const simpleTransactionAmountRecords = (
   transaction: Transaction,
 ): readonly [JournalRecord, JournalRecord] | undefined => {
@@ -185,7 +191,7 @@ export const simpleTransactionAmountRecords = (
     return undefined;
   }
 
-  const records = activeTransactionRecords(transaction);
+  const records = transaction.records;
   if (records.length !== 2 || records[0]?.currency !== records[1]?.currency) {
     return undefined;
   }
@@ -222,7 +228,7 @@ const compareTagsByName = (left: Tag, right: Tag): number =>
   left.name.localeCompare(right.name) || left.fqn.localeCompare(right.fqn);
 
 export const lineMemo = (transaction: Transaction): string | undefined => {
-  const memos = activeTransactionRecords(transaction)
+  const memos = transaction.records
     .map((record) => record.memo?.trim())
     .filter((memo): memo is string => Boolean(memo));
   if (memos.length === 0) {
@@ -240,7 +246,7 @@ export const lineCategory = (
   maps: LookupMaps,
 ): Category | "mixed" | undefined => {
   const categoryId = uniformValue(
-    activeTransactionRecords(transaction)
+    transaction.records
       .map((record) => record.category_id)
       .filter((categoryId): categoryId is number => categoryId !== null),
   );
@@ -258,7 +264,7 @@ export const lineTags = (
   maps: LookupMaps,
 ): readonly Tag[] | "mixed" => {
   const tagIds = uniformValue(
-    activeTransactionRecords(transaction).map((record) =>
+    transaction.records.map((record) =>
       [...record.tag_ids].sort(compareNumbers),
     ),
     (left, right) =>
@@ -281,7 +287,7 @@ export const lineMember = (
   maps: LookupMaps,
 ): Member | "mixed" | undefined => {
   const memberId = uniformValue(
-    activeTransactionRecords(transaction)
+    transaction.records
       .map((record) => record.member_id)
       .filter((memberId): memberId is number => memberId != null),
   );
@@ -294,16 +300,33 @@ export const lineMember = (
   return maps.membersById.get(memberId);
 };
 
-export const linePostingStatus = (
+export type TransactionDisplayStatus =
+  "cancelled" | "expected" | "mixed" | "pending";
+
+export const displayStatusLabel = (status: TransactionDisplayStatus): string =>
+  status === "pending" || status === "mixed"
+    ? settlementStatusLabel(status)
+    : lifecycleStatusLabel(status);
+
+export const lineStatus = (
   transaction: Transaction,
-): PostingStatus | "mixed" => {
-  const status = uniformValue(
-    activeTransactionRecords(transaction).map(
-      (record) => record.posting_status,
-    ),
-  );
-  return status ?? "posted";
-};
+): TransactionDisplayStatus | undefined =>
+  transaction.lifecycle_status === "expected" ||
+  transaction.lifecycle_status === "cancelled"
+    ? transaction.lifecycle_status
+    : transaction.settlement === "pending" || transaction.settlement === "mixed"
+      ? transaction.settlement
+      : undefined;
+
+export const recordStatus = (
+  record: JournalRecord,
+): TransactionDisplayStatus | undefined =>
+  record.lifecycle_status === "expected" ||
+  record.lifecycle_status === "cancelled"
+    ? record.lifecycle_status
+    : record.settlement === "pending"
+      ? "pending"
+      : undefined;
 
 export const lineDisplayAmounts = (
   transaction: Transaction,

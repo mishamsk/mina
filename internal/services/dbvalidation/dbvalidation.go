@@ -350,11 +350,10 @@ func (s *Service) classificationFindings(ctx context.Context) ([]Finding, error)
 				Limit:  &limit,
 				Offset: offset,
 			},
-			PostingStatuses: []transactions.PostingStatus{
-				transactions.PostingStatusExpected,
-				transactions.PostingStatusPending,
-				transactions.PostingStatusPosted,
-				transactions.PostingStatusCancelled,
+			LifecycleStatuses: []transactions.LifecycleStatus{
+				transactions.LifecycleStatusActive,
+				transactions.LifecycleStatusExpected,
+				transactions.LifecycleStatusCancelled,
 			},
 		})
 		if err != nil {

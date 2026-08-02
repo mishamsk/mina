@@ -26,7 +26,7 @@ import {
 test("transactions page renders demo transaction lines and expands records", async ({
   page,
 }) => {
-  await page.goto("/transactions?hideExpected=true");
+  await page.goto("/transactions?");
 
   await expect(
     page.getByRole("heading", { exact: true, name: "Transactions" }),
@@ -178,7 +178,7 @@ test("expanded records edit per-record values and escalate structural changes", 
           category_id: null,
           currency: "USD",
           memo,
-          posting_status: "posted",
+          settlement: { status: "posted" },
           reconciliation_status: "unreconciled",
           source: "manual",
           tag_ids: [initialTag.tag_id],
@@ -189,7 +189,7 @@ test("expanded records edit per-record values and escalate structural changes", 
           category_id: initialCategory.category_id,
           currency: "USD",
           memo,
-          posting_status: "posted",
+          settlement: null,
           reconciliation_status: "unreconciled",
           source: "manual",
           tag_ids: [initialTag.tag_id],
@@ -200,7 +200,7 @@ test("expanded records edit per-record values and escalate structural changes", 
   expect(createResponse.ok(), await createResponse.text()).toBe(true);
   const transaction = (await createResponse.json()) as TransactionDetailFixture;
 
-  await page.goto("/transactions?page=1&pageSize=50&hideExpected=true");
+  await page.goto("/transactions?page=1&pageSize=50");
   const transactionRow = page
     .getByRole("row")
     .filter({ hasText: memo })
@@ -286,24 +286,24 @@ test("expanded records edit per-record values and escalate structural changes", 
   await datesEditor.getByRole("button", { name: "Save" }).click();
   await expect(datesCell).toContainText("Initiated 2026-07-09");
 
-  const statusCell = records.getByTestId("record-postingStatus-cell").first();
-  await statusCell.focus();
-  await statusCell.press("F2");
-  const statusEditor = records
-    .getByTestId("record-postingStatus-editor")
+  const settlementCell = records.getByTestId("record-settlement-cell").first();
+  await settlementCell.focus();
+  await settlementCell.press("F2");
+  const settlementEditor = records
+    .getByTestId("record-settlement-editor")
     .first();
-  await statusEditor.getByRole("combobox", { name: "Posting status" }).click();
-  await page.getByRole("option", { name: "Cancelled" }).click();
-  await expect(statusEditor.getByRole("alert")).toContainText(/cancelled/i);
+  await settlementEditor.getByRole("combobox", { name: "Settlement" }).click();
+  await expect(page.getByRole("option", { name: "Cancelled" })).toHaveCount(0);
+  await page.keyboard.press("Escape");
   const unchangedResponse = await page.request.get(
     `/api/transactions/${transaction.transaction_id}`,
   );
   expect(unchangedResponse.ok(), await unchangedResponse.text()).toBe(true);
   const unchanged =
     (await unchangedResponse.json()) as TransactionDetailFixture;
-  expect(unchanged.records.map((record) => record.posting_status)).toEqual([
+  expect(unchanged.records.map((record) => record.settlement)).toEqual([
     "posted",
-    "posted",
+    null,
   ]);
 
   await expect(records.getByTestId("record-account-editor")).toHaveCount(0);
@@ -312,7 +312,7 @@ test("expanded records edit per-record values and escalate structural changes", 
     .getByRole("button", { name: "Edit account in journal" })
     .first();
   await editAccountInJournal.click();
-  await expect(statusEditor).toHaveCount(0);
+  await expect(settlementEditor).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Edit journal" })).toHaveCount(
     0,
   );
@@ -339,7 +339,7 @@ test("replacement edits preserve server-stamped pending dates", async ({
     throw new Error("Created record has no id");
   }
 
-  await page.goto("/transactions?page=1&pageSize=50&hideExpected=true");
+  await page.goto("/transactions?page=1&pageSize=50");
   const transactionRow = page
     .getByRole("row")
     .filter({ hasText: memo })
@@ -357,21 +357,21 @@ test("replacement edits preserve server-stamped pending dates", async ({
     await listRefreshReleased;
     await route.continue();
   });
-  await page.route("**/api/records/bulk/status", async (route) => {
+  await page.route("**/api/records/bulk/settlement", async (route) => {
     const response = await route.fetch();
     await new Promise<void>((resolve) => setTimeout(resolve, 50));
     await route.fulfill({ response });
   });
 
-  const statusCell = records.getByTestId("record-postingStatus-cell").first();
-  await statusCell.focus();
-  await statusCell.press("F2");
-  const statusEditor = records
-    .getByTestId("record-postingStatus-editor")
+  const settlementCell = records.getByTestId("record-settlement-cell").first();
+  await settlementCell.focus();
+  await settlementCell.press("F2");
+  const settlementEditor = records
+    .getByTestId("record-settlement-editor")
     .first();
-  await statusEditor.getByRole("combobox", { name: "Posting status" }).click();
+  await settlementEditor.getByRole("combobox", { name: "Settlement" }).click();
   await page.getByRole("option", { name: "Pending" }).click();
-  await expect(statusEditor).toHaveCount(0);
+  await expect(settlementEditor).toHaveCount(0);
 
   const afterStatus = await getTransactionDetail(page, transaction);
   const authoritativePendingDate = afterStatus.records.find(
@@ -396,7 +396,7 @@ test("replacement edits preserve server-stamped pending dates", async ({
 
   releaseListRefresh();
   await page.unroute("**/api/transactions?**");
-  await page.unroute("**/api/records/bulk/status");
+  await page.unroute("**/api/records/bulk/settlement");
   await deleteTransaction(page, transaction);
 });
 
@@ -413,7 +413,7 @@ test("successful status saves tolerate an authoritative refetch failure", async 
     throw new Error("Created transaction has no records");
   }
 
-  await page.goto("/transactions?page=1&pageSize=50&hideExpected=true");
+  await page.goto("/transactions?page=1&pageSize=50");
   const transactionRow = page
     .getByRole("row")
     .filter({ hasText: memo })
@@ -443,17 +443,17 @@ test("successful status saves tolerate an authoritative refetch failure", async 
     },
   );
 
-  const statusCell = records.getByTestId("record-postingStatus-cell").first();
-  await statusCell.focus();
-  await statusCell.press("F2");
-  const statusEditor = records
-    .getByTestId("record-postingStatus-editor")
+  const settlementCell = records.getByTestId("record-settlement-cell").first();
+  await settlementCell.focus();
+  await settlementCell.press("F2");
+  const settlementEditor = records
+    .getByTestId("record-settlement-editor")
     .first();
-  await statusEditor.getByRole("combobox", { name: "Posting status" }).click();
+  await settlementEditor.getByRole("combobox", { name: "Settlement" }).click();
   await page.getByRole("option", { name: "Pending" }).click();
 
-  await expect(statusEditor).toHaveCount(0);
-  await expect(statusCell).toContainText("pending");
+  await expect(settlementEditor).toHaveCount(0);
+  await expect(settlementCell).toContainText("pending");
   expect(failedRefetches).toBe(1);
 
   await page.unroute(`**/api/transactions/${transaction.transaction_id}`);
@@ -461,7 +461,7 @@ test("successful status saves tolerate an authoritative refetch failure", async 
   const updatedRecord = afterStatus.records.find(
     (record) => record.record_id === targetRecord.record_id,
   );
-  expect(updatedRecord?.posting_status).toBe("pending");
+  expect(updatedRecord?.settlement).toBe("pending");
   expect(updatedRecord?.pending_date).not.toBeNull();
   await deleteTransaction(page, transaction);
 });
@@ -503,7 +503,7 @@ test("tag editor keeps many assignments and controls separate in a narrow viewpo
           category_id: null,
           currency: "USD",
           memo,
-          posting_status: "posted",
+          settlement: { status: "posted" },
           reconciliation_status: "unreconciled",
           source: "manual",
           tag_ids: assignedTags.map((tag) => tag.tag_id),
@@ -514,7 +514,7 @@ test("tag editor keeps many assignments and controls separate in a narrow viewpo
           category_id: category.category_id,
           currency: "USD",
           memo,
-          posting_status: "posted",
+          settlement: null,
           reconciliation_status: "unreconciled",
           source: "manual",
           tag_ids: [assignedTags[0]!.tag_id],
@@ -525,7 +525,7 @@ test("tag editor keeps many assignments and controls separate in a narrow viewpo
   expect(createResponse.ok(), await createResponse.text()).toBe(true);
   const transaction = (await createResponse.json()) as TransactionDetailFixture;
 
-  await page.goto("/transactions?page=1&pageSize=100&hideExpected=true");
+  await page.goto("/transactions?page=1&pageSize=100");
   const row = page.locator(
     `[data-transaction-id="${transaction.transaction_id}"]`,
   );
@@ -722,7 +722,7 @@ test("inline category tag member and amount saves keep the transaction table sta
           category_id: null,
           currency: "USD",
           memo,
-          posting_status: "posted",
+          settlement: { status: "posted" },
           reconciliation_status: "unreconciled",
           source: "manual",
           tag_ids: [],
@@ -733,7 +733,7 @@ test("inline category tag member and amount saves keep the transaction table sta
           category_id: initialCategory.category_id,
           currency: "USD",
           memo,
-          posting_status: "posted",
+          settlement: null,
           reconciliation_status: "unreconciled",
           source: "manual",
           tag_ids: [],
@@ -744,7 +744,7 @@ test("inline category tag member and amount saves keep the transaction table sta
   expect(createResponse.ok(), await createResponse.text()).toBe(true);
   const transaction = (await createResponse.json()) as TransactionDetailFixture;
 
-  await page.goto("/transactions?page=1&pageSize=100&hideExpected=true");
+  await page.goto("/transactions?page=1&pageSize=100");
   const tableScroll = page.getByTestId("transactions-table-scroll");
   const row = page.locator(
     `[data-transaction-id="${transaction.transaction_id}"]`,
@@ -906,7 +906,7 @@ test("filtered inline category save restores focus after its row disappears", as
   ]);
 
   await page.goto(
-    `/transactions?page=1&pageSize=50&hideExpected=true&q=${encodeURIComponent(
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(
       unique,
     )}&category=${initialCategory.category_id}`,
   );
@@ -1002,7 +1002,7 @@ test("filtered inline category save focuses the empty-list action", async ({
   const transaction = (await createResponse.json()) as TransactionFixture;
 
   await page.goto(
-    `/transactions?page=1&pageSize=50&hideExpected=true&q=${encodeURIComponent(
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(
       unique,
     )}&category=${initialCategory.category_id}`,
   );
@@ -1077,7 +1077,7 @@ test("filtered expanded and amount saves restore focus after row removal", async
           category_id: null,
           currency: "USD",
           memo: statusMemo,
-          posting_status: "posted",
+          settlement: { status: "posted" },
           reconciliation_status: "unreconciled",
           source: "manual",
           tag_ids: [],
@@ -1088,7 +1088,7 @@ test("filtered expanded and amount saves restore focus after row removal", async
           category_id: initialCategory.category_id,
           currency: "USD",
           memo: statusMemo,
-          posting_status: "pending",
+          settlement: null,
           reconciliation_status: "unreconciled",
           source: "manual",
           tag_ids: [],
@@ -1097,7 +1097,8 @@ test("filtered expanded and amount saves restore focus after row removal", async
     },
   });
   expect(statusResponse.ok(), await statusResponse.text()).toBe(true);
-  const statusTransaction = (await statusResponse.json()) as TransactionFixture;
+  const settlementTransaction =
+    (await statusResponse.json()) as TransactionFixture;
   const transactionRows = page.locator("[data-transaction-row='true']");
   const neighborAfterRemoval = async (
     transactionId: number,
@@ -1115,7 +1116,7 @@ test("filtered expanded and amount saves restore focus after row removal", async
   };
 
   await page.goto(
-    `/transactions?page=1&pageSize=50&hideExpected=true&q=${encodeURIComponent(
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(
       unique,
     )}&category=${initialCategory.category_id}`,
   );
@@ -1145,34 +1146,34 @@ test("filtered expanded and amount saves restore focus after row removal", async
   await expect(categoryNeighbor).toBeFocused();
 
   await page.goto(
-    `/transactions?page=1&pageSize=50&hideExpected=true&q=${encodeURIComponent(
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(
       unique,
-    )}&status=posted`,
+    )}&settlement=posted`,
   );
-  const statusRow = page.locator(
-    `[data-transaction-id="${statusTransaction.transaction_id}"]`,
+  const settlementRow = page.locator(
+    `[data-transaction-id="${settlementTransaction.transaction_id}"]`,
   );
-  await expect(statusRow).toBeVisible();
-  await statusRow.getByTestId("transaction-line-title").click();
-  const statusCell = page
+  await expect(settlementRow).toBeVisible();
+  await settlementRow.getByTestId("transaction-line-title").click();
+  const settlementCell = page
     .getByTestId("expanded-records")
-    .getByTestId("record-postingStatus-cell")
+    .getByTestId("record-settlement-cell")
     .first();
-  await statusCell.focus();
-  await statusCell.press("F2");
+  await settlementCell.focus();
+  await settlementCell.press("F2");
   await page
-    .getByTestId("record-postingStatus-editor")
-    .getByRole("combobox", { name: "Posting status" })
+    .getByTestId("record-settlement-editor")
+    .getByRole("combobox", { name: "Settlement" })
     .click();
-  const statusNeighbor = await neighborAfterRemoval(
-    statusTransaction.transaction_id,
+  const settlementNeighbor = await neighborAfterRemoval(
+    settlementTransaction.transaction_id,
   );
   await page.getByRole("option", { name: "Pending" }).click();
-  await expect(statusRow).toHaveCount(0);
-  await expect(statusNeighbor).toBeFocused();
+  await expect(settlementRow).toHaveCount(0);
+  await expect(settlementNeighbor).toBeFocused();
 
   await page.goto(
-    `/transactions?page=1&pageSize=50&hideExpected=true&q=${encodeURIComponent(
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(
       unique,
     )}&amountMin=12&amountMax=13`,
   );
@@ -1198,7 +1199,7 @@ test("filtered expanded and amount saves restore focus after row removal", async
 
   await Promise.all([
     deleteTransaction(page, categoryTransaction),
-    deleteTransaction(page, statusTransaction),
+    deleteTransaction(page, settlementTransaction),
     deleteTransaction(page, amountTransaction),
   ]);
 });
@@ -1245,7 +1246,7 @@ test("reference editor releases while its page refresh is pending", async ({
     (await neighborResponse.json()) as TransactionFixture;
 
   await page.goto(
-    `/transactions?page=1&pageSize=50&hideExpected=true&q=${encodeURIComponent(unique)}&category=${initialCategory.category_id}`,
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(unique)}&category=${initialCategory.category_id}`,
   );
   const row = page.locator(
     `[data-transaction-id="${transaction.transaction_id}"]`,
@@ -1365,7 +1366,7 @@ test("overlapping filtered saves restore focus for the latest save", async ({
   ]);
 
   await page.goto(
-    `/transactions?page=1&pageSize=50&hideExpected=true&q=${encodeURIComponent(
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(
       unique,
     )}&category=${initialCategory.category_id}`,
   );
@@ -1480,9 +1481,7 @@ test("repeated background refresh failures surface stale transactions", async ({
   const transaction = (await createResponse.json()) as TransactionFixture;
 
   await page.goto(
-    `/transactions?page=1&pageSize=50&hideExpected=true&q=${encodeURIComponent(
-      unique,
-    )}`,
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(unique)}`,
   );
   const row = page.locator(
     `[data-transaction-id="${transaction.transaction_id}"]`,
@@ -1612,7 +1611,7 @@ test("transaction-row inline editing follows the uniformity rule", async ({
           currency: "USD",
           member_id: member.member_id,
           memo,
-          posting_status: "posted",
+          settlement: { status: "posted" },
           reconciliation_status: "unreconciled",
           source: "manual",
           tag_ids: [initialTag.tag_id],
@@ -1624,7 +1623,7 @@ test("transaction-row inline editing follows the uniformity rule", async ({
           currency: "USD",
           member_id: member.member_id,
           memo,
-          posting_status: "posted",
+          settlement: null,
           reconciliation_status: "unreconciled",
           source: "manual",
           tag_ids: [initialTag.tag_id],
@@ -1636,7 +1635,7 @@ test("transaction-row inline editing follows the uniformity rule", async ({
   const uniform = (await uniformResponse.json()) as TransactionDetailFixture;
 
   await page.goto(
-    `/transactions?q=${encodeURIComponent(memo)}&page=1&pageSize=50&hideExpected=true`,
+    `/transactions?q=${encodeURIComponent(memo)}&page=1&pageSize=50`,
   );
   const row = page.getByRole("row").filter({ hasText: memo }).first();
   await expect(row).toBeVisible();
@@ -1646,11 +1645,10 @@ test("transaction-row inline editing follows the uniformity rule", async ({
     .click();
   await expectTransactionFilterUrl(page, {
     categories: [initialCategory.category_id],
-    hideExpected: true,
     q: memo,
   });
   await page.getByRole("button", { name: "Close filters" }).click();
-  await expectTransactionFilterUrl(page, { hideExpected: true, q: memo });
+  await expectTransactionFilterUrl(page, { q: memo });
   await page.reload();
   await expect(row).toBeVisible();
   const categoryCell = row.getByTestId(`${rowPrefix}-category-cell`);
@@ -1723,7 +1721,7 @@ test("transaction-row inline editing follows the uniformity rule", async ({
           category_id: null,
           currency: "USD",
           memo: mixedMemo,
-          posting_status: "posted",
+          settlement: { status: "posted" },
           reconciliation_status: "unreconciled",
           source: "manual",
           tag_ids: [],
@@ -1734,7 +1732,7 @@ test("transaction-row inline editing follows the uniformity rule", async ({
           category_id: initialCategory.category_id,
           currency: "USD",
           memo: mixedMemo,
-          posting_status: "posted",
+          settlement: null,
           reconciliation_status: "unreconciled",
           source: "manual",
           tag_ids: [],
@@ -1745,7 +1743,7 @@ test("transaction-row inline editing follows the uniformity rule", async ({
           category_id: nextCategory.category_id,
           currency: "USD",
           memo: mixedMemo,
-          posting_status: "posted",
+          settlement: null,
           reconciliation_status: "unreconciled",
           source: "manual",
           tag_ids: [],
@@ -1756,7 +1754,7 @@ test("transaction-row inline editing follows the uniformity rule", async ({
   expect(mixedResponse.ok(), await mixedResponse.text()).toBe(true);
   const mixed = (await mixedResponse.json()) as TransactionDetailFixture;
   await page.goto(
-    `/transactions?q=${encodeURIComponent(mixedMemo)}&page=1&pageSize=50&hideExpected=true`,
+    `/transactions?q=${encodeURIComponent(mixedMemo)}&page=1&pageSize=50`,
   );
   const mixedRow = page.getByRole("row").filter({ hasText: mixedMemo }).first();
   await expect(mixedRow).toContainText("Mixed");
@@ -1775,7 +1773,7 @@ test("transaction-row inline editing follows the uniformity rule", async ({
           category_id: null,
           currency: "USD",
           memo: nonSimpleMemo,
-          posting_status: "posted",
+          settlement: { status: "posted" },
           reconciliation_status: "unreconciled",
           source: "manual",
           tag_ids: [],
@@ -1786,7 +1784,7 @@ test("transaction-row inline editing follows the uniformity rule", async ({
           category_id: initialCategory.category_id,
           currency: "USD",
           memo: nonSimpleMemo,
-          posting_status: "posted",
+          settlement: null,
           reconciliation_status: "unreconciled",
           source: "manual",
           tag_ids: [],
@@ -1797,7 +1795,7 @@ test("transaction-row inline editing follows the uniformity rule", async ({
           category_id: null,
           currency: "USD",
           memo: nonSimpleMemo,
-          posting_status: "posted",
+          settlement: { status: "posted" },
           reconciliation_status: "unreconciled",
           source: "manual",
           tag_ids: [],
@@ -1809,7 +1807,7 @@ test("transaction-row inline editing follows the uniformity rule", async ({
   const nonSimple =
     (await nonSimpleResponse.json()) as TransactionDetailFixture;
   await page.goto(
-    `/transactions?q=${encodeURIComponent(nonSimpleMemo)}&page=1&pageSize=50&hideExpected=true`,
+    `/transactions?q=${encodeURIComponent(nonSimpleMemo)}&page=1&pageSize=50`,
   );
   await expect(
     page
@@ -1877,7 +1875,7 @@ test("inline editing keeps one explicit-commit draft across transaction rows", a
           category_id: null,
           currency: "USD",
           memo: firstMemo,
-          posting_status: "posted",
+          settlement: { status: "posted" },
           reconciliation_status: "unreconciled",
           source: "manual",
           tag_ids: [],
@@ -1888,7 +1886,7 @@ test("inline editing keeps one explicit-commit draft across transaction rows", a
           category_id: initialCategory.category_id,
           currency: "USD",
           memo: firstMemo,
-          posting_status: "posted",
+          settlement: null,
           reconciliation_status: "unreconciled",
           source: "manual",
           tag_ids: [],
@@ -1910,7 +1908,7 @@ test("inline editing keeps one explicit-commit draft across transaction rows", a
           category_id: null,
           currency: "USD",
           memo: secondMemo,
-          posting_status: "posted",
+          settlement: { status: "posted" },
           reconciliation_status: "unreconciled",
           source: "manual",
           tag_ids: [],
@@ -1921,7 +1919,7 @@ test("inline editing keeps one explicit-commit draft across transaction rows", a
           category_id: initialCategory.category_id,
           currency: "USD",
           memo: secondMemo,
-          posting_status: "posted",
+          settlement: null,
           reconciliation_status: "unreconciled",
           source: "manual",
           tag_ids: [],
@@ -1936,7 +1934,7 @@ test("inline editing keeps one explicit-commit draft across transaction rows", a
     (await secondCreateResponse.json()) as TransactionDetailFixture;
 
   await page.goto(
-    `/transactions?q=${encodeURIComponent(memoPrefix)}&page=1&pageSize=50&hideExpected=true`,
+    `/transactions?q=${encodeURIComponent(memoPrefix)}&page=1&pageSize=50`,
   );
   const firstRow = page.getByRole("row").filter({ hasText: firstMemo }).first();
   const secondRow = page

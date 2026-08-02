@@ -359,16 +359,15 @@ func insertTransactionTemplateRecord(
 	args = append(args, tagListArgs...)
 	args = append(args,
 		record.Memo,
-		nullableEnumValue(record.PostingStatus),
 		nullableEnumValue(record.ReconciliationStatus),
 	)
 
 	if _, err := tx.ExecContext(
 		ctx,
 		`INSERT INTO `+db.accountingName("transaction_template_record")+` (
-	transaction_template_id, category_id, account_id, member_id, currency, amount, tag_ids, memo, posting_status, reconciliation_status
+	transaction_template_id, category_id, account_id, member_id, currency, amount, tag_ids, memo, reconciliation_status
 )
-VALUES (?, ?, ?, ?, ?, ?, `+tagListExpr+`, ?, CAST(? AS `+db.accountingName("posting_status")+`), CAST(? AS `+db.accountingName("reconciliation_status")+`))`,
+VALUES (?, ?, ?, ?, ?, ?, `+tagListExpr+`, ?, CAST(? AS `+db.accountingName("reconciliation_status")+`))`,
 		args...,
 	); err != nil {
 		return fmt.Errorf("insert transaction template record: %w", err)
@@ -389,7 +388,6 @@ func scanTransactionTemplateRecord(scanner transactionTemplateRecordScanner) (tr
 	var amount sql.Null[duckdb.Decimal]
 	var tagIDs []any
 	var memo sql.NullString
-	var postingStatus sql.NullString
 	var reconciliationStatus sql.NullString
 	var createdAt time.Time
 	var updatedAt time.Time
@@ -404,7 +402,6 @@ func scanTransactionTemplateRecord(scanner transactionTemplateRecordScanner) (tr
 		&amount,
 		&tagIDs,
 		&memo,
-		&postingStatus,
 		&reconciliationStatus,
 		&createdAt,
 		&updatedAt,
@@ -437,10 +434,6 @@ func scanTransactionTemplateRecord(scanner transactionTemplateRecordScanner) (tr
 	if memo.Valid {
 		record.Memo = &memo.String
 	}
-	if postingStatus.Valid {
-		status := transactions.PostingStatus(strings.ToLower(postingStatus.String))
-		record.PostingStatus = &status
-	}
 	if reconciliationStatus.Valid {
 		status := transactions.ReconciliationStatus(strings.ToLower(reconciliationStatus.String))
 		record.ReconciliationStatus = &status
@@ -469,7 +462,7 @@ func transactionTemplateRecordsByTemplateIDs(
 	rows, err := queryer.QueryContext(
 		ctx,
 		`SELECT transaction_template_record_id, transaction_template_id, category_id, account_id, member_id, currency, amount,
-	tag_ids, memo, posting_status, reconciliation_status, created_at, updated_at, tombstoned_at
+	tag_ids, memo, reconciliation_status, created_at, updated_at, tombstoned_at
 FROM `+db.accountingName("transaction_template_record")+`
 WHERE transaction_template_id IN (`+placeholders(len(templateIDs))+`) AND tombstoned_at IS NULL
 ORDER BY transaction_template_id ASC, transaction_template_record_id ASC`,

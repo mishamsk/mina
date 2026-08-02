@@ -413,8 +413,8 @@ func TestRecurringOccurrenceMaterializationReviewQueueBoundary(t *testing.T) {
 	requireNoTransportError(t, "default transaction list", err)
 	assertTransactionListResponse(t, "default recurring generated transaction list", defaultTransactions, nil, 0)
 
-	expectedStatuses := []httpclient.PostingStatus{httpclient.PostingStatusExpected}
-	expectedTransactions, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{PostingStatus: &expectedStatuses})
+	expectedStatuses := []httpclient.TransactionLifecycleStatus{httpclient.TransactionLifecycleStatusExpected}
+	expectedTransactions, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{LifecycleStatus: &expectedStatuses})
 	requireNoTransportError(t, "expected transaction list", err)
 	if expectedTransactions.StatusCode() != http.StatusOK {
 		t.Fatalf("expected transaction list status = %d, want %d; body %s", expectedTransactions.StatusCode(), http.StatusOK, expectedTransactions.Body)
@@ -425,8 +425,8 @@ func TestRecurringOccurrenceMaterializationReviewQueueBoundary(t *testing.T) {
 			t.Fatalf("transaction %d recurring_occurrence_id = nil", transaction.TransactionId)
 		}
 		for _, record := range transaction.Records {
-			if record.PostingStatus != httpclient.PostingStatusExpected || record.Source != httpclient.RecurringTemplate {
-				t.Fatalf("generated record status/source = %q/%q, want expected/recurring_template", record.PostingStatus, record.Source)
+			if record.LifecycleStatus != httpclient.TransactionLifecycleStatusExpected || record.Source != httpclient.RecurringTemplate || record.Settlement != nil {
+				t.Fatalf("generated record lifecycle/source/settlement = %q/%q/%v, want expected/recurring_template/nil", record.LifecycleStatus, record.Source, record.Settlement)
 			}
 		}
 	}
@@ -466,7 +466,7 @@ func TestRecurringOccurrenceMaterializationReviewQueueBoundary(t *testing.T) {
 		}
 	}
 	confirmed := confirmRecurringOccurrence(t, client, afterCancel.JSON200.RecurringOccurrences[0].RecurringOccurrenceId)
-	assertReviewedOccurrence(t, *confirmed.JSON200, httpclient.Confirmed)
+	assertReviewedOccurrence(t, *confirmed.JSON200, httpclient.RecurringOccurrenceStatusConfirmed)
 	if confirmed.JSON200.RecurringDefinitionFqn != definition.JSON201.Fqn {
 		t.Fatalf("confirmed cancelled-definition occurrence fqn = %q, want %q", confirmed.JSON200.RecurringDefinitionFqn, definition.JSON201.Fqn)
 	}
@@ -512,18 +512,17 @@ func TestRecurringExpectedTransactionsRejectGenericMutationsBoundary(t *testing.
 	requireNoTransportError(t, "delete generated expected transaction", err)
 	assertInvalidRequestStatus(t, "delete generated expected transaction", deleted.StatusCode(), deleted.JSON400, deleted.Body)
 
-	pending := httpclient.NonExpectedPostingStatusPending
-	statused, err := client.REST().BulkUpdateJournalRecordStatusesWithResponse(context.Background(), httpclient.BulkUpdateRecordStatusRequest{
-		RecordIds:     selectedRecordIDs,
-		PostingStatus: &pending,
+	settled, err := client.REST().BulkSetJournalRecordSettlementWithResponse(context.Background(), httpclient.BulkSetRecordSettlementRequest{
+		RecordIds:  selectedRecordIDs,
+		Settlement: httpclient.SettlementStatusPending,
 	})
-	requireNoTransportError(t, "bulk posting status generated expected transaction", err)
-	assertInvalidRequestStatus(t, "bulk posting status generated expected transaction", statused.StatusCode(), statused.JSON400, statused.Body)
+	requireNoTransportError(t, "bulk settle generated expected transaction", err)
+	assertInvalidRequestStatus(t, "bulk settle generated expected transaction", settled.StatusCode(), settled.JSON400, settled.Body)
 
 	unreconciled := httpclient.Unreconciled
-	reconciled, err := client.REST().BulkUpdateJournalRecordStatusesWithResponse(context.Background(), httpclient.BulkUpdateRecordStatusRequest{
+	reconciled, err := client.REST().BulkSetJournalRecordReconciliationWithResponse(context.Background(), httpclient.BulkSetRecordReconciliationRequest{
 		RecordIds:            selectedRecordIDs,
-		ReconciliationStatus: &unreconciled,
+		ReconciliationStatus: unreconciled,
 	})
 	requireNoTransportError(t, "bulk reconciliation generated expected transaction", err)
 	assertInvalidRequestStatus(t, "bulk reconciliation generated expected transaction", reconciled.StatusCode(), reconciled.JSON400, reconciled.Body)
@@ -553,14 +552,14 @@ func TestRecurringExpectedTransactionsRejectGenericMutationsBoundary(t *testing.
 	afterOccurrences := listRecurringOccurrences(t, client, &httpclient.ListRecurringOccurrencesParams{RecurringDefinitionId: &definition.JSON201.RecurringDefinitionId})
 	assertRecurringOccurrenceIDs(t, afterOccurrences.JSON200.RecurringOccurrences, []int64{occurrence.RecurringOccurrenceId})
 	afterOccurrence := afterOccurrences.JSON200.RecurringOccurrences[0]
-	if afterOccurrence.Status != httpclient.Expected ||
+	if afterOccurrence.Status != httpclient.RecurringOccurrenceStatusExpected ||
 		afterOccurrence.GeneratedTransactionId == nil ||
 		*afterOccurrence.GeneratedTransactionId != transactionID ||
 		afterOccurrence.ReviewedAt != nil {
 		t.Fatalf("occurrence after rejected generic mutations = %+v, want expected with same generated transaction", afterOccurrence)
 	}
 	afterTransaction := getTransaction(t, client, transactionID)
-	assertTransactionRecordPostingStatuses(t, afterTransaction.JSON200.Records, httpclient.PostingStatusExpected)
+	apptest.AssertTransactionLifecycle(t, afterTransaction.JSON200, httpclient.TransactionLifecycleStatusExpected)
 	assertRecordIDs(t, afterTransaction.JSON200.Records, selectedRecordIDs)
 }
 
@@ -621,7 +620,7 @@ func TestRecurringDateRuleResumeOnDueDateMaterializesBoundary(t *testing.T) {
 		t.Fatalf("resume due-date occurrences = %+v, want one expected occurrence", occurrences.JSON200.RecurringOccurrences)
 	}
 	occurrence := occurrences.JSON200.RecurringOccurrences[0]
-	if occurrence.Status != httpclient.Expected || occurrence.GeneratedTransactionId == nil || occurrence.ScheduledDate.Format("2006-01-02") != formatDate(today) {
+	if occurrence.Status != httpclient.RecurringOccurrenceStatusExpected || occurrence.GeneratedTransactionId == nil || occurrence.ScheduledDate.Format("2006-01-02") != formatDate(today) {
 		t.Fatalf("resume due-date occurrence = %+v, want expected generated occurrence for today", occurrence)
 	}
 }
@@ -676,10 +675,10 @@ func TestRecurringOccurrenceStatusFilterBoundary(t *testing.T) {
 	))
 	deferredID := deferRecurringDefinition(t, client, deferredDefinition.JSON201.RecurringDefinitionId, httpclient.RecurringDefinitionDeferRequest{}).JSON200.RecurringOccurrenceId
 
-	assertRecurringOccurrenceStatusFilter(t, client, httpclient.Expected, []int64{expectedID})
-	assertRecurringOccurrenceStatusFilter(t, client, httpclient.Confirmed, []int64{confirmedID})
-	assertRecurringOccurrenceStatusFilter(t, client, httpclient.Dismissed, []int64{dismissedID})
-	assertRecurringOccurrenceStatusFilter(t, client, httpclient.Deferred, []int64{deferredID})
+	assertRecurringOccurrenceStatusFilter(t, client, httpclient.RecurringOccurrenceStatusExpected, []int64{expectedID})
+	assertRecurringOccurrenceStatusFilter(t, client, httpclient.RecurringOccurrenceStatusConfirmed, []int64{confirmedID})
+	assertRecurringOccurrenceStatusFilter(t, client, httpclient.RecurringOccurrenceStatusDismissed, []int64{dismissedID})
+	assertRecurringOccurrenceStatusFilter(t, client, httpclient.RecurringOccurrenceStatusDeferred, []int64{deferredID})
 }
 
 func TestRecurringOccurrenceConfirmAndDismissBoundary(t *testing.T) {
@@ -702,7 +701,7 @@ func TestRecurringOccurrenceConfirmAndDismissBoundary(t *testing.T) {
 	assertRecordLifecycleDates(t, "expected recurring transaction", expectedTransaction.JSON200.Records, nil, nil)
 	confirmStartedAt := time.Now().UTC().Add(-time.Second)
 	confirmed := confirmRecurringOccurrence(t, client, confirmOccurrences.JSON200.RecurringOccurrences[0].RecurringOccurrenceId)
-	assertReviewedOccurrence(t, *confirmed.JSON200, httpclient.Confirmed)
+	assertReviewedOccurrence(t, *confirmed.JSON200, httpclient.RecurringOccurrenceStatusConfirmed)
 	assertRecurringActionStatus(t, "double confirm", confirmAgain(t, client, confirmed.JSON200.RecurringOccurrenceId), http.StatusBadRequest)
 	assertRecurringActionStatus(t, "dismiss after confirm", dismissAgain(t, client, confirmed.JSON200.RecurringOccurrenceId), http.StatusBadRequest)
 
@@ -710,10 +709,15 @@ func TestRecurringOccurrenceConfirmAndDismissBoundary(t *testing.T) {
 	requireNoTransportError(t, "default confirmed transaction list", err)
 	assertTransactionListResponse(t, "default confirmed transaction list", defaultTransactions, []int64{*confirmed.JSON200.GeneratedTransactionId}, 1)
 	for _, record := range defaultTransactions.JSON200.Transactions[0].Records {
-		if record.PostingStatus != httpclient.PostingStatusPosted || record.Source != httpclient.RecurringTemplate || record.PendingDate != nil || record.PostedDate == nil {
-			t.Fatalf("confirmed record status/source/pending_date/posted_date = %q/%q/%v/%v", record.PostingStatus, record.Source, record.PendingDate, record.PostedDate)
+		if record.LifecycleStatus != httpclient.TransactionLifecycleStatusActive || record.Source != httpclient.RecurringTemplate {
+			t.Fatalf("confirmed record lifecycle/source = %q/%q, want active/recurring_template", record.LifecycleStatus, record.Source)
 		}
-		assertLifecycleTimestampBetween(t, "confirmed recurring posted_date", record.PostedDate, confirmStartedAt, time.Now().UTC().Add(time.Second))
+		if record.Settlement != nil {
+			if *record.Settlement != httpclient.SettlementStatusPosted || record.PendingDate != nil || record.PostedDate == nil {
+				t.Fatalf("confirmed balance record settlement/pending_date/posted_date = %v/%v/%v", record.Settlement, record.PendingDate, record.PostedDate)
+			}
+			assertLifecycleTimestampBetween(t, "confirmed recurring posted_date", record.PostedDate, confirmStartedAt, time.Now().UTC().Add(time.Second))
+		}
 	}
 
 	accountIDs := []int64{refs.CheckingAccountID}
@@ -743,7 +747,7 @@ func TestRecurringOccurrenceConfirmAndDismissBoundary(t *testing.T) {
 	dismissOccurrences := listRecurringOccurrences(t, client, &httpclient.ListRecurringOccurrencesParams{RecurringDefinitionId: &dismissDefinition.JSON201.RecurringDefinitionId})
 	dismissedTransactionID := *dismissOccurrences.JSON200.RecurringOccurrences[0].GeneratedTransactionId
 	dismissed := dismissRecurringOccurrence(t, client, dismissOccurrences.JSON200.RecurringOccurrences[0].RecurringOccurrenceId)
-	assertReviewedOccurrence(t, *dismissed.JSON200, httpclient.Dismissed)
+	assertReviewedOccurrence(t, *dismissed.JSON200, httpclient.RecurringOccurrenceStatusDismissed)
 	assertRecurringActionStatus(t, "double dismiss", dismissAgain(t, client, dismissed.JSON200.RecurringOccurrenceId), http.StatusBadRequest)
 	assertRecurringActionStatus(t, "confirm after dismiss", confirmAgain(t, client, dismissed.JSON200.RecurringOccurrenceId), http.StatusBadRequest)
 
@@ -753,6 +757,72 @@ func TestRecurringOccurrenceConfirmAndDismissBoundary(t *testing.T) {
 	requireNoTransportError(t, "get dismissed transaction", err)
 	if dismissedTransaction.StatusCode() != http.StatusNotFound {
 		t.Fatalf("dismissed transaction status = %d, want %d; body %s", dismissedTransaction.StatusCode(), http.StatusNotFound, dismissedTransaction.Body)
+	}
+}
+
+func TestRecurringPendingConfirmationBoundary(t *testing.T) {
+	now := apptest.Timestamp("2026-08-02T07:01:51Z")
+	client := newSharedClient(t, apptest.WithClock(apptest.NewFakeClock(now)))
+	refs := createRecurringDefinitionRefs(t, client, "RecurringPending")
+	today := civilDateOnly(now)
+
+	due := createRecurringDefinition(t, client, recurringDefinitionRequest(
+		"RecurringPending:Due",
+		refs,
+		"-10.00000000",
+		"10.00000000",
+		intervalRule(1, "WEEK"),
+		formatDate(today),
+	))
+	occurrences := listRecurringOccurrences(t, client, &httpclient.ListRecurringOccurrencesParams{RecurringDefinitionId: &due.JSON201.RecurringDefinitionId})
+	confirmed, err := client.REST().ConfirmRecurringOccurrenceWithResponse(
+		context.Background(),
+		occurrences.JSON200.RecurringOccurrences[0].RecurringOccurrenceId,
+		*apptest.PendingSettlement(),
+	)
+	requireNoTransportError(t, "confirm recurring occurrence pending", err)
+	if confirmed.StatusCode() != http.StatusOK {
+		t.Fatalf("confirm pending occurrence status = %d, want %d; body %s", confirmed.StatusCode(), http.StatusOK, confirmed.Body)
+	}
+	assertPendingRecurringTransaction(t, getTransaction(t, client, *confirmed.JSON200.GeneratedTransactionId), now)
+
+	next := createRecurringDefinition(t, client, recurringDefinitionRequest(
+		"RecurringPending:Next",
+		refs,
+		"-8.00000000",
+		"8.00000000",
+		intervalRule(1, "WEEK"),
+		formatDate(today.AddDate(0, 0, 7)),
+	))
+	confirmedNext, err := client.REST().ConfirmNextRecurringDefinitionWithResponse(
+		context.Background(),
+		next.JSON201.RecurringDefinitionId,
+		*apptest.PendingSettlement(),
+	)
+	requireNoTransportError(t, "confirm next recurring definition pending", err)
+	if confirmedNext.StatusCode() != http.StatusOK {
+		t.Fatalf("confirm next pending status = %d, want %d; body %s", confirmedNext.StatusCode(), http.StatusOK, confirmedNext.Body)
+	}
+	assertPendingRecurringTransaction(t, getTransaction(t, client, *confirmedNext.JSON200.GeneratedTransactionId), now)
+}
+
+func assertPendingRecurringTransaction(t *testing.T, transaction *httpclient.GetTransactionResponse, wantPendingDate time.Time) {
+	t.Helper()
+	settledRecords := 0
+	for _, record := range transaction.JSON200.Records {
+		if record.Settlement == nil {
+			if record.PendingDate != nil || record.PostedDate != nil {
+				t.Fatalf("date-free recurring record dates = %v/%v, want nil/nil", record.PendingDate, record.PostedDate)
+			}
+			continue
+		}
+		settledRecords++
+		if *record.Settlement != httpclient.SettlementStatusPending || record.PendingDate == nil || !record.PendingDate.Equal(wantPendingDate) || record.PostedDate != nil {
+			t.Fatalf("pending recurring record settlement/dates = %v/%v/%v, want pending/%v/nil", record.Settlement, record.PendingDate, record.PostedDate, wantPendingDate)
+		}
+	}
+	if settledRecords != 1 {
+		t.Fatalf("settled recurring record count = %d, want 1", settledRecords)
 	}
 }
 
@@ -773,7 +843,7 @@ func TestRecurringDefinitionConfirmNextBoundary(t *testing.T) {
 		formatDate(nextDue),
 	))
 	confirmed := confirmNextRecurringDefinition(t, client, definition.JSON201.RecurringDefinitionId)
-	assertReviewedOccurrence(t, *confirmed.JSON200, httpclient.Confirmed)
+	assertReviewedOccurrence(t, *confirmed.JSON200, httpclient.RecurringOccurrenceStatusConfirmed)
 	if confirmed.JSON200.ScheduledDate.Format("2006-01-02") != formatDate(nextDue) {
 		t.Fatalf("confirm-next scheduled_date = %s, want %s", confirmed.JSON200.ScheduledDate.Format("2006-01-02"), formatDate(nextDue))
 	}
@@ -782,10 +852,13 @@ func TestRecurringDefinitionConfirmNextBoundary(t *testing.T) {
 	if transaction.JSON200.InitiatedDate.Format("2006-01-02") != formatDate(today) {
 		t.Fatalf("confirm-next initiated_date = %s, want %s", transaction.JSON200.InitiatedDate.Format("2006-01-02"), formatDate(today))
 	}
-	wantPostedDate := apptest.Timestamp(formatDate(today) + "T23:59:59Z")
+	wantPostedDate := now.UTC()
 	for _, record := range transaction.JSON200.Records {
-		if record.PostingStatus != httpclient.PostingStatusPosted || record.PendingDate != nil || record.PostedDate == nil {
-			t.Fatalf("confirm-next record status/pending_date/posted_date = %q/%v/%v", record.PostingStatus, record.PendingDate, record.PostedDate)
+		if record.Settlement == nil {
+			continue
+		}
+		if *record.Settlement != httpclient.SettlementStatusPosted || record.PendingDate != nil || record.PostedDate == nil {
+			t.Fatalf("confirm-next balance record settlement/pending_date/posted_date = %v/%v/%v", record.Settlement, record.PendingDate, record.PostedDate)
 		}
 		if !record.PostedDate.Equal(wantPostedDate) {
 			t.Fatalf("confirm-next record posted_date = %v, want initiated date %v", record.PostedDate, wantPostedDate)
@@ -797,7 +870,7 @@ func TestRecurringDefinitionConfirmNextBoundary(t *testing.T) {
 	if len(afterNextSlot.JSON200.RecurringOccurrences) != 2 {
 		t.Fatalf("confirm-next occurrence count = %d, want 2; occurrences = %+v", len(afterNextSlot.JSON200.RecurringOccurrences), afterNextSlot.JSON200.RecurringOccurrences)
 	}
-	if afterNextSlot.JSON200.RecurringOccurrences[0].Status != httpclient.Confirmed || afterNextSlot.JSON200.RecurringOccurrences[1].Status != httpclient.Expected {
+	if afterNextSlot.JSON200.RecurringOccurrences[0].Status != httpclient.RecurringOccurrenceStatusConfirmed || afterNextSlot.JSON200.RecurringOccurrences[1].Status != httpclient.RecurringOccurrenceStatusExpected {
 		t.Fatalf("confirm-next statuses = %q/%q, want confirmed/expected", afterNextSlot.JSON200.RecurringOccurrences[0].Status, afterNextSlot.JSON200.RecurringOccurrences[1].Status)
 	}
 	if afterNextSlot.JSON200.RecurringOccurrences[1].ScheduledDate.Format("2006-01-02") != formatDate(nextDue.AddDate(0, 0, 7)) {
@@ -886,16 +959,16 @@ func TestRecurringDefinitionReviewActionsCatchUpOverdueSlots(t *testing.T) {
 		formatDate(anchor),
 	))
 	confirmed := confirmNextRecurringDefinition(t, client, confirmDefinition.JSON201.RecurringDefinitionId)
-	assertReviewedOccurrence(t, *confirmed.JSON200, httpclient.Confirmed)
+	assertReviewedOccurrence(t, *confirmed.JSON200, httpclient.RecurringOccurrenceStatusConfirmed)
 	if confirmed.JSON200.ScheduledDate.Format("2006-01-02") != formatDate(nextDue) {
 		t.Fatalf("catch-up confirm-next scheduled_date = %s, want %s", confirmed.JSON200.ScheduledDate.Format("2006-01-02"), formatDate(nextDue))
 	}
 	confirmOccurrences := listRecurringOccurrences(t, client, &httpclient.ListRecurringOccurrencesParams{RecurringDefinitionId: &confirmDefinition.JSON201.RecurringDefinitionId})
 	assertRecurringOccurrenceTimeline(t, confirmOccurrences.JSON200.RecurringOccurrences, confirmDefinition.JSON201.RecurringDefinitionId, catchUpDates, []httpclient.RecurringOccurrenceStatus{
-		httpclient.Expected,
-		httpclient.Expected,
-		httpclient.Expected,
-		httpclient.Confirmed,
+		httpclient.RecurringOccurrenceStatusExpected,
+		httpclient.RecurringOccurrenceStatusExpected,
+		httpclient.RecurringOccurrenceStatusExpected,
+		httpclient.RecurringOccurrenceStatusConfirmed,
 	})
 
 	deferDefinition := createRecurringDefinition(t, client, recurringDefinitionRequest(
@@ -910,10 +983,10 @@ func TestRecurringDefinitionReviewActionsCatchUpOverdueSlots(t *testing.T) {
 	assertDeferredOccurrence(t, *deferred.JSON200, formatDate(nextDue))
 	deferOccurrences := listRecurringOccurrences(t, client, &httpclient.ListRecurringOccurrencesParams{RecurringDefinitionId: &deferDefinition.JSON201.RecurringDefinitionId})
 	assertRecurringOccurrenceTimeline(t, deferOccurrences.JSON200.RecurringOccurrences, deferDefinition.JSON201.RecurringDefinitionId, catchUpDates, []httpclient.RecurringOccurrenceStatus{
-		httpclient.Expected,
-		httpclient.Expected,
-		httpclient.Expected,
-		httpclient.Deferred,
+		httpclient.RecurringOccurrenceStatusExpected,
+		httpclient.RecurringOccurrenceStatusExpected,
+		httpclient.RecurringOccurrenceStatusExpected,
+		httpclient.RecurringOccurrenceStatusDeferred,
 	})
 }
 
@@ -960,13 +1033,13 @@ func TestRecurringDefinitionPauseResumeBoundary(t *testing.T) {
 	resumeRecurringDefinition(t, client, dateRule.JSON201.RecurringDefinitionId)
 	dateOccurrences := listRecurringOccurrences(t, client, &httpclient.ListRecurringOccurrencesParams{RecurringDefinitionId: &dateRule.JSON201.RecurringDefinitionId})
 	if len(dateOccurrences.JSON200.RecurringOccurrences) != 2 ||
-		dateOccurrences.JSON200.RecurringOccurrences[0].Status != httpclient.Deferred ||
-		dateOccurrences.JSON200.RecurringOccurrences[1].Status != httpclient.Deferred {
+		dateOccurrences.JSON200.RecurringOccurrences[0].Status != httpclient.RecurringOccurrenceStatusDeferred ||
+		dateOccurrences.JSON200.RecurringOccurrences[1].Status != httpclient.RecurringOccurrenceStatusDeferred {
 		t.Fatalf("date-rule resumed occurrences = %+v, want two deferred skipped slots", dateOccurrences.JSON200.RecurringOccurrences)
 	}
 	clock.Set(time.Date(dateResume.Year(), dateResume.Month(), 15, 12, 0, 0, 0, dateResume.Location()))
 	dateDue := listRecurringOccurrences(t, client, &httpclient.ListRecurringOccurrencesParams{RecurringDefinitionId: &dateRule.JSON201.RecurringDefinitionId})
-	if len(dateDue.JSON200.RecurringOccurrences) != 3 || dateDue.JSON200.RecurringOccurrences[2].Status != httpclient.Expected {
+	if len(dateDue.JSON200.RecurringOccurrences) != 3 || dateDue.JSON200.RecurringOccurrences[2].Status != httpclient.RecurringOccurrenceStatusExpected {
 		t.Fatalf("date-rule post-resume occurrences = %+v, want deferred/deferred/expected", dateDue.JSON200.RecurringOccurrences)
 	}
 }
@@ -1117,9 +1190,7 @@ func recurringExpectedReplacementRequest(refs recurringDefinitionRefs, memo stri
 				AmountUsd:            apptest.StringPtr("-20.00"),
 				TagIds:               apptest.Int64SlicePtr(refs.TagID),
 				Memo:                 &memo,
-				PendingDate:          &pendingDate,
-				PostedDate:           &postedDate,
-				PostingStatus:        httpclient.PostingStatusPosted,
+				Settlement:           &httpclient.SettlementIntent{Status: httpclient.SettlementStatusPosted, PendingDate: &pendingDate, PostedDate: &postedDate},
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.WritableSourceManual,
 			},
@@ -1129,7 +1200,6 @@ func recurringExpectedReplacementRequest(refs recurringDefinitionRefs, memo stri
 				Amount:               "20.00",
 				AmountUsd:            apptest.StringPtr("20.00"),
 				CategoryId:           apptest.Int64Ptr(refs.CategoryID),
-				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.WritableSourceManual,
 			},
@@ -1281,7 +1351,7 @@ func listRecurringOccurrences(t *testing.T, client *apptest.Client, params *http
 func confirmRecurringOccurrence(t *testing.T, client *apptest.Client, id int64) *httpclient.ConfirmRecurringOccurrenceResponse {
 	t.Helper()
 
-	response, err := client.REST().ConfirmRecurringOccurrenceWithResponse(context.Background(), id)
+	response, err := client.REST().ConfirmRecurringOccurrenceWithResponse(context.Background(), id, *apptest.PostedSettlement())
 	requireNoTransportError(t, "confirm recurring occurrence", err)
 	if response.StatusCode() != http.StatusOK {
 		t.Fatalf("confirm recurring occurrence status = %d, want %d; body %s", response.StatusCode(), http.StatusOK, response.Body)
@@ -1305,7 +1375,7 @@ func dismissRecurringOccurrence(t *testing.T, client *apptest.Client, id int64) 
 func confirmNextRecurringDefinition(t *testing.T, client *apptest.Client, id int64) *httpclient.ConfirmNextRecurringDefinitionResponse {
 	t.Helper()
 
-	response, err := client.REST().ConfirmNextRecurringDefinitionWithResponse(context.Background(), id)
+	response, err := client.REST().ConfirmNextRecurringDefinitionWithResponse(context.Background(), id, *apptest.PostedSettlement())
 	requireNoTransportError(t, "confirm next recurring definition", err)
 	if response.StatusCode() != http.StatusOK {
 		t.Fatalf("confirm next recurring definition status = %d, want %d; body %s", response.StatusCode(), http.StatusOK, response.Body)
@@ -1353,7 +1423,7 @@ func resumeRecurringDefinition(t *testing.T, client *apptest.Client, id int64) *
 func confirmAgain(t *testing.T, client *apptest.Client, id int64) int {
 	t.Helper()
 
-	response, err := client.REST().ConfirmRecurringOccurrenceWithResponse(context.Background(), id)
+	response, err := client.REST().ConfirmRecurringOccurrenceWithResponse(context.Background(), id, *apptest.PostedSettlement())
 	requireNoTransportError(t, "confirm recurring occurrence again", err)
 
 	return response.StatusCode()
@@ -1410,7 +1480,7 @@ func assertInvalidRequestStatus(t *testing.T, label string, gotStatus int, gotBo
 func assertDeferredOccurrence(t *testing.T, occurrence httpclient.RecurringOccurrence, scheduledDate string) {
 	t.Helper()
 
-	if occurrence.Status != httpclient.Deferred ||
+	if occurrence.Status != httpclient.RecurringOccurrenceStatusDeferred ||
 		occurrence.ScheduledDate.Format("2006-01-02") != scheduledDate ||
 		occurrence.GeneratedTransactionId != nil ||
 		occurrence.ReviewedAt == nil {
@@ -1449,7 +1519,7 @@ func assertRecurringOccurrences(t *testing.T, occurrences []httpclient.Recurring
 	for index, occurrence := range occurrences {
 		if occurrence.RecurringDefinitionId != definitionID ||
 			occurrence.ScheduledDate.Format("2006-01-02") != wantDates[index] ||
-			occurrence.Status != httpclient.Expected ||
+			occurrence.Status != httpclient.RecurringOccurrenceStatusExpected ||
 			occurrence.MaterializedDefinitionVersion != 1 ||
 			occurrence.GeneratedTransactionId == nil ||
 			occurrence.MaterializedAt.IsZero() ||

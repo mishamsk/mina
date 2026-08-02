@@ -3,7 +3,6 @@ package transactions
 import (
 	"context"
 	"errors"
-	"time"
 
 	"github.com/mishamsk/mina/internal/services"
 	"github.com/mishamsk/mina/internal/services/accounts"
@@ -19,9 +18,7 @@ type ShorthandCreateFields struct {
 	MemberID             *int64
 	TagIDs               []int64
 	Memo                 *string
-	PendingDate          *time.Time
-	PostedDate           *time.Time
-	PostingStatus        *PostingStatus
+	Settlement           *SettlementIntent
 	ReconciliationStatus *ReconciliationStatus
 }
 
@@ -68,15 +65,14 @@ type ExchangeInput struct {
 	MemberID             *int64
 	TagIDs               []int64
 	Memo                 *string
-	PendingDate          *time.Time
-	PostedDate           *time.Time
-	PostingStatus        *PostingStatus
+	Settlement           *SettlementIntent
 	ReconciliationStatus *ReconciliationStatus
 }
 
 type shorthandRecordSpec struct {
 	accountID int64
 	amount    values.Decimal
+	settles   bool
 }
 
 // CreateSpend builds and creates a two-record spend transaction.
@@ -89,7 +85,7 @@ func (s *Service) CreateSpend(ctx context.Context, input SpendInput) (Transactio
 	}
 	intent := categories.CategoryEconomicIntentExpense
 	createInput, err := s.shorthandCreateInput(ctx, input.ShorthandCreateFields, &input.ExpenseCategoryID, &intent, []shorthandRecordSpec{
-		{accountID: input.FundingAccountID, amount: input.Amount.Neg()},
+		{accountID: input.FundingAccountID, amount: input.Amount.Neg(), settles: true},
 		{accountID: input.CounterpartyAccountID, amount: input.Amount},
 	})
 	if err != nil {
@@ -110,7 +106,7 @@ func (s *Service) CreateIncome(ctx context.Context, input IncomeInput) (Transact
 	}
 	intent := categories.CategoryEconomicIntentIncome
 	createInput, err := s.shorthandCreateInput(ctx, input.ShorthandCreateFields, &input.IncomeCategoryID, &intent, []shorthandRecordSpec{
-		{accountID: input.DestinationAccountID, amount: input.Amount},
+		{accountID: input.DestinationAccountID, amount: input.Amount, settles: true},
 		{accountID: input.SourceAccountID, amount: input.Amount.Neg()},
 	})
 	if err != nil {
@@ -131,7 +127,7 @@ func (s *Service) CreateRefund(ctx context.Context, input RefundInput) (Transact
 	}
 	intent := categories.CategoryEconomicIntentExpense
 	createInput, err := s.shorthandCreateInput(ctx, input.ShorthandCreateFields, &input.RefundCategoryID, &intent, []shorthandRecordSpec{
-		{accountID: input.DestinationAccountID, amount: input.Amount},
+		{accountID: input.DestinationAccountID, amount: input.Amount, settles: true},
 		{accountID: input.CounterpartyAccountID, amount: input.Amount.Neg()},
 	})
 	if err != nil {
@@ -154,8 +150,8 @@ func (s *Service) CreateTransfer(ctx context.Context, input TransferInput) (Tran
 		return Transaction{}, err
 	}
 	createInput, err := s.shorthandCreateInput(ctx, input.ShorthandCreateFields, nil, nil, []shorthandRecordSpec{
-		{accountID: input.SourceAccountID, amount: input.Amount.Neg()},
-		{accountID: input.DestinationAccountID, amount: input.Amount},
+		{accountID: input.SourceAccountID, amount: input.Amount.Neg(), settles: true},
+		{accountID: input.DestinationAccountID, amount: input.Amount, settles: true},
 	})
 	if err != nil {
 		return Transaction{}, err
@@ -211,15 +207,19 @@ func (s *Service) CreateExchange(ctx context.Context, input ExchangeInput) (Tran
 		return Transaction{}, err
 	}
 
-	postingStatus := PostingStatusPosted
-	if input.PostingStatus != nil {
-		postingStatus = *input.PostingStatus
-	}
 	reconciliationStatus := ReconciliationStatusReconciled
 	if input.ReconciliationStatus != nil {
 		reconciliationStatus = *input.ReconciliationStatus
 	}
-	record := func(accountID int64, currency string, amount values.Decimal) JournalRecordInput {
+	settlementIntent := input.Settlement
+	if settlementIntent == nil {
+		settlementIntent = &SettlementIntent{Status: SettlementStatusPosted}
+	}
+	record := func(accountID int64, currency string, amount values.Decimal, settles bool) JournalRecordInput {
+		var settlement *SettlementIntent
+		if settles {
+			settlement = settlementIntent
+		}
 		return JournalRecordInput{
 			AccountID:            accountID,
 			MemberID:             input.MemberID,
@@ -227,9 +227,7 @@ func (s *Service) CreateExchange(ctx context.Context, input ExchangeInput) (Tran
 			Amount:               amount,
 			TagIDs:               append([]int64{}, input.TagIDs...),
 			Memo:                 input.Memo,
-			PendingDate:          input.PendingDate,
-			PostedDate:           input.PostedDate,
-			PostingStatus:        postingStatus,
+			Settlement:           settlement,
 			ReconciliationStatus: reconciliationStatus,
 			Source:               SourceManual,
 		}
@@ -237,10 +235,10 @@ func (s *Service) CreateExchange(ctx context.Context, input ExchangeInput) (Tran
 	return s.Create(ctx, CreateInput{
 		InitiatedDate: input.InitiatedDate,
 		Records: []JournalRecordInput{
-			record(sold.ID, soldCurrency, input.SoldAmount.Neg()),
-			record(exchange.ID, soldCurrency, input.SoldAmount),
-			record(exchange.ID, boughtCurrency, input.BoughtAmount.Neg()),
-			record(bought.ID, boughtCurrency, input.BoughtAmount),
+			record(sold.ID, soldCurrency, input.SoldAmount.Neg(), true),
+			record(exchange.ID, soldCurrency, input.SoldAmount, false),
+			record(exchange.ID, boughtCurrency, input.BoughtAmount.Neg(), false),
+			record(bought.ID, boughtCurrency, input.BoughtAmount, true),
 		},
 	})
 }
@@ -301,17 +299,21 @@ func (s *Service) shorthandCreateInput(
 		}
 	}
 
-	postingStatus := PostingStatusPosted
-	if fields.PostingStatus != nil {
-		postingStatus = *fields.PostingStatus
-	}
 	reconciliationStatus := ReconciliationStatusReconciled
 	if fields.ReconciliationStatus != nil {
 		reconciliationStatus = *fields.ReconciliationStatus
 	}
+	settlementIntent := fields.Settlement
+	if settlementIntent == nil {
+		settlementIntent = &SettlementIntent{Status: SettlementStatusPosted}
+	}
 
 	records := make([]JournalRecordInput, 0, len(specs))
 	for _, spec := range specs {
+		var settlement *SettlementIntent
+		if spec.settles {
+			settlement = settlementIntent
+		}
 		records = append(records, JournalRecordInput{
 			AccountID:            spec.accountID,
 			MemberID:             fields.MemberID,
@@ -319,9 +321,7 @@ func (s *Service) shorthandCreateInput(
 			Amount:               spec.amount,
 			TagIDs:               append([]int64{}, fields.TagIDs...),
 			Memo:                 fields.Memo,
-			PendingDate:          fields.PendingDate,
-			PostedDate:           fields.PostedDate,
-			PostingStatus:        postingStatus,
+			Settlement:           settlement,
 			ReconciliationStatus: reconciliationStatus,
 			Source:               SourceManual,
 		})

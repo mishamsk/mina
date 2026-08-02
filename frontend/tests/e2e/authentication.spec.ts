@@ -106,7 +106,7 @@ test("reauthentication preserves transaction detail focus", async ({
     page.getByRole("heading", { name: "Transactions" }),
   ).toBeVisible();
   const postedRow = page
-    .locator("[data-transaction-row]:not(:has([data-posting-status]))")
+    .locator("[data-transaction-row]:not(:has([data-display-status]))")
     .first();
   await postedRow
     .getByRole("button", { name: "Open transaction detail" })

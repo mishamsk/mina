@@ -282,27 +282,6 @@ func (e HealthResponseStatus) Valid() bool {
 	}
 }
 
-// Defines values for NonExpectedPostingStatus.
-const (
-	NonExpectedPostingStatusCancelled NonExpectedPostingStatus = "cancelled"
-	NonExpectedPostingStatusPending   NonExpectedPostingStatus = "pending"
-	NonExpectedPostingStatusPosted    NonExpectedPostingStatus = "posted"
-)
-
-// Valid indicates whether the value is a known member of the NonExpectedPostingStatus enum.
-func (e NonExpectedPostingStatus) Valid() bool {
-	switch e {
-	case NonExpectedPostingStatusCancelled:
-		return true
-	case NonExpectedPostingStatusPending:
-		return true
-	case NonExpectedPostingStatusPosted:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for OperationRunReferenceResponseOperationId.
 const (
 	DatabaseBackup      OperationRunReferenceResponseOperationId = "database-backup"
@@ -315,30 +294,6 @@ func (e OperationRunReferenceResponseOperationId) Valid() bool {
 	case DatabaseBackup:
 		return true
 	case ExchangeRateLoading:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for PostingStatus.
-const (
-	PostingStatusCancelled PostingStatus = "cancelled"
-	PostingStatusExpected  PostingStatus = "expected"
-	PostingStatusPending   PostingStatus = "pending"
-	PostingStatusPosted    PostingStatus = "posted"
-)
-
-// Valid indicates whether the value is a known member of the PostingStatus enum.
-func (e PostingStatus) Valid() bool {
-	switch e {
-	case PostingStatusCancelled:
-		return true
-	case PostingStatusExpected:
-		return true
-	case PostingStatusPending:
-		return true
-	case PostingStatusPosted:
 		return true
 	default:
 		return false
@@ -422,22 +377,22 @@ func (e RecurringDefinitionDeferRequestUnit) Valid() bool {
 
 // Defines values for RecurringOccurrenceStatus.
 const (
-	Confirmed RecurringOccurrenceStatus = "confirmed"
-	Deferred  RecurringOccurrenceStatus = "deferred"
-	Dismissed RecurringOccurrenceStatus = "dismissed"
-	Expected  RecurringOccurrenceStatus = "expected"
+	RecurringOccurrenceStatusConfirmed RecurringOccurrenceStatus = "confirmed"
+	RecurringOccurrenceStatusDeferred  RecurringOccurrenceStatus = "deferred"
+	RecurringOccurrenceStatusDismissed RecurringOccurrenceStatus = "dismissed"
+	RecurringOccurrenceStatusExpected  RecurringOccurrenceStatus = "expected"
 )
 
 // Valid indicates whether the value is a known member of the RecurringOccurrenceStatus enum.
 func (e RecurringOccurrenceStatus) Valid() bool {
 	switch e {
-	case Confirmed:
+	case RecurringOccurrenceStatusConfirmed:
 		return true
-	case Deferred:
+	case RecurringOccurrenceStatusDeferred:
 		return true
-	case Dismissed:
+	case RecurringOccurrenceStatusDismissed:
 		return true
-	case Expected:
+	case RecurringOccurrenceStatusExpected:
 		return true
 	default:
 		return false
@@ -510,6 +465,24 @@ func (e SettingSource) Valid() bool {
 	}
 }
 
+// Defines values for SettlementStatus.
+const (
+	SettlementStatusPending SettlementStatus = "pending"
+	SettlementStatusPosted  SettlementStatus = "posted"
+)
+
+// Valid indicates whether the value is a known member of the SettlementStatus enum.
+func (e SettlementStatus) Valid() bool {
+	switch e {
+	case SettlementStatusPending:
+		return true
+	case SettlementStatusPosted:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for Source.
 const (
 	Imported          Source = "imported"
@@ -561,6 +534,51 @@ func (e TransactionClass) Valid() bool {
 	case TransactionClassSpend:
 		return true
 	case TransactionClassTransfer:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TransactionLifecycleStatus.
+const (
+	TransactionLifecycleStatusActive    TransactionLifecycleStatus = "active"
+	TransactionLifecycleStatusCancelled TransactionLifecycleStatus = "cancelled"
+	TransactionLifecycleStatusExpected  TransactionLifecycleStatus = "expected"
+)
+
+// Valid indicates whether the value is a known member of the TransactionLifecycleStatus enum.
+func (e TransactionLifecycleStatus) Valid() bool {
+	switch e {
+	case TransactionLifecycleStatusActive:
+		return true
+	case TransactionLifecycleStatusCancelled:
+		return true
+	case TransactionLifecycleStatusExpected:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TransactionSettlement.
+const (
+	TransactionSettlementMixed         TransactionSettlement = "mixed"
+	TransactionSettlementNotApplicable TransactionSettlement = "not_applicable"
+	TransactionSettlementPending       TransactionSettlement = "pending"
+	TransactionSettlementPosted        TransactionSettlement = "posted"
+)
+
+// Valid indicates whether the value is a known member of the TransactionSettlement enum.
+func (e TransactionSettlement) Valid() bool {
+	switch e {
+	case TransactionSettlementMixed:
+		return true
+	case TransactionSettlementNotApplicable:
+		return true
+	case TransactionSettlementPending:
+		return true
+	case TransactionSettlementPosted:
 		return true
 	default:
 		return false
@@ -1245,12 +1263,33 @@ type BulkReassignRecordsAccountRequest struct {
 
 	// RecordIds Journal-record identifiers to update.
 	RecordIds []int64 `json:"record_ids"`
+
+	// Settlement Required when the target is owned or party and existing dates cannot supply a valid settlement; omit for flow or system.
+	Settlement *SettlementIntent `json:"settlement,omitempty"`
 }
 
 // BulkRecordOperationResponse defines model for BulkRecordOperationResponse.
 type BulkRecordOperationResponse struct {
 	RecordIds    []int64 `json:"record_ids"`
 	UpdatedCount int     `json:"updated_count"`
+}
+
+// BulkSetRecordReconciliationRequest defines model for BulkSetRecordReconciliationRequest.
+type BulkSetRecordReconciliationRequest struct {
+	// ReconciliationStatus Whether a journal record has been reconciled with its external or expected source.
+	ReconciliationStatus ReconciliationStatus `json:"reconciliation_status"`
+
+	// RecordIds Journal-record identifiers to update.
+	RecordIds []int64 `json:"record_ids"`
+}
+
+// BulkSetRecordSettlementRequest defines model for BulkSetRecordSettlementRequest.
+type BulkSetRecordSettlementRequest struct {
+	// RecordIds Journal-record identifiers to update.
+	RecordIds []int64 `json:"record_ids"`
+
+	// Settlement Server-derived balance-record settlement.
+	Settlement SettlementStatus `json:"settlement"`
 }
 
 // BulkTagRecordsRequest Provide at least one non-empty add_tag_ids or remove_tag_ids array. The two arrays must not overlap.
@@ -1263,18 +1302,6 @@ type BulkTagRecordsRequest struct {
 
 	// RemoveTagIds Tag identifiers to remove from every selected journal record.
 	RemoveTagIds *[]int64 `json:"remove_tag_ids,omitempty"`
-}
-
-// BulkUpdateRecordStatusRequest Provide posting_status, reconciliation_status, or both.
-type BulkUpdateRecordStatusRequest struct {
-	// PostingStatus Non-expected posting status accepted by bulk status updates.
-	PostingStatus *NonExpectedPostingStatus `json:"posting_status,omitempty"`
-
-	// ReconciliationStatus Whether a journal record has been reconciled with its external or expected source.
-	ReconciliationStatus *ReconciliationStatus `json:"reconciliation_status,omitempty"`
-
-	// RecordIds Journal-record identifiers to update.
-	RecordIds []int64 `json:"record_ids"`
 }
 
 // Category defines model for Category.
@@ -1421,17 +1448,9 @@ type CreateExchangeTransactionRequest struct {
 	// Memo Optional memo text for the journal records.
 	Memo *string `json:"memo,omitempty"`
 
-	// PendingDate UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.
-	PendingDate *time.Time `json:"pending_date,omitempty"`
-
-	// PostedDate UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.
-	PostedDate *time.Time `json:"posted_date,omitempty"`
-
-	// PostingStatus Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.
-	PostingStatus *PostingStatus `json:"posting_status,omitempty"`
-
 	// ReconciliationStatus Whether a journal record has been reconciled with its external or expected source.
 	ReconciliationStatus *ReconciliationStatus `json:"reconciliation_status,omitempty"`
+	Settlement           *SettlementIntent     `json:"settlement,omitempty"`
 
 	// SoldAccountId Owned or party account from which currency is sold.
 	SoldAccountId int64 `json:"sold_account_id"`
@@ -1469,17 +1488,9 @@ type CreateIncomeTransactionRequest struct {
 	// Memo Optional memo text for the journal records.
 	Memo *string `json:"memo,omitempty"`
 
-	// PendingDate UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.
-	PendingDate *time.Time `json:"pending_date,omitempty"`
-
-	// PostedDate UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.
-	PostedDate *time.Time `json:"posted_date,omitempty"`
-
-	// PostingStatus Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.
-	PostingStatus *PostingStatus `json:"posting_status,omitempty"`
-
 	// ReconciliationStatus Whether a journal record has been reconciled with its external or expected source.
 	ReconciliationStatus *ReconciliationStatus `json:"reconciliation_status,omitempty"`
+	Settlement           *SettlementIntent     `json:"settlement,omitempty"`
 
 	// SourceAccountId Source account identifier for the income or transfer.
 	SourceAccountId int64 `json:"source_account_id"`
@@ -1517,17 +1528,11 @@ type CreateJournalRecordRequest struct {
 	// Memo Optional memo text for the journal records.
 	Memo *string `json:"memo,omitempty"`
 
-	// PendingDate UTC timestamp when the record entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.
-	PendingDate *time.Time `json:"pending_date,omitempty"`
-
-	// PostedDate UTC timestamp when the record posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.
-	PostedDate *time.Time `json:"posted_date,omitempty"`
-
-	// PostingStatus Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.
-	PostingStatus PostingStatus `json:"posting_status"`
-
 	// ReconciliationStatus Whether a journal record has been reconciled with its external or expected source.
 	ReconciliationStatus ReconciliationStatus `json:"reconciliation_status"`
+
+	// Settlement Settlement intent for owned and party records; use null for flow and system records.
+	Settlement *SettlementIntent `json:"settlement"`
 
 	// Source User-writable journal-record origin. Recurring-template records are created only by Mina.
 	Source WritableSource `json:"source"`
@@ -1568,17 +1573,9 @@ type CreateRefundTransactionRequest struct {
 	// Memo Optional memo text for the journal records.
 	Memo *string `json:"memo,omitempty"`
 
-	// PendingDate UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.
-	PendingDate *time.Time `json:"pending_date,omitempty"`
-
-	// PostedDate UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.
-	PostedDate *time.Time `json:"posted_date,omitempty"`
-
-	// PostingStatus Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.
-	PostingStatus *PostingStatus `json:"posting_status,omitempty"`
-
 	// ReconciliationStatus Whether a journal record has been reconciled with its external or expected source.
 	ReconciliationStatus *ReconciliationStatus `json:"reconciliation_status,omitempty"`
+	Settlement           *SettlementIntent     `json:"settlement,omitempty"`
 
 	// TagIds Tag identifiers to assign to the journal records.
 	TagIds *[]int64 `json:"tag_ids,omitempty"`
@@ -1610,17 +1607,9 @@ type CreateSpendTransactionRequest struct {
 	// Memo Optional memo text for the journal records.
 	Memo *string `json:"memo,omitempty"`
 
-	// PendingDate UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.
-	PendingDate *time.Time `json:"pending_date,omitempty"`
-
-	// PostedDate UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.
-	PostedDate *time.Time `json:"posted_date,omitempty"`
-
-	// PostingStatus Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.
-	PostingStatus *PostingStatus `json:"posting_status,omitempty"`
-
 	// ReconciliationStatus Whether a journal record has been reconciled with its external or expected source.
 	ReconciliationStatus *ReconciliationStatus `json:"reconciliation_status,omitempty"`
+	Settlement           *SettlementIntent     `json:"settlement,omitempty"`
 
 	// TagIds Tag identifiers to assign to the journal records.
 	TagIds *[]int64 `json:"tag_ids,omitempty"`
@@ -1667,17 +1656,9 @@ type CreateTransferTransactionRequest struct {
 	// Memo Optional memo text for the journal records.
 	Memo *string `json:"memo,omitempty"`
 
-	// PendingDate UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.
-	PendingDate *time.Time `json:"pending_date,omitempty"`
-
-	// PostedDate UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.
-	PostedDate *time.Time `json:"posted_date,omitempty"`
-
-	// PostingStatus Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.
-	PostingStatus *PostingStatus `json:"posting_status,omitempty"`
-
 	// ReconciliationStatus Whether a journal record has been reconciled with its external or expected source.
 	ReconciliationStatus *ReconciliationStatus `json:"reconciliation_status,omitempty"`
+	Settlement           *SettlementIntent     `json:"settlement,omitempty"`
 
 	// SourceAccountId Source account identifier for the income or transfer.
 	SourceAccountId int64 `json:"source_account_id"`
@@ -1876,17 +1857,17 @@ type JournalRecord struct {
 
 	// InitiatedDate Human-facing transaction date in YYYY-MM-DD format.
 	InitiatedDate openapi_types.Date `json:"initiated_date"`
-	MemberId      *int64             `json:"member_id,omitempty"`
-	Memo          *string            `json:"memo,omitempty"`
+
+	// LifecycleStatus Transaction lifecycle, independent from balance-record settlement and tombstoning.
+	LifecycleStatus TransactionLifecycleStatus `json:"lifecycle_status"`
+	MemberId        *int64                     `json:"member_id,omitempty"`
+	Memo            *string                    `json:"memo,omitempty"`
 
 	// PendingDate UTC timestamp when the record entered pending; null when the record never had a pending stage.
 	PendingDate *time.Time `json:"pending_date"`
 
 	// PostedDate UTC timestamp when the record posted; null until the record reaches the posted stage.
 	PostedDate *time.Time `json:"posted_date,omitempty"`
-
-	// PostingStatus Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.
-	PostingStatus PostingStatus `json:"posting_status"`
 
 	// ReconciliationStatus Whether a journal record has been reconciled with its external or expected source.
 	ReconciliationStatus ReconciliationStatus `json:"reconciliation_status"`
@@ -1896,12 +1877,15 @@ type JournalRecord struct {
 	RecordRole RecordRole `json:"record_role"`
 
 	// RunningBalance JSON string or null, not a JSON number. Present on account-record listings when requested; aggregate DECIMAL(18,8) balance after this record in the record currency, with pending and posted records included and cancelled and expected records excluded. Responses use fixed-scale formatting with exactly 8 fractional digits.
-	RunningBalance *string    `json:"running_balance,omitempty"`
-	Source         Source     `json:"source"`
-	TagIds         []int64    `json:"tag_ids"`
-	TombstonedAt   *time.Time `json:"tombstoned_at,omitempty"`
-	TransactionId  int64      `json:"transaction_id"`
-	UpdatedAt      time.Time  `json:"updated_at"`
+	RunningBalance *string `json:"running_balance,omitempty"`
+
+	// Settlement Server-derived settlement for owned and party records; null for flow and system records and date-free expected records.
+	Settlement    *SettlementStatus `json:"settlement"`
+	Source        Source            `json:"source"`
+	TagIds        []int64           `json:"tag_ids"`
+	TombstonedAt  *time.Time        `json:"tombstoned_at,omitempty"`
+	TransactionId int64             `json:"transaction_id"`
+	UpdatedAt     time.Time         `json:"updated_at"`
 }
 
 // JournalRecordSearchResponse defines model for JournalRecordSearchResponse.
@@ -1939,9 +1923,6 @@ type MemberListResponse struct {
 	TotalCount int64 `json:"total_count"`
 }
 
-// NonExpectedPostingStatus Non-expected posting status accepted by bulk status updates.
-type NonExpectedPostingStatus string
-
 // OperationRunReferenceResponse defines model for OperationRunReferenceResponse.
 type OperationRunReferenceResponse struct {
 	OperationId    OperationRunReferenceResponseOperationId `json:"operation_id"`
@@ -1951,9 +1932,6 @@ type OperationRunReferenceResponse struct {
 
 // OperationRunReferenceResponseOperationId defines model for OperationRunReferenceResponse.OperationId.
 type OperationRunReferenceResponseOperationId string
-
-// PostingStatus Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.
-type PostingStatus string
 
 // ReconciliationStatus Whether a journal record has been reconciled with its external or expected source.
 type ReconciliationStatus string
@@ -2163,6 +2141,21 @@ type SettingsResponse struct {
 	Groups         []SettingGroup `json:"groups"`
 }
 
+// SettlementIntent defines model for SettlementIntent.
+type SettlementIntent struct {
+	// PendingDate Exact UTC time the balance record entered pending; omitted manual values are derived by the service.
+	PendingDate *time.Time `json:"pending_date,omitempty"`
+
+	// PostedDate Exact UTC time the balance record posted; omitted manual values are derived by the service.
+	PostedDate *time.Time `json:"posted_date,omitempty"`
+
+	// Status Server-derived balance-record settlement.
+	Status SettlementStatus `json:"status"`
+}
+
+// SettlementStatus Server-derived balance-record settlement.
+type SettlementStatus string
+
 // Source defines model for Source.
 type Source string
 
@@ -2200,17 +2193,23 @@ type Transaction struct {
 	CreatedAt time.Time `json:"created_at"`
 
 	// DisplayTitle Server-derived transaction summary title for transaction lines.
-	DisplayTitle   string             `json:"display_title"`
-	InitiatedDate  openapi_types.Date `json:"initiated_date"`
-	PrimaryAmounts []DisplayAmount    `json:"primary_amounts"`
-	Records        []JournalRecord    `json:"records"`
+	DisplayTitle  string             `json:"display_title"`
+	InitiatedDate openapi_types.Date `json:"initiated_date"`
+
+	// LifecycleStatus Transaction lifecycle, independent from balance-record settlement and tombstoning.
+	LifecycleStatus TransactionLifecycleStatus `json:"lifecycle_status"`
+	PrimaryAmounts  []DisplayAmount            `json:"primary_amounts"`
+	Records         []JournalRecord            `json:"records"`
 
 	// RecurringOccurrenceId Occurrence this transaction was generated from; null for non-recurring transactions; the definition is reached via the occurrence.
-	RecurringOccurrenceId *int64             `json:"recurring_occurrence_id"`
-	Shapes                []TransactionShape `json:"shapes"`
-	TombstonedAt          *time.Time         `json:"tombstoned_at,omitempty"`
-	TransactionClass      TransactionClass   `json:"transaction_class"`
-	TransactionId         int64              `json:"transaction_id"`
+	RecurringOccurrenceId *int64 `json:"recurring_occurrence_id"`
+
+	// Settlement Server-derived settlement summary across a transaction's balance records.
+	Settlement       TransactionSettlement `json:"settlement"`
+	Shapes           []TransactionShape    `json:"shapes"`
+	TombstonedAt     *time.Time            `json:"tombstoned_at,omitempty"`
+	TransactionClass TransactionClass      `json:"transaction_class"`
+	TransactionId    int64                 `json:"transaction_id"`
 }
 
 // TransactionClass defines model for TransactionClass.
@@ -2223,6 +2222,9 @@ type TransactionClassification struct {
 	Shapes           []TransactionShape `json:"shapes"`
 	TransactionClass TransactionClass   `json:"transaction_class"`
 }
+
+// TransactionLifecycleStatus Transaction lifecycle, independent from balance-record settlement and tombstoning.
+type TransactionLifecycleStatus string
 
 // TransactionListResponse defines model for TransactionListResponse.
 type TransactionListResponse struct {
@@ -2249,6 +2251,9 @@ type TransactionMonthTotalsResponse struct {
 	Month  string                `json:"month"`
 	Spend  TransactionMonthTotal `json:"spend"`
 }
+
+// TransactionSettlement Server-derived settlement summary across a transaction's balance records.
+type TransactionSettlement string
 
 // TransactionShape defines model for TransactionShape.
 type TransactionShape struct {
@@ -2295,7 +2300,6 @@ type TransactionTemplateRecord struct {
 	Currency                    *string               `json:"currency"`
 	MemberId                    *int64                `json:"member_id"`
 	Memo                        *string               `json:"memo"`
-	PostingStatus               *PostingStatus        `json:"posting_status"`
 	ReconciliationStatus        *ReconciliationStatus `json:"reconciliation_status"`
 	TagIds                      []int64               `json:"tag_ids"`
 	TombstonedAt                *time.Time            `json:"tombstoned_at,omitempty"`
@@ -2323,9 +2327,6 @@ type TransactionTemplateRecordRequest struct {
 
 	// Memo Optional memo text for the journal records.
 	Memo *string `json:"memo,omitempty"`
-
-	// PostingStatus Posting-status value or optional template default for the journal record.
-	PostingStatus *NonExpectedPostingStatus `json:"posting_status,omitempty"`
 
 	// ReconciliationStatus Reconciliation-status value or optional template default for the journal record.
 	ReconciliationStatus *ReconciliationStatus `json:"reconciliation_status,omitempty"`
@@ -2543,11 +2544,11 @@ type SearchAccountJournalRecordsParams struct {
 	// MemberId Household-member identifier to target or filter by.
 	MemberId *int64 `form:"member_id,omitempty" json:"member_id,omitempty"`
 
-	// PostingStatus Filters account register records by posting status. Expected records are excluded by default and returned when this filter is explicitly `expected` or when `include_expected=true`.
-	PostingStatus *PostingStatus `form:"posting_status,omitempty" json:"posting_status,omitempty"`
+	// LifecycleStatus Filters account register records by inherited transaction lifecycle. Expected records are excluded by default.
+	LifecycleStatus *TransactionLifecycleStatus `form:"lifecycle_status,omitempty" json:"lifecycle_status,omitempty"`
 
-	// IncludeExpected Includes expected records alongside ordinary matching records. Expected records remain excluded from running balances.
-	IncludeExpected *bool `form:"include_expected,omitempty" json:"include_expected,omitempty"`
+	// Settlement Filters account register records by server-derived settlement.
+	Settlement *SettlementStatus `form:"settlement,omitempty" json:"settlement,omitempty"`
 
 	// ReconciliationStatus Filter by reconciled or unreconciled journal-record status.
 	ReconciliationStatus *ReconciliationStatus `form:"reconciliation_status,omitempty" json:"reconciliation_status,omitempty"`
@@ -2768,11 +2769,11 @@ type SearchJournalRecordsParams struct {
 	// MemberId Household-member identifier to target or filter by.
 	MemberId *int64 `form:"member_id,omitempty" json:"member_id,omitempty"`
 
-	// PostingStatus Filters records by posting status. Expected records are excluded by default and returned when this filter is explicitly `expected` or when `include_expected=true`.
-	PostingStatus *PostingStatus `form:"posting_status,omitempty" json:"posting_status,omitempty"`
+	// LifecycleStatus Filters records by inherited transaction lifecycle. Expected records are excluded by default.
+	LifecycleStatus *TransactionLifecycleStatus `form:"lifecycle_status,omitempty" json:"lifecycle_status,omitempty"`
 
-	// IncludeExpected Includes expected records alongside ordinary matching records. Expected records remain excluded from running balances.
-	IncludeExpected *bool `form:"include_expected,omitempty" json:"include_expected,omitempty"`
+	// Settlement Filters owned and party records by server-derived settlement.
+	Settlement *SettlementStatus `form:"settlement,omitempty" json:"settlement,omitempty"`
 
 	// ReconciliationStatus Filter by reconciled or unreconciled journal-record status.
 	ReconciliationStatus *ReconciliationStatus `form:"reconciliation_status,omitempty" json:"reconciliation_status,omitempty"`
@@ -2972,8 +2973,11 @@ type ListTransactionsParams struct {
 	// MemberId Household-member identifier to target or filter by.
 	MemberId *[]int64 `form:"member_id,omitempty" json:"member_id,omitempty"`
 
-	// PostingStatus Filters transactions by active record posting status. Expected transactions are excluded by default and returned only when this filter explicitly includes `expected`.
-	PostingStatus *[]PostingStatus `form:"posting_status,omitempty" json:"posting_status,omitempty"`
+	// LifecycleStatus Filters transactions by lifecycle. Expected transactions are excluded by default and returned only when this filter explicitly includes `expected`.
+	LifecycleStatus *[]TransactionLifecycleStatus `form:"lifecycle_status,omitempty" json:"lifecycle_status,omitempty"`
+
+	// Settlement Filters transactions by server-derived settlement summary.
+	Settlement *[]TransactionSettlement `form:"settlement,omitempty" json:"settlement,omitempty"`
 
 	// TransactionClass Filter by one or more server-derived transaction classes.
 	TransactionClass *[]TransactionClass `form:"transaction_class,omitempty" json:"transaction_class,omitempty"`
@@ -3081,8 +3085,11 @@ type BulkReassignJournalRecordAccountJSONRequestBody = BulkReassignRecordsAccoun
 // BulkCategorizeJournalRecordsJSONRequestBody defines body for BulkCategorizeJournalRecords for application/json ContentType.
 type BulkCategorizeJournalRecordsJSONRequestBody = BulkCategorizeRecordsRequest
 
-// BulkUpdateJournalRecordStatusesJSONRequestBody defines body for BulkUpdateJournalRecordStatuses for application/json ContentType.
-type BulkUpdateJournalRecordStatusesJSONRequestBody = BulkUpdateRecordStatusRequest
+// BulkSetJournalRecordReconciliationJSONRequestBody defines body for BulkSetJournalRecordReconciliation for application/json ContentType.
+type BulkSetJournalRecordReconciliationJSONRequestBody = BulkSetRecordReconciliationRequest
+
+// BulkSetJournalRecordSettlementJSONRequestBody defines body for BulkSetJournalRecordSettlement for application/json ContentType.
+type BulkSetJournalRecordSettlementJSONRequestBody = BulkSetRecordSettlementRequest
 
 // BulkUpdateJournalRecordTagsJSONRequestBody defines body for BulkUpdateJournalRecordTags for application/json ContentType.
 type BulkUpdateJournalRecordTagsJSONRequestBody = BulkTagRecordsRequest
@@ -3093,8 +3100,14 @@ type CreateRecurringDefinitionJSONRequestBody = RecurringDefinitionWriteRequest
 // ReplaceRecurringDefinitionJSONRequestBody defines body for ReplaceRecurringDefinition for application/json ContentType.
 type ReplaceRecurringDefinitionJSONRequestBody = RecurringDefinitionWriteRequest
 
+// ConfirmNextRecurringDefinitionJSONRequestBody defines body for ConfirmNextRecurringDefinition for application/json ContentType.
+type ConfirmNextRecurringDefinitionJSONRequestBody = SettlementIntent
+
 // DeferRecurringDefinitionJSONRequestBody defines body for DeferRecurringDefinition for application/json ContentType.
 type DeferRecurringDefinitionJSONRequestBody = RecurringDefinitionDeferRequest
+
+// ConfirmRecurringOccurrenceJSONRequestBody defines body for ConfirmRecurringOccurrence for application/json ContentType.
+type ConfirmRecurringOccurrenceJSONRequestBody = SettlementIntent
 
 // CreateTagJSONRequestBody defines body for CreateTag for application/json ContentType.
 type CreateTagJSONRequestBody = CreateTagRequest
@@ -3290,9 +3303,12 @@ type ServerInterface interface {
 	// Assign one category to selected journal records.
 	// (POST /api/records/bulk/category)
 	BulkCategorizeJournalRecords(w http.ResponseWriter, r *http.Request)
-	// Update posting and reconciliation statuses on selected journal records.
-	// (POST /api/records/bulk/status)
-	BulkUpdateJournalRecordStatuses(w http.ResponseWriter, r *http.Request)
+	// Set reconciliation on selected active journal records.
+	// (POST /api/records/bulk/reconciliation)
+	BulkSetJournalRecordReconciliation(w http.ResponseWriter, r *http.Request)
+	// Set settlement on selected active owned or party records.
+	// (POST /api/records/bulk/settlement)
+	BulkSetJournalRecordSettlement(w http.ResponseWriter, r *http.Request)
 	// Add and remove tags on selected journal records.
 	// (POST /api/records/bulk/tags)
 	BulkUpdateJournalRecordTags(w http.ResponseWriter, r *http.Request)
@@ -3416,6 +3432,9 @@ type ServerInterface interface {
 	// Cancel a transaction.
 	// (POST /api/transactions/{transaction_id}/cancel)
 	CancelTransaction(w http.ResponseWriter, r *http.Request, transactionId int64)
+	// Restore a cancelled transaction to active.
+	// (POST /api/transactions/{transaction_id}/restore)
+	RestoreTransaction(w http.ResponseWriter, r *http.Request, transactionId int64)
 }
 
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
@@ -3716,9 +3735,15 @@ func (_ Unimplemented) BulkCategorizeJournalRecords(w http.ResponseWriter, r *ht
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Update posting and reconciliation statuses on selected journal records.
-// (POST /api/records/bulk/status)
-func (_ Unimplemented) BulkUpdateJournalRecordStatuses(w http.ResponseWriter, r *http.Request) {
+// Set reconciliation on selected active journal records.
+// (POST /api/records/bulk/reconciliation)
+func (_ Unimplemented) BulkSetJournalRecordReconciliation(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Set settlement on selected active owned or party records.
+// (POST /api/records/bulk/settlement)
+func (_ Unimplemented) BulkSetJournalRecordSettlement(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -3965,6 +3990,12 @@ func (_ Unimplemented) ReplaceTransaction(w http.ResponseWriter, r *http.Request
 // Cancel a transaction.
 // (POST /api/transactions/{transaction_id}/cancel)
 func (_ Unimplemented) CancelTransaction(w http.ResponseWriter, r *http.Request, transactionId int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Restore a cancelled transaction to active.
+// (POST /api/transactions/{transaction_id}/restore)
+func (_ Unimplemented) RestoreTransaction(w http.ResponseWriter, r *http.Request, transactionId int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -4589,28 +4620,28 @@ func (siw *ServerInterfaceWrapper) SearchAccountJournalRecords(w http.ResponseWr
 		return
 	}
 
-	// ------------- Optional query parameter "posting_status" -------------
+	// ------------- Optional query parameter "lifecycle_status" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "posting_status", r.URL.Query(), &params.PostingStatus, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "lifecycle_status", r.URL.Query(), &params.LifecycleStatus, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "posting_status"})
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "lifecycle_status"})
 		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "posting_status", Err: err})
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "lifecycle_status", Err: err})
 		}
 		return
 	}
 
-	// ------------- Optional query parameter "include_expected" -------------
+	// ------------- Optional query parameter "settlement" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "include_expected", r.URL.Query(), &params.IncludeExpected, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "settlement", r.URL.Query(), &params.Settlement, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "include_expected"})
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "settlement"})
 		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "include_expected", Err: err})
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "settlement", Err: err})
 		}
 		return
 	}
@@ -6277,28 +6308,28 @@ func (siw *ServerInterfaceWrapper) SearchJournalRecords(w http.ResponseWriter, r
 		return
 	}
 
-	// ------------- Optional query parameter "posting_status" -------------
+	// ------------- Optional query parameter "lifecycle_status" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "posting_status", r.URL.Query(), &params.PostingStatus, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "lifecycle_status", r.URL.Query(), &params.LifecycleStatus, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "posting_status"})
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "lifecycle_status"})
 		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "posting_status", Err: err})
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "lifecycle_status", Err: err})
 		}
 		return
 	}
 
-	// ------------- Optional query parameter "include_expected" -------------
+	// ------------- Optional query parameter "settlement" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "include_expected", r.URL.Query(), &params.IncludeExpected, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "settlement", r.URL.Query(), &params.Settlement, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "include_expected"})
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "settlement"})
 		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "include_expected", Err: err})
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "settlement", Err: err})
 		}
 		return
 	}
@@ -6579,8 +6610,8 @@ func (siw *ServerInterfaceWrapper) BulkCategorizeJournalRecords(w http.ResponseW
 	handler.ServeHTTP(w, r)
 }
 
-// BulkUpdateJournalRecordStatuses operation middleware
-func (siw *ServerInterfaceWrapper) BulkUpdateJournalRecordStatuses(w http.ResponseWriter, r *http.Request) {
+// BulkSetJournalRecordReconciliation operation middleware
+func (siw *ServerInterfaceWrapper) BulkSetJournalRecordReconciliation(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
@@ -6591,7 +6622,29 @@ func (siw *ServerInterfaceWrapper) BulkUpdateJournalRecordStatuses(w http.Respon
 	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.BulkUpdateJournalRecordStatuses(w, r)
+		siw.Handler.BulkSetJournalRecordReconciliation(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// BulkSetJournalRecordSettlement operation middleware
+func (siw *ServerInterfaceWrapper) BulkSetJournalRecordSettlement(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.BulkSetJournalRecordSettlement(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -7863,15 +7916,28 @@ func (siw *ServerInterfaceWrapper) ListTransactions(w http.ResponseWriter, r *ht
 		return
 	}
 
-	// ------------- Optional query parameter "posting_status" -------------
+	// ------------- Optional query parameter "lifecycle_status" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "posting_status", r.URL.Query(), &params.PostingStatus, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "lifecycle_status", r.URL.Query(), &params.LifecycleStatus, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "posting_status"})
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "lifecycle_status"})
 		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "posting_status", Err: err})
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "lifecycle_status", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "settlement" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "settlement", r.URL.Query(), &params.Settlement, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "settlement"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "settlement", Err: err})
 		}
 		return
 	}
@@ -8400,6 +8466,40 @@ func (siw *ServerInterfaceWrapper) CancelTransaction(w http.ResponseWriter, r *h
 	handler.ServeHTTP(w, r)
 }
 
+// RestoreTransaction operation middleware
+func (siw *ServerInterfaceWrapper) RestoreTransaction(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "transaction_id" -------------
+	var transactionId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "transaction_id", chi.URLParam(r, "transaction_id"), &transactionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "transaction_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RestoreTransaction(w, r, transactionId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -8661,7 +8761,10 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/api/records/bulk/category", wrapper.BulkCategorizeJournalRecords)
 	})
 	r.Group(func(r chi.Router) {
-		r.Post(options.BaseURL+"/api/records/bulk/status", wrapper.BulkUpdateJournalRecordStatuses)
+		r.Post(options.BaseURL+"/api/records/bulk/reconciliation", wrapper.BulkSetJournalRecordReconciliation)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/records/bulk/settlement", wrapper.BulkSetJournalRecordSettlement)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/api/records/bulk/tags", wrapper.BulkUpdateJournalRecordTags)
@@ -8785,6 +8888,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/api/transactions/{transaction_id}/cancel", wrapper.CancelTransaction)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/transactions/{transaction_id}/restore", wrapper.RestoreTransaction)
 	})
 
 	return r
@@ -12177,17 +12283,17 @@ func (response BulkCategorizeJournalRecords403JSONResponse) VisitBulkCategorizeJ
 	return err
 }
 
-type BulkUpdateJournalRecordStatusesRequestObject struct {
-	Body *BulkUpdateJournalRecordStatusesJSONRequestBody
+type BulkSetJournalRecordReconciliationRequestObject struct {
+	Body *BulkSetJournalRecordReconciliationJSONRequestBody
 }
 
-type BulkUpdateJournalRecordStatusesResponseObject interface {
-	VisitBulkUpdateJournalRecordStatusesResponse(w http.ResponseWriter) error
+type BulkSetJournalRecordReconciliationResponseObject interface {
+	VisitBulkSetJournalRecordReconciliationResponse(w http.ResponseWriter) error
 }
 
-type BulkUpdateJournalRecordStatuses200JSONResponse BulkRecordOperationResponse
+type BulkSetJournalRecordReconciliation200JSONResponse BulkRecordOperationResponse
 
-func (response BulkUpdateJournalRecordStatuses200JSONResponse) VisitBulkUpdateJournalRecordStatusesResponse(w http.ResponseWriter) error {
+func (response BulkSetJournalRecordReconciliation200JSONResponse) VisitBulkSetJournalRecordReconciliationResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -12199,9 +12305,9 @@ func (response BulkUpdateJournalRecordStatuses200JSONResponse) VisitBulkUpdateJo
 	return err
 }
 
-type BulkUpdateJournalRecordStatuses400JSONResponse struct{ InvalidRequestJSONResponse }
+type BulkSetJournalRecordReconciliation400JSONResponse struct{ InvalidRequestJSONResponse }
 
-func (response BulkUpdateJournalRecordStatuses400JSONResponse) VisitBulkUpdateJournalRecordStatusesResponse(w http.ResponseWriter) error {
+func (response BulkSetJournalRecordReconciliation400JSONResponse) VisitBulkSetJournalRecordReconciliationResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -12213,9 +12319,9 @@ func (response BulkUpdateJournalRecordStatuses400JSONResponse) VisitBulkUpdateJo
 	return err
 }
 
-type BulkUpdateJournalRecordStatuses401JSONResponse struct{ UnauthenticatedJSONResponse }
+type BulkSetJournalRecordReconciliation401JSONResponse struct{ UnauthenticatedJSONResponse }
 
-func (response BulkUpdateJournalRecordStatuses401JSONResponse) VisitBulkUpdateJournalRecordStatusesResponse(w http.ResponseWriter) error {
+func (response BulkSetJournalRecordReconciliation401JSONResponse) VisitBulkSetJournalRecordReconciliationResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -12227,9 +12333,73 @@ func (response BulkUpdateJournalRecordStatuses401JSONResponse) VisitBulkUpdateJo
 	return err
 }
 
-type BulkUpdateJournalRecordStatuses403JSONResponse struct{ ForbiddenJSONResponse }
+type BulkSetJournalRecordReconciliation403JSONResponse struct{ ForbiddenJSONResponse }
 
-func (response BulkUpdateJournalRecordStatuses403JSONResponse) VisitBulkUpdateJournalRecordStatusesResponse(w http.ResponseWriter) error {
+func (response BulkSetJournalRecordReconciliation403JSONResponse) VisitBulkSetJournalRecordReconciliationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type BulkSetJournalRecordSettlementRequestObject struct {
+	Body *BulkSetJournalRecordSettlementJSONRequestBody
+}
+
+type BulkSetJournalRecordSettlementResponseObject interface {
+	VisitBulkSetJournalRecordSettlementResponse(w http.ResponseWriter) error
+}
+
+type BulkSetJournalRecordSettlement200JSONResponse BulkRecordOperationResponse
+
+func (response BulkSetJournalRecordSettlement200JSONResponse) VisitBulkSetJournalRecordSettlementResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type BulkSetJournalRecordSettlement400JSONResponse struct{ InvalidRequestJSONResponse }
+
+func (response BulkSetJournalRecordSettlement400JSONResponse) VisitBulkSetJournalRecordSettlementResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type BulkSetJournalRecordSettlement401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response BulkSetJournalRecordSettlement401JSONResponse) VisitBulkSetJournalRecordSettlementResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type BulkSetJournalRecordSettlement403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response BulkSetJournalRecordSettlement403JSONResponse) VisitBulkSetJournalRecordSettlementResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -12664,6 +12834,7 @@ func (response ReplaceRecurringDefinition409JSONResponse) VisitReplaceRecurringD
 
 type ConfirmNextRecurringDefinitionRequestObject struct {
 	RecurringDefinitionId int64 `json:"recurring_definition_id"`
+	Body                  *ConfirmNextRecurringDefinitionJSONRequestBody
 }
 
 type ConfirmNextRecurringDefinitionResponseObject interface {
@@ -13055,6 +13226,7 @@ func (response ListRecurringOccurrences401JSONResponse) VisitListRecurringOccurr
 
 type ConfirmRecurringOccurrenceRequestObject struct {
 	RecurringOccurrenceId int64 `json:"recurring_occurrence_id"`
+	Body                  *ConfirmRecurringOccurrenceJSONRequestBody
 }
 
 type ConfirmRecurringOccurrenceResponseObject interface {
@@ -15116,6 +15288,84 @@ func (response CancelTransaction404JSONResponse) VisitCancelTransactionResponse(
 	return err
 }
 
+type RestoreTransactionRequestObject struct {
+	TransactionId int64 `json:"transaction_id"`
+}
+
+type RestoreTransactionResponseObject interface {
+	VisitRestoreTransactionResponse(w http.ResponseWriter) error
+}
+
+type RestoreTransaction200JSONResponse Transaction
+
+func (response RestoreTransaction200JSONResponse) VisitRestoreTransactionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestoreTransaction400JSONResponse struct{ InvalidRequestJSONResponse }
+
+func (response RestoreTransaction400JSONResponse) VisitRestoreTransactionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestoreTransaction401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response RestoreTransaction401JSONResponse) VisitRestoreTransactionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestoreTransaction403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response RestoreTransaction403JSONResponse) VisitRestoreTransactionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestoreTransaction404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response RestoreTransaction404JSONResponse) VisitRestoreTransactionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// List accounts.
@@ -15265,9 +15515,12 @@ type StrictServerInterface interface {
 	// Assign one category to selected journal records.
 	// (POST /api/records/bulk/category)
 	BulkCategorizeJournalRecords(ctx context.Context, request BulkCategorizeJournalRecordsRequestObject) (BulkCategorizeJournalRecordsResponseObject, error)
-	// Update posting and reconciliation statuses on selected journal records.
-	// (POST /api/records/bulk/status)
-	BulkUpdateJournalRecordStatuses(ctx context.Context, request BulkUpdateJournalRecordStatusesRequestObject) (BulkUpdateJournalRecordStatusesResponseObject, error)
+	// Set reconciliation on selected active journal records.
+	// (POST /api/records/bulk/reconciliation)
+	BulkSetJournalRecordReconciliation(ctx context.Context, request BulkSetJournalRecordReconciliationRequestObject) (BulkSetJournalRecordReconciliationResponseObject, error)
+	// Set settlement on selected active owned or party records.
+	// (POST /api/records/bulk/settlement)
+	BulkSetJournalRecordSettlement(ctx context.Context, request BulkSetJournalRecordSettlementRequestObject) (BulkSetJournalRecordSettlementResponseObject, error)
 	// Add and remove tags on selected journal records.
 	// (POST /api/records/bulk/tags)
 	BulkUpdateJournalRecordTags(ctx context.Context, request BulkUpdateJournalRecordTagsRequestObject) (BulkUpdateJournalRecordTagsResponseObject, error)
@@ -15391,6 +15644,9 @@ type StrictServerInterface interface {
 	// Cancel a transaction.
 	// (POST /api/transactions/{transaction_id}/cancel)
 	CancelTransaction(ctx context.Context, request CancelTransactionRequestObject) (CancelTransactionResponseObject, error)
+	// Restore a cancelled transaction to active.
+	// (POST /api/transactions/{transaction_id}/restore)
+	RestoreTransaction(ctx context.Context, request RestoreTransactionRequestObject) (RestoreTransactionResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -16784,11 +17040,11 @@ func (sh *strictHandler) BulkCategorizeJournalRecords(w http.ResponseWriter, r *
 	}
 }
 
-// BulkUpdateJournalRecordStatuses operation middleware
-func (sh *strictHandler) BulkUpdateJournalRecordStatuses(w http.ResponseWriter, r *http.Request) {
-	var request BulkUpdateJournalRecordStatusesRequestObject
+// BulkSetJournalRecordReconciliation operation middleware
+func (sh *strictHandler) BulkSetJournalRecordReconciliation(w http.ResponseWriter, r *http.Request) {
+	var request BulkSetJournalRecordReconciliationRequestObject
 
-	var body BulkUpdateJournalRecordStatusesJSONRequestBody
+	var body BulkSetJournalRecordReconciliationJSONRequestBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
 		return
@@ -16796,18 +17052,49 @@ func (sh *strictHandler) BulkUpdateJournalRecordStatuses(w http.ResponseWriter, 
 	request.Body = &body
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.BulkUpdateJournalRecordStatuses(ctx, request.(BulkUpdateJournalRecordStatusesRequestObject))
+		return sh.ssi.BulkSetJournalRecordReconciliation(ctx, request.(BulkSetJournalRecordReconciliationRequestObject))
 	}
 	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "BulkUpdateJournalRecordStatuses")
+		handler = middleware(handler, "BulkSetJournalRecordReconciliation")
 	}
 
 	response, err := handler(r.Context(), w, r, request)
 
 	if err != nil {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(BulkUpdateJournalRecordStatusesResponseObject); ok {
-		if err := validResponse.VisitBulkUpdateJournalRecordStatusesResponse(w); err != nil {
+	} else if validResponse, ok := response.(BulkSetJournalRecordReconciliationResponseObject); ok {
+		if err := validResponse.VisitBulkSetJournalRecordReconciliationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// BulkSetJournalRecordSettlement operation middleware
+func (sh *strictHandler) BulkSetJournalRecordSettlement(w http.ResponseWriter, r *http.Request) {
+	var request BulkSetJournalRecordSettlementRequestObject
+
+	var body BulkSetJournalRecordSettlementJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.BulkSetJournalRecordSettlement(ctx, request.(BulkSetJournalRecordSettlementRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "BulkSetJournalRecordSettlement")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(BulkSetJournalRecordSettlementResponseObject); ok {
+		if err := validResponse.VisitBulkSetJournalRecordSettlementResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -16994,6 +17281,13 @@ func (sh *strictHandler) ConfirmNextRecurringDefinition(w http.ResponseWriter, r
 
 	request.RecurringDefinitionId = recurringDefinitionId
 
+	var body ConfirmNextRecurringDefinitionJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.ConfirmNextRecurringDefinition(ctx, request.(ConfirmNextRecurringDefinitionRequestObject))
 	}
@@ -17133,6 +17427,13 @@ func (sh *strictHandler) ConfirmRecurringOccurrence(w http.ResponseWriter, r *ht
 	var request ConfirmRecurringOccurrenceRequestObject
 
 	request.RecurringOccurrenceId = recurringOccurrenceId
+
+	var body ConfirmRecurringOccurrenceJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.ConfirmRecurringOccurrence(ctx, request.(ConfirmRecurringOccurrenceRequestObject))
@@ -17988,286 +18289,312 @@ func (sh *strictHandler) CancelTransaction(w http.ResponseWriter, r *http.Reques
 	}
 }
 
+// RestoreTransaction operation middleware
+func (sh *strictHandler) RestoreTransaction(w http.ResponseWriter, r *http.Request, transactionId int64) {
+	var request RestoreTransactionRequestObject
+
+	request.TransactionId = transactionId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RestoreTransaction(ctx, request.(RestoreTransactionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RestoreTransaction")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RestoreTransactionResponseObject); ok {
+		if err := validResponse.VisitRestoreTransactionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // Base64 encoded, compressed with deflate, json marshaled OpenAPI spec.
 // Stored as a slice of fixed-width chunks rather than one concatenated
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

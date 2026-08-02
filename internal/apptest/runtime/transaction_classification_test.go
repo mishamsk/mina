@@ -201,8 +201,8 @@ func TestDerivedAccountingSemanticsWorkedExamples(t *testing.T) {
 			records: func(f *semanticFixture) []httpclient.CreateJournalRecordRequest {
 				return []httpclient.CreateJournalRecordRequest{
 					semanticRecord(f.checking.AccountId, "-330.00", "USD", nil),
-					semanticRecord(f.exchange.AccountId, "330.00", "USD", nil),
-					semanticRecord(f.exchange.AccountId, "-300.00", "EUR", nil),
+					semanticRecordWithoutSettlement(f.exchange.AccountId, "330.00", "USD", nil),
+					semanticRecordWithoutSettlement(f.exchange.AccountId, "-300.00", "EUR", nil),
 					semanticRecord(f.cashEUR.AccountId, "300.00", "EUR", nil),
 				}
 			},
@@ -326,7 +326,7 @@ func TestDerivedAccountingSemanticsWorkedExamples(t *testing.T) {
 			records: func(f *semanticFixture) []httpclient.CreateJournalRecordRequest {
 				return []httpclient.CreateJournalRecordRequest{
 					semanticRecord(f.checking.AccountId, "1000.00", "USD", nil),
-					semanticRecord(f.openingBalance.AccountId, "-1000.00", "USD", nil),
+					semanticRecordWithoutSettlement(f.openingBalance.AccountId, "-1000.00", "USD", nil),
 				}
 			},
 			class:          httpclient.TransactionClassAdjustment,
@@ -621,21 +621,22 @@ func TestExchangeShorthand(t *testing.T) {
 	memo := "Exchange optional fields"
 	pendingDate := apptest.Timestamp("2024-07-04T12:00:00Z")
 	postedDate := apptest.Timestamp("2024-07-05T13:00:00Z")
-	postingStatus := httpclient.PostingStatusPending
 	reconciliationStatus := httpclient.Unreconciled
 
 	response, err := client.REST().CreateExchangeTransactionWithResponse(context.Background(), httpclient.CreateExchangeTransactionRequest{
-		InitiatedDate:        apptest.Date("2024-07-04"),
-		SoldAccountId:        fixture.checking.AccountId,
-		BoughtAccountId:      fixture.cashEUR.AccountId,
-		SoldAmount:           "110.00",
-		BoughtAmount:         "100.00",
-		MemberId:             &member.MemberId,
-		TagIds:               apptest.Int64SlicePtr(tag.TagId),
-		Memo:                 &memo,
-		PendingDate:          &pendingDate,
-		PostedDate:           &postedDate,
-		PostingStatus:        &postingStatus,
+		InitiatedDate:   apptest.Date("2024-07-04"),
+		SoldAccountId:   fixture.checking.AccountId,
+		BoughtAccountId: fixture.cashEUR.AccountId,
+		SoldAmount:      "110.00",
+		BoughtAmount:    "100.00",
+		MemberId:        &member.MemberId,
+		TagIds:          apptest.Int64SlicePtr(tag.TagId),
+		Memo:            &memo,
+		Settlement: &httpclient.SettlementIntent{
+			Status:      httpclient.SettlementStatusPosted,
+			PendingDate: &pendingDate,
+			PostedDate:  &postedDate,
+		},
 		ReconciliationStatus: &reconciliationStatus,
 	})
 	requireClientResponse(t, "create exchange shorthand", err, response.StatusCode(), http.StatusCreated, response.Body)
@@ -650,14 +651,12 @@ func TestExchangeShorthand(t *testing.T) {
 		if record.Memo == nil || *record.Memo != memo {
 			t.Fatalf("memo = %v, want %q", record.Memo, memo)
 		}
-		if !record.PendingDate.Equal(pendingDate) {
-			t.Fatalf("pending_date = %v, want %v", record.PendingDate, pendingDate)
-		}
-		if record.PostedDate == nil || !record.PostedDate.Equal(postedDate) {
-			t.Fatalf("posted_date = %v, want %v", record.PostedDate, postedDate)
-		}
-		if record.PostingStatus != postingStatus {
-			t.Fatalf("posting_status = %q, want %q", record.PostingStatus, postingStatus)
+		if record.Settlement != nil {
+			if *record.Settlement != httpclient.SettlementStatusPosted || record.PendingDate == nil || !record.PendingDate.Equal(pendingDate) || record.PostedDate == nil || !record.PostedDate.Equal(postedDate) {
+				t.Fatalf("balance settlement/pending_date/posted_date = %v/%v/%v, want posted/%v/%v", record.Settlement, record.PendingDate, record.PostedDate, pendingDate, postedDate)
+			}
+		} else if record.PendingDate != nil || record.PostedDate != nil {
+			t.Fatalf("system record pending_date/posted_date = %v/%v, want nil/nil", record.PendingDate, record.PostedDate)
 		}
 		if record.ReconciliationStatus != reconciliationStatus {
 			t.Fatalf("reconciliation_status = %q, want %q", record.ReconciliationStatus, reconciliationStatus)
@@ -913,15 +912,24 @@ func fixedSystemAccounts(t *testing.T, client *apptest.Client) map[string]httpcl
 }
 
 func semanticRecord(accountID int64, amount string, currency string, categoryID *int64) httpclient.CreateJournalRecordRequest {
-	return httpclient.CreateJournalRecordRequest{
+	record := httpclient.CreateJournalRecordRequest{
 		AccountId:            accountID,
 		Amount:               amount,
 		CategoryId:           categoryID,
 		Currency:             currency,
-		PostingStatus:        httpclient.PostingStatusPosted,
 		ReconciliationStatus: httpclient.Reconciled,
 		Source:               httpclient.WritableSourceManual,
 	}
+	if categoryID == nil {
+		record.Settlement = apptest.PostedSettlement()
+	}
+	return record
+}
+
+func semanticRecordWithoutSettlement(accountID int64, amount string, currency string, categoryID *int64) httpclient.CreateJournalRecordRequest {
+	record := semanticRecord(accountID, amount, currency, categoryID)
+	record.Settlement = nil
+	return record
 }
 
 func classificationRecord(accountID int64, amount string, currency string, categoryID *int64) httpclient.ClassifyJournalRecordRequest {
@@ -1079,8 +1087,8 @@ func transferClassificationRequest(fixture classificationFixture) httpclient.Cre
 func exchangeClassificationRequest(fixture classificationFixture) httpclient.CreateTransactionRequest {
 	return classificationRequest(
 		semanticRecord(fixture.checking.AccountId, "-110.00", "USD", nil),
-		semanticRecord(fixture.exchangeProvider.AccountId, "110.00", "USD", nil),
-		semanticRecord(fixture.exchangeProvider.AccountId, "-100.00", "EUR", nil),
+		semanticRecordWithoutSettlement(fixture.exchangeProvider.AccountId, "110.00", "USD", nil),
+		semanticRecordWithoutSettlement(fixture.exchangeProvider.AccountId, "-100.00", "EUR", nil),
 		semanticRecord(fixture.cashEUR.AccountId, "100.00", "EUR", nil),
 	)
 }

@@ -1,13 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 
-import {
-  confirmRecurringOccurrenceById,
-  dismissRecurringOccurrenceById,
-  type JournalRecord,
-  type Transaction,
-  updateLedgerAccount,
-} from "@/api";
+import { type JournalRecord, updateLedgerAccount } from "@/api";
 import { apiErrorMessage } from "@/api";
 import { PageHelp } from "@/components/page-help";
 import { Toast, toastDurationMs } from "@/components/toast";
@@ -22,17 +16,14 @@ import {
   useAccountRegisterResource,
 } from "@/features/accounts";
 import { PageHeader } from "@/features/app-shell";
-import { refreshFeaturedBalances } from "@/features/featured-balances";
 import {
   buildLookupMaps,
   captureTransactionEntryLaunchContext,
   defaultTransactionPageSize,
-  invalidateAccountRegistersForTransaction,
   refreshLedgerLookups,
   transactionPageSizeOptions,
 } from "@/features/ledger";
-import { refreshOverview } from "@/features/overview";
-import { invalidateTransactionPages, openTransactionEntryPanel } from "@/store";
+import { openTransactionEntryPanel } from "@/store";
 
 const pageSizes = transactionPageSizeOptions;
 const defaultPageSize = defaultTransactionPageSize;
@@ -61,9 +52,6 @@ const readSelectedRecordId = (
 ): number | undefined =>
   parsePositiveInteger(searchParams.get("record") ?? undefined);
 
-const readHideExpected = (searchParams: URLSearchParams): boolean =>
-  searchParams.get("hideExpected") === "true";
-
 const writePageParams = (
   current: URLSearchParams,
   nextValues: { readonly page?: number; readonly pageSize?: number },
@@ -75,21 +63,6 @@ const writePageParams = (
   if (nextValues.pageSize) {
     next.set("pageSize", String(nextValues.pageSize));
   }
-  next.delete("record");
-  return next;
-};
-
-const writeHideExpectedParam = (
-  current: URLSearchParams,
-  hideExpected: boolean,
-): URLSearchParams => {
-  const next = new URLSearchParams(current);
-  if (hideExpected) {
-    next.set("hideExpected", "true");
-  } else {
-    next.delete("hideExpected");
-  }
-  next.set("page", "1");
   next.delete("record");
   return next;
 };
@@ -144,16 +117,14 @@ const AccountPageContent = ({ accountId }: { readonly accountId: number }) => {
   const page = readPage(searchParams);
   const pageSize = readPageSize(searchParams);
   const selectedRecordId = readSelectedRecordId(searchParams);
-  const hideExpected = readHideExpected(searchParams);
   const params = useMemo(
     () => ({
       accountId,
-      includeExpected: !hideExpected,
       includeRunningBalance: true,
       limit: pageSize,
       offset: (page - 1) * pageSize,
     }),
-    [accountId, hideExpected, page, pageSize],
+    [accountId, page, pageSize],
   );
   const resource = useAccountRegisterResource(params);
   const maps = useMemo(
@@ -257,57 +228,6 @@ const AccountPageContent = ({ accountId }: { readonly accountId: number }) => {
     },
     [selectedRecordId, setSearchParams],
   );
-  const confirmRecurringOccurrence = useCallback(
-    async (transaction: Transaction) => {
-      if (transaction.recurring_occurrence_id === null) {
-        throw new Error("This transaction is not a recurring occurrence.");
-      }
-
-      const result = await confirmRecurringOccurrenceById({
-        recurring_occurrence_id: transaction.recurring_occurrence_id,
-      });
-      if (result.error) {
-        throw new Error(
-          apiErrorMessage(result.error, "Occurrence could not be confirmed."),
-        );
-      }
-
-      invalidateAccountRegistersForTransaction(transaction);
-      invalidateTransactionPages();
-      await Promise.all([
-        refreshAccountRegisterPage(params),
-        refreshFeaturedBalances(),
-        refreshOverview(),
-      ]);
-    },
-    [params],
-  );
-  const dismissRecurringOccurrence = useCallback(
-    async (transaction: Transaction) => {
-      if (transaction.recurring_occurrence_id === null) {
-        throw new Error("This transaction is not a recurring occurrence.");
-      }
-
-      const result = await dismissRecurringOccurrenceById({
-        recurring_occurrence_id: transaction.recurring_occurrence_id,
-      });
-      if (result.error) {
-        throw new Error(
-          apiErrorMessage(result.error, "Occurrence could not be dismissed."),
-        );
-      }
-
-      invalidateAccountRegistersForTransaction(transaction);
-      invalidateTransactionPages();
-      await Promise.all([
-        refreshAccountRegisterPage(params),
-        refreshFeaturedBalances(),
-        refreshOverview(),
-      ]);
-    },
-    [params],
-  );
-
   return (
     <section
       className="flex h-[calc(100svh-2.5rem)] min-h-0 flex-col gap-6"
@@ -349,18 +269,10 @@ const AccountPageContent = ({ accountId }: { readonly accountId: number }) => {
       <div className="min-h-0 flex-1">
         <AccountRegisterTable
           errorMessage={resource.register.errorMessage}
-          hideExpected={hideExpected}
           loading={resource.register.loading}
           lookupErrorMessage={resource.lookups.errorMessage}
           lookupsLoaded={Boolean(resource.lookups.snapshot)}
           maps={maps}
-          onConfirmRecurringOccurrence={confirmRecurringOccurrence}
-          onDismissRecurringOccurrence={dismissRecurringOccurrence}
-          onHideExpectedChange={(nextHideExpected) => {
-            setSearchParams((current) =>
-              writeHideExpectedParam(current, nextHideExpected),
-            );
-          }}
           onNewTransaction={() => {
             openTransactionEntryPanel(
               undefined,

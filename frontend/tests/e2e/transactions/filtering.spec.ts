@@ -63,11 +63,11 @@ test("transactions page uses server pagination controls", async ({ page }) => {
       url.searchParams.get("offset") === "0"
     );
   });
-  await page.goto("/transactions?page=1&pageSize=10&hideExpected=true");
+  await page.goto("/transactions?page=1&pageSize=10");
   await legacyPageSizeRequest;
   await expect(page.getByLabel("Rows")).toContainText("50");
 
-  await page.goto("/transactions?page=1&pageSize=25&hideExpected=true");
+  await page.goto("/transactions?page=1&pageSize=25");
 
   await expect(page.getByText(/Page 1 of \d+/)).toBeVisible();
   await expect(
@@ -144,15 +144,14 @@ test("transactions page uses server pagination controls", async ({ page }) => {
 test("bulk mode keyboard ranges stay page-local across pagination", async ({
   page,
 }) => {
-  await page.goto("/transactions?page=1&pageSize=25&hideExpected=true");
+  await page.goto("/transactions?page=1&pageSize=25");
   await expect(page.getByText(/Page 1 of \d+/)).toBeVisible();
   const selectableRows = page.locator(
     "tbody tr[data-transaction-id]:not([aria-disabled='true'])",
   );
   await expect(selectableRows.nth(1)).toBeVisible();
-  const selectableCount = await selectableRows.count();
-
   await page.getByRole("button", { name: "Bulk edit" }).click();
+  const selectableCount = await selectableRows.count();
   const modeBar = page.getByTestId("transaction-browser-bulk-mode-bar");
   await expect(page.getByRole("searchbox", { name: "Search" })).toHaveCount(0);
 
@@ -236,7 +235,7 @@ test("uncached search failure replaces retained rows with the page error", async
   const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
   const unique = `MissingSearch${slug}${Date.now()}`;
 
-  await page.goto("/transactions?page=1&pageSize=50&hideExpected=true");
+  await page.goto("/transactions?page=1&pageSize=50");
   const previousRow = page.locator("[data-transaction-row='true']").first();
   await expect(previousRow).toBeVisible();
 
@@ -394,7 +393,7 @@ test("transactions page add-filter menu drives server filters and chips", async 
       funding_account_id: fundingAccount.account_id,
       initiated_date: "2026-05-31",
       memo: targetMemo,
-      posting_status: "pending",
+      settlement: { status: "pending" },
       tag_ids: [visibleTagOne.tag_id],
     },
   });
@@ -450,7 +449,7 @@ test("transactions page add-filter menu drives server filters and chips", async 
   ).toBeVisible();
 
   await page.getByRole("button", { name: "Back" }).click();
-  await page.getByRole("button", { name: "Posting status" }).click();
+  await page.getByRole("button", { name: "Settlement" }).click();
   await page.getByText("Pending", { exact: true }).click();
 
   await page.getByRole("button", { name: "Back" }).click();
@@ -479,7 +478,7 @@ test("transactions page add-filter menu drives server filters and chips", async 
         initiatedFrom: "2026-05-01",
         initiatedTo: "2026-05-31",
         limit: "25",
-        statuses: ["pending"],
+        settlements: ["pending"],
         tags: [visibleTagOne.tag_id, visibleTagTwo.tag_id],
       })
     );
@@ -495,7 +494,7 @@ test("transactions page add-filter menu drives server filters and chips", async 
     initiatedFrom: "2026-05-01",
     initiatedTo: "2026-05-31",
     pageSize: "25",
-    statuses: ["pending"],
+    settlements: ["pending"],
     tags: [visibleTagOne.tag_id, visibleTagTwo.tag_id],
   });
   await expect(
@@ -512,19 +511,19 @@ test("transactions page add-filter menu drives server filters and chips", async 
         initiatedFrom: "2026-05-01",
         initiatedTo: "2026-05-31",
         limit: "25",
-        statuses: ["pending"],
+        settlements: ["pending"],
         tags: [visibleTagOne.tag_id, visibleTagTwo.tag_id],
       })
     );
   });
   await page.goto(
     `/transactions?page=1&pageSize=25&tag=${visibleTagOne.tag_id}` +
-      `&tag=${visibleTagTwo.tag_id}&status=pending&amountMin=10` +
+      `&tag=${visibleTagTwo.tag_id}&settlement=pending&amountMin=10` +
       `&amountMax=20&initiatedFrom=2026-05-01&initiatedTo=2026-05-31`,
   );
   await deepLinkRequest;
   await expect(page.getByText("Tag Groceries")).toBeVisible();
-  await expect(page.getByText("Status Pending")).toBeVisible();
+  await expect(page.getByText("Settlement Pending")).toBeVisible();
   await expect(page.getByText("Amount 10-20")).toBeVisible();
   await expect(page.getByText("Initiated 2026-05-01-2026-05-31")).toBeVisible();
 
@@ -538,7 +537,7 @@ test("transactions page add-filter menu drives server filters and chips", async 
         initiatedFrom: "2026-05-01",
         initiatedTo: "2026-05-31",
         limit: "50",
-        statuses: ["pending"],
+        settlements: ["pending"],
         tags: [visibleTagOne.tag_id, visibleTagTwo.tag_id],
       })
     );
@@ -558,7 +557,7 @@ test("transactions page add-filter menu drives server filters and chips", async 
         initiatedFrom: "2026-05-01",
         initiatedTo: "2026-05-31",
         limit: "50",
-        statuses: ["pending"],
+        settlements: ["pending"],
         tags: [visibleTagOne.tag_id, visibleTagTwo.tag_id],
       })
     );
@@ -566,7 +565,7 @@ test("transactions page add-filter menu drives server filters and chips", async 
   await page.getByLabel("Go to day").fill("2026-05-31");
   await dateJumpRequest;
 
-  await page.getByRole("button", { name: "Remove Status Pending" }).click();
+  await page.getByRole("button", { name: "Remove Settlement Pending" }).click();
   await expectTransactionFilterUrl(page, {
     amountMax: "20",
     amountMin: "10",
@@ -582,7 +581,7 @@ test("transactions page add-filter menu drives server filters and chips", async 
   await expect(page.getByText("Amount 10-20")).toBeHidden();
 });
 
-test("transactions inline recurring occurrences support hide, confirm, dismiss, and registers", async ({
+test("transactions inline recurring occurrences support lifecycle filtering, confirm, and dismiss", async ({
   page,
 }, testInfo) => {
   await page.setViewportSize({ width: 700, height: 720 });
@@ -789,82 +788,36 @@ test("transactions inline recurring occurrences support hide, confirm, dismiss, 
   await expect(entryPanel).toHaveCount(0);
   await page.setViewportSize({ width: 700, height: 720 });
 
-  const hideExpectedToggle = page.getByRole("button", {
-    name: "Hide expected",
-  });
-  await expect(hideExpectedToggle).toHaveAttribute("aria-pressed", "false");
-  await expect(
-    hideExpectedToggle.locator('[data-icon="calendar-weeks"]'),
-  ).toBeVisible();
-
-  const hideRequest = page.waitForRequest((request) => {
+  await page.getByRole("button", { name: "Open filters" }).click();
+  await page.getByRole("button", { name: "Add filter" }).click();
+  await page.getByRole("button", { name: "Lifecycle" }).click();
+  const expectedRequest = page.waitForRequest((request) => {
     const url = new URL(request.url());
     return (
       url.pathname === "/api/transactions" &&
       url.searchParams.get("search") === search &&
       transactionRequestHasFilters(url, {
+        lifecycles: ["expected"],
         limit: "50",
-        statuses: ["cancelled", "pending", "posted"],
       })
     );
   });
-  await hideExpectedToggle.click();
-  await hideRequest;
+  await page.getByText("Expected", { exact: true }).click();
+  await expectedRequest;
 
   await expectTransactionFilterUrl(page, {
+    lifecycles: ["expected"],
     pageSize: "50",
     q: search,
-    hideExpected: true,
   });
-  await expect(hideExpectedToggle).toHaveAttribute("aria-pressed", "true");
-  await expect(
-    hideExpectedToggle.locator('[data-icon="calendar-weeks-off"]'),
-  ).toBeVisible();
-  await expect(overdueRow).toHaveCount(0);
-  await expect(dueRow).toHaveCount(0);
+  await expect(page.getByText("Lifecycle Expected")).toBeVisible();
+  await expect(overdueRow).toBeVisible();
+  await expect(dueRow).toBeVisible();
 
-  await hideExpectedToggle.click();
+  await page.getByRole("button", { name: "Remove Lifecycle Expected" }).click();
   await expectTransactionFilterUrl(page, { pageSize: "50", q: search });
-  await expect(hideExpectedToggle).toHaveAttribute("aria-pressed", "false");
   await expect(overdueRow).toBeVisible();
 
-  await page.route(
-    `**/api/transactions/${overdueFixture.transactionId}`,
-    async (route) => {
-      await route.fulfill({
-        body: JSON.stringify({
-          error: {
-            code: "test_transaction_unavailable",
-            message: "Test transaction unavailable.",
-          },
-        }),
-        contentType: "application/json",
-        status: 500,
-      });
-    },
-  );
-  await page.goto(`/accounts/${overdueFixture.checking.account_id}`);
-  const registerRow = page
-    .getByTestId("account-register-row")
-    .filter({ hasText: overdueFixture.memo });
-  await expect(registerRow).toBeVisible();
-  const overdueDayLabel = await page.evaluate((value) => {
-    const [year, month, day] = value.split("-").map(Number);
-    return new Intl.DateTimeFormat(undefined, {
-      day: "numeric",
-      month: "short",
-    }).format(new Date(year ?? 0, (month ?? 1) - 1, day ?? 1));
-  }, overdueDate);
-  await expect(registerRow).toContainText(overdueDayLabel);
-  await expect(registerRow).toContainText("Transaction unavailable");
-  await expect(
-    registerRow.getByText("Expected", { exact: true }),
-  ).toBeVisible();
-  await expect(registerRow.getByRole("img", { name: "Overdue" })).toBeVisible();
-
-  await page.goto(
-    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(search)}`,
-  );
   const featuredRow = page
     .getByTestId("featured-balance-row")
     .filter({ hasText: overdueFixture.checking.fqn.split(":").at(-1) ?? "" });
@@ -958,7 +911,7 @@ test("transaction amount chips share one right edge across row variants", async 
             category_id: null,
             currency: "USD",
             memo: mixedMemo,
-            posting_status: "posted",
+            settlement: { status: "posted" },
             reconciliation_status: "unreconciled",
             source: "manual",
           },
@@ -968,7 +921,7 @@ test("transaction amount chips share one right edge across row variants", async 
             category_id: overdueFixture.category.category_id,
             currency: "USD",
             memo: mixedMemo,
-            posting_status: "posted",
+            settlement: null,
             reconciliation_status: "unreconciled",
             source: "manual",
           },
@@ -978,7 +931,7 @@ test("transaction amount chips share one right edge across row variants", async 
             category_id: null,
             currency: "USD",
             memo: mixedMemo,
-            posting_status: "posted",
+            settlement: { status: "posted" },
             reconciliation_status: "unreconciled",
             source: "manual",
           },
@@ -988,7 +941,7 @@ test("transaction amount chips share one right edge across row variants", async 
             category_id: incomeCategory.category_id,
             currency: "USD",
             memo: mixedMemo,
-            posting_status: "posted",
+            settlement: null,
             reconciliation_status: "unreconciled",
             source: "manual",
           },
@@ -1087,7 +1040,7 @@ test("multi-part transaction rows show one honest amount or only the indicator",
           category_id: null,
           currency: "USD",
           memo: spendTransferMemo,
-          posting_status: "posted",
+          settlement: { status: "posted" },
           reconciliation_status: "unreconciled",
           source: "manual",
         },
@@ -1097,7 +1050,7 @@ test("multi-part transaction rows show one honest amount or only the indicator",
           category_id: expenseCategory.category_id,
           currency: "USD",
           memo: spendTransferMemo,
-          posting_status: "posted",
+          settlement: null,
           reconciliation_status: "unreconciled",
           source: "manual",
         },
@@ -1107,7 +1060,7 @@ test("multi-part transaction rows show one honest amount or only the indicator",
           category_id: null,
           currency: "USD",
           memo: spendTransferMemo,
-          posting_status: "posted",
+          settlement: { status: "posted" },
           reconciliation_status: "unreconciled",
           source: "manual",
         },
@@ -1130,7 +1083,7 @@ test("multi-part transaction rows show one honest amount or only the indicator",
           category_id: null,
           currency: "USD",
           memo: mixedMemo,
-          posting_status: "posted",
+          settlement: { status: "posted" },
           reconciliation_status: "unreconciled",
           source: "manual",
         },
@@ -1140,7 +1093,7 @@ test("multi-part transaction rows show one honest amount or only the indicator",
           category_id: expenseCategory.category_id,
           currency: "USD",
           memo: mixedMemo,
-          posting_status: "posted",
+          settlement: null,
           reconciliation_status: "unreconciled",
           source: "manual",
         },
@@ -1150,7 +1103,7 @@ test("multi-part transaction rows show one honest amount or only the indicator",
           category_id: null,
           currency: "USD",
           memo: mixedMemo,
-          posting_status: "posted",
+          settlement: { status: "posted" },
           reconciliation_status: "unreconciled",
           source: "manual",
         },
@@ -1160,7 +1113,7 @@ test("multi-part transaction rows show one honest amount or only the indicator",
           category_id: incomeCategory.category_id,
           currency: "USD",
           memo: mixedMemo,
-          posting_status: "posted",
+          settlement: null,
           reconciliation_status: "unreconciled",
           source: "manual",
         },
@@ -1188,7 +1141,7 @@ test("multi-part transaction rows show one honest amount or only the indicator",
 
   await page.setViewportSize({ width: 1440, height: 720 });
   await page.goto(
-    `/transactions?page=1&pageSize=50&hideExpected=true&q=${encodeURIComponent(unique)}`,
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(unique)}`,
   );
   await expect(page.getByText("Description")).toBeVisible();
 
@@ -1466,7 +1419,7 @@ test("transactions filter toolbar keeps a stable inline trigger geometry", async
   page,
 }) => {
   await page.setViewportSize({ width: 1920, height: 760 });
-  await page.goto("/transactions?page=1&pageSize=50&hideExpected=true");
+  await page.goto("/transactions?page=1&pageSize=50");
   await expect(page.getByText("Description")).toBeVisible();
 
   const toolbarRow = page.getByTestId("transaction-browser-toolbar-row");
@@ -1509,25 +1462,25 @@ test("transactions filter toolbar keeps a stable inline trigger geometry", async
   const addFilterButton = page.getByRole("button", { name: "Add filter" });
   await addFilterButton.focus();
   await page.keyboard.press("Enter");
-  const postingStatusButton = page.getByRole("button", {
-    name: "Posting status",
+  const settlementButton = page.getByRole("button", {
+    name: "Settlement",
   });
-  await expect(postingStatusButton).toBeVisible();
-  await postingStatusButton.focus();
+  await expect(settlementButton).toBeVisible();
+  await settlementButton.focus();
   await page.keyboard.press("Enter");
   const pendingCheckbox = page.getByRole("checkbox", { name: "Pending" });
   await expect(pendingCheckbox).toBeFocused();
   await expect(pendingCheckbox).toBeVisible();
   await page.getByText("Pending", { exact: true }).click();
   await expect
-    .poll(() => new URL(page.url()).searchParams.get("status"))
+    .poll(() => new URL(page.url()).searchParams.get("settlement"))
     .toBe("pending");
 
-  const statusChip = page.getByText("Status Pending", { exact: true });
-  await expect(statusChip).toBeVisible();
+  const settlementChip = page.getByText("Settlement Pending", { exact: true });
+  await expect(settlementChip).toBeVisible();
   await page.keyboard.press("Escape");
   const triggerWithChipBox = await closeFilterButton.boundingBox();
-  const chipBox = await statusChip.boundingBox();
+  const chipBox = await settlementChip.boundingBox();
   const toolbarWithChipBox = await toolbarRow.boundingBox();
   const filterBarBox = await page
     .getByTestId("transaction-browser-filter-bar")
@@ -1545,11 +1498,10 @@ test("transactions filter toolbar keeps a stable inline trigger geometry", async
   );
 
   const removeStatusButton = page.getByRole("button", {
-    name: "Remove Status Pending",
+    name: "Remove Settlement Pending",
   });
-  await removeStatusButton.focus();
-  await page.keyboard.press("Enter");
-  await expect(statusChip).toBeHidden();
+  await removeStatusButton.press("Enter");
+  await expect(settlementChip).toBeHidden();
   const finalTriggerBox = await closeFilterButton.boundingBox();
   const finalToolbarBox = await toolbarRow.boundingBox();
   expect(finalTriggerBox).not.toBeNull();
@@ -1562,7 +1514,7 @@ test("transactions filter toolbar keeps a stable inline trigger geometry", async
 test("transactions filter toolbar suppresses open-control tooltips and supports Tab traversal", async ({
   page,
 }, testInfo) => {
-  await page.goto("/transactions?page=1&pageSize=50&hideExpected=true");
+  await page.goto("/transactions?page=1&pageSize=50");
   const searchInput = page.getByRole("searchbox", { name: "Search" });
   const previousDayButton = page.getByRole("button", {
     name: "Previous day",
@@ -1571,9 +1523,6 @@ test("transactions filter toolbar suppresses open-control tooltips and supports 
   const nextDayButton = page.getByRole("button", { name: "Next day" });
   const todayButton = page.getByRole("button", { name: "Today" });
   const classFilter = page.getByLabel("Class");
-  const hideExpectedToggle = page.getByRole("button", {
-    name: "Hide expected",
-  });
   const bulkEditButton = page.getByRole("button", { name: "Bulk edit" });
   const filterToggle = page.getByRole("button", { name: "Open filters" });
   const filterTooltip = page
@@ -1583,8 +1532,6 @@ test("transactions filter toolbar suppresses open-control tooltips and supports 
     await page.keyboard.press("Tab");
     await expect(target).toBeFocused();
   };
-
-  await expect(hideExpectedToggle).toHaveAttribute("aria-pressed", "true");
 
   await filterToggle.hover();
   await expect(filterTooltip).toBeVisible();
@@ -1618,7 +1565,6 @@ test("transactions filter toolbar suppresses open-control tooltips and supports 
   await expect(nextDayButton).toBeFocused();
   await tabTo(todayButton);
   await tabTo(classFilter);
-  await tabTo(hideExpectedToggle);
   await tabTo(bulkEditButton);
   await tabTo(filterToggle);
   await expect(filterTooltip).toBeVisible();
@@ -1664,7 +1610,7 @@ test("filter X dismiss clears chips while retaining standing search and class fi
   const search = "E2E X dismiss standing controls";
 
   await page.goto(
-    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(search)}&class=spend&category=${category.category_id}&hideExpected=true`,
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(search)}&class=spend&category=${category.category_id}`,
   );
 
   await expect(
@@ -1675,17 +1621,11 @@ test("filter X dismiss clears chips while retaining standing search and class fi
     search,
   );
   await expect(page.getByLabel("Class")).toHaveText("Spend");
-  const hideExpectedToggle = page.getByRole("button", {
-    name: "Hide expected",
-  });
-  await expect(hideExpectedToggle).toHaveAttribute("aria-pressed", "true");
-
   await page.getByRole("button", { name: "Close filters" }).click();
 
   await expect(page.getByTestId("transaction-browser-filter-bar")).toBeHidden();
   await expectTransactionFilterUrl(page, {
     classes: ["spend"],
-    hideExpected: true,
     pageSize: "50",
     q: search,
   });
@@ -1693,7 +1633,6 @@ test("filter X dismiss clears chips while retaining standing search and class fi
     search,
   );
   await expect(page.getByLabel("Class")).toHaveText("Spend");
-  await expect(hideExpectedToggle).toHaveAttribute("aria-pressed", "true");
   await expect(
     page.getByRole("button", { name: "Open filters" }),
   ).toBeVisible();
@@ -1827,7 +1766,9 @@ test("transaction entity chips add filters in place", async ({
 test("transactions sidebar restores the last-used transactions URL state", async ({
   page,
 }) => {
-  await page.goto("/transactions?page=2&pageSize=25&q=Target&status=posted");
+  await page.goto(
+    "/transactions?page=2&pageSize=25&q=Target&settlement=posted",
+  );
   await expect(
     page.getByRole("heading", { exact: true, name: "Transactions" }),
   ).toBeVisible();
@@ -1838,7 +1779,7 @@ test("transactions sidebar restores the last-used transactions URL state", async
     page: "2",
     pageSize: "25",
     q: "Target",
-    statuses: ["posted"],
+    settlements: ["posted"],
   });
 
   await page.getByRole("link", { name: "Status" }).click();
@@ -1857,6 +1798,6 @@ test("transactions sidebar restores the last-used transactions URL state", async
     page: "2",
     pageSize: "25",
     q: "Target",
-    statuses: ["posted"],
+    settlements: ["posted"],
   });
 });

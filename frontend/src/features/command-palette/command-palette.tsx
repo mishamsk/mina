@@ -46,13 +46,13 @@ import {
   captureTransactionEntryLaunchContext,
   ClassIcon,
   displayAmountKey,
+  displayStatusLabel,
   formatInitiatedDate,
   FqnPath,
   lineDisplayAmounts,
   lineMemo,
-  linePostingStatus,
+  lineStatus,
   MorePartsIndicator,
-  postingStatusLabel,
   refreshLedgerLookups,
   StatusIcon,
   transactionClassLabel,
@@ -362,7 +362,7 @@ const transactionResultAmountLabel = (
 const transactionResultOptionLabel = (
   transaction: Transaction,
   memo: string | undefined,
-  postingStatus: ReturnType<typeof linePostingStatus>,
+  displayStatus: ReturnType<typeof lineStatus>,
 ): string => {
   const amountLabel = transactionResultAmountLabel(transaction);
   const partAmountsLabel = transactionHasMoreParts(transaction)
@@ -372,7 +372,7 @@ const transactionResultOptionLabel = (
     `Transaction ${formatInitiatedDate(transaction.initiated_date)}`,
     transaction.display_title,
     `class ${transactionClassLabel(transaction.transaction_class)}`,
-    `status ${postingStatusLabel(postingStatus)}`,
+    displayStatus ? `status ${displayStatusLabel(displayStatus)}` : undefined,
     amountLabel ? `amount ${amountLabel}` : undefined,
     partAmountsLabel
       ? `more transaction parts, all parts ${partAmountsLabel}`
@@ -1223,16 +1223,17 @@ export const CommandPalette = () => {
                       {transactionResults.map((transaction, index) => {
                         const active = index === activeIndex;
                         const memo = lineMemo(transaction);
-                        const postingStatus = linePostingStatus(transaction);
+                        const displayStatus = lineStatus(transaction);
                         const amountDeemphasized =
-                          postingStatus === "expected" ||
-                          postingStatus === "pending" ||
-                          postingStatus === "cancelled";
-                        const lineInactive = postingStatus === "cancelled";
+                          displayStatus === "expected" ||
+                          displayStatus === "pending" ||
+                          displayStatus === "mixed" ||
+                          displayStatus === "cancelled";
+                        const lineInactive = displayStatus === "cancelled";
                         const optionLabel = transactionResultOptionLabel(
                           transaction,
                           memo,
-                          postingStatus,
+                          displayStatus,
                         );
                         return (
                           <button
@@ -1269,10 +1270,12 @@ export const CommandPalette = () => {
                               transactionClass={transaction.transaction_class}
                             />
                             <span className="hidden h-6 w-10 shrink-0 place-items-center sm:grid">
-                              <StatusIcon
-                                focusable={false}
-                                status={postingStatus}
-                              />
+                              {displayStatus ? (
+                                <StatusIcon
+                                  focusable={false}
+                                  status={displayStatus}
+                                />
+                              ) : null}
                             </span>
                             <span
                               className="grid min-w-0 gap-0.5"

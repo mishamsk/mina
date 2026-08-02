@@ -614,8 +614,15 @@ operations:
     mcp:
       state: exposed
       name: cancel
-      description: Mark every active record in one transaction cancelled without tombstoning it. This is destructive, excludes it from aggregates, and requires explicit user intent; use transactions_delete for tombstoning.
+      description: Change a wholly pending active transaction to cancelled without changing its record history. This excludes it from aggregates and requires explicit user intent; use transactions_delete for tombstoning.
       annotations: {read_only: false, destructive: true, idempotent: true, open_world: false}
+  restoreTransaction:
+    cli: {state: exposed, name: restore}
+    mcp:
+      state: exposed
+      name: restore
+      description: Restore one cancelled transaction to active without changing its record dates or reconciliation.
+      annotations: {read_only: false, destructive: false, idempotent: true, open_world: false}
 
   searchJournalRecords:
     cli: {state: exposed, name: search}
@@ -652,10 +659,17 @@ operations:
       name: bulk_reassign_account
       description: Assign one account to selected record IDs. This can alter balances and transaction semantic validity; require explicit user intent and inspect records first.
       annotations: {read_only: false, destructive: true, idempotent: true, open_world: false}
-  bulkUpdateJournalRecordStatuses:
-    cli: {state: exposed, name: bulk-update-statuses}
+  bulkSetJournalRecordSettlement:
+    cli: {state: exposed, name: bulk-set-settlement}
     mcp:
       state: exposed
-      name: bulk_update_statuses
-      description: Update posting and/or reconciliation status on selected record IDs while preserving transaction-wide expected/cancelled invariants. This is a bulk mutation and requires explicit user intent.
+      name: bulk_set_settlement
+      description: Set pending or posted settlement on selected active owned or party record IDs. This is a bulk mutation and requires explicit user intent.
+      annotations: {read_only: false, destructive: true, idempotent: true, open_world: false}
+  bulkSetJournalRecordReconciliation:
+    cli: {state: exposed, name: bulk-set-reconciliation}
+    mcp:
+      state: exposed
+      name: bulk_set_reconciliation
+      description: Set reconciliation on selected active journal-record IDs. This is a bulk mutation and requires explicit user intent.
       annotations: {read_only: false, destructive: true, idempotent: true, open_world: false}

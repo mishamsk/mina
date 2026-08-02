@@ -158,21 +158,10 @@ type AdvancedRecordFieldName =
   | "currency"
   | "memberId"
   | "memo"
-  | "pendingDateTime"
-  | "postedDateTime"
-  | "postingStatus"
+  | "settlement"
   | "reconciliationStatus"
   | "tagIds";
 type AdvancedFieldErrors = Record<string, string>;
-type JournalRecordDraftPostingStatus = JournalRecordRowDraft["postingStatus"];
-
-interface AdvancedValidationOptions {
-  readonly allowExpectedPostingStatus: boolean;
-}
-
-const advancedValidationOptions: AdvancedValidationOptions = {
-  allowExpectedPostingStatus: false,
-};
 
 interface ShorthandFit {
   readonly additionalRecords: readonly JournalRecord[];
@@ -378,17 +367,17 @@ const blankRecordRowDraft = (): JournalRecordRowDraft => ({
   draftId: newJournalRecordDraftId(),
   memberId: undefined,
   memo: "",
-  pendingDateTime: "",
-  postedDateTime: "",
-  postingStatus: "posted",
+  settlement: "posted",
   reconciliationStatus: "unreconciled",
-  showDates: false,
   source: "manual",
   sourceAmount: undefined,
   sourceAmountUsd: undefined,
   sourceCurrency: undefined,
   sourceExternalId: undefined,
   sourceExternalSystem: undefined,
+  sourcePendingDate: undefined,
+  sourcePostedDate: undefined,
+  sourceSettlement: undefined,
   tagIds: [],
 });
 
@@ -424,7 +413,7 @@ const shorthandRecordDraft = (
   currency: normalizeCurrency(currency),
   memberId: draft.memberId,
   memo: draft.memo,
-  postingStatus: "posted",
+  settlement: "posted",
   reconciliationStatus: "unreconciled",
   tagIds: [...draft.tagIds],
 });
@@ -614,12 +603,9 @@ const migrateStoredRecordRowDraft = (
     typeof storedRow?.draftId === "string" && storedRow.draftId
       ? storedRow.draftId
       : newJournalRecordDraftId(),
-  postingStatus:
-    storedRow?.postingStatus === "expected" ||
-    storedRow?.postingStatus === "pending" ||
-    storedRow?.postingStatus === "cancelled" ||
-    storedRow?.postingStatus === "posted"
-      ? storedRow.postingStatus
+  settlement:
+    storedRow?.settlement === "pending" || storedRow?.settlement === "posted"
+      ? storedRow.settlement
       : "posted",
   reconciliationStatus:
     storedRow?.reconciliationStatus === "reconciled"
@@ -856,35 +842,6 @@ const inputAmountFromRecord = (record: JournalRecord): string => {
   return mantissa === undefined ? "" : formatMantissa(mantissa);
 };
 
-const padDatePart = (value: number, length = 2): string =>
-  value.toString().padStart(length, "0");
-
-const timestampFraction = (value: string): string => {
-  const match = value.match(/\.\d+(?=Z$|[+-]\d{2}:?\d{2}$|$)/);
-  return match?.[0].slice(0, 4) ?? "";
-};
-
-const localDateTimeValue = (value: string | null | undefined): string => {
-  if (!value) {
-    return "";
-  }
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return "";
-  }
-  return `${padDatePart(parsed.getFullYear(), 4)}-${padDatePart(
-    parsed.getMonth() + 1,
-  )}-${padDatePart(parsed.getDate())}T${padDatePart(
-    parsed.getHours(),
-  )}:${padDatePart(parsed.getMinutes())}:${padDatePart(
-    parsed.getSeconds(),
-  )}${timestampFraction(value)}`;
-};
-
-const draftPostingStatus = (
-  status: JournalRecord["posting_status"],
-): JournalRecordDraftPostingStatus => status;
-
 const writableRecordSource = (
   record: JournalRecord,
 ): JournalRecordRowDraft["source"] =>
@@ -900,17 +857,17 @@ const recordRowDraftFromJournalRecord = (
   draftId: newJournalRecordDraftId(),
   memberId: normalizeMemberId(record.member_id),
   memo: record.memo ?? "",
-  pendingDateTime: localDateTimeValue(record.pending_date),
-  postedDateTime: localDateTimeValue(record.posted_date),
-  postingStatus: draftPostingStatus(record.posting_status),
+  settlement: record.settlement ?? "posted",
   reconciliationStatus: record.reconciliation_status,
-  showDates: Boolean(record.pending_date || record.posted_date),
   source: writableRecordSource(record),
   sourceAmount: record.amount,
   sourceAmountUsd: record.amount_usd,
   sourceCurrency: record.currency,
   sourceExternalId: record.external_id,
   sourceExternalSystem: record.external_system,
+  sourcePendingDate: record.pending_date,
+  sourcePostedDate: record.posted_date,
+  sourceSettlement: record.settlement,
   tagIds: [...record.tag_ids],
 });
 
@@ -968,9 +925,7 @@ const recordRowUserInput = (row: JournalRecordRowDraft) => ({
   currency: normalizeCurrency(row.currency),
   memberId: row.memberId,
   memo: row.memo.trim(),
-  pendingDateTime: row.pendingDateTime.trim(),
-  postedDateTime: row.postedDateTime.trim(),
-  postingStatus: row.postingStatus,
+  settlement: row.settlement,
   reconciliationStatus: row.reconciliationStatus,
   tagIds: row.tagIds,
 });
@@ -1656,7 +1611,6 @@ const advancedFieldError = (
 
 const validateAdvancedDraft = (
   draft: AdvancedTransactionEntryDraft,
-  options: AdvancedValidationOptions = { allowExpectedPostingStatus: true },
 ): AdvancedFieldErrors => {
   const errors: AdvancedFieldErrors = {};
   if (!draft.date) {
@@ -1676,13 +1630,6 @@ const validateAdvancedDraft = (
     } else if (!validCurrencyPattern.test(currency)) {
       errors[advancedErrorKey(rowIndex, "currency")] =
         "Use a 3-letter code or C:: crypto code.";
-    }
-    if (
-      !options.allowExpectedPostingStatus &&
-      row.postingStatus === "expected"
-    ) {
-      errors[advancedErrorKey(rowIndex, "postingStatus")] =
-        "Expected records must be reviewed from Recurring.";
     }
   });
   if (draft.records.length < 2) {
@@ -1723,38 +1670,6 @@ const advancedBalances = (
 
 const allCurrenciesBalanced = (balances: readonly CurrencyBalance[]): boolean =>
   balances.length > 0 && balances.every((balance) => balance.balanced);
-
-const dateTimeToISO = (dateTime: string): string | null => {
-  const trimmed = dateTime.trim();
-  if (!trimmed) {
-    return null;
-  }
-  const match = trimmed.match(
-    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(\.\d+)?)?$/,
-  );
-  if (!match) {
-    return null;
-  }
-  const [, year, month, day, hours, minutes, seconds = "0", fraction = ""] =
-    match;
-  const milliseconds = fraction
-    ? Number(fraction.slice(1, 4).padEnd(3, "0"))
-    : 0;
-  const parsed = new Date(
-    Number(year),
-    Number(month) - 1,
-    Number(day),
-    Number(hours),
-    Number(minutes),
-    Number(seconds),
-    milliseconds,
-  );
-  if (Number.isNaN(parsed.getTime())) {
-    return null;
-  }
-  const iso = parsed.toISOString();
-  return fraction ? `${iso.slice(0, 19)}${fraction}Z` : iso;
-};
 
 const externalMetadataFromDraftRow = (
   row: JournalRecordRowDraft,
@@ -1820,6 +1735,7 @@ const amountUsdFromJournalRecord = (
 
 const updateRecordFromDraftRow = (
   row: JournalRecordRowDraft,
+  lookups: LedgerLookupsSnapshot | undefined,
 ): UpdateTransactionRequest["records"][number] => {
   const amount = normalizeSignedAmount(row.amount)!;
   const currency = normalizeCurrency(row.currency);
@@ -1832,9 +1748,17 @@ const updateRecordFromDraftRow = (
     ...externalMetadataFromDraftRow(row),
     member_id: row.memberId ?? null,
     memo: row.memo.trim() ? row.memo.trim() : null,
-    pending_date: dateTimeToISO(row.pendingDateTime),
-    posted_date: dateTimeToISO(row.postedDateTime),
-    posting_status: row.postingStatus,
+    settlement: isMovementAccountType(accountTypeForId(lookups, row.accountId))
+      ? {
+          ...(row.sourceSettlement === row.settlement
+            ? {
+                pending_date: row.sourcePendingDate,
+                posted_date: row.sourcePostedDate,
+              }
+            : {}),
+          status: row.settlement,
+        }
+      : null,
     reconciliation_status: row.reconciliationStatus,
     source: row.source,
     tag_ids: [...row.tagIds],
@@ -1843,9 +1767,10 @@ const updateRecordFromDraftRow = (
 
 const updateBodyFromAdvancedDraft = (
   draft: AdvancedTransactionEntryDraft,
+  lookups: LedgerLookupsSnapshot | undefined,
 ): UpdateTransactionRequest => ({
   initiated_date: draft.date,
-  records: draft.records.map(updateRecordFromDraftRow),
+  records: draft.records.map((row) => updateRecordFromDraftRow(row, lookups)),
 });
 
 const updateRecordFromShorthandDraft = (
@@ -1879,9 +1804,13 @@ const updateRecordFromShorthandDraft = (
       : draft.memo.trim()
         ? draft.memo.trim()
         : null,
-    pending_date: record.pending_date,
-    posted_date: record.posted_date ?? null,
-    posting_status: record.posting_status,
+    settlement: record.settlement
+      ? {
+          pending_date: record.pending_date,
+          posted_date: record.posted_date,
+          status: record.settlement,
+        }
+      : null,
     reconciliation_status: record.reconciliation_status,
     source: writableRecordSource(record),
     tag_ids: [...draft.tagIds],
@@ -1909,9 +1838,7 @@ const addedRecordFromShorthandDraft = (
     : draft.memo.trim()
       ? draft.memo.trim()
       : null,
-  pending_date: record.pending_date,
-  posted_date: record.posted_date ?? null,
-  posting_status: record.posting_status,
+  settlement: null,
   reconciliation_status: record.reconciliation_status,
   source: "manual",
   tag_ids: [...draft.tagIds],
@@ -2151,9 +2078,7 @@ const advancedFieldErrorsFromAPI = (message: string): AdvancedFieldErrors => {
       ["currency", ["currency"]],
       ["memberId", ["member_id", "member"]],
       ["memo", ["memo"]],
-      ["pendingDateTime", ["pending_date", "pending"]],
-      ["postedDateTime", ["posted_date", "posted"]],
-      ["postingStatus", ["posting_status", "status"]],
+      ["settlement", ["settlement"]],
       ["reconciliationStatus", ["reconciliation_status", "reconciliation"]],
       ["tagIds", ["tag_ids", "tag"]],
     ];
@@ -2414,7 +2339,7 @@ const stickyNextAdvancedDraft = (
           accountId: row.accountId,
           categoryId: row.categoryId,
           currency: normalizeCurrency(row.currency) || "USD",
-          postingStatus: row.postingStatus,
+          settlement: row.settlement,
           reconciliationStatus: "unreconciled",
         }))
       : blankAdvancedDraft().records,
@@ -3169,7 +3094,6 @@ export const EntryPanel = ({
     lookups && currentDraftReady && categoryPickerReady && !saving,
   );
   const balances = advancedBalances(draft.advanced);
-  const allowExpectedPostingStatus = false;
   const advancedCategoryErrors = useCallback(
     (advancedDraft: AdvancedTransactionEntryDraft): AdvancedFieldErrors => {
       const errors: AdvancedFieldErrors = {};
@@ -3190,7 +3114,7 @@ export const EntryPanel = ({
   );
   const localAdvancedErrors = useMemo(
     () => ({
-      ...validateAdvancedDraft(draft.advanced, advancedValidationOptions),
+      ...validateAdvancedDraft(draft.advanced),
       ...advancedCategoryErrors(draft.advanced),
     }),
     [advancedCategoryErrors, draft.advanced],
@@ -3247,7 +3171,7 @@ export const EntryPanel = ({
     let active = true;
     const timeout = window.setTimeout(() => {
       void classifyJournalTransaction({
-        records: updateBodyFromAdvancedDraft(draft.advanced).records,
+        records: updateBodyFromAdvancedDraft(draft.advanced, lookups).records,
       }).then((result) => {
         if (!active) {
           return;
@@ -3302,6 +3226,7 @@ export const EntryPanel = ({
     const timeout = window.setTimeout(() => {
       const records = updateBodyFromAdvancedDraft(
         shorthandDraftToAdvanced("exchange", exchangeDraft, lookups),
+        lookups,
       ).records;
       void classifyJournalTransaction({ records }).then((result) => {
         if (!active) {
@@ -3731,7 +3656,6 @@ export const EntryPanel = ({
           currency: record.currency ?? "USD",
           memberId: record.member_id ?? undefined,
           memo: record.memo ?? "",
-          postingStatus: record.posting_status ?? "posted",
           reconciliationStatus: record.reconciliation_status ?? "unreconciled",
           tagIds: [...record.tag_ids],
         }));
@@ -3843,7 +3767,7 @@ export const EntryPanel = ({
             focusFirstError();
             return;
           }
-          body = updateBodyFromAdvancedDraft(draft.advanced);
+          body = updateBodyFromAdvancedDraft(draft.advanced, lookups);
         } else {
           if (
             !activeShorthandTab ||
@@ -3951,9 +3875,11 @@ export const EntryPanel = ({
             currency: normalizeCurrency(row.currency),
             member_id: row.memberId ?? null,
             memo: row.memo.trim() ? row.memo.trim() : null,
-            pending_date: dateTimeToISO(row.pendingDateTime),
-            posted_date: dateTimeToISO(row.postedDateTime),
-            posting_status: row.postingStatus,
+            settlement: isMovementAccountType(
+              accountTypeForId(lookups, row.accountId),
+            )
+              ? { status: row.settlement }
+              : null,
             reconciliation_status: "unreconciled" as const,
             source: "manual" as const,
             tag_ids: [...row.tagIds],
@@ -4089,7 +4015,7 @@ export const EntryPanel = ({
         initiated_date: activeTabDraft.date,
         member_id: activeTabDraft.memberId ?? null,
         memo: activeTabDraft.memo.trim() ? activeTabDraft.memo.trim() : null,
-        posting_status: "posted" as const,
+        settlement: { status: "posted" as const },
         reconciliation_status: "unreconciled" as const,
         tag_ids: [...activeTabDraft.tagIds],
       };
@@ -4100,9 +4026,6 @@ export const EntryPanel = ({
           currency,
           member_id: activeTabDraft.memberId ?? null,
           memo: activeTabDraft.memo.trim() ? activeTabDraft.memo.trim() : null,
-          pending_date: null,
-          posted_date: null,
-          posting_status: "posted" as const,
           reconciliation_status: "unreconciled" as const,
           source: "manual" as const,
           tag_ids: [...activeTabDraft.tagIds],
@@ -4127,12 +4050,14 @@ export const EntryPanel = ({
                       account_id: activeTabDraft.fundingAccountId ?? -1,
                       amount: formatMantissa(-spendTotal),
                       category_id: null,
+                      settlement: { status: "posted" },
                     },
                     ...spendMerchantRecords.map((merchant) => ({
                       ...recordCommon,
                       account_id: merchant.accountId,
                       amount: merchant.amount,
                       category_id: merchant.categoryId,
+                      settlement: null,
                     })),
                   ],
                 } satisfies CreateTransactionRequest)
@@ -4176,7 +4101,7 @@ export const EntryPanel = ({
                       memo: activeTabDraft.memo.trim()
                         ? activeTabDraft.memo.trim()
                         : null,
-                      posting_status: "posted",
+                      settlement: { status: "posted" },
                       reconciliation_status: "unreconciled",
                       sold_account_id: activeTabDraft.soldAccountId ?? -1,
                       sold_amount: amount,
@@ -4200,6 +4125,7 @@ export const EntryPanel = ({
                             account_id: activeTabDraft.sourceAccountId ?? -1,
                             amount: formatMantissa(-transferTotal),
                             category_id: null,
+                            settlement: { status: "posted" },
                           },
                           {
                             ...recordCommon,
@@ -4207,12 +4133,14 @@ export const EntryPanel = ({
                               activeTabDraft.destinationAccountId ?? -1,
                             amount,
                             category_id: null,
+                            settlement: { status: "posted" },
                           },
                           {
                             ...recordCommon,
                             account_id: activeTabDraft.chargeAccountId,
                             amount: chargeAmount,
                             category_id: activeTabDraft.chargeCategoryId,
+                            settlement: null,
                           },
                         ],
                       } satisfies CreateTransactionRequest)
@@ -4497,10 +4425,7 @@ export const EntryPanel = ({
                     value={draft.advanced.date}
                     onBlur={() => {
                       setAdvancedFieldErrors(
-                        validateAdvancedDraft(
-                          draft.advanced,
-                          advancedValidationOptions,
-                        ),
+                        validateAdvancedDraft(draft.advanced),
                       );
                     }}
                     onChange={(event) => {
@@ -4620,10 +4545,7 @@ export const EntryPanel = ({
                               value={row.amount}
                               onBlur={() => {
                                 setAdvancedFieldErrors(
-                                  validateAdvancedDraft(
-                                    draft.advanced,
-                                    advancedValidationOptions,
-                                  ),
+                                  validateAdvancedDraft(draft.advanced),
                                 );
                               }}
                               onChange={(event) => {
@@ -4654,10 +4576,7 @@ export const EntryPanel = ({
                               value={row.currency}
                               onBlur={() => {
                                 setAdvancedFieldErrors(
-                                  validateAdvancedDraft(
-                                    draft.advanced,
-                                    advancedValidationOptions,
-                                  ),
+                                  validateAdvancedDraft(draft.advanced),
                                 );
                               }}
                               onChange={(event) => {
@@ -4742,116 +4661,51 @@ export const EntryPanel = ({
                               }}
                             />
                           </AdvancedRecordField>
-                          <AdvancedRecordField label="Status">
-                            <div className="flex flex-col gap-2">
-                              <label
-                                htmlFor={`advanced-record-${rowIndex}-status`}
-                                className="sr-only"
-                              >
-                                Record {rowIndex + 1} posting status
-                              </label>
-                              <Select
-                                value={row.postingStatus}
-                                onValueChange={(value) => {
-                                  updateAdvancedRow(rowIndex, {
-                                    postingStatus:
-                                      value as JournalRecordDraftPostingStatus,
-                                  });
-                                }}
-                              >
-                                <SelectTrigger
-                                  id={`advanced-record-${rowIndex}-status`}
-                                  className="w-full"
+                          {isMovementAccountType(
+                            accountTypeForId(lookups, row.accountId),
+                          ) ? (
+                            <AdvancedRecordField label="Settlement">
+                              <div className="flex flex-col gap-2">
+                                <label
+                                  htmlFor={`advanced-record-${rowIndex}-settlement`}
+                                  className="sr-only"
                                 >
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {allowExpectedPostingStatus ||
-                                  row.postingStatus === "expected" ? (
-                                    <SelectItem
-                                      value="expected"
-                                      disabled={!allowExpectedPostingStatus}
-                                    >
-                                      Expected
+                                  Record {rowIndex + 1} settlement
+                                </label>
+                                <Select
+                                  value={row.settlement}
+                                  onValueChange={(value) => {
+                                    updateAdvancedRow(rowIndex, {
+                                      settlement:
+                                        value as JournalRecordRowDraft["settlement"],
+                                    });
+                                  }}
+                                >
+                                  <SelectTrigger
+                                    id={`advanced-record-${rowIndex}-settlement`}
+                                    className="w-full"
+                                  >
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="posted">
+                                      Posted
                                     </SelectItem>
-                                  ) : null}
-                                  <SelectItem value="posted">Posted</SelectItem>
-                                  <SelectItem value="pending">
-                                    Pending
-                                  </SelectItem>
-                                  <SelectItem value="cancelled">
-                                    Cancelled
-                                  </SelectItem>
-                                </SelectContent>
-                              </Select>
-                              <FieldError
-                                message={advancedFieldError(
-                                  advancedFieldErrors,
-                                  rowIndex,
-                                  "postingStatus",
-                                )}
-                              />
-                            </div>
-                          </AdvancedRecordField>
-                          <AdvancedRecordField
-                            label="Dates"
-                            className="col-span-full"
-                          >
-                            <div className="flex flex-col gap-2">
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  updateAdvancedRow(rowIndex, {
-                                    showDates: !row.showDates,
-                                  });
-                                }}
-                              >
-                                Dates
-                              </Button>
-                              {row.showDates ? (
-                                <>
-                                  <label
-                                    htmlFor={`advanced-record-${rowIndex}-pending-date`}
-                                    className="sr-only"
-                                  >
-                                    Record {rowIndex + 1} pending date
-                                  </label>
-                                  <input
-                                    id={`advanced-record-${rowIndex}-pending-date`}
-                                    type="datetime-local"
-                                    step="any"
-                                    className="bg-card h-9 w-full border-2 border-[var(--border-ink)] px-2 text-sm shadow-[var(--shadow-pixel)]"
-                                    value={row.pendingDateTime}
-                                    onChange={(event) => {
-                                      updateAdvancedRow(rowIndex, {
-                                        pendingDateTime: event.target.value,
-                                      });
-                                    }}
-                                  />
-                                  <label
-                                    htmlFor={`advanced-record-${rowIndex}-posted-date`}
-                                    className="sr-only"
-                                  >
-                                    Record {rowIndex + 1} posted date
-                                  </label>
-                                  <input
-                                    id={`advanced-record-${rowIndex}-posted-date`}
-                                    type="datetime-local"
-                                    step="any"
-                                    className="bg-card h-9 w-full border-2 border-[var(--border-ink)] px-2 text-sm shadow-[var(--shadow-pixel)]"
-                                    value={row.postedDateTime}
-                                    onChange={(event) => {
-                                      updateAdvancedRow(rowIndex, {
-                                        postedDateTime: event.target.value,
-                                      });
-                                    }}
-                                  />
-                                </>
-                              ) : null}
-                            </div>
-                          </AdvancedRecordField>
+                                    <SelectItem value="pending">
+                                      Pending
+                                    </SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <FieldError
+                                  message={advancedFieldError(
+                                    advancedFieldErrors,
+                                    rowIndex,
+                                    "settlement",
+                                  )}
+                                />
+                              </div>
+                            </AdvancedRecordField>
+                          ) : null}
                           <AdvancedRecordField
                             label="Memo"
                             className="col-span-full"

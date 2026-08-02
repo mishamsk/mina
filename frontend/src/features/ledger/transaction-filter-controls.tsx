@@ -30,19 +30,24 @@ import type { TransactionFilters } from "@/models/transaction-filters";
 import {
   recordRoles,
   transactionFilterDecimalPattern,
-  transactionPostingStatuses,
+  transactionLifecycleStatuses,
+  transactionSettlements,
   transactionShapes,
 } from "@/models/transaction-filters";
 import type { LedgerLookupsSnapshot } from "@/store";
 
 import { EntityMultiPicker, type EntityOption } from "./entity-picker";
-import { postingStatusLabel } from "./format";
+import { lifecycleStatusLabel, settlementStatusLabel } from "./format";
 
 type EntityDimension = "account" | "category" | "tag" | "member";
-type RangeDimension =
-  "amount" | "amountUsd" | "initiated" | "pending" | "posted";
+type RangeDimension = "amount" | "amountUsd" | "initiated";
 export type TransactionFilterDimension =
-  EntityDimension | "role" | "shape" | "status" | RangeDimension;
+  | EntityDimension
+  | "lifecycle"
+  | "role"
+  | "settlement"
+  | "shape"
+  | RangeDimension;
 
 interface TransactionFilterControlsProps {
   readonly filters: TransactionFilters;
@@ -61,15 +66,23 @@ const dimensions: readonly DimensionDefinition[] = [
   { id: "category", label: "Category" },
   { id: "tag", label: "Tag" },
   { id: "member", label: "Member" },
-  { id: "status", label: "Posting status" },
+  { id: "lifecycle", label: "Lifecycle" },
+  { id: "settlement", label: "Settlement" },
   { id: "shape", label: "Transaction shape" },
   { id: "role", label: "Record role" },
   { id: "amount", label: "Amount" },
   { id: "amountUsd", label: "Amount USD" },
   { id: "initiated", label: "Initiated date" },
-  { id: "pending", label: "Pending date" },
-  { id: "posted", label: "Posted date" },
 ];
+
+const settlementChipValueLabel = (
+  settlement: TransactionFilters["settlements"][number],
+): string =>
+  settlement === "mixed"
+    ? "Mixed"
+    : settlement === "not_applicable"
+      ? "Not applicable"
+      : settlementStatusLabel(settlement);
 
 const editorFocusableSelector = [
   "button:not(:disabled)",
@@ -152,7 +165,8 @@ const filterCount = (
   (hiddenDimensions.has("category") ? 0 : filters.categoryIds.length) +
   (hiddenDimensions.has("tag") ? 0 : filters.tagIds.length) +
   (hiddenDimensions.has("member") ? 0 : filters.memberIds.length) +
-  (hiddenDimensions.has("status") ? 0 : filters.statuses.length) +
+  (hiddenDimensions.has("lifecycle") ? 0 : filters.lifecycleStatuses.length) +
+  (hiddenDimensions.has("settlement") ? 0 : filters.settlements.length) +
   (hiddenDimensions.has("shape") ? 0 : filters.shapes.length) +
   (hiddenDimensions.has("role") ? 0 : filters.recordRoles.length) +
   [
@@ -165,12 +179,6 @@ const filterCount = (
     hiddenDimensions.has("initiated")
       ? undefined
       : rangeLabel("Initiated", filters.initiatedFrom, filters.initiatedTo),
-    hiddenDimensions.has("pending")
-      ? undefined
-      : rangeLabel("Pending", filters.pendingFrom, filters.pendingTo),
-    hiddenDimensions.has("posted")
-      ? undefined
-      : rangeLabel("Posted", filters.postedFrom, filters.postedTo),
   ].filter(Boolean).length;
 
 export const hasActiveTransactionFilterChips = (
@@ -628,14 +636,27 @@ export const TransactionFilterControls = ({
       return renderEntityEditor(selectedDimension);
     }
 
-    if (selectedDimension === "status") {
+    if (selectedDimension === "lifecycle") {
       return (
         <CheckboxList
-          values={transactionPostingStatuses}
-          selectedValues={filters.statuses}
-          labelFor={postingStatusLabel}
-          onChange={(statuses) => {
-            updateFilters({ ...filters, statuses });
+          values={transactionLifecycleStatuses}
+          selectedValues={filters.lifecycleStatuses}
+          labelFor={lifecycleStatusLabel}
+          onChange={(lifecycleStatuses) => {
+            updateFilters({ ...filters, lifecycleStatuses });
+          }}
+        />
+      );
+    }
+
+    if (selectedDimension === "settlement") {
+      return (
+        <CheckboxList
+          values={transactionSettlements}
+          selectedValues={filters.settlements}
+          labelFor={settlementStatusLabel}
+          onChange={(settlements) => {
+            updateFilters({ ...filters, settlements });
           }}
         />
       );
@@ -708,28 +729,8 @@ export const TransactionFilterControls = ({
         },
         to: filters.initiatedTo,
       },
-      pending: {
-        from: filters.pendingFrom,
-        setValue: (
-          pendingFrom: string | undefined,
-          pendingTo: string | undefined,
-        ) => {
-          updateFilters({ ...filters, pendingFrom, pendingTo });
-        },
-        to: filters.pendingTo,
-      },
-      posted: {
-        from: filters.postedFrom,
-        setValue: (
-          postedFrom: string | undefined,
-          postedTo: string | undefined,
-        ) => {
-          updateFilters({ ...filters, postedFrom, postedTo });
-        },
-        to: filters.postedTo,
-      },
     } satisfies Record<
-      "initiated" | "pending" | "posted",
+      "initiated",
       {
         readonly from: string | undefined;
         readonly setValue: (
@@ -935,16 +936,33 @@ export const TransactionFilterControls = ({
                 );
               })
             : null}
-          {!hiddenDimensionSet.has("status")
-            ? filters.statuses.map((status) => (
+          {!hiddenDimensionSet.has("lifecycle")
+            ? filters.lifecycleStatuses.map((status) => (
                 <FilterChip
-                  key={`status-${status}`}
-                  label={`Status ${postingStatusLabel(status)}`}
+                  key={`lifecycle-${status}`}
+                  label={`Lifecycle ${lifecycleStatusLabel(status)}`}
                   onRemove={() => {
                     updateFilters({
                       ...filters,
-                      statuses: filters.statuses.filter(
+                      lifecycleStatuses: filters.lifecycleStatuses.filter(
                         (selectedStatus) => selectedStatus !== status,
+                      ),
+                    });
+                  }}
+                />
+              ))
+            : null}
+          {!hiddenDimensionSet.has("settlement")
+            ? filters.settlements.map((settlement) => (
+                <FilterChip
+                  key={`settlement-${settlement}`}
+                  label={`Settlement ${settlementChipValueLabel(settlement)}`}
+                  onRemove={() => {
+                    updateFilters({
+                      ...filters,
+                      settlements: filters.settlements.filter(
+                        (selectedSettlement) =>
+                          selectedSettlement !== settlement,
                       ),
                     });
                   }}
@@ -1040,40 +1058,6 @@ export const TransactionFilterControls = ({
                   ...filters,
                   initiatedFrom: undefined,
                   initiatedTo: undefined,
-                });
-              }}
-            />
-          ) : null}
-          {!hiddenDimensionSet.has("pending") &&
-          rangeLabel("Pending", filters.pendingFrom, filters.pendingTo) ? (
-            <FilterChip
-              label={rangeLabel(
-                "Pending",
-                filters.pendingFrom,
-                filters.pendingTo,
-              )!}
-              onRemove={() => {
-                updateFilters({
-                  ...filters,
-                  pendingFrom: undefined,
-                  pendingTo: undefined,
-                });
-              }}
-            />
-          ) : null}
-          {!hiddenDimensionSet.has("posted") &&
-          rangeLabel("Posted", filters.postedFrom, filters.postedTo) ? (
-            <FilterChip
-              label={rangeLabel(
-                "Posted",
-                filters.postedFrom,
-                filters.postedTo,
-              )!}
-              onRemove={() => {
-                updateFilters({
-                  ...filters,
-                  postedFrom: undefined,
-                  postedTo: undefined,
                 });
               }}
             />

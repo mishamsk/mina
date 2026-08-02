@@ -72,7 +72,6 @@ func TestShorthandTransactionCreateOptionalFieldsAmountUSDAndReadShapes(t *testi
 	memo := "Manual coffee"
 	pendingDate := apptest.Timestamp("2024-04-05T14:30:00Z")
 	postedDate := apptest.Timestamp("2024-04-06T15:45:00Z")
-	postingStatus := httpclient.PostingStatusPending
 	reconciliationStatus := httpclient.Unreconciled
 
 	created := createSpendTransaction(t, client, httpclient.CreateSpendTransactionRequest{
@@ -85,10 +84,12 @@ func TestShorthandTransactionCreateOptionalFieldsAmountUSDAndReadShapes(t *testi
 		MemberId:              &refs.memberID,
 		TagIds:                apptest.Int64SlicePtr(refs.tagID),
 		Memo:                  &memo,
-		PendingDate:           &pendingDate,
-		PostedDate:            &postedDate,
-		PostingStatus:         &postingStatus,
-		ReconciliationStatus:  &reconciliationStatus,
+		Settlement: &httpclient.SettlementIntent{
+			Status:      httpclient.SettlementStatusPosted,
+			PendingDate: &pendingDate,
+			PostedDate:  &postedDate,
+		},
+		ReconciliationStatus: &reconciliationStatus,
 	})
 	for _, record := range created.Records {
 		if record.MemberId == nil || *record.MemberId != refs.memberID {
@@ -98,14 +99,12 @@ func TestShorthandTransactionCreateOptionalFieldsAmountUSDAndReadShapes(t *testi
 		if record.Memo == nil || *record.Memo != memo {
 			t.Fatalf("memo = %v, want %q", record.Memo, memo)
 		}
-		if !record.PendingDate.Equal(pendingDate) {
-			t.Fatalf("pending_date = %v, want %v", record.PendingDate, pendingDate)
-		}
-		if record.PostedDate == nil || !record.PostedDate.Equal(postedDate) {
-			t.Fatalf("posted_date = %v, want %v", record.PostedDate, postedDate)
-		}
-		if record.PostingStatus != httpclient.PostingStatusPending {
-			t.Fatalf("posting_status = %q, want %q", record.PostingStatus, httpclient.PostingStatusPending)
+		if record.Settlement != nil {
+			if *record.Settlement != httpclient.SettlementStatusPosted || record.PendingDate == nil || !record.PendingDate.Equal(pendingDate) || record.PostedDate == nil || !record.PostedDate.Equal(postedDate) {
+				t.Fatalf("balance settlement/pending_date/posted_date = %v/%v/%v, want posted/%v/%v", record.Settlement, record.PendingDate, record.PostedDate, pendingDate, postedDate)
+			}
+		} else if record.PendingDate != nil || record.PostedDate != nil {
+			t.Fatalf("flow record settlement dates = %v/%v, want nil/nil", record.PendingDate, record.PostedDate)
 		}
 		if record.ReconciliationStatus != httpclient.Unreconciled {
 			t.Fatalf("reconciliation_status = %q, want %q", record.ReconciliationStatus, httpclient.Unreconciled)
@@ -226,7 +225,7 @@ func TestShorthandTransactionInfersNonUSDAmountUSDFromExchangeRates(t *testing.T
 	assertRecordAmountUSDNil(t, crypto, cryptoMerchant.AccountId)
 }
 
-func TestShorthandTransactionUsesPostedDateForAmountUSDInference(t *testing.T) {
+func TestShorthandTransactionUsesInitiatedDateForAmountUSDInference(t *testing.T) {
 	client := newSharedClient(t)
 	refs := createShorthandRefs(client)
 	postedDate := apptest.Timestamp("2024-04-02T15:00:00Z")
@@ -241,10 +240,10 @@ func TestShorthandTransactionUsesPostedDateForAmountUSDInference(t *testing.T) {
 		CategoryId:            refs.expenseCategoryID,
 		Currency:              "EUR",
 		Amount:                "10.00",
-		PostedDate:            &postedDate,
+		Settlement:            &httpclient.SettlementIntent{Status: httpclient.SettlementStatusPosted, PostedDate: &postedDate},
 	})
-	assertRecordAmountUSD(t, created, refs.euroCashAccountID, "-5.00000000")
-	assertRecordAmountUSD(t, created, refs.euroMerchantAccountID, "5.00000000")
+	assertRecordAmountUSD(t, created, refs.euroCashAccountID, "-10.00000000")
+	assertRecordAmountUSD(t, created, refs.euroMerchantAccountID, "10.00000000")
 }
 
 func TestShorthandTransactionValidationErrors(t *testing.T) {
@@ -662,20 +661,18 @@ func assertDefaultShorthandRecords(t *testing.T, transaction httpclient.Transact
 	t.Helper()
 
 	for _, record := range transaction.Records {
-		if record.PostingStatus != httpclient.PostingStatusPosted {
-			t.Fatalf("default posting_status = %q, want %q", record.PostingStatus, httpclient.PostingStatusPosted)
-		}
 		if record.ReconciliationStatus != httpclient.Reconciled {
 			t.Fatalf("default reconciliation_status = %q, want %q", record.ReconciliationStatus, httpclient.Reconciled)
 		}
 		if record.Source != httpclient.Manual {
 			t.Fatalf("default source = %q, want %q", record.Source, httpclient.Manual)
 		}
-		if record.PendingDate != nil {
-			t.Fatalf("default pending_date = %v, want nil", record.PendingDate)
-		}
-		if record.PostedDate == nil {
-			t.Fatal("default posted_date = nil, want populated")
+		if record.Settlement != nil {
+			if *record.Settlement != httpclient.SettlementStatusPosted || record.PendingDate != nil || record.PostedDate == nil {
+				t.Fatalf("default balance settlement/pending_date/posted_date = %v/%v/%v, want posted/nil/populated", record.Settlement, record.PendingDate, record.PostedDate)
+			}
+		} else if record.PendingDate != nil || record.PostedDate != nil {
+			t.Fatalf("default flow pending_date/posted_date = %v/%v, want nil/nil", record.PendingDate, record.PostedDate)
 		}
 	}
 }

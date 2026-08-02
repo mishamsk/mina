@@ -3,6 +3,7 @@ import {
   Close,
   Copy,
   MagicEdit,
+  Reload,
   Scissors,
   Trash,
 } from "pixelarticons/react";
@@ -33,12 +34,13 @@ import {
   buildLookupMaps,
   detailDisplayAmounts,
   displayAmountKey,
+  displayStatusLabel,
   formatInitiatedDate,
   lineMemo,
-  linePostingStatus,
+  lineStatus,
   type LookupMaps,
-  postingStatusLabel,
   recordRoleLabel,
+  settlementStatusLabel,
 } from "./format";
 import { FqnPath } from "./fqn-path";
 import { RecordRoleIcon, StatusIcon } from "./line-icons";
@@ -51,6 +53,10 @@ interface TransactionDetailPanelProps {
   readonly loading: boolean;
   readonly lookups: LedgerLookupsSnapshot | undefined;
   readonly onClose: () => void;
+  readonly onChangeLifecycle: (
+    transaction: Transaction,
+    action: "cancel" | "restore",
+  ) => Promise<void>;
   readonly onConfirmOccurrence?: (transaction: Transaction) => Promise<void>;
   readonly onDelete: (transaction: Transaction) => Promise<void>;
   readonly onDismissOccurrence?: (transaction: Transaction) => Promise<void>;
@@ -99,13 +105,12 @@ export const TransactionLifecycleStrip = ({
 }: {
   readonly transaction: Transaction;
 }) => {
-  const status = linePostingStatus(transaction);
-  const statusWord =
-    status === "mixed" ? "pending" : status === "posted" ? undefined : status;
+  const lineDisplayStatus = lineStatus(transaction);
+  const status = lineDisplayStatus === "mixed" ? "pending" : lineDisplayStatus;
 
   return (
     <div
-      aria-label={`Transaction lifecycle: initiated ${formatFullCivilDate(transaction.initiated_date)}${statusWord ? `, ${statusWord}` : ""}`}
+      aria-label={`Transaction lifecycle: initiated ${formatFullCivilDate(transaction.initiated_date)}${status ? `, ${displayStatusLabel(status)}` : ""}`}
       className="flex min-h-8 items-center gap-1 border-y border-[var(--hairline)] bg-[var(--band)] px-2 py-1 font-mono text-xs"
       data-testid="transaction-lifecycle"
     >
@@ -113,12 +118,12 @@ export const TransactionLifecycleStrip = ({
         Initiated
       </span>
       <span>{formatInitiatedDate(transaction.initiated_date)}</span>
-      {statusWord ? (
+      {status ? (
         <span
           className="text-muted-foreground ml-1 font-semibold lowercase"
-          data-lifecycle-status={statusWord}
+          data-lifecycle-status={status}
         >
-          {statusWord}
+          {displayStatusLabel(status)}
         </span>
       ) : null}
     </div>
@@ -291,7 +296,7 @@ const DetailRecordsTable = ({
                   Member
                 </th>
                 <th className="detail-records-status-column px-2 py-2">
-                  Status
+                  Settlement
                 </th>
                 <th className="detail-records-memo-column px-2 py-2">Memo</th>
               </>
@@ -319,7 +324,7 @@ const DetailRecordsTable = ({
                 : [];
             const expanded = expandedRecordIds.has(record.record_id);
             const disclosureId = `record-${record.record_id}-detail`;
-            const cancelled = record.posting_status === "cancelled";
+            const cancelled = transaction.lifecycle_status === "cancelled";
             const rowTone = index % 2 === 0 ? "bg-card" : "bg-[var(--band)]";
             const rowHoverTone =
               index % 2 === 0
@@ -434,16 +439,20 @@ const DetailRecordsTable = ({
                       </td>
                       <td
                         className="detail-records-status-column min-w-0 px-2 py-1.5"
-                        data-label="Status"
+                        data-label="Settlement"
                       >
                         <span className="flex w-full max-w-full min-w-0 items-center gap-1 overflow-x-auto whitespace-nowrap">
-                          <StatusIcon
-                            className="size-4"
-                            focusable={false}
-                            status={record.posting_status}
-                          />
+                          {record.settlement === "pending" ? (
+                            <StatusIcon
+                              className="size-4"
+                              focusable={false}
+                              status="pending"
+                            />
+                          ) : null}
                           <span>
-                            {postingStatusLabel(record.posting_status)}
+                            {record.settlement
+                              ? settlementStatusLabel(record.settlement)
+                              : null}
                           </span>
                         </span>
                       </td>
@@ -476,29 +485,21 @@ const DetailRecordsTable = ({
                     >
                       <dl className="grid gap-x-3 gap-y-1 text-xs sm:grid-cols-[max-content_minmax(0,1fr)_max-content_minmax(0,1fr)]">
                         <dt className="text-muted-foreground">
-                          {linePostingStatus(transaction) === "expected"
+                          {transaction.lifecycle_status === "expected"
                             ? "Expected"
                             : "Initiated"}
                         </dt>
                         <dd>
                           {formatFullCivilDate(transaction.initiated_date)}
                         </dd>
-                        <dt className="text-muted-foreground">Pending</dt>
-                        <dd>
-                          {!record.pending_date
-                            ? "—"
-                            : formatInstantTimestamp(record.pending_date)}
-                        </dd>
-                        <dt className="text-muted-foreground">Posted</dt>
-                        <dd>
-                          {record.posted_date
-                            ? formatInstantTimestamp(record.posted_date)
-                            : "—"}
-                        </dd>
-                        <dt className="text-muted-foreground">
-                          Posting status
-                        </dt>
-                        <dd>{postingStatusLabel(record.posting_status)}</dd>
+                        {record.settlement ? (
+                          <>
+                            <dt className="text-muted-foreground">
+                              Settlement
+                            </dt>
+                            <dd>{settlementStatusLabel(record.settlement)}</dd>
+                          </>
+                        ) : null}
                         <dt className="text-muted-foreground">Role</dt>
                         <dd>{recordRoleLabel(record.record_role)}</dd>
                         <dt className="text-muted-foreground">Source</dt>
@@ -655,6 +656,7 @@ export const TransactionDetailPanel = ({
   loading,
   lookups,
   onClose,
+  onChangeLifecycle,
   onConfirmOccurrence,
   onDelete,
   onDismissOccurrence,
@@ -668,6 +670,8 @@ export const TransactionDetailPanel = ({
   const panelRef = useRef<HTMLElement | null>(null);
   const deleteButtonRef = useRef<HTMLButtonElement | null>(null);
   const dismissButtonRef = useRef<HTMLButtonElement | null>(null);
+  const lifecycleButtonRef = useRef<HTMLButtonElement | null>(null);
+  const restoreLifecycleFocusRef = useRef(false);
   const restoreFocusOnCloseRef = useRef(true);
   const maps = useMemo(() => buildLookupMaps(lookups), [lookups]);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
@@ -681,6 +685,8 @@ export const TransactionDetailPanel = ({
   const [deleting, setDeleting] = useState(false);
   const [dismissing, setDismissing] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [changingLifecycle, setChangingLifecycle] = useState(false);
+  const [lifecycleErrorMessage, setLifecycleErrorMessage] = useState<string>();
   const [occurrenceActionError, setOccurrenceActionError] = useState<
     | {
         readonly message: string;
@@ -731,6 +737,16 @@ export const TransactionDetailPanel = ({
       panelRef.current?.focus({ preventScroll: true });
     });
   }, [transaction?.transaction_id]);
+
+  useEffect(() => {
+    if (changingLifecycle || !restoreLifecycleFocusRef.current) {
+      return;
+    }
+    restoreLifecycleFocusRef.current = false;
+    window.requestAnimationFrame(() => {
+      lifecycleButtonRef.current?.focus({ preventScroll: true });
+    });
+  }, [changingLifecycle, transaction?.lifecycle_status]);
 
   useEffect(() => {
     return () => {
@@ -822,9 +838,27 @@ export const TransactionDetailPanel = ({
     }
   };
 
+  const changeLifecycle = async (action: "cancel" | "restore") => {
+    if (!transaction) {
+      return;
+    }
+    restoreLifecycleFocusRef.current = true;
+    setChangingLifecycle(true);
+    setLifecycleErrorMessage(undefined);
+    try {
+      await onChangeLifecycle(transaction, action);
+    } catch (error) {
+      setLifecycleErrorMessage(
+        error instanceof Error ? error.message : "The API request failed.",
+      );
+    } finally {
+      setChangingLifecycle(false);
+    }
+  };
+
   const expectedOccurrence =
     transaction !== undefined &&
-    linePostingStatus(transaction) === "expected" &&
+    transaction.lifecycle_status === "expected" &&
     transaction.recurring_occurrence_id !== null;
   const expectedOccurrenceActionsAvailable =
     expectedOccurrence &&
@@ -863,7 +897,7 @@ export const TransactionDetailPanel = ({
           </h2>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          {transaction && !expectedOccurrence && onEdit ? (
+          {transaction?.lifecycle_status === "active" && onEdit ? (
             <Button
               type="button"
               aria-label="Edit transaction"
@@ -970,7 +1004,7 @@ export const TransactionDetailPanel = ({
                   Duplicate
                 </Button>
               ) : null}
-              {onSplit ? (
+              {transaction.lifecycle_status === "active" && onSplit ? (
                 <Button
                   type="button"
                   variant="outline"
@@ -980,6 +1014,31 @@ export const TransactionDetailPanel = ({
                 >
                   <Scissors aria-hidden="true" />
                   Split
+                </Button>
+              ) : null}
+              {transaction.lifecycle_status === "active" &&
+              transaction.settlement === "pending" ? (
+                <Button
+                  ref={lifecycleButtonRef}
+                  type="button"
+                  variant="outline"
+                  disabled={changingLifecycle}
+                  onClick={() => void changeLifecycle("cancel")}
+                >
+                  <Close aria-hidden="true" />
+                  Cancel
+                </Button>
+              ) : null}
+              {transaction.lifecycle_status === "cancelled" ? (
+                <Button
+                  ref={lifecycleButtonRef}
+                  type="button"
+                  variant="outline"
+                  disabled={changingLifecycle}
+                  onClick={() => void changeLifecycle("restore")}
+                >
+                  <Reload aria-hidden="true" />
+                  Restore
                 </Button>
               ) : null}
               <Button
@@ -993,6 +1052,11 @@ export const TransactionDetailPanel = ({
               </Button>
             </>
           )}
+          {lifecycleErrorMessage ? (
+            <p className="text-destructive text-sm" role="alert">
+              {lifecycleErrorMessage}
+            </p>
+          ) : null}
         </div>
       ) : null}
       {occurrenceActionErrorMessage ? (

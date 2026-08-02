@@ -23,7 +23,7 @@ import {
 test("transaction layouts balance localized date fit and description width", async ({
   page,
 }) => {
-  await page.goto("/transactions?page=1&pageSize=100&hideExpected=true");
+  await page.goto("/transactions?page=1&pageSize=100");
   await expect(page.getByText(/Page 1 of \d+/)).toBeVisible();
 
   const table = page.locator("table.transactions-table");
@@ -137,7 +137,7 @@ test("mixed more-parts indicators stay inside the amount column where member fir
             currency: "USD",
             member_id: member.member_id,
             memo,
-            posting_status: "posted",
+            settlement: { status: "posted" },
             reconciliation_status: "unreconciled",
             source: "manual",
           },
@@ -148,7 +148,7 @@ test("mixed more-parts indicators stay inside the amount column where member fir
             currency: "USD",
             member_id: member.member_id,
             memo,
-            posting_status: "posted",
+            settlement: null,
             reconciliation_status: "unreconciled",
             source: "manual",
           },
@@ -159,7 +159,7 @@ test("mixed more-parts indicators stay inside the amount column where member fir
             currency: "USD",
             member_id: member.member_id,
             memo,
-            posting_status: "posted",
+            settlement: { status: "posted" },
             reconciliation_status: "unreconciled",
             source: "manual",
           },
@@ -170,7 +170,7 @@ test("mixed more-parts indicators stay inside the amount column where member fir
             currency: "USD",
             member_id: member.member_id,
             memo,
-            posting_status: "posted",
+            settlement: null,
             reconciliation_status: "unreconciled",
             source: "manual",
           },
@@ -265,7 +265,7 @@ test("transactions contain long amount chips and align the pagination footer", a
           category_id: null,
           currency: "USD",
           memo: mixedMemo,
-          posting_status: "posted",
+          settlement: { status: "posted" },
           reconciliation_status: "unreconciled",
           source: "manual",
         },
@@ -275,7 +275,7 @@ test("transactions contain long amount chips and align the pagination footer", a
           category_id: category.category_id,
           currency: "USD",
           memo: mixedMemo,
-          posting_status: "posted",
+          settlement: null,
           reconciliation_status: "unreconciled",
           source: "manual",
         },
@@ -285,14 +285,14 @@ test("transactions contain long amount chips and align the pagination footer", a
           category_id: null,
           currency: "USD",
           memo: mixedMemo,
-          posting_status: "posted",
+          settlement: { status: "posted" },
           reconciliation_status: "unreconciled",
           source: "manual",
         },
       ],
     },
   });
-  expect(mixedResponse.ok()).toBe(true);
+  expect(mixedResponse.ok(), await mixedResponse.text()).toBe(true);
   const mixedTransaction = (await mixedResponse.json()) as TransactionFixture;
 
   await page.goto(
@@ -569,7 +569,7 @@ test("transactions page help and leaf category chips", async ({
   );
   expect(exchangeResponse.ok(), await exchangeResponse.text()).toBe(true);
 
-  await page.goto("/transactions?page=1&pageSize=50&hideExpected=true");
+  await page.goto("/transactions?page=1&pageSize=50");
 
   await expect(
     page.getByText("Classified transaction lines with inline journal records."),
@@ -630,7 +630,7 @@ test("transactions page help and leaf category chips", async ({
   ).toBeLessThanOrEqual(1);
 
   await page.goto(
-    `/transactions?q=${encodeURIComponent(exchangeMemo)}&page=1&pageSize=50&hideExpected=true`,
+    `/transactions?q=${encodeURIComponent(exchangeMemo)}&page=1&pageSize=50`,
   );
   const exchangeRow = page
     .getByRole("row")
@@ -640,7 +640,7 @@ test("transactions page help and leaf category chips", async ({
   await expect(exchangeRow).toContainText("-224.00 $");
   await expect(exchangeRow).not.toContainText("200.00 €");
 
-  await page.goto("/transactions?page=1&pageSize=50&hideExpected=true");
+  await page.goto("/transactions?page=1&pageSize=50");
   await expect(simpleSpendRow).toBeVisible();
 
   const spendIcon = page.getByRole("img", { name: "SPEND" }).first();
@@ -736,9 +736,7 @@ test("record role indicators preserve density across accounting shapes", async (
           category_id: null,
           currency: "USD",
           memo: adjustmentMemo,
-          pending_date: "2026-07-24T16:00:00Z",
-          posted_date: "2026-07-25T16:00:00Z",
-          posting_status: "posted",
+          settlement: { status: "posted" },
           reconciliation_status: "unreconciled",
           source: "manual",
           tag_ids: [],
@@ -749,9 +747,7 @@ test("record role indicators preserve density across accounting shapes", async (
           category_id: null,
           currency: "USD",
           memo: adjustmentMemo,
-          pending_date: "2026-07-25T16:00:00Z",
-          posted_date: "2026-07-26T16:00:00Z",
-          posting_status: "posted",
+          settlement: null,
           reconciliation_status: "unreconciled",
           source: "manual",
           tag_ids: [],
@@ -778,7 +774,7 @@ test("record role indicators preserve density across accounting shapes", async (
 
   for (const fixture of fixtures) {
     await page.goto(
-      `/transactions?q=${encodeURIComponent(fixture.memo)}&page=1&pageSize=50&hideExpected=true`,
+      `/transactions?q=${encodeURIComponent(fixture.memo)}&page=1&pageSize=50`,
     );
     const transactionRow = page
       .getByRole("row")

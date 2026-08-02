@@ -12,18 +12,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { localCivilDateStartISO, timestampDateValue } from "@/utils/date";
 
 import { useInlineEdit } from "./inline-editing";
 import type { InlineSavePageRefresh, RecordUpdate } from "./record-editing";
 import { transactionRowFallback } from "./transaction-row-focus";
 
-type DetailField = "dates" | "memo" | "postingStatus";
+type DetailField = "dates" | "memo" | "settlement";
 
 const fieldLabel: Record<DetailField, string> = {
   dates: "dates",
   memo: "memo",
-  postingStatus: "posting status",
+  settlement: "settlement",
 };
 
 const dateInputClassName =
@@ -43,21 +42,6 @@ interface RecordDetailCellsProps {
   readonly value: ReactNode;
 }
 
-const inputDateValue = (value: string | null | undefined): string =>
-  timestampDateValue(value);
-
-const nullableTimestampForDateInput = (
-  value: string,
-  originalValue: string | null | undefined,
-): string | null => {
-  if (!value) {
-    return null;
-  }
-  return value === inputDateValue(originalValue) && originalValue
-    ? originalValue
-    : localCivilDateStartISO(value);
-};
-
 export const RecordDetailCells = ({
   editable = true,
   field,
@@ -72,13 +56,7 @@ export const RecordDetailCells = ({
   const [initiatedDate, setInitiatedDate] = useState(
     transaction.initiated_date,
   );
-  const [pendingDate, setPendingDate] = useState(
-    inputDateValue(record.pending_date),
-  );
-  const [postedDate, setPostedDate] = useState(
-    inputDateValue(record.posted_date),
-  );
-  const [postingStatusSelectOpen, setPostingStatusSelectOpen] = useState(false);
+  const [settlementSelectOpen, setSettlementSelectOpen] = useState(false);
   const displayCellRef = useRef<HTMLDivElement>(null);
   const restoreFallbackRef = useRef<() => void>(() => undefined);
   const { activeEditorId, finish, requestStart } = useInlineEdit();
@@ -98,16 +76,12 @@ export const RecordDetailCells = ({
     }
     setMemo(record.memo ?? "");
     setInitiatedDate(transaction.initiated_date);
-    setPendingDate(inputDateValue(record.pending_date));
-    setPostedDate(inputDateValue(record.posted_date));
     setErrorMessage(undefined);
     finish(editorId, true);
   };
   const startEditing = () => {
     setMemo(record.memo ?? "");
     setInitiatedDate(transaction.initiated_date);
-    setPendingDate(inputDateValue(record.pending_date));
-    setPostedDate(inputDateValue(record.posted_date));
     setErrorMessage(undefined);
     restoreFallbackRef.current = transactionRowFallback(
       displayCellRef.current,
@@ -154,11 +128,6 @@ export const RecordDetailCells = ({
     void save({
       initiatedDate,
       kind: "dates",
-      pendingDate: nullableTimestampForDateInput(
-        pendingDate,
-        record.pending_date,
-      ),
-      postedDate: nullableTimestampForDateInput(postedDate, record.posted_date),
     });
   };
 
@@ -203,7 +172,7 @@ export const RecordDetailCells = ({
       data-testid={`record-${field}-editor`}
       onKeyDownCapture={(event) => {
         if (event.key === "Escape") {
-          if (field === "postingStatus" && postingStatusSelectOpen) {
+          if (field === "settlement" && settlementSelectOpen) {
             return;
           }
 
@@ -240,24 +209,6 @@ export const RecordDetailCells = ({
               onChange={(event) => setInitiatedDate(event.target.value)}
             />
           </label>
-          <label className="text-xs">
-            Pending{" "}
-            <input
-              type="date"
-              className={dateInputClassName}
-              value={pendingDate}
-              onChange={(event) => setPendingDate(event.target.value)}
-            />
-          </label>
-          <label className="text-xs">
-            Posted{" "}
-            <input
-              type="date"
-              className={dateInputClassName}
-              value={postedDate}
-              onChange={(event) => setPostedDate(event.target.value)}
-            />
-          </label>
           <div className="flex gap-2">
             <Button
               type="button"
@@ -279,11 +230,11 @@ export const RecordDetailCells = ({
           </div>
         </>
       ) : null}
-      {field === "postingStatus" ? (
-        record.posting_status === "expected" ? (
+      {field === "settlement" ? (
+        record.settlement === null ? (
           <>
             <p className="text-muted-foreground text-xs">
-              Expected occurrence status is managed by recurring actions.
+              Settlement does not apply to this record.
             </p>
             <Button
               autoFocus
@@ -298,24 +249,22 @@ export const RecordDetailCells = ({
         ) : (
           <Select
             disabled={saving}
-            open={postingStatusSelectOpen}
-            onOpenChange={setPostingStatusSelectOpen}
-            value={record.posting_status}
-            onValueChange={(postingStatus) =>
+            open={settlementSelectOpen}
+            onOpenChange={setSettlementSelectOpen}
+            value={record.settlement}
+            onValueChange={(settlement) =>
               void save({
-                kind: "postingStatus",
-                postingStatus: postingStatus as
-                  "cancelled" | "pending" | "posted",
+                kind: "settlement",
+                settlement: settlement as "pending" | "posted",
               })
             }
           >
-            <SelectTrigger autoFocus aria-label="Posting status">
+            <SelectTrigger autoFocus aria-label="Settlement">
               <SelectValue />
             </SelectTrigger>
             <SelectContent data-inline-editor-content={editorId}>
               <SelectItem value="pending">Pending</SelectItem>
               <SelectItem value="posted">Posted</SelectItem>
-              <SelectItem value="cancelled">Cancelled</SelectItem>
             </SelectContent>
           </Select>
         )

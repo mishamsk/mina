@@ -9,7 +9,7 @@ POST {{base_url}}/api/transactions/spend
   "member_id": {{member_id}},
   "tag_ids": [{{tag_id}}],
   "memo": "{{write_memo}}",
-  "posting_status": "posted",
+  "settlement": {"status": "posted"},
   "reconciliation_status": "reconciled"
 }
 HTTP 201

@@ -61,7 +61,7 @@ stderr 'error: schema: missing column journal_record.memo'
 duckdbclone $WORK/demo.db $WORK/schema_retype_enum.db
 duckdbexec $WORK/schema_retype_enum.db schema_retype_enum.sql
 ! exec mina db validate --db $WORK/schema_retype_enum.db --schema demo
-stderr 'error: schema: column journal_record.posting_status type mismatch'
+stderr 'error: schema: column transaction.lifecycle_status type mismatch'
 
 duckdbclone $WORK/demo.db $WORK/schema_unknown_table.db
 duckdbexec $WORK/schema_unknown_table.db schema_unknown_table.sql
@@ -161,12 +161,12 @@ stderr 'error: invariant: active transaction .* has fewer than two active record
 duckdbclone $WORK/demo.db $WORK/inv_mixed_cancelled_status.db
 duckdbexec $WORK/inv_mixed_cancelled_status.db inv_mixed_cancelled_status.sql
 ! exec mina db validate --db $WORK/inv_mixed_cancelled_status.db --schema demo
-stderr 'error: invariant: transaction .* mixes cancelled and non-cancelled active records'
+stderr 'error: invariant: transaction .* record .* cancelled balance record is not pending'
 
 duckdbclone $WORK/demo.db $WORK/inv_mixed_expected_status.db
 duckdbexec $WORK/inv_mixed_expected_status.db inv_mixed_expected_status.sql
 ! exec mina db validate --db $WORK/inv_mixed_expected_status.db --schema demo
-stderr 'error: invariant: transaction .* mixes expected and non-expected active records'
+stderr 'error: invariant: transaction .* record .* expected balance record has settlement dates'
 
 duckdbclone $WORK/demo.db $WORK/inv_account_currency.db
 duckdbexec $WORK/inv_account_currency.db inv_account_currency.sql
@@ -186,7 +186,7 @@ stderr 'error: invariant: active credit limit history is associated with a multi
 duckdbclone $WORK/demo.db $WORK/inv_expected_without_occurrence.db
 duckdbexec $WORK/inv_expected_without_occurrence.db inv_expected_without_occurrence.sql
 ! exec mina db validate --db $WORK/inv_expected_without_occurrence.db --schema demo
-stderr 'error: invariant: expected transaction .* has no recurring occurrence'
+stderr 'error: invariant: transaction .* expected lifecycle has no recurring occurrence'
 
 duckdbclone $WORK/demo.db $WORK/inv_recurring_definition_shape.db
 duckdbexec $WORK/inv_recurring_definition_shape.db inv_recurring_definition_shape.sql

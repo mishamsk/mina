@@ -177,7 +177,7 @@ type MaterializationDefinition struct {
 type ExpectedOccurrenceInput struct {
 	Definition    Definition
 	ScheduledDate values.CivilDate
-	Records       []transactions.JournalRecordInput
+	Records       []transactions.PersistJournalRecordInput
 }
 
 // OccurrenceListOptions controls occurrence filtering and pagination.
@@ -198,11 +198,11 @@ type Repository interface {
 	Tombstone(context.Context, int64) error
 	ListMaterializationDefinitions(context.Context, values.CivilDate) ([]MaterializationDefinition, error)
 	CreateExpectedOccurrences(context.Context, []ExpectedOccurrenceInput) error
-	CreateConfirmedOccurrence(context.Context, Definition, values.CivilDate, values.CivilDate, []transactions.JournalRecordInput) (Occurrence, error)
+	CreateConfirmedOccurrence(context.Context, Definition, values.CivilDate, values.CivilDate, []transactions.PersistJournalRecordInput, time.Time) (Occurrence, error)
 	ListOccurrences(context.Context, OccurrenceListOptions) (services.PaginatedList[Occurrence], error)
 	ListOccurrenceDates(context.Context, int64, values.CivilDate) ([]values.CivilDate, error)
-	ConfirmOccurrence(context.Context, int64) (Occurrence, error)
-	DismissOccurrence(context.Context, int64) (Occurrence, error)
+	ConfirmOccurrence(context.Context, int64, *time.Time, *time.Time, time.Time) (Occurrence, error)
+	DismissOccurrence(context.Context, int64, time.Time) (Occurrence, error)
 	DeferOccurrenceAndShiftAnchor(context.Context, Definition, values.CivilDate, values.CivilDate) (Occurrence, error)
 	PauseDefinition(context.Context, int64) (Definition, error)
 	ResumeDefinition(context.Context, Definition, values.CivilDate, []values.CivilDate) (Definition, error)
@@ -254,6 +254,7 @@ type Service struct {
 	templates            TemplateReader
 	amountUSD            AmountUSDDeriver
 	refs                 ReferenceSerializer
+	clock                transactions.Clock
 	currencyUsageChanged func()
 }
 
@@ -267,6 +268,7 @@ func NewService(
 	templates TemplateReader,
 	amountUSD AmountUSDDeriver,
 	refs ReferenceSerializer,
+	clock transactions.Clock,
 	currencyUsageChanged func(),
 ) *Service {
 	return &Service{
@@ -278,6 +280,7 @@ func NewService(
 		templates:            templates,
 		amountUSD:            amountUSD,
 		refs:                 refs,
+		clock:                clock,
 		currencyUsageChanged: currencyUsageChanged,
 	}
 }
@@ -373,11 +376,16 @@ func (s *Service) ListOccurrences(ctx context.Context, opts OccurrenceListOption
 }
 
 // ConfirmOccurrence posts an EXPECTED occurrence's generated transaction records.
-func (s *Service) ConfirmOccurrence(ctx context.Context, id int64) (Occurrence, error) {
+func (s *Service) ConfirmOccurrence(ctx context.Context, id int64, settlement transactions.SettlementIntent) (Occurrence, error) {
 	if id <= 0 {
 		return Occurrence{}, services.InvalidRequest("recurring_occurrence_id must be positive")
 	}
-	occurrence, err := s.repo.ConfirmOccurrence(ctx, id)
+	now := s.clock.Now().UTC()
+	pendingDate, postedDate, err := transactions.NormalizeSettlementIntent("settlement", settlement, now)
+	if err != nil {
+		return Occurrence{}, err
+	}
+	occurrence, err := s.repo.ConfirmOccurrence(ctx, id, pendingDate, postedDate, now)
 	if errors.Is(err, services.ErrNotFound) {
 		return Occurrence{}, services.NotFound("recurring occurrence not found")
 	}
@@ -397,7 +405,7 @@ func (s *Service) DismissOccurrence(ctx context.Context, id int64) (Occurrence, 
 	if id <= 0 {
 		return Occurrence{}, services.InvalidRequest("recurring_occurrence_id must be positive")
 	}
-	occurrence, err := s.repo.DismissOccurrence(ctx, id)
+	occurrence, err := s.repo.DismissOccurrence(ctx, id, s.clock.Now().UTC())
 	if errors.Is(err, services.ErrNotFound) {
 		return Occurrence{}, services.NotFound("recurring occurrence not found")
 	}
@@ -412,7 +420,7 @@ func (s *Service) DismissOccurrence(ctx context.Context, id int64) (Occurrence, 
 }
 
 // ConfirmNext materializes and confirms a definition's next non-materialized slot.
-func (s *Service) ConfirmNext(ctx context.Context, definitionID int64, today values.CivilDate) (Occurrence, error) {
+func (s *Service) ConfirmNext(ctx context.Context, definitionID int64, today values.CivilDate, settlement transactions.SettlementIntent) (Occurrence, error) {
 	if definitionID <= 0 {
 		return Occurrence{}, services.InvalidRequest("recurring_definition_id must be positive")
 	}
@@ -436,11 +444,12 @@ func (s *Service) ConfirmNext(ctx context.Context, definitionID int64, today val
 		if err != nil {
 			return err
 		}
-		records, err := s.generatedJournalRecords(ctx, definition, today)
+		now := s.clock.Now().UTC()
+		records, err := s.confirmedJournalRecords(ctx, definition, today, settlement, now)
 		if err != nil {
 			return err
 		}
-		created, err := s.repo.CreateConfirmedOccurrence(ctx, definition, scheduledDate, today, records)
+		created, err := s.repo.CreateConfirmedOccurrence(ctx, definition, scheduledDate, today, records, now)
 		if errors.Is(err, services.ErrConflict) {
 			return services.Conflict("recurring occurrence slot already exists")
 		}
@@ -659,18 +668,18 @@ func (s *Service) materializeDueOccurrencesSerialized(ctx context.Context, today
 		if err != nil {
 			return err
 		}
-		referencesValidated := false
+		var accountRefs map[int64]accounts.Reference
 		for _, slot := range slots {
 			if _, ok := existing[slot.String()]; ok {
 				continue
 			}
-			if !referencesValidated {
-				if _, err := s.validateDefinitionAccountReferences(ctx, definition.Definition); err != nil {
+			if accountRefs == nil {
+				accountRefs, err = s.validateDefinitionAccountReferences(ctx, definition.Definition)
+				if err != nil {
 					return err
 				}
-				referencesValidated = true
 			}
-			records, err := s.generatedJournalRecordsFromValidatedDefinition(ctx, definition.Definition, slot)
+			records, err := s.generatedJournalRecordsFromValidatedDefinition(ctx, definition.Definition, slot, accountRefs, nil, nil)
 			if err != nil {
 				return err
 			}
@@ -700,22 +709,33 @@ func (s *Service) notifyCurrencyUsageChanged() {
 	}
 }
 
-func (s *Service) generatedJournalRecords(ctx context.Context, definition Definition, scheduledDate values.CivilDate) ([]transactions.JournalRecordInput, error) {
-	if _, err := s.validateDefinitionAccountReferences(ctx, definition); err != nil {
+func (s *Service) confirmedJournalRecords(ctx context.Context, definition Definition, initiatedDate values.CivilDate, intent transactions.SettlementIntent, now time.Time) ([]transactions.PersistJournalRecordInput, error) {
+	accountRefs, err := s.validateDefinitionAccountReferences(ctx, definition)
+	if err != nil {
 		return nil, err
 	}
-
-	return s.generatedJournalRecordsFromValidatedDefinition(ctx, definition, scheduledDate)
+	pendingDate, postedDate, err := transactions.NormalizeSettlementIntent("settlement", intent, now)
+	if err != nil {
+		return nil, err
+	}
+	return s.generatedJournalRecordsFromValidatedDefinition(ctx, definition, initiatedDate, accountRefs, pendingDate, postedDate)
 }
 
-func (s *Service) generatedJournalRecordsFromValidatedDefinition(ctx context.Context, definition Definition, scheduledDate values.CivilDate) ([]transactions.JournalRecordInput, error) {
-	records := make([]transactions.JournalRecordInput, 0, len(definition.Records))
+func (s *Service) generatedJournalRecordsFromValidatedDefinition(ctx context.Context, definition Definition, scheduledDate values.CivilDate, accountRefs map[int64]accounts.Reference, pendingDate *time.Time, postedDate *time.Time) ([]transactions.PersistJournalRecordInput, error) {
+	records := make([]transactions.PersistJournalRecordInput, 0, len(definition.Records))
 	for _, record := range definition.Records {
 		amountUSD, err := s.amountUSD.SignedAmountUSD(ctx, record.Currency, record.Amount, scheduledDate)
 		if err != nil {
 			return nil, err
 		}
-		records = append(records, transactions.JournalRecordInput{
+		var recordPendingDate *time.Time
+		var recordPostedDate *time.Time
+		accountType := accountRefs[record.AccountID].AccountType
+		if accountType == accounts.AccountTypeOwned || accountType == accounts.AccountTypeParty {
+			recordPendingDate = pendingDate
+			recordPostedDate = postedDate
+		}
+		records = append(records, transactions.PersistJournalRecordInput{
 			AccountID:            record.AccountID,
 			MemberID:             record.MemberID,
 			Currency:             record.Currency,
@@ -724,7 +744,8 @@ func (s *Service) generatedJournalRecordsFromValidatedDefinition(ctx context.Con
 			CategoryID:           record.CategoryID,
 			TagIDs:               slices.Clone(record.TagIDs),
 			Memo:                 record.Memo,
-			PostingStatus:        transactions.PostingStatusExpected,
+			PendingDate:          recordPendingDate,
+			PostedDate:           recordPostedDate,
 			ReconciliationStatus: transactions.ReconciliationStatusUnreconciled,
 			Source:               transactions.SourceRecurringTemplate,
 		})

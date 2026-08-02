@@ -4,7 +4,6 @@ import (
 	"context"
 	"slices"
 	"strconv"
-	"time"
 
 	"github.com/mishamsk/mina/internal/httpapi/openapi"
 	"github.com/mishamsk/mina/internal/services"
@@ -33,7 +32,8 @@ func (s *strictServer) ListTransactions(ctx context.Context, request openapi.Lis
 		CategoryIDs:        cloneOptionalInt64Slice(request.Params.CategoryId),
 		TagIDs:             cloneOptionalInt64Slice(request.Params.TagId),
 		MemberIDs:          cloneOptionalInt64Slice(request.Params.MemberId),
-		PostingStatuses:    transactionAPIPostingStatusSlice(request.Params.PostingStatus),
+		LifecycleStatuses:  transactionAPILifecycleStatusSlice(request.Params.LifecycleStatus),
+		Settlements:        transactionAPISettlementSummarySlice(request.Params.Settlement),
 		TransactionClasses: transactionAPIClassSlice(request.Params.TransactionClass),
 		TransactionShapes:  transactionAPIShapeSlice(request.Params.TransactionShape),
 		RecordRoles:        transactionAPIRoleSlice(request.Params.RecordRole),
@@ -121,9 +121,7 @@ func (s *strictServer) CreateExchangeTransaction(ctx context.Context, request op
 		MemberID:             request.Body.MemberId,
 		TagIDs:               cloneOptionalInt64Slice(request.Body.TagIds),
 		Memo:                 request.Body.Memo,
-		PendingDate:          nullableTimestampFromOpenAPI(request.Body.PendingDate),
-		PostedDate:           nullableTimestampFromOpenAPI(request.Body.PostedDate),
-		PostingStatus:        transactionAPIPostingStatusPtr(request.Body.PostingStatus),
+		Settlement:           transactionAPISettlementIntentPtr(request.Body.Settlement),
 		ReconciliationStatus: transactionAPIReconciliationStatusPtr(request.Body.ReconciliationStatus),
 	})
 	if err != nil {
@@ -163,9 +161,7 @@ func (s *strictServer) CreateSpendTransaction(ctx context.Context, request opena
 		request.Body.MemberId,
 		request.Body.TagIds,
 		request.Body.Memo,
-		request.Body.PendingDate,
-		request.Body.PostedDate,
-		request.Body.PostingStatus,
+		request.Body.Settlement,
 		request.Body.ReconciliationStatus,
 	)
 	if err != nil {
@@ -193,9 +189,7 @@ func (s *strictServer) CreateIncomeTransaction(ctx context.Context, request open
 		request.Body.MemberId,
 		request.Body.TagIds,
 		request.Body.Memo,
-		request.Body.PendingDate,
-		request.Body.PostedDate,
-		request.Body.PostingStatus,
+		request.Body.Settlement,
 		request.Body.ReconciliationStatus,
 	)
 	if err != nil {
@@ -223,9 +217,7 @@ func (s *strictServer) CreateRefundTransaction(ctx context.Context, request open
 		request.Body.MemberId,
 		request.Body.TagIds,
 		request.Body.Memo,
-		request.Body.PendingDate,
-		request.Body.PostedDate,
-		request.Body.PostingStatus,
+		request.Body.Settlement,
 		request.Body.ReconciliationStatus,
 	)
 	if err != nil {
@@ -253,9 +245,7 @@ func (s *strictServer) CreateTransferTransaction(ctx context.Context, request op
 		request.Body.MemberId,
 		request.Body.TagIds,
 		request.Body.Memo,
-		request.Body.PendingDate,
-		request.Body.PostedDate,
-		request.Body.PostingStatus,
+		request.Body.Settlement,
 		request.Body.ReconciliationStatus,
 	)
 	if err != nil {
@@ -298,6 +288,14 @@ func (s *strictServer) CancelTransaction(ctx context.Context, request openapi.Ca
 	}
 
 	return openapi.CancelTransaction200JSONResponse(transactionAPIResponse(transaction)), nil
+}
+
+func (s *strictServer) RestoreTransaction(ctx context.Context, request openapi.RestoreTransactionRequestObject) (openapi.RestoreTransactionResponseObject, error) {
+	transaction, err := s.deps.Transactions.Restore(ctx, request.TransactionId)
+	if err != nil {
+		return nil, err
+	}
+	return openapi.RestoreTransaction200JSONResponse(transactionAPIResponse(transaction)), nil
 }
 
 func (s *strictServer) ReplaceTransaction(ctx context.Context, request openapi.ReplaceTransactionRequestObject) (openapi.ReplaceTransactionResponseObject, error) {
@@ -372,7 +370,7 @@ func (s *strictServer) BulkUpdateJournalRecordTags(ctx context.Context, request 
 }
 
 func (s *strictServer) BulkReassignJournalRecordAccount(ctx context.Context, request openapi.BulkReassignJournalRecordAccountRequestObject) (openapi.BulkReassignJournalRecordAccountResponseObject, error) {
-	response, err := s.deps.Transactions.BulkReassignAccount(ctx, request.Body.RecordIds, request.Body.AccountId)
+	response, err := s.deps.Transactions.BulkReassignAccount(ctx, request.Body.RecordIds, request.Body.AccountId, transactionAPISettlementIntentPtr(request.Body.Settlement))
 	if err != nil {
 		return nil, err
 	}
@@ -380,18 +378,20 @@ func (s *strictServer) BulkReassignJournalRecordAccount(ctx context.Context, req
 	return openapi.BulkReassignJournalRecordAccount200JSONResponse(bulkRecordOperationAPIResponse(response)), nil
 }
 
-func (s *strictServer) BulkUpdateJournalRecordStatuses(ctx context.Context, request openapi.BulkUpdateJournalRecordStatusesRequestObject) (openapi.BulkUpdateJournalRecordStatusesResponseObject, error) {
-	response, err := s.deps.Transactions.BulkUpdateStatuses(
-		ctx,
-		request.Body.RecordIds,
-		transactionAPINonExpectedPostingStatusPtr(request.Body.PostingStatus),
-		transactionAPIReconciliationStatusPtr(request.Body.ReconciliationStatus),
-	)
+func (s *strictServer) BulkSetJournalRecordSettlement(ctx context.Context, request openapi.BulkSetJournalRecordSettlementRequestObject) (openapi.BulkSetJournalRecordSettlementResponseObject, error) {
+	response, err := s.deps.Transactions.BulkSetSettlement(ctx, request.Body.RecordIds, transactions.SettlementStatus(request.Body.Settlement))
 	if err != nil {
 		return nil, err
 	}
+	return openapi.BulkSetJournalRecordSettlement200JSONResponse(bulkRecordOperationAPIResponse(response)), nil
+}
 
-	return openapi.BulkUpdateJournalRecordStatuses200JSONResponse(bulkRecordOperationAPIResponse(response)), nil
+func (s *strictServer) BulkSetJournalRecordReconciliation(ctx context.Context, request openapi.BulkSetJournalRecordReconciliationRequestObject) (openapi.BulkSetJournalRecordReconciliationResponseObject, error) {
+	response, err := s.deps.Transactions.BulkSetReconciliation(ctx, request.Body.RecordIds, transactions.ReconciliationStatus(request.Body.ReconciliationStatus))
+	if err != nil {
+		return nil, err
+	}
+	return openapi.BulkSetJournalRecordReconciliation200JSONResponse(bulkRecordOperationAPIResponse(response)), nil
 }
 
 func recordSearchOptionsFromParams(params openapi.SearchJournalRecordsParams) (transactions.RecordSearchOptions, error) {
@@ -416,7 +416,6 @@ func recordSearchOptionsFromParams(params openapi.SearchJournalRecordsParams) (t
 		PostedDateFrom:    nullableTimestampFromOpenAPI(params.PostedDateFrom),
 		PostedDateTo:      nullableTimestampFromOpenAPI(params.PostedDateTo),
 		MemoContains:      params.MemoContains,
-		IncludeExpected:   boolParam(params.IncludeExpected),
 	}
 	var err error
 	if opts.AmountMin, err = optionalDecimalField("amount_min", params.AmountMin); err != nil {
@@ -431,7 +430,7 @@ func recordSearchOptionsFromParams(params openapi.SearchJournalRecordsParams) (t
 	if opts.AmountUSDMax, err = optionalDecimalField("amount_usd_max", params.AmountUsdMax); err != nil {
 		return transactions.RecordSearchOptions{}, err
 	}
-	setRecordSearchStatuses(&opts, params.PostingStatus, params.ReconciliationStatus)
+	setRecordSearchStatuses(&opts, params.LifecycleStatus, params.Settlement, params.ReconciliationStatus)
 
 	return opts, nil
 }
@@ -455,7 +454,6 @@ func recordSearchOptionsFromAccountParams(params openapi.SearchAccountJournalRec
 		PostedDateFrom:        nullableTimestampFromOpenAPI(params.PostedDateFrom),
 		PostedDateTo:          nullableTimestampFromOpenAPI(params.PostedDateTo),
 		MemoContains:          params.MemoContains,
-		IncludeExpected:       boolParam(params.IncludeExpected),
 		IncludeRunningBalance: boolParam(params.IncludeRunningBalance),
 	}
 	var err error
@@ -471,19 +469,24 @@ func recordSearchOptionsFromAccountParams(params openapi.SearchAccountJournalRec
 	if opts.AmountUSDMax, err = optionalDecimalField("amount_usd_max", params.AmountUsdMax); err != nil {
 		return transactions.RecordSearchOptions{}, err
 	}
-	setRecordSearchStatuses(&opts, params.PostingStatus, params.ReconciliationStatus)
+	setRecordSearchStatuses(&opts, params.LifecycleStatus, params.Settlement, params.ReconciliationStatus)
 
 	return opts, nil
 }
 
 func setRecordSearchStatuses(
 	opts *transactions.RecordSearchOptions,
-	postingStatus *openapi.PostingStatus,
+	lifecycleStatus *openapi.TransactionLifecycleStatus,
+	settlement *openapi.SettlementStatus,
 	reconciliationStatus *openapi.ReconciliationStatus,
 ) {
-	if postingStatus != nil {
-		value := transactions.PostingStatus(*postingStatus)
-		opts.PostingStatus = &value
+	if lifecycleStatus != nil {
+		value := transactions.LifecycleStatus(*lifecycleStatus)
+		opts.LifecycleStatus = &value
+	}
+	if settlement != nil {
+		value := transactions.SettlementStatus(*settlement)
+		opts.Settlement = &value
 	}
 	if reconciliationStatus != nil {
 		value := transactions.ReconciliationStatus(*reconciliationStatus)
@@ -510,9 +513,7 @@ func shorthandCreateFields(
 	memberID *int64,
 	tagIDs *[]int64,
 	memo *string,
-	pendingDate *time.Time,
-	postedDate *time.Time,
-	postingStatus *openapi.PostingStatus,
+	settlement *openapi.SettlementIntent,
 	reconciliationStatus *openapi.ReconciliationStatus,
 ) (transactions.ShorthandCreateFields, error) {
 	amount, err := decimalField("amount", amountValue)
@@ -527,9 +528,7 @@ func shorthandCreateFields(
 		MemberID:             memberID,
 		TagIDs:               cloneOptionalInt64Slice(tagIDs),
 		Memo:                 memo,
-		PendingDate:          nullableTimestampFromOpenAPI(pendingDate),
-		PostedDate:           nullableTimestampFromOpenAPI(postedDate),
-		PostingStatus:        transactionAPIPostingStatusPtr(postingStatus),
+		Settlement:           transactionAPISettlementIntentPtr(settlement),
 		ReconciliationStatus: transactionAPIReconciliationStatusPtr(reconciliationStatus),
 	}, nil
 }
@@ -554,9 +553,7 @@ func journalRecordAPIInputs(records []openapi.CreateJournalRecordRequest) ([]tra
 			CategoryID:           record.CategoryId,
 			TagIDs:               cloneOptionalInt64Slice(record.TagIds),
 			Memo:                 record.Memo,
-			PendingDate:          nullableTimestampFromOpenAPI(record.PendingDate),
-			PostedDate:           nullableTimestampFromOpenAPI(record.PostedDate),
-			PostingStatus:        transactions.PostingStatus(record.PostingStatus),
+			Settlement:           transactionAPISettlementIntentPtr(record.Settlement),
 			ReconciliationStatus: transactions.ReconciliationStatus(record.ReconciliationStatus),
 			Source:               transactions.Source(record.Source),
 			ExternalID:           record.ExternalId,
@@ -576,6 +573,8 @@ func transactionAPIResponse(transaction transactions.Transaction) openapi.Transa
 		PrimaryAmounts:        displayAmountAPIResponses(transaction.PrimaryAmounts),
 		Shapes:                transactionShapeAPIResponses(transaction.Shapes),
 		RecurringOccurrenceId: transaction.RecurringOccurrenceID,
+		LifecycleStatus:       openapi.TransactionLifecycleStatus(transaction.LifecycleStatus),
+		Settlement:            openapi.TransactionSettlement(transaction.Settlement),
 		CreatedAt:             transaction.CreatedAt.UTC(),
 		TombstonedAt:          nullableTimestampTime(transaction.TombstonedAt),
 		Records:               journalRecordAPIResponses(transaction.Records),
@@ -625,7 +624,8 @@ func journalRecordAPIResponse(record transactions.JournalRecord) openapi.Journal
 		Memo:                 record.Memo,
 		PendingDate:          nullableOpenAPITimestamp(record.PendingDate),
 		PostedDate:           nullableOpenAPITimestamp(record.PostedDate),
-		PostingStatus:        openapi.PostingStatus(record.PostingStatus),
+		LifecycleStatus:      openapi.TransactionLifecycleStatus(record.LifecycleStatus),
+		Settlement:           transactionAPISettlementStatusPtr(record.Settlement),
 		ReconciliationStatus: openapi.ReconciliationStatus(record.ReconciliationStatus),
 		Source:               openapi.Source(record.Source),
 		ExternalId:           record.ExternalID,
@@ -709,15 +709,26 @@ func cloneInt64Slice(values []int64) []int64 {
 	return slices.Clone(values)
 }
 
-func transactionAPIPostingStatusSlice(statuses *[]openapi.PostingStatus) []transactions.PostingStatus {
+func transactionAPILifecycleStatusSlice(statuses *[]openapi.TransactionLifecycleStatus) []transactions.LifecycleStatus {
 	if statuses == nil {
 		return nil
 	}
-	values := make([]transactions.PostingStatus, 0, len(*statuses))
+	values := make([]transactions.LifecycleStatus, 0, len(*statuses))
 	for _, status := range *statuses {
-		values = append(values, transactions.PostingStatus(status))
+		values = append(values, transactions.LifecycleStatus(status))
 	}
 
+	return values
+}
+
+func transactionAPISettlementSummarySlice(statuses *[]openapi.TransactionSettlement) []transactions.SettlementSummary {
+	if statuses == nil {
+		return nil
+	}
+	values := make([]transactions.SettlementSummary, 0, len(*statuses))
+	for _, status := range *statuses {
+		values = append(values, transactions.SettlementSummary(status))
+	}
 	return values
 }
 
@@ -763,21 +774,22 @@ func transactionAPIRolePtr(role *openapi.RecordRole) *transactions.RecordRole {
 	return &value
 }
 
-func transactionAPIPostingStatusPtr(status *openapi.PostingStatus) *transactions.PostingStatus {
-	if status == nil {
+func transactionAPISettlementIntentPtr(intent *openapi.SettlementIntent) *transactions.SettlementIntent {
+	if intent == nil {
 		return nil
 	}
-	value := transactions.PostingStatus(*status)
-
-	return &value
+	return &transactions.SettlementIntent{
+		Status:      transactions.SettlementStatus(intent.Status),
+		PendingDate: nullableTimestampFromOpenAPI(intent.PendingDate),
+		PostedDate:  nullableTimestampFromOpenAPI(intent.PostedDate),
+	}
 }
 
-func transactionAPINonExpectedPostingStatusPtr(status *openapi.NonExpectedPostingStatus) *transactions.PostingStatus {
+func transactionAPISettlementStatusPtr(status *transactions.SettlementStatus) *openapi.SettlementStatus {
 	if status == nil {
 		return nil
 	}
-	value := transactions.PostingStatus(*status)
-
+	value := openapi.SettlementStatus(*status)
 	return &value
 }
 

@@ -30,15 +30,17 @@ func NewTransactionStore(db *AppDB) *TransactionStore {
 }
 
 // Create persists a transaction and all journal records atomically.
-func (s *TransactionStore) Create(ctx context.Context, req transactions.CreateInput) (transactions.Transaction, error) {
+func (s *TransactionStore) Create(ctx context.Context, req transactions.PersistInput) (transactions.Transaction, error) {
 	var transaction transactions.Transaction
 	err := s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
 		row := tx.QueryRowContext(
 			ctx,
-			`INSERT INTO `+s.db.accountingName("transaction")+` (initiated_date)
-VALUES (?)
-RETURNING transaction_id, initiated_date, recurring_occurrence_id, created_at, tombstoned_at`,
+			`INSERT INTO `+s.db.accountingName("transaction")+` (initiated_date, recurring_occurrence_id, lifecycle_status)
+VALUES (?, ?, CAST(? AS `+s.db.accountingName("transaction_lifecycle_status")+`))
+RETURNING transaction_id, initiated_date, recurring_occurrence_id, CAST(lifecycle_status AS VARCHAR), created_at, tombstoned_at`,
 			civilDateArg(req.InitiatedDate),
+			req.RecurringOccurrenceID,
+			enumValue(req.LifecycleStatus),
 		)
 		var err error
 		transaction, err = scanTransaction(row)
@@ -67,16 +69,17 @@ RETURNING transaction_id, initiated_date, recurring_occurrence_id, created_at, t
 }
 
 // Replace atomically replaces a transaction's metadata and active journal records.
-func (s *TransactionStore) Replace(ctx context.Context, id int64, req transactions.CreateInput) (transactions.Transaction, error) {
+func (s *TransactionStore) Replace(ctx context.Context, id int64, req transactions.PersistInput) (transactions.Transaction, error) {
 	var transaction transactions.Transaction
 	err := s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
 		row := tx.QueryRowContext(
 			ctx,
 			`UPDATE `+s.db.accountingName("transaction")+`
-SET initiated_date = ?
+SET initiated_date = ?, lifecycle_status = CAST(? AS `+s.db.accountingName("transaction_lifecycle_status")+`)
 WHERE transaction_id = ? AND tombstoned_at IS NULL
-RETURNING transaction_id, initiated_date, recurring_occurrence_id, created_at, tombstoned_at`,
+RETURNING transaction_id, initiated_date, recurring_occurrence_id, CAST(lifecycle_status AS VARCHAR), created_at, tombstoned_at`,
 			civilDateArg(req.InitiatedDate),
+			enumValue(req.LifecycleStatus),
 			id,
 		)
 		var err error
@@ -123,7 +126,7 @@ WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 func (s *TransactionStore) ListMissingAmountUSDRecords(ctx context.Context) ([]transactions.AmountUSDBackfillRecord, error) {
 	rows, err := s.db.query().QueryContext(
 		ctx,
-		`SELECT jr.record_id, jr.currency, jr.amount, COALESCE(CAST(jr.posted_date AS DATE), t.initiated_date) AS lookup_date
+		`SELECT jr.record_id, jr.currency, jr.amount, t.initiated_date AS lookup_date
 FROM `+s.db.accountingName("journal_record")+` AS jr
 JOIN `+s.db.accountingName("transaction")+` AS t
   ON t.transaction_id = jr.transaction_id
@@ -187,8 +190,7 @@ func (s *TransactionStore) MonthTotals(ctx context.Context, monthRange transacti
 	JOIN `+s.db.accountingName("account")+` a ON a.account_id = jr.account_id
 	WHERE jr.tombstoned_at IS NULL
 	  AND tx.tombstoned_at IS NULL
-	  AND jr.posting_status <> CAST('CANCELLED' AS `+s.db.accountingName("posting_status")+`)
-	  AND jr.posting_status <> CAST('EXPECTED' AS `+s.db.accountingName("posting_status")+`)
+	  AND tx.lifecycle_status = CAST('ACTIVE' AS `+s.db.accountingName("transaction_lifecycle_status")+`)
 	  AND a.account_type = CAST('FLOW' AS `+s.db.accountingName("account_type")+`)
 	  AND tx.initiated_date >= ?
 	  AND tx.initiated_date < ?
@@ -263,7 +265,7 @@ WHERE record_id = ?
 func (s *TransactionStore) Get(ctx context.Context, id int64) (transactions.Transaction, error) {
 	transaction, err := scanTransaction(s.db.query().QueryRowContext(
 		ctx,
-		`SELECT transaction_id, initiated_date, recurring_occurrence_id, created_at, tombstoned_at
+		`SELECT transaction_id, initiated_date, recurring_occurrence_id, CAST(lifecycle_status AS VARCHAR), created_at, tombstoned_at
 FROM `+s.db.accountingName("transaction")+`
 WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 		id,
@@ -287,7 +289,7 @@ WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 // List returns transactions with nested journal records in deterministic date order.
 func (s *TransactionStore) List(ctx context.Context, opts transactions.ListOptions) (transactions.ListResult, error) {
 	predicate := s.transactionListPredicate(opts)
-	query := `SELECT tx.transaction_id, tx.initiated_date, tx.recurring_occurrence_id, tx.created_at, tx.tombstoned_at
+	query := `SELECT tx.transaction_id, tx.initiated_date, tx.recurring_occurrence_id, CAST(tx.lifecycle_status AS VARCHAR), tx.created_at, tx.tombstoned_at
 ` + predicate.query
 	totalCount, err := countMatchingRows(ctx, s.db.query(), "SELECT COUNT(*) "+predicate.query, predicate.args, "transactions", opts.IncludeTotalCount)
 	if err != nil {
@@ -368,8 +370,8 @@ func (s *TransactionStore) transactionListPredicate(opts transactions.ListOption
 	query := `FROM ` + s.db.accountingName("transaction") + ` tx
 WHERE tx.tombstoned_at IS NULL`
 	args := []any{}
-	if !slices.Contains(opts.PostingStatuses, transactions.PostingStatusExpected) {
-		query += " AND NOT " + s.transactionListRecordExists("jr.posting_status = CAST('EXPECTED' AS "+s.db.accountingName("posting_status")+")")
+	if !slices.Contains(opts.LifecycleStatuses, transactions.LifecycleStatusExpected) {
+		query += " AND tx.lifecycle_status <> CAST('EXPECTED' AS " + s.db.accountingName("transaction_lifecycle_status") + ")"
 	}
 	if opts.InitiatedDateFrom != nil {
 		query += " AND tx.initiated_date >= ?"
@@ -399,13 +401,17 @@ WHERE tx.tombstoned_at IS NULL`
 		query += " AND " + s.transactionListRecordExists("("+strings.Join(tagConditions, " OR ")+")")
 		args = append(args, int64Args(opts.TagIDs)...)
 	}
-	if len(opts.PostingStatuses) > 0 {
-		statusConditions := make([]string, 0, len(opts.PostingStatuses))
-		for _, status := range opts.PostingStatuses {
-			statusConditions = append(statusConditions, "jr.posting_status = CAST(? AS "+s.db.accountingName("posting_status")+")")
+	if len(opts.LifecycleStatuses) > 0 {
+		query += " AND tx.lifecycle_status IN (" + placeholders(len(opts.LifecycleStatuses)) + ")"
+		for _, status := range opts.LifecycleStatuses {
 			args = append(args, enumValue(status))
 		}
-		query += " AND " + s.transactionListRecordExists("("+strings.Join(statusConditions, " OR ")+")")
+	}
+	if len(opts.Settlements) > 0 {
+		query += " AND " + s.transactionSettlementExpression() + " IN (" + placeholders(len(opts.Settlements)) + ")"
+		for _, settlement := range opts.Settlements {
+			args = append(args, string(settlement))
+		}
 	}
 	if len(opts.TransactionClasses) > 0 {
 		query += " AND " + s.transactionListClassExpression() + " IN (" + placeholders(len(opts.TransactionClasses)) + ")"
@@ -513,6 +519,20 @@ WHERE tx.tombstoned_at IS NULL`
 	}
 
 	return transactionListPredicate{query: query, args: args}
+}
+
+func (s *TransactionStore) transactionSettlementExpression() string {
+	accountType := s.db.accountingName("account_type")
+	return `(SELECT CASE
+	WHEN COUNT(*) FILTER (WHERE a.account_type IN (CAST('OWNED' AS ` + accountType + `), CAST('PARTY' AS ` + accountType + `))) = 0 THEN 'not_applicable'
+	WHEN COUNT(*) FILTER (WHERE a.account_type IN (CAST('OWNED' AS ` + accountType + `), CAST('PARTY' AS ` + accountType + `)) AND (jr.pending_date IS NOT NULL OR jr.posted_date IS NOT NULL)) = 0 THEN 'not_applicable'
+	WHEN BOOL_AND(jr.posted_date IS NULL) FILTER (WHERE a.account_type IN (CAST('OWNED' AS ` + accountType + `), CAST('PARTY' AS ` + accountType + `))) THEN 'pending'
+	WHEN BOOL_AND(jr.posted_date IS NOT NULL) FILTER (WHERE a.account_type IN (CAST('OWNED' AS ` + accountType + `), CAST('PARTY' AS ` + accountType + `))) THEN 'posted'
+	ELSE 'mixed'
+END
+FROM ` + s.db.accountingName("journal_record") + ` jr
+JOIN ` + s.db.accountingName("account") + ` a ON a.account_id = jr.account_id
+WHERE jr.transaction_id = tx.transaction_id AND jr.tombstoned_at IS NULL)`
 }
 
 func (s *TransactionStore) transactionListRecordExists(condition string) string {
@@ -747,16 +767,17 @@ WHERE jr.record_id IN (`+placeholders(len(recordIDs))+`)
 	return count > 0, nil
 }
 
-// Cancel sets all active journal records in a transaction to cancelled.
+// Cancel changes transaction lifecycle to cancelled without changing records.
 func (s *TransactionStore) Cancel(ctx context.Context, id int64) (transactions.Transaction, error) {
 	var transaction transactions.Transaction
 	err := s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
 		var err error
 		transaction, err = scanTransaction(tx.QueryRowContext(
 			ctx,
-			`SELECT transaction_id, initiated_date, recurring_occurrence_id, created_at, tombstoned_at
-FROM `+s.db.accountingName("transaction")+`
-WHERE transaction_id = ? AND tombstoned_at IS NULL`,
+			`UPDATE `+s.db.accountingName("transaction")+`
+SET lifecycle_status = CAST('CANCELLED' AS `+s.db.accountingName("transaction_lifecycle_status")+`)
+WHERE transaction_id = ? AND tombstoned_at IS NULL
+RETURNING transaction_id, initiated_date, recurring_occurrence_id, CAST(lifecycle_status AS VARCHAR), created_at, tombstoned_at`,
 			id,
 		))
 		if errors.Is(err, sql.ErrNoRows) {
@@ -764,19 +785,6 @@ WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 		}
 		if err != nil {
 			return fmt.Errorf("get transaction for cancel: %w", err)
-		}
-
-		if _, err := tx.ExecContext(
-			ctx,
-			`UPDATE `+s.db.accountingName("journal_record")+`
-SET posting_status = CAST('CANCELLED' AS `+s.db.accountingName("posting_status")+`),
-    updated_at = CURRENT_TIMESTAMP
-WHERE transaction_id = ?
-  AND tombstoned_at IS NULL
-  AND posting_status <> CAST('CANCELLED' AS `+s.db.accountingName("posting_status")+`)`,
-			id,
-		); err != nil {
-			return fmt.Errorf("cancel transaction journal records: %w", err)
 		}
 
 		records, err := recordsByTransactionIDs(ctx, tx, s.db, []int64{id})
@@ -794,6 +802,38 @@ WHERE transaction_id = ?
 	return transaction, nil
 }
 
+// Restore changes transaction lifecycle to active without changing records.
+func (s *TransactionStore) Restore(ctx context.Context, id int64) (transactions.Transaction, error) {
+	var transaction transactions.Transaction
+	err := s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
+		var err error
+		transaction, err = scanTransaction(tx.QueryRowContext(
+			ctx,
+			`UPDATE `+s.db.accountingName("transaction")+`
+SET lifecycle_status = CAST('ACTIVE' AS `+s.db.accountingName("transaction_lifecycle_status")+`)
+WHERE transaction_id = ? AND tombstoned_at IS NULL
+RETURNING transaction_id, initiated_date, recurring_occurrence_id, CAST(lifecycle_status AS VARCHAR), created_at, tombstoned_at`,
+			id,
+		))
+		if errors.Is(err, sql.ErrNoRows) {
+			return services.ErrNotFound
+		}
+		if err != nil {
+			return fmt.Errorf("restore transaction: %w", err)
+		}
+		records, err := recordsByTransactionIDs(ctx, tx, s.db, []int64{id})
+		if err != nil {
+			return err
+		}
+		transaction.Records = records[id]
+		return nil
+	})
+	if err != nil {
+		return transactions.Transaction{}, err
+	}
+	return transaction, nil
+}
+
 // SearchRecords returns active journal records matching filters.
 func (s *TransactionStore) SearchRecords(ctx context.Context, opts transactions.RecordSearchOptions) (services.PaginatedList[transactions.JournalRecord], error) {
 	withQuery := ""
@@ -804,8 +844,7 @@ func (s *TransactionStore) SearchRecords(ctx context.Context, opts transactions.
 		withQuery = `WITH running_balances AS (
 	SELECT jr.record_id,
 	       SUM(CAST(CASE
-	           WHEN jr.posting_status <> CAST('CANCELLED' AS ` + s.db.accountingName("posting_status") + `)
-	                AND jr.posting_status <> CAST('EXPECTED' AS ` + s.db.accountingName("posting_status") + `) THEN jr.amount
+	           WHEN tx.lifecycle_status = CAST('ACTIVE' AS ` + s.db.accountingName("transaction_lifecycle_status") + `) THEN jr.amount
 	           ELSE CAST(0 AS DECIMAL(18,8))
 	       END AS DECIMAL(18,8))) OVER (
 	           PARTITION BY jr.account_id, jr.currency
@@ -828,8 +867,8 @@ JOIN ` + s.db.accountingName("account") + ` a ON a.account_id = jr.account_id
 LEFT JOIN ` + s.db.accountingName("category") + ` c ON c.category_id = jr.category_id`
 	whereQuery := `WHERE jr.tombstoned_at IS NULL AND tx.tombstoned_at IS NULL`
 	args := []any{}
-	if opts.PostingStatus == nil && !opts.IncludeExpected {
-		whereQuery += " AND jr.posting_status <> CAST('EXPECTED' AS " + s.db.accountingName("posting_status") + ")"
+	if opts.LifecycleStatus == nil {
+		whereQuery += " AND tx.lifecycle_status <> CAST('EXPECTED' AS " + s.db.accountingName("transaction_lifecycle_status") + ")"
 	}
 	if opts.AccountID != nil {
 		whereQuery += " AND jr.account_id = ?"
@@ -851,13 +890,17 @@ LEFT JOIN ` + s.db.accountingName("category") + ` c ON c.category_id = jr.catego
 		whereQuery += " AND list_contains(jr.tag_ids, ?)"
 		args = append(args, *opts.TagID)
 	}
-	if opts.PostingStatus != nil {
-		if opts.IncludeExpected && *opts.PostingStatus != transactions.PostingStatusExpected {
-			whereQuery += " AND (jr.posting_status = CAST(? AS " + s.db.accountingName("posting_status") + ") OR jr.posting_status = CAST('EXPECTED' AS " + s.db.accountingName("posting_status") + "))"
+	if opts.LifecycleStatus != nil {
+		whereQuery += " AND tx.lifecycle_status = CAST(? AS " + s.db.accountingName("transaction_lifecycle_status") + ")"
+		args = append(args, enumValue(*opts.LifecycleStatus))
+	}
+	if opts.Settlement != nil {
+		whereQuery += " AND a.account_type IN (CAST('OWNED' AS " + s.db.accountingName("account_type") + "), CAST('PARTY' AS " + s.db.accountingName("account_type") + "))"
+		if *opts.Settlement == transactions.SettlementStatusPosted {
+			whereQuery += " AND jr.posted_date IS NOT NULL"
 		} else {
-			whereQuery += " AND jr.posting_status = CAST(? AS " + s.db.accountingName("posting_status") + ")"
+			whereQuery += " AND jr.posted_date IS NULL AND jr.pending_date IS NOT NULL"
 		}
-		args = append(args, enumValue(*opts.PostingStatus))
 	}
 	if opts.ReconciliationStatus != nil {
 		whereQuery += " AND jr.reconciliation_status = CAST(? AS " + s.db.accountingName("reconciliation_status") + ")"
@@ -918,7 +961,7 @@ LEFT JOIN ` + s.db.accountingName("category") + ` c ON c.category_id = jr.catego
 	}
 
 	query := `SELECT jr.record_id, jr.transaction_id, jr.account_id, jr.member_id, jr.currency, jr.amount, jr.amount_usd, jr.category_id,
-	` + runningBalanceSelect + `, jr.tag_ids, jr.memo, jr.pending_date, jr.posted_date, jr.posting_status, jr.reconciliation_status, jr.source, jr.external_id, jr.external_system,
+	` + runningBalanceSelect + `, jr.tag_ids, jr.memo, jr.pending_date, jr.posted_date, CAST(tx.lifecycle_status AS VARCHAR), jr.reconciliation_status, jr.source, jr.external_id, jr.external_system,
 	tx.initiated_date, jr.created_at, jr.updated_at, jr.tombstoned_at, a.account_type, a.name, a.fqn, c.economic_intent
 ` + fromQuery + "\n" + runningBalanceJoin + "\n" + whereQuery
 	sortColumns, ok := recordSortColumns[opts.SortKey]
@@ -1005,19 +1048,23 @@ WHERE record_id IN (`+placeholders(len(recordIDs))+`)`,
 }
 
 // BulkReassignAccount assigns one active account to active journal records atomically.
-func (s *TransactionStore) BulkReassignAccount(ctx context.Context, recordIDs []int64, accountID int64) (int, error) {
+func (s *TransactionStore) BulkReassignAccount(ctx context.Context, recordIDs []int64, accountID int64, pendingDates []*time.Time, postedDates []*time.Time) (int, error) {
 	err := s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
 		if err := validateActiveJournalRecords(ctx, tx, s.db, recordIDs); err != nil {
 			return err
 		}
 
-		args := append([]any{accountID}, int64Args(recordIDs)...)
+		valuesSQL, valuesArgs := explicitRecordDateValues(recordIDs, pendingDates, postedDates)
+		args := append(valuesArgs, accountID)
 		if _, err := tx.ExecContext(
 			ctx,
-			`UPDATE `+s.db.accountingName("journal_record")+`
+			`UPDATE `+s.db.accountingName("journal_record")+` AS jr
 SET account_id = ?,
+	 pending_date = changes.pending_date,
+	 posted_date = changes.posted_date,
     updated_at = CURRENT_TIMESTAMP
-WHERE record_id IN (`+placeholders(len(recordIDs))+`)`,
+FROM (`+valuesSQL+`) AS changes(record_id, pending_date, posted_date)
+WHERE jr.record_id = changes.record_id`,
 			args...,
 		); err != nil {
 			return fmt.Errorf("bulk reassign journal record accounts: %w", err)
@@ -1068,47 +1115,24 @@ WHERE record_id = ?`,
 	return len(recordIDs), nil
 }
 
-// BulkUpdateStatuses updates posting and reconciliation statuses on active journal records atomically.
-func (s *TransactionStore) BulkUpdateStatuses(
-	ctx context.Context,
-	recordIDs []int64,
-	postingStatus *transactions.PostingStatus,
-	reconciliationStatus *transactions.ReconciliationStatus,
-) (int, error) {
+// BulkSetSettlement applies explicit per-record settlement timestamps atomically.
+func (s *TransactionStore) BulkSetSettlement(ctx context.Context, recordIDs []int64, pendingDates []*time.Time, postedDates []*time.Time) (int, error) {
 	err := s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
 		if err := validateActiveJournalRecords(ctx, tx, s.db, recordIDs); err != nil {
 			return err
 		}
-
-		setClauses := []string{}
-		args := []any{}
-		if postingStatus != nil {
-			setClauses = append(setClauses, "posting_status = CAST(? AS "+s.db.accountingName("posting_status")+")")
-			args = append(args, enumValue(*postingStatus))
-			switch *postingStatus {
-			case transactions.PostingStatusPending:
-				setClauses = append(
-					setClauses,
-					"pending_date = COALESCE(pending_date, timezone('UTC', CURRENT_TIMESTAMP))",
-					"posted_date = NULL",
-				)
-			case transactions.PostingStatusPosted:
-				setClauses = append(setClauses, "posted_date = COALESCE(posted_date, timezone('UTC', CURRENT_TIMESTAMP))")
-			}
-		}
-		if reconciliationStatus != nil {
-			setClauses = append(setClauses, "reconciliation_status = CAST(? AS "+s.db.accountingName("reconciliation_status")+")")
-			args = append(args, enumValue(*reconciliationStatus))
-		}
-		setClauses = append(setClauses, "updated_at = CURRENT_TIMESTAMP")
-		args = append(args, int64Args(recordIDs)...)
-
+		valuesSQL, args := explicitRecordDateValues(recordIDs, pendingDates, postedDates)
 		if _, err := tx.ExecContext(
 			ctx,
-			"UPDATE "+s.db.accountingName("journal_record")+" SET "+strings.Join(setClauses, ", ")+" WHERE record_id IN ("+placeholders(len(recordIDs))+")",
+			`UPDATE `+s.db.accountingName("journal_record")+` AS jr
+SET pending_date = changes.pending_date,
+    posted_date = changes.posted_date,
+    updated_at = CURRENT_TIMESTAMP
+FROM (`+valuesSQL+`) AS changes(record_id, pending_date, posted_date)
+WHERE jr.record_id = changes.record_id`,
 			args...,
 		); err != nil {
-			return fmt.Errorf("bulk update journal record statuses: %w", err)
+			return fmt.Errorf("bulk update journal record settlement: %w", err)
 		}
 
 		return nil
@@ -1120,6 +1144,37 @@ func (s *TransactionStore) BulkUpdateStatuses(
 	return len(recordIDs), nil
 }
 
+// BulkSetReconciliation applies one reconciliation status atomically.
+func (s *TransactionStore) BulkSetReconciliation(ctx context.Context, recordIDs []int64, status transactions.ReconciliationStatus) (int, error) {
+	err := s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
+		if err := validateActiveJournalRecords(ctx, tx, s.db, recordIDs); err != nil {
+			return err
+		}
+		args := append([]any{enumValue(status)}, int64Args(recordIDs)...)
+		if _, err := tx.ExecContext(ctx, `UPDATE `+s.db.accountingName("journal_record")+`
+SET reconciliation_status = CAST(? AS `+s.db.accountingName("reconciliation_status")+`),
+    updated_at = CURRENT_TIMESTAMP
+WHERE record_id IN (`+placeholders(len(recordIDs))+`)`, args...); err != nil {
+			return fmt.Errorf("bulk update journal record reconciliation: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	return len(recordIDs), nil
+}
+
+func explicitRecordDateValues(recordIDs []int64, pendingDates []*time.Time, postedDates []*time.Time) (string, []any) {
+	rows := make([]string, 0, len(recordIDs))
+	args := make([]any, 0, len(recordIDs)*3)
+	for index, recordID := range recordIDs {
+		rows = append(rows, "(CAST(? AS BIGINT), CAST(? AS TIMESTAMP), CAST(? AS TIMESTAMP))")
+		args = append(args, recordID, nullableTimestampArg(pendingDates[index]), nullableTimestampArg(postedDates[index]))
+	}
+	return "VALUES " + strings.Join(rows, ", "), args
+}
+
 type transactionScanner interface {
 	Scan(dest ...any) error
 }
@@ -1128,18 +1183,21 @@ func scanTransaction(scanner transactionScanner) (transactions.Transaction, erro
 	var transaction transactions.Transaction
 	var initiatedDate time.Time
 	var recurringOccurrenceID sql.NullInt64
+	var lifecycleStatus string
 	var createdAt time.Time
 	var tombstonedAt sql.NullTime
 	if err := scanner.Scan(
 		&transaction.ID,
 		&initiatedDate,
 		&recurringOccurrenceID,
+		&lifecycleStatus,
 		&createdAt,
 		&tombstonedAt,
 	); err != nil {
 		return transactions.Transaction{}, err
 	}
 	transaction.InitiatedDate = values.CivilDateFromTime(initiatedDate)
+	transaction.LifecycleStatus = transactions.LifecycleStatus(strings.ToLower(lifecycleStatus))
 	if recurringOccurrenceID.Valid {
 		transaction.RecurringOccurrenceID = &recurringOccurrenceID.Int64
 	}
@@ -1150,7 +1208,7 @@ func scanTransaction(scanner transactionScanner) (transactions.Transaction, erro
 	return transaction, nil
 }
 
-func insertJournalRecord(ctx context.Context, tx *sql.Tx, db *AppDB, transactionID int64, req transactions.JournalRecordInput) error {
+func insertJournalRecord(ctx context.Context, tx *sql.Tx, db *AppDB, transactionID int64, req transactions.PersistJournalRecordInput) error {
 	tagListExpr, tagListArgs := tagListExpression(req.TagIDs)
 	args := []any{
 		transactionID,
@@ -1166,7 +1224,6 @@ func insertJournalRecord(ctx context.Context, tx *sql.Tx, db *AppDB, transaction
 		req.Memo,
 		nullableTimestampArg(req.PendingDate),
 		nullableTimestampArg(req.PostedDate),
-		enumValue(req.PostingStatus),
 		enumValue(req.ReconciliationStatus),
 		enumValue(req.Source),
 		req.ExternalID,
@@ -1177,9 +1234,9 @@ func insertJournalRecord(ctx context.Context, tx *sql.Tx, db *AppDB, transaction
 		ctx,
 		`INSERT INTO `+db.accountingName("journal_record")+` (
 	transaction_id, account_id, member_id, currency, amount, amount_usd, category_id, tag_ids, memo,
-	pending_date, posted_date, posting_status, reconciliation_status, source, external_id, external_system
+	pending_date, posted_date, reconciliation_status, source, external_id, external_system
 )
-VALUES (?, ?, ?, ?, ?, ?, ?, `+tagListExpr+`, ?, ?, ?, CAST(? AS `+db.accountingName("posting_status")+`), CAST(? AS `+db.accountingName("reconciliation_status")+`), CAST(? AS `+db.accountingName("source")+`), ?, ?)`,
+VALUES (?, ?, ?, ?, ?, ?, ?, `+tagListExpr+`, ?, ?, ?, CAST(? AS `+db.accountingName("reconciliation_status")+`), CAST(? AS `+db.accountingName("source")+`), ?, ?)`,
 		args...,
 	); err != nil {
 		if isForeignKeyConstraintError(err) {
@@ -1205,7 +1262,7 @@ func scanJournalRecord(scanner journalRecordScanner) (transactions.JournalRecord
 	var memo sql.NullString
 	var pendingDate sql.NullTime
 	var postedDate sql.NullTime
-	var postingStatus string
+	var lifecycleStatus string
 	var reconciliationStatus string
 	var source string
 	var externalID sql.NullString
@@ -1232,7 +1289,7 @@ func scanJournalRecord(scanner journalRecordScanner) (transactions.JournalRecord
 		&memo,
 		&pendingDate,
 		&postedDate,
-		&postingStatus,
+		&lifecycleStatus,
 		&reconciliationStatus,
 		&source,
 		&externalID,
@@ -1291,7 +1348,7 @@ func scanJournalRecord(scanner journalRecordScanner) (transactions.JournalRecord
 	record.CreatedAt = createdAt.UTC()
 	record.UpdatedAt = updatedAt.UTC()
 	record.TombstonedAt = nullableTimeFromSQL(tombstonedAt)
-	record.PostingStatus = transactions.PostingStatus(strings.ToLower(postingStatus))
+	record.LifecycleStatus = transactions.LifecycleStatus(strings.ToLower(lifecycleStatus))
 	record.ReconciliationStatus = transactions.ReconciliationStatus(strings.ToLower(reconciliationStatus))
 	record.Source = transactions.Source(strings.ToLower(source))
 	if accountType.Valid {
@@ -1323,7 +1380,7 @@ func recordsByTransactionIDs(ctx context.Context, queryer rowsQuerier, db *AppDB
 		ctx,
 		`SELECT jr.record_id, jr.transaction_id, jr.account_id, jr.member_id, jr.currency, jr.amount, jr.amount_usd, jr.category_id,
 	CAST(NULL AS DECIMAL(18,8)) AS running_balance,
-	jr.tag_ids, jr.memo, jr.pending_date, jr.posted_date, jr.posting_status, jr.reconciliation_status, jr.source, jr.external_id, jr.external_system,
+	jr.tag_ids, jr.memo, jr.pending_date, jr.posted_date, CAST(tx.lifecycle_status AS VARCHAR), jr.reconciliation_status, jr.source, jr.external_id, jr.external_system,
 	tx.initiated_date, jr.created_at, jr.updated_at, jr.tombstoned_at, a.account_type, a.name, a.fqn, c.economic_intent
 FROM `+db.accountingName("journal_record")+` jr
 JOIN `+db.accountingName("transaction")+` tx ON tx.transaction_id = jr.transaction_id
@@ -1414,10 +1471,13 @@ func transactionsByRecordIDs(ctx context.Context, queryer rowsQuerier, db *AppDB
 	}
 	affected := make([]transactions.Transaction, 0, len(transactionIDs))
 	for _, transactionID := range transactionIDs {
-		affected = append(affected, transactions.Transaction{
-			ID:      transactionID,
-			Records: records[transactionID],
-		})
+		transactionRecords := records[transactionID]
+		transaction := transactions.Transaction{ID: transactionID, Records: transactionRecords}
+		if len(transactionRecords) > 0 {
+			transaction.InitiatedDate = transactionRecords[0].InitiatedDate
+			transaction.LifecycleStatus = transactionRecords[0].LifecycleStatus
+		}
+		affected = append(affected, transaction)
 	}
 
 	return affected, nil
@@ -1438,10 +1498,13 @@ func transactionsByAccountID(ctx context.Context, queryer rowsQuerier, db *AppDB
 	}
 	affected := make([]transactions.Transaction, 0, len(transactionIDs))
 	for _, transactionID := range transactionIDs {
-		affected = append(affected, transactions.Transaction{
-			ID:      transactionID,
-			Records: records[transactionID],
-		})
+		transactionRecords := records[transactionID]
+		transaction := transactions.Transaction{ID: transactionID, Records: transactionRecords}
+		if len(transactionRecords) > 0 {
+			transaction.InitiatedDate = transactionRecords[0].InitiatedDate
+			transaction.LifecycleStatus = transactionRecords[0].LifecycleStatus
+		}
+		affected = append(affected, transaction)
 	}
 
 	return affected, nil

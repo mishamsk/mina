@@ -57,7 +57,6 @@ func TestTransactionTemplateCreateReadListScenarios(t *testing.T) {
 	fullCurrency := "USD"
 	debitAmount := "-30"
 	creditAmount := "20"
-	postingStatus := httpclient.NonExpectedPostingStatusPosted
 	reconciliationStatus := httpclient.Unreconciled
 	full := createTransactionTemplate(t, client, httpclient.TransactionTemplateWriteRequest{
 		Fqn: "Transfers:Planning",
@@ -70,7 +69,6 @@ func TestTransactionTemplateCreateReadListScenarios(t *testing.T) {
 				Amount:               &debitAmount,
 				TagIds:               &coffeeTags,
 				Memo:                 &fullMemo,
-				PostingStatus:        &postingStatus,
 				ReconciliationStatus: &reconciliationStatus,
 			},
 			{
@@ -86,12 +84,12 @@ func TestTransactionTemplateCreateReadListScenarios(t *testing.T) {
 	if len(fullRead.JSON200.Records) != 2 {
 		t.Fatalf("full template record count = %d, want 2; body %+v", len(fullRead.JSON200.Records), fullRead.JSON200)
 	}
-	assertRichTemplateRecord(t, fullRead.JSON200.Records[0], refs, debitAmount, fullMemo, httpclient.PostingStatusPosted, reconciliationStatus)
+	assertRichTemplateRecord(t, fullRead.JSON200.Records[0], refs, debitAmount, fullMemo, reconciliationStatus)
 	if fullRead.JSON200.Records[1].Amount == nil || *fullRead.JSON200.Records[1].Amount != "20.00000000" {
 		t.Fatalf("second amount = %v, want 20.00000000", fullRead.JSON200.Records[1].Amount)
 	}
-	if fullRead.JSON200.Records[1].PostingStatus != nil || fullRead.JSON200.Records[1].ReconciliationStatus != nil {
-		t.Fatalf("second statuses = %v/%v, want nil/nil", fullRead.JSON200.Records[1].PostingStatus, fullRead.JSON200.Records[1].ReconciliationStatus)
+	if fullRead.JSON200.Records[1].ReconciliationStatus != nil {
+		t.Fatalf("second reconciliation status = %v, want nil", fullRead.JSON200.Records[1].ReconciliationStatus)
 	}
 
 	list, err := client.REST().ListTransactionTemplatesWithResponse(context.Background(), nil)
@@ -557,13 +555,6 @@ func TestTransactionTemplateValidationErrors(t *testing.T) {
 		},
 	})
 
-	unsupportedStatus := httpclient.NonExpectedPostingStatus("unknown")
-	assertInvalidTransactionTemplateCreate(t, client, "unsupported posting status", httpclient.TransactionTemplateWriteRequest{
-		Fqn: "Invalid:PostingStatus",
-		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: apptest.Int64Ptr(refs.CategoryID), PostingStatus: &unsupportedStatus},
-		},
-	})
 	unsupportedReconciliationStatus := httpclient.ReconciliationStatus("unknown")
 	assertInvalidTransactionTemplateCreate(t, client, "unsupported reconciliation status", httpclient.TransactionTemplateWriteRequest{
 		Fqn: "Invalid:ReconciliationStatus",
@@ -844,15 +835,13 @@ func assertRequiredOnlyTemplateRecord(t *testing.T, record httpclient.Transactio
 	if record.CategoryId == nil || *record.CategoryId != categoryID {
 		t.Fatalf("category_id = %v, want %d", record.CategoryId, categoryID)
 	}
-	if record.AccountId != nil || record.MemberId != nil || record.Currency != nil || record.Amount != nil || record.Memo != nil ||
-		record.PostingStatus != nil || record.ReconciliationStatus != nil {
-		t.Fatalf("optional defaults = account:%v member:%v currency:%v amount:%v memo:%v posting:%v reconciliation:%v, want all nil",
+	if record.AccountId != nil || record.MemberId != nil || record.Currency != nil || record.Amount != nil || record.Memo != nil || record.ReconciliationStatus != nil {
+		t.Fatalf("optional defaults = account:%v member:%v currency:%v amount:%v memo:%v reconciliation:%v, want all nil",
 			record.AccountId,
 			record.MemberId,
 			record.Currency,
 			record.Amount,
 			record.Memo,
-			record.PostingStatus,
 			record.ReconciliationStatus,
 		)
 	}
@@ -894,7 +883,6 @@ func assertRichTemplateRecord(
 	refs transactionTemplateRefs,
 	amount string,
 	memo string,
-	postingStatus httpclient.PostingStatus,
 	reconciliationStatus httpclient.ReconciliationStatus,
 ) {
 	t.Helper()
@@ -916,9 +904,6 @@ func assertRichTemplateRecord(
 	}
 	if record.Memo == nil || *record.Memo != memo {
 		t.Fatalf("memo = %v, want %q", record.Memo, memo)
-	}
-	if record.PostingStatus == nil || *record.PostingStatus != postingStatus {
-		t.Fatalf("posting_status = %v, want %q", record.PostingStatus, postingStatus)
 	}
 	if record.ReconciliationStatus == nil || *record.ReconciliationStatus != reconciliationStatus {
 		t.Fatalf("reconciliation_status = %v, want %q", record.ReconciliationStatus, reconciliationStatus)

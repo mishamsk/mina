@@ -384,19 +384,6 @@ export const ReferenceDrilldownPage = ({
     },
     [filterKind, setTransactionFilters],
   );
-  const setHideExpected = useCallback(
-    (hideExpected: boolean) => {
-      const currentFilters = stripScopedFilterKind(
-        filterKind,
-        readTransactionFiltersFromSearchParams(readLiveSearchParams()),
-      );
-      setTransactionFilters({
-        ...currentFilters,
-        hideExpected,
-      });
-    },
-    [filterKind, setTransactionFilters],
-  );
   const clearFilterChips = useCallback(() => {
     const currentFilters = stripScopedFilterKind(
       filterKind,
@@ -405,7 +392,6 @@ export const ReferenceDrilldownPage = ({
     setTransactionFilters({
       ...emptyTransactionFilters,
       classes: currentFilters.classes,
-      hideExpected: currentFilters.hideExpected,
       search: currentFilters.search,
     });
   }, [filterKind, setTransactionFilters]);
@@ -497,7 +483,6 @@ export const ReferenceDrilldownPage = ({
         onDateJumpNext={browser.jumpToNextDate}
         onDateJumpPrevious={browser.jumpToPreviousDate}
         onDateJumpValueChange={browser.changeDateJumpValue}
-        onHideExpectedChange={setHideExpected}
         onSelectPage={browser.selectPageTransactions}
         onSearchChange={setSearchFilter}
         onSetBulkEditMode={browser.setBulkEditMode}
@@ -527,6 +512,7 @@ export const ReferenceDrilldownPage = ({
           onConfirmRecurringOccurrence={
             browser.confirmRecurringOccurrenceFromRow
           }
+          onChangeTransactionLifecycle={browser.changeTransactionLifecycle}
           onClearSelection={browser.clearTransactionSelection}
           onFilterCategory={(categoryId) => {
             addEntityFilter("category", categoryId);
@@ -591,6 +577,9 @@ export const ReferenceDrilldownPage = ({
           onUpdateTransactionsBulkReferences={
             browser.updateTransactionsBulkReferences
           }
+          onUpdateTransactionsBulkRecordState={
+            browser.updateTransactionsBulkRecordState
+          }
           page={browser.page}
           pageSize={browser.pageSize}
           refreshErrorMessage={browser.refreshErrorMessage}
@@ -619,6 +608,7 @@ export const ReferenceDrilldownPage = ({
           errorMessage={browser.detail.errorMessage}
           loading={browser.detail.loading}
           lookups={browser.lookups.snapshot}
+          onChangeLifecycle={browser.changeTransactionLifecycle}
           onClose={browser.detail.closeTransactionDetail}
           onConfirmOccurrence={browser.confirmRecurringOccurrenceFromRow}
           onDelete={browser.detail.deleteSelectedTransaction}

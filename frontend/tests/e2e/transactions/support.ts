@@ -30,6 +30,8 @@ interface MemberFixture {
 interface TransactionFixture {
   readonly display_title: string;
   readonly initiated_date?: string;
+  readonly lifecycle_status?: string;
+  readonly settlement?: string;
   readonly transaction_id: number;
 }
 
@@ -40,11 +42,12 @@ interface JournalRecordFixture {
   readonly currency: string;
   readonly member_id?: number | null;
   readonly memo?: string | null;
+  readonly lifecycle_status?: string;
   readonly pending_date?: string | null;
   readonly posted_date?: string | null;
-  readonly posting_status: string;
   readonly record_id?: number;
   readonly reconciliation_status: string;
+  readonly settlement: string | null;
   readonly source: string;
   readonly tag_ids: readonly number[];
 }
@@ -98,11 +101,10 @@ interface RecurringDefinitionFixture {
   readonly recurring_definition_id: number;
 }
 
-const defaultTransactionRequestStatuses = [
-  "cancelled",
+const defaultTransactionRequestLifecycles = [
+  "active",
   "expected",
-  "pending",
-  "posted",
+  "cancelled",
 ] as const;
 
 const formatLocalDate = (date: Date): string =>
@@ -197,12 +199,12 @@ const expectTransactionFilterUrl = async (
     readonly classes?: readonly string[];
     readonly initiatedFrom?: string;
     readonly initiatedTo?: string;
-    readonly hideExpected?: boolean;
+    readonly lifecycles?: readonly string[];
     readonly members?: readonly number[];
     readonly page?: string;
     readonly pageSize?: string;
     readonly q?: string;
-    readonly statuses?: readonly string[];
+    readonly settlements?: readonly string[];
     readonly tags?: readonly number[];
   },
 ): Promise<void> => {
@@ -214,7 +216,7 @@ const expectTransactionFilterUrl = async (
         amountMin: searchParams.get("amountMin"),
         initiatedFrom: searchParams.get("initiatedFrom"),
         initiatedTo: searchParams.get("initiatedTo"),
-        hideExpected: searchParams.get("hideExpected"),
+        lifecycles: searchParams.getAll("lifecycle").sort(),
         page: searchParams.get("page"),
         pageSize: searchParams.get("pageSize"),
         q: searchParams.get("q"),
@@ -227,7 +229,7 @@ const expectTransactionFilterUrl = async (
           .getAll("member")
           .map((value) => Number(value))
           .sort((left, right) => left - right),
-        statuses: searchParams.getAll("status").sort(),
+        settlements: searchParams.getAll("settlement").sort(),
         tags: searchParams
           .getAll("tag")
           .map((value) => Number(value))
@@ -239,7 +241,7 @@ const expectTransactionFilterUrl = async (
       amountMin: expected.amountMin ?? null,
       initiatedFrom: expected.initiatedFrom ?? null,
       initiatedTo: expected.initiatedTo ?? null,
-      hideExpected: expected.hideExpected ? "true" : null,
+      lifecycles: [...(expected.lifecycles ?? [])].sort(),
       page: expected.page ?? "1",
       pageSize: expected.pageSize ?? "50",
       q: expected.q ?? null,
@@ -250,7 +252,7 @@ const expectTransactionFilterUrl = async (
       members: [...(expected.members ?? [])].sort(
         (left, right) => left - right,
       ),
-      statuses: [...(expected.statuses ?? [])].sort(),
+      settlements: [...(expected.settlements ?? [])].sort(),
       tags: [...(expected.tags ?? [])].sort((left, right) => left - right),
     });
 };
@@ -265,7 +267,8 @@ const transactionRequestHasFilters = (
     readonly initiatedFrom?: string;
     readonly initiatedTo?: string;
     readonly limit?: string;
-    readonly statuses?: readonly string[];
+    readonly lifecycles?: readonly string[];
+    readonly settlements?: readonly string[];
     readonly tags?: readonly number[];
   },
 ): boolean => {
@@ -283,10 +286,14 @@ const transactionRequestHasFilters = (
     (expected.limit === undefined || params.get("limit") === expected.limit) &&
     JSON.stringify(params.getAll("transaction_class").sort()) ===
       JSON.stringify([...(expected.classes ?? [])].sort()) &&
-    JSON.stringify(params.getAll("posting_status").sort()) ===
+    JSON.stringify(params.getAll("lifecycle_status").sort()) ===
       JSON.stringify(
-        [...(expected.statuses ?? defaultTransactionRequestStatuses)].sort(),
+        [
+          ...(expected.lifecycles ?? defaultTransactionRequestLifecycles),
+        ].sort(),
       ) &&
+    JSON.stringify(params.getAll("settlement").sort()) ===
+      JSON.stringify([...(expected.settlements ?? [])].sort()) &&
     JSON.stringify(tags) ===
       JSON.stringify(
         [...(expected.tags ?? [])].sort((left, right) => left - right),
@@ -543,7 +550,7 @@ const expectDatelessReadOnlyDetailGrid = async (
         "Category",
         "Tags",
         "Member",
-        "Status",
+        "Settlement",
         "Memo",
       ];
   await expect(table.locator("th")).toHaveCount(expectedHeaders.length);
@@ -554,6 +561,12 @@ const expectDatelessReadOnlyDetailGrid = async (
   await expect(table.locator("tr[data-detail-record-row='true']")).toHaveCount(
     recordCount,
   );
+  if (!decluttered) {
+    await expect(table.locator("td[data-label='Settlement']")).toHaveCount(
+      recordCount,
+    );
+    await expect(table.locator("td[data-label='Status']")).toHaveCount(0);
+  }
   await expect(panel.locator("[data-inline-editor-id]")).toHaveCount(0);
   await expect(panel.locator("input, textarea, select")).toHaveCount(0);
   await expect(
@@ -726,16 +739,11 @@ const expectMouseDisclosure = async (
     .filter({ hasText: memo });
   await expect(disclosure).toBeVisible();
   await expect(disclosure).toContainText("Initiated");
-  await expect(disclosure).toContainText("Pending");
   await expect(disclosure).toContainText("Posted");
-  await expect(disclosure).toContainText("Posting status");
+  await expect(disclosure).toContainText("Settlement");
   await expect(disclosure).toContainText("Source");
   await expect(disclosure).toContainText(memo);
-  await expect(
-    disclosure
-      .getByText("Pending", { exact: true })
-      .locator("xpath=following-sibling::dd[1]"),
-  ).toHaveText("—");
+  await expect(disclosure).not.toContainText(/pending date|posted date/i);
   await expect(disclosure).not.toContainText("Invalid Date");
   await expect(
     disclosure.locator(
@@ -1077,8 +1085,8 @@ const comparableRecords = (records: readonly JournalRecordFixture[]) =>
       currency: record.currency,
       member_id: record.member_id ?? null,
       memo: record.memo ?? null,
-      posting_status: record.posting_status,
       reconciliation_status: record.reconciliation_status,
+      settlement: record.settlement,
       source: record.source,
       tag_ids: [...record.tag_ids].sort((left, right) => left - right),
     }))
@@ -1691,7 +1699,7 @@ export {
   createMember,
   createSearchSpend,
   createTag,
-  defaultTransactionRequestStatuses,
+  defaultTransactionRequestLifecycles,
   delayTransactionEntryDraftDeletion,
   deleteTransaction,
   editorButtonsFitContainer,

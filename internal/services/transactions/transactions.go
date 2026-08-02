@@ -15,22 +15,37 @@ import (
 	"github.com/mishamsk/mina/internal/services/values"
 )
 
-// PostingStatus is a journal record posting lifecycle state.
-type PostingStatus string
+// LifecycleStatus is a transaction lifecycle state.
+type LifecycleStatus string
 
 const (
-	// PostingStatusExpected identifies a pre-confirmation expected journal record.
-	PostingStatusExpected PostingStatus = "expected"
-	// PostingStatusPending identifies a pending journal record.
-	PostingStatusPending PostingStatus = "pending"
-	// PostingStatusPosted identifies a posted journal record.
-	PostingStatusPosted PostingStatus = "posted"
-	// PostingStatusCancelled identifies a cancelled journal record.
-	PostingStatusCancelled PostingStatus = "cancelled"
+	// LifecycleStatusActive identifies ordinary accounting activity.
+	LifecycleStatusActive LifecycleStatus = "active"
+	// LifecycleStatusExpected identifies a pre-confirmation recurring transaction.
+	LifecycleStatusExpected LifecycleStatus = "expected"
+	// LifecycleStatusCancelled identifies preserved activity excluded from accounting.
+	LifecycleStatusCancelled LifecycleStatus = "cancelled"
 )
 
-const mixedCancellationStatusMessage = "transaction records must be all cancelled or none cancelled"
-const mixedExpectedStatusMessage = "transaction records must be all expected or none expected"
+// SettlementStatus is the derived settlement of an owned or party record.
+type SettlementStatus string
+
+const (
+	// SettlementStatusPending identifies a balance record without a posted date.
+	SettlementStatusPending SettlementStatus = "pending"
+	// SettlementStatusPosted identifies a balance record with a posted date.
+	SettlementStatusPosted SettlementStatus = "posted"
+)
+
+// SettlementSummary is the derived settlement of a transaction's balance records.
+type SettlementSummary string
+
+const (
+	SettlementSummaryPending       SettlementSummary = "pending"
+	SettlementSummaryPosted        SettlementSummary = "posted"
+	SettlementSummaryMixed         SettlementSummary = "mixed"
+	SettlementSummaryNotApplicable SettlementSummary = "not_applicable"
+)
 
 // ReconciliationStatus is a journal record reconciliation state.
 type ReconciliationStatus string
@@ -59,6 +74,8 @@ type Transaction struct {
 	ID                    int64
 	InitiatedDate         values.CivilDate
 	RecurringOccurrenceID *int64
+	LifecycleStatus       LifecycleStatus
+	Settlement            SettlementSummary
 	Class                 TransactionClass
 	DisplayTitle          string
 	PrimaryAmounts        []DisplayAmount
@@ -89,7 +106,8 @@ type JournalRecord struct {
 	Memo                 *string
 	PendingDate          *time.Time
 	PostedDate           *time.Time
-	PostingStatus        PostingStatus
+	LifecycleStatus      LifecycleStatus
+	Settlement           *SettlementStatus
 	ReconciliationStatus ReconciliationStatus
 	Source               Source
 	ExternalID           *string
@@ -115,9 +133,40 @@ type JournalRecordInput struct {
 	CategoryID           *int64
 	TagIDs               []int64
 	Memo                 *string
+	Settlement           *SettlementIntent
+	ReconciliationStatus ReconciliationStatus
+	Source               Source
+	ExternalID           *string
+	ExternalSystem       *string
+}
+
+// SettlementIntent is an input-only pending or posted instruction with optional exact event times.
+type SettlementIntent struct {
+	Status      SettlementStatus
+	PendingDate *time.Time
+	PostedDate  *time.Time
+}
+
+// PersistInput is a fully normalized transaction write passed to persistence.
+type PersistInput struct {
+	InitiatedDate         values.CivilDate
+	RecurringOccurrenceID *int64
+	LifecycleStatus       LifecycleStatus
+	Records               []PersistJournalRecordInput
+}
+
+// PersistJournalRecordInput contains explicit normalized journal-record values.
+type PersistJournalRecordInput struct {
+	AccountID            int64
+	MemberID             *int64
+	Currency             string
+	Amount               values.Decimal
+	AmountUSD            *values.Decimal
+	CategoryID           *int64
+	TagIDs               []int64
+	Memo                 *string
 	PendingDate          *time.Time
 	PostedDate           *time.Time
-	PostingStatus        PostingStatus
 	ReconciliationStatus ReconciliationStatus
 	Source               Source
 	ExternalID           *string
@@ -154,9 +203,9 @@ type RecordSearchOptions struct {
 	CategoryID            *int64
 	MemberID              *int64
 	TagID                 *int64
-	PostingStatus         *PostingStatus
+	LifecycleStatus       *LifecycleStatus
+	Settlement            *SettlementStatus
 	RecordRole            *RecordRole
-	IncludeExpected       bool
 	ReconciliationStatus  *ReconciliationStatus
 	AmountMin             *values.Decimal
 	AmountMax             *values.Decimal
@@ -180,7 +229,8 @@ type ListOptions struct {
 	CategoryIDs        []int64
 	TagIDs             []int64
 	MemberIDs          []int64
-	PostingStatuses    []PostingStatus
+	LifecycleStatuses  []LifecycleStatus
+	Settlements        []SettlementSummary
 	TransactionClasses []TransactionClass
 	TransactionShapes  []TransactionShapeType
 	RecordRoles        []RecordRole
@@ -314,10 +364,11 @@ type SemanticRecord struct {
 
 // Repository persists transaction and journal record state.
 type Repository interface {
-	Create(context.Context, CreateInput) (Transaction, error)
-	Replace(context.Context, int64, CreateInput) (Transaction, error)
+	Create(context.Context, PersistInput) (Transaction, error)
+	Replace(context.Context, int64, PersistInput) (Transaction, error)
 	Get(context.Context, int64) (Transaction, error)
 	Cancel(context.Context, int64) (Transaction, error)
+	Restore(context.Context, int64) (Transaction, error)
 	List(context.Context, ListOptions) (ListResult, error)
 	MonthTotals(context.Context, MonthTotalsRange) (MonthActivityTotals, error)
 	Tombstone(context.Context, int64) error
@@ -328,8 +379,9 @@ type Repository interface {
 	TransactionsByAccountID(context.Context, int64) ([]Transaction, error)
 	BulkCategorize(context.Context, []int64, int64) (int, error)
 	BulkUpdateTags(context.Context, []int64, []int64, []int64) (int, error)
-	BulkReassignAccount(context.Context, []int64, int64) (int, error)
-	BulkUpdateStatuses(context.Context, []int64, *PostingStatus, *ReconciliationStatus) (int, error)
+	BulkReassignAccount(context.Context, []int64, int64, []*time.Time, []*time.Time) (int, error)
+	BulkSetSettlement(context.Context, []int64, []*time.Time, []*time.Time) (int, error)
+	BulkSetReconciliation(context.Context, []int64, ReconciliationStatus) (int, error)
 	ListMissingAmountUSDRecords(context.Context) ([]AmountUSDBackfillRecord, error)
 	BatchSetAmountUSD(context.Context, []AmountUSDBackfillUpdate) error
 }
@@ -377,7 +429,13 @@ type Service struct {
 	members              MemberReferenceValidator
 	amountUSDDeriver     AmountUSDDeriver
 	refs                 ReferenceSerializer
+	clock                Clock
 	currencyUsageChanged func()
+}
+
+// Clock supplies operation timestamps at the service boundary.
+type Clock interface {
+	Now() time.Time
 }
 
 // NewService creates a transaction service backed by repositories.
@@ -389,6 +447,7 @@ func NewService(
 	members MemberReferenceValidator,
 	amountUSDDeriver AmountUSDDeriver,
 	refs ReferenceSerializer,
+	clock Clock,
 	currencyUsageChanged func(),
 ) *Service {
 	return &Service{
@@ -399,6 +458,7 @@ func NewService(
 		members:              members,
 		amountUSDDeriver:     amountUSDDeriver,
 		refs:                 refs,
+		clock:                clock,
 		currencyUsageChanged: currencyUsageChanged,
 	}
 }
@@ -479,7 +539,6 @@ func validateClassificationRecord(index int, record ClassificationRecordInput) e
 
 // Create validates and creates a transaction and its journal records.
 func (s *Service) Create(ctx context.Context, input CreateInput) (Transaction, error) {
-	fillMissingLifecycleDates(&input)
 	if err := validateTransactionInput(input); err != nil {
 		return Transaction{}, err
 	}
@@ -489,10 +548,11 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (Transaction, e
 
 	var transaction Transaction
 	if err := s.refs.SerializeReferenceOperation(func() error {
-		if err := s.validateInputClassification(ctx, input); err != nil {
+		persistInput, err := s.preparePersistInput(ctx, input, LifecycleStatusActive)
+		if err != nil {
 			return err
 		}
-		created, err := s.repo.Create(ctx, input)
+		created, err := s.repo.Create(ctx, persistInput)
 		if errors.Is(err, services.ErrNotFound) || errors.Is(err, services.ErrInvalidReference) {
 			return services.InvalidRequest("transaction references missing or inactive resource")
 		}
@@ -519,7 +579,6 @@ func (s *Service) Replace(ctx context.Context, id int64, input CreateInput) (Tra
 	if id <= 0 {
 		return Transaction{}, services.InvalidRequest("transaction_id must be positive")
 	}
-	fillMissingLifecycleDates(&input)
 	if err := validateTransactionInput(input); err != nil {
 		return Transaction{}, err
 	}
@@ -529,13 +588,14 @@ func (s *Service) Replace(ctx context.Context, id int64, input CreateInput) (Tra
 
 	var transaction Transaction
 	if err := s.refs.SerializeReferenceOperation(func() error {
-		if err := s.validateGenericTransactionMutation(ctx, id); err != nil {
+		if err := s.validateActiveTransactionMutation(ctx, id); err != nil {
 			return err
 		}
-		if err := s.validateInputClassification(ctx, input); err != nil {
+		persistInput, err := s.preparePersistInput(ctx, input, LifecycleStatusActive)
+		if err != nil {
 			return err
 		}
-		replaced, err := s.repo.Replace(ctx, id, input)
+		replaced, err := s.repo.Replace(ctx, id, persistInput)
 		if errors.Is(err, services.ErrInvalidReference) {
 			return services.InvalidRequest("transaction references missing or inactive resource")
 		}
@@ -574,15 +634,11 @@ func (s *Service) inferMissingAmountUSD(ctx context.Context, input *CreateInput)
 		if input.Records[index].AmountUSD != nil {
 			continue
 		}
-		lookupDate := input.InitiatedDate
-		if input.Records[index].PostedDate != nil {
-			lookupDate = values.CivilDateFromTime(*input.Records[index].PostedDate)
-		}
 		amountUSD, err := s.amountUSDDeriver.SignedAmountUSD(
 			ctx,
 			input.Records[index].Currency,
 			input.Records[index].Amount,
-			lookupDate,
+			input.InitiatedDate,
 		)
 		if err != nil {
 			return err
@@ -641,7 +697,7 @@ func (s *Service) Get(ctx context.Context, id int64) (Transaction, error) {
 	return classifyTransaction(transaction)
 }
 
-// Cancel sets every active record in a transaction to cancelled.
+// Cancel changes a wholly pending active transaction to cancelled without changing records.
 func (s *Service) Cancel(ctx context.Context, id int64) (Transaction, error) {
 	if id <= 0 {
 		return Transaction{}, services.InvalidRequest("transaction_id must be positive")
@@ -649,16 +705,55 @@ func (s *Service) Cancel(ctx context.Context, id int64) (Transaction, error) {
 
 	var transaction Transaction
 	err := s.refs.SerializeReferenceOperation(func() error {
-		if err := s.validateGenericTransactionMutation(ctx, id); err != nil {
+		current, err := s.Get(ctx, id)
+		if err != nil {
 			return err
 		}
-		var err error
+		if current.LifecycleStatus == LifecycleStatusCancelled {
+			transaction = current
+			return nil
+		}
+		if current.LifecycleStatus != LifecycleStatusActive {
+			return services.InvalidRequest("only active transactions can be cancelled")
+		}
+		if current.Settlement != SettlementSummaryPending {
+			return services.InvalidRequest("only wholly pending transactions can be cancelled")
+		}
 		transaction, err = s.repo.Cancel(ctx, id)
 		return err
 	})
 	if errors.Is(err, services.ErrNotFound) {
 		return Transaction{}, services.NotFound("transaction not found")
 	}
+	if err != nil {
+		return Transaction{}, err
+	}
+
+	return classifyTransaction(transaction)
+}
+
+// Restore changes a cancelled transaction back to active without changing records.
+func (s *Service) Restore(ctx context.Context, id int64) (Transaction, error) {
+	if id <= 0 {
+		return Transaction{}, services.InvalidRequest("transaction_id must be positive")
+	}
+
+	var transaction Transaction
+	err := s.refs.SerializeReferenceOperation(func() error {
+		current, err := s.Get(ctx, id)
+		if err != nil {
+			return err
+		}
+		if current.LifecycleStatus == LifecycleStatusActive {
+			transaction = current
+			return nil
+		}
+		if current.LifecycleStatus != LifecycleStatusCancelled {
+			return services.InvalidRequest("only cancelled transactions can be restored")
+		}
+		transaction, err = s.repo.Restore(ctx, id)
+		return err
+	})
 	if err != nil {
 		return Transaction{}, err
 	}
@@ -737,9 +832,14 @@ func validateTransactionListOptions(opts ListOptions) (ListOptions, error) {
 	if err := validatePositiveIDs("member_id", opts.MemberIDs); err != nil {
 		return ListOptions{}, err
 	}
-	for _, status := range opts.PostingStatuses {
-		if err := validatePostingStatus(0, status); err != nil {
-			return ListOptions{}, services.InvalidRequest("posting_status values must be expected, pending, posted, or cancelled")
+	for _, status := range opts.LifecycleStatuses {
+		if !validLifecycleStatus(status) {
+			return ListOptions{}, services.InvalidRequest("lifecycle_status values must be active, expected, or cancelled")
+		}
+	}
+	for _, settlement := range opts.Settlements {
+		if !validSettlementSummary(settlement) {
+			return ListOptions{}, services.InvalidRequest("settlement values must be pending, posted, mixed, or not_applicable")
 		}
 	}
 	for _, class := range opts.TransactionClasses {
@@ -883,6 +983,17 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 	return nil
 }
 
+func (s *Service) validateActiveTransactionMutation(ctx context.Context, transactionID int64) error {
+	transaction, err := s.Get(ctx, transactionID)
+	if err != nil {
+		return err
+	}
+	if transaction.LifecycleStatus != LifecycleStatusActive {
+		return services.InvalidRequest("only active transactions can be replaced")
+	}
+	return nil
+}
+
 func (s *Service) validateGenericTransactionMutation(ctx context.Context, transactionID int64) error {
 	generatedExpected, err := s.repo.HasExpectedRecurringOccurrenceTransaction(ctx, transactionID)
 	if err != nil {
@@ -953,6 +1064,11 @@ func classifySearchedRecords(records services.PaginatedList[JournalRecord]) (ser
 			return services.PaginatedList[JournalRecord]{}, err
 		}
 		record.Role = role
+		settlement, err := deriveRecordSettlement(index, record.LifecycleStatus, *record)
+		if err != nil {
+			return services.PaginatedList[JournalRecord]{}, err
+		}
+		record.Settlement = settlement
 	}
 	return records, nil
 }
@@ -1035,7 +1151,7 @@ func (s *Service) BulkUpdateTags(ctx context.Context, recordIDs []int64, addTagI
 }
 
 // BulkReassignAccount assigns one account to selected journal records.
-func (s *Service) BulkReassignAccount(ctx context.Context, recordIDs []int64, accountID int64) (BulkRecordOperationResponse, error) {
+func (s *Service) BulkReassignAccount(ctx context.Context, recordIDs []int64, accountID int64, settlement *SettlementIntent) (BulkRecordOperationResponse, error) {
 	if err := validateRecordSelection(recordIDs); err != nil {
 		return BulkRecordOperationResponse{}, err
 	}
@@ -1047,10 +1163,15 @@ func (s *Service) BulkReassignAccount(ctx context.Context, recordIDs []int64, ac
 		if err := s.validateNoExpectedRecurringOccurrenceRecords(ctx, recordIDs); err != nil {
 			return err
 		}
-		if err := s.validateBulkReassignAccountClassification(ctx, recordIDs, accountID); err != nil {
+		account, affected, err := s.validateBulkReassignAccountClassification(ctx, recordIDs, accountID)
+		if err != nil {
 			return err
 		}
-		updated, err := s.repo.BulkReassignAccount(ctx, recordIDs, accountID)
+		pendingDates, postedDates, err := s.normalizedBulkReassignmentSettlement(recordIDs, affected, account.AccountType, settlement)
+		if err != nil {
+			return err
+		}
+		updated, err := s.repo.BulkReassignAccount(ctx, recordIDs, accountID, pendingDates, postedDates)
 		if errors.Is(err, services.ErrInvalidReference) {
 			return services.InvalidRequest("records or account missing or inactive resource")
 		}
@@ -1066,43 +1187,22 @@ func (s *Service) BulkReassignAccount(ctx context.Context, recordIDs []int64, ac
 	return bulkRecordOperationResponse(recordIDs, count), nil
 }
 
-// BulkUpdateStatuses updates posting and reconciliation statuses on selected journal records.
-func (s *Service) BulkUpdateStatuses(
-	ctx context.Context,
-	recordIDs []int64,
-	postingStatus *PostingStatus,
-	reconciliationStatus *ReconciliationStatus,
-) (BulkRecordOperationResponse, error) {
+// BulkSetSettlement changes settlement on selected active balance records.
+func (s *Service) BulkSetSettlement(ctx context.Context, recordIDs []int64, settlement SettlementStatus) (BulkRecordOperationResponse, error) {
 	if err := validateRecordSelection(recordIDs); err != nil {
 		return BulkRecordOperationResponse{}, err
 	}
-	if postingStatus == nil && reconciliationStatus == nil {
-		return BulkRecordOperationResponse{}, services.InvalidRequest("posting_status or reconciliation_status is required")
-	}
-	if postingStatus != nil {
-		switch *postingStatus {
-		case PostingStatusPending, PostingStatusPosted, PostingStatusCancelled:
-		default:
-			return BulkRecordOperationResponse{}, services.InvalidRequest("posting_status must be pending, posted, or cancelled")
-		}
-	}
-	if reconciliationStatus != nil {
-		switch *reconciliationStatus {
-		case ReconciliationStatusReconciled, ReconciliationStatusUnreconciled:
-		default:
-			return BulkRecordOperationResponse{}, services.InvalidRequest("reconciliation_status must be reconciled or unreconciled")
-		}
+	if !validSettlementStatus(settlement) {
+		return BulkRecordOperationResponse{}, services.InvalidRequest("settlement must be pending or posted")
 	}
 
 	var count int
 	if err := s.refs.SerializeReferenceOperation(func() error {
-		if err := s.validateNoExpectedRecurringOccurrenceRecords(ctx, recordIDs); err != nil {
+		pendingDates, postedDates, err := s.normalizedBulkSettlement(ctx, recordIDs, settlement)
+		if err != nil {
 			return err
 		}
-		if err := s.validateBulkPostingStatusInvariants(ctx, recordIDs, postingStatus); err != nil {
-			return err
-		}
-		updated, err := s.repo.BulkUpdateStatuses(ctx, recordIDs, postingStatus, reconciliationStatus)
+		updated, err := s.repo.BulkSetSettlement(ctx, recordIDs, pendingDates, postedDates)
 		if errors.Is(err, services.ErrInvalidReference) {
 			return services.InvalidRequest("records missing or inactive resource")
 		}
@@ -1118,17 +1218,118 @@ func (s *Service) BulkUpdateStatuses(
 	return bulkRecordOperationResponse(recordIDs, count), nil
 }
 
-func (s *Service) validateInputClassification(ctx context.Context, input CreateInput) error {
+// BulkSetReconciliation changes reconciliation on selected active records.
+func (s *Service) BulkSetReconciliation(ctx context.Context, recordIDs []int64, status ReconciliationStatus) (BulkRecordOperationResponse, error) {
+	if err := validateRecordSelection(recordIDs); err != nil {
+		return BulkRecordOperationResponse{}, err
+	}
+	if err := validateReconciliationStatus(0, status); err != nil {
+		return BulkRecordOperationResponse{}, services.InvalidRequest("reconciliation_status must be reconciled or unreconciled")
+	}
+	if err := s.validateSelectedActiveRecords(ctx, recordIDs); err != nil {
+		return BulkRecordOperationResponse{}, err
+	}
+	updated, err := s.repo.BulkSetReconciliation(ctx, recordIDs, status)
+	if errors.Is(err, services.ErrInvalidReference) {
+		return BulkRecordOperationResponse{}, services.InvalidRequest("records missing or inactive resource")
+	}
+	if err != nil {
+		return BulkRecordOperationResponse{}, err
+	}
+	return bulkRecordOperationResponse(recordIDs, updated), nil
+}
+
+func (s *Service) preparePersistInput(ctx context.Context, input CreateInput, lifecycle LifecycleStatus) (PersistInput, error) {
 	dictionaries, err := s.semanticDictionaries(ctx, input.Records)
 	if err != nil {
-		return err
+		return PersistInput{}, err
 	}
 	records, err := semanticRecordsFromDictionaries(input.Records, dictionaries)
 	if err != nil {
-		return err
+		return PersistInput{}, err
 	}
-	_, err = classifySemanticRecords(records)
-	return err
+	if _, err := classifySemanticRecords(records); err != nil {
+		return PersistInput{}, err
+	}
+
+	persist := PersistInput{
+		InitiatedDate:   input.InitiatedDate,
+		LifecycleStatus: lifecycle,
+		Records:         make([]PersistJournalRecordInput, 0, len(input.Records)),
+	}
+	defaultDate := SettlementTimestampFromInitiatedDate(input.InitiatedDate)
+	for index, record := range input.Records {
+		account := dictionaries.accounts[record.AccountID]
+		pendingDate, postedDate, err := normalizeSettlement(index, account.AccountType, lifecycle, record.Settlement, defaultDate)
+		if err != nil {
+			return PersistInput{}, err
+		}
+		persist.Records = append(persist.Records, PersistJournalRecordInput{
+			AccountID:            record.AccountID,
+			MemberID:             record.MemberID,
+			Currency:             record.Currency,
+			Amount:               record.Amount,
+			AmountUSD:            record.AmountUSD,
+			CategoryID:           record.CategoryID,
+			TagIDs:               append([]int64{}, record.TagIDs...),
+			Memo:                 record.Memo,
+			PendingDate:          pendingDate,
+			PostedDate:           postedDate,
+			ReconciliationStatus: record.ReconciliationStatus,
+			Source:               record.Source,
+			ExternalID:           record.ExternalID,
+			ExternalSystem:       record.ExternalSystem,
+		})
+	}
+
+	return persist, nil
+}
+
+func normalizeSettlement(index int, accountType accounts.AccountType, lifecycle LifecycleStatus, intent *SettlementIntent, defaultDate time.Time) (*time.Time, *time.Time, error) {
+	isBalance := accountType == accounts.AccountTypeOwned || accountType == accounts.AccountTypeParty
+	if lifecycle == LifecycleStatusExpected {
+		if intent != nil {
+			return nil, nil, services.InvalidRequest(indexedField(index, "settlement") + " must be omitted for expected transactions")
+		}
+		return nil, nil, nil
+	}
+	if !isBalance {
+		if intent != nil {
+			return nil, nil, services.InvalidRequest(indexedField(index, "settlement") + " is only valid for owned or party accounts")
+		}
+		return nil, nil, nil
+	}
+	if intent == nil {
+		return nil, nil, services.InvalidRequest(indexedField(index, "settlement") + " is required for owned or party accounts")
+	}
+
+	return NormalizeSettlementIntent(indexedField(index, "settlement"), *intent, defaultDate)
+}
+
+// NormalizeSettlementIntent validates pending or posted intent and fills omitted timestamps.
+func NormalizeSettlementIntent(field string, intent SettlementIntent, defaultDate time.Time) (*time.Time, *time.Time, error) {
+	pendingDate := intent.PendingDate
+	postedDate := intent.PostedDate
+	switch intent.Status {
+	case SettlementStatusPending:
+		if postedDate != nil {
+			return nil, nil, services.InvalidRequest(field + ".posted_date must be omitted for pending settlement")
+		}
+		if pendingDate == nil {
+			pendingDate = &defaultDate
+		}
+	case SettlementStatusPosted:
+		if postedDate == nil {
+			postedDate = &defaultDate
+		}
+	default:
+		return nil, nil, services.InvalidRequest(field + ".status must be pending or posted")
+	}
+	if pendingDate != nil && postedDate != nil && postedDate.Before(*pendingDate) {
+		return nil, nil, services.InvalidRequest(field + ".posted_date must not precede pending_date")
+	}
+
+	return pendingDate, postedDate, nil
 }
 
 func semanticRecordsFromDictionaries(inputs []JournalRecordInput, dictionaries semanticDictionaries) ([]SemanticRecord, error) {
@@ -1185,7 +1386,7 @@ func (s *Service) validateBulkCategorizeClassification(ctx context.Context, reco
 				found[record.ID] = struct{}{}
 			}
 		}
-		if err := ValidateTransactionClassification(affected[transactionIndex]); err != nil {
+		if err := ValidateTransactionSemantics(affected[transactionIndex]); err != nil {
 			return err
 		}
 	}
@@ -1196,13 +1397,13 @@ func (s *Service) validateBulkCategorizeClassification(ctx context.Context, reco
 	return nil
 }
 
-func (s *Service) validateBulkReassignAccountClassification(ctx context.Context, recordIDs []int64, accountID int64) error {
+func (s *Service) validateBulkReassignAccountClassification(ctx context.Context, recordIDs []int64, accountID int64) (accounts.Reference, []Transaction, error) {
 	affected, err := s.repo.TransactionsByRecordIDs(ctx, recordIDs)
 	if errors.Is(err, services.ErrInvalidReference) {
-		return invalidBulkAccountReferenceError()
+		return accounts.Reference{}, nil, invalidBulkAccountReferenceError()
 	}
 	if err != nil {
-		return err
+		return accounts.Reference{}, nil, err
 	}
 
 	selected := idSet(recordIDs)
@@ -1229,10 +1430,10 @@ func (s *Service) validateBulkReassignAccountClassification(ctx context.Context,
 		accounts.ReferenceOptions{AllowHidden: true},
 	)
 	if errors.Is(err, services.ErrInvalidReference) {
-		return invalidBulkAccountReferenceError()
+		return accounts.Reference{}, nil, invalidBulkAccountReferenceError()
 	}
 	if err != nil {
-		return err
+		return accounts.Reference{}, nil, err
 	}
 	accountReference := accountReferences[accountID]
 	for transactionIndex := range affected {
@@ -1245,15 +1446,15 @@ func (s *Service) validateBulkReassignAccountClassification(ctx context.Context,
 				found[record.ID] = struct{}{}
 			}
 		}
-		if err := ValidateTransactionClassification(affected[transactionIndex]); err != nil {
-			return err
+		if err := ValidateTransactionSemantics(affected[transactionIndex]); err != nil {
+			return accounts.Reference{}, nil, err
 		}
 	}
 	if len(found) != len(selected) {
-		return invalidBulkAccountReferenceError()
+		return accounts.Reference{}, nil, invalidBulkAccountReferenceError()
 	}
 
-	return nil
+	return accountReference, affected, nil
 }
 
 func (s *Service) validateNoExpectedRecurringOccurrenceRecords(ctx context.Context, recordIDs []int64) error {
@@ -1268,10 +1469,113 @@ func (s *Service) validateNoExpectedRecurringOccurrenceRecords(ctx context.Conte
 	return nil
 }
 
-func (s *Service) validateBulkPostingStatusInvariants(ctx context.Context, recordIDs []int64, postingStatus *PostingStatus) error {
-	if postingStatus == nil {
-		return nil
+func (s *Service) normalizedBulkSettlement(ctx context.Context, recordIDs []int64, settlement SettlementStatus) ([]*time.Time, []*time.Time, error) {
+	affected, err := s.repo.TransactionsByRecordIDs(ctx, recordIDs)
+	if errors.Is(err, services.ErrInvalidReference) {
+		return nil, nil, services.InvalidRequest("records missing or inactive resource")
 	}
+	if err != nil {
+		return nil, nil, err
+	}
+
+	selected := idSet(recordIDs)
+	records := make(map[int64]JournalRecord, len(recordIDs))
+	for _, transaction := range affected {
+		if transaction.LifecycleStatus != LifecycleStatusActive {
+			return nil, nil, services.InvalidRequest("settlement can only change on active transactions")
+		}
+		for _, record := range transaction.Records {
+			if _, ok := selected[record.ID]; ok {
+				if record.AccountType != accounts.AccountTypeOwned && record.AccountType != accounts.AccountTypeParty {
+					return nil, nil, services.InvalidRequest("settlement can only change on owned or party records")
+				}
+				records[record.ID] = record
+			}
+		}
+	}
+	if len(records) != len(selected) {
+		return nil, nil, services.InvalidRequest("records missing or inactive resource")
+	}
+
+	now := s.clock.Now().UTC()
+	pendingDates := make([]*time.Time, 0, len(recordIDs))
+	postedDates := make([]*time.Time, 0, len(recordIDs))
+	for _, recordID := range recordIDs {
+		record := records[recordID]
+		pendingDate := record.PendingDate
+		postedDate := record.PostedDate
+		switch settlement {
+		case SettlementStatusPending:
+			if pendingDate == nil {
+				pendingDate = &now
+			}
+			postedDate = nil
+		case SettlementStatusPosted:
+			if postedDate == nil {
+				postedDate = &now
+				if pendingDate != nil && postedDate.Before(*pendingDate) {
+					postedDate = pendingDate
+				}
+			}
+		}
+		pendingDates = append(pendingDates, pendingDate)
+		postedDates = append(postedDates, postedDate)
+	}
+
+	return pendingDates, postedDates, nil
+}
+
+func (s *Service) normalizedBulkReassignmentSettlement(recordIDs []int64, affected []Transaction, targetType accounts.AccountType, intent *SettlementIntent) ([]*time.Time, []*time.Time, error) {
+	selected := idSet(recordIDs)
+	records := make(map[int64]JournalRecord, len(recordIDs))
+	for _, transaction := range affected {
+		if transaction.LifecycleStatus != LifecycleStatusActive {
+			return nil, nil, services.InvalidRequest("accounts can only change on active transactions")
+		}
+		for _, record := range transaction.Records {
+			if _, ok := selected[record.ID]; ok {
+				records[record.ID] = record
+			}
+		}
+	}
+	if len(records) != len(selected) {
+		return nil, nil, invalidBulkAccountReferenceError()
+	}
+
+	isBalance := targetType == accounts.AccountTypeOwned || targetType == accounts.AccountTypeParty
+	if !isBalance {
+		if intent != nil {
+			return nil, nil, services.InvalidRequest("settlement must be omitted for flow or system accounts")
+		}
+		return make([]*time.Time, len(recordIDs)), make([]*time.Time, len(recordIDs)), nil
+	}
+
+	now := s.clock.Now().UTC()
+	pendingDates := make([]*time.Time, 0, len(recordIDs))
+	postedDates := make([]*time.Time, 0, len(recordIDs))
+	for index, recordID := range recordIDs {
+		record := records[recordID]
+		recordIntent := intent
+		if recordIntent == nil {
+			status := SettlementStatusPending
+			if record.PostedDate != nil {
+				status = SettlementStatusPosted
+			} else if record.PendingDate == nil {
+				return nil, nil, services.InvalidRequest(indexedField(index, "settlement") + " is required when reassigning to an owned or party account")
+			}
+			recordIntent = &SettlementIntent{Status: status, PendingDate: record.PendingDate, PostedDate: record.PostedDate}
+		}
+		pendingDate, postedDate, err := normalizeSettlement(index, targetType, LifecycleStatusActive, recordIntent, now)
+		if err != nil {
+			return nil, nil, err
+		}
+		pendingDates = append(pendingDates, pendingDate)
+		postedDates = append(postedDates, postedDate)
+	}
+	return pendingDates, postedDates, nil
+}
+
+func (s *Service) validateSelectedActiveRecords(ctx context.Context, recordIDs []int64) error {
 	affected, err := s.repo.TransactionsByRecordIDs(ctx, recordIDs)
 	if errors.Is(err, services.ErrInvalidReference) {
 		return services.InvalidRequest("records missing or inactive resource")
@@ -1279,28 +1583,22 @@ func (s *Service) validateBulkPostingStatusInvariants(ctx context.Context, recor
 	if err != nil {
 		return err
 	}
-
 	selected := idSet(recordIDs)
 	found := map[int64]struct{}{}
-	for transactionIndex := range affected {
-		for recordIndex := range affected[transactionIndex].Records {
-			record := &affected[transactionIndex].Records[recordIndex]
-			if _, ok := selected[record.ID]; ok {
-				record.PostingStatus = *postingStatus
-				found[record.ID] = struct{}{}
+	for _, transaction := range affected {
+		if transaction.LifecycleStatus != LifecycleStatusActive {
+			return services.InvalidRequest("records can only change on active transactions")
+		}
+		for _, record := range transaction.Records {
+			if _, ok := selected[record.ID]; !ok {
+				continue
 			}
-		}
-		if err := validateTransactionCancellationInvariant(affected[transactionIndex].Records); err != nil {
-			return err
-		}
-		if err := validateTransactionExpectedInvariant(affected[transactionIndex].Records); err != nil {
-			return err
+			found[record.ID] = struct{}{}
 		}
 	}
 	if len(found) != len(selected) {
 		return services.InvalidRequest("records missing or inactive resource")
 	}
-
 	return nil
 }
 
@@ -1389,27 +1687,9 @@ func invalidBulkAccountReferenceError() error {
 	return services.InvalidRequest("records or account missing or inactive resource")
 }
 
-func fillMissingLifecycleDates(input *CreateInput) {
-	defaultLifecycleDate := LifecycleTimestampFromInitiatedDate(input.InitiatedDate)
-	for index := range input.Records {
-		record := &input.Records[index]
-		if record.PostingStatus == PostingStatusExpected {
-			record.PendingDate = nil
-			record.PostedDate = nil
-			continue
-		}
-		if record.PostingStatus == PostingStatusPending && record.PendingDate == nil {
-			record.PendingDate = &defaultLifecycleDate
-		}
-		if record.PostingStatus == PostingStatusPosted && record.PostedDate == nil {
-			record.PostedDate = &defaultLifecycleDate
-		}
-	}
-}
-
-// LifecycleTimestampFromInitiatedDate returns the end-of-day UTC timestamp
-// used when a lifecycle timestamp is derived from a transaction's civil date.
-func LifecycleTimestampFromInitiatedDate(initiatedDate values.CivilDate) time.Time {
+// SettlementTimestampFromInitiatedDate returns the end-of-day UTC timestamp
+// used when a settlement event time is derived from a transaction's civil date.
+func SettlementTimestampFromInitiatedDate(initiatedDate values.CivilDate) time.Time {
 	return initiatedDate.Time().Add(24*time.Hour - time.Second)
 }
 
@@ -1419,17 +1699,9 @@ func validateTransactionInput(input CreateInput) error {
 	}
 
 	balances := map[string]values.Decimal{}
-	cancelledRecords := 0
-	expectedRecords := 0
 	for index, record := range input.Records {
 		if err := validateJournalRecord(index, record); err != nil {
 			return err
-		}
-		if record.PostingStatus == PostingStatusCancelled {
-			cancelledRecords++
-		}
-		if record.PostingStatus == PostingStatusExpected {
-			expectedRecords++
 		}
 		if balance, ok := balances[record.Currency]; ok {
 			updated, err := balance.Add(record.Amount)
@@ -1441,12 +1713,6 @@ func validateTransactionInput(input CreateInput) error {
 			balances[record.Currency] = record.Amount
 		}
 	}
-	if cancelledRecords > 0 && cancelledRecords < len(input.Records) {
-		return invalidMixedCancellationStatusError()
-	}
-	if expectedRecords > 0 && expectedRecords < len(input.Records) {
-		return invalidMixedExpectedStatusError()
-	}
 	for _, balance := range balances {
 		if !balance.IsZero() {
 			return services.InvalidRequest("transaction records must balance to zero amount per currency")
@@ -1454,42 +1720,6 @@ func validateTransactionInput(input CreateInput) error {
 	}
 
 	return nil
-}
-
-func validateTransactionCancellationInvariant(records []JournalRecord) error {
-	cancelledRecords := 0
-	for _, record := range records {
-		if record.PostingStatus == PostingStatusCancelled {
-			cancelledRecords++
-		}
-	}
-	if cancelledRecords > 0 && cancelledRecords < len(records) {
-		return invalidMixedCancellationStatusError()
-	}
-
-	return nil
-}
-
-func validateTransactionExpectedInvariant(records []JournalRecord) error {
-	expectedRecords := 0
-	for _, record := range records {
-		if record.PostingStatus == PostingStatusExpected {
-			expectedRecords++
-		}
-	}
-	if expectedRecords > 0 && expectedRecords < len(records) {
-		return invalidMixedExpectedStatusError()
-	}
-
-	return nil
-}
-
-func invalidMixedCancellationStatusError() error {
-	return services.InvalidRequest(mixedCancellationStatusMessage)
-}
-
-func invalidMixedExpectedStatusError() error {
-	return services.InvalidRequest(mixedExpectedStatusMessage)
 }
 
 func validateJournalRecord(index int, record JournalRecordInput) error {
@@ -1523,8 +1753,12 @@ func validateJournalRecord(index int, record JournalRecordInput) error {
 	if err := validateCurrency(record.Currency); err != nil {
 		return services.InvalidRequest(indexedField(index, "currency") + " must be an ISO 4217 code or crypto code prefixed with C::")
 	}
-	if err := validatePostingStatus(index, record.PostingStatus); err != nil {
-		return err
+	if record.Settlement != nil {
+		switch record.Settlement.Status {
+		case SettlementStatusPending, SettlementStatusPosted:
+		default:
+			return services.InvalidRequest(indexedField(index, "settlement.status") + " must be pending or posted")
+		}
 	}
 	if err := validateReconciliationStatus(index, record.ReconciliationStatus); err != nil {
 		return err
@@ -1574,10 +1808,11 @@ func validateRecordSearchOptions(opts RecordSearchOptions) error {
 	if opts.TagID != nil && *opts.TagID <= 0 {
 		return services.InvalidRequest("tag_id must be positive")
 	}
-	if opts.PostingStatus != nil {
-		if err := validatePostingStatus(0, *opts.PostingStatus); err != nil {
-			return services.InvalidRequest("posting_status must be expected, pending, posted, or cancelled")
-		}
+	if opts.LifecycleStatus != nil && !validLifecycleStatus(*opts.LifecycleStatus) {
+		return services.InvalidRequest("lifecycle_status must be active, expected, or cancelled")
+	}
+	if opts.Settlement != nil && !validSettlementStatus(*opts.Settlement) {
+		return services.InvalidRequest("settlement must be pending or posted")
 	}
 	if opts.RecordRole != nil && !validRecordRole(*opts.RecordRole) {
 		return services.InvalidRequest("record_role must be expense, refund, income, clawback, exchange, adjustment, or balance")
@@ -1709,12 +1944,25 @@ func bulkRecordOperationResponse(recordIDs []int64, count int) BulkRecordOperati
 	}
 }
 
-func validatePostingStatus(index int, status PostingStatus) error {
+func validLifecycleStatus(status LifecycleStatus) bool {
 	switch status {
-	case PostingStatusExpected, PostingStatusPending, PostingStatusPosted, PostingStatusCancelled:
-		return nil
+	case LifecycleStatusActive, LifecycleStatusExpected, LifecycleStatusCancelled:
+		return true
 	default:
-		return services.InvalidRequest(indexedField(index, "posting_status") + " must be expected, pending, posted, or cancelled")
+		return false
+	}
+}
+
+func validSettlementStatus(status SettlementStatus) bool {
+	return status == SettlementStatusPending || status == SettlementStatusPosted
+}
+
+func validSettlementSummary(status SettlementSummary) bool {
+	switch status {
+	case SettlementSummaryPending, SettlementSummaryPosted, SettlementSummaryMixed, SettlementSummaryNotApplicable:
+		return true
+	default:
+		return false
 	}
 }
 

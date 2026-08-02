@@ -83,21 +83,17 @@ func TestRecordBulkOperationsBoundary(t *testing.T) {
 		t.Fatalf("bulk account transaction_id = %d, want %d", accountRecords.JSON200.Records[0].TransactionId, created.JSON201.TransactionId)
 	}
 
-	postingStatus := httpclient.NonExpectedPostingStatusCancelled
 	reconciliationStatus := httpclient.Unreconciled
-	bulkStatus, err := client.REST().BulkUpdateJournalRecordStatusesWithResponse(context.Background(), httpclient.BulkUpdateRecordStatusRequest{
+	bulkStatus, err := client.REST().BulkSetJournalRecordReconciliationWithResponse(context.Background(), httpclient.BulkSetRecordReconciliationRequest{
 		RecordIds:            []int64{firstRecordID, secondRecordID},
-		PostingStatus:        &postingStatus,
-		ReconciliationStatus: &reconciliationStatus,
+		ReconciliationStatus: reconciliationStatus,
 	})
 	requireNoTransportError(t, "bulk update record statuses", err)
 	if bulkStatus.StatusCode() != http.StatusOK {
 		t.Fatalf("bulk status status = %d, want %d; body %s", bulkStatus.StatusCode(), http.StatusOK, bulkStatus.Body)
 	}
 	assertBulkResponse(t, bulkStatus.JSON200, []int64{firstRecordID, secondRecordID})
-	searchPostingStatus := httpclient.PostingStatus(postingStatus)
 	statusRecords, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), &httpclient.SearchJournalRecordsParams{
-		PostingStatus:        &searchPostingStatus,
 		ReconciliationStatus: &reconciliationStatus,
 	})
 	requireNoTransportError(t, "search records", err)
@@ -113,7 +109,7 @@ func TestRecordBulkReassignToFixedSystemAccountBoundary(t *testing.T) {
 	systemAccounts := fixedSystemAccounts(t, client)
 	created := createTransaction(t, client, classificationRequest(
 		semanticRecord(owned.AccountId, "10.00", "USD", nil),
-		semanticRecord(systemAccounts["system:correction"].AccountId, "-10.00", "USD", nil),
+		semanticRecordWithoutSettlement(systemAccounts["system:correction"].AccountId, "-10.00", "USD", nil),
 	))
 
 	reassigned, err := client.REST().BulkReassignJournalRecordAccountWithResponse(context.Background(), httpclient.BulkReassignRecordsAccountRequest{
@@ -139,6 +135,9 @@ func TestRecordBulkReassignToFixedSystemAccountBoundary(t *testing.T) {
 			if record.AccountId != systemAccounts["system:opening_balance"].AccountId {
 				t.Fatalf("selected record account_id = %d, want %d", record.AccountId, systemAccounts["system:opening_balance"].AccountId)
 			}
+			if record.Settlement != nil || record.PendingDate != nil || record.PostedDate != nil {
+				t.Fatalf("system-reassigned record settlement/dates = %v/%v/%v, want nil/nil/nil", record.Settlement, record.PendingDate, record.PostedDate)
+			}
 			continue
 		}
 		if record.AccountId != systemAccounts["system:correction"].AccountId {
@@ -147,6 +146,87 @@ func TestRecordBulkReassignToFixedSystemAccountBoundary(t *testing.T) {
 	}
 	if !selectedFound {
 		t.Fatalf("selected record %d not found after reassignment", selectedRecordID)
+	}
+	if read.JSON200.Settlement != httpclient.TransactionSettlementNotApplicable {
+		t.Fatalf("system-reassigned transaction settlement = %q, want not_applicable", read.JSON200.Settlement)
+	}
+}
+
+func TestRecordBulkReassignmentSettlementBoundary(t *testing.T) {
+	now := apptest.Timestamp("2026-08-02T07:01:51Z")
+	client := newSharedClient(t, apptest.WithClock(apptest.NewFakeClock(now)))
+	scenario := client.Scenario()
+	firstOwned := scenario.AccountWithCurrency("accounts:BulkSettlement:First", "USD")
+	secondOwned := scenario.AccountWithCurrency("accounts:BulkSettlement:Second", "USD")
+	thirdOwned := scenario.AccountWithCurrency("accounts:BulkSettlement:Third", "USD")
+	systemAccounts := fixedSystemAccounts(t, client)
+
+	requiresSettlement := createTransaction(t, client, classificationRequest(
+		semanticRecord(firstOwned.AccountId, "10.00", "USD", nil),
+		semanticRecordWithoutSettlement(systemAccounts["system:correction"].AccountId, "-10.00", "USD", nil),
+	))
+	dateFreeRecordID := requiresSettlement.JSON201.Records[1].RecordId
+	omitted, err := client.REST().BulkReassignJournalRecordAccountWithResponse(context.Background(), httpclient.BulkReassignRecordsAccountRequest{
+		RecordIds: []int64{dateFreeRecordID},
+		AccountId: secondOwned.AccountId,
+	})
+	requireNoTransportError(t, "reassign date-free record without settlement", err)
+	if omitted.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("omitted settlement status = %d, want %d; body %s", omitted.StatusCode(), http.StatusBadRequest, omitted.Body)
+	}
+
+	pending, err := client.REST().BulkReassignJournalRecordAccountWithResponse(context.Background(), httpclient.BulkReassignRecordsAccountRequest{
+		RecordIds:  []int64{dateFreeRecordID},
+		AccountId:  secondOwned.AccountId,
+		Settlement: apptest.PendingSettlement(),
+	})
+	requireNoTransportError(t, "reassign date-free record pending", err)
+	if pending.StatusCode() != http.StatusOK {
+		t.Fatalf("pending reassignment status = %d, want %d; body %s", pending.StatusCode(), http.StatusOK, pending.Body)
+	}
+	pendingRead := getTransaction(t, client, requiresSettlement.JSON201.TransactionId)
+	for _, record := range pendingRead.JSON200.Records {
+		if record.RecordId == dateFreeRecordID {
+			if record.Settlement == nil || *record.Settlement != httpclient.SettlementStatusPending || record.PendingDate == nil || !record.PendingDate.Equal(now) || record.PostedDate != nil {
+				t.Fatalf("reassigned pending settlement/dates = %v/%v/%v, want pending/%v/nil", record.Settlement, record.PendingDate, record.PostedDate, now)
+			}
+		}
+	}
+
+	forbiddenSource := createTransaction(t, client, classificationRequest(
+		semanticRecord(firstOwned.AccountId, "12.00", "USD", nil),
+		semanticRecordWithoutSettlement(systemAccounts["system:correction"].AccountId, "-12.00", "USD", nil),
+	))
+	forbidden, err := client.REST().BulkReassignJournalRecordAccountWithResponse(context.Background(), httpclient.BulkReassignRecordsAccountRequest{
+		RecordIds:  []int64{forbiddenSource.JSON201.Records[0].RecordId},
+		AccountId:  systemAccounts["system:opening_balance"].AccountId,
+		Settlement: apptest.PendingSettlement(),
+	})
+	requireNoTransportError(t, "reassign to system with settlement", err)
+	if forbidden.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("forbidden settlement status = %d, want %d; body %s", forbidden.StatusCode(), http.StatusBadRequest, forbidden.Body)
+	}
+
+	preservedSource := createTransaction(t, client, classificationRequest(
+		semanticRecord(firstOwned.AccountId, "-5.00", "USD", nil),
+		semanticRecord(secondOwned.AccountId, "5.00", "USD", nil),
+	))
+	preservedRecord := preservedSource.JSON201.Records[0]
+	preserved, err := client.REST().BulkReassignJournalRecordAccountWithResponse(context.Background(), httpclient.BulkReassignRecordsAccountRequest{
+		RecordIds: []int64{preservedRecord.RecordId},
+		AccountId: thirdOwned.AccountId,
+	})
+	requireNoTransportError(t, "reassign balance record preserving settlement", err)
+	if preserved.StatusCode() != http.StatusOK {
+		t.Fatalf("preserving reassignment status = %d, want %d; body %s", preserved.StatusCode(), http.StatusOK, preserved.Body)
+	}
+	preservedRead := getTransaction(t, client, preservedSource.JSON201.TransactionId)
+	for _, record := range preservedRead.JSON200.Records {
+		if record.RecordId == preservedRecord.RecordId {
+			if record.PendingDate != preservedRecord.PendingDate || record.PostedDate == nil || preservedRecord.PostedDate == nil || !record.PostedDate.Equal(*preservedRecord.PostedDate) {
+				t.Fatalf("preserved reassignment dates = %v/%v, want %v/%v", record.PendingDate, record.PostedDate, preservedRecord.PendingDate, preservedRecord.PostedDate)
+			}
+		}
 	}
 }
 
@@ -249,18 +329,9 @@ func TestRecordBulkOperationsRejectInvalidRequestsAndRollback(t *testing.T) {
 	}
 	assertRecordIDs(t, originalAccountRecords.JSON200.Records, []int64{secondRecordID})
 
-	noOpStatus, err := client.REST().BulkUpdateJournalRecordStatusesWithResponse(context.Background(), httpclient.BulkUpdateRecordStatusRequest{
-		RecordIds: []int64{firstRecordID},
-	})
-	requireNoTransportError(t, "bulk update record statuses", err)
-	if noOpStatus.StatusCode() != http.StatusBadRequest {
-		t.Fatalf("no-op status status = %d, want %d; body %s", noOpStatus.StatusCode(), http.StatusBadRequest, noOpStatus.Body)
-	}
-
-	invalidStatus := httpclient.NonExpectedPostingStatus("settled")
-	invalidStatusResponse, err := client.REST().BulkUpdateJournalRecordStatusesWithResponse(context.Background(), httpclient.BulkUpdateRecordStatusRequest{
-		RecordIds:     []int64{firstRecordID},
-		PostingStatus: &invalidStatus,
+	invalidStatusResponse, err := client.REST().BulkSetJournalRecordSettlementWithResponse(context.Background(), httpclient.BulkSetRecordSettlementRequest{
+		RecordIds:  []int64{firstRecordID},
+		Settlement: httpclient.SettlementStatus("settled"),
 	})
 	requireNoTransportError(t, "bulk update record statuses", err)
 	if invalidStatusResponse.StatusCode() != http.StatusBadRequest {
@@ -291,168 +362,92 @@ func TestRecordBulkOperationsRejectInvalidRequestsAndRollback(t *testing.T) {
 	assertRecordIDs(t, originalCategoryRecords.JSON200.Records, []int64{created.JSON201.Records[1].RecordId})
 }
 
-func TestRecordBulkStatusPostingStatusInvariantsBoundary(t *testing.T) {
+func TestRecordBulkSettlementAndTransactionLifecycleBoundary(t *testing.T) {
 	client := newSharedClient(t)
 	refs := createSearchRefs(t, client)
+	transaction := createTransaction(t, client, balancedTransactionRequest(refs.transactionRefs))
+	balanceRecordID := transaction.JSON201.Records[0].RecordId
 
-	postedRequest := balancedTransactionRequest(refs.transactionRefs)
-	for index := range postedRequest.Records {
-		postedRequest.Records[index].PendingDate = nil
-	}
-	posted := createTransaction(t, client, postedRequest)
-	originalPostedDates := make(map[int64]time.Time, len(posted.JSON201.Records))
-	for _, record := range posted.JSON201.Records {
-		if record.PostedDate == nil {
-			t.Fatalf("directly posted record %d posted_date = nil", record.RecordId)
-		}
-		originalPostedDates[record.RecordId] = *record.PostedDate
-	}
-	cancelledStatus := httpclient.NonExpectedPostingStatusCancelled
-	wholeCancel, err := client.REST().BulkUpdateJournalRecordStatusesWithResponse(context.Background(), httpclient.BulkUpdateRecordStatusRequest{
-		RecordIds:     recordIDs(posted.JSON201.Records),
-		PostingStatus: &cancelledStatus,
+	pending, err := client.REST().BulkSetJournalRecordSettlementWithResponse(context.Background(), httpclient.BulkSetRecordSettlementRequest{
+		RecordIds: []int64{balanceRecordID}, Settlement: httpclient.SettlementStatusPending,
 	})
-	requireNoTransportError(t, "bulk cancel whole transaction", err)
-	if wholeCancel.StatusCode() != http.StatusOK {
-		t.Fatalf("whole cancel status = %d, want %d; body %s", wholeCancel.StatusCode(), http.StatusOK, wholeCancel.Body)
+	requireNoTransportError(t, "set balance record pending", err)
+	if pending.StatusCode() != http.StatusOK {
+		t.Fatalf("set pending status = %d, want %d; body %s", pending.StatusCode(), http.StatusOK, pending.Body)
 	}
-	assertBulkResponse(t, wholeCancel.JSON200, recordIDs(posted.JSON201.Records))
-	assertTransactionPostingStatus(t, client, posted.JSON201.TransactionId, httpclient.PostingStatusCancelled)
-
-	postedStatus := httpclient.NonExpectedPostingStatusPosted
-	wholeUncancel, err := client.REST().BulkUpdateJournalRecordStatusesWithResponse(context.Background(), httpclient.BulkUpdateRecordStatusRequest{
-		RecordIds:     recordIDs(posted.JSON201.Records),
-		PostingStatus: &postedStatus,
-	})
-	requireNoTransportError(t, "bulk uncancel whole transaction", err)
-	if wholeUncancel.StatusCode() != http.StatusOK {
-		t.Fatalf("whole uncancel status = %d, want %d; body %s", wholeUncancel.StatusCode(), http.StatusOK, wholeUncancel.Body)
+	read := getTransaction(t, client, transaction.JSON201.TransactionId)
+	if got := read.JSON200.Records[0].Settlement; got == nil || *got != httpclient.SettlementStatusPending {
+		t.Fatalf("balance record settlement = %v, want pending", got)
 	}
-	assertBulkResponse(t, wholeUncancel.JSON200, recordIDs(posted.JSON201.Records))
-	uncancelled := getTransaction(t, client, posted.JSON201.TransactionId)
-	assertTransactionRecordPostingStatuses(t, uncancelled.JSON200.Records, httpclient.PostingStatusPosted)
-	for _, record := range uncancelled.JSON200.Records {
-		if record.PendingDate != nil {
-			t.Fatalf("uncancelled directly posted record %d pending_date = %v, want nil", record.RecordId, record.PendingDate)
-		}
+	wantPendingDate := apptest.Timestamp("2024-03-10T00:00:00Z")
+	if read.JSON200.Records[0].PendingDate == nil || !read.JSON200.Records[0].PendingDate.Equal(wantPendingDate) {
+		t.Fatalf("pending_date = %v, want preserved %v", read.JSON200.Records[0].PendingDate, wantPendingDate)
 	}
-	pendingStatus := httpclient.NonExpectedPostingStatusPending
-	pendingStartedAt := time.Now().UTC().Add(-time.Second)
-	partialPending, err := client.REST().BulkUpdateJournalRecordStatusesWithResponse(context.Background(), httpclient.BulkUpdateRecordStatusRequest{
-		RecordIds:     []int64{posted.JSON201.Records[0].RecordId},
-		PostingStatus: &pendingStatus,
-	})
-	requireNoTransportError(t, "bulk partial posted to pending", err)
-	if partialPending.StatusCode() != http.StatusOK {
-		t.Fatalf("partial posted to pending status = %d, want %d; body %s", partialPending.StatusCode(), http.StatusOK, partialPending.Body)
-	}
-	assertBulkResponse(t, partialPending.JSON200, []int64{posted.JSON201.Records[0].RecordId})
-	mixedPostingStatuses, err := client.REST().GetTransactionWithResponse(context.Background(), posted.JSON201.TransactionId)
-	requireNoTransportError(t, "read mixed pending and posted transaction", err)
-	if mixedPostingStatuses.StatusCode() != http.StatusOK {
-		t.Fatalf("mixed pending and posted read status = %d, want %d; body %s", mixedPostingStatuses.StatusCode(), http.StatusOK, mixedPostingStatuses.Body)
-	}
-	if got := mixedPostingStatuses.JSON200.Records[0].PostingStatus; got != httpclient.PostingStatusPending {
-		t.Fatalf("first record posting_status = %q, want %q", got, httpclient.PostingStatusPending)
-	}
-	assertLifecycleTimestampBetween(
-		t,
-		"posted-to-pending pending_date",
-		mixedPostingStatuses.JSON200.Records[0].PendingDate,
-		pendingStartedAt,
-		time.Now().UTC().Add(time.Second),
-	)
-	if got := mixedPostingStatuses.JSON200.Records[0].PostedDate; got != nil {
-		t.Fatalf("posted-to-pending posted_date = %v, want nil", got)
-	}
-	if got := mixedPostingStatuses.JSON200.Records[1].PostingStatus; got != httpclient.PostingStatusPosted {
-		t.Fatalf("second record posting_status = %q, want %q", got, httpclient.PostingStatusPosted)
-	}
-	repostStartedAt := time.Now().UTC().Add(-time.Second)
-	restorePartialPosted, err := client.REST().BulkUpdateJournalRecordStatusesWithResponse(context.Background(), httpclient.BulkUpdateRecordStatusRequest{
-		RecordIds:     []int64{posted.JSON201.Records[0].RecordId},
-		PostingStatus: &postedStatus,
-	})
-	requireNoTransportError(t, "bulk restore partial posted", err)
-	if restorePartialPosted.StatusCode() != http.StatusOK {
-		t.Fatalf("restore partial posted status = %d, want %d; body %s", restorePartialPosted.StatusCode(), http.StatusOK, restorePartialPosted.Body)
-	}
-	assertBulkResponse(t, restorePartialPosted.JSON200, []int64{posted.JSON201.Records[0].RecordId})
-	restored := getTransaction(t, client, posted.JSON201.TransactionId)
-	assertTransactionRecordPostingStatuses(t, restored.JSON200.Records, httpclient.PostingStatusPosted)
-	assertLifecycleTimestampBetween(
-		t,
-		"reposted posted_date",
-		restored.JSON200.Records[0].PostedDate,
-		repostStartedAt,
-		time.Now().UTC().Add(time.Second),
-	)
-	if restored.JSON200.Records[0].PostedDate.Equal(originalPostedDates[restored.JSON200.Records[0].RecordId]) {
-		t.Fatalf(
-			"reposted record %d posted_date = %v, want fresh timestamp after %v",
-			restored.JSON200.Records[0].RecordId,
-			restored.JSON200.Records[0].PostedDate,
-			originalPostedDates[restored.JSON200.Records[0].RecordId],
-		)
-	}
-	if record := restored.JSON200.Records[1]; record.PostedDate == nil || !record.PostedDate.Equal(originalPostedDates[record.RecordId]) {
-		t.Fatalf("unchanged record %d posted_date = %v, want %v", record.RecordId, record.PostedDate, originalPostedDates[record.RecordId])
+	if read.JSON200.Records[0].PostedDate != nil || read.JSON200.Settlement != httpclient.TransactionSettlementPending {
+		t.Fatalf("pending transaction dates/settlement = %v/%q, want nil/pending", read.JSON200.Records[0].PostedDate, read.JSON200.Settlement)
 	}
 
-	partialCancel, err := client.REST().BulkUpdateJournalRecordStatusesWithResponse(context.Background(), httpclient.BulkUpdateRecordStatusRequest{
-		RecordIds:     []int64{posted.JSON201.Records[0].RecordId},
-		PostingStatus: &cancelledStatus,
+	postedStartedAt := time.Now().UTC().Add(-time.Second)
+	posted, err := client.REST().BulkSetJournalRecordSettlementWithResponse(context.Background(), httpclient.BulkSetRecordSettlementRequest{
+		RecordIds: []int64{balanceRecordID}, Settlement: httpclient.SettlementStatusPosted,
 	})
-	requireNoTransportError(t, "bulk partial cancel", err)
-	assertMixedCancellationError(t, "partial cancel", partialCancel.StatusCode(), partialCancel.JSON400, partialCancel.Body)
-	assertTransactionPostingStatus(t, client, posted.JSON201.TransactionId, httpclient.PostingStatusPosted)
-
-	fullyCancelled := balancedTransactionRequest(refs.transactionRefs)
-	fullyCancelled.Records[0].PostingStatus = httpclient.PostingStatusCancelled
-	fullyCancelled.Records[1].PostingStatus = httpclient.PostingStatusCancelled
-	cancelled := createTransaction(t, client, fullyCancelled)
-	partialUncancel, err := client.REST().BulkUpdateJournalRecordStatusesWithResponse(context.Background(), httpclient.BulkUpdateRecordStatusRequest{
-		RecordIds:     []int64{cancelled.JSON201.Records[0].RecordId},
-		PostingStatus: &pendingStatus,
-	})
-	requireNoTransportError(t, "bulk partial uncancel", err)
-	assertMixedCancellationError(t, "partial uncancel", partialUncancel.StatusCode(), partialUncancel.JSON400, partialUncancel.Body)
-	assertTransactionPostingStatus(t, client, cancelled.JSON201.TransactionId, httpclient.PostingStatusCancelled)
-
-	first := createTransaction(t, client, balancedTransactionRequest(refs.transactionRefs))
-	second := createTransaction(t, client, balancedTransactionRequest(refs.transactionRefs))
-	spanning := append(recordIDs(first.JSON201.Records), second.JSON201.Records[0].RecordId)
-	spanningResponse, err := client.REST().BulkUpdateJournalRecordStatusesWithResponse(context.Background(), httpclient.BulkUpdateRecordStatusRequest{
-		RecordIds:     spanning,
-		PostingStatus: &cancelledStatus,
-	})
-	requireNoTransportError(t, "bulk cancel spanning mixed transaction", err)
-	assertMixedCancellationError(t, "spanning partial cancel", spanningResponse.StatusCode(), spanningResponse.JSON400, spanningResponse.Body)
-	assertTransactionPostingStatus(t, client, first.JSON201.TransactionId, httpclient.PostingStatusPosted)
-	assertTransactionPostingStatus(t, client, second.JSON201.TransactionId, httpclient.PostingStatusPosted)
-
-	reconciliationStatus := httpclient.Unreconciled
-	reconciliationOnly, err := client.REST().BulkUpdateJournalRecordStatusesWithResponse(context.Background(), httpclient.BulkUpdateRecordStatusRequest{
-		RecordIds:            []int64{second.JSON201.Records[0].RecordId},
-		ReconciliationStatus: &reconciliationStatus,
-	})
-	requireNoTransportError(t, "bulk reconciliation-only status", err)
-	if reconciliationOnly.StatusCode() != http.StatusOK {
-		t.Fatalf("reconciliation-only status = %d, want %d; body %s", reconciliationOnly.StatusCode(), http.StatusOK, reconciliationOnly.Body)
+	requireNoTransportError(t, "post balance record", err)
+	if posted.StatusCode() != http.StatusOK {
+		t.Fatalf("set posted status = %d, want %d; body %s", posted.StatusCode(), http.StatusOK, posted.Body)
 	}
-	assertTransactionPostingStatus(t, client, second.JSON201.TransactionId, httpclient.PostingStatusPosted)
+	read = getTransaction(t, client, transaction.JSON201.TransactionId)
+	assertLifecycleTimestampBetween(t, "posted_date", read.JSON200.Records[0].PostedDate, postedStartedAt, time.Now().UTC().Add(time.Second))
+	if read.JSON200.Settlement != httpclient.TransactionSettlementPosted {
+		t.Fatalf("posted transaction settlement = %q, want posted", read.JSON200.Settlement)
+	}
 
-	fullyExpected := balancedTransactionRequest(refs.transactionRefs)
-	fullyExpected.Records[0].PostingStatus = httpclient.PostingStatusExpected
-	fullyExpected.Records[1].PostingStatus = httpclient.PostingStatusExpected
-	expected := createTransaction(t, client, fullyExpected)
-	partialExpectedConfirmation, err := client.REST().BulkUpdateJournalRecordStatusesWithResponse(context.Background(), httpclient.BulkUpdateRecordStatusRequest{
-		RecordIds:     []int64{expected.JSON201.Records[0].RecordId},
-		PostingStatus: &pendingStatus,
+	_, err = client.REST().BulkSetJournalRecordSettlementWithResponse(context.Background(), httpclient.BulkSetRecordSettlementRequest{
+		RecordIds: []int64{balanceRecordID}, Settlement: httpclient.SettlementStatusPending,
 	})
-	requireNoTransportError(t, "bulk partial expected confirmation", err)
-	assertMixedExpectedError(t, "partial expected confirmation", partialExpectedConfirmation.StatusCode(), partialExpectedConfirmation.JSON400, partialExpectedConfirmation.Body)
-	assertTransactionPostingStatus(t, client, expected.JSON201.TransactionId, httpclient.PostingStatusExpected)
+	requireNoTransportError(t, "return balance record to pending", err)
+	cancelled, err := client.REST().CancelTransactionWithResponse(context.Background(), transaction.JSON201.TransactionId)
+	requireNoTransportError(t, "cancel pending transaction", err)
+	if cancelled.StatusCode() != http.StatusOK {
+		t.Fatalf("cancel status = %d, want %d; body %s", cancelled.StatusCode(), http.StatusOK, cancelled.Body)
+	}
+	apptest.AssertTransactionLifecycle(t, cancelled.JSON200, httpclient.TransactionLifecycleStatusCancelled)
+	if cancelled.JSON200.Settlement != httpclient.TransactionSettlementPending {
+		t.Fatalf("cancelled transaction settlement = %q, want pending", cancelled.JSON200.Settlement)
+	}
+
+	restored, err := client.REST().RestoreTransactionWithResponse(context.Background(), transaction.JSON201.TransactionId)
+	requireNoTransportError(t, "restore transaction", err)
+	if restored.StatusCode() != http.StatusOK {
+		t.Fatalf("restore status = %d, want %d; body %s", restored.StatusCode(), http.StatusOK, restored.Body)
+	}
+	apptest.AssertTransactionLifecycle(t, restored.JSON200, httpclient.TransactionLifecycleStatusActive)
+}
+
+func TestRecordBulkSettlementPostsBeforeDefaultPendingTimestampBoundary(t *testing.T) {
+	now := apptest.Timestamp("2026-08-02T07:01:51Z")
+	client := newSharedClient(t, apptest.WithClock(apptest.NewFakeClock(now)))
+	refs := createSearchRefs(t, client)
+	request := settlementTransactionRequest(refs.transactionRefs, "2026-08-02", httpclient.SettlementStatusPending)
+	transaction := createTransaction(t, client, request)
+	balanceRecord := transaction.JSON201.Records[0]
+
+	posted, err := client.REST().BulkSetJournalRecordSettlementWithResponse(context.Background(), httpclient.BulkSetRecordSettlementRequest{
+		RecordIds:  []int64{balanceRecord.RecordId},
+		Settlement: httpclient.SettlementStatusPosted,
+	})
+	requireNoTransportError(t, "post balance record before default pending timestamp", err)
+	if posted.StatusCode() != http.StatusOK {
+		t.Fatalf("set posted status = %d, want %d; body %s", posted.StatusCode(), http.StatusOK, posted.Body)
+	}
+
+	read := getTransaction(t, client, transaction.JSON201.TransactionId)
+	record := read.JSON200.Records[0]
+	if record.PendingDate == nil || record.PostedDate == nil || !record.PostedDate.Equal(*record.PendingDate) {
+		t.Fatalf("pending_date/posted_date = %v/%v, want equal default timestamps", record.PendingDate, record.PostedDate)
+	}
+	if read.JSON200.Settlement != httpclient.TransactionSettlementPosted {
+		t.Fatalf("transaction settlement = %q, want posted", read.JSON200.Settlement)
+	}
 }
 
 func TestRecordBulkOperationsRejectTombstonedTargetReferences(t *testing.T) {
@@ -520,15 +515,4 @@ func assertBulkResponse(t *testing.T, got *httpclient.BulkRecordOperationRespons
 	if got.UpdatedCount != len(wantRecordIDs) {
 		t.Fatalf("updated_count = %d, want %d", got.UpdatedCount, len(wantRecordIDs))
 	}
-}
-
-func assertTransactionPostingStatus(t *testing.T, client *apptest.Client, transactionID int64, want httpclient.PostingStatus) {
-	t.Helper()
-
-	read, err := client.REST().GetTransactionWithResponse(context.Background(), transactionID)
-	requireNoTransportError(t, "read transaction posting statuses", err)
-	if read.StatusCode() != http.StatusOK {
-		t.Fatalf("read transaction status = %d, want %d; body %s", read.StatusCode(), http.StatusOK, read.Body)
-	}
-	assertTransactionRecordPostingStatuses(t, read.JSON200.Records, want)
 }

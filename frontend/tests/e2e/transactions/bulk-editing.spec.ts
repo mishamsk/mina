@@ -7,16 +7,150 @@ import {
   createCategory,
   createExpectedRecurringFixture,
   createMember,
+  createSearchSpend,
   createTag,
   deleteTransaction,
   expect,
   findByFqn,
+  getTransactionDetail,
   listFixtures,
   type Route,
   type TransactionDetailFixture,
   type TransactionFixture,
   waitForLedgerLookups,
 } from "@tests/e2e/transactions/support";
+
+test("bulk settlement and reconciliation stay independent", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const memo = `E2E bulk settlement ${unique}`;
+  const created = await createSearchSpend(page, memo);
+
+  await page.goto(
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(memo)}`,
+  );
+  const row = page.getByRole("row").filter({ hasText: memo }).first();
+  await expect(row).toBeVisible();
+  await page.getByRole("button", { name: "Bulk edit" }).click();
+  await row.click();
+  const actions = page.getByTestId("bulk-action-bar");
+  const pendingButton = actions.getByRole("button", { name: "Pending" });
+  const postedButton = actions.getByRole("button", { name: "Posted" });
+  const reconcileButton = actions.getByRole("button", {
+    exact: true,
+    name: "Reconcile",
+  });
+  const unreconcileButton = actions.getByRole("button", {
+    exact: true,
+    name: "Unreconcile",
+  });
+
+  await unreconcileButton.click();
+  await expect(
+    page.getByRole("status").filter({ hasText: "2 records updated." }),
+  ).toBeVisible();
+  await expect(unreconcileButton).toBeFocused();
+  await pendingButton.click();
+  await expect(
+    page.getByRole("status").filter({ hasText: "1 record updated." }),
+  ).toBeVisible();
+  await expect(pendingButton).toBeFocused();
+  let detail = await getTransactionDetail(page, created);
+  expect(detail.records.map((record) => record.settlement).sort()).toEqual([
+    null,
+    "pending",
+  ]);
+  expect(detail.records.map((record) => record.reconciliation_status)).toEqual([
+    "unreconciled",
+    "unreconciled",
+  ]);
+
+  await reconcileButton.click();
+  await expect(
+    page.getByRole("status").filter({ hasText: "2 records updated." }),
+  ).toBeVisible();
+  await expect(reconcileButton).toBeFocused();
+  detail = await getTransactionDetail(page, created);
+  expect(detail.records.map((record) => record.reconciliation_status)).toEqual([
+    "reconciled",
+    "reconciled",
+  ]);
+  expect(detail.records.map((record) => record.settlement).sort()).toEqual([
+    null,
+    "pending",
+  ]);
+
+  const postedResponse = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === "/api/records/bulk/settlement" &&
+      response.request().method() === "POST",
+  );
+  await postedButton.click();
+  await postedResponse;
+  await expect(postedButton).toBeFocused();
+  const unreconcileResponse = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === "/api/records/bulk/reconciliation" &&
+      response.request().method() === "POST",
+  );
+  await unreconcileButton.click();
+  await unreconcileResponse;
+  await expect(unreconcileButton).toBeFocused();
+  detail = await getTransactionDetail(page, created);
+  expect(detail.records.map((record) => record.settlement).sort()).toEqual([
+    null,
+    "posted",
+  ]);
+  expect(detail.records.map((record) => record.reconciliation_status)).toEqual([
+    "unreconciled",
+    "unreconciled",
+  ]);
+  await deleteTransaction(page, created);
+});
+
+test("clearing selection during a record-state update stays cleared", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const memo = `E2E bulk selection race ${unique}`;
+  const created = await createSearchSpend(page, memo);
+  let releaseSettlement: (() => void) | undefined;
+  const settlementStarted = new Promise<void>((resolve) => {
+    void page.route("**/api/records/bulk/settlement", async (route) => {
+      resolve();
+      await new Promise<void>((release) => {
+        releaseSettlement = release;
+      });
+      await route.continue();
+    });
+  });
+
+  await page.goto(
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(memo)}`,
+  );
+  const row = page.getByRole("row").filter({ hasText: memo }).first();
+  await expect(row).toBeVisible();
+  await page.getByRole("button", { name: "Bulk edit" }).click();
+  await row.click();
+  const modeBar = page.getByTestId("transaction-browser-bulk-mode-bar");
+  await expect(modeBar).toContainText("1 selected");
+
+  await page
+    .getByTestId("bulk-action-bar")
+    .getByRole("button", { name: "Pending" })
+    .click();
+  await settlementStarted;
+  await modeBar.getByRole("button", { name: "Clear" }).click();
+  await expect(modeBar).toContainText("0 selected");
+  releaseSettlement?.();
+  await expect(
+    page.getByRole("status").filter({ hasText: "1 record updated." }),
+  ).toBeVisible();
+  await expect(modeBar).toContainText("0 selected");
+
+  await deleteTransaction(page, created);
+});
 
 test("bulk mode updates uniform fields and skips mixed rows", async ({
   page,
@@ -49,7 +183,7 @@ test("bulk mode updates uniform fields and skips mixed rows", async ({
           currency: "USD",
           member_id: initialMember.member_id,
           memo: uniformMemo,
-          posting_status: "posted",
+          settlement: { status: "posted" },
           reconciliation_status: "unreconciled",
           source: "manual",
           tag_ids: [],
@@ -60,7 +194,7 @@ test("bulk mode updates uniform fields and skips mixed rows", async ({
           category_id: initialCategory.category_id,
           currency: "USD",
           memo: uniformMemo,
-          posting_status: "posted",
+          settlement: null,
           reconciliation_status: "unreconciled",
           source: "manual",
           tag_ids: [],
@@ -80,7 +214,7 @@ test("bulk mode updates uniform fields and skips mixed rows", async ({
           category_id: null,
           currency: "USD",
           memo: mixedMemo,
-          posting_status: "posted",
+          settlement: { status: "posted" },
           reconciliation_status: "unreconciled",
           source: "manual",
           tag_ids: [],
@@ -91,7 +225,7 @@ test("bulk mode updates uniform fields and skips mixed rows", async ({
           category_id: initialCategory.category_id,
           currency: "USD",
           memo: mixedMemo,
-          posting_status: "posted",
+          settlement: null,
           reconciliation_status: "unreconciled",
           source: "manual",
           tag_ids: [],
@@ -102,7 +236,7 @@ test("bulk mode updates uniform fields and skips mixed rows", async ({
           category_id: targetCategory.category_id,
           currency: "USD",
           memo: mixedMemo,
-          posting_status: "posted",
+          settlement: null,
           reconciliation_status: "unreconciled",
           source: "manual",
           tag_ids: [],
@@ -340,7 +474,7 @@ test("an invalidated sibling page keeps its refresh error scoped", async ({
   expect(createResponse.ok(), await createResponse.text()).toBe(true);
   const transaction = (await createResponse.json()) as TransactionFixture;
 
-  await page.goto("/transactions?page=1&pageSize=25&hideExpected=true");
+  await page.goto("/transactions?page=1&pageSize=25");
   const row = page.locator(
     `[data-transaction-id="${transaction.transaction_id}"]`,
   );
@@ -410,14 +544,13 @@ test("an invalidated sibling page keeps its refresh error scoped", async ({
   await deleteTransaction(page, transaction);
 });
 
-test("bulk edit predicts and reports all-cancelled transactions as inactive", async ({
+test("bulk edit keeps cancelled transactions unavailable", async ({
   page,
 }, testInfo) => {
   const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
-  const [accounts, categories, targetMember] = await Promise.all([
+  const [accounts, categories] = await Promise.all([
     listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
     listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
-    createMember(page, `E2E bulk cancelled member ${unique}`),
   ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
   const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
@@ -433,7 +566,7 @@ test("bulk edit predicts and reports all-cancelled transactions as inactive", as
           category_id: null,
           currency: "USD",
           memo,
-          posting_status: "cancelled",
+          settlement: { status: "pending" },
           reconciliation_status: "unreconciled",
           source: "manual",
           tag_ids: [],
@@ -444,7 +577,7 @@ test("bulk edit predicts and reports all-cancelled transactions as inactive", as
           category_id: category.category_id,
           currency: "USD",
           memo,
-          posting_status: "cancelled",
+          settlement: null,
           reconciliation_status: "unreconciled",
           source: "manual",
           tag_ids: [],
@@ -453,7 +586,13 @@ test("bulk edit predicts and reports all-cancelled transactions as inactive", as
     },
   });
   expect(response.ok(), await response.text()).toBe(true);
-  const transaction = (await response.json()) as TransactionDetailFixture;
+  const activeToCancel = (await response.json()) as TransactionDetailFixture;
+  const cancelResponse = await page.request.post(
+    `/api/transactions/${activeToCancel.transaction_id}/cancel`,
+  );
+  const cancelBody = await cancelResponse.text();
+  expect(cancelResponse.ok(), cancelBody).toBe(true);
+  const transaction = JSON.parse(cancelBody) as TransactionDetailFixture;
 
   await page.goto(
     `/transactions?page=1&pageSize=50&q=${encodeURIComponent(memo)}`,
@@ -461,26 +600,13 @@ test("bulk edit predicts and reports all-cancelled transactions as inactive", as
   const row = page.getByRole("row").filter({ hasText: memo }).first();
   await expect(row).toBeVisible();
   await page.getByRole("button", { name: "Bulk edit" }).click();
-  await row.click();
-  await page
-    .getByTestId("bulk-action-bar")
-    .getByRole("button", { name: "Member" })
-    .click();
-  const picker = page.getByTestId("bulk-action-picker");
-  await expect(picker).toContainText(
-    "1 of 1 selected will be skipped: no active records",
-  );
-  await picker
-    .getByRole("combobox", { name: "Member" })
-    .fill(targetMember.name);
-  await picker.getByRole("combobox", { name: "Member" }).press("Enter");
-  await picker.getByRole("button", { name: "Set member" }).click();
-
+  await expect(row).toHaveAttribute("aria-disabled", "true");
   await expect(
-    page
-      .getByRole("status")
-      .filter({ hasText: "0 updated, 1 skipped: no active records." }),
-  ).toBeVisible();
+    page.getByTestId("bulk-action-bar").getByRole("button", { name: "Member" }),
+  ).toBeDisabled();
+  await expect(
+    page.getByTestId("transaction-browser-bulk-mode-bar"),
+  ).toContainText("0 selected");
   const unchangedResponse = await page.request.get(
     `/api/transactions/${transaction.transaction_id}`,
   );
@@ -527,7 +653,7 @@ test("bulk category excludes transactions with no applied records from updated c
           category_id: null,
           currency: "USD",
           memo,
-          posting_status: "posted",
+          settlement: { status: "posted" },
           reconciliation_status: "unreconciled",
           source: "manual",
           tag_ids: [],
@@ -538,7 +664,7 @@ test("bulk category excludes transactions with no applied records from updated c
           category_id: initialCategory.category_id,
           currency: "USD",
           memo,
-          posting_status: "posted",
+          settlement: null,
           reconciliation_status: "unreconciled",
           source: "manual",
           tag_ids: [],
@@ -869,6 +995,16 @@ test("bulk action surface remains visible for an empty transaction result", asyn
   await expect(categorizeRemedy).toHaveAttribute("tabindex", "0");
   await expect(tagRemedy).toHaveAttribute("tabindex", "0");
   await expect(memberRemedy).toHaveAttribute("tabindex", "0");
+  for (const action of ["Pending", "Posted", "Reconcile", "Unreconcile"]) {
+    const remedy = bulkActionBar
+      .getByRole("button", { exact: true, name: action })
+      .locator("..");
+    await expect(remedy).toHaveAttribute("tabindex", "0");
+    await remedy.focus();
+    await expect(page.getByRole("tooltip")).toHaveText(
+      "Select transactions first",
+    );
+  }
   await categorizeRemedy.focus();
   await expect(page.getByRole("tooltip")).toHaveText(
     "Select transactions first",

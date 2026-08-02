@@ -276,27 +276,6 @@ func (e HealthResponseStatus) Valid() bool {
 	}
 }
 
-// Defines values for NonExpectedPostingStatus.
-const (
-	NonExpectedPostingStatusCancelled NonExpectedPostingStatus = "cancelled"
-	NonExpectedPostingStatusPending   NonExpectedPostingStatus = "pending"
-	NonExpectedPostingStatusPosted    NonExpectedPostingStatus = "posted"
-)
-
-// Valid indicates whether the value is a known member of the NonExpectedPostingStatus enum.
-func (e NonExpectedPostingStatus) Valid() bool {
-	switch e {
-	case NonExpectedPostingStatusCancelled:
-		return true
-	case NonExpectedPostingStatusPending:
-		return true
-	case NonExpectedPostingStatusPosted:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for OperationRunReferenceResponseOperationId.
 const (
 	DatabaseBackup      OperationRunReferenceResponseOperationId = "database-backup"
@@ -309,30 +288,6 @@ func (e OperationRunReferenceResponseOperationId) Valid() bool {
 	case DatabaseBackup:
 		return true
 	case ExchangeRateLoading:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for PostingStatus.
-const (
-	PostingStatusCancelled PostingStatus = "cancelled"
-	PostingStatusExpected  PostingStatus = "expected"
-	PostingStatusPending   PostingStatus = "pending"
-	PostingStatusPosted    PostingStatus = "posted"
-)
-
-// Valid indicates whether the value is a known member of the PostingStatus enum.
-func (e PostingStatus) Valid() bool {
-	switch e {
-	case PostingStatusCancelled:
-		return true
-	case PostingStatusExpected:
-		return true
-	case PostingStatusPending:
-		return true
-	case PostingStatusPosted:
 		return true
 	default:
 		return false
@@ -416,22 +371,22 @@ func (e RecurringDefinitionDeferRequestUnit) Valid() bool {
 
 // Defines values for RecurringOccurrenceStatus.
 const (
-	Confirmed RecurringOccurrenceStatus = "confirmed"
-	Deferred  RecurringOccurrenceStatus = "deferred"
-	Dismissed RecurringOccurrenceStatus = "dismissed"
-	Expected  RecurringOccurrenceStatus = "expected"
+	RecurringOccurrenceStatusConfirmed RecurringOccurrenceStatus = "confirmed"
+	RecurringOccurrenceStatusDeferred  RecurringOccurrenceStatus = "deferred"
+	RecurringOccurrenceStatusDismissed RecurringOccurrenceStatus = "dismissed"
+	RecurringOccurrenceStatusExpected  RecurringOccurrenceStatus = "expected"
 )
 
 // Valid indicates whether the value is a known member of the RecurringOccurrenceStatus enum.
 func (e RecurringOccurrenceStatus) Valid() bool {
 	switch e {
-	case Confirmed:
+	case RecurringOccurrenceStatusConfirmed:
 		return true
-	case Deferred:
+	case RecurringOccurrenceStatusDeferred:
 		return true
-	case Dismissed:
+	case RecurringOccurrenceStatusDismissed:
 		return true
-	case Expected:
+	case RecurringOccurrenceStatusExpected:
 		return true
 	default:
 		return false
@@ -504,6 +459,24 @@ func (e SettingSource) Valid() bool {
 	}
 }
 
+// Defines values for SettlementStatus.
+const (
+	SettlementStatusPending SettlementStatus = "pending"
+	SettlementStatusPosted  SettlementStatus = "posted"
+)
+
+// Valid indicates whether the value is a known member of the SettlementStatus enum.
+func (e SettlementStatus) Valid() bool {
+	switch e {
+	case SettlementStatusPending:
+		return true
+	case SettlementStatusPosted:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for Source.
 const (
 	Imported          Source = "imported"
@@ -555,6 +528,51 @@ func (e TransactionClass) Valid() bool {
 	case TransactionClassSpend:
 		return true
 	case TransactionClassTransfer:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TransactionLifecycleStatus.
+const (
+	TransactionLifecycleStatusActive    TransactionLifecycleStatus = "active"
+	TransactionLifecycleStatusCancelled TransactionLifecycleStatus = "cancelled"
+	TransactionLifecycleStatusExpected  TransactionLifecycleStatus = "expected"
+)
+
+// Valid indicates whether the value is a known member of the TransactionLifecycleStatus enum.
+func (e TransactionLifecycleStatus) Valid() bool {
+	switch e {
+	case TransactionLifecycleStatusActive:
+		return true
+	case TransactionLifecycleStatusCancelled:
+		return true
+	case TransactionLifecycleStatusExpected:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TransactionSettlement.
+const (
+	TransactionSettlementMixed         TransactionSettlement = "mixed"
+	TransactionSettlementNotApplicable TransactionSettlement = "not_applicable"
+	TransactionSettlementPending       TransactionSettlement = "pending"
+	TransactionSettlementPosted        TransactionSettlement = "posted"
+)
+
+// Valid indicates whether the value is a known member of the TransactionSettlement enum.
+func (e TransactionSettlement) Valid() bool {
+	switch e {
+	case TransactionSettlementMixed:
+		return true
+	case TransactionSettlementNotApplicable:
+		return true
+	case TransactionSettlementPending:
+		return true
+	case TransactionSettlementPosted:
 		return true
 	default:
 		return false
@@ -1239,12 +1257,33 @@ type BulkReassignRecordsAccountRequest struct {
 
 	// RecordIds Journal-record identifiers to update.
 	RecordIds []int64 `json:"record_ids"`
+
+	// Settlement Required when the target is owned or party and existing dates cannot supply a valid settlement; omit for flow or system.
+	Settlement *SettlementIntent `json:"settlement,omitempty"`
 }
 
 // BulkRecordOperationResponse defines model for BulkRecordOperationResponse.
 type BulkRecordOperationResponse struct {
 	RecordIds    []int64 `json:"record_ids"`
 	UpdatedCount int     `json:"updated_count"`
+}
+
+// BulkSetRecordReconciliationRequest defines model for BulkSetRecordReconciliationRequest.
+type BulkSetRecordReconciliationRequest struct {
+	// ReconciliationStatus Whether a journal record has been reconciled with its external or expected source.
+	ReconciliationStatus ReconciliationStatus `json:"reconciliation_status"`
+
+	// RecordIds Journal-record identifiers to update.
+	RecordIds []int64 `json:"record_ids"`
+}
+
+// BulkSetRecordSettlementRequest defines model for BulkSetRecordSettlementRequest.
+type BulkSetRecordSettlementRequest struct {
+	// RecordIds Journal-record identifiers to update.
+	RecordIds []int64 `json:"record_ids"`
+
+	// Settlement Server-derived balance-record settlement.
+	Settlement SettlementStatus `json:"settlement"`
 }
 
 // BulkTagRecordsRequest Provide at least one non-empty add_tag_ids or remove_tag_ids array. The two arrays must not overlap.
@@ -1257,18 +1296,6 @@ type BulkTagRecordsRequest struct {
 
 	// RemoveTagIds Tag identifiers to remove from every selected journal record.
 	RemoveTagIds *[]int64 `json:"remove_tag_ids,omitempty"`
-}
-
-// BulkUpdateRecordStatusRequest Provide posting_status, reconciliation_status, or both.
-type BulkUpdateRecordStatusRequest struct {
-	// PostingStatus Non-expected posting status accepted by bulk status updates.
-	PostingStatus *NonExpectedPostingStatus `json:"posting_status,omitempty"`
-
-	// ReconciliationStatus Whether a journal record has been reconciled with its external or expected source.
-	ReconciliationStatus *ReconciliationStatus `json:"reconciliation_status,omitempty"`
-
-	// RecordIds Journal-record identifiers to update.
-	RecordIds []int64 `json:"record_ids"`
 }
 
 // Category defines model for Category.
@@ -1415,17 +1442,9 @@ type CreateExchangeTransactionRequest struct {
 	// Memo Optional memo text for the journal records.
 	Memo *string `json:"memo,omitempty"`
 
-	// PendingDate UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.
-	PendingDate *time.Time `json:"pending_date,omitempty"`
-
-	// PostedDate UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.
-	PostedDate *time.Time `json:"posted_date,omitempty"`
-
-	// PostingStatus Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.
-	PostingStatus *PostingStatus `json:"posting_status,omitempty"`
-
 	// ReconciliationStatus Whether a journal record has been reconciled with its external or expected source.
 	ReconciliationStatus *ReconciliationStatus `json:"reconciliation_status,omitempty"`
+	Settlement           *SettlementIntent     `json:"settlement,omitempty"`
 
 	// SoldAccountId Owned or party account from which currency is sold.
 	SoldAccountId int64 `json:"sold_account_id"`
@@ -1463,17 +1482,9 @@ type CreateIncomeTransactionRequest struct {
 	// Memo Optional memo text for the journal records.
 	Memo *string `json:"memo,omitempty"`
 
-	// PendingDate UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.
-	PendingDate *time.Time `json:"pending_date,omitempty"`
-
-	// PostedDate UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.
-	PostedDate *time.Time `json:"posted_date,omitempty"`
-
-	// PostingStatus Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.
-	PostingStatus *PostingStatus `json:"posting_status,omitempty"`
-
 	// ReconciliationStatus Whether a journal record has been reconciled with its external or expected source.
 	ReconciliationStatus *ReconciliationStatus `json:"reconciliation_status,omitempty"`
+	Settlement           *SettlementIntent     `json:"settlement,omitempty"`
 
 	// SourceAccountId Source account identifier for the income or transfer.
 	SourceAccountId int64 `json:"source_account_id"`
@@ -1511,17 +1522,11 @@ type CreateJournalRecordRequest struct {
 	// Memo Optional memo text for the journal records.
 	Memo *string `json:"memo,omitempty"`
 
-	// PendingDate UTC timestamp when the record entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.
-	PendingDate *time.Time `json:"pending_date,omitempty"`
-
-	// PostedDate UTC timestamp when the record posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.
-	PostedDate *time.Time `json:"posted_date,omitempty"`
-
-	// PostingStatus Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.
-	PostingStatus PostingStatus `json:"posting_status"`
-
 	// ReconciliationStatus Whether a journal record has been reconciled with its external or expected source.
 	ReconciliationStatus ReconciliationStatus `json:"reconciliation_status"`
+
+	// Settlement Settlement intent for owned and party records; use null for flow and system records.
+	Settlement *SettlementIntent `json:"settlement"`
 
 	// Source User-writable journal-record origin. Recurring-template records are created only by Mina.
 	Source WritableSource `json:"source"`
@@ -1562,17 +1567,9 @@ type CreateRefundTransactionRequest struct {
 	// Memo Optional memo text for the journal records.
 	Memo *string `json:"memo,omitempty"`
 
-	// PendingDate UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.
-	PendingDate *time.Time `json:"pending_date,omitempty"`
-
-	// PostedDate UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.
-	PostedDate *time.Time `json:"posted_date,omitempty"`
-
-	// PostingStatus Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.
-	PostingStatus *PostingStatus `json:"posting_status,omitempty"`
-
 	// ReconciliationStatus Whether a journal record has been reconciled with its external or expected source.
 	ReconciliationStatus *ReconciliationStatus `json:"reconciliation_status,omitempty"`
+	Settlement           *SettlementIntent     `json:"settlement,omitempty"`
 
 	// TagIds Tag identifiers to assign to the journal records.
 	TagIds *[]int64 `json:"tag_ids,omitempty"`
@@ -1604,17 +1601,9 @@ type CreateSpendTransactionRequest struct {
 	// Memo Optional memo text for the journal records.
 	Memo *string `json:"memo,omitempty"`
 
-	// PendingDate UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.
-	PendingDate *time.Time `json:"pending_date,omitempty"`
-
-	// PostedDate UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.
-	PostedDate *time.Time `json:"posted_date,omitempty"`
-
-	// PostingStatus Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.
-	PostingStatus *PostingStatus `json:"posting_status,omitempty"`
-
 	// ReconciliationStatus Whether a journal record has been reconciled with its external or expected source.
 	ReconciliationStatus *ReconciliationStatus `json:"reconciliation_status,omitempty"`
+	Settlement           *SettlementIntent     `json:"settlement,omitempty"`
 
 	// TagIds Tag identifiers to assign to the journal records.
 	TagIds *[]int64 `json:"tag_ids,omitempty"`
@@ -1661,17 +1650,9 @@ type CreateTransferTransactionRequest struct {
 	// Memo Optional memo text for the journal records.
 	Memo *string `json:"memo,omitempty"`
 
-	// PendingDate UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.
-	PendingDate *time.Time `json:"pending_date,omitempty"`
-
-	// PostedDate UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.
-	PostedDate *time.Time `json:"posted_date,omitempty"`
-
-	// PostingStatus Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.
-	PostingStatus *PostingStatus `json:"posting_status,omitempty"`
-
 	// ReconciliationStatus Whether a journal record has been reconciled with its external or expected source.
 	ReconciliationStatus *ReconciliationStatus `json:"reconciliation_status,omitempty"`
+	Settlement           *SettlementIntent     `json:"settlement,omitempty"`
 
 	// SourceAccountId Source account identifier for the income or transfer.
 	SourceAccountId int64 `json:"source_account_id"`
@@ -1870,17 +1851,17 @@ type JournalRecord struct {
 
 	// InitiatedDate Human-facing transaction date in YYYY-MM-DD format.
 	InitiatedDate openapi_types.Date `json:"initiated_date"`
-	MemberId      *int64             `json:"member_id,omitempty"`
-	Memo          *string            `json:"memo,omitempty"`
+
+	// LifecycleStatus Transaction lifecycle, independent from balance-record settlement and tombstoning.
+	LifecycleStatus TransactionLifecycleStatus `json:"lifecycle_status"`
+	MemberId        *int64                     `json:"member_id,omitempty"`
+	Memo            *string                    `json:"memo,omitempty"`
 
 	// PendingDate UTC timestamp when the record entered pending; null when the record never had a pending stage.
 	PendingDate *time.Time `json:"pending_date"`
 
 	// PostedDate UTC timestamp when the record posted; null until the record reaches the posted stage.
 	PostedDate *time.Time `json:"posted_date,omitempty"`
-
-	// PostingStatus Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.
-	PostingStatus PostingStatus `json:"posting_status"`
 
 	// ReconciliationStatus Whether a journal record has been reconciled with its external or expected source.
 	ReconciliationStatus ReconciliationStatus `json:"reconciliation_status"`
@@ -1890,12 +1871,15 @@ type JournalRecord struct {
 	RecordRole RecordRole `json:"record_role"`
 
 	// RunningBalance JSON string or null, not a JSON number. Present on account-record listings when requested; aggregate DECIMAL(18,8) balance after this record in the record currency, with pending and posted records included and cancelled and expected records excluded. Responses use fixed-scale formatting with exactly 8 fractional digits.
-	RunningBalance *string    `json:"running_balance,omitempty"`
-	Source         Source     `json:"source"`
-	TagIds         []int64    `json:"tag_ids"`
-	TombstonedAt   *time.Time `json:"tombstoned_at,omitempty"`
-	TransactionId  int64      `json:"transaction_id"`
-	UpdatedAt      time.Time  `json:"updated_at"`
+	RunningBalance *string `json:"running_balance,omitempty"`
+
+	// Settlement Server-derived settlement for owned and party records; null for flow and system records and date-free expected records.
+	Settlement    *SettlementStatus `json:"settlement"`
+	Source        Source            `json:"source"`
+	TagIds        []int64           `json:"tag_ids"`
+	TombstonedAt  *time.Time        `json:"tombstoned_at,omitempty"`
+	TransactionId int64             `json:"transaction_id"`
+	UpdatedAt     time.Time         `json:"updated_at"`
 }
 
 // JournalRecordSearchResponse defines model for JournalRecordSearchResponse.
@@ -1933,9 +1917,6 @@ type MemberListResponse struct {
 	TotalCount int64 `json:"total_count"`
 }
 
-// NonExpectedPostingStatus Non-expected posting status accepted by bulk status updates.
-type NonExpectedPostingStatus string
-
 // OperationRunReferenceResponse defines model for OperationRunReferenceResponse.
 type OperationRunReferenceResponse struct {
 	OperationId    OperationRunReferenceResponseOperationId `json:"operation_id"`
@@ -1945,9 +1926,6 @@ type OperationRunReferenceResponse struct {
 
 // OperationRunReferenceResponseOperationId defines model for OperationRunReferenceResponse.OperationId.
 type OperationRunReferenceResponseOperationId string
-
-// PostingStatus Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.
-type PostingStatus string
 
 // ReconciliationStatus Whether a journal record has been reconciled with its external or expected source.
 type ReconciliationStatus string
@@ -2157,6 +2135,21 @@ type SettingsResponse struct {
 	Groups         []SettingGroup `json:"groups"`
 }
 
+// SettlementIntent defines model for SettlementIntent.
+type SettlementIntent struct {
+	// PendingDate Exact UTC time the balance record entered pending; omitted manual values are derived by the service.
+	PendingDate *time.Time `json:"pending_date,omitempty"`
+
+	// PostedDate Exact UTC time the balance record posted; omitted manual values are derived by the service.
+	PostedDate *time.Time `json:"posted_date,omitempty"`
+
+	// Status Server-derived balance-record settlement.
+	Status SettlementStatus `json:"status"`
+}
+
+// SettlementStatus Server-derived balance-record settlement.
+type SettlementStatus string
+
 // Source defines model for Source.
 type Source string
 
@@ -2194,17 +2187,23 @@ type Transaction struct {
 	CreatedAt time.Time `json:"created_at"`
 
 	// DisplayTitle Server-derived transaction summary title for transaction lines.
-	DisplayTitle   string             `json:"display_title"`
-	InitiatedDate  openapi_types.Date `json:"initiated_date"`
-	PrimaryAmounts []DisplayAmount    `json:"primary_amounts"`
-	Records        []JournalRecord    `json:"records"`
+	DisplayTitle  string             `json:"display_title"`
+	InitiatedDate openapi_types.Date `json:"initiated_date"`
+
+	// LifecycleStatus Transaction lifecycle, independent from balance-record settlement and tombstoning.
+	LifecycleStatus TransactionLifecycleStatus `json:"lifecycle_status"`
+	PrimaryAmounts  []DisplayAmount            `json:"primary_amounts"`
+	Records         []JournalRecord            `json:"records"`
 
 	// RecurringOccurrenceId Occurrence this transaction was generated from; null for non-recurring transactions; the definition is reached via the occurrence.
-	RecurringOccurrenceId *int64             `json:"recurring_occurrence_id"`
-	Shapes                []TransactionShape `json:"shapes"`
-	TombstonedAt          *time.Time         `json:"tombstoned_at,omitempty"`
-	TransactionClass      TransactionClass   `json:"transaction_class"`
-	TransactionId         int64              `json:"transaction_id"`
+	RecurringOccurrenceId *int64 `json:"recurring_occurrence_id"`
+
+	// Settlement Server-derived settlement summary across a transaction's balance records.
+	Settlement       TransactionSettlement `json:"settlement"`
+	Shapes           []TransactionShape    `json:"shapes"`
+	TombstonedAt     *time.Time            `json:"tombstoned_at,omitempty"`
+	TransactionClass TransactionClass      `json:"transaction_class"`
+	TransactionId    int64                 `json:"transaction_id"`
 }
 
 // TransactionClass defines model for TransactionClass.
@@ -2217,6 +2216,9 @@ type TransactionClassification struct {
 	Shapes           []TransactionShape `json:"shapes"`
 	TransactionClass TransactionClass   `json:"transaction_class"`
 }
+
+// TransactionLifecycleStatus Transaction lifecycle, independent from balance-record settlement and tombstoning.
+type TransactionLifecycleStatus string
 
 // TransactionListResponse defines model for TransactionListResponse.
 type TransactionListResponse struct {
@@ -2243,6 +2245,9 @@ type TransactionMonthTotalsResponse struct {
 	Month  string                `json:"month"`
 	Spend  TransactionMonthTotal `json:"spend"`
 }
+
+// TransactionSettlement Server-derived settlement summary across a transaction's balance records.
+type TransactionSettlement string
 
 // TransactionShape defines model for TransactionShape.
 type TransactionShape struct {
@@ -2289,7 +2294,6 @@ type TransactionTemplateRecord struct {
 	Currency                    *string               `json:"currency"`
 	MemberId                    *int64                `json:"member_id"`
 	Memo                        *string               `json:"memo"`
-	PostingStatus               *PostingStatus        `json:"posting_status"`
 	ReconciliationStatus        *ReconciliationStatus `json:"reconciliation_status"`
 	TagIds                      []int64               `json:"tag_ids"`
 	TombstonedAt                *time.Time            `json:"tombstoned_at,omitempty"`
@@ -2317,9 +2321,6 @@ type TransactionTemplateRecordRequest struct {
 
 	// Memo Optional memo text for the journal records.
 	Memo *string `json:"memo,omitempty"`
-
-	// PostingStatus Posting-status value or optional template default for the journal record.
-	PostingStatus *NonExpectedPostingStatus `json:"posting_status,omitempty"`
 
 	// ReconciliationStatus Reconciliation-status value or optional template default for the journal record.
 	ReconciliationStatus *ReconciliationStatus `json:"reconciliation_status,omitempty"`
@@ -2537,11 +2538,11 @@ type SearchAccountJournalRecordsParams struct {
 	// MemberId Household-member identifier to target or filter by.
 	MemberId *int64 `form:"member_id,omitempty" json:"member_id,omitempty"`
 
-	// PostingStatus Filters account register records by posting status. Expected records are excluded by default and returned when this filter is explicitly `expected` or when `include_expected=true`.
-	PostingStatus *PostingStatus `form:"posting_status,omitempty" json:"posting_status,omitempty"`
+	// LifecycleStatus Filters account register records by inherited transaction lifecycle. Expected records are excluded by default.
+	LifecycleStatus *TransactionLifecycleStatus `form:"lifecycle_status,omitempty" json:"lifecycle_status,omitempty"`
 
-	// IncludeExpected Includes expected records alongside ordinary matching records. Expected records remain excluded from running balances.
-	IncludeExpected *bool `form:"include_expected,omitempty" json:"include_expected,omitempty"`
+	// Settlement Filters account register records by server-derived settlement.
+	Settlement *SettlementStatus `form:"settlement,omitempty" json:"settlement,omitempty"`
 
 	// ReconciliationStatus Filter by reconciled or unreconciled journal-record status.
 	ReconciliationStatus *ReconciliationStatus `form:"reconciliation_status,omitempty" json:"reconciliation_status,omitempty"`
@@ -2762,11 +2763,11 @@ type SearchJournalRecordsParams struct {
 	// MemberId Household-member identifier to target or filter by.
 	MemberId *int64 `form:"member_id,omitempty" json:"member_id,omitempty"`
 
-	// PostingStatus Filters records by posting status. Expected records are excluded by default and returned when this filter is explicitly `expected` or when `include_expected=true`.
-	PostingStatus *PostingStatus `form:"posting_status,omitempty" json:"posting_status,omitempty"`
+	// LifecycleStatus Filters records by inherited transaction lifecycle. Expected records are excluded by default.
+	LifecycleStatus *TransactionLifecycleStatus `form:"lifecycle_status,omitempty" json:"lifecycle_status,omitempty"`
 
-	// IncludeExpected Includes expected records alongside ordinary matching records. Expected records remain excluded from running balances.
-	IncludeExpected *bool `form:"include_expected,omitempty" json:"include_expected,omitempty"`
+	// Settlement Filters owned and party records by server-derived settlement.
+	Settlement *SettlementStatus `form:"settlement,omitempty" json:"settlement,omitempty"`
 
 	// ReconciliationStatus Filter by reconciled or unreconciled journal-record status.
 	ReconciliationStatus *ReconciliationStatus `form:"reconciliation_status,omitempty" json:"reconciliation_status,omitempty"`
@@ -2966,8 +2967,11 @@ type ListTransactionsParams struct {
 	// MemberId Household-member identifier to target or filter by.
 	MemberId *[]int64 `form:"member_id,omitempty" json:"member_id,omitempty"`
 
-	// PostingStatus Filters transactions by active record posting status. Expected transactions are excluded by default and returned only when this filter explicitly includes `expected`.
-	PostingStatus *[]PostingStatus `form:"posting_status,omitempty" json:"posting_status,omitempty"`
+	// LifecycleStatus Filters transactions by lifecycle. Expected transactions are excluded by default and returned only when this filter explicitly includes `expected`.
+	LifecycleStatus *[]TransactionLifecycleStatus `form:"lifecycle_status,omitempty" json:"lifecycle_status,omitempty"`
+
+	// Settlement Filters transactions by server-derived settlement summary.
+	Settlement *[]TransactionSettlement `form:"settlement,omitempty" json:"settlement,omitempty"`
 
 	// TransactionClass Filter by one or more server-derived transaction classes.
 	TransactionClass *[]TransactionClass `form:"transaction_class,omitempty" json:"transaction_class,omitempty"`
@@ -3075,8 +3079,11 @@ type BulkReassignJournalRecordAccountJSONRequestBody = BulkReassignRecordsAccoun
 // BulkCategorizeJournalRecordsJSONRequestBody defines body for BulkCategorizeJournalRecords for application/json ContentType.
 type BulkCategorizeJournalRecordsJSONRequestBody = BulkCategorizeRecordsRequest
 
-// BulkUpdateJournalRecordStatusesJSONRequestBody defines body for BulkUpdateJournalRecordStatuses for application/json ContentType.
-type BulkUpdateJournalRecordStatusesJSONRequestBody = BulkUpdateRecordStatusRequest
+// BulkSetJournalRecordReconciliationJSONRequestBody defines body for BulkSetJournalRecordReconciliation for application/json ContentType.
+type BulkSetJournalRecordReconciliationJSONRequestBody = BulkSetRecordReconciliationRequest
+
+// BulkSetJournalRecordSettlementJSONRequestBody defines body for BulkSetJournalRecordSettlement for application/json ContentType.
+type BulkSetJournalRecordSettlementJSONRequestBody = BulkSetRecordSettlementRequest
 
 // BulkUpdateJournalRecordTagsJSONRequestBody defines body for BulkUpdateJournalRecordTags for application/json ContentType.
 type BulkUpdateJournalRecordTagsJSONRequestBody = BulkTagRecordsRequest
@@ -3087,8 +3094,14 @@ type CreateRecurringDefinitionJSONRequestBody = RecurringDefinitionWriteRequest
 // ReplaceRecurringDefinitionJSONRequestBody defines body for ReplaceRecurringDefinition for application/json ContentType.
 type ReplaceRecurringDefinitionJSONRequestBody = RecurringDefinitionWriteRequest
 
+// ConfirmNextRecurringDefinitionJSONRequestBody defines body for ConfirmNextRecurringDefinition for application/json ContentType.
+type ConfirmNextRecurringDefinitionJSONRequestBody = SettlementIntent
+
 // DeferRecurringDefinitionJSONRequestBody defines body for DeferRecurringDefinition for application/json ContentType.
 type DeferRecurringDefinitionJSONRequestBody = RecurringDefinitionDeferRequest
+
+// ConfirmRecurringOccurrenceJSONRequestBody defines body for ConfirmRecurringOccurrence for application/json ContentType.
+type ConfirmRecurringOccurrenceJSONRequestBody = SettlementIntent
 
 // CreateTagJSONRequestBody defines body for CreateTag for application/json ContentType.
 type CreateTagJSONRequestBody = CreateTagRequest
@@ -3389,10 +3402,15 @@ type ClientInterface interface {
 
 	BulkCategorizeJournalRecords(ctx context.Context, body BulkCategorizeJournalRecordsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// BulkUpdateJournalRecordStatusesWithBody request with any body
-	BulkUpdateJournalRecordStatusesWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// BulkSetJournalRecordReconciliationWithBody request with any body
+	BulkSetJournalRecordReconciliationWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	BulkUpdateJournalRecordStatuses(ctx context.Context, body BulkUpdateJournalRecordStatusesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	BulkSetJournalRecordReconciliation(ctx context.Context, body BulkSetJournalRecordReconciliationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// BulkSetJournalRecordSettlementWithBody request with any body
+	BulkSetJournalRecordSettlementWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	BulkSetJournalRecordSettlement(ctx context.Context, body BulkSetJournalRecordSettlementJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// BulkUpdateJournalRecordTagsWithBody request with any body
 	BulkUpdateJournalRecordTagsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -3418,8 +3436,10 @@ type ClientInterface interface {
 
 	ReplaceRecurringDefinition(ctx context.Context, recurringDefinitionId int64, body ReplaceRecurringDefinitionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ConfirmNextRecurringDefinition request
-	ConfirmNextRecurringDefinition(ctx context.Context, recurringDefinitionId int64, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// ConfirmNextRecurringDefinitionWithBody request with any body
+	ConfirmNextRecurringDefinitionWithBody(ctx context.Context, recurringDefinitionId int64, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	ConfirmNextRecurringDefinition(ctx context.Context, recurringDefinitionId int64, body ConfirmNextRecurringDefinitionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeferRecurringDefinitionWithBody request with any body
 	DeferRecurringDefinitionWithBody(ctx context.Context, recurringDefinitionId int64, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -3435,8 +3455,10 @@ type ClientInterface interface {
 	// ListRecurringOccurrences request
 	ListRecurringOccurrences(ctx context.Context, params *ListRecurringOccurrencesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ConfirmRecurringOccurrence request
-	ConfirmRecurringOccurrence(ctx context.Context, recurringOccurrenceId int64, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// ConfirmRecurringOccurrenceWithBody request with any body
+	ConfirmRecurringOccurrenceWithBody(ctx context.Context, recurringOccurrenceId int64, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	ConfirmRecurringOccurrence(ctx context.Context, recurringOccurrenceId int64, body ConfirmRecurringOccurrenceJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DismissRecurringOccurrence request
 	DismissRecurringOccurrence(ctx context.Context, recurringOccurrenceId int64, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -3554,6 +3576,9 @@ type ClientInterface interface {
 
 	// CancelTransaction request
 	CancelTransaction(ctx context.Context, transactionId int64, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RestoreTransaction request
+	RestoreTransaction(ctx context.Context, transactionId int64, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
 func (c *Client) ListAccounts(ctx context.Context, params *ListAccountsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -4348,8 +4373,8 @@ func (c *Client) BulkCategorizeJournalRecords(ctx context.Context, body BulkCate
 	return c.Client.Do(req)
 }
 
-func (c *Client) BulkUpdateJournalRecordStatusesWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewBulkUpdateJournalRecordStatusesRequestWithBody(c.Server, contentType, body)
+func (c *Client) BulkSetJournalRecordReconciliationWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewBulkSetJournalRecordReconciliationRequestWithBody(c.Server, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4360,8 +4385,32 @@ func (c *Client) BulkUpdateJournalRecordStatusesWithBody(ctx context.Context, co
 	return c.Client.Do(req)
 }
 
-func (c *Client) BulkUpdateJournalRecordStatuses(ctx context.Context, body BulkUpdateJournalRecordStatusesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewBulkUpdateJournalRecordStatusesRequest(c.Server, body)
+func (c *Client) BulkSetJournalRecordReconciliation(ctx context.Context, body BulkSetJournalRecordReconciliationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewBulkSetJournalRecordReconciliationRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) BulkSetJournalRecordSettlementWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewBulkSetJournalRecordSettlementRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) BulkSetJournalRecordSettlement(ctx context.Context, body BulkSetJournalRecordSettlementJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewBulkSetJournalRecordSettlementRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4480,8 +4529,20 @@ func (c *Client) ReplaceRecurringDefinition(ctx context.Context, recurringDefini
 	return c.Client.Do(req)
 }
 
-func (c *Client) ConfirmNextRecurringDefinition(ctx context.Context, recurringDefinitionId int64, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewConfirmNextRecurringDefinitionRequest(c.Server, recurringDefinitionId)
+func (c *Client) ConfirmNextRecurringDefinitionWithBody(ctx context.Context, recurringDefinitionId int64, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewConfirmNextRecurringDefinitionRequestWithBody(c.Server, recurringDefinitionId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ConfirmNextRecurringDefinition(ctx context.Context, recurringDefinitionId int64, body ConfirmNextRecurringDefinitionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewConfirmNextRecurringDefinitionRequest(c.Server, recurringDefinitionId, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4552,8 +4613,20 @@ func (c *Client) ListRecurringOccurrences(ctx context.Context, params *ListRecur
 	return c.Client.Do(req)
 }
 
-func (c *Client) ConfirmRecurringOccurrence(ctx context.Context, recurringOccurrenceId int64, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewConfirmRecurringOccurrenceRequest(c.Server, recurringOccurrenceId)
+func (c *Client) ConfirmRecurringOccurrenceWithBody(ctx context.Context, recurringOccurrenceId int64, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewConfirmRecurringOccurrenceRequestWithBody(c.Server, recurringOccurrenceId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ConfirmRecurringOccurrence(ctx context.Context, recurringOccurrenceId int64, body ConfirmRecurringOccurrenceJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewConfirmRecurringOccurrenceRequest(c.Server, recurringOccurrenceId, body)
 	if err != nil {
 		return nil, err
 	}
@@ -5082,6 +5155,18 @@ func (c *Client) ReplaceTransaction(ctx context.Context, transactionId int64, bo
 
 func (c *Client) CancelTransaction(ctx context.Context, transactionId int64, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCancelTransactionRequest(c.Server, transactionId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) RestoreTransaction(ctx context.Context, transactionId int64, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRestoreTransactionRequest(c.Server, transactionId)
 	if err != nil {
 		return nil, err
 	}
@@ -5839,9 +5924,9 @@ func NewSearchAccountJournalRecordsRequest(server string, accountId int64, param
 
 		}
 
-		if params.PostingStatus != nil {
+		if params.LifecycleStatus != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "posting_status", *params.PostingStatus, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "lifecycle_status", *params.LifecycleStatus, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -5851,9 +5936,9 @@ func NewSearchAccountJournalRecordsRequest(server string, accountId int64, param
 
 		}
 
-		if params.IncludeExpected != nil {
+		if params.Settlement != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_expected", *params.IncludeExpected, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "settlement", *params.Settlement, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -7849,9 +7934,9 @@ func NewSearchJournalRecordsRequest(server string, params *SearchJournalRecordsP
 
 		}
 
-		if params.PostingStatus != nil {
+		if params.LifecycleStatus != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "posting_status", *params.PostingStatus, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "lifecycle_status", *params.LifecycleStatus, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -7861,9 +7946,9 @@ func NewSearchJournalRecordsRequest(server string, params *SearchJournalRecordsP
 
 		}
 
-		if params.IncludeExpected != nil {
+		if params.Settlement != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_expected", *params.IncludeExpected, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "settlement", *params.Settlement, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -8171,19 +8256,19 @@ func NewBulkCategorizeJournalRecordsRequestWithBody(server string, contentType s
 	return req, nil
 }
 
-// NewBulkUpdateJournalRecordStatusesRequest calls the generic BulkUpdateJournalRecordStatuses builder with application/json body
-func NewBulkUpdateJournalRecordStatusesRequest(server string, body BulkUpdateJournalRecordStatusesJSONRequestBody) (*http.Request, error) {
+// NewBulkSetJournalRecordReconciliationRequest calls the generic BulkSetJournalRecordReconciliation builder with application/json body
+func NewBulkSetJournalRecordReconciliationRequest(server string, body BulkSetJournalRecordReconciliationJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewBulkUpdateJournalRecordStatusesRequestWithBody(server, "application/json", bodyReader)
+	return NewBulkSetJournalRecordReconciliationRequestWithBody(server, "application/json", bodyReader)
 }
 
-// NewBulkUpdateJournalRecordStatusesRequestWithBody generates requests for BulkUpdateJournalRecordStatuses with any type of body
-func NewBulkUpdateJournalRecordStatusesRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+// NewBulkSetJournalRecordReconciliationRequestWithBody generates requests for BulkSetJournalRecordReconciliation with any type of body
+func NewBulkSetJournalRecordReconciliationRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -8191,7 +8276,47 @@ func NewBulkUpdateJournalRecordStatusesRequestWithBody(server string, contentTyp
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/api/records/bulk/status")
+	operationPath := fmt.Sprintf("/api/records/bulk/reconciliation")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewBulkSetJournalRecordSettlementRequest calls the generic BulkSetJournalRecordSettlement builder with application/json body
+func NewBulkSetJournalRecordSettlementRequest(server string, body BulkSetJournalRecordSettlementJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewBulkSetJournalRecordSettlementRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewBulkSetJournalRecordSettlementRequestWithBody generates requests for BulkSetJournalRecordSettlement with any type of body
+func NewBulkSetJournalRecordSettlementRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/records/bulk/settlement")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -8496,8 +8621,19 @@ func NewReplaceRecurringDefinitionRequestWithBody(server string, recurringDefini
 	return req, nil
 }
 
-// NewConfirmNextRecurringDefinitionRequest generates requests for ConfirmNextRecurringDefinition
-func NewConfirmNextRecurringDefinitionRequest(server string, recurringDefinitionId int64) (*http.Request, error) {
+// NewConfirmNextRecurringDefinitionRequest calls the generic ConfirmNextRecurringDefinition builder with application/json body
+func NewConfirmNextRecurringDefinitionRequest(server string, recurringDefinitionId int64, body ConfirmNextRecurringDefinitionJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewConfirmNextRecurringDefinitionRequestWithBody(server, recurringDefinitionId, "application/json", bodyReader)
+}
+
+// NewConfirmNextRecurringDefinitionRequestWithBody generates requests for ConfirmNextRecurringDefinition with any type of body
+func NewConfirmNextRecurringDefinitionRequestWithBody(server string, recurringDefinitionId int64, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -8522,10 +8658,12 @@ func NewConfirmNextRecurringDefinitionRequest(server string, recurringDefinition
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -8759,8 +8897,19 @@ func NewListRecurringOccurrencesRequest(server string, params *ListRecurringOccu
 	return req, nil
 }
 
-// NewConfirmRecurringOccurrenceRequest generates requests for ConfirmRecurringOccurrence
-func NewConfirmRecurringOccurrenceRequest(server string, recurringOccurrenceId int64) (*http.Request, error) {
+// NewConfirmRecurringOccurrenceRequest calls the generic ConfirmRecurringOccurrence builder with application/json body
+func NewConfirmRecurringOccurrenceRequest(server string, recurringOccurrenceId int64, body ConfirmRecurringOccurrenceJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewConfirmRecurringOccurrenceRequestWithBody(server, recurringOccurrenceId, "application/json", bodyReader)
+}
+
+// NewConfirmRecurringOccurrenceRequestWithBody generates requests for ConfirmRecurringOccurrence with any type of body
+func NewConfirmRecurringOccurrenceRequestWithBody(server string, recurringOccurrenceId int64, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -8785,10 +8934,12 @@ func NewConfirmRecurringOccurrenceRequest(server string, recurringOccurrenceId i
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -9717,9 +9868,21 @@ func NewListTransactionsRequest(server string, params *ListTransactionsParams) (
 
 		}
 
-		if params.PostingStatus != nil {
+		if params.LifecycleStatus != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "posting_status", *params.PostingStatus, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "lifecycle_status", *params.LifecycleStatus, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Settlement != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "settlement", *params.Settlement, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -10390,6 +10553,40 @@ func NewCancelTransactionRequest(server string, transactionId int64) (*http.Requ
 	return req, nil
 }
 
+// NewRestoreTransactionRequest generates requests for RestoreTransaction
+func NewRestoreTransactionRequest(server string, transactionId int64) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "transaction_id", transactionId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "integer", Format: "int64"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/transactions/%s/restore", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 func (c *Client) applyEditors(ctx context.Context, req *http.Request, additionalEditors []RequestEditorFn) error {
 	for _, r := range c.RequestEditors {
 		if err := r(ctx, req); err != nil {
@@ -10614,10 +10811,15 @@ type ClientWithResponsesInterface interface {
 
 	BulkCategorizeJournalRecordsWithResponse(ctx context.Context, body BulkCategorizeJournalRecordsJSONRequestBody, reqEditors ...RequestEditorFn) (*BulkCategorizeJournalRecordsResponse, error)
 
-	// BulkUpdateJournalRecordStatusesWithBodyWithResponse request with any body
-	BulkUpdateJournalRecordStatusesWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*BulkUpdateJournalRecordStatusesResponse, error)
+	// BulkSetJournalRecordReconciliationWithBodyWithResponse request with any body
+	BulkSetJournalRecordReconciliationWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*BulkSetJournalRecordReconciliationResponse, error)
 
-	BulkUpdateJournalRecordStatusesWithResponse(ctx context.Context, body BulkUpdateJournalRecordStatusesJSONRequestBody, reqEditors ...RequestEditorFn) (*BulkUpdateJournalRecordStatusesResponse, error)
+	BulkSetJournalRecordReconciliationWithResponse(ctx context.Context, body BulkSetJournalRecordReconciliationJSONRequestBody, reqEditors ...RequestEditorFn) (*BulkSetJournalRecordReconciliationResponse, error)
+
+	// BulkSetJournalRecordSettlementWithBodyWithResponse request with any body
+	BulkSetJournalRecordSettlementWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*BulkSetJournalRecordSettlementResponse, error)
+
+	BulkSetJournalRecordSettlementWithResponse(ctx context.Context, body BulkSetJournalRecordSettlementJSONRequestBody, reqEditors ...RequestEditorFn) (*BulkSetJournalRecordSettlementResponse, error)
 
 	// BulkUpdateJournalRecordTagsWithBodyWithResponse request with any body
 	BulkUpdateJournalRecordTagsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*BulkUpdateJournalRecordTagsResponse, error)
@@ -10643,8 +10845,10 @@ type ClientWithResponsesInterface interface {
 
 	ReplaceRecurringDefinitionWithResponse(ctx context.Context, recurringDefinitionId int64, body ReplaceRecurringDefinitionJSONRequestBody, reqEditors ...RequestEditorFn) (*ReplaceRecurringDefinitionResponse, error)
 
-	// ConfirmNextRecurringDefinitionWithResponse request
-	ConfirmNextRecurringDefinitionWithResponse(ctx context.Context, recurringDefinitionId int64, reqEditors ...RequestEditorFn) (*ConfirmNextRecurringDefinitionResponse, error)
+	// ConfirmNextRecurringDefinitionWithBodyWithResponse request with any body
+	ConfirmNextRecurringDefinitionWithBodyWithResponse(ctx context.Context, recurringDefinitionId int64, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ConfirmNextRecurringDefinitionResponse, error)
+
+	ConfirmNextRecurringDefinitionWithResponse(ctx context.Context, recurringDefinitionId int64, body ConfirmNextRecurringDefinitionJSONRequestBody, reqEditors ...RequestEditorFn) (*ConfirmNextRecurringDefinitionResponse, error)
 
 	// DeferRecurringDefinitionWithBodyWithResponse request with any body
 	DeferRecurringDefinitionWithBodyWithResponse(ctx context.Context, recurringDefinitionId int64, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DeferRecurringDefinitionResponse, error)
@@ -10660,8 +10864,10 @@ type ClientWithResponsesInterface interface {
 	// ListRecurringOccurrencesWithResponse request
 	ListRecurringOccurrencesWithResponse(ctx context.Context, params *ListRecurringOccurrencesParams, reqEditors ...RequestEditorFn) (*ListRecurringOccurrencesResponse, error)
 
-	// ConfirmRecurringOccurrenceWithResponse request
-	ConfirmRecurringOccurrenceWithResponse(ctx context.Context, recurringOccurrenceId int64, reqEditors ...RequestEditorFn) (*ConfirmRecurringOccurrenceResponse, error)
+	// ConfirmRecurringOccurrenceWithBodyWithResponse request with any body
+	ConfirmRecurringOccurrenceWithBodyWithResponse(ctx context.Context, recurringOccurrenceId int64, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ConfirmRecurringOccurrenceResponse, error)
+
+	ConfirmRecurringOccurrenceWithResponse(ctx context.Context, recurringOccurrenceId int64, body ConfirmRecurringOccurrenceJSONRequestBody, reqEditors ...RequestEditorFn) (*ConfirmRecurringOccurrenceResponse, error)
 
 	// DismissRecurringOccurrenceWithResponse request
 	DismissRecurringOccurrenceWithResponse(ctx context.Context, recurringOccurrenceId int64, reqEditors ...RequestEditorFn) (*DismissRecurringOccurrenceResponse, error)
@@ -10779,6 +10985,9 @@ type ClientWithResponsesInterface interface {
 
 	// CancelTransactionWithResponse request
 	CancelTransactionWithResponse(ctx context.Context, transactionId int64, reqEditors ...RequestEditorFn) (*CancelTransactionResponse, error)
+
+	// RestoreTransactionWithResponse request
+	RestoreTransactionWithResponse(ctx context.Context, transactionId int64, reqEditors ...RequestEditorFn) (*RestoreTransactionResponse, error)
 }
 
 type ListAccountsResponse struct {
@@ -12409,7 +12618,7 @@ func (r BulkCategorizeJournalRecordsResponse) ContentType() string {
 	return ""
 }
 
-type BulkUpdateJournalRecordStatusesResponse struct {
+type BulkSetJournalRecordReconciliationResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *BulkRecordOperationResponse
@@ -12419,7 +12628,7 @@ type BulkUpdateJournalRecordStatusesResponse struct {
 }
 
 // Status returns HTTPResponse.Status
-func (r BulkUpdateJournalRecordStatusesResponse) Status() string {
+func (r BulkSetJournalRecordReconciliationResponse) Status() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Status
 	}
@@ -12427,7 +12636,7 @@ func (r BulkUpdateJournalRecordStatusesResponse) Status() string {
 }
 
 // StatusCode returns HTTPResponse.StatusCode
-func (r BulkUpdateJournalRecordStatusesResponse) StatusCode() int {
+func (r BulkSetJournalRecordReconciliationResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -12435,7 +12644,40 @@ func (r BulkUpdateJournalRecordStatusesResponse) StatusCode() int {
 }
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r BulkUpdateJournalRecordStatusesResponse) ContentType() string {
+func (r BulkSetJournalRecordReconciliationResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type BulkSetJournalRecordSettlementResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *BulkRecordOperationResponse
+	JSON400      *InvalidRequest
+	JSON401      *Unauthenticated
+	JSON403      *Forbidden
+}
+
+// Status returns HTTPResponse.Status
+func (r BulkSetJournalRecordSettlementResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r BulkSetJournalRecordSettlementResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r BulkSetJournalRecordSettlementResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -13810,6 +14052,40 @@ func (r CancelTransactionResponse) ContentType() string {
 	return ""
 }
 
+type RestoreTransactionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *Transaction
+	JSON400      *InvalidRequest
+	JSON401      *Unauthenticated
+	JSON403      *Forbidden
+	JSON404      *NotFound
+}
+
+// Status returns HTTPResponse.Status
+func (r RestoreTransactionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RestoreTransactionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RestoreTransactionResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 // ListAccountsWithResponse request returning *ListAccountsResponse
 func (c *ClientWithResponses) ListAccountsWithResponse(ctx context.Context, params *ListAccountsParams, reqEditors ...RequestEditorFn) (*ListAccountsResponse, error) {
 	rsp, err := c.ListAccounts(ctx, params, reqEditors...)
@@ -14387,21 +14663,38 @@ func (c *ClientWithResponses) BulkCategorizeJournalRecordsWithResponse(ctx conte
 	return ParseBulkCategorizeJournalRecordsResponse(rsp)
 }
 
-// BulkUpdateJournalRecordStatusesWithBodyWithResponse request with arbitrary body returning *BulkUpdateJournalRecordStatusesResponse
-func (c *ClientWithResponses) BulkUpdateJournalRecordStatusesWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*BulkUpdateJournalRecordStatusesResponse, error) {
-	rsp, err := c.BulkUpdateJournalRecordStatusesWithBody(ctx, contentType, body, reqEditors...)
+// BulkSetJournalRecordReconciliationWithBodyWithResponse request with arbitrary body returning *BulkSetJournalRecordReconciliationResponse
+func (c *ClientWithResponses) BulkSetJournalRecordReconciliationWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*BulkSetJournalRecordReconciliationResponse, error) {
+	rsp, err := c.BulkSetJournalRecordReconciliationWithBody(ctx, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseBulkUpdateJournalRecordStatusesResponse(rsp)
+	return ParseBulkSetJournalRecordReconciliationResponse(rsp)
 }
 
-func (c *ClientWithResponses) BulkUpdateJournalRecordStatusesWithResponse(ctx context.Context, body BulkUpdateJournalRecordStatusesJSONRequestBody, reqEditors ...RequestEditorFn) (*BulkUpdateJournalRecordStatusesResponse, error) {
-	rsp, err := c.BulkUpdateJournalRecordStatuses(ctx, body, reqEditors...)
+func (c *ClientWithResponses) BulkSetJournalRecordReconciliationWithResponse(ctx context.Context, body BulkSetJournalRecordReconciliationJSONRequestBody, reqEditors ...RequestEditorFn) (*BulkSetJournalRecordReconciliationResponse, error) {
+	rsp, err := c.BulkSetJournalRecordReconciliation(ctx, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseBulkUpdateJournalRecordStatusesResponse(rsp)
+	return ParseBulkSetJournalRecordReconciliationResponse(rsp)
+}
+
+// BulkSetJournalRecordSettlementWithBodyWithResponse request with arbitrary body returning *BulkSetJournalRecordSettlementResponse
+func (c *ClientWithResponses) BulkSetJournalRecordSettlementWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*BulkSetJournalRecordSettlementResponse, error) {
+	rsp, err := c.BulkSetJournalRecordSettlementWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseBulkSetJournalRecordSettlementResponse(rsp)
+}
+
+func (c *ClientWithResponses) BulkSetJournalRecordSettlementWithResponse(ctx context.Context, body BulkSetJournalRecordSettlementJSONRequestBody, reqEditors ...RequestEditorFn) (*BulkSetJournalRecordSettlementResponse, error) {
+	rsp, err := c.BulkSetJournalRecordSettlement(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseBulkSetJournalRecordSettlementResponse(rsp)
 }
 
 // BulkUpdateJournalRecordTagsWithBodyWithResponse request with arbitrary body returning *BulkUpdateJournalRecordTagsResponse
@@ -14482,9 +14775,17 @@ func (c *ClientWithResponses) ReplaceRecurringDefinitionWithResponse(ctx context
 	return ParseReplaceRecurringDefinitionResponse(rsp)
 }
 
-// ConfirmNextRecurringDefinitionWithResponse request returning *ConfirmNextRecurringDefinitionResponse
-func (c *ClientWithResponses) ConfirmNextRecurringDefinitionWithResponse(ctx context.Context, recurringDefinitionId int64, reqEditors ...RequestEditorFn) (*ConfirmNextRecurringDefinitionResponse, error) {
-	rsp, err := c.ConfirmNextRecurringDefinition(ctx, recurringDefinitionId, reqEditors...)
+// ConfirmNextRecurringDefinitionWithBodyWithResponse request with arbitrary body returning *ConfirmNextRecurringDefinitionResponse
+func (c *ClientWithResponses) ConfirmNextRecurringDefinitionWithBodyWithResponse(ctx context.Context, recurringDefinitionId int64, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ConfirmNextRecurringDefinitionResponse, error) {
+	rsp, err := c.ConfirmNextRecurringDefinitionWithBody(ctx, recurringDefinitionId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseConfirmNextRecurringDefinitionResponse(rsp)
+}
+
+func (c *ClientWithResponses) ConfirmNextRecurringDefinitionWithResponse(ctx context.Context, recurringDefinitionId int64, body ConfirmNextRecurringDefinitionJSONRequestBody, reqEditors ...RequestEditorFn) (*ConfirmNextRecurringDefinitionResponse, error) {
+	rsp, err := c.ConfirmNextRecurringDefinition(ctx, recurringDefinitionId, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -14535,9 +14836,17 @@ func (c *ClientWithResponses) ListRecurringOccurrencesWithResponse(ctx context.C
 	return ParseListRecurringOccurrencesResponse(rsp)
 }
 
-// ConfirmRecurringOccurrenceWithResponse request returning *ConfirmRecurringOccurrenceResponse
-func (c *ClientWithResponses) ConfirmRecurringOccurrenceWithResponse(ctx context.Context, recurringOccurrenceId int64, reqEditors ...RequestEditorFn) (*ConfirmRecurringOccurrenceResponse, error) {
-	rsp, err := c.ConfirmRecurringOccurrence(ctx, recurringOccurrenceId, reqEditors...)
+// ConfirmRecurringOccurrenceWithBodyWithResponse request with arbitrary body returning *ConfirmRecurringOccurrenceResponse
+func (c *ClientWithResponses) ConfirmRecurringOccurrenceWithBodyWithResponse(ctx context.Context, recurringOccurrenceId int64, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ConfirmRecurringOccurrenceResponse, error) {
+	rsp, err := c.ConfirmRecurringOccurrenceWithBody(ctx, recurringOccurrenceId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseConfirmRecurringOccurrenceResponse(rsp)
+}
+
+func (c *ClientWithResponses) ConfirmRecurringOccurrenceWithResponse(ctx context.Context, recurringOccurrenceId int64, body ConfirmRecurringOccurrenceJSONRequestBody, reqEditors ...RequestEditorFn) (*ConfirmRecurringOccurrenceResponse, error) {
+	rsp, err := c.ConfirmRecurringOccurrence(ctx, recurringOccurrenceId, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -14923,6 +15232,15 @@ func (c *ClientWithResponses) CancelTransactionWithResponse(ctx context.Context,
 		return nil, err
 	}
 	return ParseCancelTransactionResponse(rsp)
+}
+
+// RestoreTransactionWithResponse request returning *RestoreTransactionResponse
+func (c *ClientWithResponses) RestoreTransactionWithResponse(ctx context.Context, transactionId int64, reqEditors ...RequestEditorFn) (*RestoreTransactionResponse, error) {
+	rsp, err := c.RestoreTransaction(ctx, transactionId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRestoreTransactionResponse(rsp)
 }
 
 // ParseListAccountsResponse parses an HTTP response from a ListAccountsWithResponse call
@@ -17305,15 +17623,62 @@ func ParseBulkCategorizeJournalRecordsResponse(rsp *http.Response) (*BulkCategor
 	return response, nil
 }
 
-// ParseBulkUpdateJournalRecordStatusesResponse parses an HTTP response from a BulkUpdateJournalRecordStatusesWithResponse call
-func ParseBulkUpdateJournalRecordStatusesResponse(rsp *http.Response) (*BulkUpdateJournalRecordStatusesResponse, error) {
+// ParseBulkSetJournalRecordReconciliationResponse parses an HTTP response from a BulkSetJournalRecordReconciliationWithResponse call
+func ParseBulkSetJournalRecordReconciliationResponse(rsp *http.Response) (*BulkSetJournalRecordReconciliationResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &BulkUpdateJournalRecordStatusesResponse{
+	response := &BulkSetJournalRecordReconciliationResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest BulkRecordOperationResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseBulkSetJournalRecordSettlementResponse parses an HTTP response from a BulkSetJournalRecordSettlementWithResponse call
+func ParseBulkSetJournalRecordSettlementResponse(rsp *http.Response) (*BulkSetJournalRecordSettlementResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &BulkSetJournalRecordSettlementResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
@@ -19339,6 +19704,60 @@ func ParseCancelTransactionResponse(rsp *http.Response) (*CancelTransactionRespo
 	}
 
 	response := &CancelTransactionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Transaction
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRestoreTransactionResponse parses an HTTP response from a RestoreTransactionWithResponse call
+func ParseRestoreTransactionResponse(rsp *http.Response) (*RestoreTransactionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RestoreTransactionResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}

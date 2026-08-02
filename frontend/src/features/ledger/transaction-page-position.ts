@@ -1,7 +1,8 @@
 import type {
-  PostingStatus,
   RecordRole,
   TransactionClass,
+  TransactionLifecycleStatus,
+  TransactionSettlement,
   TransactionShapeType,
 } from "@/api";
 import {
@@ -10,7 +11,8 @@ import {
   transactionClasses,
   transactionFilterDecimalPattern,
   type TransactionFilters,
-  transactionPostingStatuses,
+  transactionLifecycleStatuses,
+  transactionSettlements,
   transactionShapes,
 } from "@/models/transaction-filters";
 
@@ -27,18 +29,14 @@ const filterParamNames = [
   "amountUsdMin",
   "category",
   "class",
-  "hideExpected",
+  "lifecycle",
   "initiatedFrom",
   "initiatedTo",
   "member",
-  "pendingFrom",
-  "pendingTo",
-  "postedFrom",
-  "postedTo",
   "q",
   "role",
   "shape",
-  "status",
+  "settlement",
   "tag",
 ] as const;
 
@@ -153,7 +151,11 @@ export const readTransactionFiltersFromSearchParams = (
       "class",
       transactionClasses,
     ),
-    hideExpected: searchParams.get("hideExpected") === "true",
+    lifecycleStatuses: readAllowedParams<TransactionLifecycleStatus>(
+      searchParams,
+      "lifecycle",
+      transactionLifecycleStatuses,
+    ),
     initiatedFrom: readPatternParam(
       searchParams,
       "initiatedFrom",
@@ -161,10 +163,6 @@ export const readTransactionFiltersFromSearchParams = (
     ),
     initiatedTo: readPatternParam(searchParams, "initiatedTo", isoDatePattern),
     memberIds: readPositiveIntegerParams(searchParams, "member"),
-    pendingFrom: readPatternParam(searchParams, "pendingFrom", isoDatePattern),
-    pendingTo: readPatternParam(searchParams, "pendingTo", isoDatePattern),
-    postedFrom: readPatternParam(searchParams, "postedFrom", isoDatePattern),
-    postedTo: readPatternParam(searchParams, "postedTo", isoDatePattern),
     recordRoles: readAllowedParams<RecordRole>(
       searchParams,
       "role",
@@ -176,10 +174,10 @@ export const readTransactionFiltersFromSearchParams = (
       "shape",
       transactionShapes,
     ),
-    statuses: readAllowedParams<PostingStatus>(
+    settlements: readAllowedParams<TransactionSettlement>(
       searchParams,
-      "status",
-      transactionPostingStatuses,
+      "settlement",
+      transactionSettlements,
     ),
     tagIds: readPositiveIntegerParams(searchParams, "tag"),
   });
@@ -211,8 +209,11 @@ export const writeTransactionFiltersToSearchParams = (
   for (const memberId of normalized.memberIds) {
     next.append("member", String(memberId));
   }
-  for (const status of normalized.statuses) {
-    next.append("status", status);
+  for (const lifecycleStatus of normalized.lifecycleStatuses) {
+    next.append("lifecycle", lifecycleStatus);
+  }
+  for (const settlement of normalized.settlements) {
+    next.append("settlement", settlement);
   }
   for (const transactionClass of normalized.classes) {
     next.append("class", transactionClass);
@@ -223,10 +224,6 @@ export const writeTransactionFiltersToSearchParams = (
   for (const recordRole of normalized.recordRoles) {
     next.append("role", recordRole);
   }
-  if (normalized.hideExpected) {
-    next.set("hideExpected", "true");
-  }
-
   const setIfPresent = (name: string, value: string | undefined) => {
     if (value) {
       next.set(name, value);
@@ -238,10 +235,6 @@ export const writeTransactionFiltersToSearchParams = (
   setIfPresent("amountUsdMax", normalized.amountUsdMax);
   setIfPresent("initiatedFrom", normalized.initiatedFrom);
   setIfPresent("initiatedTo", normalized.initiatedTo);
-  setIfPresent("pendingFrom", normalized.pendingFrom);
-  setIfPresent("pendingTo", normalized.pendingTo);
-  setIfPresent("postedFrom", normalized.postedFrom);
-  setIfPresent("postedTo", normalized.postedTo);
   setIfPresent("q", normalized.search);
 
   if (options.resetPage ?? true) {

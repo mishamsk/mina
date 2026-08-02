@@ -17,6 +17,23 @@ func ValidateTransactionClassification(transaction Transaction) error {
 	return err
 }
 
+// ValidateTransactionSemantics validates account/category classification without settlement invariants.
+func ValidateTransactionSemantics(transaction Transaction) error {
+	records := make([]SemanticRecord, 0, len(transaction.Records))
+	for _, record := range transaction.Records {
+		records = append(records, SemanticRecord{
+			Currency:       record.Currency,
+			Amount:         record.Amount,
+			AccountFQN:     record.AccountFQN,
+			AccountType:    record.AccountType,
+			CategoryID:     record.CategoryID,
+			EconomicIntent: record.EconomicIntent,
+		})
+	}
+	_, err := classifySemanticRecords(records)
+	return err
+}
+
 // LineDisplayAmountsForSemanticRecords derives recurring-definition summary fields.
 func LineDisplayAmountsForSemanticRecords(records []SemanticRecord) (TransactionClass, []DisplayAmount, error) {
 	classified, err := classifySemanticRecords(records)
@@ -53,12 +70,81 @@ func classifyTransaction(transaction Transaction) (Transaction, error) {
 
 	for index := range transaction.Records {
 		transaction.Records[index].Role = classified.Roles[index]
+		transaction.Records[index].LifecycleStatus = transaction.LifecycleStatus
 	}
+	settlement, err := deriveTransactionSettlement(transaction)
+	if err != nil {
+		return Transaction{}, err
+	}
+	transaction.Settlement = settlement
 	transaction.Class = classified.Class
 	transaction.DisplayTitle = transactionDisplayTitle(transaction)
 	transaction.PrimaryAmounts = classified.PrimaryAmounts
 	transaction.Shapes = classified.Shapes
 	return transaction, nil
+}
+
+func deriveTransactionSettlement(transaction Transaction) (SettlementSummary, error) {
+	pending := 0
+	posted := 0
+	for index := range transaction.Records {
+		record := &transaction.Records[index]
+		settlement, err := deriveRecordSettlement(index, transaction.LifecycleStatus, *record)
+		if err != nil {
+			return "", err
+		}
+		record.Settlement = settlement
+		if settlement == nil {
+			continue
+		}
+		if *settlement == SettlementStatusPosted {
+			posted++
+		} else {
+			pending++
+		}
+	}
+
+	if transaction.LifecycleStatus == LifecycleStatusCancelled && posted > 0 {
+		return "", services.InvalidRequest("cancelled transactions must be wholly pending")
+	}
+	switch {
+	case pending > 0 && posted > 0:
+		return SettlementSummaryMixed, nil
+	case pending > 0:
+		return SettlementSummaryPending, nil
+	case posted > 0:
+		return SettlementSummaryPosted, nil
+	default:
+		return SettlementSummaryNotApplicable, nil
+	}
+}
+
+func deriveRecordSettlement(index int, lifecycle LifecycleStatus, record JournalRecord) (*SettlementStatus, error) {
+	isBalance := record.AccountType == accounts.AccountTypeOwned || record.AccountType == accounts.AccountTypeParty
+	if !isBalance {
+		if record.PendingDate != nil || record.PostedDate != nil {
+			return nil, services.InvalidRequest(fmt.Sprintf("records[%d] flow and system records must not have settlement dates", index))
+		}
+		return nil, nil
+	}
+	if lifecycle == LifecycleStatusExpected {
+		if record.PendingDate != nil || record.PostedDate != nil {
+			return nil, services.InvalidRequest(fmt.Sprintf("records[%d] expected balance records must not have settlement dates", index))
+		}
+		return nil, nil
+	}
+	if record.PendingDate != nil && record.PostedDate != nil && record.PostedDate.Before(*record.PendingDate) {
+		return nil, services.InvalidRequest(fmt.Sprintf("records[%d] posted_date must not precede pending_date", index))
+	}
+	if record.PostedDate != nil {
+		status := SettlementStatusPosted
+		return &status, nil
+	}
+	if record.PendingDate != nil {
+		status := SettlementStatusPending
+		return &status, nil
+	}
+	return nil, services.InvalidRequest(fmt.Sprintf("records[%d] active or cancelled balance record requires settlement dates", index))
 }
 
 func classifySemanticRecords(records []SemanticRecord) (Classification, error) {

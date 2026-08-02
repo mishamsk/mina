@@ -17,12 +17,10 @@ export type RecordUpdate =
   | {
       readonly initiatedDate: string;
       readonly kind: "dates";
-      readonly pendingDate: string | null;
-      readonly postedDate: string | null;
     }
   | {
-      readonly kind: "postingStatus";
-      readonly postingStatus: "cancelled" | "pending" | "posted";
+      readonly kind: "settlement";
+      readonly settlement: "pending" | "posted";
     };
 
 type RecordReplacementUpdate =
@@ -73,11 +71,13 @@ const updateRecord = (
   member_id:
     update?.kind === "member" ? (update.memberId ?? null) : record.member_id,
   memo: update?.kind === "memo" ? update.memo : record.memo,
-  pending_date:
-    update?.kind === "dates" ? update.pendingDate : record.pending_date,
-  posted_date:
-    update?.kind === "dates" ? update.postedDate : record.posted_date,
-  posting_status: record.posting_status,
+  settlement: record.settlement
+    ? {
+        pending_date: record.pending_date,
+        posted_date: record.posted_date,
+        status: record.settlement,
+      }
+    : null,
   reconciliation_status: record.reconciliation_status,
   source: record.source === "imported" ? "imported" : "manual",
   tag_ids: [...record.tag_ids],

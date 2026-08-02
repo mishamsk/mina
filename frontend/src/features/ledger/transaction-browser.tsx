@@ -5,6 +5,7 @@ import {
   Open,
   Pencil,
   Plus,
+  Reload,
   Scissors,
   Trash,
   WarningDiamond,
@@ -39,7 +40,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useElementOverflow } from "@/hooks/use-element-overflow";
 import { cn } from "@/lib/utils";
 import type { LedgerLookupsSnapshot } from "@/store";
-import { localTodayISODate, timestampDateValue } from "@/utils/date";
+import { localTodayISODate } from "@/utils/date";
 
 import { AmountText } from "./amount-text";
 import {
@@ -53,7 +54,6 @@ import {
 } from "./bulk-edit-prediction";
 import { BulkReferenceCell } from "./bulk-reference-cell";
 import {
-  activeTransactionRecords,
   buildLookupMaps,
   displayAmountKey,
   formatInitiatedDate,
@@ -62,7 +62,7 @@ import {
   lineDisplayAmounts,
   lineMember,
   lineMemo,
-  linePostingStatus,
+  lineStatus,
   lineTags,
   type LookupMaps,
   simpleTransactionAmountRecords,
@@ -101,6 +101,10 @@ interface TransactionBrowserProps {
   readonly lookups: LedgerLookupsSnapshot | undefined;
   readonly onConfirmRecurringOccurrence: (
     transaction: Transaction,
+  ) => Promise<void>;
+  readonly onChangeTransactionLifecycle: (
+    transaction: Transaction,
+    action: "cancel" | "restore",
   ) => Promise<void>;
   readonly onFilterCategory?: (categoryId: number) => void;
   readonly onFilterMember?: (memberId: number) => void;
@@ -156,6 +160,15 @@ interface TransactionBrowserProps {
   readonly onUpdateTransactionsBulkReferences?: (
     transactions: readonly Transaction[],
     update: RecordReferenceUpdate,
+  ) => Promise<void>;
+  readonly onUpdateTransactionsBulkRecordState: (
+    transactions: readonly Transaction[],
+    update:
+      | {
+          readonly kind: "reconciliation";
+          readonly value: "reconciled" | "unreconciled";
+        }
+      | { readonly kind: "settlement"; readonly value: "pending" | "posted" },
   ) => Promise<void>;
   readonly page: number;
   readonly pageSize: number;
@@ -494,14 +507,14 @@ const RecordsTable = ({
           <th className="w-[15%] px-2 py-2">Category</th>
           <th className="w-[13%] px-2 py-2">Tags</th>
           <th className="w-[8%] px-2 py-2">Member</th>
-          <th className="w-[9%] px-2 py-2">Status</th>
-          <th className="w-[12%] px-2 py-2">Dates</th>
+          <th className="w-[9%] px-2 py-2">Settlement</th>
+          <th className="w-[12%] px-2 py-2">Date</th>
           <th className="w-[12%] px-2 py-2">Memo</th>
         </tr>
       </thead>
       <tbody>
         {records.map((record) => {
-          const expected = linePostingStatus(transaction) === "expected";
+          const editableTransaction = transaction.lifecycle_status === "active";
           const account = maps.accountsById.get(record.account_id);
           const category =
             record.category_id === null
@@ -519,7 +532,7 @@ const RecordsTable = ({
               key={record.record_id}
               className={cn(
                 "bg-card border-b border-[var(--hairline)] align-top last:border-b-0",
-                record.posting_status === "cancelled" &&
+                transaction.lifecycle_status === "cancelled" &&
                   "text-muted-foreground line-through",
               )}
             >
@@ -530,7 +543,7 @@ const RecordsTable = ({
                 <StructuralRecordCell
                   label="account"
                   onEdit={
-                    !expected && onEditTransactionAsJournal
+                    editableTransaction && onEditTransactionAsJournal
                       ? () => onEditTransactionAsJournal(transaction)
                       : undefined
                   }
@@ -546,7 +559,7 @@ const RecordsTable = ({
                 <StructuralRecordCell
                   label="amount"
                   onEdit={
-                    !expected && onEditTransactionAsJournal
+                    editableTransaction && onEditTransactionAsJournal
                       ? () => onEditTransactionAsJournal(transaction)
                       : undefined
                   }
@@ -559,7 +572,9 @@ const RecordsTable = ({
               </td>
               <td className="px-2 py-2">
                 <RecordReferenceCells
-                  editable={!expected && account?.account_type === "flow"}
+                  editable={
+                    editableTransaction && account?.account_type === "flow"
+                  }
                   field="category"
                   maps={maps}
                   record={record}
@@ -576,7 +591,7 @@ const RecordsTable = ({
               </td>
               <td className="px-2 py-2">
                 <RecordReferenceCells
-                  editable={!expected}
+                  editable={editableTransaction}
                   field="tags"
                   maps={maps}
                   record={record}
@@ -601,7 +616,7 @@ const RecordsTable = ({
               </td>
               <td className="px-2 py-2">
                 <RecordReferenceCells
-                  editable={!expected}
+                  editable={editableTransaction}
                   field="member"
                   maps={maps}
                   record={record}
@@ -612,31 +627,29 @@ const RecordsTable = ({
               </td>
               <td className="px-2 py-2">
                 <RecordDetailCells
-                  editable={!expected}
-                  field="postingStatus"
+                  editable={editableTransaction && record.settlement !== null}
+                  field="settlement"
                   record={record}
                   transaction={transaction}
                   value={
-                    record.posting_status === "posted"
-                      ? ""
-                      : record.posting_status
+                    record.settlement === "posted" ? "" : record.settlement
                   }
                   onSave={onUpdateRecord}
                 />
               </td>
               <td className="text-muted-foreground px-2 py-2 break-words whitespace-normal">
                 <RecordDetailCells
-                  editable={!expected}
+                  editable={editableTransaction}
                   field="dates"
                   record={record}
                   transaction={transaction}
-                  value={`Initiated ${transaction.initiated_date}; pending ${timestampDateValue(record.pending_date) || "—"}; posted ${timestampDateValue(record.posted_date) || "—"}`}
+                  value={`Initiated ${transaction.initiated_date}`}
                   onSave={onUpdateRecord}
                 />
               </td>
               <td className="text-muted-foreground px-2 py-2 break-words whitespace-normal">
                 <RecordDetailCells
-                  editable={!expected}
+                  editable={editableTransaction}
                   field="memo"
                   record={record}
                   transaction={transaction}
@@ -698,6 +711,7 @@ export const TransactionBrowser = ({
   loading,
   lookups,
   onConfirmRecurringOccurrence,
+  onChangeTransactionLifecycle,
   onClearSelection,
   onFilterCategory,
   onFilterMember,
@@ -721,6 +735,7 @@ export const TransactionBrowser = ({
   onUpdateTransactionRecordReferences,
   onUpdateTransactionAmount,
   onUpdateTransactionsBulkReferences,
+  onUpdateTransactionsBulkRecordState,
   page,
   pageSize,
   refreshErrorMessage,
@@ -755,6 +770,9 @@ export const TransactionBrowser = ({
   >();
   const [occurrenceActionErrorMessage, setOccurrenceActionErrorMessage] =
     useState<string | undefined>();
+  const [lifecycleActionBusyId, setLifecycleActionBusyId] = useState<number>();
+  const [lifecycleActionErrorMessage, setLifecycleActionErrorMessage] =
+    useState<string>();
   const [dateJumpHighlight, setDateJumpHighlight] = useState<{
     readonly date: string;
     readonly transactionId: number;
@@ -779,7 +797,7 @@ export const TransactionBrowser = ({
   const selectableTransactions = useMemo(
     () =>
       (transactions ?? []).filter(
-        (transaction) => linePostingStatus(transaction) !== "expected",
+        (transaction) => transaction.lifecycle_status === "active",
       ),
     [transactions],
   );
@@ -846,7 +864,7 @@ export const TransactionBrowser = ({
       const end = Math.max(anchorIndex, targetIndex);
       return (transactions ?? [])
         .slice(start, end + 1)
-        .filter((transaction) => linePostingStatus(transaction) !== "expected")
+        .filter((transaction) => transaction.lifecycle_status === "active")
         .map((transaction) => transaction.transaction_id);
     },
     [transactions],
@@ -1023,6 +1041,23 @@ export const TransactionBrowser = ({
     [onConfirmRecurringOccurrence],
   );
 
+  const changeLifecycle = useCallback(
+    async (transaction: Transaction, action: "cancel" | "restore") => {
+      setLifecycleActionBusyId(transaction.transaction_id);
+      setLifecycleActionErrorMessage(undefined);
+      try {
+        await onChangeTransactionLifecycle(transaction, action);
+      } catch (error) {
+        setLifecycleActionErrorMessage(
+          error instanceof Error ? error.message : "The API request failed.",
+        );
+      } finally {
+        setLifecycleActionBusyId(undefined);
+      }
+    },
+    [onChangeTransactionLifecycle],
+  );
+
   const confirmDismiss = useCallback(async () => {
     if (!dismissDialog) {
       return;
@@ -1116,6 +1151,18 @@ export const TransactionBrowser = ({
       maps={maps}
       onApply={applyBulkUpdate}
       onEditorChange={setActiveBulkEditor}
+      onSetReconciliation={(value) =>
+        onUpdateTransactionsBulkRecordState(selectedTransactions, {
+          kind: "reconciliation",
+          value,
+        })
+      }
+      onSetSettlement={(value) =>
+        onUpdateTransactionsBulkRecordState(selectedTransactions, {
+          kind: "settlement",
+          value,
+        })
+      }
       selectedCount={selectedCount}
       skipSummary={
         activeBulkEditor
@@ -1261,30 +1308,30 @@ export const TransactionBrowser = ({
               const category = lineCategory(transaction, maps);
               const tags = lineTags(transaction, maps);
               const member = lineMember(transaction, maps);
-              const activeRecords = activeTransactionRecords(transaction);
+              const activeRecords = transaction.records;
               const simpleAmountRecords =
                 simpleTransactionAmountRecords(transaction);
-              const postingStatus = linePostingStatus(transaction);
+              const displayStatus = lineStatus(transaction);
               const amounts = lineDisplayAmounts(transaction);
               const hasMoreParts = transactionHasMoreParts(transaction);
               const amountDeemphasized =
-                postingStatus === "expected" ||
-                postingStatus === "pending" ||
-                postingStatus === "cancelled";
-              const lineInactive = postingStatus === "cancelled";
+                displayStatus === "expected" ||
+                displayStatus === "pending" ||
+                displayStatus === "mixed" ||
+                displayStatus === "cancelled";
+              const lineInactive = displayStatus === "cancelled";
               const overdueExpected =
-                postingStatus === "expected" &&
+                displayStatus === "expected" &&
                 transaction.initiated_date < today;
               const expectedOccurrence =
-                postingStatus === "expected" &&
+                displayStatus === "expected" &&
                 transaction.recurring_occurrence_id !== null;
-              const selectable = postingStatus !== "expected";
+              const selectable = transaction.lifecycle_status === "active";
               const selected = selectedTransactionIds.has(
                 transaction.transaction_id,
               );
               const canEditReferences =
-                postingStatus !== "expected" &&
-                postingStatus !== "cancelled" &&
+                transaction.lifecycle_status === "active" &&
                 activeRecords.length > 0;
               const categoryEditable =
                 canEditReferences &&
@@ -1313,8 +1360,7 @@ export const TransactionBrowser = ({
                 new Set(activeRecords.map((record) => record.member_id))
                   .size === 1;
               const amountEditable =
-                postingStatus !== "expected" &&
-                postingStatus !== "cancelled" &&
+                transaction.lifecycle_status === "active" &&
                 simpleAmountRecords !== undefined &&
                 amounts.length === 1;
               const rowReferenceSave = (
@@ -1369,7 +1415,7 @@ export const TransactionBrowser = ({
                 if (selectionAnchorIdRef.current === null && selectable) {
                   selectionAnchorIdRef.current = transaction.transaction_id;
                 }
-                if (linePostingStatus(nextTransaction) !== "expected") {
+                if (nextTransaction.lifecycle_status === "active") {
                   selectRowRange(nextTransaction.transaction_id);
                 }
               };
@@ -1635,14 +1681,14 @@ export const TransactionBrowser = ({
                             </Tooltip>
                           ) : null}
                         </div>
-                        {postingStatus !== "posted" ? (
+                        {displayStatus ? (
                           <div
                             className="flex shrink-0 items-center gap-1 whitespace-nowrap"
-                            data-posting-status={postingStatus}
+                            data-display-status={displayStatus}
                             data-testid="transaction-status-indicators"
                           >
-                            <StatusIcon status={postingStatus} />
-                            {postingStatus === "expected" && overdueExpected ? (
+                            <StatusIcon status={displayStatus} />
+                            {displayStatus === "expected" && overdueExpected ? (
                               <Tooltip
                                 label="Overdue occurrence"
                                 className="inline-flex size-6 shrink-0"
@@ -1963,7 +2009,8 @@ export const TransactionBrowser = ({
                                       onOpenTransaction(transaction, opener);
                                     },
                                   },
-                                  ...(onEditTransaction
+                                  ...(transaction.lifecycle_status ===
+                                    "active" && onEditTransaction
                                     ? [
                                         {
                                           icon: <Pencil aria-hidden="true" />,
@@ -1991,7 +2038,8 @@ export const TransactionBrowser = ({
                                         },
                                       ]
                                     : []),
-                                  ...(onSplitTransaction
+                                  ...(transaction.lifecycle_status ===
+                                    "active" && onSplitTransaction
                                     ? [
                                         {
                                           icon: <Scissors aria-hidden="true" />,
@@ -2000,6 +2048,43 @@ export const TransactionBrowser = ({
                                             onSplitTransaction(
                                               transaction,
                                               opener,
+                                            );
+                                          },
+                                        },
+                                      ]
+                                    : []),
+                                  ...(transaction.lifecycle_status ===
+                                    "active" &&
+                                  transaction.settlement === "pending"
+                                    ? [
+                                        {
+                                          disabled:
+                                            lifecycleActionBusyId ===
+                                            transaction.transaction_id,
+                                          icon: <Close aria-hidden="true" />,
+                                          label: "Cancel transaction",
+                                          onSelect: () => {
+                                            void changeLifecycle(
+                                              transaction,
+                                              "cancel",
+                                            );
+                                          },
+                                        },
+                                      ]
+                                    : []),
+                                  ...(transaction.lifecycle_status ===
+                                  "cancelled"
+                                    ? [
+                                        {
+                                          disabled:
+                                            lifecycleActionBusyId ===
+                                            transaction.transaction_id,
+                                          icon: <Reload aria-hidden="true" />,
+                                          label: "Restore transaction",
+                                          onSelect: () => {
+                                            void changeLifecycle(
+                                              transaction,
+                                              "restore",
                                             );
                                           },
                                         },
@@ -2059,6 +2144,14 @@ export const TransactionBrowser = ({
           <p className="text-muted-foreground mt-1">
             {occurrenceActionErrorMessage}
           </p>
+        </div>
+      ) : null}
+      {lifecycleActionErrorMessage ? (
+        <div
+          className="border-destructive bg-card text-destructive border-2 p-3 text-sm shadow-[var(--shadow-pixel)]"
+          role="alert"
+        >
+          {lifecycleActionErrorMessage}
         </div>
       ) : null}
 
