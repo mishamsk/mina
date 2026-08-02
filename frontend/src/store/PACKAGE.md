@@ -14,6 +14,7 @@
 - Selector hooks that return object, array, `Map`, or `Set` values use `useShallow`.
 - Store updates use immutable replacement or object spreads.
 - Browser-state hydration runs before the app body renders.
+- Authentication lifecycle generation and invalidation wiring are initialized here during browser-state hydration.
 
 Example:
 

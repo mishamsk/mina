@@ -91,6 +91,7 @@ func newRootCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.
 	)
 
 	root.AddCommand(newVersionCommand(stdout))
+	root.AddCommand(newAuthCommand(stdin, stdout, stderr, &configFilePath))
 	clientStdin := bufio.NewReader(stdin)
 	root.AddCommand(clientcli.NewCommand(clientStdin, stdout, stderr, clientcli.CommandOptions{
 		ConfigFilePath:      &configFilePath,
@@ -519,6 +520,9 @@ func serve(
 
 	server := &http.Server{
 		Handler: appInstance.Handler(),
+		BaseContext: func(net.Listener) context.Context {
+			return ctx
+		},
 	}
 	go func() {
 		<-ctx.Done()
@@ -565,7 +569,7 @@ func migrate(ctx context.Context, stdin io.Reader, stderr io.Writer, cfg appconf
 			return err
 		}
 	}
-	appInstance, err := runtime.New(ctx, cfg, runtime.Options{ExecutionProfile: runtime.ExecutionProfileLongRunning})
+	appInstance, err := runtime.New(ctx, cfg, runtime.Options{ExecutionProfile: runtime.ExecutionProfileMigration})
 	if err != nil {
 		return fmt.Errorf("startup error: %w", err)
 	}

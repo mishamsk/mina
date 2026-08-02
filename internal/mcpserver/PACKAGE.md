@@ -16,9 +16,11 @@
 - A future extension implements `Extension`, uses only its supplied session for Mina behavior, and reads generated metadata through package-level `Operations()`.
 - Future extensions are supplied to the MCP constructors by `cmd/mina` composition; registry construction rejects names used by generated or earlier extension tools.
 - Standalone stdio mode is remote-only and never constructs a Mina runtime or in-process transport.
+- Standalone stdio composition may supply `MINA_API_KEY` as a bearer credential for its generated REST dispatch; diagnostics never include it.
 - Embedded Streamable HTTP uses an in-process generated REST client targeting the isolated REST handler supplied by runtime composition.
 - Stdio and Streamable HTTP share one registry, handler, result-mapping, and extension implementation.
 - Streamable HTTP allows requests without `Origin` and rejects origins whose host is not loopback.
+- Runtime composes API-key enforcement outside the Streamable HTTP handler's Origin policy; embedded REST dispatch remains trusted after both decisions.
 - Imported only by `cmd/mina` and `internal/runtime` composition.
 - Must not import runtime, HTTP server adapters, services, stores, SQL, or `internal/clientcli`.
 

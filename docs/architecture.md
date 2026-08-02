@@ -32,9 +32,10 @@ Imports and runtime knowledge flow inward toward app-owned service packages. Com
 - `internal/mcpserver`: REST-backed MCP tool registry, generated MCP operation catalog and wrapping invokers, MCP result mapping, stdio and Streamable HTTP protocol handling, and hand-written composite tools.
 - `internal/webui`: embedded web UI assets and root browser routing boundary.
 - `internal/appconfig`: local app config source loading, config-file discovery, env parsing, explicit overrides, source precedence, defaults, and source metadata.
+- `internal/services`: app-owned domain types, validation, use cases, and provider-facing contracts. Consuming services own the interfaces implemented by providers.
+- `internal/providers`: concrete external and local provider implementations for service-owned contracts. Production concrete providers are visible only to runtime composition.
 - `internal/runtime`: database lifecycle policy, runtime option handling, and manual composition root.
 - `internal/httpapi`: REST/OpenAPI adapter, generated REST contract code, generated route registration, generated request binding, OpenAPI request validation for transport shape, HTTP DTO mapping, and HTTP status/error mapping.
-- App-owned service packages: domain types, validation, use cases, and repository interfaces.
 - `internal/store`: DuckDB driver access, migrations, transactions, query code, and repository implementations.
 - `internal/tools`: repository-only generators, architecture checks, and developer workflow commands; never product behavior.
 - `internal/x`: pure in-process library packages with app-agnostic data structures and helpers.
@@ -54,6 +55,9 @@ Rules:
 - `internal/mcpserver` owns MCP protocol behavior; `internal/httpapi` remains the REST protocol and application transport boundary.
 - `internal/runtime` wires concrete implementations and owns explicit one-shot and long-running execution profiles. Avoid hidden global state for database handles, config, clocks, listeners, or services.
 - `internal/appconfig` does not import runtime, store, HTTP, OpenAPI, background, provider, service, Cobra, or pflag packages.
+- `internal/services` does not import concrete providers; services own the contracts providers implement.
+- `internal/providers` owns provider-specific side effects and implements service-owned contracts without making transport, CLI, or runtime-composition decisions.
+- Production packages import concrete providers only from `internal/runtime` composition.
 - `internal/tools` is not imported by product packages.
 - `internal/x` packages do not import app packages or own side-effect boundaries.
 - Shared contracts belong at the lowest layer that can own them.
@@ -85,8 +89,9 @@ Rules:
 
 ## REST API
 
-- Every capability must be available through the API.
+- Every application capability must be available through the API; authentication administration and offline database validation are deliberate CLI-only operational flows.
 - API errors are stable, machine-readable JSON.
+- External REST authenticates with browser cookies or API keys; external MCP accepts API keys only. Public bootstrap routes and trusted in-process dispatch are explicit exceptions.
 - Dynamic filters, sort keys, and field names must come from typed allowlists.
 - Hidden accounts, categories, and tags are excluded by default and included only by explicit query.
 - Database validation is a CLI-only pre-trust diagnostic and is deliberately not exposed over REST.

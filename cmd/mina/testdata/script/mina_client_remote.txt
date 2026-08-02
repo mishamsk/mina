@@ -1,8 +1,15 @@
 # The generated remote client covers representative list, path, and JSON-body shapes.
 env MINA_FX_AUTO_LOAD_ENABLED=false
+env MINA_API_KEY=mina_EQO-K-an_paG-dFq7gSKeFafj2rI-41q2FCg2TZVpqO1hHBqwKXI
 freeport
-exec mina serve --db $WORK/client-remote.db --yes --host 127.0.0.1 --port $PORT --quiet &server&
+exec mina --config-file client-config.toml serve --db $WORK/client-remote.db --yes --host 127.0.0.1 --port $PORT --quiet &server&
 httpwait -timeout 10s '"status":"ok"' http://127.0.0.1:$PORT/api/health
+
+# The remote client is rejected without a key and forwards MINA_API_KEY when present.
+env MINA_API_KEY=
+! exec mina client --server http://127.0.0.1:$PORT transactions list --limit 1
+stderr '"code":"unauthenticated"'
+env MINA_API_KEY=mina_EQO-K-an_paG-dFq7gSKeFafj2rI-41q2FCg2TZVpqO1hHBqwKXI
 
 # Demo seeding accepts an exact historical anchor through the generated client.
 exec mina client --server http://127.0.0.1:$PORT demo seed --anchor_date 2026-07-15
@@ -35,3 +42,23 @@ stderr '"message"'
 
 kill -INT server
 wait server
+
+-- client-config.toml --
+auth_file = "client-auth.toml"
+
+-- client-auth.toml --
+version = 1
+signing_secret = "ZbCeTAaoT7sWtXpuq3emLOfecWDUOYmSYoExD-qJARQ"
+
+[[users]]
+id = "nNRamaBjwn8qw1uvCdHgxA"
+email = "admin@local"
+enabled = true
+password_hash = "$argon2id$v=19$m=65536,t=3,p=2$NAImLlT1PGOeyz0b4w5rUg$QfRwHPWpC8rKTAraigpky4wjIax9vOnvHBgpBDJtiFM"
+session_version = 1
+
+[[api_keys]]
+id = "0dWhc5Z7eiEwOmSSo9_Tgw"
+label = "integration"
+prefix = "EQO-K-an"
+token_digest = "b24af462a43b28cb4d7d264a2ed739ff45605568ebfdc075454bfbc8b619fadd"

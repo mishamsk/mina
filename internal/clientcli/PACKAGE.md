@@ -14,6 +14,7 @@
 - Local mode refuses ephemeral state, owns command-lifetime cleanup, and uses only a process-injected handler factory.
 - Local mode uses generated run-wait metadata to poll asynchronous manual triggers through generated REST operations, renders the terminal run, and propagates configured failure outcomes.
 - Remote mode returns the trigger response without run-wait polling.
+- Remote mode reads `MINA_API_KEY` through the env-only secret accessor and attaches it as a bearer credential; local mode remains trusted and credential-free.
 - Canceling local run-wait polling closes the session once; runtime-owned close cancels active work and waits for it.
 - Local database lock failures direct callers to the owning server through `--server`.
 - No hand-written extensions ship today.

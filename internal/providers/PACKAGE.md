@@ -7,13 +7,14 @@
 ## Implicit Contracts
 
 - Providers implement service-owned interfaces.
+- Production concrete providers are constructed and imported only by runtime composition.
 - Inbound provider data is not Mina accounting state until a service accepts and persists it.
 - Backup providers own destination artifacts, not Mina's opened accounting database.
 
 ## Boundaries
 
 - Owns: network/file side effects, external request construction, response parsing, destination artifact lifecycle, and provider-specific error normalization.
-- Does not own: app config source loading, SQL persistence, REST DTOs, CLI parsing, or domain decisions.
+- Does not own: app config source loading, SQL persistence, REST DTOs, CLI parsing, runtime composition, or domain decisions.
 
 ## Testing Notes
 

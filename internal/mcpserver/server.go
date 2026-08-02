@@ -24,6 +24,8 @@ type Options struct {
 	Version string
 	// Diagnostics receives SDK diagnostics. Nil discards them.
 	Diagnostics io.Writer
+	// APIKey is the optional bearer credential used only by remote REST dispatch.
+	APIKey string
 }
 
 // Session gives hand-written extensions access to the generated REST client.
@@ -62,10 +64,11 @@ func NewRemote(serverURL string, options Options, extensions ...Extension) (*Ser
 	if err := validateServerURL(serverURL); err != nil {
 		return nil, err
 	}
-	client, err := httpclient.NewClientWithResponses(
-		serverURL,
-		httpclient.WithHTTPClient(&http.Client{}),
-	)
+	clientOptions := []httpclient.ClientOption{httpclient.WithHTTPClient(&http.Client{})}
+	if options.APIKey != "" {
+		clientOptions = append(clientOptions, httpclient.WithBearerToken(options.APIKey))
+	}
+	client, err := httpclient.NewClientWithResponses(serverURL, clientOptions...)
 	if err != nil {
 		return nil, fmt.Errorf("create remote REST client: %w", err)
 	}
@@ -89,7 +92,7 @@ func NewStreamableHTTP(restHandler http.Handler, options Options, extensions ...
 	streamable := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
 		return server.protocol
 	}, nil)
-	return validateLoopbackOrigin(streamable), nil
+	return originPolicy(streamable), nil
 }
 
 func newServer(
@@ -122,7 +125,7 @@ func newServer(
 	return &Server{protocol: protocol}, nil
 }
 
-func validateLoopbackOrigin(next http.Handler) http.Handler {
+func originPolicy(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
 		if origin != "" && !isLoopbackOrigin(origin) {

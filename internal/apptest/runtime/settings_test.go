@@ -123,6 +123,28 @@ func TestSettingsReportsConfigLocationAndEffectiveSources(t *testing.T) {
 	assertSettingsUnchanged(t, client, response.JSON200)
 }
 
+func TestSettingsResolvesAuthenticationFileAgainstConfigDirectory(t *testing.T) {
+	settingsSources, configPath := apptest.WithSettingsSources(
+		t,
+		apptest.SettingsSourceValues{
+			ConfigFile:             "auth_file = \"auth.toml\"\n",
+			AuthenticationEmail:    "admin@local",
+			AuthenticationPassword: "settings-password",
+		},
+	)
+	client := newSharedClient(t, settingsSources)
+	cookie := loginCookie(t, client, "admin@local", "settings-password")
+
+	response, err := client.REST().GetSettingsWithResponse(context.Background(), cookieEditor(cookie))
+	requireSettingsResponse(t, err, response.StatusCode(), response.Body)
+	authentication := settingsGroup(t, response.JSON200.Groups, "authentication", "Authentication", 5)
+	authFile := settingsField(t, authentication.Fields, "auth_file", 10)
+	want := filepath.Join(filepath.Dir(configPath), "auth.toml")
+	if authFile.Value != want || authFile.Source != httpclient.ConfigFile {
+		t.Fatalf("auth_file = %+v, want resolved config-file path %q", authFile, want)
+	}
+}
+
 func TestSettingsReportsMissingConfigLocationAndDefaults(t *testing.T) {
 	settingsSources, configPath := apptest.WithSettingsSources(
 		t,

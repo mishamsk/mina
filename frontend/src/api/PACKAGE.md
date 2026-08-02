@@ -8,6 +8,7 @@
 
 - Generated endpoint paths and DTOs must not be handwritten here.
 - Network failure and REST error normalization belong only at this boundary.
+- Request interceptors retain transport correlation only; authentication lifecycle state is supplied by the store during bootstrap.
 - Handwritten wrappers may adapt generated pagination and query DTOs for UI resources but do not reclassify accounting data.
 
 ## Boundaries

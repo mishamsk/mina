@@ -85,9 +85,54 @@ type ProcessDB struct {
 type SettingsSourceValues struct {
 	ConfigFile                  string
 	ConfigFileMissing           bool
+	AuthenticationEmail         string
+	AuthenticationPassword      string
 	EnvironmentBackupDirectory  string
 	CLIOverrideAccountingSchema *string
 	CLIOverrideServePort        *int
+}
+
+// AuthenticationFixture is test-owned CLI-managed authentication state.
+type AuthenticationFixture struct {
+	Path     string
+	Email    string
+	Password string
+	APIKey   string
+}
+
+// NewAuthenticationFixture initializes a user and active API key in a test-owned file.
+func NewAuthenticationFixture(t *testing.T) AuthenticationFixture {
+	t.Helper()
+	fixture := AuthenticationFixture{
+		Path: filepath.Join(t.TempDir(), "auth.toml"), Email: "admin@local", Password: "test-password",
+	}
+	manager := newAuthenticationAdministration(t, fixture.Path)
+	password := []byte(fixture.Password)
+	if _, err := manager.Initialize(fixture.Email, password); err != nil {
+		clear(password)
+		t.Fatalf("initialize authentication file: %v", err)
+	}
+	clear(password)
+	_, token, err := manager.CreateAPIKey("test-automation")
+	if err != nil {
+		t.Fatalf("create authentication API key: %v", err)
+	}
+	fixture.APIKey = token
+	return fixture
+}
+
+// NewAuthenticationFile initializes a test-owned authentication file.
+func NewAuthenticationFile(t *testing.T, email string, password string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "auth.toml")
+	manager := newAuthenticationAdministration(t, path)
+	secret := []byte(password)
+	if _, err := manager.Initialize(email, secret); err != nil {
+		clear(secret)
+		t.Fatalf("initialize authentication file: %v", err)
+	}
+	clear(secret)
+	return path
 }
 
 // WithSettingsSources creates a test-owned settings source scenario.
@@ -101,6 +146,15 @@ func WithSettingsSources(
 		if err := os.WriteFile(path, []byte(values.ConfigFile), 0o600); err != nil {
 			t.Fatalf("write settings config fixture: %v", err)
 		}
+	}
+	if values.AuthenticationEmail != "" {
+		manager := newAuthenticationAdministration(t, filepath.Join(filepath.Dir(path), "auth.toml"))
+		password := []byte(values.AuthenticationPassword)
+		if _, err := manager.Initialize(values.AuthenticationEmail, password); err != nil {
+			clear(password)
+			t.Fatalf("initialize settings authentication file: %v", err)
+		}
+		clear(password)
 	}
 	environment := map[string]string{}
 	if values.EnvironmentBackupDirectory != "" {
@@ -128,6 +182,15 @@ func WithSettingsSources(
 		opts.config = cfg
 		opts.accountingSchemaSpecified = values.CLIOverrideAccountingSchema != nil
 	}, path
+}
+
+func newAuthenticationAdministration(t *testing.T, path string) *runtime.AuthenticationAdministration {
+	t.Helper()
+	manager, err := runtime.NewAuthenticationAdministration(appconfig.Config{AuthFile: path})
+	if err != nil {
+		t.Fatalf("create authentication administration: %v", err)
+	}
+	return manager
 }
 
 func isolateSettingsEnvironment(
@@ -226,6 +289,13 @@ func WithAccountingSchema(schema string) Option {
 func WithCacheDir(path string) Option {
 	return func(opts *clientOptions) {
 		opts.config.CacheDir = path
+	}
+}
+
+// WithAuthenticationFile enables authentication from a test-owned file.
+func WithAuthenticationFile(path string) Option {
+	return func(opts *clientOptions) {
+		opts.config.AuthFile = path
 	}
 }
 

@@ -23,13 +23,15 @@
   - Bulk journal-record category, tag, account, and status updates.
   - Background operation status, concrete typed run lookup, manual exchange-rate loading trigger, and manual database backup trigger flows; one newest-first paged envelope listing spans all operations with an optional operation filter, while operation discovery returns links to each concrete API.
   - Read-only runtime Settings reporting resolved startup values, effective sources, and the resolved config-file location.
+  - Public authentication status/login/logout contracts and protected REST behavior accepting browser sessions or revocable API keys.
   - OpenAPI discovery through `GET /api/openapi.json`.
 - Implemented runtime/demo behavior:
-  - Supported Docker image and Compose deployment run Mina as a configured host UID/GID with a read-only root, independent config/backup binds, named database/cache volumes, localhost-only publishing by default, env-only database-key forwarding, and baked signed `httpfs` artifacts for both supported architectures.
+  - Supported Docker image and Compose deployment run Mina as a configured host UID/GID with a read-only root, independent config/backup binds, named database/cache volumes, localhost-only publishing by default, fresh-deployment authentication bootstrap, env-only database-key forwarding, and baked signed `httpfs` artifacts for both supported architectures.
   - Docker publication workflows build multi-architecture GHCR SHA images and guard `main` promotion behind registry-image Compose lifecycle verification.
-  - `just test-docker` runs a real encrypted Docker lifecycle check covering Compose health, demo-data retention across recreation/restart/image replacement, encrypted backups/restores, database validation, and cleanup.
+  - `just test-docker` runs a real encrypted Docker lifecycle check covering authentication persistence, Compose health, demo-data retention across recreation/restart/image replacement, encrypted backups/restores, database validation, and cleanup.
   - Runtime opens one app for the process lifetime and composes REST, embedded Streamable HTTP MCP at `/mcp`, and embedded web UI handlers.
-  - Runtime runs non-blocking startup and recurring operations in `serve`, with public operation status and manual trigger APIs.
+  - Optional config-backed authentication loads one immutable startup snapshot; CLI-only atomic mutations manage users, long-lived browser sessions, and revocable API keys outside the accounting database.
+  - Runtime runs non-blocking startup and recurring operations in `serve`, with operation status and manual trigger APIs protected when authentication is enabled.
   - Exchange-rate startup loading uses a Frankfurter USD NDJSON cache file by default; scheduled and manual REST-triggered loading use targeted Frankfurter API requests.
   - File-backed accounting databases remain plaintext when `MINA_DATABASE_ENCRYPTION_KEY` is absent and use DuckDB AES-256-GCM when it is present; the key is environment-only and excluded from ordinary config and settings snapshots, while Status reports whether encryption is active.
   - Database backups copy the selected file-backed DuckDB accounting database to configured local backup files, preserving primary-database encryption; empty backup config creates no automatic runs.
@@ -38,13 +40,14 @@
   - File-backed startup runs configurable database validation (`none`, `shallow`, or `full`; default `shallow`) after migrations.
   - CLI-only `mina db validate` runs offline integrity checks with schema, referential, SQL invariant, and transaction-classification layers.
 - Implemented client surfaces:
-  - `mina client --server URL` exposes every configured CLI operation through a generated REST-backed command tree with typed inputs and raw JSON output.
+  - `mina client --server URL` exposes every configured CLI operation through a generated REST-backed command tree with typed inputs, raw JSON output, and optional `MINA_API_KEY` bearer authentication.
   - `mina client --db PATH` runs the same REST-backed command tree against a one-shot in-process app with no listener or automatic operations, waiting for manual exchange-rate loading and database backup runs to finish.
-  - `mina mcp stdio --server URL` exposes the configured MCP surface through the official SDK against a running Mina REST server.
-  - `mina serve` exposes the same MCP registry over Streamable HTTP at `/mcp`, backed by an in-process generated REST client against the isolated REST handler.
+  - `mina mcp stdio --server URL` exposes the configured MCP surface through the official SDK against a running Mina REST server, using `MINA_API_KEY` when authentication is enabled.
+  - `mina serve` exposes the same MCP registry over optionally API-key-protected Streamable HTTP at `/mcp`, backed by a trusted in-process generated REST client against the isolated REST handler.
   - Both MCP transports declare shared agent instructions for Mina's accounting model, preferred workflows, and mutation safety.
 - Implemented web UI behavior:
   - Minimal embedded web UI infrastructure is built from `frontend/`; root routes are canonical, with `/ui/` legacy redirects.
+  - Public authentication status bootstraps before the shell; enabled deployments show login, retain cookie sessions across reloads, expose global logout, and return to login when a protected request loses authorization.
   - Frontend styling is wired through Tailwind CSS v4 and shadcn/ui generated primitives.
   - The app shell shows a featured-account balance strip on every route when featured accounts exist, backed by account metadata and server balances.
   - Overview is the landing page, with active `owned` and `party` accounts grouped by FQN root, approximate USD subtotals, credit remaining, current-month spend/income pulse, and recent activity links.

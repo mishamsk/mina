@@ -4,4 +4,6 @@ generate:
   strict-server: true
   models: true
   embedded-spec: true
+compatibility:
+  preserve-original-operation-id-casing-in-embedded-spec: true
 output: internal/httpapi/openapi/openapi.gen.go

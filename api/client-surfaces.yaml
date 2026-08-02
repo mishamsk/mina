@@ -1,4 +1,25 @@
 operations:
+  getAuthenticationStatus:
+    cli:
+      state: excluded
+      reason: Browser authentication bootstrap is owned by the web UI and is not a client-surface accounting operation.
+    mcp:
+      state: excluded
+      reason: MCP authenticates with an API key before tool dispatch and does not use browser sessions.
+  login:
+    cli:
+      state: excluded
+      reason: Password login is a browser-only session workflow.
+    mcp:
+      state: excluded
+      reason: MCP accepts API keys only and never exchanges passwords for browser sessions.
+  logout:
+    cli:
+      state: excluded
+      reason: Logout clears a browser cookie and has no CLI session meaning.
+    mcp:
+      state: excluded
+      reason: MCP has no browser cookie session to clear.
   seedDemo:
     cli: {state: exposed, name: seed}
     mcp:

@@ -9,6 +9,7 @@
 
 - Frontend accounting state is read and written only through generated REST client operations.
 - Browser storage is limited to UI preferences, UI-only caches, and draft UI state.
+- Browser authentication state is transient; the server-owned `HttpOnly` cookie never enters frontend storage or state.
 
 ## Boundaries
 

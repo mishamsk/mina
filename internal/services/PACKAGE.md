@@ -3,11 +3,12 @@
 ## Purpose
 
 - Documents the app-owned service package pattern for domain use cases.
-- Implemented service packages are `accounts`, `settings`, `operationruns`, `categories`, `tags`, `members`, `exchangerates`, `exchangerateloading`, `backups`, `creditlimits`, `transactions`, `transactiontemplates`, `journalrecords`, `recordbulk`, `health`, `demo`, and `values`.
+- Implemented service packages include authentication, accounting use cases, operations, settings, health, demo, and shared values.
 
 ## Implicit Contracts
 
 - Service packages own domain types, validation, use cases, and repository interfaces.
+- Consuming services own provider-facing contracts; service packages never import concrete providers.
 - Dictionary services own blocked-delete decisions for active dependent references and do not expose cascade tombstone APIs.
 - Accounts, categories, and tags derive implicit hierarchy group state from active leaves; group hidden state is true only when every active leaf at or under the group is hidden.
 - Accounts, categories, and tags implement path-addressed bulk hide/unhide by selecting active leaves from the reference cache, issuing one repository update, and invalidating the cache after success.
@@ -18,7 +19,7 @@
 
 ## Boundaries
 
-- Owns: domain rules and repository contracts for app behavior.
+- Owns: domain rules, use cases, repository contracts, and provider-facing contracts for app behavior.
 - Does not own: HTTP DTOs, transport string parsing, database row types, SQL queries, process configuration, or generated adapter code.
 
 ## Testing Notes

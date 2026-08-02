@@ -1,0 +1,17 @@
+# Public local-development credentials used only by `just dev --demo`.
+# Login: admin@local / password. Bearer token: mina-token.
+version = 1
+signing_secret = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+
+[[users]]
+id = "local-demo-admin"
+email = "admin@local"
+enabled = true
+password_hash = "$argon2id$v=19$m=65536,t=3,p=2$WD9L13fVbaRgyARWx8EZvQ$6Pq10Ln5Hmjs74lIJPFpwvg658M+uaJ5A4a7B81QsLw"
+session_version = 1
+
+[[api_keys]]
+id = "local-demo-api-key"
+label = "mina-token"
+prefix = "mina-tok"
+token_digest = "1571e963f015a5d598c2cc84c01c8646e1a01216fbf147363d5d13f15b97d965"

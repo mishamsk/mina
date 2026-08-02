@@ -201,11 +201,22 @@ func connectMCPSession(
 	var transport mcp.Transport
 	switch transportName {
 	case "http":
-		transport = &mcp.StreamableClientTransport{Endpoint: target}
+		httpTransport := http.DefaultTransport
+		apiKey := ts.Getenv("MINA_API_KEY")
+		transport = &mcp.StreamableClientTransport{
+			Endpoint: target,
+			HTTPClient: &http.Client{Transport: roundTripperFunc(func(request *http.Request) (*http.Response, error) {
+				if apiKey != "" {
+					request.Header.Set("Authorization", "Bearer "+apiKey)
+				}
+				return httpTransport.RoundTrip(request)
+			})},
+		}
 	case "stdio":
 		command := exec.Command("mina", "mcp", "stdio", "--server", target)
 		command.Dir = ts.MkAbs(".")
 		command.Stderr = ts.Stderr()
+		command.Env = append(os.Environ(), "MINA_API_KEY="+ts.Getenv("MINA_API_KEY"))
 		transport = &mcp.CommandTransport{Command: command}
 	default:
 		ts.Fatalf("unknown MCP transport %q; want http or stdio", transportName)
@@ -224,6 +235,12 @@ func connectMCPSession(
 		ts.Fatalf("MCP initialize result is missing Mina agent instructions: %+v", initialized)
 	}
 	return session
+}
+
+type roundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (function roundTripperFunc) RoundTrip(request *http.Request) (*http.Response, error) {
+	return function(request)
 }
 
 func optionalBoolFact(value *bool) string {
@@ -572,10 +589,31 @@ func testscriptHTTPGet(ts *testscript.TestScript, neg bool, args []string) {
 	status := http.StatusOK
 	accept := ""
 	origin := ""
+	bearerEnvironment := ""
+	cookieEnvironment := ""
+	saveCookieEnvironment := ""
 	location := ""
 	var body []byte
 	for len(args) > 0 && args[0] != "" && args[0][0] == '-' {
 		switch args[0] {
+		case "-bearer-env":
+			if len(args) < 2 {
+				ts.Fatalf("usage: httpget [-bearer-env env-var] [-accept media-type] [-method method] [-status status] [-origin origin] [-location location] [-body file] url")
+			}
+			bearerEnvironment = args[1]
+			args = args[2:]
+		case "-cookie-env":
+			if len(args) < 2 {
+				ts.Fatalf("usage: httpget [-cookie-env env-var] url")
+			}
+			cookieEnvironment = args[1]
+			args = args[2:]
+		case "-save-cookie-env":
+			if len(args) < 2 {
+				ts.Fatalf("usage: httpget [-save-cookie-env env-var] url")
+			}
+			saveCookieEnvironment = args[1]
+			args = args[2:]
 		case "-accept":
 			if len(args) < 2 {
 				ts.Fatalf("usage: httpget [-accept media-type] [-method method] [-status status] [-origin origin] [-location location] [-body file] url")
@@ -644,12 +682,25 @@ func testscriptHTTPGet(ts *testscript.TestScript, neg bool, args []string) {
 		if origin != "" {
 			request.Header.Set("Origin", origin)
 		}
+		if bearerEnvironment != "" {
+			request.Header.Set("Authorization", "Bearer "+ts.Getenv(bearerEnvironment))
+		}
+		if cookieEnvironment != "" {
+			request.Header.Set("Cookie", ts.Getenv(cookieEnvironment))
+		}
 		if body != nil {
 			request.Header.Set("Content-Type", "application/json")
 		}
 
 		response, err := client.Do(request)
 		if err == nil {
+			if saveCookieEnvironment != "" {
+				cookies := response.Cookies()
+				if len(cookies) != 1 {
+					ts.Fatalf("%s %s cookies = %d, want 1", method, url, len(cookies))
+				}
+				ts.Setenv(saveCookieEnvironment, cookies[0].Name+"="+cookies[0].Value)
+			}
 			body, readErr := io.ReadAll(response.Body)
 			closeErr := response.Body.Close()
 			ts.Check(readErr)

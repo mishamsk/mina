@@ -24,6 +24,7 @@ import {
 
 interface EntryModalProps {
   readonly errorMessage?: string;
+  readonly globalNotice?: string;
   readonly initialTab?: TransactionEntryType;
   readonly initialTemplateFqn?: string;
   readonly launch?: EntryPanelLaunch;
@@ -32,6 +33,7 @@ interface EntryModalProps {
   readonly loading?: boolean;
   readonly loadingCreate?: boolean;
   readonly onClose: () => void;
+  readonly onGlobalNoticeDismiss: () => void;
   readonly onLookupsRetry: () => Promise<void>;
   readonly onSaved: (
     transaction: Transaction,
@@ -121,6 +123,7 @@ const EntryLoadingSkeleton = ({ create }: { readonly create: boolean }) => (
 
 export const EntryModal = ({
   errorMessage,
+  globalNotice,
   initialTab,
   initialTemplateFqn,
   launch,
@@ -129,6 +132,7 @@ export const EntryModal = ({
   loading = false,
   loadingCreate = false,
   onClose,
+  onGlobalNoticeDismiss,
   onLookupsRetry,
   onSaved,
   notice,
@@ -441,6 +445,12 @@ export const EntryModal = ({
               />
             </>
           )}
+          <Toast
+            containerClassName="bottom-16 z-[80]"
+            className="text-destructive"
+            message={globalNotice}
+            onDismiss={onGlobalNoticeDismiss}
+          />
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

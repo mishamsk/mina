@@ -20,6 +20,7 @@ import (
 	backupfile "github.com/mishamsk/mina/internal/providers/backups/file"
 	"github.com/mishamsk/mina/internal/providers/exchangerates/frankfurter"
 	"github.com/mishamsk/mina/internal/services/accounts"
+	authentication "github.com/mishamsk/mina/internal/services/authentication/online"
 	"github.com/mishamsk/mina/internal/services/backups"
 	"github.com/mishamsk/mina/internal/services/categories"
 	"github.com/mishamsk/mina/internal/services/creditlimits"
@@ -80,6 +81,10 @@ func newApp(
 	if err := opts.validateExecutionProfile(); err != nil {
 		return nil, err
 	}
+	authenticationService, err := resolveAuthentication(cfg, opts.ExecutionProfile)
+	if err != nil {
+		return nil, err
+	}
 	cfg = resolveRuntimeDefaults(cfg)
 	if err := Validate(cfg, opts.automaticOperationsEnabled()); err != nil {
 		return nil, err
@@ -102,13 +107,13 @@ func newApp(
 	if err := store.Migrate(ctx, appDB); err != nil {
 		return nil, closeAppDBAfterError(appDB, fmt.Errorf("migrate database: %w", err))
 	}
-	if opts.ExecutionProfile == ExecutionProfileLongRunning {
+	if opts.startupValidationEnabled() {
 		if err := validateStartupDatabase(ctx, cfg, appDB); err != nil {
 			return nil, closeAppDBAfterError(appDB, err)
 		}
 	}
 
-	app, err := newWithAppDB(ctx, appDB, cfg, opts)
+	app, err := newWithAppDB(ctx, appDB, cfg, opts, authenticationService)
 	if err != nil {
 		return nil, closeAppDBAfterError(appDB, err)
 	}
@@ -253,15 +258,19 @@ func NewWithAppDB(ctx context.Context, appDB *store.AppDB, cfg appconfig.Config,
 	if err := opts.validateExecutionProfile(); err != nil {
 		return nil, err
 	}
-	return newWithAppDB(ctx, appDB, resolveRuntimeDefaults(cfg), opts)
+	authenticationService, err := resolveAuthentication(cfg, opts.ExecutionProfile)
+	if err != nil {
+		return nil, err
+	}
+	return newWithAppDB(ctx, appDB, resolveRuntimeDefaults(cfg), opts, authenticationService)
 }
 
-func newWithAppDB(ctx context.Context, appDB *store.AppDB, cfg appconfig.Config, opts Options) (*App, error) {
+func newWithAppDB(ctx context.Context, appDB *store.AppDB, cfg appconfig.Config, opts Options, authenticationService *authentication.Service) (*App, error) {
 	operationRepo, err := store.NewOperationRunRepository(ctx, appDB)
 	if err != nil {
 		return nil, err
 	}
-	services, err := newAppServices(appDB, cfg, opts, operationRepo)
+	services, err := newAppServices(appDB, cfg, opts, operationRepo, authenticationService)
 	if err != nil {
 		return nil, err
 	}
@@ -269,19 +278,19 @@ func newWithAppDB(ctx context.Context, appDB *store.AppDB, cfg appconfig.Config,
 	if err != nil {
 		return nil, err
 	}
-	restHandler := httpapi.NewWithOptions(services.Dependencies, httpapi.Options{
-		Timeout: opts.HTTP.Timeout,
-	})
+	trustedRESTHandler := httpapi.NewWithOptions(services.Dependencies, httpapi.Options{Timeout: opts.HTTP.Timeout})
+	externalRESTHandler := httpapi.ProtectREST(authenticationService, opts.clock(), trustedRESTHandler)
 	var mcpHandler http.Handler
 	if opts.ExecutionProfile == ExecutionProfileLongRunning {
-		mcpHandler, err = mcpserver.NewStreamableHTTP(restHandler, mcpserver.Options{
+		mcpHandler, err = mcpserver.NewStreamableHTTP(trustedRESTHandler, mcpserver.Options{
 			Version: opts.HTTP.MCPVersion,
 		})
 		if err != nil {
 			return nil, err
 		}
+		mcpHandler = httpapi.ProtectMCP(authenticationService, mcpHandler)
 	}
-	handler := composeHTTPHandler(restHandler, mcpHandler, webui.New())
+	handler := composeHTTPHandler(externalRESTHandler, mcpHandler, webui.New())
 	if opts.HTTP.AccessLog != nil {
 		handler = httpapi.AccessLogger(opts.HTTP.AccessLog)(handler)
 	}
@@ -300,7 +309,7 @@ func newWithAppDB(ctx context.Context, appDB *store.AppDB, cfg appconfig.Config,
 	return app, nil
 }
 
-func newAppServices(appDB *store.AppDB, cfg appconfig.Config, opts Options, operationRepo operationruns.Repository) (appServices, error) {
+func newAppServices(appDB *store.AppDB, cfg appconfig.Config, opts Options, operationRepo operationruns.Repository, authenticationService *authentication.Service) (appServices, error) {
 	referenceSerializer := &referenceSerializer{}
 	services, err := newAccountingServices(appDB, cfg, opts, operationRepo, referenceSerializer)
 	if err != nil {
@@ -312,6 +321,7 @@ func newAppServices(appDB *store.AppDB, cfg appconfig.Config, opts Options, oper
 	}
 	services.Settings = settingsService
 	services.Demo = newDemoService(appDB, cfg, opts, services)
+	services.Authentication = authenticationService
 
 	return services, nil
 }

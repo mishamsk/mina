@@ -13,6 +13,7 @@ require (
 	github.com/duckdb/duckdb-go/v2 v2.10505.0
 	github.com/getkin/kin-openapi v0.142.0
 	github.com/go-chi/chi/v5 v5.3.1
+	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/govalues/decimal v0.1.36
 	github.com/modelcontextprotocol/go-sdk v1.6.1
 	github.com/oapi-codegen/nethttp-middleware v1.1.2
@@ -24,7 +25,9 @@ require (
 	github.com/rogpeppe/go-internal v1.15.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
+	golang.org/x/crypto v0.52.0
 	golang.org/x/sync v0.21.0
+	golang.org/x/term v0.43.0
 	golang.org/x/text v0.37.0
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -118,7 +121,7 @@ require (
 	github.com/gobwas/glob v0.2.3 // indirect
 	github.com/goccy/go-json v0.10.5 // indirect
 	github.com/godoc-lint/godoc-lint v0.11.2 // indirect
-	github.com/gofrs/flock v0.13.0 // indirect
+	github.com/gofrs/flock v0.13.0
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/golangci/asciicheck v0.5.0 // indirect
 	github.com/golangci/dupl v0.0.0-20260401084720-c99c5cf5c202 // indirect

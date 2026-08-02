@@ -37,6 +37,7 @@ type Config struct {
 	ConfigFilePath string
 	// SettingSources identifies the effective source of each persistent setting.
 	SettingSources    map[SourceKey]SettingSource
+	AuthFile          string
 	DatabasePath      string
 	AccountingSchema  string
 	CacheDir          string
@@ -171,6 +172,8 @@ const (
 )
 
 const (
+	// SourceAuthFile identifies the authentication file config source.
+	SourceAuthFile SourceKey = "auth_file"
 	// SourceDatabasePath identifies the database path config source.
 	SourceDatabasePath SourceKey = "db"
 	// SourceAccountingSchema identifies the accounting schema config source.
@@ -200,6 +203,7 @@ const (
 )
 
 type fileConfig struct {
+	AuthFile          *string                `toml:"auth_file"`
 	DatabasePath      *string                `toml:"db" env:"MINA_DB"`
 	AccountingSchema  *string                `toml:"schema" env:"MINA_SCHEMA"`
 	StartupValidation *string                `toml:"startup_validation" env:"MINA_STARTUP_VALIDATION"`
@@ -281,6 +285,7 @@ func DefaultExchangeRateConfig() ExchangeRateConfig {
 // Sources returns config file and environment source metadata by config source key.
 func Sources() map[SourceKey]Source {
 	return map[SourceKey]Source{
+		SourceAuthFile:                            sourceFor(SourceAuthFile),
 		SourceDatabasePath:                        sourceFor(SourceDatabasePath),
 		SourceAccountingSchema:                    sourceFor(SourceAccountingSchema),
 		SourceStartupValidation:                   sourceFor(SourceStartupValidation),
@@ -318,6 +323,12 @@ func Load(opts LoadOptions, overrides Overrides) (Config, error) {
 	applyServeFile(&cfg, fileCfg)
 	applyExchangeRateFile(&cfg, fileCfg)
 	applyBackupFile(&cfg, fileCfg)
+	if fileCfg.AuthFile != nil {
+		if strings.TrimSpace(*fileCfg.AuthFile) == "" {
+			return Config{}, fmt.Errorf("read config file %s: auth_file must not be empty", configFilePath)
+		}
+		cfg.AuthFile = resolveAuthFilePath(configFilePath, *fileCfg.AuthFile)
+	}
 	markSettingSources(cfg.SettingSources, fileCfg, SettingSourceConfigFile)
 
 	envCfg, err := loadEnvConfig()
@@ -458,6 +469,9 @@ func loadEnvConfig() (fileConfig, error) {
 }
 
 func applySharedFile(cfg *Config, fileCfg fileConfig) {
+	if fileCfg.AuthFile != nil {
+		cfg.AuthFile = *fileCfg.AuthFile
+	}
 	if fileCfg.DatabasePath != nil {
 		cfg.DatabasePath = *fileCfg.DatabasePath
 	}
@@ -467,6 +481,13 @@ func applySharedFile(cfg *Config, fileCfg fileConfig) {
 	if fileCfg.StartupValidation != nil {
 		cfg.StartupValidation = *fileCfg.StartupValidation
 	}
+}
+
+func resolveAuthFilePath(configFilePath string, authFilePath string) string {
+	if filepath.IsAbs(authFilePath) {
+		return filepath.Clean(authFilePath)
+	}
+	return filepath.Clean(filepath.Join(filepath.Dir(configFilePath), authFilePath))
 }
 
 func applyServeFile(cfg *Config, fileCfg fileConfig) {

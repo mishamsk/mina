@@ -2,6 +2,10 @@ openapi: 3.0.3
 info:
   title: Mina REST API
   version: 0.1.0
+  description: Protected operations require an API key or browser session when `auth_file` enables authentication; deployments without `auth_file` allow anonymous access.
+security:
+  - apiKeyAuth: []
+  - browserSession: []
 paths:
   /api/app/demo-seed:
     post:
@@ -25,6 +29,10 @@ paths:
           schema:
             type: integer
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           description: Demo data seeded.
           content:
@@ -45,6 +53,7 @@ paths:
       tags:
         - health
       summary: Report process health.
+      security: []
       responses:
         "200":
           description: The process is available.
@@ -54,6 +63,70 @@ paths:
                 $ref: "#/components/schemas/HealthResponse"
         "405":
           $ref: "#/components/responses/MethodNotAllowed"
+  /api/auth/status:
+    get:
+      operationId: getAuthenticationStatus
+      tags:
+        - authentication
+      summary: Report whether authentication is enabled and the browser session is valid.
+      security: []
+      responses:
+        "200":
+          description: Current browser authentication status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthenticationStatusResponse"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+  /api/auth/login:
+    post:
+      operationId: login
+      tags:
+        - authentication
+      summary: Create a long-lived browser session with an email and password.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: The browser session was created.
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthenticationStatusResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+  /api/auth/logout:
+    post:
+      operationId: logout
+      tags:
+        - authentication
+      summary: Clear the browser session cookie.
+      security: []
+      responses:
+        "204":
+          description: The local browser session cookie was cleared.
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
   /api/settings:
     get:
       operationId: getSettings
@@ -61,6 +134,8 @@ paths:
         - settings
       summary: Get the immutable settings snapshot for this process.
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
         "200":
           description: Backend-owned groups with active values and effective sources.
           content:
@@ -76,6 +151,8 @@ paths:
         - operations
       summary: List registered background operations.
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
         "200":
           description: Registered background operations.
           content:
@@ -113,6 +190,8 @@ paths:
             type: integer
             minimum: 0
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
         "200":
           description: Newest-first background-operation run page.
           content:
@@ -130,6 +209,8 @@ paths:
         - operations
       summary: Get exchange-rate loading operation status.
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
         "200":
           description: Exchange-rate loading status.
           content:
@@ -145,6 +226,10 @@ paths:
         - operations
       summary: Start an exchange-rate loading run.
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "202":
           description: Exchange-rate loading was invoked.
           content:
@@ -169,6 +254,8 @@ paths:
         - operations
       summary: Get one exchange-rate loading run.
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
         "200":
           description: Exchange-rate loading run status.
           content:
@@ -188,6 +275,8 @@ paths:
         - operations
       summary: Get database backup operation status.
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
         "200":
           description: Database backup status.
           content:
@@ -203,6 +292,10 @@ paths:
         - operations
       summary: Start a database backup run.
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "202":
           description: Database backup was invoked.
           content:
@@ -229,6 +322,8 @@ paths:
         - operations
       summary: Get one database backup run.
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
         "200":
           description: Database backup run status.
           content:
@@ -315,6 +410,8 @@ paths:
             type: integer
             minimum: 0
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
         "200":
           description: Categories in deterministic FQN order.
           content:
@@ -335,6 +432,10 @@ paths:
             schema:
               $ref: "#/components/schemas/CreateCategoryRequest"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "201":
           description: Category created.
           content:
@@ -359,6 +460,10 @@ paths:
             schema:
               $ref: "#/components/schemas/RestructureRequest"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           description: Category FQNs rewritten.
           content:
@@ -387,6 +492,8 @@ paths:
             type: boolean
             default: false
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
         "200":
           description: Category groups in deterministic FQN order.
           content:
@@ -409,6 +516,10 @@ paths:
             schema:
               $ref: "#/components/schemas/SetHiddenByPathRequest"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           description: Category hidden state updated.
           content:
@@ -443,6 +554,8 @@ paths:
             type: boolean
             default: false
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
         "200":
           description: Category found.
           content:
@@ -465,6 +578,10 @@ paths:
             schema:
               $ref: "#/components/schemas/UpdateCategoryRequest"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           description: Category updated.
           content:
@@ -481,6 +598,10 @@ paths:
         - categories
       summary: Tombstone a category.
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "204":
           description: Category tombstoned.
         "400":
@@ -553,6 +674,8 @@ paths:
             type: integer
             minimum: 0
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
         "200":
           description: Tags in deterministic FQN order.
           content:
@@ -573,6 +696,10 @@ paths:
             schema:
               $ref: "#/components/schemas/CreateTagRequest"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "201":
           description: Tag created.
           content:
@@ -597,6 +724,10 @@ paths:
             schema:
               $ref: "#/components/schemas/RestructureRequest"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           description: Tag FQNs rewritten.
           content:
@@ -625,6 +756,8 @@ paths:
             type: boolean
             default: false
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
         "200":
           description: Tag groups in deterministic FQN order.
           content:
@@ -647,6 +780,10 @@ paths:
             schema:
               $ref: "#/components/schemas/SetHiddenByPathRequest"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           description: Tag hidden state updated.
           content:
@@ -681,6 +818,8 @@ paths:
             type: boolean
             default: false
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
         "200":
           description: Tag found.
           content:
@@ -703,6 +842,10 @@ paths:
             schema:
               $ref: "#/components/schemas/UpdateTagRequest"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           description: Tag updated.
           content:
@@ -719,6 +862,10 @@ paths:
         - tags
       summary: Tombstone a tag.
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "204":
           description: Tag tombstoned.
         "400":
@@ -785,6 +932,8 @@ paths:
             type: integer
             minimum: 0
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
         "200":
           description: Members in deterministic name order.
           content:
@@ -805,6 +954,10 @@ paths:
             schema:
               $ref: "#/components/schemas/CreateMemberRequest"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "201":
           description: Member created.
           content:
@@ -839,6 +992,8 @@ paths:
             type: boolean
             default: false
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
         "200":
           description: Member found.
           content:
@@ -861,6 +1016,10 @@ paths:
             schema:
               $ref: "#/components/schemas/UpdateMemberRequest"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           description: Member updated.
           content:
@@ -879,6 +1038,10 @@ paths:
         - members
       summary: Tombstone a household member.
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "204":
           description: Member tombstoned.
         "400":
@@ -909,6 +1072,10 @@ paths:
             schema:
               $ref: "#/components/schemas/UpdateMemberHiddenRequest"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           description: Member hidden state updated.
           content:
@@ -989,6 +1156,8 @@ paths:
             type: integer
             minimum: 0
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
         "200":
           description: Accounts in deterministic FQN order.
           content:
@@ -1010,6 +1179,10 @@ paths:
             schema:
               $ref: "#/components/schemas/CreateAccountRequest"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "201":
           description: Account created.
           content:
@@ -1034,6 +1207,10 @@ paths:
             schema:
               $ref: "#/components/schemas/RestructureRequest"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           description: Account FQNs rewritten.
           content:
@@ -1062,6 +1239,8 @@ paths:
             type: boolean
             default: false
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
         "200":
           description: Account groups in deterministic FQN order.
           content:
@@ -1084,6 +1263,10 @@ paths:
             schema:
               $ref: "#/components/schemas/SetHiddenByPathRequest"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           description: Account hidden state updated.
           content:
@@ -1122,6 +1305,8 @@ paths:
               format: int64
               minimum: 1
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
         "200":
           description: Account balances.
           content:
@@ -1154,6 +1339,8 @@ paths:
             type: boolean
             default: false
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
         "200":
           description: Account found.
           content:
@@ -1177,6 +1364,10 @@ paths:
             schema:
               $ref: "#/components/schemas/UpdateAccountRequest"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           description: Account updated.
           content:
@@ -1195,6 +1386,10 @@ paths:
         - accounts
       summary: Tombstone an account.
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "204":
           description: Account tombstoned.
         "400":
@@ -1262,6 +1457,8 @@ paths:
             type: integer
             minimum: 0
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
         "200":
           description: Credit limit history in effective-date order.
           content:
@@ -1285,6 +1482,10 @@ paths:
             schema:
               $ref: "#/components/schemas/CreateCreditLimitHistoryRequest"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "201":
           description: Credit limit history entry created.
           content:
@@ -1321,6 +1522,8 @@ paths:
             type: boolean
             default: false
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
         "200":
           description: Credit limit history entry found.
           content:
@@ -1337,6 +1540,10 @@ paths:
         - accounts
       summary: Tombstone a credit limit history entry.
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "204":
           description: Credit limit history entry tombstoned.
         "400":
@@ -1417,6 +1624,8 @@ paths:
             type: integer
             minimum: 0
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
         "200":
           description: Exchange rates in deterministic currency/date order.
           content:
@@ -1437,6 +1646,10 @@ paths:
             schema:
               $ref: "#/components/schemas/CreateExchangeRateRequest"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "201":
           description: Exchange rate created.
           content:
@@ -1471,6 +1684,8 @@ paths:
             type: boolean
             default: false
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
         "200":
           description: Exchange rate found.
           content:
@@ -1493,6 +1708,10 @@ paths:
             schema:
               $ref: "#/components/schemas/UpdateExchangeRateRequest"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           description: Exchange rate updated.
           content:
@@ -1509,6 +1728,10 @@ paths:
         - exchange-rates
       summary: Tombstone an exchange rate.
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "204":
           description: Exchange rate tombstoned.
         "400":
@@ -1566,6 +1789,8 @@ paths:
             type: integer
             minimum: 0
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
         "200":
           description: Active transaction templates in caller-selected deterministic order.
           content:
@@ -1586,6 +1811,10 @@ paths:
             schema:
               $ref: "#/components/schemas/TransactionTemplateWriteRequest"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "201":
           description: Transaction template created.
           content:
@@ -1610,6 +1839,10 @@ paths:
             schema:
               $ref: "#/components/schemas/RestructureRequest"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           description: Transaction template FQNs rewritten.
           content:
@@ -1638,6 +1871,8 @@ paths:
         - transaction-templates
       summary: Get a transaction template.
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
         "200":
           description: Transaction template found.
           content:
@@ -1661,6 +1896,10 @@ paths:
             schema:
               $ref: "#/components/schemas/TransactionTemplateWriteRequest"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           description: Transaction template replaced.
           content:
@@ -1677,6 +1916,10 @@ paths:
         - transaction-templates
       summary: Tombstone a transaction template and its record defaults.
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "204":
           description: Transaction template tombstoned.
         "400":
@@ -1734,6 +1977,8 @@ paths:
             type: integer
             minimum: 0
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
         "200":
           description: Active recurring definitions in caller-selected deterministic order.
           content:
@@ -1754,6 +1999,10 @@ paths:
             schema:
               $ref: "#/components/schemas/RecurringDefinitionWriteRequest"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "201":
           description: Recurring definition created.
           content:
@@ -1780,6 +2029,8 @@ paths:
         - recurring
       summary: Get a recurring definition.
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
         "200":
           description: Recurring definition found.
           content:
@@ -1803,6 +2054,10 @@ paths:
             schema:
               $ref: "#/components/schemas/RecurringDefinitionWriteRequest"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           description: Recurring definition replaced.
           content:
@@ -1821,6 +2076,10 @@ paths:
         - recurring
       summary: Cancel a recurring definition.
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "204":
           description: Recurring definition cancelled.
         "400":
@@ -1843,6 +2102,10 @@ paths:
         - recurring
       summary: Confirm the next recurring occurrence early.
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           description: Next occurrence materialized and confirmed.
           content:
@@ -1877,6 +2140,10 @@ paths:
             schema:
               $ref: "#/components/schemas/RecurringDefinitionDeferRequest"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           description: Next interval occurrence deferred.
           content:
@@ -1905,6 +2172,10 @@ paths:
         - recurring
       summary: Pause a recurring definition.
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           description: Recurring definition paused.
           content:
@@ -1931,6 +2202,10 @@ paths:
         - recurring
       summary: Resume a recurring definition.
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           description: Recurring definition resumed.
           content:
@@ -2011,6 +2286,8 @@ paths:
             type: integer
             minimum: 0
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
         "200":
           description: Recurring occurrences in caller-selected deterministic order.
           content:
@@ -2035,6 +2312,10 @@ paths:
         - recurring
       summary: Confirm a recurring occurrence.
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           description: Occurrence confirmed and generated records posted.
           content:
@@ -2061,6 +2342,10 @@ paths:
         - recurring
       summary: Dismiss a recurring occurrence.
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           description: Occurrence dismissed and generated transaction tombstoned.
           content:
@@ -2295,6 +2580,8 @@ paths:
           schema:
             type: string
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
         "200":
           description: Transactions in requested order.
           content:
@@ -2315,6 +2602,10 @@ paths:
             schema:
               $ref: "#/components/schemas/CreateTransactionRequest"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "201":
           description: Transaction created.
           content:
@@ -2337,6 +2628,10 @@ paths:
             schema:
               $ref: "#/components/schemas/ClassifyTransactionRequest"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           description: Derived accounting classification for the draft.
           content:
@@ -2359,6 +2654,10 @@ paths:
             schema:
               $ref: "#/components/schemas/CreateExchangeTransactionRequest"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "201":
           description: Exchange transaction created.
           content:
@@ -2383,6 +2682,8 @@ paths:
             type: string
             pattern: ^[0-9]{4}-[0-9]{2}$
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
         "200":
           description: Month spend and income totals.
           content:
@@ -2404,6 +2705,10 @@ paths:
             schema:
               $ref: "#/components/schemas/CreateSpendTransactionRequest"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "201":
           description: Spend transaction created.
           content:
@@ -2425,6 +2730,10 @@ paths:
             schema:
               $ref: "#/components/schemas/CreateIncomeTransactionRequest"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "201":
           description: Income transaction created.
           content:
@@ -2446,6 +2755,10 @@ paths:
             schema:
               $ref: "#/components/schemas/CreateRefundTransactionRequest"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "201":
           description: Refund transaction created.
           content:
@@ -2467,6 +2780,10 @@ paths:
             schema:
               $ref: "#/components/schemas/CreateTransferTransactionRequest"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "201":
           description: Transfer transaction created.
           content:
@@ -2662,6 +2979,8 @@ paths:
             type: integer
             minimum: 0
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
         "200":
           description: Matching active journal records in transaction date order.
           content:
@@ -2853,6 +3172,8 @@ paths:
             type: integer
             minimum: 0
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
         "200":
           description: Matching active account records with containing transaction identity.
           content:
@@ -2876,6 +3197,10 @@ paths:
             schema:
               $ref: "#/components/schemas/BulkCategorizeRecordsRequest"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           description: Records categorized.
           content:
@@ -2897,6 +3222,10 @@ paths:
             schema:
               $ref: "#/components/schemas/BulkTagRecordsRequest"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           description: Record tags updated.
           content:
@@ -2918,6 +3247,10 @@ paths:
             schema:
               $ref: "#/components/schemas/BulkReassignRecordsAccountRequest"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           description: Record accounts reassigned.
           content:
@@ -2940,6 +3273,10 @@ paths:
             schema:
               $ref: "#/components/schemas/BulkUpdateRecordStatusRequest"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           description: Record statuses updated.
           content:
@@ -2964,6 +3301,8 @@ paths:
         - transactions
       summary: Get a transaction with journal records.
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
         "200":
           description: Transaction found.
           content:
@@ -2987,6 +3326,10 @@ paths:
             schema:
               $ref: "#/components/schemas/UpdateTransactionRequest"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           description: Transaction replaced.
           content:
@@ -3003,6 +3346,10 @@ paths:
         - transactions
       summary: Tombstone a transaction and its journal records.
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "204":
           description: Transaction tombstoned.
         "400":
@@ -3026,6 +3373,10 @@ paths:
       summary: Cancel a transaction.
       description: Sets posting_status to cancelled on all active journal records for the transaction. The operation is idempotent for an already-cancelled transaction and does not change dates or reconciliation status.
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           description: Transaction cancelled.
           content:
@@ -3037,7 +3388,30 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 components:
+  securitySchemes:
+    apiKeyAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: Mina API key
+      description: High-entropy API key created by `mina auth api-key create` and supplied through the Authorization header.
+    browserSession:
+      type: apiKey
+      in: cookie
+      name: mina_session
+      description: Long-lived signed browser session created by the login endpoint.
   responses:
+    Unauthenticated:
+      description: Authentication is required or the supplied credential is invalid.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: The request failed same-origin enforcement.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
     InvalidRequest:
       description: The request is invalid.
       content:
@@ -3093,6 +3467,46 @@ components:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
   schemas:
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          minLength: 1
+        password:
+          type: string
+          minLength: 1
+          writeOnly: true
+    AuthenticationUser:
+      type: object
+      additionalProperties: false
+      required:
+        - user_id
+        - email
+      properties:
+        user_id:
+          type: string
+        email:
+          type: string
+    AuthenticationStatusResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - enabled
+        - authenticated
+      properties:
+        enabled:
+          type: boolean
+        authenticated:
+          type: boolean
+        user:
+          allOf:
+            - $ref: "#/components/schemas/AuthenticationUser"
+          nullable: true
     DemoSeedResponse:
       type: object
       additionalProperties: false
@@ -3464,6 +3878,8 @@ components:
           type: string
           enum:
             - invalid_request
+            - unauthenticated
+            - forbidden
             - not_found
             - method_not_allowed
             - conflict

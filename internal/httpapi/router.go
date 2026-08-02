@@ -10,6 +10,7 @@ import (
 
 	"github.com/mishamsk/mina/internal/httpapi/openapi"
 	"github.com/mishamsk/mina/internal/services/accounts"
+	authentication "github.com/mishamsk/mina/internal/services/authentication/online"
 	"github.com/mishamsk/mina/internal/services/categories"
 	"github.com/mishamsk/mina/internal/services/creditlimits"
 	"github.com/mishamsk/mina/internal/services/demo"
@@ -28,20 +29,21 @@ const defaultLocalAPITimeout = 30 * time.Second
 
 // Dependencies are router inputs owned by higher-level composition.
 type Dependencies struct {
-	Settings      *settingservice.Service
-	Health        *health.Service
-	Operations    *operationruns.Service
-	Categories    *categories.Service
-	Tags          *tags.Service
-	Members       *members.Service
-	Accounts      *accounts.Service
-	CreditLimits  *creditlimits.Service
-	ExchangeRates *exchangerates.Service
-	Transactions  *transactions.Service
-	Templates     *transactiontemplates.Service
-	Recurring     *recurring.Service
-	Demo          *demo.Service
-	Clock         Clock
+	Settings       *settingservice.Service
+	Health         *health.Service
+	Operations     *operationruns.Service
+	Categories     *categories.Service
+	Tags           *tags.Service
+	Members        *members.Service
+	Accounts       *accounts.Service
+	CreditLimits   *creditlimits.Service
+	ExchangeRates  *exchangerates.Service
+	Transactions   *transactions.Service
+	Templates      *transactiontemplates.Service
+	Recurring      *recurring.Service
+	Demo           *demo.Service
+	Authentication *authentication.Service
+	Clock          Clock
 }
 
 // Clock returns the current process time for HTTP adapter decisions.
@@ -111,6 +113,7 @@ func applyMiddleware(router chi.Router, opts Options) {
 	}
 
 	router.Use(middleware.RequestID)
+	router.Use(withHTTPRequest)
 	if opts.AccessLog != nil {
 		router.Use(AccessLogger(opts.AccessLog))
 	}

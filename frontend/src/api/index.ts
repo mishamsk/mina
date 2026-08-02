@@ -11,6 +11,20 @@ export interface NetworkFailure {
 
 const defaultNetworkFailureMessage = "Network request failed";
 
+const requestAuthenticationGenerations = new WeakMap<Request, number>();
+let authenticationLifecycle: AuthenticationLifecycle | undefined;
+
+export interface AuthenticationLifecycle {
+  readonly getGeneration: () => number;
+  readonly onInvalid: () => void;
+}
+
+export const configureAuthenticationLifecycle = (
+  lifecycle: AuthenticationLifecycle,
+): void => {
+  authenticationLifecycle = lifecycle;
+};
+
 export const getApiBaseUrl = (): string => {
   if (globalThis.location?.origin) {
     return globalThis.location.origin;
@@ -35,8 +49,27 @@ export const configureApiClient = (baseUrl = getApiBaseUrl()): void => {
   client.setConfig({ baseUrl });
 };
 
-client.interceptors.error.use((error, response) => {
+client.interceptors.request.use((request) => {
+  if (authenticationLifecycle) {
+    requestAuthenticationGenerations.set(
+      request,
+      authenticationLifecycle.getGeneration(),
+    );
+  }
+  return request;
+});
+
+client.interceptors.error.use((error, response, request) => {
   if (response) {
+    if (
+      response.status === 401 &&
+      request !== undefined &&
+      authenticationLifecycle !== undefined &&
+      requestAuthenticationGenerations.get(request) ===
+        authenticationLifecycle.getGeneration()
+    ) {
+      authenticationLifecycle.onInvalid();
+    }
     return error;
   }
   return normalizeNetworkFailure(error);

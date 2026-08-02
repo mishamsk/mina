@@ -33,6 +33,8 @@ INITIAL_IMAGE_ID=""
 UPDATED_IMAGE_ID=""
 INITIAL_CONTAINER_ID=""
 UPDATED_CONTAINER_ID=""
+MISSING_AUTH_CONTAINER_ID=""
+AUTH_RETRY_CONTAINER_ID=""
 EXPECT_DISTINCT_UPDATE=false
 CLEANED=false
 OWNED_IMAGES=""
@@ -40,6 +42,14 @@ DEMO_SNAPSHOT=""
 PRE_UPDATE_BACKUP=""
 POST_UPDATE_BACKUP=""
 DATABASE_ENCRYPTION_KEY="$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
+INITIAL_ADMIN_EMAIL="owner-${RUN_ID_SLUG}@example.test"
+INITIAL_ADMIN_PASSWORD="initial-admin-password-$RUN_ID"
+BOOTSTRAP_ADMIN_EMAIL="$INITIAL_ADMIN_EMAIL"
+BOOTSTRAP_ADMIN_PASSWORD="$INITIAL_ADMIN_PASSWORD"
+AUTH_API_KEY=""
+AUTH_CONFIG_FINGERPRINT=""
+AUTH_FILE_FINGERPRINT=""
+CHANGED_ADMIN_PASSWORD="docker-test-password-$RUN_ID"
 
 log() {
     printf '\n== %s ==\n' "$*"
@@ -91,6 +101,8 @@ compose_with_key() {
     MINA_BACKUP_DIR="$BACKUP_DIR" \
     MINA_BACKUP_FILE_SCHEDULE_UTC="" \
     MINA_DATABASE_ENCRYPTION_KEY="$encryption_key" \
+    MINA_INITIAL_ADMIN_EMAIL="$BOOTSTRAP_ADMIN_EMAIL" \
+    MINA_INITIAL_ADMIN_PASSWORD="$BOOTSTRAP_ADMIN_PASSWORD" \
         docker compose -p "$PROJECT" -f "$COMPOSE_FILE" "$@"
 }
 
@@ -105,6 +117,8 @@ compose_without_key() {
         MINA_CONFIG_DIR="$CONFIG_DIR" \
         MINA_BACKUP_DIR="$BACKUP_DIR" \
         MINA_BACKUP_FILE_SCHEDULE_UTC="" \
+        MINA_INITIAL_ADMIN_EMAIL="$BOOTSTRAP_ADMIN_EMAIL" \
+        MINA_INITIAL_ADMIN_PASSWORD="$BOOTSTRAP_ADMIN_PASSWORD" \
         docker compose -p "$PROJECT" -f "$COMPOSE_FILE" "$@"
 }
 
@@ -118,6 +132,8 @@ compose_demo() {
     MINA_BACKUP_DIR="$BACKUP_DIR" \
     MINA_BACKUP_FILE_SCHEDULE_UTC="" \
     MINA_DATABASE_ENCRYPTION_KEY="$DATABASE_ENCRYPTION_KEY" \
+    MINA_INITIAL_ADMIN_EMAIL="$BOOTSTRAP_ADMIN_EMAIL" \
+    MINA_INITIAL_ADMIN_PASSWORD="$BOOTSTRAP_ADMIN_PASSWORD" \
         docker compose -p "$PROJECT" -f "$COMPOSE_FILE" -f "$DEMO_OVERRIDE" "$@"
 }
 
@@ -131,12 +147,16 @@ compose_traefik_config() {
     MINA_BACKUP_DIR="$BACKUP_DIR" \
     MINA_BACKUP_FILE_SCHEDULE_UTC="" \
     MINA_DATABASE_ENCRYPTION_KEY="$DATABASE_ENCRYPTION_KEY" \
+    MINA_INITIAL_ADMIN_EMAIL="$BOOTSTRAP_ADMIN_EMAIL" \
+    MINA_INITIAL_ADMIN_PASSWORD="$BOOTSTRAP_ADMIN_PASSWORD" \
         docker compose -p "$PROJECT" -f "$COMPOSE_FILE" -f "$TRAEFIK_OVERRIDE" config --format json
 }
 
 compose_default_config() {
     env \
         -u MINA_DATABASE_ENCRYPTION_KEY \
+        -u MINA_INITIAL_ADMIN_EMAIL \
+        -u MINA_INITIAL_ADMIN_PASSWORD \
         MINA_IMAGE="" \
         MINA_UID="" \
         MINA_GID="" \
@@ -158,6 +178,8 @@ compose_explicit_config_without_home() {
         MINA_CONFIG_DIR="$CONFIG_DIR" \
         MINA_BACKUP_DIR="$BACKUP_DIR" \
         MINA_DATABASE_ENCRYPTION_KEY="$DATABASE_ENCRYPTION_KEY" \
+        MINA_INITIAL_ADMIN_EMAIL="$BOOTSTRAP_ADMIN_EMAIL" \
+        MINA_INITIAL_ADMIN_PASSWORD="$BOOTSTRAP_ADMIN_PASSWORD" \
         docker compose -p "$PROJECT" -f "$COMPOSE_FILE" config --format json
 }
 
@@ -171,6 +193,8 @@ compose_import() {
     MINA_BACKUP_DIR="$IMPORT_BACKUP_DIR" \
     MINA_BACKUP_FILE_SCHEDULE_UTC="" \
     MINA_DATABASE_ENCRYPTION_KEY="$DATABASE_ENCRYPTION_KEY" \
+    MINA_INITIAL_ADMIN_EMAIL="$BOOTSTRAP_ADMIN_EMAIL" \
+    MINA_INITIAL_ADMIN_PASSWORD="$BOOTSTRAP_ADMIN_PASSWORD" \
         docker compose -p "$IMPORT_PROJECT" -f "$COMPOSE_FILE" "$@"
 }
 
@@ -202,6 +226,10 @@ cleanup() {
     if [[ "$CLEANED" == true ]]; then
         return
     fi
+    for cid in "$MISSING_AUTH_CONTAINER_ID" "$AUTH_RETRY_CONTAINER_ID"; do
+        [[ -n "$cid" ]] || continue
+        docker rm -f "$cid" >/dev/null 2>&1 || true
+    done
     compose_import down --volumes --remove-orphans >/dev/null 2>&1 || true
     compose_base down --volumes --remove-orphans >/dev/null 2>&1 || true
     if [[ -n "$OWNED_IMAGES" ]]; then
@@ -339,6 +367,14 @@ wait_healthy() {
 }
 
 curl_body() {
+    if [[ -n "$AUTH_API_KEY" ]]; then
+        curl --fail --silent --show-error -H "Authorization: Bearer $AUTH_API_KEY" "$@"
+        return
+    fi
+    if [[ -f "$WORK_DIR/mina-session.cookies" ]]; then
+        curl --fail --silent --show-error --cookie "$WORK_DIR/mina-session.cookies" "$@"
+        return
+    fi
     curl --fail --silent --show-error "$@"
 }
 
@@ -470,6 +506,188 @@ assert_config_bootstrapped() {
     fi
 }
 
+file_fingerprint() {
+    cksum "$1"
+}
+
+assert_login() {
+    local password="$1"
+    local expected_status="$2"
+    local response_file="$WORK_DIR/login-response.json"
+    local status
+
+    status="$(jq -nc --arg email "$INITIAL_ADMIN_EMAIL" --arg password "$password" '{email: $email, password: $password}' | curl \
+        --silent --show-error \
+        --output "$response_file" \
+        --write-out '%{http_code}' \
+        --cookie-jar "$WORK_DIR/mina-session.cookies" \
+        -H 'Content-Type: application/json' \
+        --data-binary @- \
+        "$(api_url /api/auth/login)")"
+    if [[ "$status" != "$expected_status" ]]; then
+        printf 'login with expected status %s returned %s: %s\n' "$expected_status" "$status" "$(cat "$response_file")" >&2
+        exit 1
+    fi
+    if [[ "$expected_status" == "200" ]]; then
+        jq -e --arg email "$INITIAL_ADMIN_EMAIL" '.enabled == true and .authenticated == true and .user.email == $email' "$response_file" >/dev/null
+    fi
+}
+
+assert_fresh_auth_bootstrap() {
+    local cid="$1"
+    local auth_file="$CONFIG_DIR/auth.toml"
+    local status protected_status
+
+    grep -Eq '^auth_file = "auth.toml"$' "$CONFIG_DIR/config.toml"
+    [[ -f "$auth_file" ]]
+    assert_host_owned_file "$auth_file"
+    assert_private_file "$auth_file"
+    docker exec "$cid" sh -c '! tr "\000" "\n" </proc/1/environ | grep -q "^MINA_INITIAL_ADMIN_"'
+
+    status="$(curl_body "$(api_url /api/auth/status)")"
+    jq -e '.enabled == true and .authenticated == false and .user == null' <<<"$status" >/dev/null
+    protected_status="$(curl --silent --output /dev/null --write-out '%{http_code}' "$(api_url '/api/accounts?limit=1')")"
+    [[ "$protected_status" == "401" ]]
+    assert_login "$INITIAL_ADMIN_PASSWORD" 200
+    curl --fail --silent --show-error \
+        --cookie "$WORK_DIR/mina-session.cookies" \
+        "$(api_url '/api/accounts?limit=1')" >/dev/null
+}
+
+create_main_api_key() {
+    local output
+    output="$(compose_base run --rm --no-deps -T mina auth api-key create docker-lifecycle)"
+    AUTH_API_KEY="$(sed -n 's/^API key (shown once): //p' <<<"$output")"
+    if [[ -z "$AUTH_API_KEY" ]]; then
+        printf 'could not read one-time API key from Mina output: %s\n' "$output" >&2
+        exit 1
+    fi
+}
+
+change_bootstrap_password() {
+    local cid="$1"
+    printf '%s\n%s\n' "$CHANGED_ADMIN_PASSWORD" "$CHANGED_ADMIN_PASSWORD" | \
+        compose_base run --rm --no-deps -T mina auth user set-password "$INITIAL_ADMIN_EMAIL"
+    compose_base restart mina
+    wait_healthy "$cid"
+    assert_login "$INITIAL_ADMIN_PASSWORD" 401
+    assert_login "$CHANGED_ADMIN_PASSWORD" 200
+    create_main_api_key
+    compose_base restart mina
+    wait_healthy "$cid"
+    curl_body "$(api_url '/api/accounts?limit=1')" >/dev/null
+}
+
+record_auth_state() {
+    AUTH_CONFIG_FINGERPRINT="$(file_fingerprint "$CONFIG_DIR/config.toml")"
+    AUTH_FILE_FINGERPRINT="$(file_fingerprint "$CONFIG_DIR/auth.toml")"
+}
+
+assert_auth_state_retained() {
+    [[ "$(file_fingerprint "$CONFIG_DIR/config.toml")" == "$AUTH_CONFIG_FINGERPRINT" ]]
+    [[ "$(file_fingerprint "$CONFIG_DIR/auth.toml")" == "$AUTH_FILE_FINGERPRINT" ]]
+    assert_login "$CHANGED_ADMIN_PASSWORD" 200
+    curl_body "$(api_url '/api/accounts?limit=1')" >/dev/null
+}
+
+assert_missing_auth_file_fails_closed() {
+    local missing_dir="$WORK_DIR/missing-auth-config"
+    local missing_backups="$WORK_DIR/missing-auth-backups"
+    local missing_data="$WORK_DIR/missing-auth-data"
+    local missing_cache="$WORK_DIR/missing-auth-cache"
+    local missing_fingerprint exit_code
+
+    mkdir -p "$missing_dir" "$missing_backups" "$missing_data" "$missing_cache"
+    chmod 0700 "$missing_dir" "$missing_backups" "$missing_data" "$missing_cache"
+    cp "$CONFIG_TEMPLATE" "$missing_dir/config.toml"
+    chmod 0600 "$missing_dir/config.toml"
+    missing_fingerprint="$(file_fingerprint "$missing_dir/config.toml")"
+
+    MISSING_AUTH_CONTAINER_ID="$(docker run --detach \
+        --name "${PROJECT}-missing-auth" \
+        --user "$HOST_UID:$HOST_GID" \
+        --read-only \
+        --tmpfs /tmp:size=64m,mode=1777 \
+        -e XDG_CONFIG_HOME=/config \
+        -e XDG_CACHE_HOME=/cache \
+        -e MINA_FX_AUTO_LOAD_ENABLED=false \
+        -v "$missing_dir:/config/mina" \
+        -v "$missing_backups:/backups" \
+        -v "$missing_data:/data" \
+        -v "$missing_cache:/cache" \
+        "$CURRENT_IMAGE" serve --host 127.0.0.1 --port 8080 --quiet)"
+    exit_code="$(docker wait "$MISSING_AUTH_CONTAINER_ID")"
+    if [[ "$exit_code" == "0" ]]; then
+        printf 'configured Mina unexpectedly started without its auth file\n' >&2
+        exit 1
+    fi
+    local missing_logs
+    missing_logs="$(docker logs "$MISSING_AUTH_CONTAINER_ID" 2>&1)"
+    grep -q 'auth.toml' <<<"$missing_logs"
+    [[ ! -e "$missing_dir/auth.toml" ]]
+    [[ "$(file_fingerprint "$missing_dir/config.toml")" == "$missing_fingerprint" ]]
+    docker rm "$MISSING_AUTH_CONTAINER_ID" >/dev/null
+    MISSING_AUTH_CONTAINER_ID=""
+}
+
+assert_auth_only_bootstrap_retry() {
+    local retry_dir="$WORK_DIR/auth-only-config"
+    local retry_backups="$WORK_DIR/auth-only-backups"
+    local retry_data="$WORK_DIR/auth-only-data"
+    local retry_cache="$WORK_DIR/auth-only-cache"
+    local retry_email="retry-${RUN_ID_SLUG}@example.test"
+    local retry_password="retry-admin-password-$RUN_ID"
+    local auth_fingerprint status
+
+    mkdir -p "$retry_dir" "$retry_backups" "$retry_data" "$retry_cache"
+    chmod 0700 "$retry_dir" "$retry_backups" "$retry_data" "$retry_cache"
+    cp "$CONFIG_TEMPLATE" "$retry_dir/config.toml"
+    chmod 0600 "$retry_dir/config.toml"
+    printf '%s\n%s\n' "$retry_password" "$retry_password" | docker run --rm -i \
+        --user "$HOST_UID:$HOST_GID" \
+        -e XDG_CONFIG_HOME=/config \
+        -v "$retry_dir:/config/mina" \
+        "$CURRENT_IMAGE" auth init "$retry_email" >/dev/null
+    auth_fingerprint="$(file_fingerprint "$retry_dir/auth.toml")"
+    rm "$retry_dir/config.toml"
+
+    AUTH_RETRY_CONTAINER_ID="$(docker run --detach \
+        --name "${PROJECT}-auth-only-retry" \
+        --user "$HOST_UID:$HOST_GID" \
+        --read-only \
+        --tmpfs /tmp:size=64m,mode=1777 \
+        -e XDG_CONFIG_HOME=/config \
+        -e XDG_CACHE_HOME=/cache \
+        -e MINA_FX_AUTO_LOAD_ENABLED=false \
+        -v "$retry_dir:/config/mina" \
+        -v "$retry_backups:/backups" \
+        -v "$retry_data:/data" \
+        -v "$retry_cache:/cache" \
+        "$CURRENT_IMAGE" serve --host 127.0.0.1 --port 8080 --quiet)"
+    for _ in $(seq 1 100); do
+        if status="$(docker exec "$AUTH_RETRY_CONTAINER_ID" curl --fail --silent --show-error http://127.0.0.1:8080/api/auth/status 2>/dev/null)"; then
+            break
+        fi
+        if [[ "$(docker inspect -f '{{.State.Running}}' "$AUTH_RETRY_CONTAINER_ID")" != "true" ]]; then
+            printf 'auth-only retry Mina exited before readiness\n' >&2
+            docker logs "$AUTH_RETRY_CONTAINER_ID" >&2
+            exit 1
+        fi
+        sleep 0.1
+    done
+
+    jq -e '.enabled == true and .authenticated == false and .user == null' <<<"$status" >/dev/null
+    cmp "$CONFIG_TEMPLATE" "$retry_dir/config.toml"
+    [[ "$(file_fingerprint "$retry_dir/auth.toml")" == "$auth_fingerprint" ]]
+    assert_host_owned_file "$retry_dir/config.toml"
+    assert_private_file "$retry_dir/config.toml"
+    assert_host_owned_file "$retry_dir/auth.toml"
+    assert_private_file "$retry_dir/auth.toml"
+
+    docker rm -f "$AUTH_RETRY_CONTAINER_ID" >/dev/null
+    AUTH_RETRY_CONTAINER_ID=""
+}
+
 assert_hardened_runtime() {
     local cid="$1"
     local inspect
@@ -515,6 +733,47 @@ assert_config_permission_failure() {
         printf 'read-only config failure was not actionable: %s\n' "$output" >&2
         exit 1
     fi
+}
+
+assert_fresh_bootstrap_input_failure() {
+    local name="$1"
+    local expected="$2"
+    shift 2
+    local config_dir="$WORK_DIR/bootstrap-input-$name"
+    local output rc
+
+    mkdir -p "$config_dir"
+    chmod 0700 "$config_dir"
+    set +e
+    output="$(docker run --rm \
+        --user "$HOST_UID:$HOST_GID" \
+        -e XDG_CONFIG_HOME=/config \
+        -v "$config_dir:/config/mina" \
+        "$@" \
+        "$INITIAL_IMAGE" serve 2>&1)"
+    rc=$?
+    set -e
+    if (( rc == 0 )) || [[ "$output" != *"$expected"* ]]; then
+        printf 'fresh bootstrap input case %s was not rejected clearly: rc=%s output=%s\n' "$name" "$rc" "$output" >&2
+        exit 1
+    fi
+    if find "$config_dir" -mindepth 1 -print -quit | grep -q .; then
+        printf 'fresh bootstrap input case %s left partial config state:\n' "$name" >&2
+        find "$config_dir" -mindepth 1 -print >&2
+        exit 1
+    fi
+}
+
+assert_fresh_bootstrap_inputs_required() {
+    assert_fresh_bootstrap_input_failure missing-email MINA_INITIAL_ADMIN_EMAIL
+    assert_fresh_bootstrap_input_failure missing-password MINA_INITIAL_ADMIN_PASSWORD \
+        -e MINA_INITIAL_ADMIN_EMAIL="$INITIAL_ADMIN_EMAIL"
+    assert_fresh_bootstrap_input_failure placeholder-email MINA_INITIAL_ADMIN_EMAIL \
+        -e MINA_INITIAL_ADMIN_EMAIL=replace-with-your-email \
+        -e MINA_INITIAL_ADMIN_PASSWORD="$INITIAL_ADMIN_PASSWORD"
+    assert_fresh_bootstrap_input_failure placeholder-password MINA_INITIAL_ADMIN_PASSWORD \
+        -e MINA_INITIAL_ADMIN_EMAIL="$INITIAL_ADMIN_EMAIL" \
+        -e MINA_INITIAL_ADMIN_PASSWORD=replace-with-a-long-random-password
 }
 
 assert_standalone_version() {
@@ -733,11 +992,15 @@ assert_rendered_compose_config() {
     local config_dir="$3"
     local backup_dir="$4"
     local encryption_key="${5:-}"
+    local bootstrap_email="${6:-}"
+    local bootstrap_password="${7:-}"
     jq -e \
         --arg image "$image" \
         --arg config_dir "$config_dir" \
         --arg backup_dir "$backup_dir" \
         --arg encryption_key "$encryption_key" \
+        --arg bootstrap_email "$bootstrap_email" \
+        --arg bootstrap_password "$bootstrap_password" \
         '
         .services.mina.image == $image
         and (.services.mina.volumes | any(.source == $config_dir and .target == "/config/mina" and .read_only != true and .bind.create_host_path != true))
@@ -751,6 +1014,8 @@ assert_rendered_compose_config() {
         and .services.mina.environment.XDG_CONFIG_HOME == "/config"
         and .services.mina.environment.MINA_DB == "/data/mina.duckdb"
         and (if $encryption_key == "" then .services.mina.environment.MINA_DATABASE_ENCRYPTION_KEY == null else .services.mina.environment.MINA_DATABASE_ENCRYPTION_KEY == $encryption_key end)
+        and (if $bootstrap_email == "" then .services.mina.environment.MINA_INITIAL_ADMIN_EMAIL == null else .services.mina.environment.MINA_INITIAL_ADMIN_EMAIL == $bootstrap_email end)
+        and (if $bootstrap_password == "" then .services.mina.environment.MINA_INITIAL_ADMIN_PASSWORD == null else .services.mina.environment.MINA_INITIAL_ADMIN_PASSWORD == $bootstrap_password end)
         and (.services.mina.environment | has("MINA_SCHEMA") | not)
         ' <<<"$config" >/dev/null
 }
@@ -771,7 +1036,9 @@ assert_default_compose_config() {
         "$CURRENT_IMAGE" \
         "$CONFIG_DIR" \
         "$BACKUP_DIR" \
-        "$DATABASE_ENCRYPTION_KEY"
+        "$DATABASE_ENCRYPTION_KEY" \
+        "$BOOTSTRAP_ADMIN_EMAIL" \
+        "$BOOTSTRAP_ADMIN_PASSWORD"
 }
 
 assert_import_rejected() {
@@ -791,6 +1058,8 @@ assert_import_rejected() {
 
 test_container_import() {
     local cache_token="seed-cache-$RUN_ID"
+    local main_api_key="$AUTH_API_KEY"
+    local import_key_output
 
     cp "$PRE_UPDATE_BACKUP" "$SEED_DIR/mina.duckdb"
     printf 'not a Mina database\n' > "$SEED_DIR/invalid.duckdb"
@@ -852,8 +1121,14 @@ test_container_import() {
     local import_container_id
     import_container_id="$(compose_import ps -q mina)"
     wait_healthy "$import_container_id"
+    import_key_output="$(compose_import run --rm --no-deps -T mina auth api-key create docker-import-lifecycle)"
+    AUTH_API_KEY="$(sed -n 's/^API key (shown once): //p' <<<"$import_key_output")"
+    [[ -n "$AUTH_API_KEY" ]]
+    compose_import restart mina
+    wait_healthy "$import_container_id"
     assert_reachability
     assert_demo_snapshot_retained
+    AUTH_API_KEY="$main_api_key"
     compose_import down --remove-orphans
     assert_volume_exists "$IMPORT_DATA_VOLUME"
     assert_volume_exists "$IMPORT_CACHE_VOLUME"
@@ -1004,6 +1279,9 @@ prepare_images
 CURRENT_IMAGE="$INITIAL_IMAGE"
 assert_default_compose_config
 assert_config_permission_failure
+assert_fresh_bootstrap_inputs_required
+assert_missing_auth_file_fails_closed
+assert_auth_only_bootstrap_retry
 assert_standalone_version
 assert_bundled_httpfs_extension
 assert_offline_encrypted_database "$INITIAL_IMAGE"
@@ -1019,7 +1297,6 @@ INITIAL_CONTAINER_ID="$(compose_base ps -q mina)"
 wait_healthy "$INITIAL_CONTAINER_ID"
 assert_loopback_publish "$INITIAL_CONTAINER_ID"
 assert_reachability
-record_demo_snapshot
 assert_volume_exists "$DATA_VOLUME"
 assert_volume_exists "$CACHE_VOLUME"
 assert_volume_entry_owner "$DATA_VOLUME" . "$HOST_UID:$HOST_GID"
@@ -1031,20 +1308,28 @@ assert_container_image "$INITIAL_CONTAINER_ID" "$INITIAL_IMAGE_ID"
 assert_non_root_process "$INITIAL_CONTAINER_ID"
 assert_hardened_runtime "$INITIAL_CONTAINER_ID"
 assert_config_bootstrapped "$INITIAL_CONTAINER_ID"
+assert_fresh_auth_bootstrap "$INITIAL_CONTAINER_ID"
+record_demo_snapshot
 assert_cache_mount "$INITIAL_CONTAINER_ID"
 assert_volume_entry_owner "$CACHE_VOLUME" mina/docker-service-test-cache-probe "$HOST_UID:$HOST_GID"
 
 log "normal recreation without demo override"
+BOOTSTRAP_ADMIN_EMAIL="ignored-${RUN_ID_SLUG}@example.test"
+BOOTSTRAP_ADMIN_PASSWORD="ignored-bootstrap-password-$RUN_ID"
 compose_base up -d --force-recreate
 NORMAL_CONTAINER_ID="$(compose_base ps -q mina)"
 wait_healthy "$NORMAL_CONTAINER_ID"
 assert_reachability
 assert_demo_snapshot_retained
+assert_login "$INITIAL_ADMIN_PASSWORD" 200
+change_bootstrap_password "$NORMAL_CONTAINER_ID"
+record_auth_state
 
 log "same-image restart"
 compose_base restart mina
 wait_healthy "$NORMAL_CONTAINER_ID"
 assert_reachability
+assert_auth_state_retained
 assert_demo_snapshot_retained
 
 log "ordinary down preserves named volumes and changed IDs are repaired"
@@ -1073,6 +1358,7 @@ wait_healthy "$NORMAL_CONTAINER_ID"
 assert_volume_entry_owner "$DATA_VOLUME" mina.duckdb "$HOST_UID:$HOST_GID"
 assert_volume_entry_owner "$CACHE_VOLUME" mina/docker-service-test-cache-probe "$HOST_UID:$HOST_GID"
 assert_reachability
+assert_auth_state_retained
 assert_demo_snapshot_retained
 
 log "pre-update backup"
@@ -1096,6 +1382,7 @@ else
     assert_container_image "$UPDATED_CONTAINER_ID" "$INITIAL_IMAGE_ID"
 fi
 assert_reachability
+assert_auth_state_retained
 
 log "retained demo data after update"
 assert_demo_snapshot_retained

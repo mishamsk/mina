@@ -35,10 +35,42 @@ if [ "${1:-}" = "serve" ]; then
         exit 1
     fi
     if [ ! -e "$config_file" ]; then
-        if ! cp "$template" "$config_file"; then
+        bootstrap_config="$config_dir/.config.toml.bootstrap.$$"
+        auth_file="$config_dir/auth.toml"
+        initial_admin_email="${MINA_INITIAL_ADMIN_EMAIL:-}"
+        initial_admin_password="${MINA_INITIAL_ADMIN_PASSWORD:-}"
+        cleanup_bootstrap() {
+            rm -f "$bootstrap_config"
+        }
+        trap cleanup_bootstrap EXIT HUP INT TERM
+        if [ ! -e "$auth_file" ]; then
+            if [ -z "$initial_admin_email" ] || [ "$initial_admin_email" = "replace-with-your-email" ]; then
+                printf 'mina: MINA_INITIAL_ADMIN_EMAIL is required for fresh initialization and must not be the .env.example placeholder\n' >&2
+                exit 1
+            fi
+            if [ -z "$initial_admin_password" ] || [ "$initial_admin_password" = "replace-with-a-long-random-password" ]; then
+                printf 'mina: MINA_INITIAL_ADMIN_PASSWORD is required for fresh initialization and must not be the .env.example placeholder\n' >&2
+                exit 1
+            fi
+        elif [ ! -f "$auth_file" ]; then
+            printf 'mina: authentication path %s exists but is not a regular file; no existing state was overwritten\n' "$auth_file" >&2
+            exit 1
+        fi
+        if ! cp "$template" "$bootstrap_config"; then
             printf 'mina: cannot initialize config file %s as %s; ensure the config bind is writable\n' "$config_file" "$identity" >&2
             exit 1
         fi
+        if [ ! -e "$auth_file" ]; then
+            if ! printf '%s\n%s\n' "$initial_admin_password" "$initial_admin_password" | mina --config-file "$bootstrap_config" auth init -- "$initial_admin_email"; then
+                printf 'mina: cannot initialize authentication file %s as %s; no existing config or auth file was overwritten\n' "$auth_file" "$identity" >&2
+                exit 1
+            fi
+        fi
+        if ! mv "$bootstrap_config" "$config_file"; then
+            printf 'mina: cannot install initialized config file %s as %s; existing authentication state was preserved for retry\n' "$config_file" "$identity" >&2
+            exit 1
+        fi
+        trap - EXIT HUP INT TERM
     elif [ ! -f "$config_file" ]; then
         printf 'mina: config path %s exists but is not a regular file\n' "$config_file" >&2
         exit 1
@@ -47,5 +79,8 @@ if [ "${1:-}" = "serve" ]; then
         exit 1
     fi
 fi
+
+unset MINA_INITIAL_ADMIN_EMAIL MINA_INITIAL_ADMIN_PASSWORD
+unset initial_admin_email initial_admin_password
 
 exec mina "$@"

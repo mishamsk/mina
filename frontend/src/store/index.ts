@@ -45,6 +45,16 @@ export {
   useGroupRegisterPageView,
 } from "./accounts";
 export {
+  type AuthenticationPhase,
+  getAuthenticationSnapshot,
+  hydrateAuthentication,
+  loginAuthentication,
+  logoutAuthentication,
+  setAuthenticationLost,
+  useAuthenticationStore,
+  useAuthenticationView,
+} from "./authentication";
+export {
   type BootstrapStatus,
   getBootstrapStatusSnapshot,
   hydrateBrowserState,

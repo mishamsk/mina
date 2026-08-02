@@ -47,6 +47,8 @@ services:
       - XDG_CACHE_HOME=/cache
       - MINA_DB=/data/mina.duckdb
       - MINA_DATABASE_ENCRYPTION_KEY
+      - MINA_INITIAL_ADMIN_EMAIL
+      - MINA_INITIAL_ADMIN_PASSWORD
       - MINA_BACKUP_FILE_SCHEDULE_UTC
       - MINA_HOST=0.0.0.0
       - MINA_PORT=8080

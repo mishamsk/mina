@@ -1,14 +1,59 @@
 import { AlertCircle } from "lucide-react";
+import { useEffect } from "react";
 import { BrowserRouter } from "react-router";
 
 import { ErrorBoundary } from "./components/error-boundary";
 import { AppTooltipProvider } from "./components/tooltip";
 import { Card, CardContent, CardHeader, CardTitle } from "./components/ui/card";
+import { LoginScreen } from "./features/authentication";
 import { AppRoutes } from "./pages/router";
+import { useAuthenticationView } from "./store/authentication";
 import { useBootstrapView } from "./store/bootstrap";
+
+const maxHeadingFocusAttempts = 10;
 
 export const App = () => {
   const { errorMessage, status } = useBootstrapView();
+  const authentication = useAuthenticationView();
+
+  useEffect(() => {
+    if (
+      status !== "ready" ||
+      (authentication.phase !== "authenticated" &&
+        authentication.phase !== "disabled")
+    ) {
+      return;
+    }
+    let retryFrame: number | undefined;
+    let attempts = 0;
+    const focusPageHeading = () => {
+      const activeElement = document.activeElement;
+      if (
+        activeElement instanceof HTMLElement &&
+        activeElement.closest("[role='dialog']")
+      ) {
+        return;
+      }
+      const heading = document.querySelector<HTMLElement>(
+        "main h1[tabindex='-1']",
+      );
+      if (heading) {
+        heading.focus({ preventScroll: true });
+        return;
+      }
+      attempts += 1;
+      if (attempts < maxHeadingFocusAttempts) {
+        retryFrame = window.requestAnimationFrame(focusPageHeading);
+      }
+    };
+    const frame = window.requestAnimationFrame(focusPageHeading);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      if (retryFrame !== undefined) {
+        window.cancelAnimationFrame(retryFrame);
+      }
+    };
+  }, [authentication.phase, status]);
 
   if (status === "failed") {
     return (
@@ -41,9 +86,13 @@ export const App = () => {
   return (
     <ErrorBoundary>
       <AppTooltipProvider>
-        <BrowserRouter>
-          <AppRoutes />
-        </BrowserRouter>
+        {authentication.phase === "unauthenticated" ? (
+          <LoginScreen />
+        ) : (
+          <BrowserRouter>
+            <AppRoutes />
+          </BrowserRouter>
+        )}
       </AppTooltipProvider>
     </ErrorBoundary>
   );

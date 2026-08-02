@@ -16,8 +16,9 @@
 - Config and backups are independent host binds, defaulting to `./config` and `./backups` relative to the deployment file.
 - Database and cache use distinct project-scoped named volumes mounted at `/data` and `/cache`.
 - Ordinary `docker compose down` preserves named volumes; `down --volumes` and explicit volume deletion are destructive.
-- `/config/mina` is writable; first `serve` copies the image template only when `/config/mina/config.toml` is absent.
+- `/config/mina` is writable; first `serve` stages the image template and initializes `auth.toml` through `mina auth` only when `config.toml` is absent.
 - `/data/mina.duckdb` is the fixed Compose database path; `/cache/mina` remains the app's normal XDG cache layout.
+- `.env.example` documents numeric Compose identity, an omitted-by-default database-encryption assignment, and required fresh-initialization administrator inputs without containing usable credentials.
 - Compose forwards `MINA_DATABASE_ENCRYPTION_KEY` from the operator environment or deployment `.env`; the secret is absent from the Compose file, config template, and image, and `.env` must remain private and outside version control.
 - Backups bind independently to `/backups` and never derive from database storage.
 - Utility commands such as `version` and `db validate` do not bootstrap or require writable config.
@@ -35,6 +36,9 @@
 - Cache import accepts only directories and regular files, rejects symlinks and special entries, normalizes private modes, and atomically swaps the staged tree.
 - Combined import prepares both artifacts before installation and rolls back an installed cache if the database commit does not complete.
 - `serve` never imports implicitly and there is no overwrite path.
+- Fresh-serve bootstrap installs config last, preserves any existing auth file, and is retryable after interruption.
+- Fresh auth creation requires non-placeholder `MINA_INITIAL_ADMIN_EMAIL` and `MINA_INITIAL_ADMIN_PASSWORD`, initializes only through `mina auth`, and clears both inputs before the long-running Mina process starts.
+- Existing config is never replaced or opted into authentication; a configured missing auth file fails closed.
 
 ## Image Contract
 
@@ -54,6 +58,7 @@
 - Main-service state is writable only through `/config/mina`, `/data`, `/cache`, and `/backups`; app cache state lives under `/cache/mina` and `/tmp` is ephemeral.
 - Port publishing remains on `127.0.0.1` by default.
 - Database and schema overrides are intentionally absent from the base environment surface.
+- Initial-admin environment values are first-initialization inputs only; they are not app config and never modify existing config or auth files.
 - Only config and backup bind paths are overrideable, through `MINA_CONFIG_DIR` and `MINA_BACKUP_DIR`; Compose must not silently create them.
 - Config initialization must fail early with an actionable ownership message when its bind is not writable.
 
@@ -79,6 +84,6 @@
 - `just docker-manifest-check IMAGE` verifies that a remote image index contains `linux/amd64` and `linux/arm64`.
 - `just test-docker` builds real images unless `MINA_IMAGE` is supplied.
 - The publication workflow runs `MINA_IMAGE=ghcr.io/mishamsk/mina:<full-commit-sha> just test-docker` against the published registry image before promotion.
-- The lifecycle test covers private bind permissions, named-volume ownership and `down` persistence, encrypted creation, explicit encrypted import/restore, config bootstrap and writes, hardening, reachability, recreation, restart, image replacement, encrypted backups, correct/wrong/missing-key validation, and destructive test cleanup.
+- The lifecycle test covers required non-default authentication bootstrap, private bind permissions, config/auth preservation, named-volume ownership and `down` persistence, encrypted creation, explicit encrypted import/restore, hardening, authenticated reachability, recreation, restart, image replacement, encrypted backups, correct/wrong/missing-key validation, and destructive test cleanup.
 - It also builds and runs the non-native supported architecture when local emulation is available and reports an explicit limitation otherwise.
 - Docker tests must leave no test containers, networks, tagged test images, or temporary state.

@@ -2,12 +2,26 @@ package httpclient
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
 )
 
 const inProcessBaseURL = "http://mina.test"
+
+// WithBearerToken adds one opaque API key to every generated remote request.
+func WithBearerToken(token string) ClientOption {
+	return WithRequestEditorFn(BearerTokenEditor(token))
+}
+
+// BearerTokenEditor adds one opaque API key to a generated request.
+func BearerTokenEditor(token string) RequestEditorFn {
+	return func(_ context.Context, request *http.Request) error {
+		request.Header.Set("Authorization", "Bearer "+token)
+		return nil
+	}
+}
 
 // HandlerDoer performs generated REST requests against an in-process HTTP handler.
 type HandlerDoer struct {

@@ -44,19 +44,25 @@ const (
 	ExecutionProfileLongRunning ExecutionProfile = "long-running"
 	// ExecutionProfileOneShot skips startup database validation and automatic operation execution.
 	ExecutionProfileOneShot ExecutionProfile = "one-shot"
+	// ExecutionProfileMigration validates the migrated database without loading authentication or starting operations.
+	ExecutionProfileMigration ExecutionProfile = "migration"
 )
 
 func (opts Options) validateExecutionProfile() error {
 	switch opts.ExecutionProfile {
-	case ExecutionProfileLongRunning, ExecutionProfileOneShot:
+	case ExecutionProfileLongRunning, ExecutionProfileOneShot, ExecutionProfileMigration:
 		return nil
 	default:
-		return fmt.Errorf("runtime execution profile must be %q or %q", ExecutionProfileLongRunning, ExecutionProfileOneShot)
+		return fmt.Errorf("runtime execution profile must be %q, %q, or %q", ExecutionProfileLongRunning, ExecutionProfileOneShot, ExecutionProfileMigration)
 	}
 }
 
 func (opts Options) automaticOperationsEnabled() bool {
 	return opts.ExecutionProfile == ExecutionProfileLongRunning && opts.Operations.Enabled
+}
+
+func (opts Options) startupValidationEnabled() bool {
+	return opts.ExecutionProfile == ExecutionProfileLongRunning || opts.ExecutionProfile == ExecutionProfileMigration
 }
 
 func resolveRuntimeDefaults(cfg appconfig.Config) appconfig.Config {

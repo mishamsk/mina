@@ -4,6 +4,21 @@ export type ClientOptions = {
     baseUrl: `${string}://${string}` | (string & {});
 };
 
+export type LoginRequest = {
+    email: string;
+};
+
+export type AuthenticationUser = {
+    user_id: string;
+    email: string;
+};
+
+export type AuthenticationStatusResponse = {
+    enabled: boolean;
+    authenticated: boolean;
+    user?: AuthenticationUser | null;
+};
+
 export type DemoSeedResponse = {
     members: number;
     accounts: number;
@@ -174,7 +189,7 @@ export type ExchangeRateListResponse = {
 };
 
 export type ApiError = {
-    code: 'invalid_request' | 'not_found' | 'method_not_allowed' | 'conflict' | 'internal_error';
+    code: 'invalid_request' | 'unauthenticated' | 'forbidden' | 'not_found' | 'method_not_allowed' | 'conflict' | 'internal_error';
     message: string;
 };
 
@@ -1373,6 +1388,11 @@ export type UpdateMemberHiddenRequest = {
     is_hidden: boolean;
 };
 
+export type LoginRequestWritable = {
+    email: string;
+    password: string;
+};
+
 export type SeedDemoData = {
     body?: never;
     path?: never;
@@ -1394,6 +1414,14 @@ export type SeedDemoErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
     /**
      * The route does not support the requested method.
      */
@@ -1444,6 +1472,93 @@ export type GetHealthResponses = {
 
 export type GetHealthResponse = GetHealthResponses[keyof GetHealthResponses];
 
+export type GetAuthenticationStatusData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/auth/status';
+};
+
+export type GetAuthenticationStatusErrors = {
+    /**
+     * The route does not support the requested method.
+     */
+    405: ErrorResponse;
+};
+
+export type GetAuthenticationStatusError = GetAuthenticationStatusErrors[keyof GetAuthenticationStatusErrors];
+
+export type GetAuthenticationStatusResponses = {
+    /**
+     * Current browser authentication status.
+     */
+    200: AuthenticationStatusResponse;
+};
+
+export type GetAuthenticationStatusResponse = GetAuthenticationStatusResponses[keyof GetAuthenticationStatusResponses];
+
+export type LoginData = {
+    body: LoginRequestWritable;
+    path?: never;
+    query?: never;
+    url: '/api/auth/login';
+};
+
+export type LoginErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The route does not support the requested method.
+     */
+    405: ErrorResponse;
+};
+
+export type LoginError = LoginErrors[keyof LoginErrors];
+
+export type LoginResponses = {
+    /**
+     * The browser session was created.
+     */
+    200: AuthenticationStatusResponse;
+};
+
+export type LoginResponse = LoginResponses[keyof LoginResponses];
+
+export type LogoutData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/auth/logout';
+};
+
+export type LogoutErrors = {
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
+    /**
+     * The route does not support the requested method.
+     */
+    405: ErrorResponse;
+};
+
+export type LogoutError = LogoutErrors[keyof LogoutErrors];
+
+export type LogoutResponses = {
+    /**
+     * The local browser session cookie was cleared.
+     */
+    204: void;
+};
+
+export type LogoutResponse = LogoutResponses[keyof LogoutResponses];
+
 export type GetSettingsData = {
     body?: never;
     path?: never;
@@ -1452,6 +1567,10 @@ export type GetSettingsData = {
 };
 
 export type GetSettingsErrors = {
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
     /**
      * The route does not support the requested method.
      */
@@ -1477,6 +1596,10 @@ export type ListBackgroundOperationsData = {
 };
 
 export type ListBackgroundOperationsErrors = {
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
     /**
      * The route does not support the requested method.
      */
@@ -1520,6 +1643,10 @@ export type ListBackgroundOperationRunEnvelopesErrors = {
      */
     400: ErrorResponse;
     /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
      * The route does not support the requested method.
      */
     405: ErrorResponse;
@@ -1545,6 +1672,10 @@ export type GetExchangeRateLoadingStatusData = {
 
 export type GetExchangeRateLoadingStatusErrors = {
     /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
      * The route does not support the requested method.
      */
     405: ErrorResponse;
@@ -1569,6 +1700,14 @@ export type StartExchangeRateLoadingRunData = {
 };
 
 export type StartExchangeRateLoadingRunErrors = {
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
     /**
      * The route does not support the requested method.
      */
@@ -1604,6 +1743,10 @@ export type GetExchangeRateLoadingRunErrors = {
      */
     400: ErrorResponse;
     /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
      * The requested resource was not found.
      */
     404: ErrorResponse;
@@ -1633,6 +1776,10 @@ export type GetDatabaseBackupStatusData = {
 
 export type GetDatabaseBackupStatusErrors = {
     /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
      * The route does not support the requested method.
      */
     405: ErrorResponse;
@@ -1661,6 +1808,14 @@ export type StartDatabaseBackupRunErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
     /**
      * The route does not support the requested method.
      */
@@ -1695,6 +1850,10 @@ export type GetDatabaseBackupRunErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
     /**
      * The requested resource was not found.
      */
@@ -1761,6 +1920,10 @@ export type ListCategoriesErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
 };
 
 export type ListCategoriesError = ListCategoriesErrors[keyof ListCategoriesErrors];
@@ -1786,6 +1949,14 @@ export type CreateCategoryErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
     /**
      * The category FQN duplicates an active category, conflicts with the active category hierarchy, or a category restructure would collide with active budget category/month rows.
      */
@@ -1815,6 +1986,14 @@ export type RestructureCategoriesErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
     /**
      * The requested resource was not found.
      */
@@ -1853,6 +2032,10 @@ export type ListCategoryGroupsErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
 };
 
 export type ListCategoryGroupsError = ListCategoryGroupsErrors[keyof ListCategoryGroupsErrors];
@@ -1878,6 +2061,14 @@ export type SetCategoryHiddenByPathErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
     /**
      * The requested resource was not found.
      */
@@ -1912,6 +2103,14 @@ export type DeleteCategoryErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
     /**
      * The requested resource was not found.
      */
@@ -1956,6 +2155,10 @@ export type GetCategoryErrors = {
      */
     400: ErrorResponse;
     /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
      * The requested resource was not found.
      */
     404: ErrorResponse;
@@ -1989,6 +2192,14 @@ export type UpdateCategoryErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
     /**
      * The requested resource was not found.
      */
@@ -2047,6 +2258,10 @@ export type ListTagsErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
 };
 
 export type ListTagsError = ListTagsErrors[keyof ListTagsErrors];
@@ -2072,6 +2287,14 @@ export type CreateTagErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
     /**
      * The tag FQN duplicates an active tag or conflicts with the active tag hierarchy.
      */
@@ -2101,6 +2324,14 @@ export type RestructureTagsErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
     /**
      * The requested resource was not found.
      */
@@ -2139,6 +2370,10 @@ export type ListTagGroupsErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
 };
 
 export type ListTagGroupsError = ListTagGroupsErrors[keyof ListTagGroupsErrors];
@@ -2164,6 +2399,14 @@ export type SetTagHiddenByPathErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
     /**
      * The requested resource was not found.
      */
@@ -2198,6 +2441,14 @@ export type DeleteTagErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
     /**
      * The requested resource was not found.
      */
@@ -2242,6 +2493,10 @@ export type GetTagErrors = {
      */
     400: ErrorResponse;
     /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
      * The requested resource was not found.
      */
     404: ErrorResponse;
@@ -2275,6 +2530,14 @@ export type UpdateTagErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
     /**
      * The requested resource was not found.
      */
@@ -2329,6 +2592,10 @@ export type ListMembersErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
 };
 
 export type ListMembersError = ListMembersErrors[keyof ListMembersErrors];
@@ -2354,6 +2621,14 @@ export type CreateMemberErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
     /**
      * The request conflicts with existing state.
      */
@@ -2388,6 +2663,14 @@ export type DeleteMemberErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
     /**
      * The requested resource was not found.
      */
@@ -2432,6 +2715,10 @@ export type GetMemberErrors = {
      */
     400: ErrorResponse;
     /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
      * The requested resource was not found.
      */
     404: ErrorResponse;
@@ -2465,6 +2752,14 @@ export type UpdateMemberErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
     /**
      * The requested resource was not found.
      */
@@ -2503,6 +2798,14 @@ export type UpdateMemberHiddenErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
     /**
      * The requested resource was not found.
      */
@@ -2565,6 +2868,10 @@ export type ListAccountsErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
 };
 
 export type ListAccountsError = ListAccountsErrors[keyof ListAccountsErrors];
@@ -2590,6 +2897,14 @@ export type CreateAccountErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
     /**
      * The account FQN duplicates an active account or conflicts with the active account hierarchy.
      */
@@ -2619,6 +2934,14 @@ export type RestructureAccountsErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
     /**
      * The requested resource was not found.
      */
@@ -2657,6 +2980,10 @@ export type ListAccountGroupsErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
 };
 
 export type ListAccountGroupsError = ListAccountGroupsErrors[keyof ListAccountGroupsErrors];
@@ -2682,6 +3009,14 @@ export type SetAccountHiddenByPathErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
     /**
      * The requested resource was not found.
      */
@@ -2720,6 +3055,10 @@ export type ListAccountBalancesErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
 };
 
 export type ListAccountBalancesError = ListAccountBalancesErrors[keyof ListAccountBalancesErrors];
@@ -2750,6 +3089,14 @@ export type DeleteAccountErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
     /**
      * The requested resource was not found.
      */
@@ -2794,6 +3141,10 @@ export type GetAccountErrors = {
      */
     400: ErrorResponse;
     /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
      * The requested resource was not found.
      */
     404: ErrorResponse;
@@ -2827,6 +3178,14 @@ export type UpdateAccountErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
     /**
      * The requested resource was not found.
      */
@@ -2887,6 +3246,10 @@ export type ListCreditLimitHistoryErrors = {
      */
     400: ErrorResponse;
     /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
      * The requested resource was not found.
      */
     404: ErrorResponse;
@@ -2920,6 +3283,14 @@ export type CreateCreditLimitHistoryErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
     /**
      * The requested resource was not found.
      */
@@ -2959,6 +3330,14 @@ export type DeleteCreditLimitHistoryErrors = {
      */
     400: ErrorResponse;
     /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
+    /**
      * The requested resource was not found.
      */
     404: ErrorResponse;
@@ -2997,6 +3376,10 @@ export type GetCreditLimitHistoryErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
     /**
      * The requested resource was not found.
      */
@@ -3059,6 +3442,10 @@ export type ListExchangeRatesErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
 };
 
 export type ListExchangeRatesError = ListExchangeRatesErrors[keyof ListExchangeRatesErrors];
@@ -3084,6 +3471,14 @@ export type CreateExchangeRateErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
     /**
      * The request conflicts with existing state.
      */
@@ -3118,6 +3513,14 @@ export type DeleteExchangeRateErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
     /**
      * The requested resource was not found.
      */
@@ -3158,6 +3561,10 @@ export type GetExchangeRateErrors = {
      */
     400: ErrorResponse;
     /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
      * The requested resource was not found.
      */
     404: ErrorResponse;
@@ -3191,6 +3598,14 @@ export type UpdateExchangeRateErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
     /**
      * The requested resource was not found.
      */
@@ -3237,6 +3652,10 @@ export type ListTransactionTemplatesErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
 };
 
 export type ListTransactionTemplatesError = ListTransactionTemplatesErrors[keyof ListTransactionTemplatesErrors];
@@ -3262,6 +3681,14 @@ export type CreateTransactionTemplateErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
     /**
      * The transaction template FQN duplicates an active template or conflicts with the active template hierarchy.
      */
@@ -3291,6 +3718,14 @@ export type RestructureTransactionTemplatesErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
     /**
      * The requested resource was not found.
      */
@@ -3330,6 +3765,14 @@ export type DeleteTransactionTemplateErrors = {
      */
     400: ErrorResponse;
     /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
+    /**
      * The requested resource was not found.
      */
     404: ErrorResponse;
@@ -3364,6 +3807,10 @@ export type GetTransactionTemplateErrors = {
      */
     400: ErrorResponse;
     /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
      * The requested resource was not found.
      */
     404: ErrorResponse;
@@ -3397,6 +3844,14 @@ export type ReplaceTransactionTemplateErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
     /**
      * The requested resource was not found.
      */
@@ -3443,6 +3898,10 @@ export type ListRecurringDefinitionsErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
 };
 
 export type ListRecurringDefinitionsError = ListRecurringDefinitionsErrors[keyof ListRecurringDefinitionsErrors];
@@ -3468,6 +3927,14 @@ export type CreateRecurringDefinitionErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
     /**
      * The request conflicts with existing state.
      */
@@ -3503,6 +3970,14 @@ export type DeleteRecurringDefinitionErrors = {
      */
     400: ErrorResponse;
     /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
+    /**
      * The requested resource was not found.
      */
     404: ErrorResponse;
@@ -3537,6 +4012,10 @@ export type GetRecurringDefinitionErrors = {
      */
     400: ErrorResponse;
     /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
      * The requested resource was not found.
      */
     404: ErrorResponse;
@@ -3570,6 +4049,14 @@ export type ReplaceRecurringDefinitionErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
     /**
      * The requested resource was not found.
      */
@@ -3609,6 +4096,14 @@ export type ConfirmNextRecurringDefinitionErrors = {
      */
     400: ErrorResponse;
     /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
+    /**
      * The requested resource was not found.
      */
     404: ErrorResponse;
@@ -3646,6 +4141,14 @@ export type DeferRecurringDefinitionErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
     /**
      * The requested resource was not found.
      */
@@ -3685,6 +4188,14 @@ export type PauseRecurringDefinitionErrors = {
      */
     400: ErrorResponse;
     /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
+    /**
      * The requested resource was not found.
      */
     404: ErrorResponse;
@@ -3718,6 +4229,14 @@ export type ResumeRecurringDefinitionErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
     /**
      * The requested resource was not found.
      */
@@ -3772,6 +4291,10 @@ export type ListRecurringOccurrencesErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
 };
 
 export type ListRecurringOccurrencesError = ListRecurringOccurrencesErrors[keyof ListRecurringOccurrencesErrors];
@@ -3802,6 +4325,14 @@ export type ConfirmRecurringOccurrenceErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
     /**
      * The requested resource was not found.
      */
@@ -3836,6 +4367,14 @@ export type DismissRecurringOccurrenceErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
     /**
      * The requested resource was not found.
      */
@@ -3962,6 +4501,10 @@ export type ListTransactionsErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
 };
 
 export type ListTransactionsError = ListTransactionsErrors[keyof ListTransactionsErrors];
@@ -3987,6 +4530,14 @@ export type CreateTransactionErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
 };
 
 export type CreateTransactionError = CreateTransactionErrors[keyof CreateTransactionErrors];
@@ -4012,6 +4563,14 @@ export type ClassifyTransactionErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
 };
 
 export type ClassifyTransactionError = ClassifyTransactionErrors[keyof ClassifyTransactionErrors];
@@ -4037,6 +4596,14 @@ export type CreateExchangeTransactionErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
 };
 
 export type CreateExchangeTransactionError = CreateExchangeTransactionErrors[keyof CreateExchangeTransactionErrors];
@@ -4067,6 +4634,10 @@ export type GetTransactionMonthTotalsErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
 };
 
 export type GetTransactionMonthTotalsError = GetTransactionMonthTotalsErrors[keyof GetTransactionMonthTotalsErrors];
@@ -4092,6 +4663,14 @@ export type CreateSpendTransactionErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
 };
 
 export type CreateSpendTransactionError = CreateSpendTransactionErrors[keyof CreateSpendTransactionErrors];
@@ -4117,6 +4696,14 @@ export type CreateIncomeTransactionErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
 };
 
 export type CreateIncomeTransactionError = CreateIncomeTransactionErrors[keyof CreateIncomeTransactionErrors];
@@ -4142,6 +4729,14 @@ export type CreateRefundTransactionErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
 };
 
 export type CreateRefundTransactionError = CreateRefundTransactionErrors[keyof CreateRefundTransactionErrors];
@@ -4167,6 +4762,14 @@ export type CreateTransferTransactionErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
 };
 
 export type CreateTransferTransactionError = CreateTransferTransactionErrors[keyof CreateTransferTransactionErrors];
@@ -4289,6 +4892,10 @@ export type SearchJournalRecordsErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
 };
 
 export type SearchJournalRecordsError = SearchJournalRecordsErrors[keyof SearchJournalRecordsErrors];
@@ -4409,6 +5016,10 @@ export type SearchAccountJournalRecordsErrors = {
      */
     400: ErrorResponse;
     /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
      * The requested resource was not found.
      */
     404: ErrorResponse;
@@ -4437,6 +5048,14 @@ export type BulkCategorizeJournalRecordsErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
 };
 
 export type BulkCategorizeJournalRecordsError = BulkCategorizeJournalRecordsErrors[keyof BulkCategorizeJournalRecordsErrors];
@@ -4462,6 +5081,14 @@ export type BulkUpdateJournalRecordTagsErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
 };
 
 export type BulkUpdateJournalRecordTagsError = BulkUpdateJournalRecordTagsErrors[keyof BulkUpdateJournalRecordTagsErrors];
@@ -4487,6 +5114,14 @@ export type BulkReassignJournalRecordAccountErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
 };
 
 export type BulkReassignJournalRecordAccountError = BulkReassignJournalRecordAccountErrors[keyof BulkReassignJournalRecordAccountErrors];
@@ -4512,6 +5147,14 @@ export type BulkUpdateJournalRecordStatusesErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
 };
 
 export type BulkUpdateJournalRecordStatusesError = BulkUpdateJournalRecordStatusesErrors[keyof BulkUpdateJournalRecordStatusesErrors];
@@ -4542,6 +5185,14 @@ export type DeleteTransactionErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
     /**
      * The requested resource was not found.
      */
@@ -4577,6 +5228,10 @@ export type GetTransactionErrors = {
      */
     400: ErrorResponse;
     /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
      * The requested resource was not found.
      */
     404: ErrorResponse;
@@ -4611,6 +5266,14 @@ export type ReplaceTransactionErrors = {
      */
     400: ErrorResponse;
     /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
+    /**
      * The requested resource was not found.
      */
     404: ErrorResponse;
@@ -4644,6 +5307,14 @@ export type CancelTransactionErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
     /**
      * The requested resource was not found.
      */

@@ -68,9 +68,22 @@ type StartedMinaProcess = OwnedMinaProcess & {
 };
 
 type TestBackend = {
+  readonly authentication?: {
+    readonly email: string;
+    readonly password: string;
+  };
   readonly baseURL: string;
   cleanup(): Promise<void>;
 };
+
+type TestBackendOptions = {
+  readonly authentication?: boolean;
+};
+
+const testAuthentication = {
+  email: "@",
+  password: "mina-e2e-password",
+} as const;
 
 class BoundedOutput {
   readonly #limit: number;
@@ -403,6 +416,46 @@ const startMina = async ({
   }
 };
 
+const initializeAuthentication = async (
+  configFile: string,
+  testDirectory: string,
+): Promise<void> => {
+  const output = new BoundedOutput(outputLimit);
+  const args = [
+    "--config-file",
+    configFile,
+    "auth",
+    "init",
+    testAuthentication.email,
+  ];
+  const child = spawn(minaBinary, args, {
+    cwd: resolve(dirname(minaBinary), ".."),
+    env: process.env,
+    stdio: ["pipe", "ignore", "pipe"],
+  });
+  child.stderr.setEncoding("utf8");
+  child.stderr.on("data", (chunk: string) => {
+    output.append(chunk);
+  });
+  child.stdin.end(
+    `${testAuthentication.password}\n${testAuthentication.password}\n`,
+  );
+  const result = await new Promise<ProcessExit>((resolveExit) => {
+    child.once("error", (error) => {
+      resolveExit({ code: null, error, signal: null });
+    });
+    child.once("exit", (code, signal) => {
+      resolveExit({ code, signal });
+    });
+  });
+  if (result.code !== 0) {
+    throw new Error(
+      `frontend e2e authentication setup failed (code ${String(result.code)}, signal ${String(result.signal)}): ${result.error?.message ?? output.toString()}`,
+    );
+  }
+  await chmod(testDirectory, 0o700);
+};
+
 const processCommand = async (pid: number): Promise<string | undefined> => {
   try {
     const { stdout } = await execFileAsync("ps", [
@@ -689,7 +742,9 @@ const createE2EInvocation = async (): Promise<() => Promise<void>> => {
   }
 };
 
-const createTestBackend = async (): Promise<TestBackend> => {
+const createTestBackend = async (
+  options: TestBackendOptions = {},
+): Promise<TestBackend> => {
   const invocationRoot = requiredOwnedPath(invocationRootEnvironment);
   const templateDatabase = requiredOwnedPath(
     templateDatabaseEnvironment,
@@ -756,8 +811,22 @@ const createTestBackend = async (): Promise<TestBackend> => {
     await copyFile(templateDatabase, database);
     await chmod(database, 0o600);
     await mkdir(backupDirectory);
+    const configFile = join(testDirectory, "config.toml");
+    await writeFile(
+      configFile,
+      options.authentication === true ? 'auth_file = "auth.toml"\n' : "",
+      {
+        encoding: "utf8",
+        mode: 0o600,
+      },
+    );
+    if (options.authentication === true) {
+      await initializeAuthentication(configFile, testDirectory);
+    }
     mina = await startMina({
       args: [
+        "--config-file",
+        configFile,
         "serve",
         "--db",
         database,
@@ -776,7 +845,12 @@ const createTestBackend = async (): Promise<TestBackend> => {
       invocationRoot,
       ownerDirectory: testDirectory,
     });
-    return { baseURL: mina.baseURL, cleanup };
+    return {
+      authentication:
+        options.authentication === true ? testAuthentication : undefined,
+      baseURL: mina.baseURL,
+      cleanup,
+    };
   } catch (error) {
     let cleanupError: unknown;
     try {

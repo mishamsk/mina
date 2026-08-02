@@ -8,8 +8,9 @@
 ## Implicit Contracts
 
 - Runtime composition is the only place that wires concrete service, store, and adapter implementations.
-- Every app selects an explicit long-running or one-shot execution profile.
+- Every app selects an explicit long-running, one-shot, or migration execution profile.
 - One-shot apps open and migrate normally, skip startup database validation, and never start automatic operations.
+- Migration apps open and migrate normally, run startup database validation, skip authentication loading, and never start automatic operations.
 - One-shot apps register the same manual-operation REST handlers as long-running apps.
 - App instances own one initialized `AppDB`, app service bundle, REST handler, and web UI handler.
 - Startup demo seeding runs after app composition and before HTTP listen, using an explicit civil-date anchor when supplied and delegating history-window validation to the demo service.
@@ -21,6 +22,8 @@
 - `ValidateDatabase` opens the selected file-backed accounting state read-only with the active key when present and never writes to the target.
 - Runtime derives accounting database and schema defaults from `appconfig.Config`.
 - Runtime consumes source-loaded app settings from `internal/appconfig`.
+- Long-running runtime resolves `auth_file`, loads the file provider's immutable state, composes the online authentication service, and supplies only that service to HTTP and MCP protection; one-shot local client sessions remain trusted and do not load it.
+- `NewAuthenticationAdministration` separately composes the CLI-only administration service and mutable file provider for `mina auth`; administration never enters the running app or handler dependency graph.
 - Runtime resolves mode-ready config values once, adapts appconfig's immutable settings snapshot, and composes the settings service; see `docs/settings-architecture.md`.
 - Runtime consumes the cache directory resolved by `internal/appconfig`.
 - Automatic operation execution requires both the long-running profile and enabled runtime operations.
@@ -37,6 +40,7 @@
 - Runtime cancels operations and waits for them before closing `AppDB`.
 - Runtime composes REST, embedded Streamable HTTP MCP, and embedded UI handlers without changing protocol ownership.
 - Embedded MCP exists only in the long-running profile at `/mcp` and targets the isolated REST handler, never the composed root handler.
+- External REST accepts configured cookie or API-key authentication, external MCP accepts API keys only, and embedded MCP's isolated REST dispatch stays behind that one outer decision.
 - Runtime applies configured HTTP access logging around the composed REST, MCP, and embedded UI handler.
 - Runtime may import every app layer, but app service packages must not import runtime.
 

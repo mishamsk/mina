@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { BulkCategorizeJournalRecordsData, BulkCategorizeJournalRecordsErrors, BulkCategorizeJournalRecordsResponses, BulkReassignJournalRecordAccountData, BulkReassignJournalRecordAccountErrors, BulkReassignJournalRecordAccountResponses, BulkUpdateJournalRecordStatusesData, BulkUpdateJournalRecordStatusesErrors, BulkUpdateJournalRecordStatusesResponses, BulkUpdateJournalRecordTagsData, BulkUpdateJournalRecordTagsErrors, BulkUpdateJournalRecordTagsResponses, CancelTransactionData, CancelTransactionErrors, CancelTransactionResponses, ClassifyTransactionData, ClassifyTransactionErrors, ClassifyTransactionResponses, ConfirmNextRecurringDefinitionData, ConfirmNextRecurringDefinitionErrors, ConfirmNextRecurringDefinitionResponses, ConfirmRecurringOccurrenceData, ConfirmRecurringOccurrenceErrors, ConfirmRecurringOccurrenceResponses, CreateAccountData, CreateAccountErrors, CreateAccountResponses, CreateCategoryData, CreateCategoryErrors, CreateCategoryResponses, CreateCreditLimitHistoryData, CreateCreditLimitHistoryErrors, CreateCreditLimitHistoryResponses, CreateExchangeRateData, CreateExchangeRateErrors, CreateExchangeRateResponses, CreateExchangeTransactionData, CreateExchangeTransactionErrors, CreateExchangeTransactionResponses, CreateIncomeTransactionData, CreateIncomeTransactionErrors, CreateIncomeTransactionResponses, CreateMemberData, CreateMemberErrors, CreateMemberResponses, CreateRecurringDefinitionData, CreateRecurringDefinitionErrors, CreateRecurringDefinitionResponses, CreateRefundTransactionData, CreateRefundTransactionErrors, CreateRefundTransactionResponses, CreateSpendTransactionData, CreateSpendTransactionErrors, CreateSpendTransactionResponses, CreateTagData, CreateTagErrors, CreateTagResponses, CreateTransactionData, CreateTransactionErrors, CreateTransactionResponses, CreateTransactionTemplateData, CreateTransactionTemplateErrors, CreateTransactionTemplateResponses, CreateTransferTransactionData, CreateTransferTransactionErrors, CreateTransferTransactionResponses, DeferRecurringDefinitionData, DeferRecurringDefinitionErrors, DeferRecurringDefinitionResponses, DeleteAccountData, DeleteAccountErrors, DeleteAccountResponses, DeleteCategoryData, DeleteCategoryErrors, DeleteCategoryResponses, DeleteCreditLimitHistoryData, DeleteCreditLimitHistoryErrors, DeleteCreditLimitHistoryResponses, DeleteExchangeRateData, DeleteExchangeRateErrors, DeleteExchangeRateResponses, DeleteMemberData, DeleteMemberErrors, DeleteMemberResponses, DeleteRecurringDefinitionData, DeleteRecurringDefinitionErrors, DeleteRecurringDefinitionResponses, DeleteTagData, DeleteTagErrors, DeleteTagResponses, DeleteTransactionData, DeleteTransactionErrors, DeleteTransactionResponses, DeleteTransactionTemplateData, DeleteTransactionTemplateErrors, DeleteTransactionTemplateResponses, DismissRecurringOccurrenceData, DismissRecurringOccurrenceErrors, DismissRecurringOccurrenceResponses, GetAccountData, GetAccountErrors, GetAccountResponses, GetCategoryData, GetCategoryErrors, GetCategoryResponses, GetCreditLimitHistoryData, GetCreditLimitHistoryErrors, GetCreditLimitHistoryResponses, GetDatabaseBackupRunData, GetDatabaseBackupRunErrors, GetDatabaseBackupRunResponses, GetDatabaseBackupStatusData, GetDatabaseBackupStatusErrors, GetDatabaseBackupStatusResponses, GetExchangeRateData, GetExchangeRateErrors, GetExchangeRateLoadingRunData, GetExchangeRateLoadingRunErrors, GetExchangeRateLoadingRunResponses, GetExchangeRateLoadingStatusData, GetExchangeRateLoadingStatusErrors, GetExchangeRateLoadingStatusResponses, GetExchangeRateResponses, GetHealthData, GetHealthErrors, GetHealthResponses, GetMemberData, GetMemberErrors, GetMemberResponses, GetRecurringDefinitionData, GetRecurringDefinitionErrors, GetRecurringDefinitionResponses, GetSettingsData, GetSettingsErrors, GetSettingsResponses, GetTagData, GetTagErrors, GetTagResponses, GetTransactionData, GetTransactionErrors, GetTransactionMonthTotalsData, GetTransactionMonthTotalsErrors, GetTransactionMonthTotalsResponses, GetTransactionResponses, GetTransactionTemplateData, GetTransactionTemplateErrors, GetTransactionTemplateResponses, ListAccountBalancesData, ListAccountBalancesErrors, ListAccountBalancesResponses, ListAccountGroupsData, ListAccountGroupsErrors, ListAccountGroupsResponses, ListAccountsData, ListAccountsErrors, ListAccountsResponses, ListBackgroundOperationRunEnvelopesData, ListBackgroundOperationRunEnvelopesErrors, ListBackgroundOperationRunEnvelopesResponses, ListBackgroundOperationsData, ListBackgroundOperationsErrors, ListBackgroundOperationsResponses, ListCategoriesData, ListCategoriesErrors, ListCategoriesResponses, ListCategoryGroupsData, ListCategoryGroupsErrors, ListCategoryGroupsResponses, ListCreditLimitHistoryData, ListCreditLimitHistoryErrors, ListCreditLimitHistoryResponses, ListExchangeRatesData, ListExchangeRatesErrors, ListExchangeRatesResponses, ListMembersData, ListMembersErrors, ListMembersResponses, ListRecurringDefinitionsData, ListRecurringDefinitionsErrors, ListRecurringDefinitionsResponses, ListRecurringOccurrencesData, ListRecurringOccurrencesErrors, ListRecurringOccurrencesResponses, ListTagGroupsData, ListTagGroupsErrors, ListTagGroupsResponses, ListTagsData, ListTagsErrors, ListTagsResponses, ListTransactionsData, ListTransactionsErrors, ListTransactionsResponses, ListTransactionTemplatesData, ListTransactionTemplatesErrors, ListTransactionTemplatesResponses, PauseRecurringDefinitionData, PauseRecurringDefinitionErrors, PauseRecurringDefinitionResponses, ReplaceRecurringDefinitionData, ReplaceRecurringDefinitionErrors, ReplaceRecurringDefinitionResponses, ReplaceTransactionData, ReplaceTransactionErrors, ReplaceTransactionResponses, ReplaceTransactionTemplateData, ReplaceTransactionTemplateErrors, ReplaceTransactionTemplateResponses, RestructureAccountsData, RestructureAccountsErrors, RestructureAccountsResponses, RestructureCategoriesData, RestructureCategoriesErrors, RestructureCategoriesResponses, RestructureTagsData, RestructureTagsErrors, RestructureTagsResponses, RestructureTransactionTemplatesData, RestructureTransactionTemplatesErrors, RestructureTransactionTemplatesResponses, ResumeRecurringDefinitionData, ResumeRecurringDefinitionErrors, ResumeRecurringDefinitionResponses, SearchAccountJournalRecordsData, SearchAccountJournalRecordsErrors, SearchAccountJournalRecordsResponses, SearchJournalRecordsData, SearchJournalRecordsErrors, SearchJournalRecordsResponses, SeedDemoData, SeedDemoErrors, SeedDemoResponses, SetAccountHiddenByPathData, SetAccountHiddenByPathErrors, SetAccountHiddenByPathResponses, SetCategoryHiddenByPathData, SetCategoryHiddenByPathErrors, SetCategoryHiddenByPathResponses, SetTagHiddenByPathData, SetTagHiddenByPathErrors, SetTagHiddenByPathResponses, StartDatabaseBackupRunData, StartDatabaseBackupRunErrors, StartDatabaseBackupRunResponses, StartExchangeRateLoadingRunData, StartExchangeRateLoadingRunErrors, StartExchangeRateLoadingRunResponses, UpdateAccountData, UpdateAccountErrors, UpdateAccountResponses, UpdateCategoryData, UpdateCategoryErrors, UpdateCategoryResponses, UpdateExchangeRateData, UpdateExchangeRateErrors, UpdateExchangeRateResponses, UpdateMemberData, UpdateMemberErrors, UpdateMemberHiddenData, UpdateMemberHiddenErrors, UpdateMemberHiddenResponses, UpdateMemberResponses, UpdateTagData, UpdateTagErrors, UpdateTagResponses } from './types.gen';
+import type { BulkCategorizeJournalRecordsData, BulkCategorizeJournalRecordsErrors, BulkCategorizeJournalRecordsResponses, BulkReassignJournalRecordAccountData, BulkReassignJournalRecordAccountErrors, BulkReassignJournalRecordAccountResponses, BulkUpdateJournalRecordStatusesData, BulkUpdateJournalRecordStatusesErrors, BulkUpdateJournalRecordStatusesResponses, BulkUpdateJournalRecordTagsData, BulkUpdateJournalRecordTagsErrors, BulkUpdateJournalRecordTagsResponses, CancelTransactionData, CancelTransactionErrors, CancelTransactionResponses, ClassifyTransactionData, ClassifyTransactionErrors, ClassifyTransactionResponses, ConfirmNextRecurringDefinitionData, ConfirmNextRecurringDefinitionErrors, ConfirmNextRecurringDefinitionResponses, ConfirmRecurringOccurrenceData, ConfirmRecurringOccurrenceErrors, ConfirmRecurringOccurrenceResponses, CreateAccountData, CreateAccountErrors, CreateAccountResponses, CreateCategoryData, CreateCategoryErrors, CreateCategoryResponses, CreateCreditLimitHistoryData, CreateCreditLimitHistoryErrors, CreateCreditLimitHistoryResponses, CreateExchangeRateData, CreateExchangeRateErrors, CreateExchangeRateResponses, CreateExchangeTransactionData, CreateExchangeTransactionErrors, CreateExchangeTransactionResponses, CreateIncomeTransactionData, CreateIncomeTransactionErrors, CreateIncomeTransactionResponses, CreateMemberData, CreateMemberErrors, CreateMemberResponses, CreateRecurringDefinitionData, CreateRecurringDefinitionErrors, CreateRecurringDefinitionResponses, CreateRefundTransactionData, CreateRefundTransactionErrors, CreateRefundTransactionResponses, CreateSpendTransactionData, CreateSpendTransactionErrors, CreateSpendTransactionResponses, CreateTagData, CreateTagErrors, CreateTagResponses, CreateTransactionData, CreateTransactionErrors, CreateTransactionResponses, CreateTransactionTemplateData, CreateTransactionTemplateErrors, CreateTransactionTemplateResponses, CreateTransferTransactionData, CreateTransferTransactionErrors, CreateTransferTransactionResponses, DeferRecurringDefinitionData, DeferRecurringDefinitionErrors, DeferRecurringDefinitionResponses, DeleteAccountData, DeleteAccountErrors, DeleteAccountResponses, DeleteCategoryData, DeleteCategoryErrors, DeleteCategoryResponses, DeleteCreditLimitHistoryData, DeleteCreditLimitHistoryErrors, DeleteCreditLimitHistoryResponses, DeleteExchangeRateData, DeleteExchangeRateErrors, DeleteExchangeRateResponses, DeleteMemberData, DeleteMemberErrors, DeleteMemberResponses, DeleteRecurringDefinitionData, DeleteRecurringDefinitionErrors, DeleteRecurringDefinitionResponses, DeleteTagData, DeleteTagErrors, DeleteTagResponses, DeleteTransactionData, DeleteTransactionErrors, DeleteTransactionResponses, DeleteTransactionTemplateData, DeleteTransactionTemplateErrors, DeleteTransactionTemplateResponses, DismissRecurringOccurrenceData, DismissRecurringOccurrenceErrors, DismissRecurringOccurrenceResponses, GetAccountData, GetAccountErrors, GetAccountResponses, GetAuthenticationStatusData, GetAuthenticationStatusErrors, GetAuthenticationStatusResponses, GetCategoryData, GetCategoryErrors, GetCategoryResponses, GetCreditLimitHistoryData, GetCreditLimitHistoryErrors, GetCreditLimitHistoryResponses, GetDatabaseBackupRunData, GetDatabaseBackupRunErrors, GetDatabaseBackupRunResponses, GetDatabaseBackupStatusData, GetDatabaseBackupStatusErrors, GetDatabaseBackupStatusResponses, GetExchangeRateData, GetExchangeRateErrors, GetExchangeRateLoadingRunData, GetExchangeRateLoadingRunErrors, GetExchangeRateLoadingRunResponses, GetExchangeRateLoadingStatusData, GetExchangeRateLoadingStatusErrors, GetExchangeRateLoadingStatusResponses, GetExchangeRateResponses, GetHealthData, GetHealthErrors, GetHealthResponses, GetMemberData, GetMemberErrors, GetMemberResponses, GetRecurringDefinitionData, GetRecurringDefinitionErrors, GetRecurringDefinitionResponses, GetSettingsData, GetSettingsErrors, GetSettingsResponses, GetTagData, GetTagErrors, GetTagResponses, GetTransactionData, GetTransactionErrors, GetTransactionMonthTotalsData, GetTransactionMonthTotalsErrors, GetTransactionMonthTotalsResponses, GetTransactionResponses, GetTransactionTemplateData, GetTransactionTemplateErrors, GetTransactionTemplateResponses, ListAccountBalancesData, ListAccountBalancesErrors, ListAccountBalancesResponses, ListAccountGroupsData, ListAccountGroupsErrors, ListAccountGroupsResponses, ListAccountsData, ListAccountsErrors, ListAccountsResponses, ListBackgroundOperationRunEnvelopesData, ListBackgroundOperationRunEnvelopesErrors, ListBackgroundOperationRunEnvelopesResponses, ListBackgroundOperationsData, ListBackgroundOperationsErrors, ListBackgroundOperationsResponses, ListCategoriesData, ListCategoriesErrors, ListCategoriesResponses, ListCategoryGroupsData, ListCategoryGroupsErrors, ListCategoryGroupsResponses, ListCreditLimitHistoryData, ListCreditLimitHistoryErrors, ListCreditLimitHistoryResponses, ListExchangeRatesData, ListExchangeRatesErrors, ListExchangeRatesResponses, ListMembersData, ListMembersErrors, ListMembersResponses, ListRecurringDefinitionsData, ListRecurringDefinitionsErrors, ListRecurringDefinitionsResponses, ListRecurringOccurrencesData, ListRecurringOccurrencesErrors, ListRecurringOccurrencesResponses, ListTagGroupsData, ListTagGroupsErrors, ListTagGroupsResponses, ListTagsData, ListTagsErrors, ListTagsResponses, ListTransactionsData, ListTransactionsErrors, ListTransactionsResponses, ListTransactionTemplatesData, ListTransactionTemplatesErrors, ListTransactionTemplatesResponses, LoginData, LoginErrors, LoginResponses, LogoutData, LogoutErrors, LogoutResponses, PauseRecurringDefinitionData, PauseRecurringDefinitionErrors, PauseRecurringDefinitionResponses, ReplaceRecurringDefinitionData, ReplaceRecurringDefinitionErrors, ReplaceRecurringDefinitionResponses, ReplaceTransactionData, ReplaceTransactionErrors, ReplaceTransactionResponses, ReplaceTransactionTemplateData, ReplaceTransactionTemplateErrors, ReplaceTransactionTemplateResponses, RestructureAccountsData, RestructureAccountsErrors, RestructureAccountsResponses, RestructureCategoriesData, RestructureCategoriesErrors, RestructureCategoriesResponses, RestructureTagsData, RestructureTagsErrors, RestructureTagsResponses, RestructureTransactionTemplatesData, RestructureTransactionTemplatesErrors, RestructureTransactionTemplatesResponses, ResumeRecurringDefinitionData, ResumeRecurringDefinitionErrors, ResumeRecurringDefinitionResponses, SearchAccountJournalRecordsData, SearchAccountJournalRecordsErrors, SearchAccountJournalRecordsResponses, SearchJournalRecordsData, SearchJournalRecordsErrors, SearchJournalRecordsResponses, SeedDemoData, SeedDemoErrors, SeedDemoResponses, SetAccountHiddenByPathData, SetAccountHiddenByPathErrors, SetAccountHiddenByPathResponses, SetCategoryHiddenByPathData, SetCategoryHiddenByPathErrors, SetCategoryHiddenByPathResponses, SetTagHiddenByPathData, SetTagHiddenByPathErrors, SetTagHiddenByPathResponses, StartDatabaseBackupRunData, StartDatabaseBackupRunErrors, StartDatabaseBackupRunResponses, StartExchangeRateLoadingRunData, StartExchangeRateLoadingRunErrors, StartExchangeRateLoadingRunResponses, UpdateAccountData, UpdateAccountErrors, UpdateAccountResponses, UpdateCategoryData, UpdateCategoryErrors, UpdateCategoryResponses, UpdateExchangeRateData, UpdateExchangeRateErrors, UpdateExchangeRateResponses, UpdateMemberData, UpdateMemberErrors, UpdateMemberHiddenData, UpdateMemberHiddenErrors, UpdateMemberHiddenResponses, UpdateMemberResponses, UpdateTagData, UpdateTagErrors, UpdateTagResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -21,7 +21,15 @@ export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends 
 /**
  * Seed demo data into the opened app.
  */
-export const seedDemo = <ThrowOnError extends boolean = false>(options?: Options<SeedDemoData, ThrowOnError>): RequestResult<SeedDemoResponses, SeedDemoErrors, ThrowOnError> => (options?.client ?? client).post<SeedDemoResponses, SeedDemoErrors, ThrowOnError>({ url: '/api/app/demo-seed', ...options });
+export const seedDemo = <ThrowOnError extends boolean = false>(options?: Options<SeedDemoData, ThrowOnError>): RequestResult<SeedDemoResponses, SeedDemoErrors, ThrowOnError> => (options?.client ?? client).post<SeedDemoResponses, SeedDemoErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/app/demo-seed',
+    ...options
+});
 
 /**
  * Report process health.
@@ -29,59 +37,166 @@ export const seedDemo = <ThrowOnError extends boolean = false>(options?: Options
 export const getHealth = <ThrowOnError extends boolean = false>(options?: Options<GetHealthData, ThrowOnError>): RequestResult<GetHealthResponses, GetHealthErrors, ThrowOnError> => (options?.client ?? client).get<GetHealthResponses, GetHealthErrors, ThrowOnError>({ url: '/api/health', ...options });
 
 /**
+ * Report whether authentication is enabled and the browser session is valid.
+ */
+export const getAuthenticationStatus = <ThrowOnError extends boolean = false>(options?: Options<GetAuthenticationStatusData, ThrowOnError>): RequestResult<GetAuthenticationStatusResponses, GetAuthenticationStatusErrors, ThrowOnError> => (options?.client ?? client).get<GetAuthenticationStatusResponses, GetAuthenticationStatusErrors, ThrowOnError>({ url: '/api/auth/status', ...options });
+
+/**
+ * Create a long-lived browser session with an email and password.
+ */
+export const login = <ThrowOnError extends boolean = false>(options: Options<LoginData, ThrowOnError>): RequestResult<LoginResponses, LoginErrors, ThrowOnError> => (options.client ?? client).post<LoginResponses, LoginErrors, ThrowOnError>({
+    url: '/api/auth/login',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Clear the browser session cookie.
+ */
+export const logout = <ThrowOnError extends boolean = false>(options?: Options<LogoutData, ThrowOnError>): RequestResult<LogoutResponses, LogoutErrors, ThrowOnError> => (options?.client ?? client).post<LogoutResponses, LogoutErrors, ThrowOnError>({ url: '/api/auth/logout', ...options });
+
+/**
  * Get the immutable settings snapshot for this process.
  */
-export const getSettings = <ThrowOnError extends boolean = false>(options?: Options<GetSettingsData, ThrowOnError>): RequestResult<GetSettingsResponses, GetSettingsErrors, ThrowOnError> => (options?.client ?? client).get<GetSettingsResponses, GetSettingsErrors, ThrowOnError>({ url: '/api/settings', ...options });
+export const getSettings = <ThrowOnError extends boolean = false>(options?: Options<GetSettingsData, ThrowOnError>): RequestResult<GetSettingsResponses, GetSettingsErrors, ThrowOnError> => (options?.client ?? client).get<GetSettingsResponses, GetSettingsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/settings',
+    ...options
+});
 
 /**
  * List registered background operations.
  */
-export const listBackgroundOperations = <ThrowOnError extends boolean = false>(options?: Options<ListBackgroundOperationsData, ThrowOnError>): RequestResult<ListBackgroundOperationsResponses, ListBackgroundOperationsErrors, ThrowOnError> => (options?.client ?? client).get<ListBackgroundOperationsResponses, ListBackgroundOperationsErrors, ThrowOnError>({ url: '/api/background-operations', ...options });
+export const listBackgroundOperations = <ThrowOnError extends boolean = false>(options?: Options<ListBackgroundOperationsData, ThrowOnError>): RequestResult<ListBackgroundOperationsResponses, ListBackgroundOperationsErrors, ThrowOnError> => (options?.client ?? client).get<ListBackgroundOperationsResponses, ListBackgroundOperationsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/background-operations',
+    ...options
+});
 
 /**
  * List background-operation run envelopes.
  */
-export const listBackgroundOperationRunEnvelopes = <ThrowOnError extends boolean = false>(options?: Options<ListBackgroundOperationRunEnvelopesData, ThrowOnError>): RequestResult<ListBackgroundOperationRunEnvelopesResponses, ListBackgroundOperationRunEnvelopesErrors, ThrowOnError> => (options?.client ?? client).get<ListBackgroundOperationRunEnvelopesResponses, ListBackgroundOperationRunEnvelopesErrors, ThrowOnError>({ url: '/api/background-operations/runs', ...options });
+export const listBackgroundOperationRunEnvelopes = <ThrowOnError extends boolean = false>(options?: Options<ListBackgroundOperationRunEnvelopesData, ThrowOnError>): RequestResult<ListBackgroundOperationRunEnvelopesResponses, ListBackgroundOperationRunEnvelopesErrors, ThrowOnError> => (options?.client ?? client).get<ListBackgroundOperationRunEnvelopesResponses, ListBackgroundOperationRunEnvelopesErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/background-operations/runs',
+    ...options
+});
 
 /**
  * Get exchange-rate loading operation status.
  */
-export const getExchangeRateLoadingStatus = <ThrowOnError extends boolean = false>(options?: Options<GetExchangeRateLoadingStatusData, ThrowOnError>): RequestResult<GetExchangeRateLoadingStatusResponses, GetExchangeRateLoadingStatusErrors, ThrowOnError> => (options?.client ?? client).get<GetExchangeRateLoadingStatusResponses, GetExchangeRateLoadingStatusErrors, ThrowOnError>({ url: '/api/background-operations/exchange-rate-loading/status', ...options });
+export const getExchangeRateLoadingStatus = <ThrowOnError extends boolean = false>(options?: Options<GetExchangeRateLoadingStatusData, ThrowOnError>): RequestResult<GetExchangeRateLoadingStatusResponses, GetExchangeRateLoadingStatusErrors, ThrowOnError> => (options?.client ?? client).get<GetExchangeRateLoadingStatusResponses, GetExchangeRateLoadingStatusErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/background-operations/exchange-rate-loading/status',
+    ...options
+});
 
 /**
  * Start an exchange-rate loading run.
  */
-export const startExchangeRateLoadingRun = <ThrowOnError extends boolean = false>(options?: Options<StartExchangeRateLoadingRunData, ThrowOnError>): RequestResult<StartExchangeRateLoadingRunResponses, StartExchangeRateLoadingRunErrors, ThrowOnError> => (options?.client ?? client).post<StartExchangeRateLoadingRunResponses, StartExchangeRateLoadingRunErrors, ThrowOnError>({ url: '/api/background-operations/exchange-rate-loading/runs', ...options });
+export const startExchangeRateLoadingRun = <ThrowOnError extends boolean = false>(options?: Options<StartExchangeRateLoadingRunData, ThrowOnError>): RequestResult<StartExchangeRateLoadingRunResponses, StartExchangeRateLoadingRunErrors, ThrowOnError> => (options?.client ?? client).post<StartExchangeRateLoadingRunResponses, StartExchangeRateLoadingRunErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/background-operations/exchange-rate-loading/runs',
+    ...options
+});
 
 /**
  * Get one exchange-rate loading run.
  */
-export const getExchangeRateLoadingRun = <ThrowOnError extends boolean = false>(options: Options<GetExchangeRateLoadingRunData, ThrowOnError>): RequestResult<GetExchangeRateLoadingRunResponses, GetExchangeRateLoadingRunErrors, ThrowOnError> => (options.client ?? client).get<GetExchangeRateLoadingRunResponses, GetExchangeRateLoadingRunErrors, ThrowOnError>({ url: '/api/background-operations/exchange-rate-loading/runs/{operation_run_id}', ...options });
+export const getExchangeRateLoadingRun = <ThrowOnError extends boolean = false>(options: Options<GetExchangeRateLoadingRunData, ThrowOnError>): RequestResult<GetExchangeRateLoadingRunResponses, GetExchangeRateLoadingRunErrors, ThrowOnError> => (options.client ?? client).get<GetExchangeRateLoadingRunResponses, GetExchangeRateLoadingRunErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/background-operations/exchange-rate-loading/runs/{operation_run_id}',
+    ...options
+});
 
 /**
  * Get database backup operation status.
  */
-export const getDatabaseBackupStatus = <ThrowOnError extends boolean = false>(options?: Options<GetDatabaseBackupStatusData, ThrowOnError>): RequestResult<GetDatabaseBackupStatusResponses, GetDatabaseBackupStatusErrors, ThrowOnError> => (options?.client ?? client).get<GetDatabaseBackupStatusResponses, GetDatabaseBackupStatusErrors, ThrowOnError>({ url: '/api/background-operations/database-backup/status', ...options });
+export const getDatabaseBackupStatus = <ThrowOnError extends boolean = false>(options?: Options<GetDatabaseBackupStatusData, ThrowOnError>): RequestResult<GetDatabaseBackupStatusResponses, GetDatabaseBackupStatusErrors, ThrowOnError> => (options?.client ?? client).get<GetDatabaseBackupStatusResponses, GetDatabaseBackupStatusErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/background-operations/database-backup/status',
+    ...options
+});
 
 /**
  * Start a database backup run.
  */
-export const startDatabaseBackupRun = <ThrowOnError extends boolean = false>(options?: Options<StartDatabaseBackupRunData, ThrowOnError>): RequestResult<StartDatabaseBackupRunResponses, StartDatabaseBackupRunErrors, ThrowOnError> => (options?.client ?? client).post<StartDatabaseBackupRunResponses, StartDatabaseBackupRunErrors, ThrowOnError>({ url: '/api/background-operations/database-backup/runs', ...options });
+export const startDatabaseBackupRun = <ThrowOnError extends boolean = false>(options?: Options<StartDatabaseBackupRunData, ThrowOnError>): RequestResult<StartDatabaseBackupRunResponses, StartDatabaseBackupRunErrors, ThrowOnError> => (options?.client ?? client).post<StartDatabaseBackupRunResponses, StartDatabaseBackupRunErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/background-operations/database-backup/runs',
+    ...options
+});
 
 /**
  * Get one database backup run.
  */
-export const getDatabaseBackupRun = <ThrowOnError extends boolean = false>(options: Options<GetDatabaseBackupRunData, ThrowOnError>): RequestResult<GetDatabaseBackupRunResponses, GetDatabaseBackupRunErrors, ThrowOnError> => (options.client ?? client).get<GetDatabaseBackupRunResponses, GetDatabaseBackupRunErrors, ThrowOnError>({ url: '/api/background-operations/database-backup/runs/{operation_run_id}', ...options });
+export const getDatabaseBackupRun = <ThrowOnError extends boolean = false>(options: Options<GetDatabaseBackupRunData, ThrowOnError>): RequestResult<GetDatabaseBackupRunResponses, GetDatabaseBackupRunErrors, ThrowOnError> => (options.client ?? client).get<GetDatabaseBackupRunResponses, GetDatabaseBackupRunErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/background-operations/database-backup/runs/{operation_run_id}',
+    ...options
+});
 
 /**
  * List categories.
  */
-export const listCategories = <ThrowOnError extends boolean = false>(options?: Options<ListCategoriesData, ThrowOnError>): RequestResult<ListCategoriesResponses, ListCategoriesErrors, ThrowOnError> => (options?.client ?? client).get<ListCategoriesResponses, ListCategoriesErrors, ThrowOnError>({ url: '/api/categories', ...options });
+export const listCategories = <ThrowOnError extends boolean = false>(options?: Options<ListCategoriesData, ThrowOnError>): RequestResult<ListCategoriesResponses, ListCategoriesErrors, ThrowOnError> => (options?.client ?? client).get<ListCategoriesResponses, ListCategoriesErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/categories',
+    ...options
+});
 
 /**
  * Create a category.
  */
 export const createCategory = <ThrowOnError extends boolean = false>(options: Options<CreateCategoryData, ThrowOnError>): RequestResult<CreateCategoryResponses, CreateCategoryErrors, ThrowOnError> => (options.client ?? client).post<CreateCategoryResponses, CreateCategoryErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
     url: '/api/categories',
     ...options,
     headers: {
@@ -96,6 +211,11 @@ export const createCategory = <ThrowOnError extends boolean = false>(options: Op
  * Atomically rewrites active category FQNs and active budget category paths equal to or under `from_fqn` to the `to_fqn` prefix. Tombstoned categories and budgets are not changed.
  */
 export const restructureCategories = <ThrowOnError extends boolean = false>(options: Options<RestructureCategoriesData, ThrowOnError>): RequestResult<RestructureCategoriesResponses, RestructureCategoriesErrors, ThrowOnError> => (options.client ?? client).post<RestructureCategoriesResponses, RestructureCategoriesErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
     url: '/api/categories/restructure',
     ...options,
     headers: {
@@ -109,7 +229,15 @@ export const restructureCategories = <ThrowOnError extends boolean = false>(opti
  *
  * Returns one item per active category FQN proper prefix. A group is hidden when every active leaf at or under it is hidden; hidden groups are excluded unless `include_hidden=true`.
  */
-export const listCategoryGroups = <ThrowOnError extends boolean = false>(options?: Options<ListCategoryGroupsData, ThrowOnError>): RequestResult<ListCategoryGroupsResponses, ListCategoryGroupsErrors, ThrowOnError> => (options?.client ?? client).get<ListCategoryGroupsResponses, ListCategoryGroupsErrors, ThrowOnError>({ url: '/api/categories/groups', ...options });
+export const listCategoryGroups = <ThrowOnError extends boolean = false>(options?: Options<ListCategoryGroupsData, ThrowOnError>): RequestResult<ListCategoryGroupsResponses, ListCategoryGroupsErrors, ThrowOnError> => (options?.client ?? client).get<ListCategoryGroupsResponses, ListCategoryGroupsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/categories/groups',
+    ...options
+});
 
 /**
  * Set hidden state for a category path.
@@ -117,6 +245,11 @@ export const listCategoryGroups = <ThrowOnError extends boolean = false>(options
  * Sets `is_hidden` on every active category leaf at or under `path_fqn`. A leaf path and a group path are handled identically.
  */
 export const setCategoryHiddenByPath = <ThrowOnError extends boolean = false>(options: Options<SetCategoryHiddenByPathData, ThrowOnError>): RequestResult<SetCategoryHiddenByPathResponses, SetCategoryHiddenByPathErrors, ThrowOnError> => (options.client ?? client).post<SetCategoryHiddenByPathResponses, SetCategoryHiddenByPathErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
     url: '/api/categories/set-hidden',
     ...options,
     headers: {
@@ -128,17 +261,38 @@ export const setCategoryHiddenByPath = <ThrowOnError extends boolean = false>(op
 /**
  * Tombstone a category.
  */
-export const deleteCategory = <ThrowOnError extends boolean = false>(options: Options<DeleteCategoryData, ThrowOnError>): RequestResult<DeleteCategoryResponses, DeleteCategoryErrors, ThrowOnError> => (options.client ?? client).delete<DeleteCategoryResponses, DeleteCategoryErrors, ThrowOnError>({ url: '/api/categories/{category_id}', ...options });
+export const deleteCategory = <ThrowOnError extends boolean = false>(options: Options<DeleteCategoryData, ThrowOnError>): RequestResult<DeleteCategoryResponses, DeleteCategoryErrors, ThrowOnError> => (options.client ?? client).delete<DeleteCategoryResponses, DeleteCategoryErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/categories/{category_id}',
+    ...options
+});
 
 /**
  * Get a category.
  */
-export const getCategory = <ThrowOnError extends boolean = false>(options: Options<GetCategoryData, ThrowOnError>): RequestResult<GetCategoryResponses, GetCategoryErrors, ThrowOnError> => (options.client ?? client).get<GetCategoryResponses, GetCategoryErrors, ThrowOnError>({ url: '/api/categories/{category_id}', ...options });
+export const getCategory = <ThrowOnError extends boolean = false>(options: Options<GetCategoryData, ThrowOnError>): RequestResult<GetCategoryResponses, GetCategoryErrors, ThrowOnError> => (options.client ?? client).get<GetCategoryResponses, GetCategoryErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/categories/{category_id}',
+    ...options
+});
 
 /**
  * Update category mutable metadata.
  */
 export const updateCategory = <ThrowOnError extends boolean = false>(options: Options<UpdateCategoryData, ThrowOnError>): RequestResult<UpdateCategoryResponses, UpdateCategoryErrors, ThrowOnError> => (options.client ?? client).patch<UpdateCategoryResponses, UpdateCategoryErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
     url: '/api/categories/{category_id}',
     ...options,
     headers: {
@@ -150,12 +304,25 @@ export const updateCategory = <ThrowOnError extends boolean = false>(options: Op
 /**
  * List tags.
  */
-export const listTags = <ThrowOnError extends boolean = false>(options?: Options<ListTagsData, ThrowOnError>): RequestResult<ListTagsResponses, ListTagsErrors, ThrowOnError> => (options?.client ?? client).get<ListTagsResponses, ListTagsErrors, ThrowOnError>({ url: '/api/tags', ...options });
+export const listTags = <ThrowOnError extends boolean = false>(options?: Options<ListTagsData, ThrowOnError>): RequestResult<ListTagsResponses, ListTagsErrors, ThrowOnError> => (options?.client ?? client).get<ListTagsResponses, ListTagsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/tags',
+    ...options
+});
 
 /**
  * Create a tag.
  */
 export const createTag = <ThrowOnError extends boolean = false>(options: Options<CreateTagData, ThrowOnError>): RequestResult<CreateTagResponses, CreateTagErrors, ThrowOnError> => (options.client ?? client).post<CreateTagResponses, CreateTagErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
     url: '/api/tags',
     ...options,
     headers: {
@@ -170,6 +337,11 @@ export const createTag = <ThrowOnError extends boolean = false>(options: Options
  * Atomically rewrites active tag FQNs equal to or under `from_fqn` to the `to_fqn` prefix. Tombstoned tags are not changed.
  */
 export const restructureTags = <ThrowOnError extends boolean = false>(options: Options<RestructureTagsData, ThrowOnError>): RequestResult<RestructureTagsResponses, RestructureTagsErrors, ThrowOnError> => (options.client ?? client).post<RestructureTagsResponses, RestructureTagsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
     url: '/api/tags/restructure',
     ...options,
     headers: {
@@ -183,7 +355,15 @@ export const restructureTags = <ThrowOnError extends boolean = false>(options: O
  *
  * Returns one item per active tag FQN proper prefix. A group is hidden when every active leaf at or under it is hidden; hidden groups are excluded unless `include_hidden=true`.
  */
-export const listTagGroups = <ThrowOnError extends boolean = false>(options?: Options<ListTagGroupsData, ThrowOnError>): RequestResult<ListTagGroupsResponses, ListTagGroupsErrors, ThrowOnError> => (options?.client ?? client).get<ListTagGroupsResponses, ListTagGroupsErrors, ThrowOnError>({ url: '/api/tags/groups', ...options });
+export const listTagGroups = <ThrowOnError extends boolean = false>(options?: Options<ListTagGroupsData, ThrowOnError>): RequestResult<ListTagGroupsResponses, ListTagGroupsErrors, ThrowOnError> => (options?.client ?? client).get<ListTagGroupsResponses, ListTagGroupsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/tags/groups',
+    ...options
+});
 
 /**
  * Set hidden state for a tag path.
@@ -191,6 +371,11 @@ export const listTagGroups = <ThrowOnError extends boolean = false>(options?: Op
  * Sets `is_hidden` on every active tag leaf at or under `path_fqn`. A leaf path and a group path are handled identically.
  */
 export const setTagHiddenByPath = <ThrowOnError extends boolean = false>(options: Options<SetTagHiddenByPathData, ThrowOnError>): RequestResult<SetTagHiddenByPathResponses, SetTagHiddenByPathErrors, ThrowOnError> => (options.client ?? client).post<SetTagHiddenByPathResponses, SetTagHiddenByPathErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
     url: '/api/tags/set-hidden',
     ...options,
     headers: {
@@ -202,17 +387,38 @@ export const setTagHiddenByPath = <ThrowOnError extends boolean = false>(options
 /**
  * Tombstone a tag.
  */
-export const deleteTag = <ThrowOnError extends boolean = false>(options: Options<DeleteTagData, ThrowOnError>): RequestResult<DeleteTagResponses, DeleteTagErrors, ThrowOnError> => (options.client ?? client).delete<DeleteTagResponses, DeleteTagErrors, ThrowOnError>({ url: '/api/tags/{tag_id}', ...options });
+export const deleteTag = <ThrowOnError extends boolean = false>(options: Options<DeleteTagData, ThrowOnError>): RequestResult<DeleteTagResponses, DeleteTagErrors, ThrowOnError> => (options.client ?? client).delete<DeleteTagResponses, DeleteTagErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/tags/{tag_id}',
+    ...options
+});
 
 /**
  * Get a tag.
  */
-export const getTag = <ThrowOnError extends boolean = false>(options: Options<GetTagData, ThrowOnError>): RequestResult<GetTagResponses, GetTagErrors, ThrowOnError> => (options.client ?? client).get<GetTagResponses, GetTagErrors, ThrowOnError>({ url: '/api/tags/{tag_id}', ...options });
+export const getTag = <ThrowOnError extends boolean = false>(options: Options<GetTagData, ThrowOnError>): RequestResult<GetTagResponses, GetTagErrors, ThrowOnError> => (options.client ?? client).get<GetTagResponses, GetTagErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/tags/{tag_id}',
+    ...options
+});
 
 /**
  * Update tag hidden state.
  */
 export const updateTag = <ThrowOnError extends boolean = false>(options: Options<UpdateTagData, ThrowOnError>): RequestResult<UpdateTagResponses, UpdateTagErrors, ThrowOnError> => (options.client ?? client).patch<UpdateTagResponses, UpdateTagErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
     url: '/api/tags/{tag_id}',
     ...options,
     headers: {
@@ -224,12 +430,25 @@ export const updateTag = <ThrowOnError extends boolean = false>(options: Options
 /**
  * List household members.
  */
-export const listMembers = <ThrowOnError extends boolean = false>(options?: Options<ListMembersData, ThrowOnError>): RequestResult<ListMembersResponses, ListMembersErrors, ThrowOnError> => (options?.client ?? client).get<ListMembersResponses, ListMembersErrors, ThrowOnError>({ url: '/api/members', ...options });
+export const listMembers = <ThrowOnError extends boolean = false>(options?: Options<ListMembersData, ThrowOnError>): RequestResult<ListMembersResponses, ListMembersErrors, ThrowOnError> => (options?.client ?? client).get<ListMembersResponses, ListMembersErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/members',
+    ...options
+});
 
 /**
  * Create a household member.
  */
 export const createMember = <ThrowOnError extends boolean = false>(options: Options<CreateMemberData, ThrowOnError>): RequestResult<CreateMemberResponses, CreateMemberErrors, ThrowOnError> => (options.client ?? client).post<CreateMemberResponses, CreateMemberErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
     url: '/api/members',
     ...options,
     headers: {
@@ -241,17 +460,38 @@ export const createMember = <ThrowOnError extends boolean = false>(options: Opti
 /**
  * Tombstone a household member.
  */
-export const deleteMember = <ThrowOnError extends boolean = false>(options: Options<DeleteMemberData, ThrowOnError>): RequestResult<DeleteMemberResponses, DeleteMemberErrors, ThrowOnError> => (options.client ?? client).delete<DeleteMemberResponses, DeleteMemberErrors, ThrowOnError>({ url: '/api/members/{member_id}', ...options });
+export const deleteMember = <ThrowOnError extends boolean = false>(options: Options<DeleteMemberData, ThrowOnError>): RequestResult<DeleteMemberResponses, DeleteMemberErrors, ThrowOnError> => (options.client ?? client).delete<DeleteMemberResponses, DeleteMemberErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/members/{member_id}',
+    ...options
+});
 
 /**
  * Get a household member.
  */
-export const getMember = <ThrowOnError extends boolean = false>(options: Options<GetMemberData, ThrowOnError>): RequestResult<GetMemberResponses, GetMemberErrors, ThrowOnError> => (options.client ?? client).get<GetMemberResponses, GetMemberErrors, ThrowOnError>({ url: '/api/members/{member_id}', ...options });
+export const getMember = <ThrowOnError extends boolean = false>(options: Options<GetMemberData, ThrowOnError>): RequestResult<GetMemberResponses, GetMemberErrors, ThrowOnError> => (options.client ?? client).get<GetMemberResponses, GetMemberErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/members/{member_id}',
+    ...options
+});
 
 /**
  * Update household member name.
  */
 export const updateMember = <ThrowOnError extends boolean = false>(options: Options<UpdateMemberData, ThrowOnError>): RequestResult<UpdateMemberResponses, UpdateMemberErrors, ThrowOnError> => (options.client ?? client).patch<UpdateMemberResponses, UpdateMemberErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
     url: '/api/members/{member_id}',
     ...options,
     headers: {
@@ -264,6 +504,11 @@ export const updateMember = <ThrowOnError extends boolean = false>(options: Opti
  * Update household member hidden state.
  */
 export const updateMemberHidden = <ThrowOnError extends boolean = false>(options: Options<UpdateMemberHiddenData, ThrowOnError>): RequestResult<UpdateMemberHiddenResponses, UpdateMemberHiddenErrors, ThrowOnError> => (options.client ?? client).put<UpdateMemberHiddenResponses, UpdateMemberHiddenErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
     url: '/api/members/{member_id}/hidden',
     ...options,
     headers: {
@@ -275,7 +520,15 @@ export const updateMemberHidden = <ThrowOnError extends boolean = false>(options
 /**
  * List accounts.
  */
-export const listAccounts = <ThrowOnError extends boolean = false>(options?: Options<ListAccountsData, ThrowOnError>): RequestResult<ListAccountsResponses, ListAccountsErrors, ThrowOnError> => (options?.client ?? client).get<ListAccountsResponses, ListAccountsErrors, ThrowOnError>({ url: '/api/accounts', ...options });
+export const listAccounts = <ThrowOnError extends boolean = false>(options?: Options<ListAccountsData, ThrowOnError>): RequestResult<ListAccountsResponses, ListAccountsErrors, ThrowOnError> => (options?.client ?? client).get<ListAccountsResponses, ListAccountsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/accounts',
+    ...options
+});
 
 /**
  * Create an account.
@@ -283,6 +536,11 @@ export const listAccounts = <ThrowOnError extends boolean = false>(options?: Opt
  * Creates a multi-currency account when `currency` is null or omitted, or a single-currency account when `currency` is a code.
  */
 export const createAccount = <ThrowOnError extends boolean = false>(options: Options<CreateAccountData, ThrowOnError>): RequestResult<CreateAccountResponses, CreateAccountErrors, ThrowOnError> => (options.client ?? client).post<CreateAccountResponses, CreateAccountErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
     url: '/api/accounts',
     ...options,
     headers: {
@@ -297,6 +555,11 @@ export const createAccount = <ThrowOnError extends boolean = false>(options: Opt
  * Atomically rewrites active account FQNs equal to or under `from_fqn` to the `to_fqn` prefix. Tombstoned accounts are not changed.
  */
 export const restructureAccounts = <ThrowOnError extends boolean = false>(options: Options<RestructureAccountsData, ThrowOnError>): RequestResult<RestructureAccountsResponses, RestructureAccountsErrors, ThrowOnError> => (options.client ?? client).post<RestructureAccountsResponses, RestructureAccountsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
     url: '/api/accounts/restructure',
     ...options,
     headers: {
@@ -310,7 +573,15 @@ export const restructureAccounts = <ThrowOnError extends boolean = false>(option
  *
  * Returns one item per active account FQN proper prefix. A group is hidden when every active leaf at or under it is hidden; hidden groups are excluded unless `include_hidden=true`.
  */
-export const listAccountGroups = <ThrowOnError extends boolean = false>(options?: Options<ListAccountGroupsData, ThrowOnError>): RequestResult<ListAccountGroupsResponses, ListAccountGroupsErrors, ThrowOnError> => (options?.client ?? client).get<ListAccountGroupsResponses, ListAccountGroupsErrors, ThrowOnError>({ url: '/api/accounts/groups', ...options });
+export const listAccountGroups = <ThrowOnError extends boolean = false>(options?: Options<ListAccountGroupsData, ThrowOnError>): RequestResult<ListAccountGroupsResponses, ListAccountGroupsErrors, ThrowOnError> => (options?.client ?? client).get<ListAccountGroupsResponses, ListAccountGroupsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/accounts/groups',
+    ...options
+});
 
 /**
  * Set hidden state for an account path.
@@ -318,6 +589,11 @@ export const listAccountGroups = <ThrowOnError extends boolean = false>(options?
  * Sets `is_hidden` on every active account leaf at or under `path_fqn`. A leaf path and a group path are handled identically.
  */
 export const setAccountHiddenByPath = <ThrowOnError extends boolean = false>(options: Options<SetAccountHiddenByPathData, ThrowOnError>): RequestResult<SetAccountHiddenByPathResponses, SetAccountHiddenByPathErrors, ThrowOnError> => (options.client ?? client).post<SetAccountHiddenByPathResponses, SetAccountHiddenByPathErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
     url: '/api/accounts/set-hidden',
     ...options,
     headers: {
@@ -331,17 +607,41 @@ export const setAccountHiddenByPath = <ThrowOnError extends boolean = false>(opt
  *
  * Returns server-computed per-currency balances for active `owned` and `party` accounts. `current_balance` includes pending and posted records; `posted_balance` includes posted records only; cancelled and expected records are excluded. Accounts with `account.currency` and no records return a zero row for that currency.
  */
-export const listAccountBalances = <ThrowOnError extends boolean = false>(options?: Options<ListAccountBalancesData, ThrowOnError>): RequestResult<ListAccountBalancesResponses, ListAccountBalancesErrors, ThrowOnError> => (options?.client ?? client).get<ListAccountBalancesResponses, ListAccountBalancesErrors, ThrowOnError>({ url: '/api/accounts/balances', ...options });
+export const listAccountBalances = <ThrowOnError extends boolean = false>(options?: Options<ListAccountBalancesData, ThrowOnError>): RequestResult<ListAccountBalancesResponses, ListAccountBalancesErrors, ThrowOnError> => (options?.client ?? client).get<ListAccountBalancesResponses, ListAccountBalancesErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/accounts/balances',
+    ...options
+});
 
 /**
  * Tombstone an account.
  */
-export const deleteAccount = <ThrowOnError extends boolean = false>(options: Options<DeleteAccountData, ThrowOnError>): RequestResult<DeleteAccountResponses, DeleteAccountErrors, ThrowOnError> => (options.client ?? client).delete<DeleteAccountResponses, DeleteAccountErrors, ThrowOnError>({ url: '/api/accounts/{account_id}', ...options });
+export const deleteAccount = <ThrowOnError extends boolean = false>(options: Options<DeleteAccountData, ThrowOnError>): RequestResult<DeleteAccountResponses, DeleteAccountErrors, ThrowOnError> => (options.client ?? client).delete<DeleteAccountResponses, DeleteAccountErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/accounts/{account_id}',
+    ...options
+});
 
 /**
  * Get an account.
  */
-export const getAccount = <ThrowOnError extends boolean = false>(options: Options<GetAccountData, ThrowOnError>): RequestResult<GetAccountResponses, GetAccountErrors, ThrowOnError> => (options.client ?? client).get<GetAccountResponses, GetAccountErrors, ThrowOnError>({ url: '/api/accounts/{account_id}', ...options });
+export const getAccount = <ThrowOnError extends boolean = false>(options: Options<GetAccountData, ThrowOnError>): RequestResult<GetAccountResponses, GetAccountErrors, ThrowOnError> => (options.client ?? client).get<GetAccountResponses, GetAccountErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/accounts/{account_id}',
+    ...options
+});
 
 /**
  * Update mutable account fields.
@@ -349,6 +649,11 @@ export const getAccount = <ThrowOnError extends boolean = false>(options: Option
  * An actual currency-mode or currency-code change is rejected while active credit-limit history exists. Otherwise, setting or changing a single currency is allowed only when every active journal and recurring-definition record for the account already uses it. Omitting currency or setting its current value is not a change. Mina-managed system accounts remain immutable.
  */
 export const updateAccount = <ThrowOnError extends boolean = false>(options: Options<UpdateAccountData, ThrowOnError>): RequestResult<UpdateAccountResponses, UpdateAccountErrors, ThrowOnError> => (options.client ?? client).patch<UpdateAccountResponses, UpdateAccountErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
     url: '/api/accounts/{account_id}',
     ...options,
     headers: {
@@ -360,7 +665,15 @@ export const updateAccount = <ThrowOnError extends boolean = false>(options: Opt
 /**
  * List credit limit history for an account.
  */
-export const listCreditLimitHistory = <ThrowOnError extends boolean = false>(options: Options<ListCreditLimitHistoryData, ThrowOnError>): RequestResult<ListCreditLimitHistoryResponses, ListCreditLimitHistoryErrors, ThrowOnError> => (options.client ?? client).get<ListCreditLimitHistoryResponses, ListCreditLimitHistoryErrors, ThrowOnError>({ url: '/api/accounts/{account_id}/credit-limit-history', ...options });
+export const listCreditLimitHistory = <ThrowOnError extends boolean = false>(options: Options<ListCreditLimitHistoryData, ThrowOnError>): RequestResult<ListCreditLimitHistoryResponses, ListCreditLimitHistoryErrors, ThrowOnError> => (options.client ?? client).get<ListCreditLimitHistoryResponses, ListCreditLimitHistoryErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/accounts/{account_id}/credit-limit-history',
+    ...options
+});
 
 /**
  * Create a credit limit history entry.
@@ -368,6 +681,11 @@ export const listCreditLimitHistory = <ThrowOnError extends boolean = false>(opt
  * Creates an account-denominated limit only for a single-currency account. Multi-currency accounts are rejected.
  */
 export const createCreditLimitHistory = <ThrowOnError extends boolean = false>(options: Options<CreateCreditLimitHistoryData, ThrowOnError>): RequestResult<CreateCreditLimitHistoryResponses, CreateCreditLimitHistoryErrors, ThrowOnError> => (options.client ?? client).post<CreateCreditLimitHistoryResponses, CreateCreditLimitHistoryErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
     url: '/api/accounts/{account_id}/credit-limit-history',
     ...options,
     headers: {
@@ -379,22 +697,51 @@ export const createCreditLimitHistory = <ThrowOnError extends boolean = false>(o
 /**
  * Tombstone a credit limit history entry.
  */
-export const deleteCreditLimitHistory = <ThrowOnError extends boolean = false>(options: Options<DeleteCreditLimitHistoryData, ThrowOnError>): RequestResult<DeleteCreditLimitHistoryResponses, DeleteCreditLimitHistoryErrors, ThrowOnError> => (options.client ?? client).delete<DeleteCreditLimitHistoryResponses, DeleteCreditLimitHistoryErrors, ThrowOnError>({ url: '/api/credit-limit-history/{credit_limit_history_id}', ...options });
+export const deleteCreditLimitHistory = <ThrowOnError extends boolean = false>(options: Options<DeleteCreditLimitHistoryData, ThrowOnError>): RequestResult<DeleteCreditLimitHistoryResponses, DeleteCreditLimitHistoryErrors, ThrowOnError> => (options.client ?? client).delete<DeleteCreditLimitHistoryResponses, DeleteCreditLimitHistoryErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/credit-limit-history/{credit_limit_history_id}',
+    ...options
+});
 
 /**
  * Get a credit limit history entry.
  */
-export const getCreditLimitHistory = <ThrowOnError extends boolean = false>(options: Options<GetCreditLimitHistoryData, ThrowOnError>): RequestResult<GetCreditLimitHistoryResponses, GetCreditLimitHistoryErrors, ThrowOnError> => (options.client ?? client).get<GetCreditLimitHistoryResponses, GetCreditLimitHistoryErrors, ThrowOnError>({ url: '/api/credit-limit-history/{credit_limit_history_id}', ...options });
+export const getCreditLimitHistory = <ThrowOnError extends boolean = false>(options: Options<GetCreditLimitHistoryData, ThrowOnError>): RequestResult<GetCreditLimitHistoryResponses, GetCreditLimitHistoryErrors, ThrowOnError> => (options.client ?? client).get<GetCreditLimitHistoryResponses, GetCreditLimitHistoryErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/credit-limit-history/{credit_limit_history_id}',
+    ...options
+});
 
 /**
  * List exchange rates.
  */
-export const listExchangeRates = <ThrowOnError extends boolean = false>(options?: Options<ListExchangeRatesData, ThrowOnError>): RequestResult<ListExchangeRatesResponses, ListExchangeRatesErrors, ThrowOnError> => (options?.client ?? client).get<ListExchangeRatesResponses, ListExchangeRatesErrors, ThrowOnError>({ url: '/api/exchange-rates', ...options });
+export const listExchangeRates = <ThrowOnError extends boolean = false>(options?: Options<ListExchangeRatesData, ThrowOnError>): RequestResult<ListExchangeRatesResponses, ListExchangeRatesErrors, ThrowOnError> => (options?.client ?? client).get<ListExchangeRatesResponses, ListExchangeRatesErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/exchange-rates',
+    ...options
+});
 
 /**
  * Create an exchange rate.
  */
 export const createExchangeRate = <ThrowOnError extends boolean = false>(options: Options<CreateExchangeRateData, ThrowOnError>): RequestResult<CreateExchangeRateResponses, CreateExchangeRateErrors, ThrowOnError> => (options.client ?? client).post<CreateExchangeRateResponses, CreateExchangeRateErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
     url: '/api/exchange-rates',
     ...options,
     headers: {
@@ -406,17 +753,38 @@ export const createExchangeRate = <ThrowOnError extends boolean = false>(options
 /**
  * Tombstone an exchange rate.
  */
-export const deleteExchangeRate = <ThrowOnError extends boolean = false>(options: Options<DeleteExchangeRateData, ThrowOnError>): RequestResult<DeleteExchangeRateResponses, DeleteExchangeRateErrors, ThrowOnError> => (options.client ?? client).delete<DeleteExchangeRateResponses, DeleteExchangeRateErrors, ThrowOnError>({ url: '/api/exchange-rates/{exchange_rate_id}', ...options });
+export const deleteExchangeRate = <ThrowOnError extends boolean = false>(options: Options<DeleteExchangeRateData, ThrowOnError>): RequestResult<DeleteExchangeRateResponses, DeleteExchangeRateErrors, ThrowOnError> => (options.client ?? client).delete<DeleteExchangeRateResponses, DeleteExchangeRateErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/exchange-rates/{exchange_rate_id}',
+    ...options
+});
 
 /**
  * Get an exchange rate.
  */
-export const getExchangeRate = <ThrowOnError extends boolean = false>(options: Options<GetExchangeRateData, ThrowOnError>): RequestResult<GetExchangeRateResponses, GetExchangeRateErrors, ThrowOnError> => (options.client ?? client).get<GetExchangeRateResponses, GetExchangeRateErrors, ThrowOnError>({ url: '/api/exchange-rates/{exchange_rate_id}', ...options });
+export const getExchangeRate = <ThrowOnError extends boolean = false>(options: Options<GetExchangeRateData, ThrowOnError>): RequestResult<GetExchangeRateResponses, GetExchangeRateErrors, ThrowOnError> => (options.client ?? client).get<GetExchangeRateResponses, GetExchangeRateErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/exchange-rates/{exchange_rate_id}',
+    ...options
+});
 
 /**
  * Update an exchange rate value.
  */
 export const updateExchangeRate = <ThrowOnError extends boolean = false>(options: Options<UpdateExchangeRateData, ThrowOnError>): RequestResult<UpdateExchangeRateResponses, UpdateExchangeRateErrors, ThrowOnError> => (options.client ?? client).patch<UpdateExchangeRateResponses, UpdateExchangeRateErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
     url: '/api/exchange-rates/{exchange_rate_id}',
     ...options,
     headers: {
@@ -428,12 +796,25 @@ export const updateExchangeRate = <ThrowOnError extends boolean = false>(options
 /**
  * List transaction templates.
  */
-export const listTransactionTemplates = <ThrowOnError extends boolean = false>(options?: Options<ListTransactionTemplatesData, ThrowOnError>): RequestResult<ListTransactionTemplatesResponses, ListTransactionTemplatesErrors, ThrowOnError> => (options?.client ?? client).get<ListTransactionTemplatesResponses, ListTransactionTemplatesErrors, ThrowOnError>({ url: '/api/transaction-templates', ...options });
+export const listTransactionTemplates = <ThrowOnError extends boolean = false>(options?: Options<ListTransactionTemplatesData, ThrowOnError>): RequestResult<ListTransactionTemplatesResponses, ListTransactionTemplatesErrors, ThrowOnError> => (options?.client ?? client).get<ListTransactionTemplatesResponses, ListTransactionTemplatesErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/transaction-templates',
+    ...options
+});
 
 /**
  * Create a transaction template.
  */
 export const createTransactionTemplate = <ThrowOnError extends boolean = false>(options: Options<CreateTransactionTemplateData, ThrowOnError>): RequestResult<CreateTransactionTemplateResponses, CreateTransactionTemplateErrors, ThrowOnError> => (options.client ?? client).post<CreateTransactionTemplateResponses, CreateTransactionTemplateErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
     url: '/api/transaction-templates',
     ...options,
     headers: {
@@ -448,6 +829,11 @@ export const createTransactionTemplate = <ThrowOnError extends boolean = false>(
  * Atomically rewrites active transaction template FQNs equal to or under `from_fqn` to the `to_fqn` prefix. Tombstoned templates are not changed.
  */
 export const restructureTransactionTemplates = <ThrowOnError extends boolean = false>(options: Options<RestructureTransactionTemplatesData, ThrowOnError>): RequestResult<RestructureTransactionTemplatesResponses, RestructureTransactionTemplatesErrors, ThrowOnError> => (options.client ?? client).post<RestructureTransactionTemplatesResponses, RestructureTransactionTemplatesErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
     url: '/api/transaction-templates/restructure',
     ...options,
     headers: {
@@ -459,12 +845,28 @@ export const restructureTransactionTemplates = <ThrowOnError extends boolean = f
 /**
  * Tombstone a transaction template and its record defaults.
  */
-export const deleteTransactionTemplate = <ThrowOnError extends boolean = false>(options: Options<DeleteTransactionTemplateData, ThrowOnError>): RequestResult<DeleteTransactionTemplateResponses, DeleteTransactionTemplateErrors, ThrowOnError> => (options.client ?? client).delete<DeleteTransactionTemplateResponses, DeleteTransactionTemplateErrors, ThrowOnError>({ url: '/api/transaction-templates/{transaction_template_id}', ...options });
+export const deleteTransactionTemplate = <ThrowOnError extends boolean = false>(options: Options<DeleteTransactionTemplateData, ThrowOnError>): RequestResult<DeleteTransactionTemplateResponses, DeleteTransactionTemplateErrors, ThrowOnError> => (options.client ?? client).delete<DeleteTransactionTemplateResponses, DeleteTransactionTemplateErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/transaction-templates/{transaction_template_id}',
+    ...options
+});
 
 /**
  * Get a transaction template.
  */
-export const getTransactionTemplate = <ThrowOnError extends boolean = false>(options: Options<GetTransactionTemplateData, ThrowOnError>): RequestResult<GetTransactionTemplateResponses, GetTransactionTemplateErrors, ThrowOnError> => (options.client ?? client).get<GetTransactionTemplateResponses, GetTransactionTemplateErrors, ThrowOnError>({ url: '/api/transaction-templates/{transaction_template_id}', ...options });
+export const getTransactionTemplate = <ThrowOnError extends boolean = false>(options: Options<GetTransactionTemplateData, ThrowOnError>): RequestResult<GetTransactionTemplateResponses, GetTransactionTemplateErrors, ThrowOnError> => (options.client ?? client).get<GetTransactionTemplateResponses, GetTransactionTemplateErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/transaction-templates/{transaction_template_id}',
+    ...options
+});
 
 /**
  * Replace a transaction template.
@@ -472,6 +874,11 @@ export const getTransactionTemplate = <ThrowOnError extends boolean = false>(opt
  * Replaces the full date-free template record set atomically. The request `fqn` must equal the current template `fqn`; rename and move operations go through `/api/transaction-templates/restructure`. The transaction_template_id is preserved, previous active record defaults are tombstoned, and replacement records are partial defaults that do not need to balance.
  */
 export const replaceTransactionTemplate = <ThrowOnError extends boolean = false>(options: Options<ReplaceTransactionTemplateData, ThrowOnError>): RequestResult<ReplaceTransactionTemplateResponses, ReplaceTransactionTemplateErrors, ThrowOnError> => (options.client ?? client).put<ReplaceTransactionTemplateResponses, ReplaceTransactionTemplateErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
     url: '/api/transaction-templates/{transaction_template_id}',
     ...options,
     headers: {
@@ -483,12 +890,25 @@ export const replaceTransactionTemplate = <ThrowOnError extends boolean = false>
 /**
  * List recurring definitions.
  */
-export const listRecurringDefinitions = <ThrowOnError extends boolean = false>(options?: Options<ListRecurringDefinitionsData, ThrowOnError>): RequestResult<ListRecurringDefinitionsResponses, ListRecurringDefinitionsErrors, ThrowOnError> => (options?.client ?? client).get<ListRecurringDefinitionsResponses, ListRecurringDefinitionsErrors, ThrowOnError>({ url: '/api/recurring-definitions', ...options });
+export const listRecurringDefinitions = <ThrowOnError extends boolean = false>(options?: Options<ListRecurringDefinitionsData, ThrowOnError>): RequestResult<ListRecurringDefinitionsResponses, ListRecurringDefinitionsErrors, ThrowOnError> => (options?.client ?? client).get<ListRecurringDefinitionsResponses, ListRecurringDefinitionsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/recurring-definitions',
+    ...options
+});
 
 /**
  * Create a recurring definition.
  */
 export const createRecurringDefinition = <ThrowOnError extends boolean = false>(options: Options<CreateRecurringDefinitionData, ThrowOnError>): RequestResult<CreateRecurringDefinitionResponses, CreateRecurringDefinitionErrors, ThrowOnError> => (options.client ?? client).post<CreateRecurringDefinitionResponses, CreateRecurringDefinitionErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
     url: '/api/recurring-definitions',
     ...options,
     headers: {
@@ -500,12 +920,28 @@ export const createRecurringDefinition = <ThrowOnError extends boolean = false>(
 /**
  * Cancel a recurring definition.
  */
-export const deleteRecurringDefinition = <ThrowOnError extends boolean = false>(options: Options<DeleteRecurringDefinitionData, ThrowOnError>): RequestResult<DeleteRecurringDefinitionResponses, DeleteRecurringDefinitionErrors, ThrowOnError> => (options.client ?? client).delete<DeleteRecurringDefinitionResponses, DeleteRecurringDefinitionErrors, ThrowOnError>({ url: '/api/recurring-definitions/{recurring_definition_id}', ...options });
+export const deleteRecurringDefinition = <ThrowOnError extends boolean = false>(options: Options<DeleteRecurringDefinitionData, ThrowOnError>): RequestResult<DeleteRecurringDefinitionResponses, DeleteRecurringDefinitionErrors, ThrowOnError> => (options.client ?? client).delete<DeleteRecurringDefinitionResponses, DeleteRecurringDefinitionErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/recurring-definitions/{recurring_definition_id}',
+    ...options
+});
 
 /**
  * Get a recurring definition.
  */
-export const getRecurringDefinition = <ThrowOnError extends boolean = false>(options: Options<GetRecurringDefinitionData, ThrowOnError>): RequestResult<GetRecurringDefinitionResponses, GetRecurringDefinitionErrors, ThrowOnError> => (options.client ?? client).get<GetRecurringDefinitionResponses, GetRecurringDefinitionErrors, ThrowOnError>({ url: '/api/recurring-definitions/{recurring_definition_id}', ...options });
+export const getRecurringDefinition = <ThrowOnError extends boolean = false>(options: Options<GetRecurringDefinitionData, ThrowOnError>): RequestResult<GetRecurringDefinitionResponses, GetRecurringDefinitionErrors, ThrowOnError> => (options.client ?? client).get<GetRecurringDefinitionResponses, GetRecurringDefinitionErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/recurring-definitions/{recurring_definition_id}',
+    ...options
+});
 
 /**
  * Replace a recurring definition.
@@ -513,6 +949,11 @@ export const getRecurringDefinition = <ThrowOnError extends boolean = false>(opt
  * Replaces the schedule and full complete record set atomically. The recurring_definition_id is preserved, definition_version increments, and previous active records are tombstoned.
  */
 export const replaceRecurringDefinition = <ThrowOnError extends boolean = false>(options: Options<ReplaceRecurringDefinitionData, ThrowOnError>): RequestResult<ReplaceRecurringDefinitionResponses, ReplaceRecurringDefinitionErrors, ThrowOnError> => (options.client ?? client).put<ReplaceRecurringDefinitionResponses, ReplaceRecurringDefinitionErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
     url: '/api/recurring-definitions/{recurring_definition_id}',
     ...options,
     headers: {
@@ -524,12 +965,25 @@ export const replaceRecurringDefinition = <ThrowOnError extends boolean = false>
 /**
  * Confirm the next recurring occurrence early.
  */
-export const confirmNextRecurringDefinition = <ThrowOnError extends boolean = false>(options: Options<ConfirmNextRecurringDefinitionData, ThrowOnError>): RequestResult<ConfirmNextRecurringDefinitionResponses, ConfirmNextRecurringDefinitionErrors, ThrowOnError> => (options.client ?? client).post<ConfirmNextRecurringDefinitionResponses, ConfirmNextRecurringDefinitionErrors, ThrowOnError>({ url: '/api/recurring-definitions/{recurring_definition_id}/confirm-next', ...options });
+export const confirmNextRecurringDefinition = <ThrowOnError extends boolean = false>(options: Options<ConfirmNextRecurringDefinitionData, ThrowOnError>): RequestResult<ConfirmNextRecurringDefinitionResponses, ConfirmNextRecurringDefinitionErrors, ThrowOnError> => (options.client ?? client).post<ConfirmNextRecurringDefinitionResponses, ConfirmNextRecurringDefinitionErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/recurring-definitions/{recurring_definition_id}/confirm-next',
+    ...options
+});
 
 /**
  * Defer the next non-materialized interval occurrence.
  */
 export const deferRecurringDefinition = <ThrowOnError extends boolean = false>(options: Options<DeferRecurringDefinitionData, ThrowOnError>): RequestResult<DeferRecurringDefinitionResponses, DeferRecurringDefinitionErrors, ThrowOnError> => (options.client ?? client).post<DeferRecurringDefinitionResponses, DeferRecurringDefinitionErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
     url: '/api/recurring-definitions/{recurring_definition_id}/defer',
     ...options,
     headers: {
@@ -541,41 +995,94 @@ export const deferRecurringDefinition = <ThrowOnError extends boolean = false>(o
 /**
  * Pause a recurring definition.
  */
-export const pauseRecurringDefinition = <ThrowOnError extends boolean = false>(options: Options<PauseRecurringDefinitionData, ThrowOnError>): RequestResult<PauseRecurringDefinitionResponses, PauseRecurringDefinitionErrors, ThrowOnError> => (options.client ?? client).post<PauseRecurringDefinitionResponses, PauseRecurringDefinitionErrors, ThrowOnError>({ url: '/api/recurring-definitions/{recurring_definition_id}/pause', ...options });
+export const pauseRecurringDefinition = <ThrowOnError extends boolean = false>(options: Options<PauseRecurringDefinitionData, ThrowOnError>): RequestResult<PauseRecurringDefinitionResponses, PauseRecurringDefinitionErrors, ThrowOnError> => (options.client ?? client).post<PauseRecurringDefinitionResponses, PauseRecurringDefinitionErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/recurring-definitions/{recurring_definition_id}/pause',
+    ...options
+});
 
 /**
  * Resume a recurring definition.
  */
-export const resumeRecurringDefinition = <ThrowOnError extends boolean = false>(options: Options<ResumeRecurringDefinitionData, ThrowOnError>): RequestResult<ResumeRecurringDefinitionResponses, ResumeRecurringDefinitionErrors, ThrowOnError> => (options.client ?? client).post<ResumeRecurringDefinitionResponses, ResumeRecurringDefinitionErrors, ThrowOnError>({ url: '/api/recurring-definitions/{recurring_definition_id}/resume', ...options });
+export const resumeRecurringDefinition = <ThrowOnError extends boolean = false>(options: Options<ResumeRecurringDefinitionData, ThrowOnError>): RequestResult<ResumeRecurringDefinitionResponses, ResumeRecurringDefinitionErrors, ThrowOnError> => (options.client ?? client).post<ResumeRecurringDefinitionResponses, ResumeRecurringDefinitionErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/recurring-definitions/{recurring_definition_id}/resume',
+    ...options
+});
 
 /**
  * List recurring occurrences.
  *
  * Runs catch-up materialization through the server's current civil date before listing.
  */
-export const listRecurringOccurrences = <ThrowOnError extends boolean = false>(options?: Options<ListRecurringOccurrencesData, ThrowOnError>): RequestResult<ListRecurringOccurrencesResponses, ListRecurringOccurrencesErrors, ThrowOnError> => (options?.client ?? client).get<ListRecurringOccurrencesResponses, ListRecurringOccurrencesErrors, ThrowOnError>({ url: '/api/recurring-occurrences', ...options });
+export const listRecurringOccurrences = <ThrowOnError extends boolean = false>(options?: Options<ListRecurringOccurrencesData, ThrowOnError>): RequestResult<ListRecurringOccurrencesResponses, ListRecurringOccurrencesErrors, ThrowOnError> => (options?.client ?? client).get<ListRecurringOccurrencesResponses, ListRecurringOccurrencesErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/recurring-occurrences',
+    ...options
+});
 
 /**
  * Confirm a recurring occurrence.
  */
-export const confirmRecurringOccurrence = <ThrowOnError extends boolean = false>(options: Options<ConfirmRecurringOccurrenceData, ThrowOnError>): RequestResult<ConfirmRecurringOccurrenceResponses, ConfirmRecurringOccurrenceErrors, ThrowOnError> => (options.client ?? client).post<ConfirmRecurringOccurrenceResponses, ConfirmRecurringOccurrenceErrors, ThrowOnError>({ url: '/api/recurring-occurrences/{recurring_occurrence_id}/confirm', ...options });
+export const confirmRecurringOccurrence = <ThrowOnError extends boolean = false>(options: Options<ConfirmRecurringOccurrenceData, ThrowOnError>): RequestResult<ConfirmRecurringOccurrenceResponses, ConfirmRecurringOccurrenceErrors, ThrowOnError> => (options.client ?? client).post<ConfirmRecurringOccurrenceResponses, ConfirmRecurringOccurrenceErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/recurring-occurrences/{recurring_occurrence_id}/confirm',
+    ...options
+});
 
 /**
  * Dismiss a recurring occurrence.
  */
-export const dismissRecurringOccurrence = <ThrowOnError extends boolean = false>(options: Options<DismissRecurringOccurrenceData, ThrowOnError>): RequestResult<DismissRecurringOccurrenceResponses, DismissRecurringOccurrenceErrors, ThrowOnError> => (options.client ?? client).post<DismissRecurringOccurrenceResponses, DismissRecurringOccurrenceErrors, ThrowOnError>({ url: '/api/recurring-occurrences/{recurring_occurrence_id}/dismiss', ...options });
+export const dismissRecurringOccurrence = <ThrowOnError extends boolean = false>(options: Options<DismissRecurringOccurrenceData, ThrowOnError>): RequestResult<DismissRecurringOccurrenceResponses, DismissRecurringOccurrenceErrors, ThrowOnError> => (options.client ?? client).post<DismissRecurringOccurrenceResponses, DismissRecurringOccurrenceErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/recurring-occurrences/{recurring_occurrence_id}/dismiss',
+    ...options
+});
 
 /**
  * List transactions with journal records.
  *
  * Defaults to `initiated_date` descending with `transaction_id` descending as the stable tiebreaker.
  */
-export const listTransactions = <ThrowOnError extends boolean = false>(options?: Options<ListTransactionsData, ThrowOnError>): RequestResult<ListTransactionsResponses, ListTransactionsErrors, ThrowOnError> => (options?.client ?? client).get<ListTransactionsResponses, ListTransactionsErrors, ThrowOnError>({ url: '/api/transactions', ...options });
+export const listTransactions = <ThrowOnError extends boolean = false>(options?: Options<ListTransactionsData, ThrowOnError>): RequestResult<ListTransactionsResponses, ListTransactionsErrors, ThrowOnError> => (options?.client ?? client).get<ListTransactionsResponses, ListTransactionsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/transactions',
+    ...options
+});
 
 /**
  * Create a per-currency balanced transaction.
  */
 export const createTransaction = <ThrowOnError extends boolean = false>(options: Options<CreateTransactionData, ThrowOnError>): RequestResult<CreateTransactionResponses, CreateTransactionErrors, ThrowOnError> => (options.client ?? client).post<CreateTransactionResponses, CreateTransactionErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
     url: '/api/transactions',
     ...options,
     headers: {
@@ -590,6 +1097,11 @@ export const createTransaction = <ThrowOnError extends boolean = false>(options:
  * Returns server-derived record roles, transaction shapes, class, and display amounts. Drafts need not balance, but category and exchange rules still apply.
  */
 export const classifyTransaction = <ThrowOnError extends boolean = false>(options: Options<ClassifyTransactionData, ThrowOnError>): RequestResult<ClassifyTransactionResponses, ClassifyTransactionErrors, ThrowOnError> => (options.client ?? client).post<ClassifyTransactionResponses, ClassifyTransactionErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
     url: '/api/transactions/classify',
     ...options,
     headers: {
@@ -604,6 +1116,11 @@ export const classifyTransaction = <ThrowOnError extends boolean = false>(option
  * Creates the two supplied balance records and the matching `system:exchange` records. Each side resolves from a single-currency account or requires an explicit currency for a multi-currency account; explicit values must match single-currency accounts, and the resolved currencies must differ.
  */
 export const createExchangeTransaction = <ThrowOnError extends boolean = false>(options: Options<CreateExchangeTransactionData, ThrowOnError>): RequestResult<CreateExchangeTransactionResponses, CreateExchangeTransactionErrors, ThrowOnError> => (options.client ?? client).post<CreateExchangeTransactionResponses, CreateExchangeTransactionErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
     url: '/api/transactions/exchange',
     ...options,
     headers: {
@@ -617,12 +1134,25 @@ export const createExchangeTransaction = <ThrowOnError extends boolean = false>(
  *
  * Aggregates active journal records with posting_status pending or posted by transaction initiated_date for the requested YYYY-MM month. Expected and cancelled records are excluded. Expense-role records increase spend, refund-role records net against spend, income-role records increase income, and clawback-role records net against income. Balance, adjustment, and exchange roles are excluded. Totals are USD equivalents; records without amount_usd are counted as unconverted for their total.
  */
-export const getTransactionMonthTotals = <ThrowOnError extends boolean = false>(options: Options<GetTransactionMonthTotalsData, ThrowOnError>): RequestResult<GetTransactionMonthTotalsResponses, GetTransactionMonthTotalsErrors, ThrowOnError> => (options.client ?? client).get<GetTransactionMonthTotalsResponses, GetTransactionMonthTotalsErrors, ThrowOnError>({ url: '/api/transactions/month-totals', ...options });
+export const getTransactionMonthTotals = <ThrowOnError extends boolean = false>(options: Options<GetTransactionMonthTotalsData, ThrowOnError>): RequestResult<GetTransactionMonthTotalsResponses, GetTransactionMonthTotalsErrors, ThrowOnError> => (options.client ?? client).get<GetTransactionMonthTotalsResponses, GetTransactionMonthTotalsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/transactions/month-totals',
+    ...options
+});
 
 /**
  * Create a same-currency spend transaction.
  */
 export const createSpendTransaction = <ThrowOnError extends boolean = false>(options: Options<CreateSpendTransactionData, ThrowOnError>): RequestResult<CreateSpendTransactionResponses, CreateSpendTransactionErrors, ThrowOnError> => (options.client ?? client).post<CreateSpendTransactionResponses, CreateSpendTransactionErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
     url: '/api/transactions/spend',
     ...options,
     headers: {
@@ -635,6 +1165,11 @@ export const createSpendTransaction = <ThrowOnError extends boolean = false>(opt
  * Create a same-currency income transaction.
  */
 export const createIncomeTransaction = <ThrowOnError extends boolean = false>(options: Options<CreateIncomeTransactionData, ThrowOnError>): RequestResult<CreateIncomeTransactionResponses, CreateIncomeTransactionErrors, ThrowOnError> => (options.client ?? client).post<CreateIncomeTransactionResponses, CreateIncomeTransactionErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
     url: '/api/transactions/income',
     ...options,
     headers: {
@@ -647,6 +1182,11 @@ export const createIncomeTransaction = <ThrowOnError extends boolean = false>(op
  * Create a same-currency refund transaction.
  */
 export const createRefundTransaction = <ThrowOnError extends boolean = false>(options: Options<CreateRefundTransactionData, ThrowOnError>): RequestResult<CreateRefundTransactionResponses, CreateRefundTransactionErrors, ThrowOnError> => (options.client ?? client).post<CreateRefundTransactionResponses, CreateRefundTransactionErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
     url: '/api/transactions/refund',
     ...options,
     headers: {
@@ -659,6 +1199,11 @@ export const createRefundTransaction = <ThrowOnError extends boolean = false>(op
  * Create a same-currency transfer transaction.
  */
 export const createTransferTransaction = <ThrowOnError extends boolean = false>(options: Options<CreateTransferTransactionData, ThrowOnError>): RequestResult<CreateTransferTransactionResponses, CreateTransferTransactionErrors, ThrowOnError> => (options.client ?? client).post<CreateTransferTransactionResponses, CreateTransferTransactionErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
     url: '/api/transactions/transfer',
     ...options,
     headers: {
@@ -670,17 +1215,38 @@ export const createTransferTransaction = <ThrowOnError extends boolean = false>(
 /**
  * Search active journal records.
  */
-export const searchJournalRecords = <ThrowOnError extends boolean = false>(options?: Options<SearchJournalRecordsData, ThrowOnError>): RequestResult<SearchJournalRecordsResponses, SearchJournalRecordsErrors, ThrowOnError> => (options?.client ?? client).get<SearchJournalRecordsResponses, SearchJournalRecordsErrors, ThrowOnError>({ url: '/api/records', ...options });
+export const searchJournalRecords = <ThrowOnError extends boolean = false>(options?: Options<SearchJournalRecordsData, ThrowOnError>): RequestResult<SearchJournalRecordsResponses, SearchJournalRecordsErrors, ThrowOnError> => (options?.client ?? client).get<SearchJournalRecordsResponses, SearchJournalRecordsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/records',
+    ...options
+});
 
 /**
  * Search active journal records for one account.
  */
-export const searchAccountJournalRecords = <ThrowOnError extends boolean = false>(options: Options<SearchAccountJournalRecordsData, ThrowOnError>): RequestResult<SearchAccountJournalRecordsResponses, SearchAccountJournalRecordsErrors, ThrowOnError> => (options.client ?? client).get<SearchAccountJournalRecordsResponses, SearchAccountJournalRecordsErrors, ThrowOnError>({ url: '/api/accounts/{account_id}/records', ...options });
+export const searchAccountJournalRecords = <ThrowOnError extends boolean = false>(options: Options<SearchAccountJournalRecordsData, ThrowOnError>): RequestResult<SearchAccountJournalRecordsResponses, SearchAccountJournalRecordsErrors, ThrowOnError> => (options.client ?? client).get<SearchAccountJournalRecordsResponses, SearchAccountJournalRecordsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/accounts/{account_id}/records',
+    ...options
+});
 
 /**
  * Assign one category to selected journal records.
  */
 export const bulkCategorizeJournalRecords = <ThrowOnError extends boolean = false>(options: Options<BulkCategorizeJournalRecordsData, ThrowOnError>): RequestResult<BulkCategorizeJournalRecordsResponses, BulkCategorizeJournalRecordsErrors, ThrowOnError> => (options.client ?? client).post<BulkCategorizeJournalRecordsResponses, BulkCategorizeJournalRecordsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
     url: '/api/records/bulk/category',
     ...options,
     headers: {
@@ -693,6 +1259,11 @@ export const bulkCategorizeJournalRecords = <ThrowOnError extends boolean = fals
  * Add and remove tags on selected journal records.
  */
 export const bulkUpdateJournalRecordTags = <ThrowOnError extends boolean = false>(options: Options<BulkUpdateJournalRecordTagsData, ThrowOnError>): RequestResult<BulkUpdateJournalRecordTagsResponses, BulkUpdateJournalRecordTagsErrors, ThrowOnError> => (options.client ?? client).post<BulkUpdateJournalRecordTagsResponses, BulkUpdateJournalRecordTagsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
     url: '/api/records/bulk/tags',
     ...options,
     headers: {
@@ -705,6 +1276,11 @@ export const bulkUpdateJournalRecordTags = <ThrowOnError extends boolean = false
  * Assign one account to selected journal records.
  */
 export const bulkReassignJournalRecordAccount = <ThrowOnError extends boolean = false>(options: Options<BulkReassignJournalRecordAccountData, ThrowOnError>): RequestResult<BulkReassignJournalRecordAccountResponses, BulkReassignJournalRecordAccountErrors, ThrowOnError> => (options.client ?? client).post<BulkReassignJournalRecordAccountResponses, BulkReassignJournalRecordAccountErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
     url: '/api/records/bulk/account',
     ...options,
     headers: {
@@ -719,6 +1295,11 @@ export const bulkReassignJournalRecordAccount = <ThrowOnError extends boolean = 
  * Changing posting_status to pending stamps a missing pending_date with the current UTC time and clears posted_date. Changing posting_status to posted stamps a missing posted_date with the current UTC time. Updates are rejected when they would leave any transaction with a mix of cancelled and non-cancelled active journal records, or with a mix of expected and non-expected active journal records.
  */
 export const bulkUpdateJournalRecordStatuses = <ThrowOnError extends boolean = false>(options: Options<BulkUpdateJournalRecordStatusesData, ThrowOnError>): RequestResult<BulkUpdateJournalRecordStatusesResponses, BulkUpdateJournalRecordStatusesErrors, ThrowOnError> => (options.client ?? client).post<BulkUpdateJournalRecordStatusesResponses, BulkUpdateJournalRecordStatusesErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
     url: '/api/records/bulk/status',
     ...options,
     headers: {
@@ -730,12 +1311,28 @@ export const bulkUpdateJournalRecordStatuses = <ThrowOnError extends boolean = f
 /**
  * Tombstone a transaction and its journal records.
  */
-export const deleteTransaction = <ThrowOnError extends boolean = false>(options: Options<DeleteTransactionData, ThrowOnError>): RequestResult<DeleteTransactionResponses, DeleteTransactionErrors, ThrowOnError> => (options.client ?? client).delete<DeleteTransactionResponses, DeleteTransactionErrors, ThrowOnError>({ url: '/api/transactions/{transaction_id}', ...options });
+export const deleteTransaction = <ThrowOnError extends boolean = false>(options: Options<DeleteTransactionData, ThrowOnError>): RequestResult<DeleteTransactionResponses, DeleteTransactionErrors, ThrowOnError> => (options.client ?? client).delete<DeleteTransactionResponses, DeleteTransactionErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/transactions/{transaction_id}',
+    ...options
+});
 
 /**
  * Get a transaction with journal records.
  */
-export const getTransaction = <ThrowOnError extends boolean = false>(options: Options<GetTransactionData, ThrowOnError>): RequestResult<GetTransactionResponses, GetTransactionErrors, ThrowOnError> => (options.client ?? client).get<GetTransactionResponses, GetTransactionErrors, ThrowOnError>({ url: '/api/transactions/{transaction_id}', ...options });
+export const getTransaction = <ThrowOnError extends boolean = false>(options: Options<GetTransactionData, ThrowOnError>): RequestResult<GetTransactionResponses, GetTransactionErrors, ThrowOnError> => (options.client ?? client).get<GetTransactionResponses, GetTransactionErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/transactions/{transaction_id}',
+    ...options
+});
 
 /**
  * Replace a transaction and its journal records.
@@ -743,6 +1340,11 @@ export const getTransaction = <ThrowOnError extends boolean = false>(options: Op
  * Replaces initiated_date and the full journal record set atomically. The transaction_id is preserved, previous active records are tombstoned, and replacement records must balance to zero amount within each currency.
  */
 export const replaceTransaction = <ThrowOnError extends boolean = false>(options: Options<ReplaceTransactionData, ThrowOnError>): RequestResult<ReplaceTransactionResponses, ReplaceTransactionErrors, ThrowOnError> => (options.client ?? client).put<ReplaceTransactionResponses, ReplaceTransactionErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
     url: '/api/transactions/{transaction_id}',
     ...options,
     headers: {
@@ -756,4 +1358,12 @@ export const replaceTransaction = <ThrowOnError extends boolean = false>(options
  *
  * Sets posting_status to cancelled on all active journal records for the transaction. The operation is idempotent for an already-cancelled transaction and does not change dates or reconciliation status.
  */
-export const cancelTransaction = <ThrowOnError extends boolean = false>(options: Options<CancelTransactionData, ThrowOnError>): RequestResult<CancelTransactionResponses, CancelTransactionErrors, ThrowOnError> => (options.client ?? client).post<CancelTransactionResponses, CancelTransactionErrors, ThrowOnError>({ url: '/api/transactions/{transaction_id}/cancel', ...options });
+export const cancelTransaction = <ThrowOnError extends boolean = false>(options: Options<CancelTransactionData, ThrowOnError>): RequestResult<CancelTransactionResponses, CancelTransactionErrors, ThrowOnError> => (options.client ?? client).post<CancelTransactionResponses, CancelTransactionErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/transactions/{transaction_id}/cancel',
+    ...options
+});

@@ -1,4 +1,5 @@
 startup_validation = "shallow"
+auth_file = "auth.toml"
 
 [backups.file]
 directory = "/backups"

@@ -29,6 +29,7 @@ type settingGroupMetadata struct {
 type settingGroupKey string
 
 const (
+	settingGroupAuthentication settingGroupKey = "authentication"
 	settingGroupStorageStartup settingGroupKey = "storage_startup"
 	settingGroupHTTPServer     settingGroupKey = "http_server"
 	settingGroupExchangeRates  settingGroupKey = "exchange_rates"
@@ -45,6 +46,7 @@ type settingMetadata struct {
 
 //nolint:gochecknoglobals // immutable package definition data
 var settingGroupMetadataByKey = map[settingGroupKey]settingGroupMetadata{
+	settingGroupAuthentication: {Label: "Authentication", Order: 5},
 	settingGroupStorageStartup: {Label: "Storage and startup", Order: 10},
 	settingGroupHTTPServer:     {Label: "HTTP server", Order: 20},
 	settingGroupExchangeRates:  {Label: "Exchange rates", Order: 30},
@@ -56,6 +58,10 @@ var settingGroupMetadataByKey = map[settingGroupKey]settingGroupMetadata{
 //
 //nolint:gochecknoglobals // immutable package definition data
 var settingMetadataByKey = map[SourceKey]settingMetadata{
+	SourceAuthFile: {
+		Group: settingGroupAuthentication,
+		Label: "Authentication file", Help: "CLI-managed authentication file loaded when Mina started; empty disables authentication.", Order: 10, Control: SettingControlText,
+	},
 	SourceDatabasePath: {
 		Group: settingGroupStorageStartup,
 		Label: "Database file", Help: "Accounting database file opened by this Mina process.", Order: 10, Control: SettingControlText,
@@ -222,6 +228,7 @@ func validateSettingControl(valueType reflect.Type, control SettingControlKind) 
 
 func settingValues(cfg Config) map[SourceKey]string {
 	return map[SourceKey]string{
+		SourceAuthFile:                            cfg.AuthFile,
 		SourceDatabasePath:                        cfg.DatabasePath,
 		SourceAccountingSchema:                    cfg.AccountingSchema,
 		SourceStartupValidation:                   cfg.StartupValidation,

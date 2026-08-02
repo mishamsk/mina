@@ -1,8 +1,26 @@
 # Stdio and Streamable HTTP expose one shared MCP registry beside REST and the web UI.
 env MINA_FX_AUTO_LOAD_ENABLED=false
+env MINA_API_KEY=mina_EQO-K-an_paG-dFq7gSKeFafj2rI-41q2FCg2TZVpqO1hHBqwKXI
+env TEST_MINA_API_KEY=mina_EQO-K-an_paG-dFq7gSKeFafj2rI-41q2FCg2TZVpqO1hHBqwKXI
+env TEST_MINA_API_KEY_PREFIX=EQO-K-an
+env TEST_OTHER_MINA_API_KEY=mina_Tq0BQrfy_-PztWjSGp7yFdphXUu9HqhmdYRnPnh1Wky3iP-OU8qw
 freeport
-exec mina serve --demo --db $WORK/mcp.db --yes --host 127.0.0.1 --port $PORT --quiet &server&
+exec mina --config-file mcp-config.toml serve --demo --db $WORK/mcp.db --yes --host 127.0.0.1 --port $PORT --access-log $WORK/mcp-access.log &server&
 httpwait -timeout 15s '"status":"ok"' http://127.0.0.1:$PORT/api/health
+
+# Authentication failures and bearer credentials stay out of process access logs.
+httpget -method POST -status 401 -body invalid-login.json http://127.0.0.1:$PORT/api/auth/login
+stdout '"code":"unauthenticated"'
+
+# External MCP rejects an absent key before protocol dispatch.
+httpget -status 401 http://127.0.0.1:$PORT/mcp
+stdout '"code":"unauthenticated"'
+
+# A valid browser session cookie is not an MCP credential.
+httpget -save-cookie-env MCP_BROWSER_SESSION -method POST -body valid-login.json http://127.0.0.1:$PORT/api/auth/login
+stdout '"authenticated":true'
+httpget -cookie-env MCP_BROWSER_SESSION -method POST -status 401 -accept 'application/json, text/event-stream' -body initialize.json http://127.0.0.1:$PORT/mcp
+stdout '"code":"unauthenticated"'
 
 # Stdio lists representative tools and leaves annotation assertions to the script.
 mcplist stdio http://127.0.0.1:$PORT
@@ -34,7 +52,7 @@ stdout '"status":201'
 stdout '"member_id":'
 
 # Non-loopback origins stay forbidden on Streamable HTTP.
-httpget -method POST -status 403 -accept 'application/json, text/event-stream' -origin https://example.com -body initialize.json http://127.0.0.1:$PORT/mcp
+httpget -bearer-env MINA_API_KEY -method POST -status 403 -accept 'application/json, text/event-stream' -origin https://example.com -body initialize.json http://127.0.0.1:$PORT/mcp
 stdout 'Forbidden: Origin must be loopback'
 
 # REST and the web UI remain reachable on the same listener.
@@ -43,8 +61,66 @@ stdout '"status":"ok"'
 httpget -accept text/html http://127.0.0.1:$PORT/
 stdout '<div id="root"></div>'
 
+# CLI revocation changes persisted state while the running server retains its startup snapshot.
+exec mina --config-file mcp-config.toml auth api-key revoke $TEST_MINA_API_KEY_PREFIX
+httpget -bearer-env TEST_MINA_API_KEY http://127.0.0.1:$PORT/api/settings
+stdout '"groups"'
 kill -INT server
 wait server
+! grep 'highly-visible-secret' $WORK/mcp-access.log
+! grep $MINA_API_KEY $WORK/mcp-access.log
+
+# Persisted key revocation takes effect after restart and fails before MCP dispatch.
+freeport
+exec mina --config-file mcp-config.toml serve --db $WORK/mcp.db --yes --host 127.0.0.1 --port $PORT --quiet &revoked_server&
+httpwait -timeout 15s '"status":"ok"' http://127.0.0.1:$PORT/api/health
+httpget -bearer-env TEST_MINA_API_KEY -status 401 http://127.0.0.1:$PORT/mcp
+stdout '"code":"unauthenticated"'
+httpget -bearer-env TEST_OTHER_MINA_API_KEY http://127.0.0.1:$PORT/api/settings
+stdout '"groups"'
+kill -INT revoked_server
+wait revoked_server
+
+# Authentication-disabled Streamable HTTP reaches MCP protocol dispatch without credentials.
+freeport
+exec mina serve --db $WORK/mcp-disabled.db --yes --host 127.0.0.1 --port $PORT --quiet &disabled_server&
+httpwait -timeout 15s '"status":"ok"' http://127.0.0.1:$PORT/api/health
+httpget -method POST -accept 'application/json, text/event-stream' -body initialize.json http://127.0.0.1:$PORT/mcp
+stdout '"jsonrpc":"2.0"'
+kill -INT disabled_server
+wait disabled_server
 
 -- initialize.json --
 {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"origin-probe","version":"test"}}}
+
+-- invalid-login.json --
+{"email":"admin@local","password":"highly-visible-secret"}
+
+-- valid-login.json --
+{"email":"admin@local","password":"integration-password"}
+
+-- mcp-config.toml --
+auth_file = "mcp-auth.toml"
+
+-- mcp-auth.toml --
+version = 1
+signing_secret = "ZbCeTAaoT7sWtXpuq3emLOfecWDUOYmSYoExD-qJARQ"
+
+[[users]]
+id = "nNRamaBjwn8qw1uvCdHgxA"
+email = "admin@local"
+enabled = true
+password_hash = "$argon2id$v=19$m=65536,t=3,p=2$NAImLlT1PGOeyz0b4w5rUg$QfRwHPWpC8rKTAraigpky4wjIax9vOnvHBgpBDJtiFM"
+session_version = 1
+
+[[api_keys]]
+id = "0dWhc5Z7eiEwOmSSo9_Tgw"
+label = "integration"
+prefix = "EQO-K-an"
+token_digest = "b24af462a43b28cb4d7d264a2ed739ff45605568ebfdc075454bfbc8b619fadd"
+
+[[api_keys]]
+id = "W2r-lW8ibcVrtTUicHrlAw"
+label = "unrelated"
+prefix = "Tq0BQrfy"
+token_digest = "2efe6126bd82d8b6bc14e4c40a62da38792d742ec02f05495b924d4541b752cc"

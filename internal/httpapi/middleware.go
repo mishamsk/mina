@@ -81,6 +81,9 @@ func openAPIRequestValidationMiddleware(spec *openapi3.T) func(http.Handler) htt
 	validator := openapimiddleware.OapiRequestValidatorWithOptions(spec, &openapimiddleware.Options{
 		ErrorHandlerWithOpts: openAPIValidationErrorHandler,
 		DoNotValidateServers: true,
+		Options: openapi3filter.Options{
+			AuthenticationFunc: openapi3filter.NoopAuthenticationFunc,
+		},
 	})
 	queryValidator := openAPIQueryParameterValidationMiddleware(spec)
 
@@ -90,10 +93,7 @@ func openAPIRequestValidationMiddleware(spec *openapi3.T) func(http.Handler) htt
 }
 
 func openAPIQueryParameterValidationMiddleware(spec *openapi3.T) func(http.Handler) http.Handler {
-	router, err := gorillamux.NewRouter(spec)
-	if err != nil {
-		panic(fmt.Errorf("build OpenAPI router: %w", err))
-	}
+	router := mustOpenAPIRouter(spec)
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -116,6 +116,15 @@ func openAPIQueryParameterValidationMiddleware(spec *openapi3.T) func(http.Handl
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+func mustOpenAPIRouter(spec *openapi3.T) routers.Router {
+	router, err := gorillamux.NewRouter(spec)
+	if err != nil {
+		panic(fmt.Errorf("build OpenAPI router: %w", err))
+	}
+
+	return router
 }
 
 func routeAllowsQueryParameter(route *routers.Route, name string) bool {

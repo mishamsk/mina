@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/mishamsk/mina/internal/appconfig"
 	"github.com/mishamsk/mina/internal/mcpserver"
 )
 
@@ -32,9 +33,11 @@ func newMCPStdioCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer) *co
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			apiKey := appconfig.APIKeyFromEnvironment()
 			server, err := mcpserver.NewRemote(serverURL, mcpserver.Options{
 				Version:     version,
 				Diagnostics: stderr,
+				APIKey:      apiKey,
 			})
 			if err != nil {
 				return err

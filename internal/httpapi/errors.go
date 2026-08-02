@@ -52,6 +52,10 @@ func modelErrorCode(code services.ErrorCode) openapi.APIErrorCode {
 
 func statusForCode(code openapi.APIErrorCode) int {
 	switch code {
+	case openapi.APIErrorCodeUnauthenticated:
+		return http.StatusUnauthorized
+	case openapi.APIErrorCodeForbidden:
+		return http.StatusForbidden
 	case openapi.APIErrorCodeInvalidRequest:
 		return http.StatusBadRequest
 	case openapi.APIErrorCodeNotFound:

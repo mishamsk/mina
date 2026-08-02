@@ -20,3 +20,4 @@
 
 - A settings read is observational and returns the running process's resolved startup values, their effective sources, and the resolved config-file location.
 - Values cross service and transport boundaries as canonical strings with typed presentation metadata.
+- The resolved `auth_file` path is ordinary operational metadata; authentication-file contents and `MINA_API_KEY` never enter the settings snapshot.

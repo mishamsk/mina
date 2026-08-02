@@ -66,6 +66,13 @@ Structure and navigation only; how any of it looks is owned by the theme specifi
 - Side peek/detail panels are non-modal: no backdrop, no focus trap, no modal semantics; the underlying list stays interactive so row navigation can drive the panel. `Esc` closes the panel and returns focus to the originating row. Clicking outside the panel also closes it — the click still performs its normal action on the underlying content (a click that opens another record simply moves the panel). The transaction editor modal is a true modal: focus trap, restores focus to its invoker on close, and never closes on outside interaction — backdrop clicks are absorbed (with a one-step outline flash) and never activate underlying content. Centered dialogs remain modal and trap focus.
 - Table density (comfortable/compact) is a persisted UI preference.
 
+## Authentication
+
+- Browser startup checks public authentication status before rendering the app shell. When authentication is disabled, the shell opens unchanged.
+- When authentication is enabled without a valid session, a focused login screen requests email and password; failures stay inline and clear the password field.
+- A successful login opens the normal shell and survives reload through the server-owned session cookie.
+- Authenticated shells expose a global Log out action at the bottom of the sidebar. Logout replaces the shell with login when authentication remains enabled; if authentication becomes disabled, the shell stays visible without the logout action. Any protected-request `401` replaces the shell with login.
+
 ## Command Palette
 
 A launcher-style command palette (VS Code / Spotlight pattern) is a core Phase 2 surface, available everywhere via a global shortcut. It serves:

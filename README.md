@@ -3,7 +3,7 @@
 **Local-first personal finance for one household, with real double-entry accounting underneath and a UI meant for people who do not collect ledger syntax as a hobby.**
 
 > [!CAUTION]
-> **THIS IS ALPHA SOFTWARE.** Mina holds personal financial data and can crash, misbehave, corrupt it, or wipe it. Keep independent backups. Mina has no authentication or security guarantees: run it only on a local machine or a trusted private network, never directly on the public internet. Use it at your own risk, ideally with data you can afford to restore while the paint is still wet.
+> **THIS IS ALPHA SOFTWARE.** Mina holds personal financial data and can crash, misbehave, corrupt it, or wipe it. Keep independent backups. Authentication is household access control, not a public-internet security guarantee: run Mina only on a local machine or trusted private network, or behind a TLS-terminating reverse proxy. Use it at your own risk, ideally with data you can afford to restore while the paint is still wet.
 
 Mina is a personal fun project that I am sharing as open source. I want it to be genuinely useful, but I am not pretending it is enterprise-ready.
 
@@ -42,24 +42,29 @@ mkdir -p "$HOME/mina-deployment"
 cd "$HOME/mina-deployment"
 curl -fsSLo compose.yaml \
   https://raw.githubusercontent.com/mishamsk/mina/main/docker/compose.yaml
+curl -fsSLo .env.example \
+  https://raw.githubusercontent.com/mishamsk/mina/main/docker/.env.example
 
 mkdir -p config backups
 chmod 0700 config backups
-printf 'MINA_UID=%s\nMINA_GID=%s\n' "$(id -u)" "$(id -g)" > .env
-
-# Generate once, store this value in a password manager, and supply the same
-# value for every future start and restore. Compose reads it from .env.
-MINA_KEY="$(openssl rand -base64 32)"
-printf 'MINA_DATABASE_ENCRYPTION_KEY=%s\n' "$MINA_KEY" >> .env
-unset MINA_KEY
+cp .env.example .env
 chmod 0600 .env
+
+# Edit .env manually (or ask an agent to edit it): set MINA_UID/MINA_GID,
+# replace both initial-admin placeholders, and uncomment and set a generated
+# database key. Keep its assignment absent only when deliberately choosing
+# plaintext database and backup files.
 
 docker compose pull
 docker compose up -d
 docker compose ps
 ```
 
-Open <http://127.0.0.1:8080>. The image is `ghcr.io/mishamsk/mina:main`; the Compose health check uses `GET /api/health`.
+Generate and store the database key and initial administrator password in a password manager. `openssl rand -base64 32` is suitable for either secret. Shell-exported values override `.env`, so automation may pre-export `MINA_UID`, `MINA_GID`, `MINA_INITIAL_ADMIN_EMAIL`, `MINA_INITIAL_ADMIN_PASSWORD`, and `MINA_DATABASE_ENCRYPTION_KEY` before the Compose commands instead of writing secrets into `.env`.
+
+The initial-admin variables are consumed only if first startup must create `auth.toml`; Mina removes them from the long-running process environment. Existing config and authentication files are never changed by later values.
+
+Open <http://127.0.0.1:8080>. The image is `ghcr.io/mishamsk/mina:main`; the Compose health check uses `GET /api/health`. Existing deployments with a config file are never silently opted into authentication or overwritten.
 
 Prefer to delegate? Give your coding agent this prompt:
 
@@ -115,6 +120,10 @@ mina serve --demo
 
 No database file means the accounting state disappears when Mina stops. Demo seeding is only accepted for new state.
 
+### Enable Authentication for a Native Install
+
+Add `auth_file = "auth.toml"` to the loaded `config.toml`, initialize the first user with `mina auth init owner@example.com`, then start or restart Mina and sign in. The [authentication guide](docs/authentication.md) has the complete native workflow, API-key setup, and security tradeoffs. The auth file itself is CLI-owned and must never be edited by hand.
+
 ## Data, Backups, and Privacy
 
 With the Compose setup:
@@ -122,22 +131,33 @@ With the Compose setup:
 - `mina-data` holds the portable accounting database, encrypted with AES-256-GCM when `MINA_DATABASE_ENCRYPTION_KEY` is present.
 - `mina-cache` holds rebuildable provider data.
 - `./config/config.toml` holds operational configuration.
+- `./config/auth.toml` holds CLI-managed authentication state for fresh deployments; do not edit it by hand.
 - `./backups` receives database backups; the template keeps 14 and schedules a daily backup at `03:00` UTC. Backups from an encrypted database use the same key and are encrypted too.
 
-The key is intentionally not a Mina setting: there is no TOML field, CLI flag, REST/MCP/UI input, or settings-snapshot value for it. Compose forwards it from the operator's shell environment or deployment `.env` file. Keep `.env` mode `0600`, out of version control and ordinary deployment backups, and keep a separate copy of the key in a password manager. A key/file mismatch fails without changing the database; omit the variable only when intentionally using plaintext state.
+The key is intentionally not a Mina setting: there is no TOML field, CLI flag, REST/MCP/UI input, or settings-snapshot value for it. Compose forwards it from the operator's shell environment or deployment `.env` file. Keep `.env` mode `0600`, out of version control and ordinary deployment backups, and keep a separate copy of the key in a password manager. A key/file mismatch fails without changing the database; omit the assignment and shell export only when intentionally using plaintext state.
 
 Losing the key makes the encrypted database and every encrypted backup unrecoverable. Keep the key separately from the database and backups, retain tested independent backup copies, and test restore with `MINA_DATABASE_ENCRYPTION_KEY` set before relying on them. Encryption protects files at rest; it is not authentication and Mina does not claim NIST, FIPS, or other compliance certification.
 
 Named volumes survive `docker compose down`. `docker compose down --volumes` deletes them. A backup on the same machine is useful; a tested copy elsewhere is an actual recovery plan.
 
-Trigger a backup from the UI command palette or through the API:
+Trigger a backup from the UI command palette or through the API with `MINA_API_KEY` set to a valid key:
 
 ```bash
 curl -fsS -X POST \
+  -H "Authorization: Bearer $MINA_API_KEY" \
   http://127.0.0.1:8080/api/background-operations/database-backup/runs
 ```
 
-Mina is local-first, not magically private. Anyone who can reach the service can use it. Encryption reduces exposure from copied files but does not protect a running process or a disclosed key. Keep the listener, key, files, and backup copies inside boundaries you trust.
+Mina is local-first, not magically private. Authentication limits network access, while encryption reduces exposure from copied files; neither protects a compromised running process or disclosed credentials. Keep the listener, credentials, encryption key, files, and backup copies inside boundaries you trust.
+
+Manage Compose users and API keys through Mina's auth CLI. Every mutation requires a service restart; API-key secrets are displayed only once:
+
+```bash
+docker compose run --rm --no-deps mina auth user list
+docker compose run --rm --no-deps mina auth user add another@example.com
+docker compose run --rm --no-deps mina auth api-key create automation
+docker compose restart mina
+```
 
 ## Operating Compose
 
@@ -171,6 +191,7 @@ When Mina is running:
 
 - Health: `<Mina server URL>/api/health`
 - OpenAPI document: `<Mina server URL>/api/openapi.json`
+- Protected REST operations: `Authorization: Bearer <API key>`
 
 ## MCP and CLI Clients
 
@@ -180,14 +201,16 @@ Mina provides programmatic CLI and MCP clients for agents and scripts. Both are 
 
 ### MCP
 
-The running Mina server exposes Streamable HTTP MCP at `<Mina server URL>/mcp`; point an MCP client that supports this transport at that URL. For a client that launches MCP servers over stdio, configure the equivalent of:
+The running Mina server exposes Streamable HTTP MCP at `<Mina server URL>/mcp`. When `auth_file` is configured, supply `Authorization: Bearer <API key>`; when it is omitted, connect without that header. For authenticated stdio operation, configure the equivalent of:
 
 ```text
-mina mcp stdio --server "$MINA_SERVER_URL"
+MINA_API_KEY='<API key>' mina mcp stdio --server "$MINA_SERVER_URL"
 ```
 
+Omit `MINA_API_KEY` when Mina authentication is disabled.
+
 > [!CAUTION]
-> Mina has no authentication yet. Do not expose MCP publicly: keep it on the same local or trusted private-network boundary as Mina's REST API and UI.
+> Authentication does not make plain HTTP safe from observers. Keep MCP on a trusted private network or behind a TLS-terminating reverse proxy; never publish it directly to the internet.
 
 All MCP tools document their purpose and inputs in the server; agents should use filtered list or search tools for discovery, get tools for known IDs, and ask for confirmation before using any tool that creates, changes, or deletes data. Client-specific configuration and Mina's transport behavior are covered by the [CLI and MCP architecture](docs/cli-mcp-architecture.md).
 
@@ -196,7 +219,8 @@ All MCP tools document their purpose and inputs in the server; agents should use
 The REST-backed CLI can operate on the running server:
 
 ```bash
-mina client --server "$MINA_SERVER_URL" transactions list --limit 5
+MINA_API_KEY='<API key>' \
+  mina client --server "$MINA_SERVER_URL" transactions list --limit 5
 ```
 
 For one-off commands against a database file not already owned by `mina serve`, use `--db PATH` for an in-process local session without starting a server:
@@ -206,6 +230,7 @@ mina client --db ./mina.duckdb transactions list --limit 5
 ```
 
 Run `mina client --help` and command-level `--help` for the available operations and input flags.
+Authentication setup and API-key lifecycle are covered by the [authentication guide](docs/authentication.md).
 
 ## Contributing
 

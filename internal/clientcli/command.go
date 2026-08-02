@@ -292,7 +292,12 @@ func openSession(command *cobra.Command, options CommandOptions) (*Session, erro
 		if err := validateServerURL(serverURL); err != nil {
 			return nil, err
 		}
-		client, err := httpclient.NewClientWithResponses(serverURL)
+		apiKey := appconfig.APIKeyFromEnvironment()
+		clientOptions := []httpclient.ClientOption{}
+		if apiKey != "" {
+			clientOptions = append(clientOptions, httpclient.WithBearerToken(apiKey))
+		}
+		client, err := httpclient.NewClientWithResponses(serverURL, clientOptions...)
 		if err != nil {
 			return nil, fmt.Errorf("create remote client: %w", err)
 		}

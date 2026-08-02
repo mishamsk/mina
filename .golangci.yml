@@ -2,6 +2,8 @@ version: "2"
 
 run:
   timeout: 5m
+  build-tags:
+    - integration
 
 linters:
   default: standard
@@ -138,16 +140,18 @@ linters:
             - cmd/mina/cli_smoke_test.go
             - "**/cmd/mina/cli_smoke_test.go"
           allow:
+            - $gostd
+            - github.com/duckdb/duckdb-go/v2$
             - github.com/modelcontextprotocol/go-sdk/mcp$
             - github.com/rogpeppe/go-internal/testscript$
-            - io$
-            - net$
-            - net/http$
-            - os$
-            - os/exec$
-            - strconv$
-            - testing$
-            - time$
+        integration-test-no-production-imports:
+          list-mode: lax
+          files:
+            - cmd/mina/cli_smoke_test.go
+            - "**/cmd/mina/cli_smoke_test.go"
+          deny:
+            - pkg: github.com/mishamsk/mina
+              desc: the launched-process integration driver must not import Mina production code
         service-boundaries:
           list-mode: lax
           files:

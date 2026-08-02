@@ -25,19 +25,28 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+const (
+	ApiKeyAuthScopes     apiKeyAuthContextKey     = "apiKeyAuth.Scopes"
+	BrowserSessionScopes browserSessionContextKey = "browserSession.Scopes"
+)
+
 // Defines values for APIErrorCode.
 const (
 	APIErrorCodeConflict         APIErrorCode = "conflict"
+	APIErrorCodeForbidden        APIErrorCode = "forbidden"
 	APIErrorCodeInternalError    APIErrorCode = "internal_error"
 	APIErrorCodeInvalidRequest   APIErrorCode = "invalid_request"
 	APIErrorCodeMethodNotAllowed APIErrorCode = "method_not_allowed"
 	APIErrorCodeNotFound         APIErrorCode = "not_found"
+	APIErrorCodeUnauthenticated  APIErrorCode = "unauthenticated"
 )
 
 // Valid indicates whether the value is a known member of the APIErrorCode enum.
 func (e APIErrorCode) Valid() bool {
 	switch e {
 	case APIErrorCodeConflict:
+		return true
+	case APIErrorCodeForbidden:
 		return true
 	case APIErrorCodeInternalError:
 		return true
@@ -46,6 +55,8 @@ func (e APIErrorCode) Valid() bool {
 	case APIErrorCodeMethodNotAllowed:
 		return true
 	case APIErrorCodeNotFound:
+		return true
+	case APIErrorCodeUnauthenticated:
 		return true
 	default:
 		return false
@@ -1158,6 +1169,19 @@ type AccountListResponse struct {
 // AccountType Account semantic type. Owned and party accounts hold tracked household state; flow records carry categorized economic activity; system accounts are fixed Mina mechanics.
 type AccountType string
 
+// AuthenticationStatusResponse defines model for AuthenticationStatusResponse.
+type AuthenticationStatusResponse struct {
+	Authenticated bool                `json:"authenticated"`
+	Enabled       bool                `json:"enabled"`
+	User          *AuthenticationUser `json:"user,omitempty"`
+}
+
+// AuthenticationUser defines model for AuthenticationUser.
+type AuthenticationUser struct {
+	Email  string `json:"email"`
+	UserId string `json:"user_id"`
+}
+
 // BackgroundOperationId defines model for BackgroundOperationId.
 type BackgroundOperationId string
 
@@ -1888,6 +1912,12 @@ type JournalRecordSearchResponse struct {
 	TotalCount int64 `json:"total_count"`
 }
 
+// LoginRequest defines model for LoginRequest.
+type LoginRequest struct {
+	Email    string  `json:"email"`
+	Password *string `json:"password,omitempty"`
+}
+
 // Member defines model for Member.
 type Member struct {
 	CreatedAt time.Time `json:"created_at"`
@@ -2394,6 +2424,9 @@ type CategoryFQNConflict = ErrorResponse
 // Conflict defines model for Conflict.
 type Conflict = ErrorResponse
 
+// Forbidden defines model for Forbidden.
+type Forbidden = ErrorResponse
+
 // InternalError defines model for InternalError.
 type InternalError = ErrorResponse
 
@@ -2411,6 +2444,15 @@ type TagFQNConflict = ErrorResponse
 
 // TransactionTemplateFQNConflict defines model for TransactionTemplateFQNConflict.
 type TransactionTemplateFQNConflict = ErrorResponse
+
+// Unauthenticated defines model for Unauthenticated.
+type Unauthenticated = ErrorResponse
+
+// apiKeyAuthContextKey is the context key for apiKeyAuth security scheme
+type apiKeyAuthContextKey string
+
+// browserSessionContextKey is the context key for browserSession security scheme
+type browserSessionContextKey string
 
 // ListAccountsParams defines parameters for ListAccounts.
 type ListAccountsParams struct {
@@ -3003,6 +3045,9 @@ type UpdateAccountJSONRequestBody = UpdateAccountRequest
 // CreateCreditLimitHistoryJSONRequestBody defines body for CreateCreditLimitHistory for application/json ContentType.
 type CreateCreditLimitHistoryJSONRequestBody = CreateCreditLimitHistoryRequest
 
+// LoginJSONRequestBody defines body for Login for application/json ContentType.
+type LoginJSONRequestBody = LoginRequest
+
 // CreateCategoryJSONRequestBody defines body for CreateCategory for application/json ContentType.
 type CreateCategoryJSONRequestBody = CreateCategoryRequest
 
@@ -3137,6 +3182,15 @@ type ServerInterface interface {
 	// Seed demo data into the opened app.
 	// (POST /api/app/demo-seed)
 	SeedDemo(w http.ResponseWriter, r *http.Request, params SeedDemoParams)
+	// Create a long-lived browser session with an email and password.
+	// (POST /api/auth/login)
+	Login(w http.ResponseWriter, r *http.Request)
+	// Clear the browser session cookie.
+	// (POST /api/auth/logout)
+	Logout(w http.ResponseWriter, r *http.Request)
+	// Report whether authentication is enabled and the browser session is valid.
+	// (GET /api/auth/status)
+	GetAuthenticationStatus(w http.ResponseWriter, r *http.Request)
 	// List registered background operations.
 	// (GET /api/background-operations)
 	ListBackgroundOperations(w http.ResponseWriter, r *http.Request)
@@ -3443,6 +3497,24 @@ func (_ Unimplemented) SearchAccountJournalRecords(w http.ResponseWriter, r *htt
 // Seed demo data into the opened app.
 // (POST /api/app/demo-seed)
 func (_ Unimplemented) SeedDemo(w http.ResponseWriter, r *http.Request, params SeedDemoParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Create a long-lived browser session with an email and password.
+// (POST /api/auth/login)
+func (_ Unimplemented) Login(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Clear the browser session cookie.
+// (POST /api/auth/logout)
+func (_ Unimplemented) Logout(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Report whether authentication is enabled and the browser session is valid.
+// (GET /api/auth/status)
+func (_ Unimplemented) GetAuthenticationStatus(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -3911,6 +3983,14 @@ func (siw *ServerInterfaceWrapper) ListAccounts(w http.ResponseWriter, r *http.R
 	var err error
 	_ = err
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListAccountsParams
 
@@ -4032,6 +4112,14 @@ func (siw *ServerInterfaceWrapper) ListAccounts(w http.ResponseWriter, r *http.R
 // CreateAccount operation middleware
 func (siw *ServerInterfaceWrapper) CreateAccount(w http.ResponseWriter, r *http.Request) {
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateAccount(w, r)
 	}))
@@ -4048,6 +4136,14 @@ func (siw *ServerInterfaceWrapper) ListAccountBalances(w http.ResponseWriter, r 
 
 	var err error
 	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListAccountBalancesParams
@@ -4095,6 +4191,14 @@ func (siw *ServerInterfaceWrapper) ListAccountGroups(w http.ResponseWriter, r *h
 	var err error
 	_ = err
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListAccountGroupsParams
 
@@ -4125,6 +4229,14 @@ func (siw *ServerInterfaceWrapper) ListAccountGroups(w http.ResponseWriter, r *h
 // RestructureAccounts operation middleware
 func (siw *ServerInterfaceWrapper) RestructureAccounts(w http.ResponseWriter, r *http.Request) {
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RestructureAccounts(w, r)
 	}))
@@ -4138,6 +4250,14 @@ func (siw *ServerInterfaceWrapper) RestructureAccounts(w http.ResponseWriter, r 
 
 // SetAccountHiddenByPath operation middleware
 func (siw *ServerInterfaceWrapper) SetAccountHiddenByPath(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SetAccountHiddenByPath(w, r)
@@ -4165,6 +4285,14 @@ func (siw *ServerInterfaceWrapper) DeleteAccount(w http.ResponseWriter, r *http.
 		return
 	}
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeleteAccount(w, r, accountId)
 	}))
@@ -4190,6 +4318,14 @@ func (siw *ServerInterfaceWrapper) GetAccount(w http.ResponseWriter, r *http.Req
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "account_id", Err: err})
 		return
 	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params GetAccountParams
@@ -4233,6 +4369,14 @@ func (siw *ServerInterfaceWrapper) UpdateAccount(w http.ResponseWriter, r *http.
 		return
 	}
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateAccount(w, r, accountId)
 	}))
@@ -4258,6 +4402,14 @@ func (siw *ServerInterfaceWrapper) ListCreditLimitHistory(w http.ResponseWriter,
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "account_id", Err: err})
 		return
 	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListCreditLimitHistoryParams
@@ -4353,6 +4505,14 @@ func (siw *ServerInterfaceWrapper) CreateCreditLimitHistory(w http.ResponseWrite
 		return
 	}
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateCreditLimitHistory(w, r, accountId)
 	}))
@@ -4378,6 +4538,14 @@ func (siw *ServerInterfaceWrapper) SearchAccountJournalRecords(w http.ResponseWr
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "account_id", Err: err})
 		return
 	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params SearchAccountJournalRecordsParams
@@ -4685,6 +4853,14 @@ func (siw *ServerInterfaceWrapper) SeedDemo(w http.ResponseWriter, r *http.Reque
 	var err error
 	_ = err
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	// Parameter object where we will unmarshal all parameters from the context
 	var params SeedDemoParams
 
@@ -4725,8 +4901,58 @@ func (siw *ServerInterfaceWrapper) SeedDemo(w http.ResponseWriter, r *http.Reque
 	handler.ServeHTTP(w, r)
 }
 
+// Login operation middleware
+func (siw *ServerInterfaceWrapper) Login(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.Login(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// Logout operation middleware
+func (siw *ServerInterfaceWrapper) Logout(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.Logout(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAuthenticationStatus operation middleware
+func (siw *ServerInterfaceWrapper) GetAuthenticationStatus(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAuthenticationStatus(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListBackgroundOperations operation middleware
 func (siw *ServerInterfaceWrapper) ListBackgroundOperations(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListBackgroundOperations(w, r)
@@ -4741,6 +4967,14 @@ func (siw *ServerInterfaceWrapper) ListBackgroundOperations(w http.ResponseWrite
 
 // StartDatabaseBackupRun operation middleware
 func (siw *ServerInterfaceWrapper) StartDatabaseBackupRun(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.StartDatabaseBackupRun(w, r)
@@ -4768,6 +5002,14 @@ func (siw *ServerInterfaceWrapper) GetDatabaseBackupRun(w http.ResponseWriter, r
 		return
 	}
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetDatabaseBackupRun(w, r, operationRunId)
 	}))
@@ -4782,6 +5024,14 @@ func (siw *ServerInterfaceWrapper) GetDatabaseBackupRun(w http.ResponseWriter, r
 // GetDatabaseBackupStatus operation middleware
 func (siw *ServerInterfaceWrapper) GetDatabaseBackupStatus(w http.ResponseWriter, r *http.Request) {
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetDatabaseBackupStatus(w, r)
 	}))
@@ -4795,6 +5045,14 @@ func (siw *ServerInterfaceWrapper) GetDatabaseBackupStatus(w http.ResponseWriter
 
 // StartExchangeRateLoadingRun operation middleware
 func (siw *ServerInterfaceWrapper) StartExchangeRateLoadingRun(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.StartExchangeRateLoadingRun(w, r)
@@ -4822,6 +5080,14 @@ func (siw *ServerInterfaceWrapper) GetExchangeRateLoadingRun(w http.ResponseWrit
 		return
 	}
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetExchangeRateLoadingRun(w, r, operationRunId)
 	}))
@@ -4835,6 +5101,14 @@ func (siw *ServerInterfaceWrapper) GetExchangeRateLoadingRun(w http.ResponseWrit
 
 // GetExchangeRateLoadingStatus operation middleware
 func (siw *ServerInterfaceWrapper) GetExchangeRateLoadingStatus(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetExchangeRateLoadingStatus(w, r)
@@ -4852,6 +5126,14 @@ func (siw *ServerInterfaceWrapper) ListBackgroundOperationRunEnvelopes(w http.Re
 
 	var err error
 	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListBackgroundOperationRunEnvelopesParams
@@ -4911,6 +5193,14 @@ func (siw *ServerInterfaceWrapper) ListCategories(w http.ResponseWriter, r *http
 
 	var err error
 	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListCategoriesParams
@@ -5033,6 +5323,14 @@ func (siw *ServerInterfaceWrapper) ListCategories(w http.ResponseWriter, r *http
 // CreateCategory operation middleware
 func (siw *ServerInterfaceWrapper) CreateCategory(w http.ResponseWriter, r *http.Request) {
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateCategory(w, r)
 	}))
@@ -5049,6 +5347,14 @@ func (siw *ServerInterfaceWrapper) ListCategoryGroups(w http.ResponseWriter, r *
 
 	var err error
 	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListCategoryGroupsParams
@@ -5080,6 +5386,14 @@ func (siw *ServerInterfaceWrapper) ListCategoryGroups(w http.ResponseWriter, r *
 // RestructureCategories operation middleware
 func (siw *ServerInterfaceWrapper) RestructureCategories(w http.ResponseWriter, r *http.Request) {
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RestructureCategories(w, r)
 	}))
@@ -5093,6 +5407,14 @@ func (siw *ServerInterfaceWrapper) RestructureCategories(w http.ResponseWriter, 
 
 // SetCategoryHiddenByPath operation middleware
 func (siw *ServerInterfaceWrapper) SetCategoryHiddenByPath(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SetCategoryHiddenByPath(w, r)
@@ -5120,6 +5442,14 @@ func (siw *ServerInterfaceWrapper) DeleteCategory(w http.ResponseWriter, r *http
 		return
 	}
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeleteCategory(w, r, categoryId)
 	}))
@@ -5145,6 +5475,14 @@ func (siw *ServerInterfaceWrapper) GetCategory(w http.ResponseWriter, r *http.Re
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
 		return
 	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params GetCategoryParams
@@ -5188,6 +5526,14 @@ func (siw *ServerInterfaceWrapper) UpdateCategory(w http.ResponseWriter, r *http
 		return
 	}
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateCategory(w, r, categoryId)
 	}))
@@ -5214,6 +5560,14 @@ func (siw *ServerInterfaceWrapper) DeleteCreditLimitHistory(w http.ResponseWrite
 		return
 	}
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeleteCreditLimitHistory(w, r, creditLimitHistoryId)
 	}))
@@ -5239,6 +5593,14 @@ func (siw *ServerInterfaceWrapper) GetCreditLimitHistory(w http.ResponseWriter, 
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "credit_limit_history_id", Err: err})
 		return
 	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params GetCreditLimitHistoryParams
@@ -5272,6 +5634,14 @@ func (siw *ServerInterfaceWrapper) ListExchangeRates(w http.ResponseWriter, r *h
 
 	var err error
 	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListExchangeRatesParams
@@ -5394,6 +5764,14 @@ func (siw *ServerInterfaceWrapper) ListExchangeRates(w http.ResponseWriter, r *h
 // CreateExchangeRate operation middleware
 func (siw *ServerInterfaceWrapper) CreateExchangeRate(w http.ResponseWriter, r *http.Request) {
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateExchangeRate(w, r)
 	}))
@@ -5420,6 +5798,14 @@ func (siw *ServerInterfaceWrapper) DeleteExchangeRate(w http.ResponseWriter, r *
 		return
 	}
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeleteExchangeRate(w, r, exchangeRateId)
 	}))
@@ -5445,6 +5831,14 @@ func (siw *ServerInterfaceWrapper) GetExchangeRate(w http.ResponseWriter, r *htt
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "exchange_rate_id", Err: err})
 		return
 	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params GetExchangeRateParams
@@ -5488,6 +5882,14 @@ func (siw *ServerInterfaceWrapper) UpdateExchangeRate(w http.ResponseWriter, r *
 		return
 	}
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateExchangeRate(w, r, exchangeRateId)
 	}))
@@ -5518,6 +5920,14 @@ func (siw *ServerInterfaceWrapper) ListMembers(w http.ResponseWriter, r *http.Re
 
 	var err error
 	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListMembersParams
@@ -5614,6 +6024,14 @@ func (siw *ServerInterfaceWrapper) ListMembers(w http.ResponseWriter, r *http.Re
 // CreateMember operation middleware
 func (siw *ServerInterfaceWrapper) CreateMember(w http.ResponseWriter, r *http.Request) {
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateMember(w, r)
 	}))
@@ -5640,6 +6058,14 @@ func (siw *ServerInterfaceWrapper) DeleteMember(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeleteMember(w, r, memberId)
 	}))
@@ -5665,6 +6091,14 @@ func (siw *ServerInterfaceWrapper) GetMember(w http.ResponseWriter, r *http.Requ
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "member_id", Err: err})
 		return
 	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params GetMemberParams
@@ -5708,6 +6142,14 @@ func (siw *ServerInterfaceWrapper) UpdateMember(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateMember(w, r, memberId)
 	}))
@@ -5734,6 +6176,14 @@ func (siw *ServerInterfaceWrapper) UpdateMemberHidden(w http.ResponseWriter, r *
 		return
 	}
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateMemberHidden(w, r, memberId)
 	}))
@@ -5750,6 +6200,14 @@ func (siw *ServerInterfaceWrapper) SearchJournalRecords(w http.ResponseWriter, r
 
 	var err error
 	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params SearchJournalRecordsParams
@@ -6080,6 +6538,14 @@ func (siw *ServerInterfaceWrapper) SearchJournalRecords(w http.ResponseWriter, r
 // BulkReassignJournalRecordAccount operation middleware
 func (siw *ServerInterfaceWrapper) BulkReassignJournalRecordAccount(w http.ResponseWriter, r *http.Request) {
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.BulkReassignJournalRecordAccount(w, r)
 	}))
@@ -6093,6 +6559,14 @@ func (siw *ServerInterfaceWrapper) BulkReassignJournalRecordAccount(w http.Respo
 
 // BulkCategorizeJournalRecords operation middleware
 func (siw *ServerInterfaceWrapper) BulkCategorizeJournalRecords(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.BulkCategorizeJournalRecords(w, r)
@@ -6108,6 +6582,14 @@ func (siw *ServerInterfaceWrapper) BulkCategorizeJournalRecords(w http.ResponseW
 // BulkUpdateJournalRecordStatuses operation middleware
 func (siw *ServerInterfaceWrapper) BulkUpdateJournalRecordStatuses(w http.ResponseWriter, r *http.Request) {
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.BulkUpdateJournalRecordStatuses(w, r)
 	}))
@@ -6121,6 +6603,14 @@ func (siw *ServerInterfaceWrapper) BulkUpdateJournalRecordStatuses(w http.Respon
 
 // BulkUpdateJournalRecordTags operation middleware
 func (siw *ServerInterfaceWrapper) BulkUpdateJournalRecordTags(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.BulkUpdateJournalRecordTags(w, r)
@@ -6138,6 +6628,14 @@ func (siw *ServerInterfaceWrapper) ListRecurringDefinitions(w http.ResponseWrite
 
 	var err error
 	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListRecurringDefinitionsParams
@@ -6208,6 +6706,14 @@ func (siw *ServerInterfaceWrapper) ListRecurringDefinitions(w http.ResponseWrite
 // CreateRecurringDefinition operation middleware
 func (siw *ServerInterfaceWrapper) CreateRecurringDefinition(w http.ResponseWriter, r *http.Request) {
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateRecurringDefinition(w, r)
 	}))
@@ -6233,6 +6739,14 @@ func (siw *ServerInterfaceWrapper) DeleteRecurringDefinition(w http.ResponseWrit
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "recurring_definition_id", Err: err})
 		return
 	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeleteRecurringDefinition(w, r, recurringDefinitionId)
@@ -6260,6 +6774,14 @@ func (siw *ServerInterfaceWrapper) GetRecurringDefinition(w http.ResponseWriter,
 		return
 	}
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetRecurringDefinition(w, r, recurringDefinitionId)
 	}))
@@ -6285,6 +6807,14 @@ func (siw *ServerInterfaceWrapper) ReplaceRecurringDefinition(w http.ResponseWri
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "recurring_definition_id", Err: err})
 		return
 	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ReplaceRecurringDefinition(w, r, recurringDefinitionId)
@@ -6312,6 +6842,14 @@ func (siw *ServerInterfaceWrapper) ConfirmNextRecurringDefinition(w http.Respons
 		return
 	}
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ConfirmNextRecurringDefinition(w, r, recurringDefinitionId)
 	}))
@@ -6337,6 +6875,14 @@ func (siw *ServerInterfaceWrapper) DeferRecurringDefinition(w http.ResponseWrite
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "recurring_definition_id", Err: err})
 		return
 	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeferRecurringDefinition(w, r, recurringDefinitionId)
@@ -6364,6 +6910,14 @@ func (siw *ServerInterfaceWrapper) PauseRecurringDefinition(w http.ResponseWrite
 		return
 	}
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.PauseRecurringDefinition(w, r, recurringDefinitionId)
 	}))
@@ -6390,6 +6944,14 @@ func (siw *ServerInterfaceWrapper) ResumeRecurringDefinition(w http.ResponseWrit
 		return
 	}
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ResumeRecurringDefinition(w, r, recurringDefinitionId)
 	}))
@@ -6406,6 +6968,14 @@ func (siw *ServerInterfaceWrapper) ListRecurringOccurrences(w http.ResponseWrite
 
 	var err error
 	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListRecurringOccurrencesParams
@@ -6514,6 +7084,14 @@ func (siw *ServerInterfaceWrapper) ConfirmRecurringOccurrence(w http.ResponseWri
 		return
 	}
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ConfirmRecurringOccurrence(w, r, recurringOccurrenceId)
 	}))
@@ -6540,6 +7118,14 @@ func (siw *ServerInterfaceWrapper) DismissRecurringOccurrence(w http.ResponseWri
 		return
 	}
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DismissRecurringOccurrence(w, r, recurringOccurrenceId)
 	}))
@@ -6553,6 +7139,14 @@ func (siw *ServerInterfaceWrapper) DismissRecurringOccurrence(w http.ResponseWri
 
 // GetSettings operation middleware
 func (siw *ServerInterfaceWrapper) GetSettings(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetSettings(w, r)
@@ -6570,6 +7164,14 @@ func (siw *ServerInterfaceWrapper) ListTags(w http.ResponseWriter, r *http.Reque
 
 	var err error
 	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListTagsParams
@@ -6679,6 +7281,14 @@ func (siw *ServerInterfaceWrapper) ListTags(w http.ResponseWriter, r *http.Reque
 // CreateTag operation middleware
 func (siw *ServerInterfaceWrapper) CreateTag(w http.ResponseWriter, r *http.Request) {
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateTag(w, r)
 	}))
@@ -6695,6 +7305,14 @@ func (siw *ServerInterfaceWrapper) ListTagGroups(w http.ResponseWriter, r *http.
 
 	var err error
 	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListTagGroupsParams
@@ -6726,6 +7344,14 @@ func (siw *ServerInterfaceWrapper) ListTagGroups(w http.ResponseWriter, r *http.
 // RestructureTags operation middleware
 func (siw *ServerInterfaceWrapper) RestructureTags(w http.ResponseWriter, r *http.Request) {
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RestructureTags(w, r)
 	}))
@@ -6739,6 +7365,14 @@ func (siw *ServerInterfaceWrapper) RestructureTags(w http.ResponseWriter, r *htt
 
 // SetTagHiddenByPath operation middleware
 func (siw *ServerInterfaceWrapper) SetTagHiddenByPath(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SetTagHiddenByPath(w, r)
@@ -6766,6 +7400,14 @@ func (siw *ServerInterfaceWrapper) DeleteTag(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeleteTag(w, r, tagId)
 	}))
@@ -6791,6 +7433,14 @@ func (siw *ServerInterfaceWrapper) GetTag(w http.ResponseWriter, r *http.Request
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tag_id", Err: err})
 		return
 	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params GetTagParams
@@ -6834,6 +7484,14 @@ func (siw *ServerInterfaceWrapper) UpdateTag(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateTag(w, r, tagId)
 	}))
@@ -6850,6 +7508,14 @@ func (siw *ServerInterfaceWrapper) ListTransactionTemplates(w http.ResponseWrite
 
 	var err error
 	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListTransactionTemplatesParams
@@ -6920,6 +7586,14 @@ func (siw *ServerInterfaceWrapper) ListTransactionTemplates(w http.ResponseWrite
 // CreateTransactionTemplate operation middleware
 func (siw *ServerInterfaceWrapper) CreateTransactionTemplate(w http.ResponseWriter, r *http.Request) {
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateTransactionTemplate(w, r)
 	}))
@@ -6933,6 +7607,14 @@ func (siw *ServerInterfaceWrapper) CreateTransactionTemplate(w http.ResponseWrit
 
 // RestructureTransactionTemplates operation middleware
 func (siw *ServerInterfaceWrapper) RestructureTransactionTemplates(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RestructureTransactionTemplates(w, r)
@@ -6960,6 +7642,14 @@ func (siw *ServerInterfaceWrapper) DeleteTransactionTemplate(w http.ResponseWrit
 		return
 	}
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeleteTransactionTemplate(w, r, transactionTemplateId)
 	}))
@@ -6985,6 +7675,14 @@ func (siw *ServerInterfaceWrapper) GetTransactionTemplate(w http.ResponseWriter,
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "transaction_template_id", Err: err})
 		return
 	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetTransactionTemplate(w, r, transactionTemplateId)
@@ -7012,6 +7710,14 @@ func (siw *ServerInterfaceWrapper) ReplaceTransactionTemplate(w http.ResponseWri
 		return
 	}
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ReplaceTransactionTemplate(w, r, transactionTemplateId)
 	}))
@@ -7028,6 +7734,14 @@ func (siw *ServerInterfaceWrapper) ListTransactions(w http.ResponseWriter, r *ht
 
 	var err error
 	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListTransactionsParams
@@ -7358,6 +8072,14 @@ func (siw *ServerInterfaceWrapper) ListTransactions(w http.ResponseWriter, r *ht
 // CreateTransaction operation middleware
 func (siw *ServerInterfaceWrapper) CreateTransaction(w http.ResponseWriter, r *http.Request) {
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateTransaction(w, r)
 	}))
@@ -7371,6 +8093,14 @@ func (siw *ServerInterfaceWrapper) CreateTransaction(w http.ResponseWriter, r *h
 
 // ClassifyTransaction operation middleware
 func (siw *ServerInterfaceWrapper) ClassifyTransaction(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ClassifyTransaction(w, r)
@@ -7386,6 +8116,14 @@ func (siw *ServerInterfaceWrapper) ClassifyTransaction(w http.ResponseWriter, r 
 // CreateExchangeTransaction operation middleware
 func (siw *ServerInterfaceWrapper) CreateExchangeTransaction(w http.ResponseWriter, r *http.Request) {
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateExchangeTransaction(w, r)
 	}))
@@ -7399,6 +8137,14 @@ func (siw *ServerInterfaceWrapper) CreateExchangeTransaction(w http.ResponseWrit
 
 // CreateIncomeTransaction operation middleware
 func (siw *ServerInterfaceWrapper) CreateIncomeTransaction(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateIncomeTransaction(w, r)
@@ -7416,6 +8162,14 @@ func (siw *ServerInterfaceWrapper) GetTransactionMonthTotals(w http.ResponseWrit
 
 	var err error
 	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params GetTransactionMonthTotalsParams
@@ -7447,6 +8201,14 @@ func (siw *ServerInterfaceWrapper) GetTransactionMonthTotals(w http.ResponseWrit
 // CreateRefundTransaction operation middleware
 func (siw *ServerInterfaceWrapper) CreateRefundTransaction(w http.ResponseWriter, r *http.Request) {
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateRefundTransaction(w, r)
 	}))
@@ -7461,6 +8223,14 @@ func (siw *ServerInterfaceWrapper) CreateRefundTransaction(w http.ResponseWriter
 // CreateSpendTransaction operation middleware
 func (siw *ServerInterfaceWrapper) CreateSpendTransaction(w http.ResponseWriter, r *http.Request) {
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateSpendTransaction(w, r)
 	}))
@@ -7474,6 +8244,14 @@ func (siw *ServerInterfaceWrapper) CreateSpendTransaction(w http.ResponseWriter,
 
 // CreateTransferTransaction operation middleware
 func (siw *ServerInterfaceWrapper) CreateTransferTransaction(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateTransferTransaction(w, r)
@@ -7501,6 +8279,14 @@ func (siw *ServerInterfaceWrapper) DeleteTransaction(w http.ResponseWriter, r *h
 		return
 	}
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeleteTransaction(w, r, transactionId)
 	}))
@@ -7526,6 +8312,14 @@ func (siw *ServerInterfaceWrapper) GetTransaction(w http.ResponseWriter, r *http
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "transaction_id", Err: err})
 		return
 	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetTransaction(w, r, transactionId)
@@ -7553,6 +8347,14 @@ func (siw *ServerInterfaceWrapper) ReplaceTransaction(w http.ResponseWriter, r *
 		return
 	}
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ReplaceTransaction(w, r, transactionId)
 	}))
@@ -7578,6 +8380,14 @@ func (siw *ServerInterfaceWrapper) CancelTransaction(w http.ResponseWriter, r *h
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "transaction_id", Err: err})
 		return
 	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, ApiKeyAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, BrowserSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CancelTransaction(w, r, transactionId)
@@ -7741,6 +8551,15 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/api/app/demo-seed", wrapper.SeedDemo)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/auth/login", wrapper.Login)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/auth/logout", wrapper.Logout)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/api/auth/status", wrapper.GetAuthenticationStatus)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/api/background-operations", wrapper.ListBackgroundOperations)
@@ -7977,6 +8796,8 @@ type CategoryFQNConflictJSONResponse ErrorResponse
 
 type ConflictJSONResponse ErrorResponse
 
+type ForbiddenJSONResponse ErrorResponse
+
 type InternalErrorJSONResponse ErrorResponse
 
 type InvalidRequestJSONResponse ErrorResponse
@@ -7988,6 +8809,8 @@ type NotFoundJSONResponse ErrorResponse
 type TagFQNConflictJSONResponse ErrorResponse
 
 type TransactionTemplateFQNConflictJSONResponse ErrorResponse
+
+type UnauthenticatedJSONResponse ErrorResponse
 
 type ListAccountsRequestObject struct {
 	Params ListAccountsParams
@@ -8025,6 +8848,20 @@ func (response ListAccounts400JSONResponse) VisitListAccountsResponse(w http.Res
 	return err
 }
 
+type ListAccounts401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ListAccounts401JSONResponse) VisitListAccountsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CreateAccountRequestObject struct {
 	Body *CreateAccountJSONRequestBody
 }
@@ -8057,6 +8894,34 @@ func (response CreateAccount400JSONResponse) VisitCreateAccountResponse(w http.R
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateAccount401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response CreateAccount401JSONResponse) VisitCreateAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateAccount403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateAccount403JSONResponse) VisitCreateAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -8111,6 +8976,20 @@ func (response ListAccountBalances400JSONResponse) VisitListAccountBalancesRespo
 	return err
 }
 
+type ListAccountBalances401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ListAccountBalances401JSONResponse) VisitListAccountBalancesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListAccountGroupsRequestObject struct {
 	Params ListAccountGroupsParams
 }
@@ -8147,6 +9026,20 @@ func (response ListAccountGroups400JSONResponse) VisitListAccountGroupsResponse(
 	return err
 }
 
+type ListAccountGroups401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ListAccountGroups401JSONResponse) VisitListAccountGroupsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type RestructureAccountsRequestObject struct {
 	Body *RestructureAccountsJSONRequestBody
 }
@@ -8179,6 +9072,34 @@ func (response RestructureAccounts400JSONResponse) VisitRestructureAccountsRespo
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestructureAccounts401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response RestructureAccounts401JSONResponse) VisitRestructureAccountsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestructureAccounts403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response RestructureAccounts403JSONResponse) VisitRestructureAccountsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -8247,6 +9168,34 @@ func (response SetAccountHiddenByPath400JSONResponse) VisitSetAccountHiddenByPat
 	return err
 }
 
+type SetAccountHiddenByPath401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response SetAccountHiddenByPath401JSONResponse) VisitSetAccountHiddenByPathResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAccountHiddenByPath403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response SetAccountHiddenByPath403JSONResponse) VisitSetAccountHiddenByPathResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type SetAccountHiddenByPath404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response SetAccountHiddenByPath404JSONResponse) VisitSetAccountHiddenByPathResponse(w http.ResponseWriter) error {
@@ -8287,6 +9236,34 @@ func (response DeleteAccount400JSONResponse) VisitDeleteAccountResponse(w http.R
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteAccount401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response DeleteAccount401JSONResponse) VisitDeleteAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteAccount403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteAccount403JSONResponse) VisitDeleteAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -8356,6 +9333,20 @@ func (response GetAccount400JSONResponse) VisitGetAccountResponse(w http.Respons
 	return err
 }
 
+type GetAccount401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response GetAccount401JSONResponse) VisitGetAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetAccount404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response GetAccount404JSONResponse) VisitGetAccountResponse(w http.ResponseWriter) error {
@@ -8403,6 +9394,34 @@ func (response UpdateAccount400JSONResponse) VisitUpdateAccountResponse(w http.R
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAccount401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response UpdateAccount401JSONResponse) VisitUpdateAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAccount403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response UpdateAccount403JSONResponse) VisitUpdateAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -8472,6 +9491,20 @@ func (response ListCreditLimitHistory400JSONResponse) VisitListCreditLimitHistor
 	return err
 }
 
+type ListCreditLimitHistory401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ListCreditLimitHistory401JSONResponse) VisitListCreditLimitHistoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListCreditLimitHistory404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response ListCreditLimitHistory404JSONResponse) VisitListCreditLimitHistoryResponse(w http.ResponseWriter) error {
@@ -8519,6 +9552,34 @@ func (response CreateCreditLimitHistory400JSONResponse) VisitCreateCreditLimitHi
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateCreditLimitHistory401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response CreateCreditLimitHistory401JSONResponse) VisitCreateCreditLimitHistoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateCreditLimitHistory403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateCreditLimitHistory403JSONResponse) VisitCreateCreditLimitHistoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -8588,6 +9649,20 @@ func (response SearchAccountJournalRecords400JSONResponse) VisitSearchAccountJou
 	return err
 }
 
+type SearchAccountJournalRecords401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response SearchAccountJournalRecords401JSONResponse) VisitSearchAccountJournalRecordsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type SearchAccountJournalRecords404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response SearchAccountJournalRecords404JSONResponse) VisitSearchAccountJournalRecordsResponse(w http.ResponseWriter) error {
@@ -8638,6 +9713,34 @@ func (response SeedDemo400JSONResponse) VisitSeedDemoResponse(w http.ResponseWri
 	return err
 }
 
+type SeedDemo401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response SeedDemo401JSONResponse) VisitSeedDemoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SeedDemo403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response SeedDemo403JSONResponse) VisitSeedDemoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type SeedDemo405JSONResponse struct{ MethodNotAllowedJSONResponse }
 
 func (response SeedDemo405JSONResponse) VisitSeedDemoResponse(w http.ResponseWriter) error {
@@ -8680,6 +9783,166 @@ func (response SeedDemo500JSONResponse) VisitSeedDemoResponse(w http.ResponseWri
 	return err
 }
 
+type LoginRequestObject struct {
+	Body *LoginJSONRequestBody
+}
+
+type LoginResponseObject interface {
+	VisitLoginResponse(w http.ResponseWriter) error
+}
+
+type Login200ResponseHeaders struct {
+	SetCookie *string
+}
+
+type Login200JSONResponse struct {
+	Body    AuthenticationStatusResponse
+	Headers Login200ResponseHeaders
+}
+
+func (response Login200JSONResponse) VisitLoginResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.SetCookie != nil {
+		w.Header().Set("Set-Cookie", fmt.Sprint(*response.Headers.SetCookie))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type Login400JSONResponse struct{ InvalidRequestJSONResponse }
+
+func (response Login400JSONResponse) VisitLoginResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type Login401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response Login401JSONResponse) VisitLoginResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type Login405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response Login405JSONResponse) VisitLoginResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LogoutRequestObject struct {
+}
+
+type LogoutResponseObject interface {
+	VisitLogoutResponse(w http.ResponseWriter) error
+}
+
+type Logout204ResponseHeaders struct {
+	SetCookie *string
+}
+
+type Logout204Response struct {
+	Headers Logout204ResponseHeaders
+}
+
+func (response Logout204Response) VisitLogoutResponse(w http.ResponseWriter) error {
+	if response.Headers.SetCookie != nil {
+		w.Header().Set("Set-Cookie", fmt.Sprint(*response.Headers.SetCookie))
+	}
+	w.WriteHeader(204)
+	return nil
+}
+
+type Logout403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response Logout403JSONResponse) VisitLogoutResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type Logout405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response Logout405JSONResponse) VisitLogoutResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAuthenticationStatusRequestObject struct {
+}
+
+type GetAuthenticationStatusResponseObject interface {
+	VisitGetAuthenticationStatusResponse(w http.ResponseWriter) error
+}
+
+type GetAuthenticationStatus200JSONResponse AuthenticationStatusResponse
+
+func (response GetAuthenticationStatus200JSONResponse) VisitGetAuthenticationStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAuthenticationStatus405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response GetAuthenticationStatus405JSONResponse) VisitGetAuthenticationStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListBackgroundOperationsRequestObject struct {
 }
 
@@ -8697,6 +9960,20 @@ func (response ListBackgroundOperations200JSONResponse) VisitListBackgroundOpera
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListBackgroundOperations401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ListBackgroundOperations401JSONResponse) VisitListBackgroundOperationsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -8746,6 +10023,34 @@ func (response StartDatabaseBackupRun400JSONResponse) VisitStartDatabaseBackupRu
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartDatabaseBackupRun401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response StartDatabaseBackupRun401JSONResponse) VisitStartDatabaseBackupRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartDatabaseBackupRun403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response StartDatabaseBackupRun403JSONResponse) VisitStartDatabaseBackupRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -8800,6 +10105,20 @@ func (response GetDatabaseBackupRun400JSONResponse) VisitGetDatabaseBackupRunRes
 	return err
 }
 
+type GetDatabaseBackupRun401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response GetDatabaseBackupRun401JSONResponse) VisitGetDatabaseBackupRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetDatabaseBackupRun404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response GetDatabaseBackupRun404JSONResponse) VisitGetDatabaseBackupRunResponse(w http.ResponseWriter) error {
@@ -8849,6 +10168,20 @@ func (response GetDatabaseBackupStatus200JSONResponse) VisitGetDatabaseBackupSta
 	return err
 }
 
+type GetDatabaseBackupStatus401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response GetDatabaseBackupStatus401JSONResponse) VisitGetDatabaseBackupStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetDatabaseBackupStatus405JSONResponse struct{ MethodNotAllowedJSONResponse }
 
 func (response GetDatabaseBackupStatus405JSONResponse) VisitGetDatabaseBackupStatusResponse(w http.ResponseWriter) error {
@@ -8880,6 +10213,34 @@ func (response StartExchangeRateLoadingRun202JSONResponse) VisitStartExchangeRat
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartExchangeRateLoadingRun401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response StartExchangeRateLoadingRun401JSONResponse) VisitStartExchangeRateLoadingRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartExchangeRateLoadingRun403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response StartExchangeRateLoadingRun403JSONResponse) VisitStartExchangeRateLoadingRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -8934,6 +10295,20 @@ func (response GetExchangeRateLoadingRun400JSONResponse) VisitGetExchangeRateLoa
 	return err
 }
 
+type GetExchangeRateLoadingRun401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response GetExchangeRateLoadingRun401JSONResponse) VisitGetExchangeRateLoadingRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetExchangeRateLoadingRun404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response GetExchangeRateLoadingRun404JSONResponse) VisitGetExchangeRateLoadingRunResponse(w http.ResponseWriter) error {
@@ -8979,6 +10354,20 @@ func (response GetExchangeRateLoadingStatus200JSONResponse) VisitGetExchangeRate
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetExchangeRateLoadingStatus401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response GetExchangeRateLoadingStatus401JSONResponse) VisitGetExchangeRateLoadingStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -9033,6 +10422,20 @@ func (response ListBackgroundOperationRunEnvelopes400JSONResponse) VisitListBack
 	return err
 }
 
+type ListBackgroundOperationRunEnvelopes401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ListBackgroundOperationRunEnvelopes401JSONResponse) VisitListBackgroundOperationRunEnvelopesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListBackgroundOperationRunEnvelopes405JSONResponse struct{ MethodNotAllowedJSONResponse }
 
 func (response ListBackgroundOperationRunEnvelopes405JSONResponse) VisitListBackgroundOperationRunEnvelopesResponse(w http.ResponseWriter) error {
@@ -9083,6 +10486,20 @@ func (response ListCategories400JSONResponse) VisitListCategoriesResponse(w http
 	return err
 }
 
+type ListCategories401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ListCategories401JSONResponse) VisitListCategoriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CreateCategoryRequestObject struct {
 	Body *CreateCategoryJSONRequestBody
 }
@@ -9115,6 +10532,34 @@ func (response CreateCategory400JSONResponse) VisitCreateCategoryResponse(w http
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateCategory401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response CreateCategory401JSONResponse) VisitCreateCategoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateCategory403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateCategory403JSONResponse) VisitCreateCategoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -9171,6 +10616,20 @@ func (response ListCategoryGroups400JSONResponse) VisitListCategoryGroupsRespons
 	return err
 }
 
+type ListCategoryGroups401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ListCategoryGroups401JSONResponse) VisitListCategoryGroupsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type RestructureCategoriesRequestObject struct {
 	Body *RestructureCategoriesJSONRequestBody
 }
@@ -9203,6 +10662,34 @@ func (response RestructureCategories400JSONResponse) VisitRestructureCategoriesR
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestructureCategories401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response RestructureCategories401JSONResponse) VisitRestructureCategoriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestructureCategories403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response RestructureCategories403JSONResponse) VisitRestructureCategoriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -9273,6 +10760,34 @@ func (response SetCategoryHiddenByPath400JSONResponse) VisitSetCategoryHiddenByP
 	return err
 }
 
+type SetCategoryHiddenByPath401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response SetCategoryHiddenByPath401JSONResponse) VisitSetCategoryHiddenByPathResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetCategoryHiddenByPath403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response SetCategoryHiddenByPath403JSONResponse) VisitSetCategoryHiddenByPathResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type SetCategoryHiddenByPath404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response SetCategoryHiddenByPath404JSONResponse) VisitSetCategoryHiddenByPathResponse(w http.ResponseWriter) error {
@@ -9313,6 +10828,34 @@ func (response DeleteCategory400JSONResponse) VisitDeleteCategoryResponse(w http
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteCategory401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response DeleteCategory401JSONResponse) VisitDeleteCategoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteCategory403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteCategory403JSONResponse) VisitDeleteCategoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -9382,6 +10925,20 @@ func (response GetCategory400JSONResponse) VisitGetCategoryResponse(w http.Respo
 	return err
 }
 
+type GetCategory401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response GetCategory401JSONResponse) VisitGetCategoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetCategory404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response GetCategory404JSONResponse) VisitGetCategoryResponse(w http.ResponseWriter) error {
@@ -9433,6 +10990,34 @@ func (response UpdateCategory400JSONResponse) VisitUpdateCategoryResponse(w http
 	return err
 }
 
+type UpdateCategory401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response UpdateCategory401JSONResponse) VisitUpdateCategoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateCategory403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response UpdateCategory403JSONResponse) VisitUpdateCategoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type UpdateCategory404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response UpdateCategory404JSONResponse) VisitUpdateCategoryResponse(w http.ResponseWriter) error {
@@ -9473,6 +11058,34 @@ func (response DeleteCreditLimitHistory400JSONResponse) VisitDeleteCreditLimitHi
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteCreditLimitHistory401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response DeleteCreditLimitHistory401JSONResponse) VisitDeleteCreditLimitHistoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteCreditLimitHistory403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteCreditLimitHistory403JSONResponse) VisitDeleteCreditLimitHistoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -9528,6 +11141,20 @@ func (response GetCreditLimitHistory400JSONResponse) VisitGetCreditLimitHistoryR
 	return err
 }
 
+type GetCreditLimitHistory401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response GetCreditLimitHistory401JSONResponse) VisitGetCreditLimitHistoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetCreditLimitHistory404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response GetCreditLimitHistory404JSONResponse) VisitGetCreditLimitHistoryResponse(w http.ResponseWriter) error {
@@ -9578,6 +11205,20 @@ func (response ListExchangeRates400JSONResponse) VisitListExchangeRatesResponse(
 	return err
 }
 
+type ListExchangeRates401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ListExchangeRates401JSONResponse) VisitListExchangeRatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CreateExchangeRateRequestObject struct {
 	Body *CreateExchangeRateJSONRequestBody
 }
@@ -9610,6 +11251,34 @@ func (response CreateExchangeRate400JSONResponse) VisitCreateExchangeRateRespons
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateExchangeRate401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response CreateExchangeRate401JSONResponse) VisitCreateExchangeRateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateExchangeRate403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateExchangeRate403JSONResponse) VisitCreateExchangeRateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -9654,6 +11323,34 @@ func (response DeleteExchangeRate400JSONResponse) VisitDeleteExchangeRateRespons
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteExchangeRate401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response DeleteExchangeRate401JSONResponse) VisitDeleteExchangeRateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteExchangeRate403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteExchangeRate403JSONResponse) VisitDeleteExchangeRateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -9709,6 +11406,20 @@ func (response GetExchangeRate400JSONResponse) VisitGetExchangeRateResponse(w ht
 	return err
 }
 
+type GetExchangeRate401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response GetExchangeRate401JSONResponse) VisitGetExchangeRateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetExchangeRate404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response GetExchangeRate404JSONResponse) VisitGetExchangeRateResponse(w http.ResponseWriter) error {
@@ -9756,6 +11467,34 @@ func (response UpdateExchangeRate400JSONResponse) VisitUpdateExchangeRateRespons
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateExchangeRate401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response UpdateExchangeRate401JSONResponse) VisitUpdateExchangeRateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateExchangeRate403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response UpdateExchangeRate403JSONResponse) VisitUpdateExchangeRateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -9845,6 +11584,20 @@ func (response ListMembers400JSONResponse) VisitListMembersResponse(w http.Respo
 	return err
 }
 
+type ListMembers401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ListMembers401JSONResponse) VisitListMembersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CreateMemberRequestObject struct {
 	Body *CreateMemberJSONRequestBody
 }
@@ -9877,6 +11630,34 @@ func (response CreateMember400JSONResponse) VisitCreateMemberResponse(w http.Res
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateMember401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response CreateMember401JSONResponse) VisitCreateMemberResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateMember403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateMember403JSONResponse) VisitCreateMemberResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -9921,6 +11702,34 @@ func (response DeleteMember400JSONResponse) VisitDeleteMemberResponse(w http.Res
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteMember401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response DeleteMember401JSONResponse) VisitDeleteMemberResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteMember403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteMember403JSONResponse) VisitDeleteMemberResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -9990,6 +11799,20 @@ func (response GetMember400JSONResponse) VisitGetMemberResponse(w http.ResponseW
 	return err
 }
 
+type GetMember401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response GetMember401JSONResponse) VisitGetMemberResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetMember404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response GetMember404JSONResponse) VisitGetMemberResponse(w http.ResponseWriter) error {
@@ -10037,6 +11860,34 @@ func (response UpdateMember400JSONResponse) VisitUpdateMemberResponse(w http.Res
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMember401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response UpdateMember401JSONResponse) VisitUpdateMemberResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMember403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response UpdateMember403JSONResponse) VisitUpdateMemberResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -10106,6 +11957,34 @@ func (response UpdateMemberHidden400JSONResponse) VisitUpdateMemberHiddenRespons
 	return err
 }
 
+type UpdateMemberHidden401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response UpdateMemberHidden401JSONResponse) VisitUpdateMemberHiddenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMemberHidden403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response UpdateMemberHidden403JSONResponse) VisitUpdateMemberHiddenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type UpdateMemberHidden404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response UpdateMemberHidden404JSONResponse) VisitUpdateMemberHiddenResponse(w http.ResponseWriter) error {
@@ -10156,6 +12035,20 @@ func (response SearchJournalRecords400JSONResponse) VisitSearchJournalRecordsRes
 	return err
 }
 
+type SearchJournalRecords401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response SearchJournalRecords401JSONResponse) VisitSearchJournalRecordsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type BulkReassignJournalRecordAccountRequestObject struct {
 	Body *BulkReassignJournalRecordAccountJSONRequestBody
 }
@@ -10188,6 +12081,34 @@ func (response BulkReassignJournalRecordAccount400JSONResponse) VisitBulkReassig
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type BulkReassignJournalRecordAccount401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response BulkReassignJournalRecordAccount401JSONResponse) VisitBulkReassignJournalRecordAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type BulkReassignJournalRecordAccount403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response BulkReassignJournalRecordAccount403JSONResponse) VisitBulkReassignJournalRecordAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -10228,6 +12149,34 @@ func (response BulkCategorizeJournalRecords400JSONResponse) VisitBulkCategorizeJ
 	return err
 }
 
+type BulkCategorizeJournalRecords401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response BulkCategorizeJournalRecords401JSONResponse) VisitBulkCategorizeJournalRecordsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type BulkCategorizeJournalRecords403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response BulkCategorizeJournalRecords403JSONResponse) VisitBulkCategorizeJournalRecordsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type BulkUpdateJournalRecordStatusesRequestObject struct {
 	Body *BulkUpdateJournalRecordStatusesJSONRequestBody
 }
@@ -10260,6 +12209,34 @@ func (response BulkUpdateJournalRecordStatuses400JSONResponse) VisitBulkUpdateJo
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type BulkUpdateJournalRecordStatuses401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response BulkUpdateJournalRecordStatuses401JSONResponse) VisitBulkUpdateJournalRecordStatusesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type BulkUpdateJournalRecordStatuses403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response BulkUpdateJournalRecordStatuses403JSONResponse) VisitBulkUpdateJournalRecordStatusesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -10300,6 +12277,34 @@ func (response BulkUpdateJournalRecordTags400JSONResponse) VisitBulkUpdateJourna
 	return err
 }
 
+type BulkUpdateJournalRecordTags401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response BulkUpdateJournalRecordTags401JSONResponse) VisitBulkUpdateJournalRecordTagsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type BulkUpdateJournalRecordTags403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response BulkUpdateJournalRecordTags403JSONResponse) VisitBulkUpdateJournalRecordTagsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListRecurringDefinitionsRequestObject struct {
 	Params ListRecurringDefinitionsParams
 }
@@ -10336,6 +12341,20 @@ func (response ListRecurringDefinitions400JSONResponse) VisitListRecurringDefini
 	return err
 }
 
+type ListRecurringDefinitions401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ListRecurringDefinitions401JSONResponse) VisitListRecurringDefinitionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CreateRecurringDefinitionRequestObject struct {
 	Body *CreateRecurringDefinitionJSONRequestBody
 }
@@ -10368,6 +12387,34 @@ func (response CreateRecurringDefinition400JSONResponse) VisitCreateRecurringDef
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRecurringDefinition401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response CreateRecurringDefinition401JSONResponse) VisitCreateRecurringDefinitionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRecurringDefinition403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateRecurringDefinition403JSONResponse) VisitCreateRecurringDefinitionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -10412,6 +12459,34 @@ func (response DeleteRecurringDefinition400JSONResponse) VisitDeleteRecurringDef
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteRecurringDefinition401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response DeleteRecurringDefinition401JSONResponse) VisitDeleteRecurringDefinitionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteRecurringDefinition403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteRecurringDefinition403JSONResponse) VisitDeleteRecurringDefinitionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -10466,6 +12541,20 @@ func (response GetRecurringDefinition400JSONResponse) VisitGetRecurringDefinitio
 	return err
 }
 
+type GetRecurringDefinition401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response GetRecurringDefinition401JSONResponse) VisitGetRecurringDefinitionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetRecurringDefinition404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response GetRecurringDefinition404JSONResponse) VisitGetRecurringDefinitionResponse(w http.ResponseWriter) error {
@@ -10513,6 +12602,34 @@ func (response ReplaceRecurringDefinition400JSONResponse) VisitReplaceRecurringD
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceRecurringDefinition401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ReplaceRecurringDefinition401JSONResponse) VisitReplaceRecurringDefinitionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceRecurringDefinition403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ReplaceRecurringDefinition403JSONResponse) VisitReplaceRecurringDefinitionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -10577,6 +12694,34 @@ func (response ConfirmNextRecurringDefinition400JSONResponse) VisitConfirmNextRe
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ConfirmNextRecurringDefinition401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ConfirmNextRecurringDefinition401JSONResponse) VisitConfirmNextRecurringDefinitionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ConfirmNextRecurringDefinition403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ConfirmNextRecurringDefinition403JSONResponse) VisitConfirmNextRecurringDefinitionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -10646,6 +12791,34 @@ func (response DeferRecurringDefinition400JSONResponse) VisitDeferRecurringDefin
 	return err
 }
 
+type DeferRecurringDefinition401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response DeferRecurringDefinition401JSONResponse) VisitDeferRecurringDefinitionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeferRecurringDefinition403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeferRecurringDefinition403JSONResponse) VisitDeferRecurringDefinitionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type DeferRecurringDefinition404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response DeferRecurringDefinition404JSONResponse) VisitDeferRecurringDefinitionResponse(w http.ResponseWriter) error {
@@ -10710,6 +12883,34 @@ func (response PauseRecurringDefinition400JSONResponse) VisitPauseRecurringDefin
 	return err
 }
 
+type PauseRecurringDefinition401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response PauseRecurringDefinition401JSONResponse) VisitPauseRecurringDefinitionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PauseRecurringDefinition403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response PauseRecurringDefinition403JSONResponse) VisitPauseRecurringDefinitionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type PauseRecurringDefinition404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response PauseRecurringDefinition404JSONResponse) VisitPauseRecurringDefinitionResponse(w http.ResponseWriter) error {
@@ -10756,6 +12957,34 @@ func (response ResumeRecurringDefinition400JSONResponse) VisitResumeRecurringDef
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResumeRecurringDefinition401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ResumeRecurringDefinition401JSONResponse) VisitResumeRecurringDefinitionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResumeRecurringDefinition403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ResumeRecurringDefinition403JSONResponse) VisitResumeRecurringDefinitionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -10810,6 +13039,20 @@ func (response ListRecurringOccurrences400JSONResponse) VisitListRecurringOccurr
 	return err
 }
 
+type ListRecurringOccurrences401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ListRecurringOccurrences401JSONResponse) VisitListRecurringOccurrencesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ConfirmRecurringOccurrenceRequestObject struct {
 	RecurringOccurrenceId int64 `json:"recurring_occurrence_id"`
 }
@@ -10842,6 +13085,34 @@ func (response ConfirmRecurringOccurrence400JSONResponse) VisitConfirmRecurringO
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ConfirmRecurringOccurrence401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ConfirmRecurringOccurrence401JSONResponse) VisitConfirmRecurringOccurrenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ConfirmRecurringOccurrence403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ConfirmRecurringOccurrence403JSONResponse) VisitConfirmRecurringOccurrenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -10896,6 +13167,34 @@ func (response DismissRecurringOccurrence400JSONResponse) VisitDismissRecurringO
 	return err
 }
 
+type DismissRecurringOccurrence401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response DismissRecurringOccurrence401JSONResponse) VisitDismissRecurringOccurrenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DismissRecurringOccurrence403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DismissRecurringOccurrence403JSONResponse) VisitDismissRecurringOccurrenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type DismissRecurringOccurrence404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response DismissRecurringOccurrence404JSONResponse) VisitDismissRecurringOccurrenceResponse(w http.ResponseWriter) error {
@@ -10927,6 +13226,20 @@ func (response GetSettings200JSONResponse) VisitGetSettingsResponse(w http.Respo
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetSettings401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response GetSettings401JSONResponse) VisitGetSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -10981,6 +13294,20 @@ func (response ListTags400JSONResponse) VisitListTagsResponse(w http.ResponseWri
 	return err
 }
 
+type ListTags401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ListTags401JSONResponse) VisitListTagsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CreateTagRequestObject struct {
 	Body *CreateTagJSONRequestBody
 }
@@ -11013,6 +13340,34 @@ func (response CreateTag400JSONResponse) VisitCreateTagResponse(w http.ResponseW
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateTag401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response CreateTag401JSONResponse) VisitCreateTagResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateTag403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateTag403JSONResponse) VisitCreateTagResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -11067,6 +13422,20 @@ func (response ListTagGroups400JSONResponse) VisitListTagGroupsResponse(w http.R
 	return err
 }
 
+type ListTagGroups401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ListTagGroups401JSONResponse) VisitListTagGroupsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type RestructureTagsRequestObject struct {
 	Body *RestructureTagsJSONRequestBody
 }
@@ -11099,6 +13468,34 @@ func (response RestructureTags400JSONResponse) VisitRestructureTagsResponse(w ht
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestructureTags401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response RestructureTags401JSONResponse) VisitRestructureTagsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestructureTags403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response RestructureTags403JSONResponse) VisitRestructureTagsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -11167,6 +13564,34 @@ func (response SetTagHiddenByPath400JSONResponse) VisitSetTagHiddenByPathRespons
 	return err
 }
 
+type SetTagHiddenByPath401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response SetTagHiddenByPath401JSONResponse) VisitSetTagHiddenByPathResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetTagHiddenByPath403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response SetTagHiddenByPath403JSONResponse) VisitSetTagHiddenByPathResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type SetTagHiddenByPath404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response SetTagHiddenByPath404JSONResponse) VisitSetTagHiddenByPathResponse(w http.ResponseWriter) error {
@@ -11207,6 +13632,34 @@ func (response DeleteTag400JSONResponse) VisitDeleteTagResponse(w http.ResponseW
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteTag401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response DeleteTag401JSONResponse) VisitDeleteTagResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteTag403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteTag403JSONResponse) VisitDeleteTagResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -11276,6 +13729,20 @@ func (response GetTag400JSONResponse) VisitGetTagResponse(w http.ResponseWriter)
 	return err
 }
 
+type GetTag401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response GetTag401JSONResponse) VisitGetTagResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetTag404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response GetTag404JSONResponse) VisitGetTagResponse(w http.ResponseWriter) error {
@@ -11323,6 +13790,34 @@ func (response UpdateTag400JSONResponse) VisitUpdateTagResponse(w http.ResponseW
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateTag401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response UpdateTag401JSONResponse) VisitUpdateTagResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateTag403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response UpdateTag403JSONResponse) VisitUpdateTagResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -11377,6 +13872,20 @@ func (response ListTransactionTemplates400JSONResponse) VisitListTransactionTemp
 	return err
 }
 
+type ListTransactionTemplates401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ListTransactionTemplates401JSONResponse) VisitListTransactionTemplatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CreateTransactionTemplateRequestObject struct {
 	Body *CreateTransactionTemplateJSONRequestBody
 }
@@ -11409,6 +13918,34 @@ func (response CreateTransactionTemplate400JSONResponse) VisitCreateTransactionT
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateTransactionTemplate401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response CreateTransactionTemplate401JSONResponse) VisitCreateTransactionTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateTransactionTemplate403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateTransactionTemplate403JSONResponse) VisitCreateTransactionTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -11461,6 +13998,34 @@ func (response RestructureTransactionTemplates400JSONResponse) VisitRestructureT
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestructureTransactionTemplates401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response RestructureTransactionTemplates401JSONResponse) VisitRestructureTransactionTemplatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestructureTransactionTemplates403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response RestructureTransactionTemplates403JSONResponse) VisitRestructureTransactionTemplatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -11525,6 +14090,34 @@ func (response DeleteTransactionTemplate400JSONResponse) VisitDeleteTransactionT
 	return err
 }
 
+type DeleteTransactionTemplate401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response DeleteTransactionTemplate401JSONResponse) VisitDeleteTransactionTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteTransactionTemplate403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteTransactionTemplate403JSONResponse) VisitDeleteTransactionTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type DeleteTransactionTemplate404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response DeleteTransactionTemplate404JSONResponse) VisitDeleteTransactionTemplateResponse(w http.ResponseWriter) error {
@@ -11571,6 +14164,20 @@ func (response GetTransactionTemplate400JSONResponse) VisitGetTransactionTemplat
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTransactionTemplate401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response GetTransactionTemplate401JSONResponse) VisitGetTransactionTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -11626,6 +14233,34 @@ func (response ReplaceTransactionTemplate400JSONResponse) VisitReplaceTransactio
 	return err
 }
 
+type ReplaceTransactionTemplate401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ReplaceTransactionTemplate401JSONResponse) VisitReplaceTransactionTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceTransactionTemplate403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ReplaceTransactionTemplate403JSONResponse) VisitReplaceTransactionTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ReplaceTransactionTemplate404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response ReplaceTransactionTemplate404JSONResponse) VisitReplaceTransactionTemplateResponse(w http.ResponseWriter) error {
@@ -11676,6 +14311,20 @@ func (response ListTransactions400JSONResponse) VisitListTransactionsResponse(w 
 	return err
 }
 
+type ListTransactions401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ListTransactions401JSONResponse) VisitListTransactionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CreateTransactionRequestObject struct {
 	Body *CreateTransactionJSONRequestBody
 }
@@ -11708,6 +14357,34 @@ func (response CreateTransaction400JSONResponse) VisitCreateTransactionResponse(
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateTransaction401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response CreateTransaction401JSONResponse) VisitCreateTransactionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateTransaction403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateTransaction403JSONResponse) VisitCreateTransactionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -11748,6 +14425,34 @@ func (response ClassifyTransaction400JSONResponse) VisitClassifyTransactionRespo
 	return err
 }
 
+type ClassifyTransaction401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ClassifyTransaction401JSONResponse) VisitClassifyTransactionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ClassifyTransaction403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ClassifyTransaction403JSONResponse) VisitClassifyTransactionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CreateExchangeTransactionRequestObject struct {
 	Body *CreateExchangeTransactionJSONRequestBody
 }
@@ -11780,6 +14485,34 @@ func (response CreateExchangeTransaction400JSONResponse) VisitCreateExchangeTran
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateExchangeTransaction401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response CreateExchangeTransaction401JSONResponse) VisitCreateExchangeTransactionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateExchangeTransaction403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateExchangeTransaction403JSONResponse) VisitCreateExchangeTransactionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -11820,6 +14553,34 @@ func (response CreateIncomeTransaction400JSONResponse) VisitCreateIncomeTransact
 	return err
 }
 
+type CreateIncomeTransaction401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response CreateIncomeTransaction401JSONResponse) VisitCreateIncomeTransactionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateIncomeTransaction403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateIncomeTransaction403JSONResponse) VisitCreateIncomeTransactionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetTransactionMonthTotalsRequestObject struct {
 	Params GetTransactionMonthTotalsParams
 }
@@ -11852,6 +14613,20 @@ func (response GetTransactionMonthTotals400JSONResponse) VisitGetTransactionMont
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTransactionMonthTotals401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response GetTransactionMonthTotals401JSONResponse) VisitGetTransactionMonthTotalsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -11892,6 +14667,34 @@ func (response CreateRefundTransaction400JSONResponse) VisitCreateRefundTransact
 	return err
 }
 
+type CreateRefundTransaction401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response CreateRefundTransaction401JSONResponse) VisitCreateRefundTransactionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRefundTransaction403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateRefundTransaction403JSONResponse) VisitCreateRefundTransactionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CreateSpendTransactionRequestObject struct {
 	Body *CreateSpendTransactionJSONRequestBody
 }
@@ -11924,6 +14727,34 @@ func (response CreateSpendTransaction400JSONResponse) VisitCreateSpendTransactio
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSpendTransaction401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response CreateSpendTransaction401JSONResponse) VisitCreateSpendTransactionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSpendTransaction403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateSpendTransaction403JSONResponse) VisitCreateSpendTransactionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -11964,6 +14795,34 @@ func (response CreateTransferTransaction400JSONResponse) VisitCreateTransferTran
 	return err
 }
 
+type CreateTransferTransaction401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response CreateTransferTransaction401JSONResponse) VisitCreateTransferTransactionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateTransferTransaction403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateTransferTransaction403JSONResponse) VisitCreateTransferTransactionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type DeleteTransactionRequestObject struct {
 	TransactionId int64 `json:"transaction_id"`
 }
@@ -11990,6 +14849,34 @@ func (response DeleteTransaction400JSONResponse) VisitDeleteTransactionResponse(
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteTransaction401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response DeleteTransaction401JSONResponse) VisitDeleteTransactionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteTransaction403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteTransaction403JSONResponse) VisitDeleteTransactionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -12040,6 +14927,20 @@ func (response GetTransaction400JSONResponse) VisitGetTransactionResponse(w http
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTransaction401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response GetTransaction401JSONResponse) VisitGetTransactionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -12095,6 +14996,34 @@ func (response ReplaceTransaction400JSONResponse) VisitReplaceTransactionRespons
 	return err
 }
 
+type ReplaceTransaction401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response ReplaceTransaction401JSONResponse) VisitReplaceTransactionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceTransaction403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ReplaceTransaction403JSONResponse) VisitReplaceTransactionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ReplaceTransaction404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response ReplaceTransaction404JSONResponse) VisitReplaceTransactionResponse(w http.ResponseWriter) error {
@@ -12141,6 +15070,34 @@ func (response CancelTransaction400JSONResponse) VisitCancelTransactionResponse(
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelTransaction401JSONResponse struct{ UnauthenticatedJSONResponse }
+
+func (response CancelTransaction401JSONResponse) VisitCancelTransactionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelTransaction403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CancelTransaction403JSONResponse) VisitCancelTransactionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -12200,6 +15157,15 @@ type StrictServerInterface interface {
 	// Seed demo data into the opened app.
 	// (POST /api/app/demo-seed)
 	SeedDemo(ctx context.Context, request SeedDemoRequestObject) (SeedDemoResponseObject, error)
+	// Create a long-lived browser session with an email and password.
+	// (POST /api/auth/login)
+	Login(ctx context.Context, request LoginRequestObject) (LoginResponseObject, error)
+	// Clear the browser session cookie.
+	// (POST /api/auth/logout)
+	Logout(ctx context.Context, request LogoutRequestObject) (LogoutResponseObject, error)
+	// Report whether authentication is enabled and the browser session is valid.
+	// (GET /api/auth/status)
+	GetAuthenticationStatus(ctx context.Context, request GetAuthenticationStatusRequestObject) (GetAuthenticationStatusResponseObject, error)
 	// List registered background operations.
 	// (GET /api/background-operations)
 	ListBackgroundOperations(ctx context.Context, request ListBackgroundOperationsRequestObject) (ListBackgroundOperationsResponseObject, error)
@@ -12819,6 +15785,85 @@ func (sh *strictHandler) SeedDemo(w http.ResponseWriter, r *http.Request, params
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(SeedDemoResponseObject); ok {
 		if err := validResponse.VisitSeedDemoResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// Login operation middleware
+func (sh *strictHandler) Login(w http.ResponseWriter, r *http.Request) {
+	var request LoginRequestObject
+
+	var body LoginJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.Login(ctx, request.(LoginRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "Login")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(LoginResponseObject); ok {
+		if err := validResponse.VisitLoginResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// Logout operation middleware
+func (sh *strictHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	var request LogoutRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.Logout(ctx, request.(LogoutRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "Logout")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(LogoutResponseObject); ok {
+		if err := validResponse.VisitLogoutResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetAuthenticationStatus operation middleware
+func (sh *strictHandler) GetAuthenticationStatus(w http.ResponseWriter, r *http.Request) {
+	var request GetAuthenticationStatusRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetAuthenticationStatus(ctx, request.(GetAuthenticationStatusRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetAuthenticationStatus")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetAuthenticationStatusResponseObject); ok {
+		if err := validResponse.VisitGetAuthenticationStatusResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -14948,264 +17993,281 @@ func (sh *strictHandler) CancelTransaction(w http.ResponseWriter, r *http.Reques
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

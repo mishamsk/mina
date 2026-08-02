@@ -96,6 +96,7 @@ operations:
 ## Client Modes and Sessions
 
 - A remote session uses a normal `http.Client` against a configured Mina server URL.
+- Remote CLI and stdio MCP sessions read `MINA_API_KEY` and attach it as an opaque bearer credential without logging it.
 - A local session owns one runtime app and a request doer that invokes its REST handler in-process.
 - The in-process doer supplies a synthetic base URL only for generated request construction.
 - Local requests execute OpenAPI binding, REST validation, DTO mapping, services, and stores exactly like remote requests.
@@ -168,7 +169,8 @@ mina client --db ./mina.db transactions create --json @transaction.json
 - The embedded MCP server uses an in-process generated REST client targeting the REST handler directly.
 - The MCP handler is composed beside `/api` and the web UI; it never calls the final composed handler.
 - Streamable HTTP validates origins and retains Mina's loopback listener default.
-- Non-loopback REST and MCP exposure share one authentication and deployment policy.
+- Streamable HTTP MCP accepts API keys only; its already-authorized in-process REST dispatch does not add a second credential layer.
+- Non-loopback REST and MCP exposure requires a trusted network or TLS-terminating reverse proxy; Mina itself serves plain HTTP.
 
 ## Hand-Written Extensions
 

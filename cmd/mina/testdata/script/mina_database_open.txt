@@ -19,6 +19,11 @@ exec mina migrate --db $WORK/migrated.db --yes
 ! stderr 'listen error:'
 exists $WORK/migrated.db
 
+# Offline migration validates without requiring configured online authentication state.
+exec mina --config-file migrate-auth-independent.toml migrate --yes
+! stderr 'listen error:'
+exists $WORK/auth-independent.db
+
 # Existing empty databases are not migrated when migration confirmation is declined.
 duckdbtouch $WORK/needs-confirm.db
 duckdbsnapshot $WORK/needs-confirm.db $WORK/needs-confirm.snapshot
@@ -36,3 +41,7 @@ exists $WORK/quoted-schema.db
 
 -- no.txt --
 n
+
+-- migrate-auth-independent.toml --
+db = "auth-independent.db"
+auth_file = "missing-auth.toml"

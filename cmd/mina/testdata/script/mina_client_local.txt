@@ -1,6 +1,7 @@
 # A fresh local target is created, migrated, and served in-process without a listener.
 env MINA_FX_AUTO_LOAD_ENABLED=false
-exec mina client --db $WORK/local.db --yes tags create --json '{"fqn":"LocalCLI"}'
+env MINA_API_KEY=
+exec mina --config-file local-config.toml client --db $WORK/local.db --yes tags create --json '{"fqn":"LocalCLI"}'
 stdout '"fqn":"LocalCLI"'
 stdout '"tag_id":5'
 ! stderr .
@@ -74,3 +75,6 @@ stderr 'mina client requires a target: use --db PATH for local mode or --server 
 -- consent-and-body.txt --
 y
 {"fqn":"PipeBody"}
+
+-- local-config.toml --
+auth_file = "local-auth.toml"

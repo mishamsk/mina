@@ -8,6 +8,7 @@ import {
   Hash,
   Home,
   ListBox,
+  Logout,
   Menu,
   Plus,
   Search,
@@ -15,13 +16,13 @@ import {
   User,
   Wallet,
 } from "pixelarticons/react";
-import type { ComponentType, ReactNode, SVGProps } from "react";
+import type { ComponentType, ReactNode, Ref, SVGProps } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { NavLink, type To, useSearchParams } from "react-router";
 
 import { apiErrorMessage, fetchTransactionById } from "@/api";
 import { Toast } from "@/components/toast";
-import { Tooltip } from "@/components/tooltip";
+import { focusWithoutTooltip, Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { CommandPalette } from "@/features/command-palette";
@@ -41,12 +42,15 @@ import {
   failTransactionEntryRoute,
   getCommandPaletteSnapshot,
   loadTransactionEntryRoute,
+  logoutAuthentication,
   openCommandPalette,
   openTransactionEntryPanel,
   openTransactionEntryRoute,
   resolveTransactionEntryRoute,
   setSidebarCollapsed,
   toggleCommandPalette,
+  useAuthenticationView,
+  useCommandPaletteOpen,
   useLastTransactionsPageSearch,
   usePreferencesView,
   useTransactionEntryPanelView,
@@ -237,11 +241,54 @@ const CommandPaletteButton = ({
   );
 };
 
+const LogoutButton = ({
+  buttonRef,
+  collapsed,
+  pending,
+  onLogout,
+}: {
+  readonly buttonRef: Ref<HTMLButtonElement>;
+  readonly collapsed: boolean;
+  readonly pending: boolean;
+  readonly onLogout: () => void;
+}) => {
+  const label = pending ? "Logging out…" : "Log out";
+  const button = (
+    <Button
+      ref={buttonRef}
+      type="button"
+      variant="outline"
+      className={cn("w-full", collapsed && "px-0")}
+      aria-label={label}
+      disabled={pending}
+      onClick={onLogout}
+    >
+      <Logout aria-hidden="true" />
+      <span className={cn(collapsed && "sr-only")} aria-live="polite">
+        {label}
+      </span>
+    </Button>
+  );
+
+  return collapsed || pending ? (
+    <Tooltip label={label} className="w-full" asChild={!pending}>
+      {button}
+    </Tooltip>
+  ) : (
+    button
+  );
+};
+
 export const AppShell = ({ children }: AppShellProps) => {
   const {
     preferences: { sidebarCollapsed },
   } = usePreferencesView();
+  const authentication = useAuthenticationView();
+  const commandPaletteOpen = useCommandPaletteOpen();
   const entryModal = useTransactionEntryPanelView();
+  const [logoutPending, setLogoutPending] = useState(false);
+  const [logoutError, setLogoutError] = useState<string>();
+  const logoutButtonRef = useRef<HTMLButtonElement>(null);
   const [entrySaveNotice, setEntrySaveNotice] = useState<
     { readonly id: number; readonly message: string } | undefined
   >();
@@ -258,6 +305,13 @@ export const AppShell = ({ children }: AppShellProps) => {
     entryParam ? searchParams.get("transaction") : null,
   );
   const lastTransactionsPageSearch = useLastTransactionsPageSearch();
+
+  useEffect(() => {
+    if (!logoutPending && logoutError && !commandPaletteOpen) {
+      focusWithoutTooltip(logoutButtonRef.current, { preventScroll: true });
+    }
+  }, [commandPaletteOpen, logoutError, logoutPending]);
+
   const primaryNavItems: readonly NavItem[] = [
     { icon: Home, label: "Overview", to: "/overview" },
     {
@@ -452,7 +506,6 @@ export const AppShell = ({ children }: AppShellProps) => {
       ) {
         return;
       }
-
       const commandPaletteOpen = getCommandPaletteSnapshot().open;
       if (!commandPaletteOpen && hasActiveOverlay()) {
         event.preventDefault();
@@ -555,6 +608,23 @@ export const AppShell = ({ children }: AppShellProps) => {
           <div className="mt-auto flex flex-col gap-3">
             <Separator />
             <SidebarNav collapsed={sidebarCollapsed} items={utilityNavItems} />
+            {authentication.phase === "authenticated" ? (
+              <LogoutButton
+                buttonRef={logoutButtonRef}
+                collapsed={sidebarCollapsed}
+                pending={logoutPending}
+                onLogout={() => {
+                  setLogoutPending(true);
+                  setLogoutError(undefined);
+                  void logoutAuthentication().then((error) => {
+                    setLogoutPending(false);
+                    if (error) {
+                      setLogoutError(error);
+                    }
+                  });
+                }}
+              />
+            ) : null}
           </div>
         </div>
 
@@ -602,6 +672,7 @@ export const AppShell = ({ children }: AppShellProps) => {
       <CommandPalette />
       <EntryModal
         errorMessage={entryModal.errorMessage}
+        globalNotice={logoutError}
         initialTab={entryModal.initialTab}
         initialTemplateFqn={entryModal.initialTemplateFqn}
         launch={entryModal.launch}
@@ -614,6 +685,9 @@ export const AppShell = ({ children }: AppShellProps) => {
         recentTransactions={entryModal.recentTransactions}
         requestCloseRef={entryCloseRequestRef}
         onClose={closeEntryModal}
+        onGlobalNoticeDismiss={() => {
+          setLogoutError(undefined);
+        }}
         onLookupsRetry={refreshLedgerLookups}
         onNoticeDismiss={() => {
           setEntrySaveNotice(undefined);
@@ -645,6 +719,16 @@ export const AppShell = ({ children }: AppShellProps) => {
           message={entrySaveNotice?.message}
           onDismiss={() => {
             setEntrySaveNotice(undefined);
+          }}
+        />
+      ) : null}
+      {!entryModal.open ? (
+        <Toast
+          containerClassName="bottom-16 z-[80]"
+          className="text-destructive"
+          message={logoutError}
+          onDismiss={() => {
+            setLogoutError(undefined);
           }}
         />
       ) : null}

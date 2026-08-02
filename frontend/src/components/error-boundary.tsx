@@ -35,7 +35,9 @@ export class ErrorBoundary extends Component<
             className="status-panel"
             aria-labelledby="render-error-title"
           >
-            <h1 id="render-error-title">Mina</h1>
+            <h1 id="render-error-title" tabIndex={-1}>
+              Mina
+            </h1>
             <p role="alert">{this.state.errorMessage}</p>
           </section>
         </main>

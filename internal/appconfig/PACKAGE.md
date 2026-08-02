@@ -12,16 +12,18 @@
 - The platform fallback is `$HOME/.config/mina/config.toml` on macOS and `mina/config.toml` under `os.UserConfigDir()` elsewhere.
 - If the platform config directory is unavailable, startup continues without a config file target.
 - Missing config files are valid; `Load` retains the resolved path for settings reporting.
+- `auth_file` is optional, has no environment or CLI override, and relative values resolve against the loaded config file's directory.
 - Every `fileConfig` leaf has one entry in the static settings metadata map; snapshot construction rejects missing or unknown entries.
 - Settings snapshot construction captures resolved process-config values and validates presentation-metadata completeness and consistency.
 - `DefaultConfig` does not inspect the filesystem or environment.
 - `Load` resolves Mina's app cache directory as `mina` under `XDG_CACHE_HOME` when set, otherwise under `os.UserCacheDir()`, unless `Overrides.CacheDir` is set.
 - `MINA_DATABASE_ENCRYPTION_KEY` is read through a dedicated env-only accessor and never enters `Config`, source metadata, TOML, overrides, or settings snapshots.
+- `MINA_API_KEY` is read through a dedicated env-only accessor for remote client composition and never enters ordinary config or settings snapshots.
 
 ## Boundaries
 
 - Owns: config file parsing, environment variable parsing, app config merge policy, defaults, explicit overrides, effective-source tracking, and read-only settings metadata/snapshot derivation.
-- Does not own: CLI flags, prompts, quiet mode, demo mode, access-log files, database files, listeners, database handles, clocks, writers, provider test seams, database lifecycle policy, service/provider option structs, domain validation, SQL, HTTP DTOs, or background runner mechanics.
+- Does not own: authentication-file reads or writes, CLI flags, prompts, quiet mode, demo mode, access-log files, database files, listeners, database handles, clocks, writers, provider test seams, database lifecycle policy, service/provider option structs, domain validation, SQL, HTTP DTOs, or background runner mechanics.
 
 ## Testing Notes
 

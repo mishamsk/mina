@@ -1,0 +1,136 @@
+# The auth CLI discovers a relative auth_file, initializes it privately, and never prints stored secrets.
+mkdir config
+cp config.toml config/config.toml
+stdin first-password.txt
+exec mina --config-file config/config.toml auth init Admin@Local
+stdout 'Initialized .*config/auth.toml with user admin@local'
+stdout 'Authentication changes take effect after Mina restarts.'
+stderr '^Password: Confirm password: $'
+exists config/auth.toml
+exec find config/auth.toml -perm 0600 -print
+stdout 'config/auth.toml'
+grep '^version = 1$' config/auth.toml
+grep '^signing_secret = ' config/auth.toml
+grep 'password_hash = .*.argon2id' config/auth.toml
+! grep 'first-password' config/auth.toml
+
+# A representative user mutation normalizes email and announces restart semantics.
+stdin second-password.txt
+exec mina --config-file config/config.toml auth user add SECOND@LOCAL
+stdout 'Added user second@local'
+stdout 'Authentication changes take effect after Mina restarts.'
+
+# API key plaintext is revealed once; subsequent listing exposes metadata only.
+exec mina --config-file config/config.toml auth api-key create automation
+stdout 'Created API key automation'
+stdout 'API key \(shown once\): mina_[A-Za-z0-9_-]+_[A-Za-z0-9_-]+'
+stdout 'Authentication changes take effect after Mina restarts.'
+exec mina --config-file config/config.toml auth api-key list
+stdout 'automation.*prefix='
+! stdout 'mina_'
+! stdout 'token_digest'
+! stdout 'revoked'
+
+# Revocation deletes the active record from listing and TOML and frees its label for immediate reuse.
+exec mina --config-file revoke-config.toml auth api-key revoke EQO-K-an
+stdout 'Revoked API key integration'
+exec mina --config-file revoke-config.toml auth api-key list
+! stdout 'integration'
+stdout 'unrelated.*prefix='
+! grep 'label = "integration"' revoke-auth.toml
+! grep 'revoked' revoke-auth.toml
+exec mina --config-file revoke-config.toml auth api-key create integration
+stdout 'Created API key integration'
+exec mina --config-file revoke-config.toml auth api-key list
+stdout 'integration.*prefix='
+stdout 'unrelated.*prefix='
+
+# CLI-only mutations retain the startup snapshot until a launched server restarts.
+freeport
+exec mina --config-file config/config.toml serve --db $WORK/auth.db --yes --host 127.0.0.1 --port $PORT --quiet &original_server&
+httpwait -timeout 15s '"status":"ok"' http://127.0.0.1:$PORT/api/health
+httpget -save-cookie-env OLD_SESSION -method POST -body first-login.json http://127.0.0.1:$PORT/api/auth/login
+stdout '"authenticated":true'
+
+stdin replacement-password.txt
+exec mina --config-file config/config.toml auth user set-password admin@local
+stdout 'Changed password for admin@local'
+httpget -method POST -body first-login.json http://127.0.0.1:$PORT/api/auth/login
+stdout '"authenticated":true'
+httpget -method POST -status 401 -body replacement-login.json http://127.0.0.1:$PORT/api/auth/login
+httpget -cookie-env OLD_SESSION http://127.0.0.1:$PORT/api/settings
+stdout '"groups"'
+kill -INT original_server
+wait original_server
+
+freeport
+exec mina --config-file config/config.toml serve --db $WORK/auth.db --yes --host 127.0.0.1 --port $PORT --quiet &password_server&
+httpwait -timeout 15s '"status":"ok"' http://127.0.0.1:$PORT/api/health
+httpget -method POST -status 401 -body first-login.json http://127.0.0.1:$PORT/api/auth/login
+httpget -save-cookie-env REPLACEMENT_SESSION -method POST -body replacement-login.json http://127.0.0.1:$PORT/api/auth/login
+stdout '"authenticated":true'
+httpget -cookie-env OLD_SESSION -status 401 http://127.0.0.1:$PORT/api/settings
+
+exec mina --config-file config/config.toml auth user disable admin@local
+stdout 'Set user admin@local enabled=false'
+httpget -method POST -body replacement-login.json http://127.0.0.1:$PORT/api/auth/login
+stdout '"authenticated":true'
+httpget -cookie-env REPLACEMENT_SESSION http://127.0.0.1:$PORT/api/settings
+stdout '"groups"'
+kill -INT password_server
+wait password_server
+
+freeport
+exec mina --config-file config/config.toml serve --db $WORK/auth.db --yes --host 127.0.0.1 --port $PORT --quiet &disabled_server&
+httpwait -timeout 15s '"status":"ok"' http://127.0.0.1:$PORT/api/health
+httpget -method POST -status 401 -body replacement-login.json http://127.0.0.1:$PORT/api/auth/login
+httpget -cookie-env REPLACEMENT_SESSION -status 401 http://127.0.0.1:$PORT/api/settings
+kill -INT disabled_server
+wait disabled_server
+
+-- config.toml --
+auth_file = "auth.toml"
+
+-- revoke-config.toml --
+auth_file = "revoke-auth.toml"
+
+-- revoke-auth.toml --
+version = 1
+signing_secret = "ZbCeTAaoT7sWtXpuq3emLOfecWDUOYmSYoExD-qJARQ"
+
+[[users]]
+id = "nNRamaBjwn8qw1uvCdHgxA"
+email = "admin@local"
+enabled = true
+password_hash = "$argon2id$v=19$m=65536,t=3,p=2$NAImLlT1PGOeyz0b4w5rUg$QfRwHPWpC8rKTAraigpky4wjIax9vOnvHBgpBDJtiFM"
+session_version = 1
+
+[[api_keys]]
+id = "0dWhc5Z7eiEwOmSSo9_Tgw"
+label = "integration"
+prefix = "EQO-K-an"
+token_digest = "b24af462a43b28cb4d7d264a2ed739ff45605568ebfdc075454bfbc8b619fadd"
+
+[[api_keys]]
+id = "W2r-lW8ibcVrtTUicHrlAw"
+label = "unrelated"
+prefix = "Tq0BQrfy"
+token_digest = "2efe6126bd82d8b6bc14e4c40a62da38792d742ec02f05495b924d4541b752cc"
+
+-- first-password.txt --
+first-password
+first-password
+
+-- second-password.txt --
+second-password
+second-password
+
+-- replacement-password.txt --
+replacement-password
+replacement-password
+
+-- first-login.json --
+{"email":"admin@local","password":"first-password"}
+
+-- replacement-login.json --
+{"email":"admin@local","password":"replacement-password"}

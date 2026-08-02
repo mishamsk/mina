@@ -15,6 +15,7 @@ Mina frontend is the local web UI served by `mina serve`.
 - Accounting state comes from the backend through generated REST client code.
 - Phase 2 does not use a general server-state query library by default.
 - Browser IndexedDB stores UI preferences, UI-only caches, and draft UI state only.
+- Authentication status is transient; frontend code never writes credentials or session material to IndexedDB, `localStorage`, or `sessionStorage`; the server-owned `HttpOnly` session cookie remains in the browser cookie jar.
 - Do not persist accounting data copied from REST responses in IndexedDB.
 - Store accessors must work inside and outside React components.
 - Frontend imports must preserve the package boundaries listed below.
@@ -72,6 +73,14 @@ Rules:
 - IndexedDB is browser-local operational UI state only.
 - Backend database files remain the only accounting state source.
 - UI-only caches are disposable and must not contain accounting data copied from REST responses.
+- Authentication cookies are server-owned and `HttpOnly`; the frontend keeps only the current status and user in memory.
+
+## Authentication Lifecycle
+
+- The public authentication-status request resolves before browser UI state hydrates or the app shell renders.
+- Disabled authentication preserves the existing app-shell startup path; enabled authentication gates the shell behind login.
+- Any protected REST `401` clears in-memory authentication state and returns the browser to login.
+- Login passwords stay in the native form only until request dispatch and are never copied into Zustand or IndexedDB.
 
 ## REST Data Access
 

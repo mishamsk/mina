@@ -176,7 +176,9 @@ test("command palette opens globally, filters, navigates, and restores focus", a
 
 test("command palette opens from the transactions page", async ({ page }) => {
   await page.goto("/transactions");
-  await expect(page.locator("body")).toBeFocused();
+  await expect(
+    page.getByRole("heading", { name: "Transactions" }),
+  ).toBeFocused();
   await page.getByRole("searchbox", { name: "Search" }).focus();
   await openPalette(page);
   const dialog = page.getByRole("dialog", { name: "Command Palette" });

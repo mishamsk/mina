@@ -161,7 +161,7 @@ build-go:
 build: frontend-build build-go
 
 [doc('''Start the REST API in the background; pass -p to persist data in build/dev/mina.db.
-Pass --demo to seed deterministic demo data at startup.''')]
+Pass --demo to seed deterministic demo data and enable login plus API authentication.''')]
 [group('demo')]
 dev mode="" extra="": build
     #!/usr/bin/env bash
@@ -173,6 +173,8 @@ dev mode="" extra="": build
     stderr_log="$dev_dir/stderr.log"
     access_log="$dev_dir/access.log"
     db_path="$dev_dir/mina.db"
+    config_path="$dev_dir/config.toml"
+    auth_path="$dev_dir/auth.toml"
     default_port=8080
     persist=false
     demo=false
@@ -228,14 +230,19 @@ dev mode="" extra="": build
     port="$(select_dev_port)"
     : > "$stdout_log"
     : > "$stderr_log"
+    mina_args=()
     serve_args=(serve --host 127.0.0.1 --port "$port" --access-log "$access_log")
     if [ "$persist" = true ]; then
         serve_args+=(--db "$db_path" --yes)
     fi
     if [ "$demo" = true ]; then
+        printf 'auth_file = "auth.toml"\n' > "$config_path"
+        chmod 0600 "$config_path"
+        install -m 0600 scripts/fixtures/demo-auth.toml "$auth_path"
+        mina_args+=(--config-file "$config_path")
         serve_args+=(--demo)
     fi
-    nohup ./bin/mina "${serve_args[@]}" > "$stdout_log" 2> "$stderr_log" &
+    nohup ./bin/mina "${mina_args[@]}" "${serve_args[@]}" > "$stdout_log" 2> "$stderr_log" &
     pid="$!"
     echo "$pid" > "$pid_file"
     disown "$pid"
@@ -245,6 +252,10 @@ dev mode="" extra="": build
             echo "mina listening at http://127.0.0.1:$port with pid $pid"
             if [ "$port" != "$default_port" ]; then
                 echo "default port $default_port was busy; selected high port $port"
+            fi
+            if [ "$demo" = true ]; then
+                echo "login: admin@local / password"
+                echo "api token: mina-token"
             fi
             echo "logs: $stdout_log $stderr_log $access_log"
             exit 0

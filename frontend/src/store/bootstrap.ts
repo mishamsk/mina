@@ -2,6 +2,10 @@ import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 import { useShallow } from "zustand/react/shallow";
 
+import {
+  hydrateAuthentication,
+  initializeAuthenticationLifecycle,
+} from "./authentication";
 import { hydrateUiPreferences } from "./preferences";
 import { createSelectors } from "./selectors";
 import { hydrateStatusPageUiState } from "./status-page";
@@ -56,6 +60,8 @@ export const setBootstrapFailed = (error: unknown): void => {
 
 export const hydrateBrowserState = async (): Promise<void> => {
   try {
+    initializeAuthenticationLifecycle();
+    await hydrateAuthentication();
     await Promise.all([hydrateUiPreferences(), hydrateStatusPageUiState()]);
     setBootstrapReady();
   } catch (error) {

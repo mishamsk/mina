@@ -11,7 +11,10 @@
 - Error responses use the stable JSON error envelope defined by the REST contract.
 - Request middleware supplies request IDs, real IP handling, panic recovery, local API timeout enforcement, and optional access logs.
 - Generated strict-server operation methods are the HTTP adapter implementation surface.
-- Generated OpenAPI route registration is the only source of REST route path/method declarations.
+- Generated OpenAPI route registration is the only source of application REST route path/method declarations; the adapter-owned OpenAPI discovery endpoint is the sole exception.
+- External REST protection accepts a valid browser session or API key, keeps documented bootstrap routes public, and applies same-origin checks to unsafe cookie-authenticated requests.
+- HTTP receives only the state-read-only online authentication service through `Dependencies`; administration is absent from the adapter dependency graph.
+- The unprotected handler supplied to embedded MCP is a trusted internal dispatch path behind MCP's outer API-key decision.
 - `/api/openapi.json` is the adapter-owned OpenAPI discovery endpoint serving the embedded generated spec; no interactive documentation endpoint is served.
 - Generated request binding owns transport parsing for OpenAPI-declared path parameters, query parameter types/cardinality, and JSON body decoding.
 - OpenAPI request validation owns transport-schema validation, including declared query values, JSON schema validation, unknown JSON fields, and required non-null JSON fields.
