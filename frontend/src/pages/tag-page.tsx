@@ -9,7 +9,6 @@ import {
   ReferenceDrilldownNotFound,
   ReferenceDrilldownPage,
   ReferenceDrilldownSkeleton,
-  referenceTransactionHref,
 } from "@/features/reference";
 import { refreshTagsPage, useTagsResource } from "@/features/tags";
 
@@ -50,8 +49,6 @@ export const TagPage = () => {
       ? [tag.tag_id]
       : tagDescendantIds(tagsPage.snapshot.tags, tag.fqn);
   }, [exactOnly, tag, tagsPage.snapshot]);
-  const viewAllHref = referenceTransactionHref("tag", filterIds);
-
   const setExactOnly = (nextExactOnly: boolean) => {
     setSearchParams((current) => {
       const next = new URLSearchParams(current);
@@ -116,17 +113,11 @@ export const TagPage = () => {
       ) : null}
       {tag ? (
         <ReferenceDrilldownPage
-          actionLabel="View all transactions"
-          entityKindLabel="Tag"
           exactOnly={exactOnly}
           filterIds={filterIds}
           filterKind="tag"
-          fqn={tag.fqn}
-          hidden={tag.is_hidden}
           onExactOnlyChange={setExactOnly}
           showExactOnlyToggle
-          title={tag.name}
-          viewAllHref={viewAllHref}
         />
       ) : null}
     </section>

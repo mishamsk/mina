@@ -47,7 +47,7 @@ export const TransactionsPage = () => {
   }, [location.search]);
 
   const openEntryPanel = useCallback(() => {
-    browser.setBulkEditMode(false);
+    browser.setEditMode(false);
     openTransactionEntryPanel(
       undefined,
       captureTransactionEntryLaunchContext(),
@@ -190,16 +190,16 @@ export const TransactionsPage = () => {
         eyebrow="Ledger"
         help={
           <PageHelp label="Transactions help">
-            Classified transaction lines with inline journal records. Click a
-            row (or press Space) to expand its journal records.
+            Read-only transaction lines open full detail on click, Enter, or
+            Space. Edit mode adds quick changes and eligible amount inputs.
           </PageHelp>
         }
         toolbar={
           <TransactionBrowserToolbar
-            bulkEditMode={browser.bulkEditMode}
+            amountSavePending={browser.pendingAmountSave}
+            editMode={browser.editMode}
             dateJumpLoading={browser.dateJumpLoading}
             dateJumpValue={browser.dateJumpValue}
-            detailPanelOpen={Boolean(browser.detail.selectedTransactionId)}
             onDateJumpToday={browser.jumpToCurrentDate}
             filterControls={
               <TransactionFilterControls
@@ -218,7 +218,7 @@ export const TransactionsPage = () => {
             onDateJumpValueChange={browser.changeDateJumpValue}
             onSelectPage={browser.selectPageTransactions}
             onSearchChange={setSearchFilter}
-            onSetBulkEditMode={browser.setBulkEditMode}
+            onSetEditMode={browser.setEditMode}
             onTransactionClassChange={setTransactionClassFilter}
             selectableCount={browser.selectableTransactionCount}
             selectedCount={browser.selectedTransactionIds.size}
@@ -228,7 +228,7 @@ export const TransactionsPage = () => {
       <div className="grid min-h-0 min-w-0 flex-1 gap-6">
         <div className="flex min-h-0 min-w-0 flex-col gap-3">
           <TransactionBrowser
-            bulkEditMode={browser.bulkEditMode}
+            editMode={browser.editMode}
             dateJumpAnchor={browser.dateJumpAnchor}
             errorMessage={browser.errorMessage}
             hasNextPage={
@@ -238,7 +238,6 @@ export const TransactionsPage = () => {
                   : browser.page * browser.pageSize < browser.totalCount
                 : false
             }
-            inlineEdit={browser.inlineEdit}
             loading={browser.loading}
             lookups={browser.lookups.snapshot}
             onConfirmRecurringOccurrence={
@@ -266,28 +265,23 @@ export const TransactionsPage = () => {
               browser.setPage(browser.page + 1);
             }}
             onOpenTransaction={browser.detail.openTransactionDetail}
-            onEditTransactionAsJournal={splitTransaction}
             onPageSizeChange={browser.setPageSize}
             onPreviousPage={() => {
               browser.setPage(
                 Math.max(defaultTransactionPage, browser.page - 1),
               );
             }}
-            onSetBulkEditMode={browser.setBulkEditMode}
+            onSetEditMode={browser.setEditMode}
             onSplitTransaction={splitTransaction}
             onSelectRange={browser.selectTransactionRange}
             onTogglePageSelection={browser.togglePageTransactionSelection}
             onToggleSelection={browser.toggleTransactionSelection}
-            onUpdateRecord={browser.updateRecord}
-            onUpdateTransactionRecordReferences={
-              browser.updateTransactionRecordReferences
-            }
             onUpdateTransactionAmount={browser.updateTransactionAmount}
-            onUpdateTransactionsBulkReferences={
-              browser.updateTransactionsBulkReferences
+            onUpdateTransactionsEditReferences={
+              browser.updateTransactionsEditReferences
             }
-            onUpdateTransactionsBulkRecordState={
-              browser.updateTransactionsBulkRecordState
+            onUpdateTransactionsEditRecordState={
+              browser.updateTransactionsEditRecordState
             }
             page={browser.page}
             pageSize={browser.pageSize}
@@ -305,14 +299,11 @@ export const TransactionsPage = () => {
               ? "text-[var(--color-class-adjustment-ink)]"
               : "text-[var(--color-money-in)]"
           }
-          containerClassName={
-            browser.bulkEditMode ? "bottom-40 sm:bottom-28" : undefined
-          }
           durationMs={toastDurationMs}
           message={browser.notice?.message}
           onDismiss={browser.dismissNotice}
         />
-        {!browser.bulkEditMode && browser.detail.selectedTransactionId ? (
+        {!browser.editMode && browser.detail.selectedTransactionId ? (
           <TransactionDetailPanel
             errorMessage={browser.detail.errorMessage}
             loading={browser.detail.loading}

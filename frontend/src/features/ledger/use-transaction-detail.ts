@@ -82,29 +82,47 @@ export const useTransactionDetail = ({
   );
   const loading = detailNeedsFetch || Boolean(transaction && !lookupsLoaded);
 
+  const closeTransactionDetail = useCallback(() => {
+    setFetchedDetail(undefined);
+    setSearchParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        next.delete("transaction");
+        return next;
+      },
+      { replace: true },
+    );
+  }, [setSearchParams]);
+
   const openTransactionDetail = useCallback(
     (nextTransaction: Transaction, opener?: HTMLElement) => {
+      if (selectedTransactionId === nextTransaction.transaction_id) {
+        closeTransactionDetail();
+        const restoreTarget = opener ?? detailRestoreFocusRef.current;
+        window.requestAnimationFrame(() => {
+          focusWithoutTooltip(
+            restoreTarget?.isConnected ? restoreTarget : undefined,
+            { preventScroll: true },
+          );
+        });
+        return;
+      }
+
       setSuppressedDetailFetchId(undefined);
       const activeElement = document.activeElement;
       detailRestoreFocusRef.current =
         opener ?? (activeElement instanceof HTMLElement ? activeElement : null);
-      setSearchParams((current) => {
-        const next = new URLSearchParams(current);
-        next.set("transaction", String(nextTransaction.transaction_id));
-        return next;
-      });
+      setSearchParams(
+        (current) => {
+          const next = new URLSearchParams(current);
+          next.set("transaction", String(nextTransaction.transaction_id));
+          return next;
+        },
+        { replace: selectedTransactionId !== undefined },
+      );
     },
-    [setSearchParams],
+    [closeTransactionDetail, selectedTransactionId, setSearchParams],
   );
-
-  const closeTransactionDetail = useCallback(() => {
-    setFetchedDetail(undefined);
-    setSearchParams((current) => {
-      const next = new URLSearchParams(current);
-      next.delete("transaction");
-      return next;
-    });
-  }, [setSearchParams]);
 
   const refreshSelectedTransactionDetail = useCallback(
     async (transactionId: number, nextTransaction?: Transaction) => {

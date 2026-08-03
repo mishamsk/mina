@@ -1,6 +1,5 @@
 import { test } from "@tests/e2e/test";
 import {
-  type AccountFixture,
   type CategoryFixture,
   chooseOptionByKeyboard,
   clickRowAction,
@@ -9,11 +8,8 @@ import {
   createTag,
   expect,
   fillAndExpectValue,
-  findByFqn,
   journalRecord,
-  listFixtures,
   type Route,
-  type TransactionFixture,
   waitForLedgerLookups,
 } from "@tests/e2e/transactions/support";
 
@@ -339,97 +335,6 @@ test("late category creation failures remain visible after blur", async ({
   await expect(categoryPicker).toHaveAttribute("aria-expanded", "false");
   await expect(categoryPicker.locator("..").getByRole("alert")).toBeVisible();
   await expect(memo).toBeFocused();
-});
-
-test("constrained inline category picker renders an unsliced level and selects its leaf", async ({
-  page,
-}, testInfo) => {
-  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
-  const unique = `${slug}${Date.now()}`;
-  const prefix = `E2EInlineSegment:${unique}:Group`;
-  const categories = await Promise.all(
-    Array.from({ length: 10 }, (_, index) =>
-      createCategory(
-        page,
-        `${prefix}:Leaf${String(index).padStart(2, "0")}`,
-        "expense",
-      ),
-    ),
-  );
-  const accounts = await listFixtures<AccountFixture>(
-    page,
-    "/api/accounts",
-    "accounts",
-  );
-  const initialCategory = await createCategory(
-    page,
-    `E2EInlineSegment:${unique}:Initial`,
-    "expense",
-  );
-  const memo = `E2E constrained segment picker ${unique}`;
-  const createResponse = await page.request.post("/api/transactions/spend", {
-    data: {
-      amount: "8.31",
-      category_id: initialCategory.category_id,
-      counterparty_account_id: findByFqn(accounts, "merchant:PowellsBooks")
-        .account_id,
-      currency: "USD",
-      funding_account_id: findByFqn(accounts, "cash:Wallet").account_id,
-      initiated_date: "2026-05-31",
-      memo,
-    },
-  });
-  expect(createResponse.ok()).toBe(true);
-  const transaction = (await createResponse.json()) as TransactionFixture;
-
-  await page.goto(
-    `/transactions?q=${encodeURIComponent(memo)}&page=1&pageSize=50`,
-  );
-  const row = page
-    .locator(`[data-transaction-id="${transaction.transaction_id}"]`)
-    .first();
-  await expect(row).toBeVisible();
-  const rowPrefix = `transaction-${transaction.transaction_id}`;
-  const categoryCell = row.getByTestId(`${rowPrefix}-category-cell`);
-  await categoryCell.focus();
-  await categoryCell.press("F2");
-  const categoryEditor = row.getByTestId(`${rowPrefix}-category-editor`);
-  const categoryPicker = categoryEditor.getByRole("combobox", {
-    name: "Category",
-  });
-  await categoryPicker.fill(`E2EInlineSegment:${unique}:`);
-  await expect(
-    categoryEditor.getByRole("option", {
-      name: "Group, group, 10 children",
-    }),
-  ).toBeVisible();
-  await categoryPicker.press("ArrowRight");
-  await expect(categoryPicker).toHaveValue(`${prefix}:`);
-  const inlineOptions = categoryEditor.getByRole("listbox");
-  await expect(inlineOptions).toHaveAttribute("data-picker-mode", "level");
-  await expect(inlineOptions.getByRole("option")).toHaveCount(10);
-  await expect(categoryPicker).toHaveAttribute(
-    "aria-activedescendant",
-    /-option-/,
-  );
-  const constrainedGeometry = await inlineOptions.evaluate((options) => {
-    const input = options.parentElement?.querySelector("input");
-    return {
-      inputWidth: input?.getBoundingClientRect().width ?? 0,
-      optionsWidth: options.getBoundingClientRect().width,
-      overflowY: window.getComputedStyle(options).overflowY,
-    };
-  });
-  expect(constrainedGeometry.optionsWidth).toBeLessThanOrEqual(
-    constrainedGeometry.inputWidth + 1,
-  );
-  expect(constrainedGeometry.overflowY).toBe("auto");
-
-  await categoryPicker.fill(categories[0]!.fqn);
-  await expect(categoryPicker).toHaveValue(categories[0]!.fqn);
-  await expect(inlineOptions).toHaveCount(0);
-  await categoryEditor.getByRole("button", { name: "Save category" }).click();
-  await expect(categoryEditor).toHaveCount(0);
 });
 
 test("tags multi-picker retains its prefix for sibling batching", async ({

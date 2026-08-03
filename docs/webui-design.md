@@ -30,8 +30,8 @@ Primary usage patterns, most to least frequent; every design decision favors the
 
 Every transaction surface presents exactly two layers. This doctrine applies to all current and future screens.
 
-- Transaction line: one row per transaction showing the server-derived transaction class and display amount per `docs/accounting-semantics.md`. This is the default everywhere. Multi-part transactions stay single-height (transfer: the moved amount; exchange: the sold-side amount only, with the bought side and the effective rate one expansion away; more than one shape: one identifiable primary amount or none plus a bare `+` more-parts indicator, with complete amounts in detail and never a synthetic total) — there is no separate shape-summary view between the line and the records.
-- Journal records: the full balanced record table with accounts, signed amounts, categories, tags, members, statuses, and dates. One expansion away, always editable.
+- Transaction line: one row per transaction showing the server-derived transaction class and display amount per `docs/accounting-semantics.md`. This is the default everywhere. Multi-part transactions stay single-height (transfer: the moved amount; exchange: the sold-side amount only; more than one shape: one identifiable primary amount or none plus a bare `+` more-parts indicator, with complete amounts in detail and never a synthetic total) — there is no separate shape-summary view between the line and the records.
+- Transaction detail: the read-only full balanced record table with accounts, signed amounts, categories, tags, members, statuses, and dates. Row activation opens this URL-addressable side panel; structural editing is an explicit detail or row action through the full transaction editor.
 
 Entry mirrors display:
 
@@ -45,10 +45,10 @@ Hard rule: the UI never re-derives accounting truths client-side. Transaction cl
 
 There is exactly one transactions/records browsing system, built once and embedded everywhere:
 
-- On the Transactions page it lists classified transaction lines that expand inline to journal records.
+- On the Transactions page it lists classified transaction lines that open read-only transaction detail.
 - On account, group, category, tag, and member pages it appears pre-filtered to that entity. Account and group registers are the one-sided records view — the only true records-only presentation.
 - Record rows in registers use a side peek panel to preview the full containing transaction without leaving the list.
-- Filtering, sorting, selection, inline editing, keyboard driving, and the peek panel behave identically in every embedding.
+- Filtering, sorting, transaction Edit mode, keyboard driving, and detail/peek behavior are shared across every applicable embedding.
 
 There are no separate "transaction mode" and "record mode" screens; context determines which shape the shared browser renders.
 
@@ -126,7 +126,7 @@ Canonical rendering rules; every screen uses these so the product reads as one s
 ### Transaction summary line
 
 - Simple two-sided transactions title as `From → To` using effective account display labels: spend → `Chase:Joint → merchant:TraderJoes` (funding → merchant); income → `Acme:salary → Chase:Joint` (source → destination); refund → `merchant:Target → Chase:Joint`; transfer → `Chase:Joint → Ally:Emergency`; exchange → `USD → EUR`; adjustment → affected account label. Complex/mixed transactions fall back to memo or the dominant counterparty label. Titles are derived server-side.
-- Row composition: class icon, initiated date, description (the `From → To` line) with the memo as a truncated second line (full memo in a tooltip) and trailing status indicators, category, tags, member, display amount, and the trailing actions column (open detail). The description column header reads "Description".
+- Row composition: class icon, initiated date, description (the `From → To` line) with the memo as a truncated second line (full memo in a tooltip) and trailing status indicators, category, tags, member, display amount, and the trailing explicit transaction-actions column. The description column header reads "Description".
 - Class is encoded as a distinct icon plus its class color in a narrow leftmost column, with the class name in a tooltip; that column's header is hidden except on very wide screens.
 - The date cell is compact: the day (`May 31`) with the year as a de-emphasized second line on every row.
 - Expected and cancelled lifecycle indicators take precedence over settlement; active pending and mixed-settlement indicators trail the description text with distinct glyphs, tooltips, and accessible names. Posted and no-balance active rows show nothing, and indicators never change row height.
@@ -138,8 +138,8 @@ Canonical rendering rules; every screen uses these so the product reads as one s
 ### Entity chips
 
 - Category, tag, and member values render as entity chips wherever they appear in transaction lines and detail views, except in the transaction detail's per-record disclosure, where values render as plain undecorated text.
-- Every entity chip is a filter affordance: activating it adds that entity to the embedding browser's active filters, appearing as a removable typed filter chip in the filter bar — slicing continues in place, preserving list context. In the detail/peek panel, chip activation filters the underlying list. In embeddings without a filter bar (e.g. Overview recent activity), chip activation opens Transactions with that filter applied.
-- Chips never navigate to entity pages (those stay reachable by name via the command palette and entity lists) and never start inline editing — editing has its own affordance per the inline-editing rule.
+- In browse and read-only surfaces, every entity chip is a filter affordance: activating it adds that entity to the embedding browser's active filters, appearing as a removable typed filter chip in the filter bar — slicing continues in place, preserving list context. In the detail/peek panel, chip activation filters the underlying list. In embeddings without a filter bar (e.g. Overview recent activity), chip activation opens Transactions with that filter applied.
+- Chips never navigate to entity pages (those stay reachable by name via the command palette and entity lists) and never start editing. Browse-mode chips filter; Edit-mode transaction chips are inert because the dock owns quick changes.
 - Entity chips read as one family and stay visually distinct from indicators and actions per the affordance-class rule; non-entity chip-shaped rendering (e.g. amounts) must not read as interactive.
 
 ### Dates and statuses
@@ -151,23 +151,23 @@ Canonical rendering rules; every screen uses these so the product reads as one s
 
 ### Hidden entities and members
 
-- Hidden accounts, categories, and tags are excluded from pickers and default lists everywhere. Broader pickers and filter menus offer an explicit "Include hidden" toggle; inline transaction editors omit the toggle and keep hidden entities excluded. Hidden items render with an eye-off icon.
+- Hidden accounts, categories, and tags are excluded from pickers and default lists everywhere. Broader pickers, filter menus, and Edit-mode dock pickers offer an explicit "Include hidden" toggle. Hidden items render with an eye-off icon.
 - No member attribution means whole-household and renders as nothing. Attributed records show a small member initials chip.
 
 ## Interaction Rules
 
 ### Keyboard
 
-- Keyboard-complete tables: up/down moves row focus; in the transactions browser Space toggles inline expansion of the focused row and, outside bulk-edit mode, Enter opens the detail panel (in bulk-edit mode Space toggles selection per Bulk operations); open peek, start inline edit, and selection stay keyboard-driven — batch review sessions never need the mouse.
+- Keyboard-complete tables: up/down moves row focus; in the transactions browser click, Enter, and Space open detail in browse mode and toggle selection in Edit mode; open detail/peek, Edit-mode selection, dock editing, and eligible amount editing stay keyboard-driven — batch review sessions never need the mouse.
 - Global shortcuts: open command palette, new transaction (opens the transaction editor modal in place on any screen), focus list search, `Esc` closes overlays, `Cmd+Enter` submits forms, `Cmd+Shift+Enter` saves and closes in the entry modal, arrows + `Enter` drive pickers; hierarchical pickers add segment completion per Pickers — Tab/ArrowRight commit a segment, ArrowLeft/Backspace back out.
-- Toggling bulk-edit mode is available from the toolbar and the command palette; in-mode selection keys per Bulk operations.
+- Toggling Edit mode is available from the toolbar and the command palette; in-mode selection keys follow Edit mode.
 
 ### Tables and filtering
 
-- Server-driven pagination/sort/filter, sticky header, right-aligned numeric columns, whole-row affordances for expand/peek — no per-row disclosure control and no reserved indicator column; the row itself is the affordance, and an expanded row carries a persistent theme-owned expanded-state treatment that visually joins it to its expanded content — leading checkbox column only in bulk-edit mode (see Bulk operations).
+- Server-driven pagination/sort/filter, sticky header, right-aligned numeric columns, and whole-row affordances for detail/peek — no per-row disclosure control or reserved indicator column; the row itself is the affordance. Transaction lines gain a leading checkbox column only in Edit mode.
 - Per-row actions live in one narrow trailing actions column — always the rightmost column, in every table — never mid-row. Button-class actions render as compact icon buttons with tooltips and are always visible: no hover- or focus-reveal semantics anywhere. State toggles stay persistently visible because they carry state. Fit decides presentation, never count: when the actions cell fits the full action cluster it shows all buttons; when it cannot, the cluster collapses into a single overflow (⋯) button that opens a floating panel with all actions — by the column-collapse priority in the transactions browser, and per row in reference tables.
 - Tables render no Actions column header; the actions column is right-padded so its trailing margin matches the table's leading padding.
-- Reference/dictionary row activation (click, Enter, or Space on a leaf row) opens the entity's read-only detail/register page: accounts open their register, account groups the group register, categories/tags/members their drill-down pages. Edit is a compact trailing row action with a tooltip; all action buttons stop row-activation propagation. The transactions browser is the explicit exception: row activation (click or Space) expands journal records, Enter opens the detail panel outside bulk-edit mode, and its detail action stays explicit.
+- Reference/dictionary row activation (click, Enter, or Space on a leaf row) opens the entity's read-only detail/register page: accounts open their register, account groups the group register, categories/tags/members their drill-down pages. Edit is a compact trailing row action with a tooltip; all action buttons stop row-activation propagation. In Transactions and Category/Tag/Member drill-down browsers, transaction row activation opens its read-only detail in browse mode, closes it when that row is already active, and switches it directly when another row is active; Edit mode instead toggles selection and makes trailing actions unavailable.
 - Stable column layout: fixed percentage-based column widths so columns never shift when paging or when row content changes.
 - When horizontal space runs out, columns collapse by priority instead of showing a horizontal scrollbar: member first, then row actions fold into a single overflow (⋯) menu, then tags, then category.
 - Pagination shows "Page X of Y" from server-provided total counts.
@@ -182,36 +182,24 @@ Canonical rendering rules; every screen uses these so the product reads as one s
 - Jumping to a day lands the view on the page containing that day when possible; if the day has no transactions, it falls back to the first transaction at or before that day, clamping at list boundaries as needed, and brings the target row into view with a transient highlight. Day-stepping keeps working after any jump.
 - Transaction class is a primary classification: it filters from a standing toolbar dropdown beside search and date jump, not from the Add-filter menu; the dropdown owns the URL-backed class state.
 
-### Inline editing — the uniformity rule
+### Transaction Edit mode
 
-Transaction-level values are editable in place only when the edit maps mechanically onto records:
-
-- Category, tags, member: editable on the transaction row only when the value is identical across all active records; the edit applies to all of them.
-- Amount: editable on the transaction row only for simple shapes (minimal two-sided single-currency spend/income/refund/transfer) where the change derives mechanically to both records.
-- Everything else is edited per-record in the expanded records view, or through the full form.
-- Inline editors are the shared pickers: category search popup, tag search with multi-select, member popup, account picker with context-aware type filtering.
-- Inline editing has its own trigger, separate from chip activation: the keyboard edit action on the focused cell, or a hover-revealed edit control on editable cells. Activating an entity chip always filters, never edits.
-- Inline editing exists only in transaction rows and the expanded records subtable. The Transactions screen's detail panel is read-only: no panel cell is an inline-edit target by any path; its values change only through the transaction editor modal via the panel's Edit or Split actions. The account-register peek is also read-only and exposes only "Open transaction".
-
-### Bulk operations
-
-- Bulk selection is gated behind an explicit bulk-edit mode; during normal browsing the shared browser renders no selection controls.
-- A toolbar action enters the mode: entering swaps the toolbar row for a bulk-mode bar (mode indicator, live selection count, select-page/clear, Done) and reveals the leading checkbox column and a persistent bulk action surface, visible from 0 selected.
-- Entering collapses expanded rows, closes detail/peek panels, and discards any inline-editor draft.
-- Exiting (Done, the Esc ladder, or any route navigation) clears selection and all draft bulk state and restores the normal toolbar. Bulk-edit mode is transient UI state — never in the URL, never restored by deep links.
-- While the mode is active, row expansion, detail opening, row actions, chip filter-activation, occurrence confirm/dismiss, and ordinary inline editing are unavailable; unavailable affordances are removed, not grayed. Only the bulk surface's own buttons use the disabled treatment, with tooltips naming the remedy.
-- Filters, search, and sort are frozen while in mode; pagination stays live.
-- Selection mechanics: the whole row is the selection target (click, Space, or Enter toggles); Shift+Click / Shift+Space / Shift+Up/Down range-select from the anchor; the header checkbox and Cmd/Ctrl+A select the page. Expected occurrences are never selectable.
-- Selection is page-local: paging keeps the mode active, clears selection, and discards any open bulk-editor draft.
-- Bulk field edits — category (replace), tags (add), member (set) — launch from the bulk action surface or from any selected row's editable cell (the standard inline-edit trigger, or `c`/`t`/`m`); both entry points open the same editor (the bulk-surface variant may offer Include hidden; row-launched variants never do, per the hidden-entities rule) and apply to the entire selection through the owning save boundary (record bulk endpoints where supported, atomic transaction replacement for member). Bulk category applies to the selection's categorizable records and reports how many rows it skipped.
-- The uniformity rule applies: a bulk edit targets only transactions whose records are uniform for that field. Non-qualifying selected transactions are skipped and reported in the result toast ("12 updated, 2 skipped: mixed records"); an all-skipped result uses warning treatment. Complex transactions that cannot be mapped mechanically to a uniform record edit are skipped.
-- Selection is retained after a successful apply so edits chain (categorize, then tag).
-- Settlement actions set selected active transactions' owned/party records to Pending or Posted through the dedicated settlement operation; reconciliation actions independently Reconcile or Unreconcile their records. Cancellation and restoration remain per-transaction actions outside bulk mode.
-- Esc ladder in-mode, one level per press: open bulk-editor draft → discard it; else selection > 0 → clear selection; else exit the mode.
-- Record-level bulk (account reassignment, settlement, reconciliation) is available in account registers where records are the row unit.
+- Transaction quick changes are gated behind explicit Edit mode; browse mode renders no selection controls, keeps amount chips read-only, and routes rows to read-only detail.
+- Entering swaps the toolbar for a compact `EDIT MODE` header with the live selection count, Select page, Clear, and Done; closes detail; reveals the leading checkbox column; and places a persistent right-side control panel beside the table and pagination.
+- The control panel is visible from zero selected and provides Category Replace, Tags Add/Remove, Member Set/Clear, and grouped settlement/reconciliation actions. It expands at most one labeled editor at a time, scrolls internally within the browser's fixed viewport height, and keeps mutation errors with that editor without losing its draft or selection; it never moves below the table or displaces pagination.
+- Quick changes target only selected transactions whose active records can accept the requested mechanical edit. Non-qualifying rows are skipped with reasoned result feedback that states the transaction count it describes with singular/plural wording; only transactions with records in the applied mutation count as updated. Selection remains after success so changes can chain.
+- Category targets categorizable records; Tags use explicit Add or Remove; Member uses atomic Set or Clear; settlement sets eligible owned/party records Pending or Posted; reconciliation independently Reconciles or Unreconciles. Cancellation, restoration, and structural changes stay explicit per-transaction actions outside Edit mode.
+- Filters, search, class, date jump, sorting, drill-down scope, detail, row actions, entity-chip activation, and occurrence actions are unavailable while Edit mode is active. Pagination stays live; changing page keeps the mode active but clears selection and dock drafts.
+- Selection mechanics: click, Space, or Enter toggles a row; Shift+Click / Shift+Space / Shift+Up/Down range-select from the anchor; the header checkbox and Cmd/Ctrl+A select the page. Expected occurrences are never selectable.
+- With a selected row focused, `c`, `t`, and `m` open the Category, Tags, and Member dock editors.
+- Every mechanically editable active amount becomes a stable styled input in Edit mode regardless of selection. Eligibility is limited to minimal two-record, single-currency spend, income, refund, or transfer shapes whose balanced replacement is mechanical; other amounts remain read-only chips.
+- Amount inputs preserve the current absolute amount while editing; Enter saves, Tab or blur saves before focus advances, Escape restores, and invalid or failed saves remain inline. Saves are isolated per row, use full-transaction replacement, and keep Edit mode and selection active.
+- Exiting through Done, the completed Escape ladder, transaction entry, or route navigation clears transient state and restores the normal toolbar. If an amount save is pending, the exit waits for it to succeed; a failed save cancels the requested exit and retains Edit mode and the failed draft. Escape closes the open dock editor, then clears selection, then exits Edit mode. Edit mode is never represented in the URL.
+- Account registers retain record-level bulk operations where records are the row unit.
 
 ### Pickers
 
+- An open picker option list paints above its owning multi-picker's selected chips and remains unclipped within the active surface.
 - Entity pickers are type-ahead comboboxes over hierarchical data with segment-by-segment completion. The input text is the single source of truth: its longest leading segment chain that resolves to a group in the picker's option set (after context type filtering and the active surface's hidden-entity policy) is the committed prefix; the remainder filters. Groups are derived client-side from the pickable leaves and are navigation only — committed values are always leaves; a group with no pickable leaves never appears (pruned, never disabled).
 - Flat entity sets such as members bypass segment derivation; punctuation in a flat name, including `:`, remains part of one opaque leaf.
 - Two derived modes, never user-toggled: when the committed prefix is non-empty and the remainder has no colon, the popup is a level browser — the committed prefix's children (groups and leaves) filtered by segment name under a breadcrumb header whose crumbs re-root on activation; when the prefix is empty or the remainder still contains colons (e.g. pasted mid-paths), the popup is full-path substring search over leaf FQNs scoped under the prefix, leaves ranked before groups. Typing or pasting an exact leaf FQN selects immediately in every mode.
@@ -242,16 +230,16 @@ Each screen below lists purpose, layout, behavior, primary data sources, and pha
 ### 2. Transactions — Phase 2 (core screen)
 
 - Purpose: scan, search, slice, and edit all activity.
-- One list: classified transaction lines from the shared browser — no separate records mode. Rows expand inline to the records subtable with per-record editing.
+- One list: classified transaction lines from the shared browser — no separate records mode. Row activation opens URL-addressable read-only detail.
 - Scope: all-time, paginated, newest first (initiated date descending) by default. A date-jump control navigates to any point in history. The page remembers its last position (anchor, filters) and restores it on return.
 - Toolbar: search, go-to-day with icon-only day-step buttons, class dropdown, and the Filter toggle; typed filter chips accumulate in the filter bar beneath the toolbar row.
-- Inline quick fixes per the uniformity rule; bulk selection and the bulk action bar per Bulk operations.
-- Transaction detail (URL-addressable, side panel over the list): class badge, counterparty title, display amounts, lifecycle strip, record table, metadata (source, created). Record rows show only role glyph, Account, Amount, and the full-path Category chip; account display labels link to registers and expose their FQNs in tooltips, while Category keeps its filter behavior. The panel is read-only: no pointer or keyboard path starts an inline editor. Actions: a labeled Edit button in the panel header — the panel's primary action — plus Duplicate, Split, Delete, and either Cancel or Restore in the footer bar. Cancel is available only for pending active transactions; Restore is available only for cancelled transactions; delete remains the distinct tombstone action. Edit, Duplicate, and Split open the transaction editor modal over the panel; the panel stays open beneath it and refreshes after save. The detail view shows everything the summary line truncates or hides. The lifecycle strip directly under the panel header shows `Initiated` plus the civil `initiated_date`, followed by `expected` or `cancelled` lifecycle when applicable; otherwise it shows `pending` for pending or mixed active transactions. Posted and no-balance active transactions show no status word. Row activation (click, Enter, or Space; `aria-expanded`) toggles a read-only plain-text per-record disclosure listing the full initiated date, derived Pending/Posted settlement for owned/party records only, role, source, tag FQNs, member name, and the untruncated memo. Flow/system records show no settlement or lifecycle-date affordance, raw settlement timestamps never appear, and Created stays in metadata.
+- Edit mode provides selection-based quick changes through its in-layout dock plus selection-independent eligible amount inputs.
+- Transaction detail (URL-addressable, side panel over the list): class badge, counterparty title, display amounts, lifecycle strip, record table, metadata (source, created). Record rows show only role glyph, Account, Amount, and the full-path Category chip; account display labels link to registers and expose their FQNs in tooltips, while Category keeps its filter behavior. The panel is read-only; values change only through its explicit Edit or Split transaction-editor actions. Actions: a labeled Edit button in the panel header — the panel's primary action — plus Duplicate, Split, Delete, and either Cancel or Restore in the footer bar. Cancel is available only for pending active transactions; Restore is available only for cancelled transactions; delete remains the distinct tombstone action. Edit, Duplicate, and Split open the transaction editor modal over the panel; the panel stays open beneath it and refreshes after save. The detail view shows everything the summary line truncates or hides. The lifecycle strip directly under the panel header shows `Initiated` plus the civil `initiated_date`, followed by `expected` or `cancelled` lifecycle when applicable; otherwise it shows `pending` for pending or mixed active transactions. Posted and no-balance active transactions show no status word. Detail-record activation (click, Enter, or Space; `aria-expanded`) toggles a read-only plain-text disclosure listing the full initiated date, derived Pending/Posted settlement for owned/party records only, role, source, tag FQNs, member name, and the untruncated memo. Flow/system records show no settlement or lifecycle-date affordance, raw settlement timestamps never appear, and Created stays in metadata.
 
 ### 3. Transaction entry — Phase 2
 
 - Surface: one centered modal editor, app-shell-owned and route-independent — the single surface for create, edit, split, and duplicate, opened in place from every entry point with no navigation. Stable stage frame, wide enough for the full journal grid at near-full viewport height; header and submit footer always pinned; the body is the single scroll region; content growth and validation errors never resize or move the frame. The underlying page stays visible behind the scrim and live-updates as entries save.
-- Entry points (all open the same modal): page-header "New transaction" everywhere; the app-shell sidebar action; the global new-transaction shortcut; command-palette entry commands and template-name prefills; browser empty-state action; detail-panel and row Edit / Duplicate / Split; "Edit as journal" escalation from expanded records. Opening forces bulk-edit mode off; opening over an active inline-editor draft discards it per the inline-editing rules.
+- Entry points (all open the same modal): page-header "New transaction" everywhere; the app-shell sidebar action; the global new-transaction shortcut; command-palette entry commands and template-name prefills; browser empty-state action; and detail-panel and row Edit / Duplicate / Split. Opening exits transaction Edit mode.
 - Template type-ahead start: the modal opens with a smart field — type a template name to prefill everything, or skip past it to a blank form. The palette offers the same entry points.
 - Type tabs: Spend, Income, Refund, Transfer, Exchange, Advanced. Shorthand forms render in a centered narrow column; Advanced fills the body width; the frame never changes between tabs.
   - Spend: date, currency, funding account (`owned` or `party`), one or more merchant rows (`flow`, inline-creatable) each with its own amount and category (`expense`), optional tags/member/memo, optional friend-split rows (member or `party` account + share) that produce the transfer support records. The funding amount is the sum of merchant-row amounts and friend-split party shares; multiple merchant rows against one unchanged funding record are the ordinary case, not a split-only affordance.
@@ -265,7 +253,7 @@ Each screen below lists purpose, layout, behavior, primary data sources, and pha
 - Escalation: "Edit as journal" from any tab converts the current form contents into records with nothing lost.
 - Create vs edit: create shows all six tabs, "Save and add another" as the default submit (`Cmd+Enter`) plus "Save and close" (`Cmd+Shift+Enter`), sticky fields (date, account, type) carrying into the next entry, the session tally, and the modal rail. Edit/split show "Update transaction" only (closes on success), the fitting shorthand tab plus Advanced, and a "Replacing transaction" footer note; the detail panel stays open beneath the modal and refreshes after save. Editing reopens the shorthand shape when records still fit; "Split" always opens the journal editor with the transaction's records loaded, ready to divide across categories, counterparties, or member/person shares. Duplicate opens the create path prefilled.
 - Batch ergonomics: batched entry works from any page. The modal rail (wide screens, create mode) shows THIS SESSION — this sitting's saved entries, each with an Edit action that relaunches it — and RECENT — the launch context's transaction rows captured at open. The rail is read-only and adds no tab stops. Below the rail breakpoint a one-line footer recap of the last save sits beside the session tally. Saves fan out immediately to the visible list behind the modal; deeper recall closes the modal (drafts persist), checks the list, and reopens.
-- Deep links: one `?entry=` param valid on every route — `new[:spend|income|refund|transfer|exchange|journal]` (`journal` opens Advanced), `edit:<id>`, `split:<id>`, `duplicate:<id>`. Opening pushes one history entry (browser Back closes); in-app close strips the param; composes with the transaction-detail param; missing ids show the standard error state in the modal body; `new` restores the persisted draft. Bulk-edit mode stays never-URL.
+- Deep links: one `?entry=` param valid on every route — `new[:spend|income|refund|transfer|exchange|journal]` (`journal` opens Advanced), `edit:<id>`, `split:<id>`, `duplicate:<id>`. Opening pushes one history entry (browser Back closes); in-app close strips the param; composes with the transaction-detail param; missing ids show the standard error state in the modal body; `new` restores the persisted draft. Transaction Edit mode stays never-URL.
 - Close / Esc / drafts / focus: Esc ladder inside the modal — open picker → close it; confirmation dialog open → it handles Esc; otherwise close the modal. Create closes without prompting (per-tab drafts persist to IndexedDB and restore on reopen); edit/split with modifications require the discard confirmation. On close, focus restores to the invoking control, falling back first to the list-region restore target and then to the app-shell New transaction action; initial focus is the template type-ahead (create) or the first field of the active tab (edit).
 - Validation: inline on blur; API errors map onto the offending fields/rows; the pinned footer shows the general error strip and, when errors sit off-screen, a compact attention strip that scrolls to and focuses the first offending field. Advanced save stays disabled until every currency balances. Errors never close the modal or lose entered data.
 - Responsive: wide screens — centered stage with gutters and the rail; medium — stage without the rail (footer recap); narrow — full-screen takeover with header/footer pinned and the Advanced grid scrolling horizontally inside the body only.
@@ -295,10 +283,9 @@ Each screen below lists purpose, layout, behavior, primary data sources, and pha
 - Members and Tags render as compact left-aligned lists with a bounded maximum width instead of stretching a near-single-column table across the viewport; the trailing actions column stays narrow. Categories keeps the wider two-column layout (name + intent badge).
 - Row actions follow the accounts affordance philosophy: rows that can be deleted carry a delete quick action in the trailing actions column (always visible per the row-actions rule), disabled with an explanatory tooltip when the listing reports the entity as not deletable; activation opens the standard confirm dialog naming the entity and calls the existing delete endpoint, with API errors surfaced as the fallback. Group-only rows carry no delete while no group delete operation exists. The side-panel editor keeps its delete.
 - Category and Tag leaf rows expose featured and hidden flat toggles in the shared fixed trailing slots.
-- Every dictionary entity is a drill-down target with its own page embedding the shared browser pre-filtered to it, with the same peek panel:
+- Every dictionary entity is a drill-down target with its own page embedding the shared browser pre-filtered to it, with the same peek panel. Category, tag, and member drill-downs use the route-level page header as their sole identity header and start directly with the scoped toolbar/browser; they have no duplicate identity card or cross-link to Transactions.
   - Category and tag pages roll up descendants by default (`Food` includes `Food:Restaurants`), with a "this level only" toggle; hidden descendants stay excluded from the rollup, consistent with hidden entities being excluded from default lists everywhere.
   - Member pages show the transactions attributed to that member through the same shared-browser embedding.
-  - Category, tag, and member pages include a `View all transactions` action that opens the Transactions page with the drill-down scope as URL filters.
 - Categories: economic-intent badge per row (`expense` or `income`); the editor requires intent and explains its classification effect in one line.
 - Templates: template tree with record-default summaries; editor manages the partial record defaults (all optional: account, category, member, currency, amount, tags, memo, statuses); primary row action "Use" opens the transaction editor modal prefilled. Templates are reachable by type-ahead from the entry modal and the command palette.
 
@@ -341,7 +328,7 @@ Definitions management screen:
 
 Mina-specific building blocks every screen composes (names indicative; placement per frontend package boundaries):
 
-- `TransactionBrowser` — the shared browsing system: transaction shape (expandable transaction lines) and records shape (register rows + peek panel), with filtering, selection, inline editing, and keyboard driving.
+- `TransactionBrowser` — the shared browsing system: transaction lines with URL-addressable detail and Edit-mode dock/amount controls, plus register rows with peek panels; filtering, pagination, selection, and keyboard behavior stay shared.
 - `PeekPanel` — side panel previewing the full containing transaction from a record row.
 - `EntryModal` — the centered modal transaction editor: template type-ahead, shorthand tabs, journal editor, session tally, modal rail (session + recent context), create/edit/split/duplicate launches, `?entry=` deep links.
 - `CommandPalette` — navigation, entry launcher, transaction search, app actions.
@@ -351,12 +338,12 @@ Mina-specific building blocks every screen composes (names indicative; placement
 - `ClassIcon` / `StatusIcon` / `RecordRoleIcon` — narrow icon-encoded class, status, and record-role indicators with tooltips; `ClassBadge` chip form remains for detail headers.
 - `CategoryChip`, `TagChip`, `MemberChip` — entity chips that add their entity to the active filters; `AccountTypeBadge`, `IntentBadge` — descriptive indicators.
 - `RowActions` — the trailing per-row actions cluster: always-visible icon-button actions plus persistent flat toggle icons, collapsing into a single overflow (⋯) button with a floating panel when the actions cell cannot fit the row's full action cluster.
-- `EntityPicker` — hierarchical type-ahead combobox with variants for include-hidden on broader surfaces, hidden-excluding inline transaction editing, inline-create, and context-aware account-type filtering.
+- `EntityPicker` — hierarchical type-ahead combobox with variants for include-hidden on broader surfaces, entry-time leaf creation, and context-aware account-type filtering.
 - `FilterBar` / `FilterChip` — URL-backed typed filters.
 - `PageHelp` — header help icon button revealing a hidden-by-default explanation paragraph.
 - `DataTable` — server-driven table shell: sticky header, skeletons, selection, pagination, keyboard row focus.
 - `BalanceMeter` — per-currency zero-sum indicator for the journal editor.
-- `ConfirmDialog`, `EmptyState`, `BulkActionBar`.
+- `TransactionEditDock`, `ConfirmDialog`, `EmptyState`.
 
 ## Accessibility & Quality Bar
 

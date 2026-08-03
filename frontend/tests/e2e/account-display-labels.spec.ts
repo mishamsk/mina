@@ -84,18 +84,6 @@ test("contextual account labels disambiguate while account controls keep FQNs", 
   );
   await page.mouse.move(0, 0);
   await transactionRow.getByTestId("transaction-line-title").click();
-  const expandedRecords = page.getByTestId("expanded-records");
-  const expandedGiftCard = expandedRecords.getByText("Amazon:gift_card", {
-    exact: true,
-  });
-  const expandedFlow = expandedRecords.getByText("Amazon", { exact: true });
-  await expect(expandedGiftCard).toBeVisible();
-  await expect(expandedFlow).toBeVisible();
-  await expectFqnTooltip(page, expandedGiftCard, giftCard.fqn);
-  await expectFqnTooltip(page, expandedFlow, flow.fqn);
-
-  await transactionRow.focus();
-  await transactionRow.press("Enter");
   const detail = page.getByTestId("transaction-detail-panel");
   await expect(detail).toBeVisible();
   const detailTitle = detail.getByRole("heading", {

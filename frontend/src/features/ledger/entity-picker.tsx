@@ -1,8 +1,13 @@
 import { ChevronRight, Close, EyeOff, Home, Plus } from "pixelarticons/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
+import {
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
+} from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
 export interface EntityOption {
@@ -25,7 +30,6 @@ interface EntityPickerProps {
   readonly excludedOptionIds?: readonly number[];
   readonly id: string;
   readonly hierarchical?: boolean;
-  readonly inlineOptions?: boolean;
   readonly label: string;
   readonly labelClassName?: string;
   readonly onChange: (id: number | undefined) => void;
@@ -249,7 +253,6 @@ export const EntityPicker = ({
   excludedOptionIds = [],
   id,
   hierarchical = true,
-  inlineOptions = false,
   label,
   labelClassName,
   onChange,
@@ -278,8 +281,10 @@ export const EntityPicker = ({
   const typedThisSessionRef = useRef(false);
   const interactionVersionRef = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const listboxRef = useRef<HTMLDivElement>(null);
+  const deferredCloseFrameRef = useRef<number | undefined>(undefined);
   const onChangeRef = useRef(onChange);
-  const blurTimeoutRef = useRef<number | undefined>(undefined);
+  const skipInitialAutoFocusOpenRef = useRef(autoFocus);
 
   useEffect(() => {
     onChangeRef.current = onChange;
@@ -288,7 +293,7 @@ export const EntityPicker = ({
   useEffect(
     () => () => {
       interactionVersionRef.current += 1;
-      window.clearTimeout(blurTimeoutRef.current);
+      window.cancelAnimationFrame(deferredCloseFrameRef.current ?? 0);
     },
     [],
   );
@@ -332,6 +337,19 @@ export const EntityPicker = ({
     ? `Browsing under ${model.committedPrefix}`
     : "Searching full paths";
 
+  useLayoutEffect(() => {
+    if (!open) {
+      return;
+    }
+    inputRef.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    if (!activeOptionId) {
+      return;
+    }
+    listboxRef.current
+      ?.querySelector<HTMLElement>(`#${CSS.escape(activeOptionId)}`)
+      ?.scrollIntoView({ block: "nearest" });
+  }, [activeOptionId, open]);
+
   const updateOpen = (nextOpen: boolean, typedSession = false) => {
     if (nextOpen && !open) {
       typedThisSessionRef.current = typedSession;
@@ -341,6 +359,19 @@ export const EntityPicker = ({
     }
     setOpen(nextOpen);
     onOpenChange?.(nextOpen);
+  };
+
+  const updatePopoverOpen = (nextOpen: boolean) => {
+    window.cancelAnimationFrame(deferredCloseFrameRef.current ?? 0);
+    if (!nextOpen && document.activeElement === inputRef.current) {
+      deferredCloseFrameRef.current = window.requestAnimationFrame(() => {
+        if (document.activeElement !== inputRef.current) {
+          updateOpen(false);
+        }
+      });
+      return;
+    }
+    updateOpen(nextOpen, typedThisSessionRef.current);
   };
 
   const selectOption = (option: EntityOption) => {
@@ -456,417 +487,426 @@ export const EntityPicker = ({
         ];
 
   return (
-    <div
-      className={cn(
-        "relative flex flex-col gap-1",
-        inlineOptions && "min-h-0 flex-1",
-      )}
-    >
-      <label
-        htmlFor={id}
-        className={cn("text-sm font-semibold", labelClassName)}
-      >
-        {label}
-      </label>
-      <input
-        ref={inputRef}
-        id={id}
-        autoFocus={autoFocus}
-        role="combobox"
-        aria-controls={`${id}-options`}
-        aria-describedby={`${id}-context`}
-        aria-expanded={open && !disabled}
-        aria-autocomplete="list"
-        aria-activedescendant={activeOptionId}
-        className="bg-card h-9 shrink-0 border-2 border-[var(--border-ink)] px-2 text-sm shadow-[var(--shadow-pixel)]"
-        disabled={disabled}
-        placeholder={placeholder}
-        value={query}
-        onBlur={() => {
-          window.clearTimeout(blurTimeoutRef.current);
-          blurTimeoutRef.current = window.setTimeout(() => {
-            updateOpen(false);
-          }, 100);
-        }}
-        onChange={(event) => {
-          interactionVersionRef.current += 1;
-          const nextQuery = event.target.value;
-          const nextModel = deriveQueryModel(nextQuery, groupFqns);
-          retainedPrefixRef.current =
-            nextModel.committedPrefix ||
-            (retainedPrefixRef.current &&
-            nextQuery.startsWith(`${retainedPrefixRef.current}:`)
-              ? retainedPrefixRef.current
-              : "");
-          typedThisSessionRef.current = true;
-          const exactOption = [...effectiveOptions, ...exactMatchOptions].find(
-            (option) => option.searchLabel === nextQuery,
-          );
-          if (exactOption) {
-            selectOption(exactOption);
-            return;
-          }
-          if (nextModel.levelMode !== model.levelMode) {
-            setAnnouncement(
-              nextModel.levelMode
-                ? `Browsing under ${nextModel.committedPrefix}`
-                : "Searching full paths",
-            );
-          }
-          setQuery(nextQuery);
-          setCreateError(undefined);
-          updateOpen(true, true);
-          setActiveIndex(0);
-          if (!selected || selected.searchLabel !== nextQuery) {
-            onChange(undefined);
-          }
-        }}
-        onFocus={() => {
-          if (disabled) {
-            return;
-          }
-          window.clearTimeout(blurTimeoutRef.current);
-          const nextQuery = selected?.searchLabel ?? query;
-          setQuery(nextQuery);
-          updateOpen(true);
-          const focusedModel = deriveQueryModel(nextQuery, groupFqns);
-          const focusedRows = rowsForQuery(
-            effectiveOptions,
-            groups,
-            focusedModel,
-          );
-          setActiveIndex(
-            Math.max(
-              0,
-              focusedRows.findIndex(
-                (row) => row.kind === "leaf" && row.option.id === value,
-              ),
-            ),
-          );
-        }}
-        onKeyDown={(event) => {
-          if (disabled) {
-            return;
-          }
+    <Popover open={open && !disabled} onOpenChange={updatePopoverOpen}>
+      <div className={cn("relative flex flex-col gap-1", open && "z-50")}>
+        <label
+          htmlFor={id}
+          className={cn("text-sm font-semibold", labelClassName)}
+        >
+          {label}
+        </label>
+        <PopoverAnchor asChild>
+          <input
+            ref={inputRef}
+            id={id}
+            type="text"
+            autoFocus={autoFocus}
+            role="combobox"
+            aria-controls={`${id}-options`}
+            aria-describedby={`${id}-context`}
+            aria-expanded={open && !disabled}
+            aria-autocomplete="list"
+            aria-activedescendant={activeOptionId}
+            className="bg-card h-9 shrink-0 border-2 border-[var(--border-ink)] px-2 text-sm shadow-[var(--shadow-pixel)]"
+            disabled={disabled}
+            placeholder={placeholder}
+            value={query}
+            onChange={(event) => {
+              interactionVersionRef.current += 1;
+              const nextQuery = event.target.value;
+              const nextModel = deriveQueryModel(nextQuery, groupFqns);
+              retainedPrefixRef.current =
+                nextModel.committedPrefix ||
+                (retainedPrefixRef.current &&
+                nextQuery.startsWith(`${retainedPrefixRef.current}:`)
+                  ? retainedPrefixRef.current
+                  : "");
+              typedThisSessionRef.current = true;
+              const exactOption = [
+                ...effectiveOptions,
+                ...exactMatchOptions,
+              ].find((option) => option.searchLabel === nextQuery);
+              if (exactOption) {
+                selectOption(exactOption);
+                return;
+              }
+              if (nextModel.levelMode !== model.levelMode) {
+                setAnnouncement(
+                  nextModel.levelMode
+                    ? `Browsing under ${nextModel.committedPrefix}`
+                    : "Searching full paths",
+                );
+              }
+              setQuery(nextQuery);
+              setCreateError(undefined);
+              updateOpen(true, true);
+              setActiveIndex(0);
+              if (!selected || selected.searchLabel !== nextQuery) {
+                onChange(undefined);
+              }
+            }}
+            onFocus={() => {
+              if (disabled) {
+                return;
+              }
+              const nextQuery = selected?.searchLabel ?? query;
+              setQuery(nextQuery);
+              if (skipInitialAutoFocusOpenRef.current) {
+                skipInitialAutoFocusOpenRef.current = false;
+                return;
+              }
+              updateOpen(true);
+              const focusedModel = deriveQueryModel(nextQuery, groupFqns);
+              const focusedRows = rowsForQuery(
+                effectiveOptions,
+                groups,
+                focusedModel,
+              );
+              setActiveIndex(
+                Math.max(
+                  0,
+                  focusedRows.findIndex(
+                    (row) => row.kind === "leaf" && row.option.id === value,
+                  ),
+                ),
+              );
+            }}
+            onKeyDown={(event) => {
+              if (disabled) {
+                return;
+              }
 
-          if (event.metaKey || event.ctrlKey) {
-            return;
-          }
+              if (event.metaKey || event.ctrlKey) {
+                return;
+              }
 
-          if (event.key === "Escape") {
-            if (open) {
+              if (event.key === "Escape") {
+                if (open) {
+                  event.preventDefault();
+                  updateOpen(false);
+                }
+                return;
+              }
+
+              if (event.key === "ArrowDown") {
+                event.preventDefault();
+                updateOpen(true);
+                setActiveIndex((current) =>
+                  rows.length === 0
+                    ? 0
+                    : Math.min(current + 1, rows.length - 1),
+                );
+                return;
+              }
+
+              if (event.key === "ArrowUp") {
+                event.preventDefault();
+                updateOpen(true);
+                setActiveIndex((current) =>
+                  rows.length === 0 ? 0 : Math.max(current - 1, 0),
+                );
+                return;
+              }
+
+              if (event.key === "Enter" && open && activeRow) {
+                event.preventDefault();
+                void activateRow(activeRow);
+                return;
+              }
+
+              if (
+                event.key === "ArrowRight" &&
+                open &&
+                activeRow?.kind === "group" &&
+                event.currentTarget.selectionStart === query.length &&
+                event.currentTarget.selectionEnd === query.length
+              ) {
+                event.preventDefault();
+                drillInto(activeRow.group);
+                return;
+              }
+
+              if (
+                event.key === "Tab" &&
+                !event.shiftKey &&
+                open &&
+                activeRow &&
+                typedThisSessionRef.current
+              ) {
+                const adoptedValue =
+                  activeRow.kind === "group"
+                    ? `${activeRow.group.fqn}:`
+                    : activeRow.kind === "leaf"
+                      ? activeRow.option.searchLabel
+                      : activeRow.fqn;
+                if (adoptedValue !== query) {
+                  event.preventDefault();
+                  adoptActiveRow();
+                }
+                return;
+              }
+
+              if (
+                event.key === "ArrowLeft" &&
+                open &&
+                model.committedPrefix &&
+                model.filter === "" &&
+                event.currentTarget.selectionStart === query.length &&
+                event.currentTarget.selectionEnd === query.length
+              ) {
+                event.preventDefault();
+                const separatorIndex = model.committedPrefix.lastIndexOf(":");
+                backTo(
+                  separatorIndex < 0
+                    ? ""
+                    : model.committedPrefix.slice(0, separatorIndex),
+                );
+                return;
+              }
+
+              if (
+                event.key === "Backspace" &&
+                open &&
+                query.endsWith(":") &&
+                event.currentTarget.selectionStart === query.length &&
+                event.currentTarget.selectionEnd === query.length
+              ) {
+                event.preventDefault();
+                interactionVersionRef.current += 1;
+                typedThisSessionRef.current = true;
+                const nextQuery = query.slice(0, -1);
+                setQuery(nextQuery);
+                setActiveIndex(0);
+                setCreateError(undefined);
+                onChange(undefined);
+                const nextModel = deriveQueryModel(nextQuery, groupFqns);
+                retainedPrefixRef.current = nextModel.committedPrefix;
+                setAnnouncement(
+                  nextModel.committedPrefix
+                    ? `Back to ${nextModel.committedPrefix}`
+                    : "Back to root",
+                );
+              }
+            }}
+          />
+        </PopoverAnchor>
+        <span id={`${id}-context`} className="sr-only">
+          {contextText}
+        </span>
+        <span
+          id={`${id}-announcement`}
+          className="sr-only"
+          role="status"
+          aria-live="polite"
+        >
+          {announcement}
+        </span>
+        {open && !disabled ? (
+          <PopoverContent
+            ref={listboxRef}
+            id={`${id}-options`}
+            role="listbox"
+            data-picker-portal
+            data-picker-mode={model.levelMode ? "level" : "search"}
+            align="start"
+            collisionPadding={4}
+            sideOffset={4}
+            sticky="always"
+            updatePositionStrategy="always"
+            className="max-h-[min(14rem,var(--radix-popover-content-available-height))] w-[var(--radix-popover-trigger-width)] overflow-auto p-0"
+            onCloseAutoFocus={(event) => event.preventDefault()}
+            onEscapeKeyDown={(event) => {
               event.preventDefault();
               updateOpen(false);
-            }
-            return;
-          }
-
-          if (event.key === "ArrowDown") {
-            event.preventDefault();
-            updateOpen(true);
-            setActiveIndex((current) =>
-              rows.length === 0 ? 0 : Math.min(current + 1, rows.length - 1),
-            );
-            return;
-          }
-
-          if (event.key === "ArrowUp") {
-            event.preventDefault();
-            updateOpen(true);
-            setActiveIndex((current) =>
-              rows.length === 0 ? 0 : Math.max(current - 1, 0),
-            );
-            return;
-          }
-
-          if (event.key === "Enter" && open && activeRow) {
-            event.preventDefault();
-            void activateRow(activeRow);
-            return;
-          }
-
-          if (
-            event.key === "ArrowRight" &&
-            open &&
-            activeRow?.kind === "group" &&
-            event.currentTarget.selectionStart === query.length &&
-            event.currentTarget.selectionEnd === query.length
-          ) {
-            event.preventDefault();
-            drillInto(activeRow.group);
-            return;
-          }
-
-          if (
-            event.key === "Tab" &&
-            !event.shiftKey &&
-            open &&
-            activeRow &&
-            typedThisSessionRef.current
-          ) {
-            const adoptedValue =
-              activeRow.kind === "group"
-                ? `${activeRow.group.fqn}:`
-                : activeRow.kind === "leaf"
-                  ? activeRow.option.searchLabel
-                  : activeRow.fqn;
-            if (adoptedValue !== query) {
-              event.preventDefault();
-              adoptActiveRow();
-            }
-            return;
-          }
-
-          if (
-            event.key === "ArrowLeft" &&
-            open &&
-            model.committedPrefix &&
-            model.filter === "" &&
-            event.currentTarget.selectionStart === query.length &&
-            event.currentTarget.selectionEnd === query.length
-          ) {
-            event.preventDefault();
-            const separatorIndex = model.committedPrefix.lastIndexOf(":");
-            backTo(
-              separatorIndex < 0
-                ? ""
-                : model.committedPrefix.slice(0, separatorIndex),
-            );
-            return;
-          }
-
-          if (
-            event.key === "Backspace" &&
-            open &&
-            query.endsWith(":") &&
-            event.currentTarget.selectionStart === query.length &&
-            event.currentTarget.selectionEnd === query.length
-          ) {
-            event.preventDefault();
-            interactionVersionRef.current += 1;
-            typedThisSessionRef.current = true;
-            const nextQuery = query.slice(0, -1);
-            setQuery(nextQuery);
-            setActiveIndex(0);
-            setCreateError(undefined);
-            onChange(undefined);
-            const nextModel = deriveQueryModel(nextQuery, groupFqns);
-            retainedPrefixRef.current = nextModel.committedPrefix;
-            setAnnouncement(
-              nextModel.committedPrefix
-                ? `Back to ${nextModel.committedPrefix}`
-                : "Back to root",
-            );
-          }
-        }}
-      />
-      <span id={`${id}-context`} className="sr-only">
-        {contextText}
-      </span>
-      <span
-        id={`${id}-announcement`}
-        className="sr-only"
-        role="status"
-        aria-live="polite"
-      >
-        {announcement}
-      </span>
-      {open && !disabled ? (
-        <div
-          id={`${id}-options`}
-          role="listbox"
-          data-picker-mode={model.levelMode ? "level" : "search"}
-          className={cn(
-            "bg-card z-30 overflow-auto border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]",
-            inlineOptions
-              ? "relative mt-1 min-h-0 flex-1"
-              : "absolute top-full right-0 left-0 mt-1 max-h-56",
-          )}
-        >
-          {model.levelMode ? (
-            <div
-              data-picker-breadcrumb
-              data-testid={`${id}-breadcrumb`}
-              className="sticky top-0 z-10 flex min-w-0 items-center gap-1 border-b border-[var(--hairline)] bg-[var(--band)] px-2 py-1 font-mono text-xs"
-            >
-              <Tooltip asChild label="Browse from root">
-                <button
-                  type="button"
-                  tabIndex={-1}
-                  aria-label="Browse from root"
-                  className="text-muted-foreground hover:text-foreground shrink-0"
-                  onMouseDown={(event) => {
-                    event.preventDefault();
-                  }}
-                  onClick={() => {
-                    backTo("");
-                  }}
-                >
-                  <Home aria-hidden="true" className="size-4" />
-                </button>
-              </Tooltip>
-              {visibleBreadcrumbSegments.map(({ index, segment }) => (
-                <span
-                  key={`${index}:${segment}`}
-                  className="flex min-w-0 items-center gap-1"
-                >
-                  <ChevronRight className="text-muted-foreground size-4 shrink-0" />
-                  {index < 0 ? (
-                    <Tooltip focusable={false} label={model.committedPrefix}>
-                      <span className="text-muted-foreground">…</span>
-                    </Tooltip>
-                  ) : (
-                    <Tooltip
-                      asChild
-                      label={breadcrumbSegments.slice(0, index + 1).join(":")}
-                    >
-                      <button
-                        type="button"
-                        tabIndex={-1}
-                        aria-label={`Browse ${breadcrumbSegments
-                          .slice(0, index + 1)
-                          .join(":")}`}
-                        className={cn(
-                          "max-w-24 truncate",
-                          index === breadcrumbSegments.length - 1
-                            ? "text-foreground font-semibold"
-                            : "text-muted-foreground hover:text-foreground",
-                        )}
-                        onMouseDown={(event) => {
-                          event.preventDefault();
-                        }}
-                        onClick={() => {
-                          backTo(
-                            breadcrumbSegments.slice(0, index + 1).join(":"),
-                          );
-                        }}
-                      >
-                        {segment}
-                      </button>
-                    </Tooltip>
-                  )}
-                </span>
-              ))}
-            </div>
-          ) : null}
-          {rows.length > 0 ? (
-            rows.map((row, rowIndex) => {
-              const option = (
-                <button
-                  key={rowId(id, row)}
-                  id={rowId(id, row)}
-                  type="button"
-                  role="option"
-                  tabIndex={-1}
-                  aria-disabled={
-                    row.kind === "create" && creating ? true : undefined
-                  }
-                  aria-description={
-                    row.kind === "create" && creating
-                      ? "Wait for creation to finish."
-                      : undefined
-                  }
-                  aria-label={
-                    row.kind === "group"
-                      ? `${row.group.fqn}, group, ${row.group.childCount} children`
-                      : row.kind === "create"
-                        ? `Create ${row.fqn}`
-                        : undefined
-                  }
-                  aria-selected={
-                    row.kind === "leaf" ? row.option.id === value : false
-                  }
-                  className={cn(
-                    "hover:bg-muted flex w-full items-center px-2 py-2 text-left text-sm",
-                    row.kind === "create" && "bg-card sticky bottom-0",
-                    rowIndex === clampedActiveIndex &&
-                      "bg-[var(--color-interactive-bright)]",
-                    row.kind === "leaf" &&
-                      row.option.id === value &&
-                      "bg-[var(--color-interactive-bright)]",
-                    row.kind === "create" &&
-                      creating &&
-                      "text-muted-foreground outline-muted-foreground bg-muted hover:bg-muted [&_svg]:!text-muted-foreground cursor-not-allowed outline outline-1 -outline-offset-1",
-                  )}
-                  onMouseDown={(event) => {
-                    event.preventDefault();
-                    void activateRow(row);
-                  }}
-                >
-                  {row.kind === "leaf" ? (
-                    <span className="flex min-w-0 flex-col items-start">
-                      <span className="flex items-center gap-1 font-medium">
-                        {row.option.hidden ? (
-                          <EyeOff aria-label="Hidden" className="size-3" />
-                        ) : null}
-                        {row.option.label}
-                      </span>
-                      {row.option.detail ? (
-                        <span className="text-muted-foreground font-mono text-xs">
-                          {row.option.detail}
-                        </span>
-                      ) : null}
-                    </span>
-                  ) : row.kind === "group" ? (
-                    <>
-                      <Tooltip
-                        className="min-w-0 flex-1 font-mono font-medium"
-                        focusable={false}
-                        label={row.group.fqn}
-                      >
-                        <span className="block truncate">
-                          {row.group.segment}
-                        </span>
-                      </Tooltip>
-                      <span className="text-muted-foreground ml-2 font-mono text-xs">
-                        {row.group.childCount}
-                      </span>
-                      <ChevronRight
-                        aria-hidden="true"
-                        className="text-muted-foreground ml-1 size-4 shrink-0"
-                      />
-                    </>
-                  ) : (
-                    <>
-                      <Plus
-                        aria-hidden="true"
-                        className="mr-1 size-4 shrink-0 text-[var(--color-class-adjustment-ink)]"
-                      />
-                      <span className="min-w-0 truncate font-medium">
-                        {creating ? "Creating" : "Create"} “{row.fqn}”
-                      </span>
-                    </>
-                  )}
-                </button>
-              );
-              return row.kind === "create" ? (
-                <Tooltip
-                  key={rowId(id, row)}
-                  asChild
-                  disabled={!creating}
-                  label="Wait for creation to finish."
-                >
-                  {option}
+              inputRef.current?.focus({ preventScroll: true });
+            }}
+            onOpenAutoFocus={(event) => event.preventDefault()}
+          >
+            {model.levelMode ? (
+              <div
+                data-picker-breadcrumb
+                data-testid={`${id}-breadcrumb`}
+                className="sticky top-0 z-10 flex min-w-0 items-center gap-1 border-b border-[var(--hairline)] bg-[var(--band)] px-2 py-1 font-mono text-xs"
+              >
+                <Tooltip asChild label="Browse from root">
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    aria-label="Browse from root"
+                    className="text-muted-foreground hover:text-foreground shrink-0"
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                    }}
+                    onClick={() => {
+                      backTo("");
+                    }}
+                  >
+                    <Home aria-hidden="true" className="size-4" />
+                  </button>
                 </Tooltip>
-              ) : (
-                option
-              );
-            })
-          ) : (
-            <div className="text-muted-foreground px-2 py-2 text-sm">
-              {model.committedPrefix
-                ? `No matches under ${model.committedPrefix}:`
-                : "No matches"}
-            </div>
-          )}
-        </div>
-      ) : null}
-      {createError ? (
-        <div className="text-destructive px-2 py-2 text-xs" role="alert">
-          {createError}
-        </div>
-      ) : null}
-    </div>
+                {visibleBreadcrumbSegments.map(({ index, segment }) => (
+                  <span
+                    key={`${index}:${segment}`}
+                    className="flex min-w-0 items-center gap-1"
+                  >
+                    <ChevronRight className="text-muted-foreground size-4 shrink-0" />
+                    {index < 0 ? (
+                      <Tooltip focusable={false} label={model.committedPrefix}>
+                        <span className="text-muted-foreground">…</span>
+                      </Tooltip>
+                    ) : (
+                      <Tooltip
+                        asChild
+                        label={breadcrumbSegments.slice(0, index + 1).join(":")}
+                      >
+                        <button
+                          type="button"
+                          tabIndex={-1}
+                          aria-label={`Browse ${breadcrumbSegments
+                            .slice(0, index + 1)
+                            .join(":")}`}
+                          className={cn(
+                            "max-w-24 truncate",
+                            index === breadcrumbSegments.length - 1
+                              ? "text-foreground font-semibold"
+                              : "text-muted-foreground hover:text-foreground",
+                          )}
+                          onMouseDown={(event) => {
+                            event.preventDefault();
+                          }}
+                          onClick={() => {
+                            backTo(
+                              breadcrumbSegments.slice(0, index + 1).join(":"),
+                            );
+                          }}
+                        >
+                          {segment}
+                        </button>
+                      </Tooltip>
+                    )}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+            {rows.length > 0 ? (
+              rows.map((row, rowIndex) => {
+                const option = (
+                  <button
+                    key={rowId(id, row)}
+                    id={rowId(id, row)}
+                    type="button"
+                    role="option"
+                    tabIndex={-1}
+                    aria-disabled={
+                      row.kind === "create" && creating ? true : undefined
+                    }
+                    aria-description={
+                      row.kind === "create" && creating
+                        ? "Wait for creation to finish."
+                        : undefined
+                    }
+                    aria-label={
+                      row.kind === "group"
+                        ? `${row.group.fqn}, group, ${row.group.childCount} children`
+                        : row.kind === "create"
+                          ? `Create ${row.fqn}`
+                          : undefined
+                    }
+                    aria-selected={
+                      row.kind === "leaf" ? row.option.id === value : false
+                    }
+                    className={cn(
+                      "hover:bg-muted flex w-full items-center px-2 py-2 text-left text-sm",
+                      row.kind === "create" && "bg-card sticky bottom-0",
+                      rowIndex === clampedActiveIndex &&
+                        "bg-[var(--color-interactive-bright)]",
+                      row.kind === "leaf" &&
+                        row.option.id === value &&
+                        "bg-[var(--color-interactive-bright)]",
+                      row.kind === "create" &&
+                        creating &&
+                        "text-muted-foreground outline-muted-foreground bg-muted hover:bg-muted [&_svg]:!text-muted-foreground cursor-not-allowed outline outline-1 -outline-offset-1",
+                    )}
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      void activateRow(row);
+                    }}
+                  >
+                    {row.kind === "leaf" ? (
+                      <span className="flex min-w-0 flex-col items-start">
+                        <span className="flex items-center gap-1 font-medium">
+                          {row.option.hidden ? (
+                            <EyeOff aria-label="Hidden" className="size-3" />
+                          ) : null}
+                          {row.option.label}
+                        </span>
+                        {row.option.detail ? (
+                          <span className="text-muted-foreground font-mono text-xs">
+                            {row.option.detail}
+                          </span>
+                        ) : null}
+                      </span>
+                    ) : row.kind === "group" ? (
+                      <>
+                        <Tooltip
+                          className="min-w-0 flex-1 font-mono font-medium"
+                          focusable={false}
+                          label={row.group.fqn}
+                        >
+                          <span className="block truncate">
+                            {row.group.segment}
+                          </span>
+                        </Tooltip>
+                        <span className="text-muted-foreground ml-2 font-mono text-xs">
+                          {row.group.childCount}
+                        </span>
+                        <ChevronRight
+                          aria-hidden="true"
+                          className="text-muted-foreground ml-1 size-4 shrink-0"
+                        />
+                      </>
+                    ) : (
+                      <>
+                        <Plus
+                          aria-hidden="true"
+                          className="mr-1 size-4 shrink-0 text-[var(--color-class-adjustment-ink)]"
+                        />
+                        <span className="min-w-0 truncate font-medium">
+                          {creating ? "Creating" : "Create"} “{row.fqn}”
+                        </span>
+                      </>
+                    )}
+                  </button>
+                );
+                return row.kind === "create" ? (
+                  <Tooltip
+                    key={rowId(id, row)}
+                    asChild
+                    disabled={!creating}
+                    label="Wait for creation to finish."
+                  >
+                    {option}
+                  </Tooltip>
+                ) : (
+                  option
+                );
+              })
+            ) : (
+              <div className="text-muted-foreground px-2 py-2 text-sm">
+                {model.committedPrefix
+                  ? `No matches under ${model.committedPrefix}:`
+                  : "No matches"}
+              </div>
+            )}
+          </PopoverContent>
+        ) : null}
+        {createError ? (
+          <div className="text-destructive px-2 py-2 text-xs" role="alert">
+            {createError}
+          </div>
+        ) : null}
+      </div>
+    </Popover>
   );
 };
 
@@ -877,7 +917,6 @@ interface EntityMultiPickerProps {
   readonly disabled?: boolean;
   readonly id: string;
   readonly hierarchical?: boolean;
-  readonly inlineOptions?: boolean;
   readonly label: string;
   readonly labelClassName?: string;
   readonly onChange: (ids: readonly number[]) => void;
@@ -894,7 +933,6 @@ export const EntityMultiPicker = ({
   disabled = false,
   id,
   hierarchical = true,
-  inlineOptions = false,
   label,
   labelClassName,
   onChange,
@@ -922,9 +960,7 @@ export const EntityMultiPicker = ({
   );
 
   return (
-    <div
-      className={cn("flex flex-col gap-2", inlineOptions && "min-h-0 flex-1")}
-    >
+    <div className="flex flex-col gap-2">
       <EntityPicker
         autoFocus={autoFocus}
         clearOnSelect
@@ -945,7 +981,6 @@ export const EntityMultiPicker = ({
         excludedOptionIds={value}
         hierarchical={hierarchical}
         id={id}
-        inlineOptions={inlineOptions}
         label={label}
         labelClassName={labelClassName}
         onOpenChange={onOpenChange}
@@ -962,25 +997,25 @@ export const EntityMultiPicker = ({
       />
       {selectedOptions.length > 0 ? (
         <div
-          className={cn(
-            "relative z-40 flex flex-wrap gap-1 p-0.5",
-            inlineOptions && "max-h-28 shrink-0 overflow-y-auto",
-          )}
+          className="relative z-40 flex flex-wrap gap-1 p-0.5"
           data-testid="entity-multi-picker-selected"
         >
           {selectedOptions.map((option) => (
             <span
               key={option.id}
-              className="bg-muted inline-flex h-7 items-center gap-1 border border-[var(--border-ink)] px-2 font-mono text-xs shadow-[var(--shadow-chip)]"
+              className="bg-muted inline-flex h-7 max-w-full min-w-0 items-center gap-1 border border-[var(--border-ink)] px-2 font-mono text-xs shadow-[var(--shadow-chip)]"
             >
               {option.hidden ? (
                 <EyeOff aria-label="Hidden" className="size-3" />
               ) : null}
-              {option.label}
+              <Tooltip focusable={false} label={option.label}>
+                <span className="block truncate">{option.label}</span>
+              </Tooltip>
               <Button
                 type="button"
                 variant="ghost"
                 size="icon-xs"
+                className="shrink-0"
                 aria-label={`Remove ${option.label}`}
                 disabled={disabled}
                 onClick={() => {

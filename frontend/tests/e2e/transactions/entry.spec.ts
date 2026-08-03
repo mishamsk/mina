@@ -1106,21 +1106,21 @@ test("entry modal deep links compose with history and report missing transaction
   );
 });
 
-test("opening the entry modal exits bulk mode and takes over a narrow viewport", async ({
+test("opening the entry modal exits edit mode and takes over a narrow viewport", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 820 });
   await page.goto("/transactions?page=1&pageSize=25");
-  await page.getByRole("button", { name: "Bulk edit" }).click();
+  await page.getByRole("button", { name: "Edit mode" }).click();
   await expect(
-    page.getByTestId("transaction-browser-bulk-mode-bar"),
+    page.getByTestId("transaction-browser-edit-mode-header"),
   ).toBeVisible();
   await page
     .locator("main")
     .getByRole("button", { name: "New transaction" })
     .click();
   await expect(
-    page.getByTestId("transaction-browser-bulk-mode-bar"),
+    page.getByTestId("transaction-browser-edit-mode-header"),
   ).toHaveCount(0);
 
   await page.getByRole("button", { name: "Close transaction editor" }).click();

@@ -429,7 +429,7 @@ test("transaction quick-delete refreshes reference deleteability without a reloa
   await page
     .getByRole("searchbox", { name: "Search" })
     .fill("Wire transfer with fee");
-  const feesTransactionRows = page.locator("tbody > tr[aria-expanded]");
+  const feesTransactionRows = page.locator("[data-transaction-row='true']");
   await expect(feesTransactionRows).toHaveCount(1);
   await quickDeleteTransactionFromRow(page, feesTransactionRows.first());
 
@@ -517,7 +517,7 @@ test("transaction quick-delete refreshes reference deleteability without a reloa
     page.getByRole("heading", { exact: true, name: "Transactions" }),
   ).toBeVisible();
   await page.getByRole("searchbox", { name: "Search" }).fill(categoryMemo);
-  const categoryTransactionRows = page.locator("tbody > tr[aria-expanded]");
+  const categoryTransactionRows = page.locator("[data-transaction-row='true']");
   await expect(categoryTransactionRows).toHaveCount(1);
   await quickDeleteTransactionFromRow(page, categoryTransactionRows.first());
 

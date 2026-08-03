@@ -283,7 +283,7 @@
     width: 25%;
   }
 
-  .transactions-table--bulk-edit .transactions-description-column {
+  .transactions-table--edit-mode .transactions-description-column {
     width: calc(25% - 2.25rem);
   }
 
@@ -307,11 +307,11 @@
     width: 17%;
   }
 
-  .transactions-table--bulk-edit .transactions-actions-column {
+  .transactions-table--edit-mode .transactions-actions-column {
     display: none;
   }
 
-  .transactions-table--bulk-edit :is(th, td).transactions-actions-column {
+  .transactions-table--edit-mode :is(th, td).transactions-actions-column {
     padding-right: 0 !important;
     padding-left: 0 !important;
   }
@@ -340,7 +340,7 @@
       width: 22%;
     }
 
-    .transactions-table--bulk-edit .transactions-description-column {
+    .transactions-table--edit-mode .transactions-description-column {
       width: calc(22% - 2.25rem);
     }
 
@@ -370,7 +370,7 @@
       width: 27%;
     }
 
-    .transactions-table--bulk-edit .transactions-description-column {
+    .transactions-table--edit-mode .transactions-description-column {
       width: calc(27% - 2.25rem);
     }
 
@@ -419,7 +419,7 @@
       width: 24%;
     }
 
-    .transactions-table--bulk-edit .transactions-description-column {
+    .transactions-table--edit-mode .transactions-description-column {
       width: calc(24% - 2.25rem);
     }
 
@@ -464,16 +464,16 @@
       width: 20%;
     }
 
-    .transactions-table--bulk-edit .transactions-selection-column {
+    .transactions-table--edit-mode .transactions-selection-column {
       width: 1.5rem;
     }
 
-    .transactions-table--bulk-edit :is(th, td).transactions-selection-column {
+    .transactions-table--edit-mode :is(th, td).transactions-selection-column {
       padding-right: 0.25rem !important;
       padding-left: 0.25rem !important;
     }
 
-    .transactions-table--bulk-edit .transactions-description-column {
+    .transactions-table--edit-mode .transactions-description-column {
       width: auto;
     }
 
@@ -481,8 +481,8 @@
       width: 47%;
     }
 
-    .transactions-table--bulk-edit .transactions-amount-column {
-      width: 37%;
+    .transactions-table--edit-mode .transactions-amount-column {
+      width: 56%;
     }
 
     .transactions-table .transactions-actions-column {

@@ -1,5 +1,5 @@
-import { EyeOff, Open, Reload } from "pixelarticons/react";
-import { type ReactNode, useCallback, useMemo, useRef } from "react";
+import { Reload } from "pixelarticons/react";
+import { useCallback, useMemo, useRef } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 
 import { Toast, toastDurationMs } from "@/components/toast";
@@ -9,8 +9,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   captureTransactionEntryLaunchContext,
   defaultTransactionPage,
-  defaultTransactionPageSize,
-  FqnPath,
   hasActiveTransactionFilterChips,
   readLiveSearchParams,
   readTransactionFiltersFromSearchParams,
@@ -29,32 +27,15 @@ import {
 import { openTransactionEntryLaunch, openTransactionEntryPanel } from "@/store";
 
 export interface ReferenceDrilldownPageProps {
-  readonly actionLabel: string;
-  readonly badges?: ReactNode;
-  readonly entityKindLabel: string;
   readonly exactOnly?: boolean;
   readonly filterIds: readonly number[];
   readonly filterKind: "category" | "member" | "tag";
-  readonly fqn?: string;
-  readonly hidden?: boolean;
   readonly onExactOnlyChange?: (exactOnly: boolean) => void;
   readonly showExactOnlyToggle?: boolean;
-  readonly title: string;
-  readonly viewAllHref: string;
 }
 
 export const ReferenceDrilldownSkeleton = () => (
-  <div className="flex h-full min-h-0 flex-col gap-6" aria-hidden="true">
-    <div className="bg-card border-2 border-[var(--border-ink)] p-4 shadow-[var(--shadow-pixel)]">
-      <div className="flex flex-col gap-4 lg:flex-row lg:justify-between">
-        <div className="space-y-3">
-          <Skeleton className="h-4 w-32" />
-          <Skeleton className="h-7 w-72 max-w-full" />
-          <Skeleton className="h-6 w-44 max-w-full" />
-        </div>
-        <Skeleton className="h-9 w-48 max-w-full" />
-      </div>
-    </div>
+  <div className="flex h-full min-h-0 flex-col" aria-hidden="true">
     <div className="min-h-0 flex-1">
       <div className="bg-card border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]">
         {Array.from({ length: 6 }).map((_, index) => (
@@ -201,32 +182,12 @@ const referenceEntityPath = (
   return `/members/${id}`;
 };
 
-export const referenceTransactionHref = (
-  kind: ReferenceDrilldownPageProps["filterKind"],
-  ids: readonly number[],
-): string => {
-  const searchParams = new URLSearchParams();
-  for (const id of ids) {
-    searchParams.append(kind, String(id));
-  }
-  searchParams.set("page", String(defaultTransactionPage));
-  searchParams.set("pageSize", String(defaultTransactionPageSize));
-  return `/transactions?${searchParams.toString()}`;
-};
-
 export const ReferenceDrilldownPage = ({
-  actionLabel,
-  badges,
-  entityKindLabel,
   exactOnly,
   filterIds,
   filterKind,
-  fqn,
-  hidden,
   onExactOnlyChange,
   showExactOnlyToggle = false,
-  title,
-  viewAllHref,
 }: ReferenceDrilldownPageProps) => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -403,52 +364,11 @@ export const ReferenceDrilldownPage = ({
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-6">
-      <div className="bg-card border-2 border-[var(--border-ink)] p-4 shadow-[var(--shadow-pixel)]">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="min-w-0 space-y-3">
-            <div>
-              <p className="font-heading text-muted-foreground text-xs font-semibold uppercase">
-                {entityKindLabel}
-              </p>
-              <h2 className="font-heading text-foreground mt-1 truncate text-xl font-bold">
-                {fqn ? (
-                  <FqnPath
-                    value={fqn}
-                    focusable={false}
-                    className="text-xl"
-                    leafClassName="font-bold"
-                  />
-                ) : (
-                  title
-                )}
-              </h2>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {badges}
-              {hidden ? (
-                <span
-                  aria-label={`Hidden ${entityKindLabel.toLowerCase()}`}
-                  className="font-heading bg-muted text-foreground inline-flex min-h-6 items-center gap-1 border border-[var(--border-ink)] px-1.5 text-xs font-semibold uppercase shadow-[var(--shadow-chip)]"
-                >
-                  <EyeOff aria-hidden="true" className="size-4" />
-                  Hidden
-                </span>
-              ) : null}
-            </div>
-          </div>
-          <Button asChild variant="outline">
-            <Link to={viewAllHref}>
-              <Open aria-hidden="true" />
-              {actionLabel}
-            </Link>
-          </Button>
-        </div>
-      </div>
       <TransactionBrowserToolbar
-        bulkEditMode={browser.bulkEditMode}
+        amountSavePending={browser.pendingAmountSave}
+        editMode={browser.editMode}
         dateJumpLoading={browser.dateJumpLoading}
         dateJumpValue={browser.dateJumpValue}
-        detailPanelOpen={Boolean(browser.detail.selectedTransactionId)}
         onDateJumpToday={browser.jumpToCurrentDate}
         extraControls={
           showExactOnlyToggle ? (
@@ -485,7 +405,7 @@ export const ReferenceDrilldownPage = ({
         onDateJumpValueChange={browser.changeDateJumpValue}
         onSelectPage={browser.selectPageTransactions}
         onSearchChange={setSearchFilter}
-        onSetBulkEditMode={browser.setBulkEditMode}
+        onSetEditMode={browser.setEditMode}
         onTransactionClassChange={setTransactionClassFilter}
         selectableCount={browser.selectableTransactionCount}
         selectedCount={browser.selectedTransactionIds.size}
@@ -496,7 +416,7 @@ export const ReferenceDrilldownPage = ({
         tabIndex={-1}
       >
         <TransactionBrowser
-          bulkEditMode={browser.bulkEditMode}
+          editMode={browser.editMode}
           dateJumpAnchor={browser.dateJumpAnchor}
           errorMessage={browser.errorMessage}
           hasNextPage={
@@ -506,7 +426,6 @@ export const ReferenceDrilldownPage = ({
                 : browser.page * browser.pageSize < browser.totalCount
               : false
           }
-          inlineEdit={browser.inlineEdit}
           loading={browser.loading}
           lookups={browser.lookups.snapshot}
           onConfirmRecurringOccurrence={
@@ -549,17 +468,11 @@ export const ReferenceDrilldownPage = ({
             browser.setPage(browser.page + 1);
           }}
           onOpenTransaction={browser.detail.openTransactionDetail}
-          onEditTransactionAsJournal={(transaction) => {
-            openTransactionEntryLaunch(
-              { transaction, type: "split" },
-              captureTransactionEntryLaunchContext(),
-            );
-          }}
           onPageSizeChange={browser.setPageSize}
           onPreviousPage={() => {
             browser.setPage(Math.max(defaultTransactionPage, browser.page - 1));
           }}
-          onSetBulkEditMode={browser.setBulkEditMode}
+          onSetEditMode={browser.setEditMode}
           onSplitTransaction={(transaction) => {
             openTransactionEntryLaunch(
               { transaction, type: "split" },
@@ -569,16 +482,12 @@ export const ReferenceDrilldownPage = ({
           onSelectRange={browser.selectTransactionRange}
           onTogglePageSelection={browser.togglePageTransactionSelection}
           onToggleSelection={browser.toggleTransactionSelection}
-          onUpdateRecord={browser.updateRecord}
-          onUpdateTransactionRecordReferences={
-            browser.updateTransactionRecordReferences
-          }
           onUpdateTransactionAmount={browser.updateTransactionAmount}
-          onUpdateTransactionsBulkReferences={
-            browser.updateTransactionsBulkReferences
+          onUpdateTransactionsEditReferences={
+            browser.updateTransactionsEditReferences
           }
-          onUpdateTransactionsBulkRecordState={
-            browser.updateTransactionsBulkRecordState
+          onUpdateTransactionsEditRecordState={
+            browser.updateTransactionsEditRecordState
           }
           page={browser.page}
           pageSize={browser.pageSize}
@@ -596,14 +505,11 @@ export const ReferenceDrilldownPage = ({
             ? "text-[var(--color-class-adjustment-ink)]"
             : "text-[var(--color-money-in)]"
         }
-        containerClassName={
-          browser.bulkEditMode ? "bottom-40 sm:bottom-28" : undefined
-        }
         durationMs={toastDurationMs}
         message={browser.notice?.message}
         onDismiss={browser.dismissNotice}
       />
-      {!browser.bulkEditMode && browser.detail.selectedTransactionId ? (
+      {!browser.editMode && browser.detail.selectedTransactionId ? (
         <TransactionDetailPanel
           errorMessage={browser.detail.errorMessage}
           loading={browser.detail.loading}

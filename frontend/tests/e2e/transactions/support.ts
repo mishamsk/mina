@@ -451,6 +451,7 @@ const createExpectedRecurringFixture = async (
 const createSearchSpend = async (
   page: Page,
   memo: string,
+  amount = "12.34",
 ): Promise<TransactionFixture> => {
   const [accounts, categories] = await Promise.all([
     listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
@@ -461,7 +462,7 @@ const createSearchSpend = async (
   const category = findByFqn(categories, "Entertainment:Books");
   const response = await page.request.post("/api/transactions/spend", {
     data: {
-      amount: "12.34",
+      amount,
       category_id: category.category_id,
       counterparty_account_id: merchantAccount.account_id,
       currency: "USD",
@@ -568,7 +569,6 @@ const expectDatelessReadOnlyDetailGrid = async (
     );
     await expect(table.locator("td[data-label='Status']")).toHaveCount(0);
   }
-  await expect(panel.locator("[data-inline-editor-id]")).toHaveCount(0);
   await expect(panel.locator("input, textarea, select")).toHaveCount(0);
   await expect(
     panel.getByRole("button", {
@@ -590,7 +590,6 @@ const expectRecordRoleIndicators = async (
   expectedLabels: readonly string[],
   layoutChecks: {
     readonly narrowDetail?: boolean;
-    readonly narrowInline?: boolean;
   } = {},
 ): Promise<void> => {
   const indicators = table.getByRole("img", { name: / role$/ });
@@ -639,45 +638,6 @@ const expectRecordRoleIndicators = async (
     expect(
       Math.abs(height - (heightsWithoutIndicators[index] ?? 0)),
     ).toBeLessThanOrEqual(1);
-  }
-
-  if (layoutChecks.narrowInline) {
-    const page = table.page();
-    const originalViewport = page.viewportSize();
-    await page.setViewportSize({ width: 320, height: 800 });
-    try {
-      const trigger = table
-        .getByRole("img", { name: expectedLabels[0], exact: true })
-        .locator("..");
-      await trigger.focus();
-      await expect(trigger).toBeFocused();
-      await expect
-        .poll(() =>
-          trigger.evaluate((element) => {
-            const glyph = element.querySelector("svg");
-            if (!glyph) {
-              return false;
-            }
-
-            const triggerBounds = element.getBoundingClientRect();
-            const glyphBounds = glyph.getBoundingClientRect();
-            const style = getComputedStyle(element);
-            return (
-              triggerBounds.left <= glyphBounds.left &&
-              triggerBounds.right >= glyphBounds.right &&
-              triggerBounds.top <= glyphBounds.top &&
-              triggerBounds.bottom >= glyphBounds.bottom &&
-              style.outlineStyle === "solid" &&
-              style.outlineWidth === "2px"
-            );
-          }),
-        )
-        .toBe(true);
-    } finally {
-      if (originalViewport) {
-        await page.setViewportSize(originalViewport);
-      }
-    }
   }
 
   if (layoutChecks.narrowDetail) {
@@ -763,7 +723,7 @@ const expectKeyboardDisclosure = async (panel: Locator): Promise<void> => {
   await row.press("Enter");
   await expect(row).toHaveAttribute("aria-expanded", "true");
   await row.press("F2");
-  await expect(panel.locator("[data-inline-editor-id]")).toHaveCount(0);
+  await expect(row).toHaveAttribute("aria-expanded", "true");
   await row.press(" ");
   await expect(row).toHaveAttribute("aria-expanded", "false");
 };
@@ -948,113 +908,6 @@ const expectCollapsedRowActionsKeepAmountVisible = async (row: Locator) => {
   ).resolves.toBe(true);
 };
 
-const expectInlineSaveKeepsTransactionTableStable = async (
-  page: Page,
-  transactionId: number,
-  focusTarget: Locator,
-  save: () => Promise<void>,
-  expectUpdatedValue: () => Promise<void>,
-): Promise<void> => {
-  const transactionListPattern = "**/api/transactions**";
-  const tableScroll = page.getByTestId("transactions-table-scroll");
-  const table = tableScroll.locator("table.transactions-table");
-  const stabilityMarker = `save-${transactionId}-${Date.now()}`;
-  await table.evaluate((element, marker) => {
-    element.dataset.e2eStabilityMarker = marker;
-  }, stabilityMarker);
-  const scrollTop = await tableScroll.evaluate((element) => element.scrollTop);
-  expect(scrollTop).toBeGreaterThan(0);
-  const visibleTransactionIds = await tableScroll.evaluate((element) => {
-    const containerBounds = element.getBoundingClientRect();
-    return Array.from(
-      element.querySelectorAll<HTMLElement>("[data-transaction-row='true']"),
-    )
-      .filter((row) => {
-        const rowBounds = row.getBoundingClientRect();
-        return (
-          rowBounds.bottom > containerBounds.top &&
-          rowBounds.top < containerBounds.bottom
-        );
-      })
-      .map((row) => row.dataset.transactionId ?? "");
-  });
-  expect(visibleTransactionIds.length).toBeGreaterThan(0);
-
-  let releaseRefetch: (() => void) | undefined;
-  let markRefetchStarted: (() => void) | undefined;
-  const refetchStarted = new Promise<void>((resolve) => {
-    markRefetchStarted = resolve;
-  });
-  const refetchResponse = page.waitForResponse((response) => {
-    const url = new URL(response.url());
-    return (
-      response.request().method() === "GET" &&
-      url.pathname === "/api/transactions"
-    );
-  });
-  const holdRefetch = async (route: Route) => {
-    const url = new URL(route.request().url());
-    if (
-      route.request().method() !== "GET" ||
-      url.pathname !== "/api/transactions"
-    ) {
-      await route.continue();
-      return;
-    }
-
-    markRefetchStarted?.();
-    await new Promise<void>((resolve) => {
-      releaseRefetch = resolve;
-    });
-    await route.continue();
-  };
-  await page.route(transactionListPattern, holdRefetch);
-
-  try {
-    await save();
-    await refetchStarted;
-    await expectUpdatedValue();
-
-    await expect(tableScroll).toBeVisible();
-    await expect(page.locator("[data-slot='skeleton']")).toHaveCount(0);
-    await expect(page.getByTestId("transactions-page-busy")).toHaveCount(0);
-    await expect(table).toHaveAttribute(
-      "data-e2e-stability-marker",
-      stabilityMarker,
-    );
-    await expect(
-      page.locator(`[data-transaction-id="${transactionId}"]`),
-    ).toHaveAttribute("aria-expanded", "true");
-    for (const visibleTransactionId of visibleTransactionIds) {
-      await expect(
-        page.locator(`[data-transaction-id="${visibleTransactionId}"]`),
-      ).toBeVisible();
-    }
-    expect(await tableScroll.evaluate((element) => element.scrollTop)).toBe(
-      scrollTop,
-    );
-  } finally {
-    releaseRefetch?.();
-    await refetchResponse;
-    await page.unroute(transactionListPattern, holdRefetch);
-  }
-
-  await expect(tableScroll).toBeVisible();
-  await expect(page.locator("[data-slot='skeleton']")).toHaveCount(0);
-  await expect(page.getByTestId("transactions-page-busy")).toHaveCount(0);
-  await expect(table).toHaveAttribute(
-    "data-e2e-stability-marker",
-    stabilityMarker,
-  );
-  await expect(
-    page.locator(`[data-transaction-id="${transactionId}"]`),
-  ).toHaveAttribute("aria-expanded", "true");
-  await expect(focusTarget).toBeFocused();
-  expect(await tableScroll.evaluate((element) => element.scrollTop)).toBe(
-    scrollTop,
-  );
-};
-
 const comparableRecords = (records: readonly JournalRecordFixture[]) =>
   records
     .map((record) => ({
@@ -1097,6 +950,14 @@ const hideAccount = async (
 ): Promise<void> => {
   const response = await page.request.patch(
     `/api/accounts/${account.account_id}`,
+    { data: { is_hidden: true } },
+  );
+  expect(response.ok()).toBe(true);
+};
+
+const hideMember = async (page: Page, member: MemberFixture): Promise<void> => {
+  const response = await page.request.put(
+    `/api/members/${member.member_id}/hidden`,
     { data: { is_hidden: true } },
   );
   expect(response.ok()).toBe(true);
@@ -1690,7 +1551,6 @@ export {
   expectCollapsedRowActionsKeepAmountVisible,
   expectDatelessReadOnlyDetailGrid,
   expectFocusedAccountLabel,
-  expectInlineSaveKeepsTransactionTableStable,
   expectKeyboardDisclosure,
   expectMouseDisclosure,
   expectRecordRoleIndicators,
@@ -1703,6 +1563,7 @@ export {
   getTransactionDetail,
   hideAccount,
   hideCategory,
+  hideMember,
   hideTag,
   journalRecord,
   listFixtures,

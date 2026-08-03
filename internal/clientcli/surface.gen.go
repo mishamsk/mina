@@ -95,6 +95,40 @@ func Operations() []Operation {
 			Invoke: invokeBulkReassignJournalRecordAccount,
 		},
 		{
+			ID:          "bulkSetJournalRecordMember",
+			Method:      "POST",
+			Path:        "/api/records/bulk/member",
+			Summary:     "Set or clear the member on selected active journal records.",
+			Description: "",
+			CLI:         CLIOperation{Area: "records", Name: "bulk-set-member"},
+			Input: InputDescriptor{
+				Body: BodyDescriptor{
+					Present:  true,
+					Required: true,
+					Type:     "object",
+					Properties: []BodyPropertyDescriptor{
+						{
+							Name:        "member_id",
+							Type:        "integer",
+							Description: "Active household-member identifier to set, or null to clear attribution.",
+							Required:    true,
+						},
+						{
+							Name:        "record_ids",
+							Type:        "array",
+							Description: "Journal-record identifiers to update.",
+							Required:    true,
+							Array:       true,
+							ItemType:    "integer",
+						},
+					},
+					RequiredProperties: []string{"member_id", "record_ids"},
+					Simple:             false,
+				},
+			},
+			Invoke: invokeBulkSetJournalRecordMember,
+		},
+		{
 			ID:          "bulkSetJournalRecordReconciliation",
 			Method:      "POST",
 			Path:        "/api/records/bulk/reconciliation",
@@ -3670,6 +3704,20 @@ func invokeBulkReassignJournalRecordAccount(ctx context.Context, client httpclie
 		return InvocationResult{}, err
 	}
 	response, err := client.BulkReassignJournalRecordAccountWithBodyWithResponse(ctx, "application/json", bytes.NewReader(input.Body))
+	if err != nil {
+		return InvocationResult{}, err
+	}
+	if response == nil {
+		return InvocationResult{}, errors.New("generated client returned no operation response")
+	}
+	return normalizeInvocationResult(response.Body, response.HTTPResponse)
+}
+
+func invokeBulkSetJournalRecordMember(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
+	if err := validateInvocationInput(input, nil, nil, true, true); err != nil {
+		return InvocationResult{}, err
+	}
+	response, err := client.BulkSetJournalRecordMemberWithBodyWithResponse(ctx, "application/json", bytes.NewReader(input.Body))
 	if err != nil {
 		return InvocationResult{}, err
 	}

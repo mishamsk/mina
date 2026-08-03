@@ -4,7 +4,6 @@ import { useParams, useSearchParams } from "react-router";
 import { PageHelp } from "@/components/page-help";
 import { PageHeader } from "@/features/app-shell";
 import {
-  IntentBadge,
   refreshCategoriesPage,
   useCategoriesResource,
 } from "@/features/categories";
@@ -14,7 +13,6 @@ import {
   ReferenceDrilldownNotFound,
   ReferenceDrilldownPage,
   ReferenceDrilldownSkeleton,
-  referenceTransactionHref,
 } from "@/features/reference";
 
 const parsePositiveInteger = (
@@ -59,8 +57,6 @@ export const CategoryPage = () => {
       ? [category.category_id]
       : categoryDescendantIds(categoriesPage.snapshot.categories, category.fqn);
   }, [category, categoriesPage.snapshot, exactOnly]);
-  const viewAllHref = referenceTransactionHref("category", filterIds);
-
   const setExactOnly = (nextExactOnly: boolean) => {
     setSearchParams((current) => {
       const next = new URLSearchParams(current);
@@ -125,18 +121,11 @@ export const CategoryPage = () => {
       ) : null}
       {category ? (
         <ReferenceDrilldownPage
-          actionLabel="View all transactions"
-          badges={<IntentBadge economicIntent={category.economic_intent} />}
-          entityKindLabel="Category"
           exactOnly={exactOnly}
           filterIds={filterIds}
           filterKind="category"
-          fqn={category.fqn}
-          hidden={category.is_hidden}
           onExactOnlyChange={setExactOnly}
           showExactOnlyToggle
-          title={category.name}
-          viewAllHref={viewAllHref}
         />
       ) : null}
     </section>

@@ -5,7 +5,10 @@ import { useShallow } from "zustand/react/shallow";
 import type { Transaction } from "@/api";
 import type { TransactionEntryType } from "@/models/ui-state";
 
-import { setTransactionBulkEditEnabled } from "./transaction-bulk-edit";
+import {
+  cancelDeferredTransactionEntryOpen,
+  exitTransactionEditModeForEntry,
+} from "./transaction-edit-mode";
 
 export type TransactionEntryLaunchType = "duplicate" | "edit" | "split";
 export const transactionEntryWillOpenEvent = "mina:transaction-entry-will-open";
@@ -66,74 +69,81 @@ export const useTransactionEntryPanelView = (): TransactionEntryModalState =>
 export const getTransactionEntryPanelSnapshot =
   (): TransactionEntryModalState => useTransactionEntryPanelStore.getState();
 
-const prepareEntryOpen = (): void => {
-  setTransactionBulkEditEnabled(false);
-  window.dispatchEvent(new Event(transactionEntryWillOpenEvent));
+const prepareEntryOpen = (openEntry: () => void): void => {
+  exitTransactionEditModeForEntry(() => {
+    window.dispatchEvent(new Event(transactionEntryWillOpenEvent));
+    openEntry();
+  });
 };
 
 export const openTransactionEntryPanel = (
   initialTab?: TransactionEntryType,
   context: TransactionEntryLaunchContext = { recentTransactions: [] },
 ): void => {
-  prepareEntryOpen();
-  useTransactionEntryPanelStore.setState(
-    {
-      errorMessage: undefined,
-      initialTab,
-      initialTemplateFqn: undefined,
-      launch: undefined,
-      loading: false,
-      open: true,
-      recentTransactions: context.recentTransactions,
-      requestedEntry: initialTab
-        ? `new:${initialTab === "advanced" ? "journal" : initialTab}`
-        : "new",
-    },
-    false,
-    "TransactionEntryModalStore/openTransactionEntryPanel",
-  );
+  prepareEntryOpen(() => {
+    useTransactionEntryPanelStore.setState(
+      {
+        errorMessage: undefined,
+        initialTab,
+        initialTemplateFqn: undefined,
+        launch: undefined,
+        loading: false,
+        open: true,
+        recentTransactions: context.recentTransactions,
+        requestedEntry: initialTab
+          ? `new:${initialTab === "advanced" ? "journal" : initialTab}`
+          : "new",
+      },
+      false,
+      "TransactionEntryModalStore/openTransactionEntryPanel",
+    );
+  });
 };
 
 export const openTransactionEntryLaunch = (
   launch: TransactionEntryLaunch,
   context: TransactionEntryLaunchContext = { recentTransactions: [] },
 ): void => {
-  prepareEntryOpen();
-  useTransactionEntryPanelStore.setState(
-    {
-      errorMessage: undefined,
-      initialTab: undefined,
-      initialTemplateFqn: undefined,
-      launch,
-      loading: false,
-      open: true,
-      recentTransactions: context.recentTransactions,
-      requestedEntry: `${launch.type}:${launch.transaction.transaction_id}`,
-    },
-    false,
-    "TransactionEntryModalStore/openTransactionEntryLaunch",
-  );
+  prepareEntryOpen(() => {
+    useTransactionEntryPanelStore.setState(
+      {
+        errorMessage: undefined,
+        initialTab: undefined,
+        initialTemplateFqn: undefined,
+        launch,
+        loading: false,
+        open: true,
+        recentTransactions: context.recentTransactions,
+        requestedEntry: `${launch.type}:${launch.transaction.transaction_id}`,
+      },
+      false,
+      "TransactionEntryModalStore/openTransactionEntryLaunch",
+    );
+  });
 };
 
 export const loadTransactionEntryRoute = (
   requestedEntry: string,
+  onReady: () => void,
   context: TransactionEntryLaunchContext = { recentTransactions: [] },
 ): void => {
-  prepareEntryOpen();
-  useTransactionEntryPanelStore.setState(
-    {
-      errorMessage: undefined,
-      initialTab: undefined,
-      initialTemplateFqn: undefined,
-      launch: undefined,
-      loading: true,
-      open: true,
-      recentTransactions: context.recentTransactions,
-      requestedEntry,
-    },
-    false,
-    "TransactionEntryModalStore/loadTransactionEntryRoute",
-  );
+  prepareEntryOpen(() => {
+    useTransactionEntryPanelStore.setState(
+      {
+        errorMessage: undefined,
+        initialTab: undefined,
+        initialTemplateFqn: undefined,
+        launch: undefined,
+        loading: true,
+        open: true,
+        recentTransactions: context.recentTransactions,
+        requestedEntry,
+      },
+      false,
+      "TransactionEntryModalStore/loadTransactionEntryRoute",
+    );
+    onReady();
+  });
 };
 
 export const resolveTransactionEntryRoute = (
@@ -173,45 +183,48 @@ export const openTransactionEntryRoute = (
   initialTab?: TransactionEntryType,
   context: TransactionEntryLaunchContext = { recentTransactions: [] },
 ): void => {
-  prepareEntryOpen();
-  useTransactionEntryPanelStore.setState(
-    {
-      errorMessage: undefined,
-      initialTab,
-      initialTemplateFqn: undefined,
-      launch: undefined,
-      loading: false,
-      open: true,
-      recentTransactions: context.recentTransactions,
-      requestedEntry,
-    },
-    false,
-    "TransactionEntryModalStore/openTransactionEntryRoute",
-  );
+  prepareEntryOpen(() => {
+    useTransactionEntryPanelStore.setState(
+      {
+        errorMessage: undefined,
+        initialTab,
+        initialTemplateFqn: undefined,
+        launch: undefined,
+        loading: false,
+        open: true,
+        recentTransactions: context.recentTransactions,
+        requestedEntry,
+      },
+      false,
+      "TransactionEntryModalStore/openTransactionEntryRoute",
+    );
+  });
 };
 
 export const openTransactionEntryTemplate = (
   templateFqn: string,
   context: TransactionEntryLaunchContext = { recentTransactions: [] },
 ): void => {
-  prepareEntryOpen();
-  useTransactionEntryPanelStore.setState(
-    {
-      errorMessage: undefined,
-      initialTab: "advanced",
-      initialTemplateFqn: templateFqn,
-      launch: undefined,
-      loading: false,
-      open: true,
-      recentTransactions: context.recentTransactions,
-      requestedEntry: "new:journal",
-    },
-    false,
-    "TransactionEntryModalStore/openTransactionEntryTemplate",
-  );
+  prepareEntryOpen(() => {
+    useTransactionEntryPanelStore.setState(
+      {
+        errorMessage: undefined,
+        initialTab: "advanced",
+        initialTemplateFqn: templateFqn,
+        launch: undefined,
+        loading: false,
+        open: true,
+        recentTransactions: context.recentTransactions,
+        requestedEntry: "new:journal",
+      },
+      false,
+      "TransactionEntryModalStore/openTransactionEntryTemplate",
+    );
+  });
 };
 
 export const closeTransactionEntryPanel = (): void => {
+  cancelDeferredTransactionEntryOpen();
   useTransactionEntryPanelStore.setState(
     {
       errorMessage: undefined,

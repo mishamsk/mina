@@ -3254,6 +3254,31 @@ paths:
                 $ref: "#/components/schemas/BulkRecordOperationResponse"
         "400":
           $ref: "#/components/responses/InvalidRequest"
+  /api/records/bulk/member:
+    post:
+      operationId: bulkSetJournalRecordMember
+      tags:
+        - records
+      summary: Set or clear the member on selected active journal records.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkSetRecordMemberRequest"
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "200":
+          description: Record members updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkRecordOperationResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
   /api/records/bulk/account:
     post:
       operationId: bulkReassignJournalRecordAccount
@@ -4291,6 +4316,28 @@ components:
           description: Required when the target is owned or party and existing dates cannot supply a valid settlement; omit for flow or system.
           allOf:
             - $ref: "#/components/schemas/SettlementIntent"
+          nullable: true
+    BulkSetRecordMemberRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - record_ids
+        - member_id
+      properties:
+        record_ids:
+          description: "Journal-record identifiers to update."
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: integer
+            format: int64
+            minimum: 1
+        member_id:
+          description: "Active household-member identifier to set, or null to clear attribution."
+          type: integer
+          format: int64
+          minimum: 1
           nullable: true
     BulkSetRecordSettlementRequest:
       type: object

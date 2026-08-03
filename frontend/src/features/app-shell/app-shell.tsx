@@ -422,24 +422,26 @@ export const AppShell = ({ children }: AppShellProps) => {
     const transactionId = Number(match[2]);
     loadTransactionEntryRoute(
       entryParam,
+      () => {
+        void fetchTransactionById(transactionId).then((result) => {
+          if (result.data && !result.data.tombstoned_at) {
+            resolveTransactionEntryRoute(entryParam, {
+              transaction: result.data,
+              type,
+            });
+            return;
+          }
+          failTransactionEntryRoute(
+            entryParam,
+            apiErrorMessage(
+              result.error,
+              `Transaction #${transactionId} could not be found.`,
+            ),
+          );
+        });
+      },
       captureTransactionEntryLaunchContext(),
     );
-    void fetchTransactionById(transactionId).then((result) => {
-      if (result.data && !result.data.tombstoned_at) {
-        resolveTransactionEntryRoute(entryParam, {
-          transaction: result.data,
-          type,
-        });
-        return;
-      }
-      failTransactionEntryRoute(
-        entryParam,
-        apiErrorMessage(
-          result.error,
-          `Transaction #${transactionId} could not be found.`,
-        ),
-      );
-    });
   }, [
     entryModal.open,
     entryModal.requestedEntry,
@@ -533,7 +535,6 @@ export const AppShell = ({ children }: AppShellProps) => {
         event.altKey ||
         event.shiftKey ||
         hasActiveOverlay() ||
-        document.querySelector("[data-inline-editor-id]") ||
         target?.matches("input, textarea, select, [contenteditable='true']")
       ) {
         return;

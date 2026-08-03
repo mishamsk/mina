@@ -10,6 +10,7 @@
 - Toolbar search state is URL-backed with `q` and `hidden`.
 - Flat reference lists are page-owned and may reuse the toolbar with hidden controls disabled.
 - Drill-down pages own client-side descendant filter expansion because transaction filters are flat ID lists.
+- Category, Tag, and Member drill-down shells begin with the scoped transaction toolbar/browser; the owning route's `PageHeader` is the sole identity header.
 
 ## Boundaries
 

@@ -6,7 +6,7 @@
 
 ## Implicit Contracts
 
-- Create/replace and bulk category/account/tag use cases validate references through dictionary service APIs before writes; account-reference validation centrally enforces each single-currency account's record currency.
+- Create/replace and bulk category/account/tag/member use cases validate references through dictionary service APIs before writes; account-reference validation centrally enforces each single-currency account's record currency.
 - Transaction-list and record-search dictionary ID filters validate active references through dictionary service APIs before reads.
 - Account-scoped record search treats the path account ID as a target account and returns not found for missing or inactive accounts.
 - Create/replace infers missing `amount_usd` from the transaction initiated date and preserves explicit values.

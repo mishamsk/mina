@@ -5,18 +5,187 @@ import {
   chooseOptionByKeyboard,
   createCategory,
   createMember,
+  createSearchSpend,
   createTag,
+  deleteTransaction,
   expect,
   findByFqn,
   formatLocalDate,
   hideCategory,
+  hideMember,
   hideTag,
   listFixtures,
-  type TransactionDetailFixture,
+  type Locator,
+  type Page,
   waitForLedgerLookups,
 } from "@tests/e2e/transactions/support";
 
-test("inline editors hide hidden controls and results while broader pickers retain the control", async ({
+const expectListboxAboveSelectedChips = async (
+  page: Page,
+  listbox: Locator,
+  selectedChips: Locator,
+) => {
+  const [listboxBox, selectedBox, listboxId] = await Promise.all([
+    listbox.boundingBox(),
+    selectedChips.boundingBox(),
+    listbox.getAttribute("id"),
+  ]);
+  expect(listboxBox).not.toBeNull();
+  expect(selectedBox).not.toBeNull();
+  expect(listboxId).not.toBeNull();
+  const overlapLeft = Math.max(listboxBox!.x, selectedBox!.x);
+  const overlapRight = Math.min(
+    listboxBox!.x + listboxBox!.width,
+    selectedBox!.x + selectedBox!.width,
+  );
+  const overlapTop = Math.max(listboxBox!.y, selectedBox!.y);
+  const overlapBottom = Math.min(
+    listboxBox!.y + listboxBox!.height,
+    selectedBox!.y + selectedBox!.height,
+  );
+  expect(overlapRight).toBeGreaterThan(overlapLeft);
+  if (overlapBottom <= overlapTop) {
+    expect(
+      listboxBox!.y + listboxBox!.height <= selectedBox!.y ||
+        selectedBox!.y + selectedBox!.height <= listboxBox!.y,
+    ).toBe(true);
+    return;
+  }
+  expect(overlapBottom).toBeGreaterThan(overlapTop);
+  const paintedElement = await page.evaluate(
+    ({ x, y }) => {
+      const element = document.elementFromPoint(x, y);
+      return {
+        className: element?.getAttribute("class"),
+        closestListboxId: element?.closest('[role="listbox"]')?.id,
+        tagName: element?.tagName,
+        testId: element?.getAttribute("data-testid"),
+      };
+    },
+    {
+      x: overlapLeft + Math.min(4, (overlapRight - overlapLeft) / 2),
+      y: overlapTop + Math.min(4, (overlapBottom - overlapTop) / 2),
+    },
+  );
+  expect(paintedElement.closestListboxId, JSON.stringify(paintedElement)).toBe(
+    listboxId,
+  );
+};
+
+const expectActiveOptionVisible = async (
+  combobox: Locator,
+  listbox: Locator,
+) => {
+  await expect(combobox).toHaveAttribute("aria-activedescendant", /.+/);
+  const comboboxId = await combobox.getAttribute("id");
+  expect(comboboxId).not.toBeNull();
+  const geometry = await listbox.evaluate((element, inputId) => {
+    const input = document.getElementById(inputId);
+    const activeId = input?.getAttribute("aria-activedescendant");
+    const active = activeId ? document.getElementById(activeId) : null;
+    const listboxRect = element.getBoundingClientRect();
+    const activeRect = active?.getBoundingClientRect();
+    return {
+      activeBottom: activeRect?.bottom,
+      activeTop: activeRect?.top,
+      listboxBottom: listboxRect.bottom,
+      listboxTop: listboxRect.top,
+      viewportHeight: window.innerHeight,
+    };
+  }, comboboxId!);
+  expect(geometry.activeTop).toBeGreaterThanOrEqual(geometry.listboxTop);
+  expect(geometry.activeBottom).toBeLessThanOrEqual(geometry.listboxBottom);
+  expect(geometry.listboxTop).toBeGreaterThanOrEqual(0);
+  expect(geometry.listboxBottom).toBeLessThanOrEqual(geometry.viewportHeight);
+};
+
+test("multi-picker options paint above selected chips in edit and entry surfaces", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const memo = `E2E picker layering ${unique}`;
+  const [tags, transaction] = await Promise.all([
+    Promise.all(
+      Array.from({ length: 9 }, (_, index) =>
+        createTag(
+          page,
+          `E2E:Layering:${unique}:Tag${index === 0 ? "Long".repeat(40) : index + 1}`,
+        ),
+      ),
+    ),
+    createSearchSpend(page, memo),
+  ]);
+  const tag = tags[0]!;
+  await page.goto(
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(memo)}`,
+  );
+  const row = page.getByRole("row").filter({ hasText: memo }).first();
+  await expect(row).toBeVisible();
+  await page.getByRole("button", { name: "Edit mode" }).click();
+  await row.click();
+  const dock = page.getByTestId("transaction-edit-dock");
+  await dock.getByRole("button", { name: "Add / remove" }).click();
+  await page.setViewportSize({ width: 700, height: 720 });
+  const dockEditor = page.getByTestId("edit-dock-editor");
+  const dockTags = dockEditor.getByRole("combobox", { name: "Tags to add" });
+  await dockTags.fill(tag.fqn);
+  await dockTags.press("Enter");
+  const dockSelected = dockEditor.getByTestId("entity-multi-picker-selected");
+  await expect(dockSelected).toContainText(tag.name);
+  const selectedChip = dockSelected.locator(":scope > span").first();
+  const removeTag = selectedChip.getByRole("button", {
+    name: `Remove ${tag.name}`,
+  });
+  const [chipBox, editorBox, removeBox] = await Promise.all([
+    selectedChip.boundingBox(),
+    dockEditor.boundingBox(),
+    removeTag.boundingBox(),
+  ]);
+  expect(chipBox).not.toBeNull();
+  expect(editorBox).not.toBeNull();
+  expect(removeBox).not.toBeNull();
+  expect(chipBox!.x + chipBox!.width).toBeLessThanOrEqual(
+    editorBox!.x + editorBox!.width,
+  );
+  expect(removeBox!.x + removeBox!.width).toBeLessThanOrEqual(
+    editorBox!.x + editorBox!.width,
+  );
+  await dockTags.press("ArrowDown");
+  const dockListbox = page.locator("#edit-dock-tags-options");
+  await expect(dockListbox).toBeVisible();
+  for (let index = 0; index < 7; index += 1) {
+    await dockTags.press("ArrowDown");
+  }
+  await expectActiveOptionVisible(dockTags, dockListbox);
+  await dockTags.press("Escape");
+  await page.setViewportSize({ width: 1600, height: 1200 });
+  await dockTags.press("ArrowDown");
+  await expectListboxAboveSelectedChips(page, dockListbox, dockSelected);
+  await dockTags.press("Escape");
+  await dockEditor.getByRole("button", { name: "Cancel" }).click();
+  await page.getByRole("button", { name: "Done" }).click();
+
+  await page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" })
+    .click();
+  const spendPanel = page.getByRole("tabpanel", { name: "Spend" });
+  const entryTags = spendPanel.getByRole("combobox", { name: "Tags" });
+  await entryTags.fill(tag.fqn);
+  await entryTags.press("Enter");
+  const entrySelected = spendPanel.getByTestId("entity-multi-picker-selected");
+  await expect(entrySelected).toContainText(tag.name);
+  await entrySelected.scrollIntoViewIfNeeded();
+  await entryTags.press("ArrowDown");
+  const entryListbox = page.locator("#spend-tags-options");
+  await expect(entryListbox).toBeVisible();
+  await expectListboxAboveSelectedChips(page, entryListbox, entrySelected);
+  await entryTags.press("Escape");
+  await page.keyboard.press("Escape");
+  await deleteTransaction(page, transaction);
+});
+
+test("edit dock and broader pickers expose explicit hidden-entity controls", async ({
   page,
 }, testInfo) => {
   await page.setViewportSize({ width: 1600, height: 900 });
@@ -24,9 +193,11 @@ test("inline editors hide hidden controls and results while broader pickers reta
   const unique = `${slug}${Date.now()}`;
   const hiddenTagFqn = `E2E:Hidden:${unique}:QuietTag`;
   const hiddenCategoryFqn = `E2E:Hidden:${unique}:QuietCategory`;
-  const [hiddenTag, hiddenCategory] = await Promise.all([
+  const hiddenMemberName = `E2E Hidden Member ${unique}`;
+  const [hiddenTag, hiddenCategory, hiddenMember] = await Promise.all([
     createTag(page, hiddenTagFqn),
     createCategory(page, hiddenCategoryFqn, "expense"),
+    createMember(page, hiddenMemberName),
   ]);
 
   const [accounts, categories] = await Promise.all([
@@ -51,10 +222,10 @@ test("inline editors hide hidden controls and results while broader pickers reta
     },
   });
   expect(spendResponse.ok()).toBe(true);
-  const transaction = (await spendResponse.json()) as TransactionDetailFixture;
   await Promise.all([
     hideTag(page, hiddenTag),
     hideCategory(page, hiddenCategory),
+    hideMember(page, hiddenMember),
   ]);
 
   await page.goto("/transactions?page=1&pageSize=50");
@@ -68,54 +239,58 @@ test("inline editors hide hidden controls and results while broader pickers reta
       .getByText("QuietTag", { exact: true }),
   ).toBeVisible();
 
-  const rowPrefix = `transaction-${transaction.transaction_id}`;
-  const categoryCell = hiddenTagRow.getByTestId(`${rowPrefix}-category-cell`);
-  await categoryCell.hover();
-  await categoryCell.getByRole("button", { name: "Edit Category" }).click();
-  const categoryEditor = hiddenTagRow.getByTestId(
-    `${rowPrefix}-category-editor`,
+  await page.getByRole("button", { name: "Edit mode" }).click();
+  await hiddenTagRow.click();
+  const dock = page.getByTestId("transaction-edit-dock");
+  await dock.getByRole("button", { name: "Choose category" }).click();
+  let editor = page.getByTestId("edit-dock-editor");
+  const includeHidden = editor.getByRole("checkbox", {
+    name: "Include hidden",
+  });
+  await expect(includeHidden).toBeVisible();
+  const categoryPicker = editor.getByRole("combobox", { name: "Category" });
+  await categoryPicker.fill(hiddenCategoryFqn);
+  await expect(page.locator("#edit-dock-category-options")).toContainText(
+    "No matches",
   );
-  await expect(
-    categoryEditor.getByText("Include hidden", { exact: true }),
-  ).toHaveCount(0);
-  await categoryEditor
-    .getByRole("combobox", { name: "Category" })
-    .fill(hiddenCategoryFqn);
-  await expect(categoryEditor.getByRole("listbox")).toContainText("No matches");
-  await categoryEditor
-    .getByRole("combobox", { name: "Category" })
-    .press("Escape");
-  await categoryEditor
-    .getByRole("button", { name: "Cancel category edit" })
-    .click();
-  await expect(categoryEditor).toHaveCount(0);
-  await expect(categoryCell).toBeFocused();
+  await includeHidden.click();
+  await categoryPicker.focus();
+  await expect(page.locator("#edit-dock-category-options")).toContainText(
+    "QuietCategory",
+  );
+  await categoryPicker.press("Escape");
+  await editor.getByRole("button", { name: "Cancel" }).click();
 
-  const tagsCell = hiddenTagRow.getByTestId(`${rowPrefix}-tags-cell`);
-  await tagsCell.hover();
-  await tagsCell.getByRole("button", { name: "Edit Tags" }).click();
-  const tagsEditor = hiddenTagRow.getByTestId(`${rowPrefix}-tags-editor`);
-  await expect(
-    tagsEditor.getByText("Include hidden", { exact: true }),
-  ).toHaveCount(0);
-  await tagsEditor.getByRole("combobox", { name: "Tags" }).press("Escape");
-  await tagsEditor.getByRole("button", { name: "Cancel tags edit" }).click();
-  await expect(tagsEditor).toHaveCount(0);
-  await expect(tagsCell).toBeFocused();
+  await dock.getByRole("button", { name: "Add / remove" }).click();
+  editor = page.getByTestId("edit-dock-editor");
+  const tagsPicker = editor.getByRole("combobox", { name: "Tags to add" });
+  await tagsPicker.fill(hiddenTagFqn);
+  await expect(page.locator("#edit-dock-tags-options")).toContainText(
+    "No matches",
+  );
+  await editor.getByRole("checkbox", { name: "Include hidden" }).click();
+  await tagsPicker.focus();
+  await expect(page.locator("#edit-dock-tags-options")).toContainText(
+    "QuietTag",
+  );
+  await tagsPicker.press("Escape");
+  await editor.getByRole("button", { name: "Cancel" }).click();
 
-  const memberCell = hiddenTagRow.getByTestId(`${rowPrefix}-member-cell`);
-  await memberCell.hover();
-  await memberCell.getByRole("button", { name: "Edit Member" }).click();
-  const memberEditor = hiddenTagRow.getByTestId(`${rowPrefix}-member-editor`);
-  await expect(
-    memberEditor.getByText("Include hidden", { exact: true }),
-  ).toHaveCount(0);
-  await memberEditor.getByRole("combobox", { name: "Member" }).press("Escape");
-  await memberEditor
-    .getByRole("button", { name: "Cancel member edit" })
-    .click();
-  await expect(memberEditor).toHaveCount(0);
-  await expect(memberCell).toBeFocused();
+  await dock.getByRole("button", { name: "Set / clear" }).click();
+  editor = page.getByTestId("edit-dock-editor");
+  const memberPicker = editor.getByRole("combobox", { name: "Member" });
+  await memberPicker.fill(hiddenMemberName);
+  await expect(page.locator("#edit-dock-member-options")).toContainText(
+    "No matches",
+  );
+  await editor.getByRole("checkbox", { name: "Include hidden" }).click();
+  await memberPicker.focus();
+  await expect(page.locator("#edit-dock-member-options")).toContainText(
+    hiddenMemberName,
+  );
+  await memberPicker.press("Escape");
+  await editor.getByRole("button", { name: "Cancel" }).click();
+  await page.getByRole("button", { name: "Done" }).click();
 
   await page.getByRole("button", { name: "Open filters" }).click();
   await page.getByRole("button", { name: "Add filter" }).click();
@@ -147,11 +322,11 @@ test("inline editors hide hidden controls and results while broader pickers reta
     .locator("header")
     .getByRole("button", { name: "New transaction" })
     .click();
-  const tagsPicker = page.getByRole("combobox", { name: "Tags" });
-  await expect(tagsPicker).toBeVisible();
-  await expect(tagsPicker).toBeEnabled();
-  await tagsPicker.fill(hiddenTagFqn);
-  await expect(tagsPicker).toHaveValue(hiddenTagFqn);
+  const entryTagsPicker = page.getByRole("combobox", { name: "Tags" });
+  await expect(entryTagsPicker).toBeVisible();
+  await expect(entryTagsPicker).toBeEnabled();
+  await entryTagsPicker.fill(hiddenTagFqn);
+  await expect(entryTagsPicker).toHaveValue(hiddenTagFqn);
   await expect(page.locator("#spend-tags-options")).toContainText("No matches");
 });
 

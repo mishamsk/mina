@@ -71,17 +71,20 @@ test("transactions page uses server pagination controls", async ({ page }) => {
 
   await expect(page.getByText(/Page 1 of \d+/)).toBeVisible();
   await expect(
-    page.locator("tbody > tr[aria-expanded]").filter({ hasText: "→" }).first(),
+    page
+      .locator("[data-transaction-row='true']")
+      .filter({ hasText: "→" })
+      .first(),
   ).toBeVisible();
   const firstPageFirstTitle = (
     await page
-      .locator("tbody > tr[aria-expanded]")
+      .locator("[data-transaction-row='true']")
       .first()
       .locator(".transactions-description-column")
       .innerText()
   ).split("\n")[0];
   const firstPageFirstDate = await page
-    .locator("tbody > tr[aria-expanded]")
+    .locator("[data-transaction-row='true']")
     .first()
     .locator(".transactions-date-column")
     .innerText();
@@ -113,7 +116,7 @@ test("transactions page uses server pagination controls", async ({ page }) => {
     await expect(page).toHaveURL(/page=2/);
     await expect(page.getByTestId("transactions-page-busy")).toBeVisible();
     const retainedRowText = await page
-      .locator("tbody > tr[aria-expanded]")
+      .locator("[data-transaction-row='true']")
       .first()
       .innerText();
     expect(retainedRowText).toContain(firstPageFirstTitle);
@@ -141,7 +144,7 @@ test("transactions page uses server pagination controls", async ({ page }) => {
   await expect(page.getByText(/Page 1 of \d+/)).toBeVisible();
 });
 
-test("bulk mode keyboard ranges stay page-local across pagination", async ({
+test("edit mode keyboard ranges stay page-local across pagination", async ({
   page,
 }) => {
   await page.goto("/transactions?page=1&pageSize=25");
@@ -150,9 +153,9 @@ test("bulk mode keyboard ranges stay page-local across pagination", async ({
     "tbody tr[data-transaction-id]:not([aria-disabled='true'])",
   );
   await expect(selectableRows.nth(1)).toBeVisible();
-  await page.getByRole("button", { name: "Bulk edit" }).click();
+  await page.getByRole("button", { name: "Edit mode" }).click();
   const selectableCount = await selectableRows.count();
-  const modeBar = page.getByTestId("transaction-browser-bulk-mode-bar");
+  const modeBar = page.getByTestId("transaction-browser-edit-mode-header");
   await expect(page.getByRole("searchbox", { name: "Search" })).toHaveCount(0);
 
   await selectableRows.first().focus();
@@ -179,8 +182,8 @@ test("bulk mode keyboard ranges stay page-local across pagination", async ({
   await expect(page).toHaveURL(/page=2/);
   await expect(page.getByText(/Page 2 of \d+/)).toBeVisible();
   await expect(modeBar).toContainText("0 selected");
-  await expect(page.getByTestId("bulk-action-bar")).toBeVisible();
-  await expect(page.getByTestId("bulk-action-picker")).toHaveCount(0);
+  await expect(page.getByTestId("transaction-edit-dock")).toBeVisible();
+  await expect(page.getByTestId("edit-dock-editor")).toHaveCount(0);
 });
 
 test("transactions page search filters server-side and deep-links", async ({
@@ -1523,7 +1526,7 @@ test("transactions filter toolbar suppresses open-control tooltips and supports 
   const nextDayButton = page.getByRole("button", { name: "Next day" });
   const todayButton = page.getByRole("button", { name: "Today" });
   const classFilter = page.getByLabel("Class");
-  const bulkEditButton = page.getByRole("button", { name: "Bulk edit" });
+  const editModeButton = page.getByRole("button", { name: "Edit mode" });
   const filterToggle = page.getByRole("button", { name: "Open filters" });
   const filterTooltip = page
     .getByRole("tooltip")
@@ -1565,7 +1568,7 @@ test("transactions filter toolbar suppresses open-control tooltips and supports 
   await expect(nextDayButton).toBeFocused();
   await tabTo(todayButton);
   await tabTo(classFilter);
-  await tabTo(bulkEditButton);
+  await tabTo(editModeButton);
   await tabTo(filterToggle);
   await expect(filterTooltip).toBeVisible();
   await page.keyboard.press("Enter");
@@ -1741,7 +1744,6 @@ test("transaction entity chips add filters in place", async ({
     q: searchQuery,
   });
   await expect(page.getByText(`Category ${category.name}`)).toBeVisible();
-  await expect(targetRow).toHaveAttribute("aria-expanded", "false");
   await expect(
     page.getByRole("row").filter({ hasText: alternateMemo }),
   ).toBeHidden();

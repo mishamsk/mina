@@ -195,28 +195,28 @@ test("command palette opens from the transactions page", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "New spend" })).toHaveCount(0);
 });
 
-test("command palette toggles transaction bulk-edit mode", async ({ page }) => {
+test("command palette toggles transaction edit-mode mode", async ({ page }) => {
   await page.goto("/transactions");
   await expect(page.getByText("Description")).toBeVisible();
   await page.getByRole("searchbox", { name: "Search" }).focus();
 
   await openPalette(page);
   const search = page.getByRole("combobox", { name: "Command search" });
-  await search.fill("bulk edit");
+  await search.fill("edit mode");
   await page
     .getByRole("dialog", { name: "Command Palette" })
-    .getByRole("option", { name: /Toggle bulk edit/ })
+    .getByRole("option", { name: /Toggle transaction edit mode/ })
     .click();
   await expect(
-    page.getByTestId("transaction-browser-bulk-mode-bar"),
+    page.getByTestId("transaction-browser-edit-mode-header"),
   ).toBeVisible();
   await expect(
-    page.getByTestId("transaction-browser-bulk-mode-bar"),
+    page.getByTestId("transaction-browser-edit-mode-header"),
   ).toContainText("0 selected");
 
   await openPalette(page);
   const doneButton = page
-    .getByTestId("transaction-browser-bulk-mode-bar")
+    .getByTestId("transaction-browser-edit-mode-header")
     .getByRole("button", { name: "Done" });
   const doneBounds = await doneButton.boundingBox();
   expect(doneBounds).not.toBeNull();
@@ -225,7 +225,7 @@ test("command palette toggles transaction bulk-edit mode", async ({ page }) => {
     doneBounds!.y + doneBounds!.height / 2,
   );
   await expect(
-    page.getByTestId("transaction-browser-bulk-mode-bar"),
+    page.getByTestId("transaction-browser-edit-mode-header"),
   ).toBeVisible();
   await expect(
     page.getByRole("dialog", { name: "Command Palette" }),
@@ -234,15 +234,15 @@ test("command palette toggles transaction bulk-edit mode", async ({ page }) => {
   await openPalette(page);
   await page
     .getByRole("combobox", { name: "Command search" })
-    .fill("bulk edit");
+    .fill("edit mode");
   await page
     .getByRole("dialog", { name: "Command Palette" })
-    .getByRole("option", { name: /Toggle bulk edit/ })
+    .getByRole("option", { name: /Toggle transaction edit mode/ })
     .click();
   await expect(
-    page.getByTestId("transaction-browser-bulk-mode-bar"),
+    page.getByTestId("transaction-browser-edit-mode-header"),
   ).toHaveCount(0);
-  await expect(page.getByTestId("bulk-action-bar")).toHaveCount(0);
+  await expect(page.getByTestId("transaction-edit-dock")).toHaveCount(0);
 });
 
 test("current Settings command restores focus to the sidebar link", async ({

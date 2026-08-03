@@ -1,27 +1,27 @@
 import type { Account, JournalRecord, Transaction } from "@/api";
 
-export type BulkEditField = "category" | "member" | "tags";
+export type EditModeField = "category" | "member" | "tags";
 
-export type BulkEditSkipReason =
+export type EditModeSkipReason =
   | "mixed records"
   | "no active records"
   | "no categorizable records"
   | "partially attributed members";
 
-export interface BulkEditPrediction {
-  readonly reason?: BulkEditSkipReason;
+export interface EditModePrediction {
+  readonly reason?: EditModeSkipReason;
   readonly skip: boolean;
 }
 
-export interface BulkEditSkipSummary {
+export interface EditModeSkipSummary {
   readonly count: number;
   readonly reasons: readonly {
     readonly count: number;
-    readonly reason: BulkEditSkipReason;
+    readonly reason: EditModeSkipReason;
   }[];
 }
 
-const reasonOrder: readonly BulkEditSkipReason[] = [
+const reasonOrder: readonly EditModeSkipReason[] = [
   "mixed records",
   "no active records",
   "partially attributed members",
@@ -35,25 +35,25 @@ const sameTagIds = (left: readonly number[], right: readonly number[]) =>
 const sortedTagIds = (tagIds: readonly number[]): readonly number[] =>
   [...tagIds].sort((left, right) => left - right);
 
-export const activeBulkEditRecords = (
+export const activeEditModeRecords = (
   transaction: Transaction,
 ): readonly JournalRecord[] =>
   transaction.lifecycle_status === "active" ? transaction.records : [];
 
-export const bulkCategoryTargetRecords = (
+export const editModeCategoryTargetRecords = (
   transaction: Transaction,
   accountsById: ReadonlyMap<number, Account>,
 ): readonly JournalRecord[] =>
-  activeBulkEditRecords(transaction).filter(
+  activeEditModeRecords(transaction).filter(
     (record) => accountsById.get(record.account_id)?.account_type === "flow",
   );
 
-export const predictBulkEdit = (
+export const predictEditMode = (
   transaction: Transaction,
-  field: BulkEditField,
+  field: EditModeField,
   accountsById: ReadonlyMap<number, Account>,
-): BulkEditPrediction => {
-  const records = activeBulkEditRecords(transaction);
+): EditModePrediction => {
+  const records = activeEditModeRecords(transaction);
   if (records.length === 0) {
     return { reason: "no active records", skip: true };
   }
@@ -64,7 +64,7 @@ export const predictBulkEdit = (
     );
     if (
       categorizedRecords.length === 0 ||
-      bulkCategoryTargetRecords(transaction, accountsById).length === 0
+      editModeCategoryTargetRecords(transaction, accountsById).length === 0
     ) {
       return { reason: "no categorizable records", skip: true };
     }
@@ -103,14 +103,14 @@ export const predictBulkEdit = (
     : { reason: "mixed records", skip: true };
 };
 
-export const summarizeBulkEditSkips = (
+export const summarizeEditModeSkips = (
   transactions: readonly Transaction[],
-  field: BulkEditField,
+  field: EditModeField,
   accountsById: ReadonlyMap<number, Account>,
-): BulkEditSkipSummary => {
-  const counts = new Map<BulkEditSkipReason, number>();
+): EditModeSkipSummary => {
+  const counts = new Map<EditModeSkipReason, number>();
   for (const transaction of transactions) {
-    const prediction = predictBulkEdit(transaction, field, accountsById);
+    const prediction = predictEditMode(transaction, field, accountsById);
     if (prediction.reason) {
       counts.set(prediction.reason, (counts.get(prediction.reason) ?? 0) + 1);
     }
@@ -125,11 +125,12 @@ export const summarizeBulkEditSkips = (
   };
 };
 
-export const formatBulkEditSkipReasons = (
-  summary: BulkEditSkipSummary,
+export const formatEditModeSkipReasons = (
+  summary: EditModeSkipSummary,
 ): string =>
-  summary.reasons.length === 1
-    ? summary.reasons[0]!.reason
-    : summary.reasons
-        .map(({ count, reason }) => `${reason} (${count})`)
-        .join(", ");
+  summary.reasons
+    .map(
+      ({ count, reason }) =>
+        `${count} ${count === 1 ? "transaction has" : "transactions have"} ${reason}`,
+    )
+    .join(", ");

@@ -735,6 +735,7 @@ export const TransactionDetailPanel = ({
   }, [dismissing]);
 
   useEffect(() => {
+    restoreFocusOnCloseRef.current = true;
     window.requestAnimationFrame(() => {
       panelRef.current?.focus({ preventScroll: true });
     });
@@ -882,7 +883,6 @@ export const TransactionDetailPanel = ({
       role="dialog"
       aria-labelledby="transaction-detail-title"
       className="bg-card fixed top-4 right-4 bottom-4 z-50 flex w-[min(760px,calc(100vw-2rem))] max-w-full flex-col border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]"
-      data-inline-edit-scope="true"
       data-testid="transaction-detail-panel"
       tabIndex={-1}
     >

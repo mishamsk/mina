@@ -20,7 +20,7 @@
   - Record-local roles and independent transaction shapes derived from account type, sign, and optional category intent; responses include the reduced class, display amounts, and exchange effective rate.
   - Dry-run transaction classification for unbalanced drafts, with category-rule and exchange-exclusivity validation.
   - Paginated journal-record search with account-FQN prefix register filtering, plus account-record search by account ID.
-  - Transaction lifecycle cancel/restore plus separate journal-record category, tag, account, settlement, and reconciliation bulk updates.
+  - Transaction lifecycle cancel/restore plus separate journal-record category, tag, member, account, settlement, and reconciliation bulk updates.
   - Background operation status, concrete typed run lookup, manual exchange-rate loading trigger, and manual database backup trigger flows; one newest-first paged envelope listing spans all operations with an optional operation filter, while operation discovery returns links to each concrete API.
   - Read-only runtime Settings reporting resolved startup values, effective sources, and the resolved config-file location.
   - Public authentication status/login/logout contracts and protected REST behavior accepting browser sessions or revocable API keys.
@@ -52,7 +52,7 @@
   - The app shell shows a featured-account balance strip on every route when featured accounts exist, backed by account metadata and server balances.
   - Accounts expose effective display labels for contextual transaction and balance presentation with full-FQN disambiguation; the Accounts side panel edits or clears the optional override, while hierarchy, search, selection, and navigation remain FQN-based.
   - Overview is the landing page, with active `owned` and `party` accounts grouped by FQN root, approximate USD subtotals, credit remaining, current-month spend/income pulse, and recent activity links.
-- Transactions page uses server-derived titles, lifecycle and settlement indicators/filters, date-jump pagination, bulk reference editing, and URL-addressable detail; record settlement controls apply only to owned/party records and raw settlement timestamps remain hidden.
+  - Transactions and Category/Tag/Member drill-downs use server-derived titles, lifecycle/settlement indicators and filters, date-jump navigation, detail-first rows, and a shared Edit mode with page-local selection, an internally scrolling right-side panel for reference/status changes, and independent eligible amount inputs; table pagination stays viewport-bound, detail is URL-addressable and read-only, settlement controls apply only to owned/party records, and raw settlement timestamps remain hidden.
   - Expected recurring occurrences use confirm/dismiss review actions; cancelled transactions remain history-preserving and restorable, while delete is a separate tombstone action.
   - `/recurring` manages recurring definitions with schedules, status and next-date display, lifecycle actions, and balanced-record creation/editing.
   - Accounts page shows the chart as a searchable/filterable `owned`/`party`/`flow`/`system` FQN tree, with explicit single-/multi-currency modes and fixed system accounts readable but immutable; user accounts retain hide/unhide, featured, move/rename, delete, create/edit, single-currency credit-limit, register, and per-currency balance workflows.
@@ -64,13 +64,13 @@
   - Categories and Tags pages show searchable FQN trees with featured and hidden row toggles, move/rename, and create/edit/delete side-panel workflows; Categories show `expense` or `income` intent badges.
   - Category and Tag leaf rows carry deleteability-driven delete actions with named confirmation; group rows do not offer delete.
   - Members page shows a searchable flat member list with create/rename/delete side-panel workflows and hover/focus-revealed Edit/Delete row actions; ineligible deletes are proactively disabled from the API deleteability signal.
-  - Categories, Tags, and Members have URL-addressable drill-down pages with metadata and pre-filtered transaction previews.
+  - Categories, Tags, and Members have URL-addressable drill-down pages with one route identity header and pre-filtered transaction browsers directly beneath it.
   - Accounts, Categories, Tags, and Members retain full-height Arcade Cabinet table frames with internally scrolling data bodies.
   - Transaction entry is one app-shell-owned, route-independent stage modal opened in place from page headers, the sidebar, global shortcut, command palette, empty states, rows, and detail panels; its six tabs cover multi-merchant Spend, Income, money-back Refund, Transfer with an optional charge, two-currency Exchange with effective-rate feedback, and Advanced journal entry.
   - Advanced entry offers categories only on `flow` records and shows the server's live derived roles, shapes, class, and display amounts before save.
   - Saved transactions support row and detail-panel Edit, Duplicate, and Split actions with shorthand-fit edit detection, duplicate-as-new-entry prefill, split-through-journal replacement, discard protection, and live refresh while the detail panel remains open beneath the modal.
   - Transaction entry category pickers fetch API-filtered `expense` or `income` categories for the shorthand flows that carry economic meaning.
-  - Shared hierarchical entity pickers support breadcrumbed segment browsing, guarded keyboard segment completion and back-out, scoped full-path fallback, exact-FQN selection, account-intent pruning, and multi-select sibling batching across entry, inline, bulk, filter, reference, and recurring surfaces; eligible entry pickers additionally support inline valid-leaf creation.
+  - Shared hierarchical entity pickers support breadcrumbed segment browsing, guarded keyboard segment completion and back-out, scoped full-path fallback, exact-FQN selection, account-intent pruning, and multi-select sibling batching across entry, Edit-mode dock, filter, reference, and recurring surfaces; eligible entry pickers additionally support valid-leaf creation.
   - The status page calls backend health as an infrastructure proof and stores UI-only preference state in IndexedDB.
 - Implemented storage behavior:
   - Runtime owns accounting location defaults, opens an in-memory DuckDB process database, and selects either an attached accounting database file or the in-memory accounting database with configurable schema fallback.

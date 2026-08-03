@@ -17,7 +17,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { cn } from "@/lib/utils";
 import {
   transactionClasses,
   type TransactionFilters,
@@ -27,10 +26,10 @@ import { transactionClassLabel } from "./format";
 import { TransactionSearchInput } from "./transaction-search-input";
 
 interface TransactionBrowserToolbarProps {
-  readonly bulkEditMode: boolean;
+  readonly amountSavePending: boolean;
+  readonly editMode: boolean;
   readonly dateJumpLoading: boolean;
   readonly dateJumpValue: string;
-  readonly detailPanelOpen: boolean;
   readonly extraControls?: ReactNode;
   readonly filterControls: ReactNode;
   readonly hasActiveFilterChips: boolean;
@@ -44,17 +43,17 @@ interface TransactionBrowserToolbarProps {
   readonly onDateJumpValueChange: (value: string) => void;
   readonly onSelectPage: () => void;
   readonly onSearchChange: (value: string) => void;
-  readonly onSetBulkEditMode: (enabled: boolean) => void;
+  readonly onSetEditMode: (enabled: boolean) => void;
   readonly onTransactionClassChange: (value: string) => void;
   readonly selectableCount: number;
   readonly selectedCount: number;
 }
 
 export const TransactionBrowserToolbar = ({
-  bulkEditMode,
+  amountSavePending,
+  editMode,
   dateJumpLoading,
   dateJumpValue,
-  detailPanelOpen,
   extraControls,
   filterControls,
   hasActiveFilterChips,
@@ -68,18 +67,17 @@ export const TransactionBrowserToolbar = ({
   onDateJumpValueChange,
   onSelectPage,
   onSearchChange,
-  onSetBulkEditMode,
+  onSetEditMode,
   onTransactionClassChange,
   selectableCount,
   selectedCount,
 }: TransactionBrowserToolbarProps) => {
   const [filterBarOpen, setFilterBarOpen] = useState(false);
-  const bulkEditButtonRef = useRef<HTMLButtonElement>(null);
+  const editModeButtonRef = useRef<HTMLButtonElement>(null);
   const doneButtonRef = useRef<HTMLButtonElement>(null);
   const selectPageButtonRef = useRef<HTMLButtonElement>(null);
-  const previousBulkEditModeRef = useRef(bulkEditMode);
-  const showFilterBar =
-    !bulkEditMode && (filterBarOpen || hasActiveFilterChips);
+  const previousEditModeRef = useRef(editMode);
+  const showFilterBar = !editMode && (filterBarOpen || hasActiveFilterChips);
   const clearSelectionAndRestoreFocus = () => {
     onClearSelection();
     window.requestAnimationFrame(() => {
@@ -88,9 +86,9 @@ export const TransactionBrowserToolbar = ({
   };
 
   useLayoutEffect(() => {
-    const previousBulkEditMode = previousBulkEditModeRef.current;
-    previousBulkEditModeRef.current = bulkEditMode;
-    if (bulkEditMode) {
+    const previousEditMode = previousEditModeRef.current;
+    previousEditModeRef.current = editMode;
+    if (editMode) {
       const frame = window.requestAnimationFrame(() => {
         setFilterBarOpen(false);
         (selectPageButtonRef.current ?? doneButtonRef.current)?.focus({
@@ -102,26 +100,26 @@ export const TransactionBrowserToolbar = ({
       };
     }
 
-    if (previousBulkEditMode) {
+    if (previousEditMode) {
       const frame = window.requestAnimationFrame(() => {
-        bulkEditButtonRef.current?.focus({ preventScroll: true });
+        editModeButtonRef.current?.focus({ preventScroll: true });
       });
       return () => {
         window.cancelAnimationFrame(frame);
       };
     }
-  }, [bulkEditMode]);
+  }, [editMode]);
 
   return (
     <div className="flex flex-col gap-3">
-      {bulkEditMode ? (
+      {editMode ? (
         <div
-          data-transaction-browser-bulk-controls
-          data-testid="transaction-browser-bulk-mode-bar"
+          data-transaction-browser-edit-controls
+          data-testid="transaction-browser-edit-mode-header"
           className="flex min-h-10 animate-[toolbar-mode-swap_120ms_steps(2)] flex-wrap items-center gap-3 motion-reduce:animate-none"
         >
           <span className="font-heading text-foreground inline-flex min-h-7 items-center border-2 border-[var(--border-ink)] bg-[var(--color-interactive-bright)] px-2 text-xs font-semibold uppercase shadow-[var(--shadow-chip)]">
-            Bulk edit
+            Edit mode
           </span>
           <span
             className="font-heading text-sm font-semibold text-[var(--frame-foreground)] uppercase"
@@ -158,16 +156,22 @@ export const TransactionBrowserToolbar = ({
               Clear
             </Button>
           ) : null}
-          <Button
-            ref={doneButtonRef}
-            type="button"
-            size="sm"
+          <AppTooltip
             className="ml-auto"
-            data-bulk-done
-            onClick={() => onSetBulkEditMode(false)}
+            label="Exit after the amount update finishes"
+            disabled={!amountSavePending}
+            focusable={false}
           >
-            Done
-          </Button>
+            <Button
+              ref={doneButtonRef}
+              type="button"
+              size="sm"
+              data-edit-mode-done
+              onClick={() => onSetEditMode(false)}
+            >
+              Done
+            </Button>
+          </AppTooltip>
         </div>
       ) : (
         <div
@@ -283,22 +287,17 @@ export const TransactionBrowserToolbar = ({
             </Select>
           </div>
           {extraControls}
-          <div
-            className={cn(
-              "flex h-9 items-end gap-3",
-              detailPanelOpen && "basis-full",
-            )}
-          >
+          <div className="flex h-9 items-end gap-3">
             <Button
-              ref={bulkEditButtonRef}
+              ref={editModeButtonRef}
               type="button"
               variant="outline"
               size="lg"
               aria-pressed="false"
-              onClick={() => onSetBulkEditMode(true)}
+              onClick={() => onSetEditMode(true)}
             >
               <Check aria-hidden="true" />
-              Bulk edit
+              Edit mode
             </Button>
             <AppTooltip
               asChild

@@ -403,6 +403,17 @@ export type BulkReassignRecordsAccountRequest = {
     settlement?: SettlementIntent | null;
 };
 
+export type BulkSetRecordMemberRequest = {
+    /**
+     * Journal-record identifiers to update.
+     */
+    record_ids: Array<number>;
+    /**
+     * Active household-member identifier to set, or null to clear attribution.
+     */
+    member_id: number | null;
+};
+
 export type BulkSetRecordSettlementRequest = {
     /**
      * Journal-record identifiers to update.
@@ -5102,6 +5113,39 @@ export type BulkUpdateJournalRecordTagsResponses = {
 };
 
 export type BulkUpdateJournalRecordTagsResponse = BulkUpdateJournalRecordTagsResponses[keyof BulkUpdateJournalRecordTagsResponses];
+
+export type BulkSetJournalRecordMemberData = {
+    body: BulkSetRecordMemberRequest;
+    path?: never;
+    query?: never;
+    url: '/api/records/bulk/member';
+};
+
+export type BulkSetJournalRecordMemberErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
+};
+
+export type BulkSetJournalRecordMemberError = BulkSetJournalRecordMemberErrors[keyof BulkSetJournalRecordMemberErrors];
+
+export type BulkSetJournalRecordMemberResponses = {
+    /**
+     * Record members updated.
+     */
+    200: BulkRecordOperationResponse;
+};
+
+export type BulkSetJournalRecordMemberResponse = BulkSetJournalRecordMemberResponses[keyof BulkSetJournalRecordMemberResponses];
 
 export type BulkReassignJournalRecordAccountData = {
     body: BulkReassignRecordsAccountRequest;

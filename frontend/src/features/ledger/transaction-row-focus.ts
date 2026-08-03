@@ -50,7 +50,7 @@ export const transactionRowFallback = (
   transactionId: number,
 ): (() => void) => {
   const browser = source?.closest<HTMLElement>(
-    "[data-inline-edit-scope='true']",
+    "[data-transaction-browser='true']",
   );
   const sourceRow = browser?.querySelector<HTMLTableRowElement>(
     `[data-transaction-id="${transactionId}"]`,

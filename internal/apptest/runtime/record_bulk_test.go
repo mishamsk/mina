@@ -64,6 +64,42 @@ func TestRecordBulkOperationsBoundary(t *testing.T) {
 		t.Fatalf("old tag record count = %d, want 0; body %+v", len(removedTag.JSON200.Records), removedTag.JSON200)
 	}
 
+	bulkMember, err := client.REST().BulkSetJournalRecordMemberWithResponse(context.Background(), httpclient.BulkSetRecordMemberRequest{
+		RecordIds: []int64{secondRecordID},
+		MemberId:  &refs.SecondMemberId,
+	})
+	requireNoTransportError(t, "bulk set record member", err)
+	if bulkMember.StatusCode() != http.StatusOK {
+		t.Fatalf("bulk member status = %d, want %d; body %s", bulkMember.StatusCode(), http.StatusOK, bulkMember.Body)
+	}
+	assertBulkResponse(t, bulkMember.JSON200, []int64{secondRecordID})
+	memberRecords, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), &httpclient.SearchJournalRecordsParams{MemberId: &refs.SecondMemberId})
+	requireNoTransportError(t, "search member records", err)
+	if memberRecords.StatusCode() != http.StatusOK {
+		t.Fatalf("member records status = %d, want %d; body %s", memberRecords.StatusCode(), http.StatusOK, memberRecords.Body)
+	}
+	assertRecordIDs(t, memberRecords.JSON200.Records, []int64{secondRecordID})
+	memberSet := getTransaction(t, client, created.JSON201.TransactionId)
+	assertRecordMembers(t, memberSet.JSON200.Records, map[int64]*int64{
+		firstRecordID:  &refs.MemberId,
+		secondRecordID: &refs.SecondMemberId,
+	})
+
+	clearedMember, err := client.REST().BulkSetJournalRecordMemberWithResponse(context.Background(), httpclient.BulkSetRecordMemberRequest{
+		RecordIds: []int64{secondRecordID},
+		MemberId:  nil,
+	})
+	requireNoTransportError(t, "bulk clear record member", err)
+	if clearedMember.StatusCode() != http.StatusOK {
+		t.Fatalf("bulk clear member status = %d, want %d; body %s", clearedMember.StatusCode(), http.StatusOK, clearedMember.Body)
+	}
+	assertBulkResponse(t, clearedMember.JSON200, []int64{secondRecordID})
+	cleared := getTransaction(t, client, created.JSON201.TransactionId)
+	assertRecordMembers(t, cleared.JSON200.Records, map[int64]*int64{
+		firstRecordID:  &refs.MemberId,
+		secondRecordID: nil,
+	})
+
 	bulkAccount, err := client.REST().BulkReassignJournalRecordAccountWithResponse(context.Background(), httpclient.BulkReassignRecordsAccountRequest{
 		RecordIds: []int64{secondRecordID},
 		AccountId: replacementMerchant.AccountId,
@@ -101,6 +137,83 @@ func TestRecordBulkOperationsBoundary(t *testing.T) {
 		t.Fatalf("status search status = %d, want %d; body %s", statusRecords.StatusCode(), http.StatusOK, statusRecords.Body)
 	}
 	assertRecordIDs(t, statusRecords.JSON200.Records, []int64{firstRecordID, secondRecordID})
+}
+
+func TestRecordBulkMemberValidationAndAtomicityBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	refs := createSearchRefs(t, client)
+	created := createTransaction(t, client, balancedTransactionRequest(refs.transactionRefs))
+	firstRecordID := created.JSON201.Records[0].RecordId
+	secondRecordID := created.JSON201.Records[1].RecordId
+
+	for name, recordIDs := range map[string][]int64{
+		"empty":     {},
+		"duplicate": {firstRecordID, firstRecordID},
+		"missing":   {999999},
+	} {
+		t.Run(name+" record selection", func(t *testing.T) {
+			response, err := client.REST().BulkSetJournalRecordMemberWithResponse(context.Background(), httpclient.BulkSetRecordMemberRequest{
+				RecordIds: recordIDs,
+				MemberId:  &refs.SecondMemberId,
+			})
+			requireNoTransportError(t, "bulk set record member", err)
+			if response.StatusCode() != http.StatusBadRequest {
+				t.Fatalf("status = %d, want %d; body %s", response.StatusCode(), http.StatusBadRequest, response.Body)
+			}
+		})
+	}
+
+	missingMemberID := int64(999999)
+	missingMember, err := client.REST().BulkSetJournalRecordMemberWithResponse(context.Background(), httpclient.BulkSetRecordMemberRequest{
+		RecordIds: []int64{firstRecordID},
+		MemberId:  &missingMemberID,
+	})
+	requireNoTransportError(t, "bulk set missing member", err)
+	if missingMember.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("missing member status = %d, want %d; body %s", missingMember.StatusCode(), http.StatusBadRequest, missingMember.Body)
+	}
+
+	tombstonedMember := client.Scenario().Member("Tombstoned Bulk Member")
+	deleteMember(t, client, tombstonedMember.MemberId)
+	tombstonedResponse, err := client.REST().BulkSetJournalRecordMemberWithResponse(context.Background(), httpclient.BulkSetRecordMemberRequest{
+		RecordIds: []int64{firstRecordID},
+		MemberId:  &tombstonedMember.MemberId,
+	})
+	requireNoTransportError(t, "bulk set tombstoned member", err)
+	if tombstonedResponse.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("tombstoned member status = %d, want %d; body %s", tombstonedResponse.StatusCode(), http.StatusBadRequest, tombstonedResponse.Body)
+	}
+
+	tombstonedTransaction := createTransaction(t, client, balancedTransactionRequest(refs.transactionRefs))
+	deleted, err := client.REST().DeleteTransactionWithResponse(context.Background(), tombstonedTransaction.JSON201.TransactionId)
+	requireNoTransportError(t, "delete transaction", err)
+	if deleted.StatusCode() != http.StatusNoContent {
+		t.Fatalf("delete transaction status = %d, want %d; body %s", deleted.StatusCode(), http.StatusNoContent, deleted.Body)
+	}
+	tombstonedRecord, err := client.REST().BulkSetJournalRecordMemberWithResponse(context.Background(), httpclient.BulkSetRecordMemberRequest{
+		RecordIds: []int64{tombstonedTransaction.JSON201.Records[0].RecordId},
+		MemberId:  &refs.SecondMemberId,
+	})
+	requireNoTransportError(t, "bulk set tombstoned record member", err)
+	if tombstonedRecord.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("tombstoned record status = %d, want %d; body %s", tombstonedRecord.StatusCode(), http.StatusBadRequest, tombstonedRecord.Body)
+	}
+
+	before := getTransaction(t, client, created.JSON201.TransactionId)
+	allOrNothing, err := client.REST().BulkSetJournalRecordMemberWithResponse(context.Background(), httpclient.BulkSetRecordMemberRequest{
+		RecordIds: []int64{secondRecordID, 999999},
+		MemberId:  &refs.SecondMemberId,
+	})
+	requireNoTransportError(t, "bulk set member atomically", err)
+	if allOrNothing.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("all-or-nothing status = %d, want %d; body %s", allOrNothing.StatusCode(), http.StatusBadRequest, allOrNothing.Body)
+	}
+	after := getTransaction(t, client, created.JSON201.TransactionId)
+	for index := range before.JSON200.Records {
+		if got, want := after.JSON200.Records[index].MemberId, before.JSON200.Records[index].MemberId; (got == nil) != (want == nil) || (got != nil && *got != *want) {
+			t.Fatalf("record %d member_id after rejected update = %v, want %v", after.JSON200.Records[index].RecordId, got, want)
+		}
+	}
 }
 
 func TestRecordBulkReassignToFixedSystemAccountBoundary(t *testing.T) {
@@ -514,5 +627,22 @@ func assertBulkResponse(t *testing.T, got *httpclient.BulkRecordOperationRespons
 	assertInt64s(t, got.RecordIds, wantRecordIDs)
 	if got.UpdatedCount != len(wantRecordIDs) {
 		t.Fatalf("updated_count = %d, want %d", got.UpdatedCount, len(wantRecordIDs))
+	}
+}
+
+func assertRecordMembers(t *testing.T, records []httpclient.JournalRecord, wantByRecordID map[int64]*int64) {
+	t.Helper()
+
+	if len(records) != len(wantByRecordID) {
+		t.Fatalf("member assertion record count = %d, want %d", len(records), len(wantByRecordID))
+	}
+	for _, record := range records {
+		want, ok := wantByRecordID[record.RecordId]
+		if !ok {
+			t.Fatalf("unexpected record %d in member assertion", record.RecordId)
+		}
+		if (record.MemberId == nil) != (want == nil) || (record.MemberId != nil && *record.MemberId != *want) {
+			t.Fatalf("record %d member_id = %v, want %v", record.RecordId, record.MemberId, want)
+		}
 	}
 }

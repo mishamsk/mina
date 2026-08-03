@@ -15,6 +15,7 @@
 - Store updates use immutable replacement or object spreads.
 - Browser-state hydration runs before the app body renders.
 - Authentication lifecycle generation and invalidation wiring are initialized here during browser-state hydration.
+- Transaction-entry launches wait for every pending Edit-mode amount save, proceed only after all succeed, and are cancelled by a failed save or removal of the requested entry route.
 
 Example:
 

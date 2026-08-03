@@ -1,5 +1,11 @@
 import { Close, EyeOff, Filter } from "pixelarticons/react";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import type {
   Account,
@@ -405,35 +411,28 @@ export const TransactionFilterControls = ({
     [hiddenDimensionSet],
   );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open) {
       return;
     }
 
-    const frameId = window.requestAnimationFrame(() => {
-      if (selectedDimension) {
-        const firstEditorControl =
-          editorRef.current?.querySelector<HTMLElement>(
-            editorFocusableSelector,
-          );
-        firstEditorControl?.focus();
-        return;
-      }
-
-      if (!restoreDimensionRef.current) {
-        return;
-      }
-
-      const dimensionButton = editorRef.current?.querySelector<HTMLElement>(
-        `[data-filter-dimension="${restoreDimensionRef.current}"]`,
+    if (selectedDimension) {
+      const firstEditorControl = editorRef.current?.querySelector<HTMLElement>(
+        editorFocusableSelector,
       );
-      restoreDimensionRef.current = undefined;
-      dimensionButton?.focus();
-    });
+      firstEditorControl?.focus();
+      return;
+    }
 
-    return () => {
-      window.cancelAnimationFrame(frameId);
-    };
+    if (!restoreDimensionRef.current) {
+      return;
+    }
+
+    const dimensionButton = editorRef.current?.querySelector<HTMLElement>(
+      `[data-filter-dimension="${restoreDimensionRef.current}"]`,
+    );
+    restoreDimensionRef.current = undefined;
+    dimensionButton?.focus();
   }, [open, selectedDimension]);
 
   const accountOptions = useMemo(

@@ -652,6 +652,13 @@ operations:
       name: bulk_update_tags
       description: Add and remove tag IDs on selected record IDs in one request. This is a bulk mutation; require explicit user intent and inspect records first.
       annotations: {read_only: false, destructive: true, idempotent: true, open_world: false}
+  bulkSetJournalRecordMember:
+    cli: {state: exposed, name: bulk-set-member}
+    mcp:
+      state: exposed
+      name: bulk_set_member
+      description: Set one active member ID on selected active journal-record IDs, or clear attribution with null. This is a bulk mutation; require explicit user intent and inspect records first.
+      annotations: {read_only: false, destructive: true, idempotent: true, open_world: false}
   bulkReassignJournalRecordAccount:
     cli: {state: exposed, name: bulk-reassign-account}
     mcp:

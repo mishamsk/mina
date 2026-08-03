@@ -33,7 +33,7 @@ test("transaction layouts balance localized date fit and description width", asy
     const layout = await table.evaluate((tableElement) => {
       const rows = Array.from(
         tableElement.querySelectorAll<HTMLTableRowElement>(
-          "tbody > tr[aria-expanded]",
+          "[data-transaction-row='true']",
         ),
       );
       const firstRow = rows[0];
@@ -99,6 +99,29 @@ test("transaction layouts balance localized date fit and description width", asy
   await expect(truncatedLine).toHaveCSS("text-overflow", "ellipsis");
   await truncatedLine.hover();
   await expect(page.getByRole("tooltip")).toContainText(fullText);
+
+  await page.mouse.move(0, 0);
+  const toolbar = page.getByTestId("transaction-browser-toolbar-row");
+  const toolbarBeforeDetail = await requiredBoundingBox(toolbar);
+  const editModeButton = page.getByRole("button", { name: "Edit mode" });
+  const editModeButtonBeforeDetail = await requiredBoundingBox(editModeButton);
+  const firstRow = page.locator("[data-transaction-row='true']").first();
+  await firstRow.focus();
+  await firstRow.press("Enter");
+  const detailPanel = page.getByTestId("transaction-detail-panel");
+  await expect(detailPanel).toBeVisible();
+  const toolbarAfterDetail = await requiredBoundingBox(toolbar);
+  const editModeButtonAfterDetail = await requiredBoundingBox(editModeButton);
+  expect(toolbarAfterDetail.y).toBe(toolbarBeforeDetail.y);
+  expect(toolbarAfterDetail.height).toBe(toolbarBeforeDetail.height);
+  expect(editModeButtonAfterDetail.y).toBe(editModeButtonBeforeDetail.y);
+  expect(
+    boundingBoxesOverlap(
+      await requiredBoundingBox(detailPanel),
+      editModeButtonAfterDetail,
+    ),
+  ).toBe(true);
+  await page.getByRole("button", { name: "Close transaction detail" }).click();
 });
 
 test("mixed more-parts indicators stay inside the amount column where member first appears", async ({
@@ -243,7 +266,7 @@ test("transactions contain long amount chips and align the pagination footer", a
 
   const spendResponse = await page.request.post("/api/transactions/spend", {
     data: {
-      amount: "9999999999.99",
+      amount: "9999999999.12345678",
       category_id: category.category_id,
       counterparty_account_id: merchantAccount.account_id,
       currency: "USD",
@@ -322,7 +345,7 @@ test("transactions contain long amount chips and align the pagination footer", a
     await expect(longAmountRow).toBeVisible();
     await expect(
       longAmountRow.locator(".transactions-amount-column"),
-    ).toContainText("-9,999,999,999.99 $");
+    ).toContainText("-9,999,999,999.12 $");
     const mixedLongAmountRow = page
       .getByRole("row")
       .filter({ hasText: mixedMemo });
@@ -351,7 +374,7 @@ test("transactions contain long amount chips and align the pagination footer", a
   }
 
   await page.setViewportSize({ width: 1000, height: 720 });
-  const fullAmountLabel = "-9,999,999,999.99 $";
+  const fullAmountLabel = "-9,999,999,999.12 $";
   const longAmountRow = page.getByRole("row").filter({ hasText: memo });
   await page.getByRole("button", { name: "Collapse sidebar" }).click();
   const longAmountChip = longAmountRow.getByTestId("amount-chip");
@@ -369,7 +392,7 @@ test("transactions contain long amount chips and align the pagination footer", a
   await expect(longAmountTooltip).toBeVisible();
 
   await page.setViewportSize({ width: 1000, height: 720 });
-  await page.getByRole("button", { name: "Bulk edit" }).click();
+  await page.getByRole("button", { name: "Edit mode" }).click();
   const bulkFooterBox = await page
     .getByTestId("transactions-pagination-footer")
     .boundingBox();
@@ -385,7 +408,9 @@ test("transactions contain long amount chips and align the pagination footer", a
         ((sidebarControlBox?.y ?? 0) + (sidebarControlBox?.height ?? 0)),
     ),
   ).toBeLessThanOrEqual(1);
-  const bulkModeBar = page.getByTestId("transaction-browser-bulk-mode-bar");
+  const editModeHeader = page.getByTestId(
+    "transaction-browser-edit-mode-header",
+  );
   const mixedLongAmountRow = page
     .getByRole("row")
     .filter({ hasText: mixedMemo });
@@ -398,15 +423,53 @@ test("transactions contain long amount chips and align the pagination footer", a
     "All parts: -9,999,999,998.98 $, -1.01 $",
   );
   await bulkMoreParts.click();
-  await expect(bulkModeBar).toContainText("1 selected");
-  await longAmountRow.getByTestId("amount-chip").hover();
+  await expect(editModeHeader).toContainText("1 selected");
+  const editModeAmountInput = longAmountRow.getByTestId(
+    `transaction-${spendTransaction.transaction_id}-amount-input`,
+  );
+  await expect(editModeAmountInput).toHaveValue("9999999999.12345678");
+  await page.setViewportSize({ width: 390, height: 720 });
+  await expect(editModeAmountInput).toBeVisible();
+  const narrowLayout = page.getByTestId("transaction-browser-layout");
+  const narrowDock = page.getByTestId("transaction-edit-dock");
+  const narrowGeometry = await narrowLayout.evaluate((layout) => {
+    const tableRegion = layout.firstElementChild;
+    const dock = layout.lastElementChild;
+    return {
+      dockWidth: dock?.getBoundingClientRect().width ?? 0,
+      layoutClientWidth: layout.clientWidth,
+      layoutScrollWidth: layout.scrollWidth,
+      tableRegionWidth: tableRegion?.getBoundingClientRect().width ?? 0,
+    };
+  });
+  expect(narrowGeometry.tableRegionWidth).toBeGreaterThanOrEqual(368);
+  expect(narrowGeometry.dockWidth).toBeGreaterThanOrEqual(256);
+  expect(narrowGeometry.layoutScrollWidth).toBeGreaterThan(
+    narrowGeometry.layoutClientWidth,
+  );
+  const narrowDockAction = narrowDock.getByRole("button", {
+    name: "Set / clear",
+  });
+  await narrowDockAction.scrollIntoViewIfNeeded();
+  await expect(narrowDockAction).toBeInViewport();
+  await expect(
+    narrowDock.evaluate((dock) => dock.scrollWidth <= dock.clientWidth + 1),
+  ).resolves.toBe(true);
+  const amountInputWidth = await editModeAmountInput.evaluate((input) => ({
+    client: input.clientWidth,
+    scroll: input.scrollWidth,
+  }));
+  expect(amountInputWidth.client).toBeGreaterThanOrEqual(
+    amountInputWidth.scroll,
+  );
+  await expect(longAmountRow.getByTestId("amount-chip")).toHaveCount(0);
   await expect(
     page.getByRole("tooltip").filter({ hasText: fullAmountLabel }),
   ).toBeHidden();
   await page.keyboard.press("Escape");
-  await expect(bulkModeBar).toContainText("0 selected");
+  await expect(editModeHeader).toContainText("0 selected");
   await page.keyboard.press("Escape");
-  await expect(bulkModeBar).toHaveCount(0);
+  await expect(editModeHeader).toHaveCount(0);
 
   await page.setViewportSize({ width: 1440, height: 720 });
   await page
@@ -572,12 +635,12 @@ test("transactions page help and leaf category chips", async ({
   await page.goto("/transactions?page=1&pageSize=50");
 
   await expect(
-    page.getByText("Classified transaction lines with inline journal records."),
+    page.getByText("Read-only transaction lines open full detail on click"),
   ).toBeHidden();
 
   await page.getByRole("button", { name: "Transactions help" }).click();
   await expect(
-    page.getByText("Classified transaction lines with inline journal records."),
+    page.getByText("Read-only transaction lines open full detail on click"),
   ).toBeVisible();
 
   const simpleSpendRow = page
@@ -610,7 +673,7 @@ test("transactions page help and leaf category chips", async ({
   ).toBeVisible();
   await expect(mixedRow.locator(".transactions-amount-column")).toHaveText("+");
   const rowHeights = await page
-    .locator("tbody > tr[aria-expanded]")
+    .locator("[data-transaction-row='true']")
     .evaluateAll((rows) => {
       const mixed = rows.find((row) =>
         row.textContent?.includes("Mixed payroll correction"),
@@ -783,19 +846,6 @@ test("record role indicators preserve density across accounting shapes", async (
     await expect(transactionRow).toBeVisible();
     await transactionRow.focus();
     await transactionRow.press(" ");
-
-    const expandedTable = page.getByTestId("expanded-records");
-    await expect(expandedTable).toBeVisible();
-    await expectRecordRoleIndicators(
-      expandedTable,
-      "tbody > tr",
-      fixture.roles,
-      { narrowInline: fixture.memo === spendMemo },
-    );
-
-    await transactionRow
-      .getByRole("button", { name: "Open transaction detail" })
-      .click();
     const detailPanel = page.getByTestId("transaction-detail-panel");
     await expect(detailPanel).toBeVisible();
     const detailTable = detailPanel.getByTestId(
@@ -1029,7 +1079,7 @@ test("transactions line composition uses compact dates and single-line leaf tags
   expect(noMemoTitleCenterOffset).toBeLessThanOrEqual(1);
 
   const rowHeights = await page
-    .locator("tbody > tr[aria-expanded]")
+    .locator("[data-transaction-row='true']")
     .evaluateAll(
       (rows, rowText) => {
         const manyTag = rows.find((row) =>

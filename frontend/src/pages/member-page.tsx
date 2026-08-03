@@ -8,7 +8,6 @@ import {
   ReferenceDrilldownNotFound,
   ReferenceDrilldownPage,
   ReferenceDrilldownSkeleton,
-  referenceTransactionHref,
 } from "@/features/reference";
 
 const parsePositiveInteger = (
@@ -26,8 +25,6 @@ export const MemberPage = () => {
     (candidate) => candidate.member_id === memberId,
   );
   const filterIds = member ? [member.member_id] : [];
-  const viewAllHref = referenceTransactionHref("member", filterIds);
-
   return (
     <section
       className="flex h-[calc(100svh-2.5rem)] min-h-0 flex-col gap-6"
@@ -65,14 +62,7 @@ export const MemberPage = () => {
         />
       ) : null}
       {member ? (
-        <ReferenceDrilldownPage
-          actionLabel="View all transactions"
-          entityKindLabel="Member"
-          filterIds={filterIds}
-          filterKind="member"
-          title={member.name}
-          viewAllHref={viewAllHref}
-        />
+        <ReferenceDrilldownPage filterIds={filterIds} filterKind="member" />
       ) : null}
     </section>
   );

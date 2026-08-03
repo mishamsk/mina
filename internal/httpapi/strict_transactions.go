@@ -369,6 +369,14 @@ func (s *strictServer) BulkUpdateJournalRecordTags(ctx context.Context, request 
 	return openapi.BulkUpdateJournalRecordTags200JSONResponse(bulkRecordOperationAPIResponse(response)), nil
 }
 
+func (s *strictServer) BulkSetJournalRecordMember(ctx context.Context, request openapi.BulkSetJournalRecordMemberRequestObject) (openapi.BulkSetJournalRecordMemberResponseObject, error) {
+	response, err := s.deps.Transactions.BulkSetMember(ctx, request.Body.RecordIds, request.Body.MemberId)
+	if err != nil {
+		return nil, err
+	}
+	return openapi.BulkSetJournalRecordMember200JSONResponse(bulkRecordOperationAPIResponse(response)), nil
+}
+
 func (s *strictServer) BulkReassignJournalRecordAccount(ctx context.Context, request openapi.BulkReassignJournalRecordAccountRequestObject) (openapi.BulkReassignJournalRecordAccountResponseObject, error) {
 	response, err := s.deps.Transactions.BulkReassignAccount(ctx, request.Body.RecordIds, request.Body.AccountId, transactionAPISettlementIntentPtr(request.Body.Settlement))
 	if err != nil {

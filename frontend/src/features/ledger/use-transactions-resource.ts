@@ -54,13 +54,16 @@ interface LoadedTransactionPage {
 }
 
 let ledgerLookupRequestEpoch = 0;
-const pendingPageRefreshCallbacks = new Map<string, () => void>();
+const pendingPageRefreshCallbacks = new Map<string, Set<() => void>>();
 
 const queuePageRefreshCallback = (
   params: TransactionPageParams,
   callback: () => void,
 ): void => {
-  pendingPageRefreshCallbacks.set(transactionPageKey(params), callback);
+  const key = transactionPageKey(params);
+  const callbacks = pendingPageRefreshCallbacks.get(key) ?? new Set();
+  callbacks.add(callback);
+  pendingPageRefreshCallbacks.set(key, callbacks);
 };
 
 const cancelPageRefreshCallback = (params: TransactionPageParams): void => {
@@ -73,13 +76,15 @@ const cancelAllPageRefreshCallbacks = (): void => {
 
 const settlePageRefreshCallbacks = (params: TransactionPageParams): void => {
   const key = transactionPageKey(params);
-  const callback = pendingPageRefreshCallbacks.get(key);
-  if (!callback) {
+  const callbacks = pendingPageRefreshCallbacks.get(key);
+  if (!callbacks) {
     return;
   }
 
   pendingPageRefreshCallbacks.delete(key);
-  callback();
+  for (const callback of callbacks) {
+    callback();
+  }
 };
 
 const effectivePageParams = (
@@ -335,7 +340,7 @@ export const refreshTransactionPage = async (
 
 const refreshTransactionPageInBackground = async (
   params: TransactionPageParams,
-): Promise<void> => {
+): Promise<readonly Transaction[] | undefined> => {
   const key = transactionPageKey(params);
   const pageAtRefreshStart = getTransactionsSnapshot().pages[key];
   const result = await fetchTransactionPage(params);
@@ -345,7 +350,7 @@ const refreshTransactionPageInBackground = async (
       pageAtRefreshStart,
       apiErrorDetails(result.error),
     );
-    return;
+    return pageAtRefreshStart?.transactions;
   }
 
   const refreshed = setRefreshedTransactionPage(
@@ -357,6 +362,7 @@ const refreshTransactionPageInBackground = async (
   if (refreshed) {
     settlePageRefreshCallbacks(params);
   }
+  return result.data.transactions;
 };
 
 export const refreshLedgerLookups = async (): Promise<void> => {
@@ -468,21 +474,22 @@ export const refreshViewsAfterEntrySave = async (
   return false;
 };
 
-export const refreshTransactionPageAfterBulkSave = async (
+export const refreshTransactionPageAfterEditModeSave = async (
   params: TransactionPageParams,
   transactions: readonly Transaction[],
-): Promise<void> => {
+): Promise<readonly Transaction[]> => {
   invalidateReferencePagesAfterTransactionMutation();
   markOtherTransactionPagesStale(params);
   for (const transaction of transactions) {
     invalidateAccountRegistersForTransaction(transaction);
   }
 
-  await Promise.all([
+  const [refreshedTransactions] = await Promise.all([
     refreshTransactionPageInBackground(params),
     refreshFeaturedBalances(),
     refreshOverview(),
   ]);
+  return refreshedTransactions ?? [];
 };
 
 export const jumpToTransactionDatePage = async (

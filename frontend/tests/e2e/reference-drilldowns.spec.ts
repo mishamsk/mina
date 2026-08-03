@@ -125,13 +125,15 @@ const expectReferenceRowActivation = async (
   await page.goto(sourcePath);
   await expect(row).toBeVisible();
   await row.focus();
-  await page.keyboard.press("Enter");
+  await expect(row).toBeFocused();
+  await row.press("Enter");
   await expect(page).toHaveURL(destination);
 
   await page.goto(sourcePath);
   await expect(row).toBeVisible();
   await row.focus();
-  await page.keyboard.press("Space");
+  await expect(row).toBeFocused();
+  await row.press("Space");
   await expect(page).toHaveURL(destination);
 };
 
@@ -212,22 +214,7 @@ const createSpend = async (
   return (await response.json()) as TransactionFixture;
 };
 
-const expectUrlFilterIds = async (
-  page: Page,
-  kind: "category" | "member" | "tag",
-  expectedIds: readonly number[],
-): Promise<void> => {
-  await expect
-    .poll(() =>
-      new URL(page.url()).searchParams
-        .getAll(kind)
-        .map((value) => Number(value))
-        .sort((left, right) => left - right),
-    )
-    .toEqual([...expectedIds].sort((left, right) => left - right));
-};
-
-test("category drill-down direct navigation, view-all, refresh, not-found, and detail panel work", async ({
+test("category drill-down keeps one header, scoped toolbar, refresh, not-found, and detail", async ({
   page,
 }, testInfo) => {
   const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
@@ -251,8 +238,14 @@ test("category drill-down direct navigation, view-all, refresh, not-found, and d
     .getByRole("heading", { level: 1 })
     .filter({ hasText: category.name });
   await expect(categoryHeading).toBeVisible();
+  await expect(categoryHeading).toHaveCount(1);
   await expect(categoryHeading.getByText("E2EDrill:")).toBeVisible();
-  await expect(page.getByText("Expense")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { level: 2 }).filter({ hasText: category.name }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("link", { name: "View all transactions" }),
+  ).toHaveCount(0);
   await expect(page.getByRole("row").filter({ hasText: memo })).toBeVisible();
 
   const dateJumpResponse = page.waitForResponse((response) => {
@@ -301,10 +294,6 @@ test("category drill-down direct navigation, view-all, refresh, not-found, and d
   ).toHaveText(memo);
   await page.getByRole("button", { name: "Close transaction detail" }).click();
   await expect(page.getByTestId("transaction-detail-panel")).toBeHidden();
-
-  await page.getByRole("link", { name: "View all transactions" }).click();
-  await expect(page).toHaveURL(/\/transactions\?/);
-  await expectUrlFilterIds(page, "category", [category.category_id]);
 
   await page.goto("/categories/999999999");
   await expect(
@@ -376,11 +365,11 @@ test("debounced drill-down search preserves unsaved split editor input", async (
   expect(new URL(page.url()).searchParams.get("q")).toBe(unique);
 });
 
-test("reference transaction drill-downs share the bulk-mode lifecycle", async ({
+test("reference transaction drill-downs share the edit-mode lifecycle", async ({
   page,
 }, testInfo) => {
   const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
-  const category = await createCategory(page, `E2EBulkDrill:${unique}`);
+  const category = await createCategory(page, `E2EEditModeDrill:${unique}`);
   const memo = `E2E bulk drilldown ${unique}`;
   await createSpend(page, { category, memo });
 
@@ -389,8 +378,8 @@ test("reference transaction drill-downs share the bulk-mode lifecycle", async ({
   await expect(row).toBeVisible();
   await expect(row.getByRole("checkbox")).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Bulk edit" }).click();
-  const modeBar = page.getByTestId("transaction-browser-bulk-mode-bar");
+  await page.getByRole("button", { name: "Edit mode" }).click();
+  const modeBar = page.getByTestId("transaction-browser-edit-mode-header");
   await expect(modeBar).toContainText("0 selected");
   await expect(page.getByRole("searchbox", { name: "Search" })).toHaveCount(0);
   await expect(
@@ -400,13 +389,97 @@ test("reference transaction drill-downs share the bulk-mode lifecycle", async ({
   await expect(row).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(modeBar).toContainText("1 selected");
-  await expect(page.getByTestId("bulk-action-bar")).toBeVisible();
+  await expect(page.getByTestId("transaction-edit-dock")).toBeVisible();
 
-  await page.getByRole("link", { name: "View all transactions" }).click();
-  await expect(page).toHaveURL(/\/transactions\?/);
+  await modeBar.getByRole("button", { name: "Done" }).click();
   await expect(modeBar).toHaveCount(0);
-  await expect(page.getByTestId("bulk-action-bar")).toHaveCount(0);
+  await expect(page.getByTestId("transaction-edit-dock")).toHaveCount(0);
   await expect(page.getByRole("searchbox", { name: "Search" })).toBeVisible();
+  await expect(page).toHaveURL(
+    new RegExp(`/categories/${category.category_id}(?:\\?|$)`),
+  );
+  await expect(row).toBeVisible();
+});
+
+test("a dock edit that empties a drill-down restores usable focus", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const [sourceCategory, replacementCategory] = await Promise.all([
+    createCategory(page, `E2EFocusSource${unique}`),
+    createCategory(page, `E2EFocusReplacement${unique}`),
+  ]);
+  const memo = `E2E drill-down focus ${unique}`;
+  await createSpend(page, { category: sourceCategory, memo });
+
+  await page.goto(`/categories/${sourceCategory.category_id}`);
+  const row = page.getByRole("row").filter({ hasText: memo });
+  await expect(row).toBeVisible();
+  await page.getByRole("button", { name: "Edit mode" }).click();
+  await row.click();
+
+  const dock = page.getByTestId("transaction-edit-dock");
+  await dock.getByRole("button", { name: "Choose category" }).click();
+  const editor = page.getByTestId("edit-dock-editor");
+  const categoryPicker = editor.getByRole("combobox", { name: "Category" });
+  await categoryPicker.fill(replacementCategory.fqn);
+  await categoryPicker.press("Enter");
+  await editor.getByRole("button", { name: "Apply" }).click();
+
+  await expect(row).toHaveCount(0);
+  await expect(editor).toHaveCount(0);
+  await expect(page.locator("[data-transaction-empty-action]")).toBeFocused();
+});
+
+test("a dock edit focuses the removed row's nearest drill-down neighbor", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const [sourceCategory, replacementCategory] = await Promise.all([
+    createCategory(page, `E2ENeighborSource${unique}`),
+    createCategory(page, `E2ENeighborReplacement${unique}`),
+  ]);
+  const newestMemo = `E2E neighbor newest ${unique}`;
+  const middleMemo = `E2E neighbor middle ${unique}`;
+  const oldestMemo = `E2E neighbor oldest ${unique}`;
+  await Promise.all([
+    createSpend(page, {
+      category: sourceCategory,
+      initiatedDate: "2025-01-03",
+      memo: newestMemo,
+    }),
+    createSpend(page, {
+      category: sourceCategory,
+      initiatedDate: "2025-01-02",
+      memo: middleMemo,
+    }),
+    createSpend(page, {
+      category: sourceCategory,
+      initiatedDate: "2025-01-01",
+      memo: oldestMemo,
+    }),
+  ]);
+
+  await page.goto(`/categories/${sourceCategory.category_id}`);
+  const middleRow = page.getByRole("row").filter({ hasText: middleMemo });
+  const oldestRow = page.getByRole("row").filter({ hasText: oldestMemo });
+  await page.getByRole("button", { name: "Edit mode" }).click();
+  await middleRow.click();
+
+  const dock = page.getByTestId("transaction-edit-dock");
+  await dock.getByRole("button", { name: "Choose category" }).click();
+  const editor = page.getByTestId("edit-dock-editor");
+  const categoryPicker = editor.getByRole("combobox", { name: "Category" });
+  await categoryPicker.fill(replacementCategory.fqn);
+  await categoryPicker.press("Enter");
+  await editor.getByRole("button", { name: "Apply" }).click();
+
+  await expect(middleRow).toHaveCount(0);
+  await expect(editor).toHaveCount(0);
+  await expect(oldestRow).toBeFocused();
+  await expect(
+    page.getByRole("row").filter({ hasText: newestMemo }),
+  ).not.toBeFocused();
 });
 
 test("drill-down transaction row quick-delete confirms, tombstones, and refreshes", async ({
@@ -419,7 +492,7 @@ test("drill-down transaction row quick-delete confirms, tombstones, and refreshe
   const transaction = await createSpend(page, { category, memo });
 
   await page.goto(`/categories/${category.category_id}`);
-  const row = page.locator("tbody > tr[aria-expanded]").filter({
+  const row = page.locator("[data-transaction-row='true']").filter({
     hasText: memo,
   });
   await expect(row).toBeVisible();
@@ -596,10 +669,7 @@ test("category drill-down rolls visible descendants, excludes hidden descendants
   ).toHaveCount(0);
   await expect(
     page.getByRole("link", { name: "View all transactions" }),
-  ).toHaveAttribute(
-    "href",
-    "/transactions?category=900001&category=900002&page=1&pageSize=50",
-  );
+  ).toHaveCount(0);
 
   const toggle = page.getByLabel("This level only");
   await toggle.click();
@@ -613,7 +683,7 @@ test("category drill-down rolls visible descendants, excludes hidden descendants
   ).toHaveCount(0);
 });
 
-test("tag drill-down direct navigation, filters, view-all, not-found, and exact scope work", async ({
+test("tag drill-down keeps one header, scoped filters, not-found, and exact scope", async ({
   page,
 }, testInfo) => {
   const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
@@ -641,7 +711,14 @@ test("tag drill-down direct navigation, filters, view-all, not-found, and exact 
     .getByRole("heading", { level: 1 })
     .filter({ hasText: tag.name });
   await expect(tagHeading).toBeVisible();
+  await expect(tagHeading).toHaveCount(1);
   await expect(tagHeading.getByText("E2ETagDrill:")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { level: 2 }).filter({ hasText: tag.name }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("link", { name: "View all transactions" }),
+  ).toHaveCount(0);
   await expect(page.getByRole("row").filter({ hasText: memo })).toBeVisible();
 
   const toggle = page.getByLabel("This level only");
@@ -651,10 +728,6 @@ test("tag drill-down direct navigation, filters, view-all, not-found, and exact 
   await page.reload();
   await expect(toggle).toBeChecked();
   await expect(page.getByRole("row").filter({ hasText: memo })).toBeVisible();
-
-  await page.getByRole("link", { name: "View all transactions" }).click();
-  await expect(page).toHaveURL(/\/transactions\?/);
-  await expectUrlFilterIds(page, "tag", [tag.tag_id]);
 
   await page.goto("/tags/999999999");
   await expect(
@@ -788,10 +861,7 @@ test("tag drill-down rolls visible descendants, excludes hidden descendants, and
   ).toHaveCount(0);
   await expect(
     page.getByRole("link", { name: "View all transactions" }),
-  ).toHaveAttribute(
-    "href",
-    "/transactions?tag=900101&tag=900102&page=1&pageSize=50",
-  );
+  ).toHaveCount(0);
 
   const toggle = page.getByLabel("This level only");
   await toggle.click();
@@ -853,6 +923,15 @@ test("member drill-down direct navigation filters attributed transactions", asyn
     }),
   ).toBeVisible();
   await expect(
+    page.getByRole("heading", {
+      exact: true,
+      name: targetMember.name,
+    }),
+  ).toHaveCount(1);
+  await expect(
+    page.getByRole("link", { name: "View all transactions" }),
+  ).toHaveCount(0);
+  await expect(
     page.getByRole("row").filter({ hasText: targetMemo }),
   ).toBeVisible();
   await expect(
@@ -863,10 +942,6 @@ test("member drill-down direct navigation filters attributed transactions", asyn
   await expect(
     page.getByRole("row").filter({ hasText: targetMemo }),
   ).toBeVisible();
-
-  await page.getByRole("link", { name: "View all transactions" }).click();
-  await expect(page).toHaveURL(/\/transactions\?/);
-  await expectUrlFilterIds(page, "member", [targetMember.member_id]);
 
   await page.goto("/members/999999999");
   await expect(

@@ -103,6 +103,44 @@ func Operations() []Operation {
 			Invoke: invokeBulkReassignJournalRecordAccount,
 		},
 		{
+			ID:          "bulkSetJournalRecordMember",
+			Method:      "POST",
+			Path:        "/api/records/bulk/member",
+			Summary:     "Set or clear the member on selected active journal records.",
+			Description: "Set one active member ID on selected active journal-record IDs, or clear attribution with null. This is a bulk mutation; require explicit user intent and inspect records first.",
+			MCP: MCPOperation{
+				Group: "records", Name: "bulk_set_member",
+				ReadOnly: false, Destructive: true, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"member_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}],\"description\":\"Active household-member identifier to set, or null to clear attribution.\"},\"record_ids\":{\"description\":\"Journal-record identifiers to update.\",\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"minItems\":1,\"type\":\"array\",\"uniqueItems\":true}},\"required\":[\"member_id\",\"record_ids\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
+			},
+			Input: InputDescriptor{
+				Body: BodyDescriptor{
+					Present:  true,
+					Required: true,
+					Type:     "object",
+					Properties: []BodyPropertyDescriptor{
+						{
+							Name:        "member_id",
+							Type:        "integer",
+							Description: "Active household-member identifier to set, or null to clear attribution.",
+							Required:    true,
+						},
+						{
+							Name:        "record_ids",
+							Type:        "array",
+							Description: "Journal-record identifiers to update.",
+							Required:    true,
+							Array:       true,
+							ItemType:    "integer",
+						},
+					},
+					RequiredProperties: []string{"member_id", "record_ids"},
+					Simple:             false,
+				},
+			},
+			Invoke: invokeBulkSetJournalRecordMember,
+		},
+		{
 			ID:          "bulkSetJournalRecordReconciliation",
 			Method:      "POST",
 			Path:        "/api/records/bulk/reconciliation",
@@ -3967,6 +4005,20 @@ func invokeBulkReassignJournalRecordAccount(ctx context.Context, client httpclie
 		return InvocationResult{}, err
 	}
 	response, err := client.BulkReassignJournalRecordAccountWithBodyWithResponse(ctx, "application/json", bytes.NewReader(input.Body))
+	if err != nil {
+		return InvocationResult{}, err
+	}
+	if response == nil {
+		return InvocationResult{}, errors.New("generated client returned no operation response")
+	}
+	return normalizeInvocationResult(response.Body, response.HTTPResponse)
+}
+
+func invokeBulkSetJournalRecordMember(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
+	if err := validateInvocationInput(input, nil, nil, true, true); err != nil {
+		return InvocationResult{}, err
+	}
+	response, err := client.BulkSetJournalRecordMemberWithBodyWithResponse(ctx, "application/json", bytes.NewReader(input.Body))
 	if err != nil {
 		return InvocationResult{}, err
 	}

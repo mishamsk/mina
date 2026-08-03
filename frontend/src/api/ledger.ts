@@ -33,6 +33,7 @@ import type {
 } from "./generated";
 import {
   bulkCategorizeJournalRecords,
+  bulkSetJournalRecordMember,
   bulkSetJournalRecordReconciliation,
   bulkSetJournalRecordSettlement,
   bulkUpdateJournalRecordTags,
@@ -330,6 +331,7 @@ export const fetchLedgerLookups = async () => {
     }),
     listMembers({
       query: {
+        include_hidden: true,
         include_tombstoned: true,
         limit: lookupLimit,
         offset: 0,
@@ -973,11 +975,6 @@ export const replaceLedgerTransaction = (
     },
   });
 
-export const updateJournalRecordCategory = (
-  recordId: number,
-  categoryId: number,
-) => updateJournalRecordsCategory([recordId], categoryId);
-
 export const updateJournalRecordsCategory = (
   recordIds: readonly number[],
   categoryId: number,
@@ -989,39 +986,28 @@ export const updateJournalRecordsCategory = (
     },
   });
 
-export const updateJournalRecordTags = (
-  recordId: number,
-  currentTagIds: readonly number[],
-  nextTagIds: readonly number[],
-) => updateJournalRecordsTags([recordId], currentTagIds, nextTagIds);
-
-export const updateJournalRecordsTags = (
+export const updateJournalRecordsTagsOperation = (
   recordIds: readonly number[],
-  currentTagIds: readonly number[],
-  nextTagIds: readonly number[],
-) => {
-  const current = new Set(currentTagIds);
-  const next = new Set(nextTagIds);
-  const addTagIds = nextTagIds.filter((tagId) => !current.has(tagId));
-  const removeTagIds = currentTagIds.filter((tagId) => !next.has(tagId));
-
-  return bulkUpdateJournalRecordTags({
+  operation: "add" | "remove",
+  tagIds: readonly number[],
+) =>
+  bulkUpdateJournalRecordTags({
     body: {
-      ...(addTagIds.length > 0 ? { add_tag_ids: addTagIds } : {}),
-      ...(removeTagIds.length > 0 ? { remove_tag_ids: removeTagIds } : {}),
+      ...(operation === "add"
+        ? { add_tag_ids: [...tagIds] }
+        : { remove_tag_ids: [...tagIds] }),
       record_ids: [...recordIds],
     },
   });
-};
 
-export const updateJournalRecordSettlement = (
-  recordId: number,
-  settlement: SettlementStatus,
+export const updateJournalRecordsMember = (
+  recordIds: readonly number[],
+  memberId: number | null,
 ) =>
-  bulkSetJournalRecordSettlement({
+  bulkSetJournalRecordMember({
     body: {
-      record_ids: [recordId],
-      settlement,
+      member_id: memberId,
+      record_ids: [...recordIds],
     },
   });
 

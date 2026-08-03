@@ -542,6 +542,14 @@ func TestRecurringExpectedTransactionsRejectGenericMutationsBoundary(t *testing.
 	requireNoTransportError(t, "bulk tag generated expected transaction", err)
 	assertInvalidRequestStatus(t, "bulk tag generated expected transaction", tagged.StatusCode(), tagged.JSON400, tagged.Body)
 
+	member := client.Scenario().Member("Recurring Generic Guard Member")
+	memberSet, err := client.REST().BulkSetJournalRecordMemberWithResponse(context.Background(), httpclient.BulkSetRecordMemberRequest{
+		RecordIds: selectedRecordIDs,
+		MemberId:  &member.MemberId,
+	})
+	requireNoTransportError(t, "bulk member generated expected transaction", err)
+	assertInvalidRequestStatus(t, "bulk member generated expected transaction", memberSet.StatusCode(), memberSet.JSON400, memberSet.Body)
+
 	reassigned, err := client.REST().BulkReassignJournalRecordAccountWithResponse(context.Background(), httpclient.BulkReassignRecordsAccountRequest{
 		RecordIds: selectedRecordIDs,
 		AccountId: refs.CheckingAccountID,
@@ -561,6 +569,11 @@ func TestRecurringExpectedTransactionsRejectGenericMutationsBoundary(t *testing.
 	afterTransaction := getTransaction(t, client, transactionID)
 	apptest.AssertTransactionLifecycle(t, afterTransaction.JSON200, httpclient.TransactionLifecycleStatusExpected)
 	assertRecordIDs(t, afterTransaction.JSON200.Records, selectedRecordIDs)
+	for _, record := range afterTransaction.JSON200.Records {
+		if record.MemberId == nil || *record.MemberId != refs.MemberID {
+			t.Fatalf("record %d member_id after rejected update = %v, want %d", record.RecordId, record.MemberId, refs.MemberID)
+		}
+	}
 }
 
 func TestRecurringOccurrenceDateRuleMaterializationBoundary(t *testing.T) {

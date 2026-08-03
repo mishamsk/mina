@@ -20,41 +20,36 @@ import {
   deleteTransactionById,
   dismissRecurringOccurrenceById,
   fetchTransactionById,
-  type JournalRecord,
   replaceLedgerTransaction,
   restoreTransactionById,
   type Transaction,
   type TransactionPageParams,
-  updateJournalRecordCategory,
   updateJournalRecordsCategory,
-  updateJournalRecordSettlement,
+  updateJournalRecordsMember,
   updateJournalRecordsReconciliation,
   updateJournalRecordsSettlement,
-  updateJournalRecordsTags,
-  updateJournalRecordTags,
+  updateJournalRecordsTagsOperation,
 } from "@/api";
 import type { TransactionFilters } from "@/models/transaction-filters";
 import {
-  setTransactionBulkEditAvailable,
-  setTransactionBulkEditEnabled,
+  setTransactionEditModeAvailable,
+  setTransactionEditModeEnabled,
   transactionPageKey,
-  useTransactionBulkEditView,
+  useTransactionEditModeView,
 } from "@/store";
 
 import {
-  activeBulkEditRecords,
-  bulkCategoryTargetRecords,
-  formatBulkEditSkipReasons,
-  predictBulkEdit,
-  summarizeBulkEditSkips,
-} from "./bulk-edit-prediction";
-import { useInlineEditCoordinator } from "./inline-editing";
+  activeEditModeRecords,
+  editModeCategoryTargetRecords,
+  formatEditModeSkipReasons,
+  predictEditMode,
+  summarizeEditModeSkips,
+} from "./edit-mode-prediction";
 import {
-  type InlineSavePageRefresh,
-  type RecordUpdate,
-  recordUpdateBody,
-  transactionWithRecordUpdate,
-} from "./record-editing";
+  type AmountSavePageRefresh,
+  transactionAmountUpdateBody,
+} from "./transaction-amount-update";
+import type { EditDockUpdate } from "./transaction-edit-dock";
 import {
   defaultTransactionPage,
   readTransactionPageFromSearchParams,
@@ -63,7 +58,7 @@ import {
 import { useTransactionDateJump } from "./use-transaction-date-jump";
 import { useTransactionDetail } from "./use-transaction-detail";
 import {
-  refreshTransactionPageAfterBulkSave,
+  refreshTransactionPageAfterEditModeSave,
   refreshTransactionPageAfterSave,
   useTransactionsResource,
 } from "./use-transactions-resource";
@@ -83,25 +78,18 @@ interface UseTransactionBrowserPageOptions {
   readonly setSearchParams: SetURLSearchParams;
 }
 
-const sameTagIds = (left: readonly number[], right: readonly number[]) =>
-  left.length === right.length &&
-  left.every((tagId, index) => tagId === right[index]);
-
-const sortedTagIds = (tagIds: readonly number[]): readonly number[] =>
-  [...tagIds].sort((left, right) => left - right);
-
 export const useTransactionBrowserPage = ({
   filters,
   readFiltersFromSearchParams,
   searchParams,
   setSearchParams,
 }: UseTransactionBrowserPageOptions) => {
-  const inlineEdit = useInlineEditCoordinator();
-  const { enabled: bulkEditMode } = useTransactionBulkEditView();
+  const { enabled: editMode, pendingAmountSave } = useTransactionEditModeView();
   const location = useLocation();
   const navigationType = useNavigationType();
   const previousLocationKeyRef = useRef(location.key);
   const historyNavigationRef = useRef(false);
+  const editModeDetailClosePendingRef = useRef(false);
   const [notice, setNotice] = useState<Notice | undefined>();
   const [selectedTransactionsById, setSelectedTransactionsById] = useState<
     ReadonlyMap<number, Transaction>
@@ -126,6 +114,16 @@ export const useTransactionBrowserPage = ({
     },
     [],
   );
+  const removeSelectedTransaction = useCallback((transactionId: number) => {
+    setSelectedTransactionsById((current) => {
+      if (!current.has(transactionId)) {
+        return current;
+      }
+      const next = new Map(current);
+      next.delete(transactionId);
+      return next;
+    });
+  }, []);
   const dateJumpFocusRestoreRef = useRef<HTMLButtonElement | null>(null);
   const { page, pageSize } = readTransactionPageFromSearchParams(searchParams);
   const params: TransactionPageParams = useMemo(
@@ -215,12 +213,11 @@ export const useTransactionBrowserPage = ({
     transactions,
   });
   const { closeTransactionDetail, selectedTransactionId } = detail;
-  const { discardActive: discardActiveInlineEdit } = inlineEdit;
 
   useEffect(() => {
-    setTransactionBulkEditAvailable(true);
+    setTransactionEditModeAvailable(true);
     return () => {
-      setTransactionBulkEditAvailable(false);
+      setTransactionEditModeAvailable(false);
     };
   }, []);
 
@@ -230,25 +227,27 @@ export const useTransactionBrowserPage = ({
       locationChanged && navigationType === NavigationType.Pop;
     historyNavigationRef.current = historyNavigation;
     previousLocationKeyRef.current = location.key;
+    const editModeDetailClose =
+      locationChanged && editModeDetailClosePendingRef.current;
+    if (locationChanged) {
+      editModeDetailClosePendingRef.current = false;
+    }
     if (
       locationChanged &&
       navigationType !== NavigationType.Push &&
-      bulkEditMode
+      editMode &&
+      !editModeDetailClose
     ) {
-      setTransactionBulkEditEnabled(false);
+      setTransactionEditModeEnabled(false);
     }
-  }, [bulkEditMode, location.key, navigationType]);
+  }, [editMode, location.key, navigationType]);
 
   useEffect(() => {
-    if (bulkEditMode) {
+    if (editMode) {
       cancelDateJump();
     }
-    discardActiveInlineEdit();
-    if (
-      bulkEditMode &&
-      selectedTransactionId &&
-      !historyNavigationRef.current
-    ) {
+    if (editMode && selectedTransactionId && !historyNavigationRef.current) {
+      editModeDetailClosePendingRef.current = true;
       closeTransactionDetail();
     }
     const frame = window.requestAnimationFrame(() => {
@@ -257,13 +256,7 @@ export const useTransactionBrowserPage = ({
     return () => {
       window.cancelAnimationFrame(frame);
     };
-  }, [
-    bulkEditMode,
-    cancelDateJump,
-    closeTransactionDetail,
-    discardActiveInlineEdit,
-    selectedTransactionId,
-  ]);
+  }, [editMode, cancelDateJump, closeTransactionDetail, selectedTransactionId]);
 
   const selectableTransactions = useMemo(
     () =>
@@ -447,383 +440,136 @@ export const useTransactionBrowserPage = ({
     [detail, displayedPageParams, showNotice],
   );
 
-  const updateRecord = useCallback(
-    async (
-      transaction: Transaction,
-      record: JournalRecord,
-      update: RecordUpdate,
-      onPageRefresh?: InlineSavePageRefresh,
-    ) => {
-      let nextTransaction: Transaction;
-      let nextDetailTransaction: Transaction | undefined;
-      if (update.kind === "category") {
-        const result = await updateJournalRecordCategory(
-          record.record_id,
-          update.categoryId,
-        );
-        if (result.error) {
-          throw new Error(apiErrorMessage(result.error));
-        }
-        const refreshed = await fetchTransactionById(
-          transaction.transaction_id,
-        );
-        if (!refreshed.data) {
-          throw new Error(apiErrorMessage(refreshed.error));
-        }
-        nextTransaction = refreshed.data;
-        nextDetailTransaction = refreshed.data;
-      } else if (update.kind === "tags") {
-        if (
-          record.tag_ids.length === update.tagIds.length &&
-          record.tag_ids.every((tagId) => update.tagIds.includes(tagId))
-        ) {
-          return;
-        }
-        const result = await updateJournalRecordTags(
-          record.record_id,
-          record.tag_ids,
-          update.tagIds,
-        );
-        if (result.error) {
-          throw new Error(apiErrorMessage(result.error));
-        }
-        nextTransaction = transactionWithRecordUpdate(
-          transaction,
-          [record.record_id],
-          update,
-        );
-      } else if (update.kind === "settlement") {
-        const result = await updateJournalRecordSettlement(
-          record.record_id,
-          update.settlement,
-        );
-        if (result.error) {
-          throw new Error(apiErrorMessage(result.error));
-        }
-        const refreshed = await fetchTransactionById(
-          transaction.transaction_id,
-        );
-        if (refreshed.data) {
-          nextTransaction = refreshed.data;
-          nextDetailTransaction = refreshed.data;
-        } else {
-          nextTransaction = transaction;
-        }
-      } else {
-        const result = await replaceLedgerTransaction(
-          transaction.transaction_id,
-          recordUpdateBody(transaction, [record.record_id], update),
-        );
-        if (!result.data) {
-          throw new Error(apiErrorMessage(result.error));
-        }
-        const rowRemainsVisible = await refreshTransactionPageAfterSave(
-          displayedPageParams,
-          transaction.transaction_id,
-          result.data,
-          transaction,
-          { onPageRefresh },
-        );
-        await detail.refreshSelectedTransactionDetail(
-          transaction.transaction_id,
-          result.data,
-        );
-        return rowRemainsVisible;
-      }
-
-      const rowRemainsVisible = await refreshTransactionPageAfterSave(
-        displayedPageParams,
-        transaction.transaction_id,
-        nextTransaction,
-        transaction,
-        { onPageRefresh },
-      );
-      await detail.refreshSelectedTransactionDetail(
-        transaction.transaction_id,
-        nextDetailTransaction,
-      );
-      return rowRemainsVisible;
-    },
-    [detail, displayedPageParams],
-  );
-
-  const updateTransactionRecordReferences = useCallback(
-    async (
-      transaction: Transaction,
-      records: readonly JournalRecord[],
-      update: Extract<
-        RecordUpdate,
-        { readonly kind: "category" | "member" | "tags" }
-      >,
-      onPageRefresh?: InlineSavePageRefresh,
-    ) => {
-      const recordIds = records.map((record) => record.record_id);
-      if (recordIds.length === 0) {
-        return true;
-      }
-
-      let nextTransaction: Transaction;
-      let nextDetailTransaction: Transaction | undefined;
-      if (update.kind === "category") {
-        const result = await updateJournalRecordsCategory(
-          recordIds,
-          update.categoryId,
-        );
-        if (result.error) {
-          throw new Error(apiErrorMessage(result.error));
-        }
-        const refreshed = await fetchTransactionById(
-          transaction.transaction_id,
-        );
-        if (!refreshed.data) {
-          throw new Error(apiErrorMessage(refreshed.error));
-        }
-        nextTransaction = refreshed.data;
-        nextDetailTransaction = refreshed.data;
-      } else if (update.kind === "tags") {
-        const currentTagIds = records[0]?.tag_ids ?? [];
-        if (
-          currentTagIds.length === update.tagIds.length &&
-          currentTagIds.every((tagId) => update.tagIds.includes(tagId))
-        ) {
-          return true;
-        }
-        const result = await updateJournalRecordsTags(
-          recordIds,
-          currentTagIds,
-          update.tagIds,
-        );
-        if (result.error) {
-          throw new Error(apiErrorMessage(result.error));
-        }
-        nextTransaction = transactionWithRecordUpdate(
-          transaction,
-          recordIds,
-          update,
-        );
-      } else {
-        const result = await replaceLedgerTransaction(
-          transaction.transaction_id,
-          recordUpdateBody(transaction, recordIds, update),
-        );
-        if (!result.data) {
-          throw new Error(apiErrorMessage(result.error));
-        }
-        const rowRemainsVisible = await refreshTransactionPageAfterSave(
-          displayedPageParams,
-          transaction.transaction_id,
-          result.data,
-          transaction,
-          { onPageRefresh },
-        );
-        await detail.refreshSelectedTransactionDetail(
-          transaction.transaction_id,
-          result.data,
-        );
-        return rowRemainsVisible;
-      }
-
-      const rowRemainsVisible = await refreshTransactionPageAfterSave(
-        displayedPageParams,
-        transaction.transaction_id,
-        nextTransaction,
-        transaction,
-        { onPageRefresh },
-      );
-      await detail.refreshSelectedTransactionDetail(
-        transaction.transaction_id,
-        nextDetailTransaction,
-      );
-      return rowRemainsVisible;
-    },
-    [detail, displayedPageParams],
-  );
-
   const updateTransactionAmount = useCallback(
     async (
       transaction: Transaction,
-      records: readonly [JournalRecord, JournalRecord],
       amount: string,
-      onPageRefresh?: InlineSavePageRefresh,
+      onPageRefresh?: AmountSavePageRefresh,
     ) => {
       const result = await replaceLedgerTransaction(
         transaction.transaction_id,
-        recordUpdateBody(
-          transaction,
-          records.map((record) => record.record_id),
-          { amount, kind: "amount" },
-        ),
+        transactionAmountUpdateBody(transaction, amount),
       );
       if (!result.data) {
         throw new Error(apiErrorMessage(result.error));
       }
 
+      updateSelectedTransactionSnapshot(result.data);
       const rowRemainsVisible = await refreshTransactionPageAfterSave(
         displayedPageParams,
         transaction.transaction_id,
         result.data,
         transaction,
-        { onPageRefresh },
+        {
+          onPageRefresh: (visible) => {
+            if (!visible) {
+              removeSelectedTransaction(transaction.transaction_id);
+            }
+            onPageRefresh?.(visible);
+          },
+        },
       );
+      if (!rowRemainsVisible) {
+        removeSelectedTransaction(transaction.transaction_id);
+      }
       await detail.refreshSelectedTransactionDetail(
         transaction.transaction_id,
         result.data,
       );
       return rowRemainsVisible;
     },
-    [detail, displayedPageParams],
+    [
+      detail,
+      displayedPageParams,
+      removeSelectedTransaction,
+      updateSelectedTransactionSnapshot,
+    ],
   );
 
-  const updateTransactionsBulkReferences = useCallback(
-    async (
-      transactions: readonly Transaction[],
-      update: Extract<
-        RecordUpdate,
-        { readonly kind: "category" | "member" | "tags" }
-      >,
-    ) => {
+  const updateTransactionsEditReferences = useCallback(
+    async (transactions: readonly Transaction[], update: EditDockUpdate) => {
       const accountsById = new Map(
         (lookups.snapshot?.accounts ?? []).map((account) => [
           account.account_id,
           account,
         ]),
       );
-      const skipSummary = summarizeBulkEditSkips(
+      const skipSummary = summarizeEditModeSkips(
         transactions,
         update.kind,
         accountsById,
       );
       const qualifyingTransactions = transactions.filter(
         (transaction) =>
-          !predictBulkEdit(transaction, update.kind, accountsById).skip,
+          !predictEditMode(transaction, update.kind, accountsById).skip,
       );
-      const updatedTransactions: Transaction[] = [];
+      const recordIds = qualifyingTransactions.flatMap((transaction) =>
+        (update.kind === "category"
+          ? editModeCategoryTargetRecords(transaction, accountsById)
+          : activeEditModeRecords(transaction)
+        ).map((record) => record.record_id),
+      );
 
-      if (update.kind === "category") {
-        const recordIds = qualifyingTransactions.flatMap((transaction) =>
-          bulkCategoryTargetRecords(transaction, accountsById).map(
-            (record) => record.record_id,
-          ),
-        );
-        if (recordIds.length > 0) {
-          const result = await updateJournalRecordsCategory(
-            recordIds,
-            update.categoryId,
-          );
-          if (result.error) {
-            throw new Error(apiErrorMessage(result.error));
-          }
-          const categoryUpdatedTransactions = qualifyingTransactions.map(
-            (transaction) => {
-              const categorizedRecordIds = new Set(
-                bulkCategoryTargetRecords(transaction, accountsById).map(
-                  (record) => record.record_id,
-                ),
-              );
-              return {
-                ...transaction,
-                records: transaction.records.map((record) =>
-                  categorizedRecordIds.has(record.record_id)
-                    ? { ...record, category_id: update.categoryId }
-                    : record,
-                ),
-              };
-            },
-          );
-          updatedTransactions.push(...categoryUpdatedTransactions);
+      if (recordIds.length > 0) {
+        const result =
+          update.kind === "category"
+            ? await updateJournalRecordsCategory(recordIds, update.categoryId)
+            : update.kind === "tags"
+              ? await updateJournalRecordsTagsOperation(
+                  recordIds,
+                  update.operation,
+                  update.tagIds,
+                )
+              : await updateJournalRecordsMember(recordIds, update.memberId);
+        if (result.error) {
+          throw new Error(apiErrorMessage(result.error));
         }
-      } else if (update.kind === "tags") {
-        const groups = new Map<
-          string,
-          { readonly currentTagIds: readonly number[]; recordIds: number[] }
-        >();
-        for (const transaction of qualifyingTransactions) {
-          const records = activeBulkEditRecords(transaction);
-          const currentTagIds = sortedTagIds(records[0]!.tag_ids);
-          const key = currentTagIds.join(",");
-          const group = groups.get(key) ?? {
-            currentTagIds,
-            recordIds: [],
-          };
-          group.recordIds.push(...records.map((record) => record.record_id));
-          groups.set(key, group);
-        }
-        for (const group of groups.values()) {
-          const nextTagIds = Array.from(
-            new Set([...group.currentTagIds, ...update.tagIds]),
-          );
-          if (sameTagIds(group.currentTagIds, sortedTagIds(nextTagIds))) {
-            continue;
-          }
-          const result = await updateJournalRecordsTags(
-            group.recordIds,
-            group.currentTagIds,
-            nextTagIds,
-          );
-          if (result.error) {
-            throw new Error(apiErrorMessage(result.error));
-          }
-        }
-        for (const transaction of qualifyingTransactions) {
-          const records = activeBulkEditRecords(transaction);
-          const currentTagIds = sortedTagIds(records[0]!.tag_ids);
-          const nextTagIds = Array.from(
-            new Set([...currentTagIds, ...update.tagIds]),
-          );
-          updatedTransactions.push(
-            transactionWithRecordUpdate(
-              transaction,
-              records.map((record) => record.record_id),
-              { kind: "tags", tagIds: nextTagIds },
-            ),
-          );
-        }
-      } else {
-        updatedTransactions.push(
-          ...(await Promise.all(
-            qualifyingTransactions.map(async (transaction) => {
-              const result = await replaceLedgerTransaction(
-                transaction.transaction_id,
-                recordUpdateBody(
-                  transaction,
-                  activeBulkEditRecords(transaction).map(
-                    (record) => record.record_id,
-                  ),
-                  update,
-                ),
-              );
-              if (!result.data) {
-                throw new Error(apiErrorMessage(result.error));
-              }
-              return result.data;
-            }),
-          )),
-        );
       }
 
-      if (updatedTransactions.length > 0) {
-        setSelectedTransactionsById((current) => {
-          const next = new Map(current);
-          for (const transaction of updatedTransactions) {
-            if (next.has(transaction.transaction_id)) {
-              next.set(transaction.transaction_id, transaction);
-            }
-          }
-          return next;
-        });
-        await refreshTransactionPageAfterBulkSave(
-          displayedPageParams,
-          updatedTransactions,
+      let noLongerVisibleCount = 0;
+      if (qualifyingTransactions.length > 0) {
+        const visibleTransactions =
+          await refreshTransactionPageAfterEditModeSave(
+            displayedPageParams,
+            qualifyingTransactions,
+          );
+        const visibleIds = new Set(
+          visibleTransactions.map((transaction) => transaction.transaction_id),
+        );
+        noLongerVisibleCount = qualifyingTransactions.filter(
+          (transaction) => !visibleIds.has(transaction.transaction_id),
+        ).length;
+        const updatedById = new Map(
+          visibleTransactions.map((transaction) => [
+            transaction.transaction_id,
+            transaction,
+          ]),
+        );
+        setSelectedTransactionsById(
+          (current) =>
+            new Map(
+              Array.from(current).flatMap(([transactionId, transaction]) => {
+                if (!visibleIds.has(transactionId)) {
+                  return [];
+                }
+                return [
+                  [
+                    transactionId,
+                    updatedById.get(transactionId) ?? transaction,
+                  ],
+                ];
+              }),
+            ),
         );
       }
 
       showNotice(
-        `${updatedTransactions.length} updated, ${skipSummary.count} skipped${
+        `${qualifyingTransactions.length} updated · ${skipSummary.count} require full edit${
           skipSummary.count > 0
-            ? `: ${formatBulkEditSkipReasons(skipSummary)}`
+            ? `: ${formatEditModeSkipReasons(skipSummary)}`
             : ""
-        }.`,
-        updatedTransactions.length === 0 && skipSummary.count > 0
+        }${noLongerVisibleCount > 0 ? ` · ${noLongerVisibleCount} no longer match this view` : ""}`,
+        qualifyingTransactions.length === 0 && skipSummary.count > 0
           ? "warning"
           : "success",
       );
@@ -831,7 +577,7 @@ export const useTransactionBrowserPage = ({
     [displayedPageParams, lookups.snapshot?.accounts, showNotice],
   );
 
-  const updateTransactionsBulkRecordState = useCallback(
+  const updateTransactionsEditRecordState = useCallback(
     async (
       selected: readonly Transaction[],
       update:
@@ -882,7 +628,7 @@ export const useTransactionBrowserPage = ({
           return refreshed.data;
         }),
       );
-      await refreshTransactionPageAfterBulkSave(
+      await refreshTransactionPageAfterEditModeSave(
         displayedPageParams,
         updatedTransactions,
       );
@@ -963,7 +709,7 @@ export const useTransactionBrowserPage = ({
   );
 
   return {
-    bulkEditMode,
+    editMode,
     cancelDateJump,
     changeDateJumpValue,
     changeTransactionLifecycle,
@@ -980,13 +726,13 @@ export const useTransactionBrowserPage = ({
     jumpToNextDate,
     jumpToCurrentDate,
     jumpToPreviousDate,
-    inlineEdit,
     loading,
     lookups,
     notice,
     page,
     pageSize,
     params,
+    pendingAmountSave,
     refreshErrorMessage,
     selectPageTransactions,
     selectTransactionRange,
@@ -995,17 +741,15 @@ export const useTransactionBrowserPage = ({
     selectableTransactionCount: selectableTransactions.length,
     setPage,
     setPageSize,
-    setBulkEditMode: setTransactionBulkEditEnabled,
+    setEditMode: setTransactionEditModeEnabled,
     showNotice,
     totalCount,
     togglePageTransactionSelection,
     toggleTransactionSelection,
     updateSelectedTransactionSnapshot,
     transactions,
-    updateRecord,
     updateTransactionAmount,
-    updateTransactionsBulkReferences,
-    updateTransactionsBulkRecordState,
-    updateTransactionRecordReferences,
+    updateTransactionsEditReferences,
+    updateTransactionsEditRecordState,
   };
 };

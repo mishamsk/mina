@@ -300,16 +300,24 @@ test("transaction detail panel shows full records and supports deep links", asyn
     ),
   ).toHaveCount(0);
 
-  await alternateDetailRow.locator(".transactions-description-column").click();
+  await page.keyboard.press("Escape");
   await expect(panel).toBeHidden();
   await expect(page).toHaveURL(/\/transactions\?page=1&pageSize=50$/);
-  await expect(alternateDetailRow).toHaveAttribute("aria-expanded", "true");
   await alternateDetailRow.locator(".transactions-description-column").click();
-  await expect(alternateDetailRow).toHaveAttribute("aria-expanded", "false");
+  await expect(page).toHaveURL(
+    new RegExp(`[?&]transaction=${alternateTransaction.transaction_id}(?:&|$)`),
+  );
+  const alternatePanel = page.getByRole("dialog", {
+    name: alternateTransaction.display_title,
+  });
+  await expect(alternatePanel).toBeVisible();
+  await page.keyboard.press("Escape");
 
   await clickRowAction(page, detailRow, "Open transaction detail");
   await expect(panel).toBeVisible();
 
+  await page.keyboard.press("Escape");
+  await expect(panel).toBeHidden();
   await alternateDetailRow.scrollIntoViewIfNeeded();
   await alternateDetailRow.focus();
   await expect(alternateDetailRow).toBeFocused();
@@ -317,9 +325,6 @@ test("transaction detail panel shows full records and supports deep links", asyn
   await expect(page).toHaveURL(
     new RegExp(`[?&]transaction=${alternateTransaction.transaction_id}(?:&|$)`),
   );
-  const alternatePanel = page.getByRole("dialog", {
-    name: alternateTransaction.display_title,
-  });
   await expect(alternatePanel).toBeVisible();
   await expect(
     alternatePanel.getByTestId("transaction-detail-summary-memo"),
@@ -512,7 +517,6 @@ test("transaction detail panel is read-only while category chips keep filtering"
     panel.getByRole("button", { exact: true, name: "Edit transaction" }),
   ).toBeVisible();
   await expect(panel.locator("td[data-label][tabindex]")).toHaveCount(0);
-  await expect(panel.locator("[data-inline-editor-id]")).toHaveCount(0);
   await expect(panel.locator("input, textarea, select")).toHaveCount(0);
 
   const accountCell = panel.locator("td[data-label='Account']").first();
@@ -545,9 +549,9 @@ test("transaction detail panel is read-only while category chips keep filtering"
     ),
   ).toHaveCount(0);
   await page.keyboard.press("F2");
-  await expect(panel.locator("[data-inline-editor-id]")).toHaveCount(0);
+  await expect(disclosure).toBeVisible();
   await amountChip.click();
-  await expect(panel.locator("[data-inline-editor-id]")).toHaveCount(0);
+  await expect(disclosure).toBeVisible();
   await expect(disclosure.getByText(memo, { exact: true })).toHaveCSS(
     "white-space",
     "pre-wrap",
@@ -785,15 +789,6 @@ test("detail lifecycle and dateless records cover variants in detail and peek", 
   await expect(
     mixedIndicators.getByRole("img", { name: "Mixed settlement" }),
   ).toBeVisible();
-  await simpleRow.locator(".transactions-description-column").click();
-  const simpleExpandedRecords = simpleRow.locator(
-    "xpath=following-sibling::tr[1]",
-  );
-  await expect(simpleExpandedRecords).toContainText("Initiated 2026-07-11");
-  await expect(simpleExpandedRecords).not.toContainText(
-    /pending date|posted date/i,
-  );
-
   const expectSimpleSurface = async (
     panel: Locator,
     expectedVariant: "decluttered" | "full",
@@ -1099,6 +1094,17 @@ test("Escape closes filter popover before transaction detail panel", async ({
   await expect(popover).toBeVisible();
   await expect(panel).toBeVisible();
 
+  await popover.getByRole("button", { name: "Category" }).click();
+  const categoryPicker = popover.getByRole("combobox", {
+    name: "Categories",
+  });
+  await categoryPicker.fill(category.name);
+  await page.getByRole("option").filter({ hasText: category.fqn }).click();
+  await expect(panel).toBeVisible();
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get("category"))
+    .toBe(String(category.category_id));
+
   await page.keyboard.press("Escape");
   await expect(popover).toBeHidden();
   await expect(panel).toBeVisible();
@@ -1107,7 +1113,7 @@ test("Escape closes filter popover before transaction detail panel", async ({
   await expect(panel).toBeHidden();
 });
 
-test("focused transaction row closes detail with one Escape", async ({
+test("transaction row activation toggles its active detail", async ({
   page,
 }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 760 });
@@ -1121,6 +1127,7 @@ test("focused transaction row closes detail with one Escape", async ({
   const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const category = findByFqn(categories, "Entertainment:Books");
   const memo = `E2E keyboard detail ${unique}`;
+  const alternateMemo = `E2E alternate keyboard row ${unique}`;
 
   const spendResponse = await page.request.post("/api/transactions/spend", {
     data: {
@@ -1135,13 +1142,34 @@ test("focused transaction row closes detail with one Escape", async ({
   });
   expect(spendResponse.ok()).toBe(true);
   const transaction = (await spendResponse.json()) as TransactionFixture;
+  const alternateSpendResponse = await page.request.post(
+    "/api/transactions/spend",
+    {
+      data: {
+        amount: "6.12",
+        category_id: category.category_id,
+        counterparty_account_id: merchantAccount.account_id,
+        currency: "USD",
+        funding_account_id: fundingAccount.account_id,
+        initiated_date: "2026-07-03",
+        memo: alternateMemo,
+      },
+    },
+  );
+  expect(alternateSpendResponse.ok()).toBe(true);
+  const alternateTransaction =
+    (await alternateSpendResponse.json()) as TransactionFixture;
 
   await page.goto("/transactions?page=1&pageSize=50");
   await expect(page.getByText("Description")).toBeVisible();
 
   const detailRow = page.getByRole("row").filter({ hasText: memo }).first();
+  const alternateDetailRow = page
+    .getByRole("row")
+    .filter({ hasText: alternateMemo })
+    .first();
   await expect(detailRow).toBeVisible();
-  await expect(detailRow).toHaveAttribute("aria-expanded", "false");
+  await expect(alternateDetailRow).toBeVisible();
 
   await detailRow.focus();
   await expect(detailRow).toBeFocused();
@@ -1152,28 +1180,70 @@ test("focused transaction row closes detail with one Escape", async ({
   );
   const panel = page.getByRole("dialog", { name: transaction.display_title });
   await expect(panel).toBeVisible();
-  await expect(detailRow).toHaveAttribute("aria-expanded", "false");
 
-  await page.keyboard.press("Escape");
+  await detailRow.press("Enter");
+  await expect(panel).toBeHidden();
+  await expect(page).toHaveURL(/\/transactions\?page=1&pageSize=50$/);
+  await expect(detailRow).toBeFocused();
+  await page.goBack();
+  await expect(panel).toBeHidden();
+  await expect(page).toHaveURL(/\/transactions\?page=1&pageSize=50$/);
+
+  await detailRow.press("Space");
+  await expect(page).toHaveURL(
+    new RegExp(`[?&]transaction=${transaction.transaction_id}(?:&|$)`),
+  );
+  await expect(panel).toBeVisible();
+  await expect(page.getByTestId("transaction-edit-dock")).toHaveCount(0);
+
+  await detailRow.press("Space");
   await expect(panel).toBeHidden();
   await expect(page).toHaveURL(/\/transactions\?page=1&pageSize=50$/);
   await expect(detailRow).toBeFocused();
 
-  await page.keyboard.press("Space");
-  await expect(detailRow).toHaveAttribute("aria-expanded", "true");
-  await expect(detailRow).toHaveAttribute(
-    "aria-controls",
-    `transaction-records-${transaction.transaction_id}`,
-  );
-  await expect(page.getByTestId("bulk-action-bar")).toHaveCount(0);
+  await detailRow.locator(".transactions-description-column").click();
+  await expect(panel).toBeVisible();
+  await detailRow.locator(".transactions-description-column").click();
+  await expect(panel).toBeHidden();
+  await expect(page).toHaveURL(/\/transactions\?page=1&pageSize=50$/);
+  await expect(detailRow).toBeFocused();
 
-  await page.getByRole("button", { name: "Bulk edit" }).click();
+  await detailRow.locator(".transactions-description-column").click();
+  await alternateDetailRow.locator(".transactions-description-column").click();
+  const alternatePanel = page.getByTestId("transaction-detail-panel");
+  await expect(alternatePanel).toBeVisible();
+  await expect(
+    alternatePanel.getByTestId("transaction-detail-summary-memo"),
+  ).toHaveText(alternateMemo);
+  await expect(page).toHaveURL(
+    new RegExp(`[?&]transaction=${alternateTransaction.transaction_id}(?:&|$)`),
+  );
+
+  await page.keyboard.press("Escape");
+  await expect(alternatePanel).toBeHidden();
+  await expect(alternateDetailRow).toBeFocused();
+  await alternateDetailRow.press("Enter");
+  await expect(alternatePanel).toBeVisible();
+
+  await alternateDetailRow.press("Enter");
+  await expect(alternatePanel).toBeHidden();
+  await expect(page).toHaveURL(/\/transactions\?page=1&pageSize=50$/);
+  await expect(alternateDetailRow).toBeFocused();
+  await page.goBack();
+  await expect(alternatePanel).toBeHidden();
+  await expect(page).toHaveURL(/\/transactions\?page=1&pageSize=50$/);
+
+  await detailRow.press("Enter");
+  await expect(panel).toBeVisible();
+  await page.getByRole("button", { name: "Edit mode" }).press("Enter");
+  await expect(panel).toBeHidden();
+  await expect(
+    page.getByTestId("transaction-browser-edit-mode-header"),
+  ).toBeVisible();
   await detailRow.focus();
   await page.keyboard.press("Space");
-  await expect(detailRow).not.toHaveAttribute("aria-expanded", /.+/);
-  await expect(detailRow).not.toHaveAttribute("aria-controls", /.+/);
   await expect(
-    page.getByTestId("transaction-browser-bulk-mode-bar"),
+    page.getByTestId("transaction-browser-edit-mode-header"),
   ).toContainText("1 selected");
 });
 
@@ -2063,7 +2133,6 @@ test("transaction row quick-delete confirms, handles errors, and preserves row b
   });
   const transactionRows = page.locator("[data-transaction-row='true']");
   await expect(row).toBeVisible();
-  await expect(row).toHaveAttribute("aria-expanded", "false");
   const deletedRowIndex = await row.evaluate((element) =>
     Array.from(
       element.parentElement?.querySelectorAll(
@@ -2079,7 +2148,6 @@ test("transaction row quick-delete confirms, handles errors, and preserves row b
   ).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page).toHaveURL(/\/transactions\?page=1&pageSize=50$/);
-  await expect(row).toHaveAttribute("aria-expanded", "false");
 
   await clickRowAction(page, row, "Delete transaction");
   const confirmDialog = page.getByRole("alertdialog", {
@@ -2089,12 +2157,10 @@ test("transaction row quick-delete confirms, handles errors, and preserves row b
   await expect(
     confirmDialog.getByText(transaction.display_title),
   ).toBeVisible();
-  await expect(row).toHaveAttribute("aria-expanded", "false");
   await expect(page).toHaveURL(/\/transactions\?page=1&pageSize=50$/);
   await confirmDialog.getByRole("button", { name: "Cancel" }).click();
   await expect(confirmDialog).toBeHidden();
   await expect(row).toBeVisible();
-  await expect(row).toHaveAttribute("aria-expanded", "false");
   await expect
     .poll(() =>
       row.evaluate(
@@ -2135,7 +2201,6 @@ test("transaction row quick-delete confirms, handles errors, and preserves row b
     "Mock quick delete failure.",
   );
   await expect(confirmDialog).toBeVisible();
-  await expect(row).toHaveAttribute("aria-expanded", "false");
   await page.unroute(deleteUrlPattern, failDeleteRoute);
 
   const deleteRequest = page.waitForRequest(

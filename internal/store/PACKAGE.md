@@ -33,7 +33,7 @@
 - SQL casts on typed date/decimal columns are limited to store-owned expression keys such as active uniqueness indexes.
 - Query generation is not selected because the required DuckDB SQL features are not yet proven against a repo-owned generator. Manual query code must keep user values parameter-bound and dynamic identifiers selected from store-owned allowlists.
 - Database-specific constraint and foreign-key errors are mapped before returning from repository implementations.
-- Transaction repositories store normalized journal records and own active selected-record checks for bulk operations.
+- Transaction repositories store normalized journal records and own active selected-record checks plus atomic writes for bulk operations.
 - Transaction-template repositories store normalized partial record defaults.
 - Record-link repositories store pairwise journal-record settlement metadata; services own semantic validation and cascade-tombstone decisions.
 - Recurring repositories store normalized definition record shapes and permanent occurrence rows.

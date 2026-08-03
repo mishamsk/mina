@@ -380,6 +380,7 @@ type Repository interface {
 	TransactionsByAccountID(context.Context, int64) ([]Transaction, error)
 	BulkCategorize(context.Context, []int64, int64) (int, error)
 	BulkUpdateTags(context.Context, []int64, []int64, []int64) (int, error)
+	BulkSetMember(context.Context, []int64, *int64) (int, error)
 	BulkReassignAccount(context.Context, []int64, int64, []*time.Time, []*time.Time) (int, error)
 	BulkSetSettlement(context.Context, []int64, []*time.Time, []*time.Time) (int, error)
 	BulkSetReconciliation(context.Context, []int64, ReconciliationStatus) (int, error)
@@ -1138,6 +1139,42 @@ func (s *Service) BulkUpdateTags(ctx context.Context, recordIDs []int64, addTagI
 		updated, err := s.repo.BulkUpdateTags(ctx, recordIDs, addTagIDs, removeTagIDs)
 		if errors.Is(err, services.ErrInvalidReference) {
 			return services.InvalidRequest("records or tags missing or inactive resource")
+		}
+		if err != nil {
+			return err
+		}
+		count = updated
+		return nil
+	}); err != nil {
+		return BulkRecordOperationResponse{}, err
+	}
+
+	return bulkRecordOperationResponse(recordIDs, count), nil
+}
+
+// BulkSetMember sets or clears the member on selected active journal records.
+func (s *Service) BulkSetMember(ctx context.Context, recordIDs []int64, memberID *int64) (BulkRecordOperationResponse, error) {
+	if err := validateRecordSelection(recordIDs); err != nil {
+		return BulkRecordOperationResponse{}, err
+	}
+	if memberID != nil && *memberID <= 0 {
+		return BulkRecordOperationResponse{}, services.InvalidRequest("member_id must be positive or null")
+	}
+
+	var count int
+	if err := s.refs.SerializeReferenceOperation(func() error {
+		if err := s.validateNoExpectedRecurringOccurrenceRecords(ctx, recordIDs); err != nil {
+			return err
+		}
+		if _, err := s.members.ValidateActiveReferences(ctx, optionalID(memberID), members.ReferenceOptions{AllowHidden: true}); err != nil {
+			if errors.Is(err, services.ErrInvalidReference) {
+				return services.InvalidRequest("member missing or inactive resource")
+			}
+			return err
+		}
+		updated, err := s.repo.BulkSetMember(ctx, recordIDs, memberID)
+		if errors.Is(err, services.ErrInvalidReference) {
+			return services.InvalidRequest("records missing or inactive resource")
 		}
 		if err != nil {
 			return err

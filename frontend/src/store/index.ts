@@ -123,13 +123,18 @@ export {
   useTagsStore,
 } from "./tags";
 export {
-  getTransactionBulkEditSnapshot,
-  setTransactionBulkEditAvailable,
-  setTransactionBulkEditEnabled,
-  toggleTransactionBulkEdit,
-  useTransactionBulkEditStore,
-  useTransactionBulkEditView,
-} from "./transaction-bulk-edit";
+  cancelDeferredTransactionEntryOpen,
+  exitTransactionEditModeForEntry,
+  getTransactionEditModeSnapshot,
+  setTransactionAmountDraftInvalid,
+  setTransactionAmountSavePending,
+  setTransactionEditModeAvailable,
+  setTransactionEditModeEnabled,
+  toggleTransactionEditMode,
+  useTransactionEditModeAvailable,
+  useTransactionEditModeStore,
+  useTransactionEditModeView,
+} from "./transaction-edit-mode";
 export {
   closeTransactionEntryPanel,
   failTransactionEntryRoute,

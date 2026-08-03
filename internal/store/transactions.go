@@ -1115,6 +1115,27 @@ WHERE record_id = ?`,
 	return len(recordIDs), nil
 }
 
+// BulkSetMember sets or clears one member on active journal records atomically.
+func (s *TransactionStore) BulkSetMember(ctx context.Context, recordIDs []int64, memberID *int64) (int, error) {
+	err := s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
+		if err := validateActiveJournalRecords(ctx, tx, s.db, recordIDs); err != nil {
+			return err
+		}
+		args := append([]any{memberID}, int64Args(recordIDs)...)
+		if _, err := tx.ExecContext(ctx, `UPDATE `+s.db.accountingName("journal_record")+`
+SET member_id = ?,
+    updated_at = CURRENT_TIMESTAMP
+WHERE record_id IN (`+placeholders(len(recordIDs))+`)`, args...); err != nil {
+			return fmt.Errorf("bulk update journal record members: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	return len(recordIDs), nil
+}
+
 // BulkSetSettlement applies explicit per-record settlement timestamps atomically.
 func (s *TransactionStore) BulkSetSettlement(ctx context.Context, recordIDs []int64, pendingDates []*time.Time, postedDates []*time.Time) (int, error) {
 	err := s.db.withTx(ctx, nil, func(tx *sql.Tx) error {

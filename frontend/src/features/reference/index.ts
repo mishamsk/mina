@@ -3,7 +3,6 @@ export {
   ReferenceDrilldownNotFound,
   ReferenceDrilldownPage,
   ReferenceDrilldownSkeleton,
-  referenceTransactionHref,
 } from "./reference-drilldown-page";
 export {
   readReferenceSearchState,

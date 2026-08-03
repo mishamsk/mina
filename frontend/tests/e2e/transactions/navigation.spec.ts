@@ -70,13 +70,13 @@ test("transactions page jumps to a date-anchored page", async ({ page }) => {
     await expect
       .poll(normalizedFirstTransactionRowText)
       .toBe(retainedFirstPageRow);
-    await page.getByRole("button", { name: "Bulk edit" }).click();
+    await page.getByRole("button", { name: "Edit mode" }).click();
     await page
       .locator("tbody > tr[data-transaction-id]:not([aria-disabled='true'])")
       .first()
       .click();
     await expect(
-      page.getByTestId("transaction-browser-bulk-mode-bar"),
+      page.getByTestId("transaction-browser-edit-mode-header"),
     ).toContainText("1 selected");
   } finally {
     releaseDateJumpResponse?.();
@@ -87,13 +87,13 @@ test("transactions page jumps to a date-anchored page", async ({ page }) => {
   ).json()) as TransactionListFixture;
   await expectTransactionsPageUrl(page, 1, 25);
   await expect(
-    page.getByTestId("transaction-browser-bulk-mode-bar"),
+    page.getByTestId("transaction-browser-edit-mode-header"),
   ).toContainText("1 selected");
   await expect(
     page.locator(`[data-date-jump-anchor="${jumpDate}"]`),
   ).toHaveCount(0);
   await page
-    .getByTestId("transaction-browser-bulk-mode-bar")
+    .getByTestId("transaction-browser-edit-mode-header")
     .getByRole("button", { name: "Done" })
     .click();
 
@@ -375,7 +375,7 @@ test("transactions page collapses low-priority columns instead of scrolling hori
   const measureTableState = async () =>
     page.getByTestId("transactions-table-scroll").evaluate((container) => {
       const rows = Array.from(
-        container.querySelectorAll("tbody > tr[aria-expanded]"),
+        container.querySelectorAll("[data-transaction-row='true']"),
       );
       const row =
         rows.find((candidate) =>

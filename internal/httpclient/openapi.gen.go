@@ -1274,6 +1274,15 @@ type BulkRecordOperationResponse struct {
 	UpdatedCount int     `json:"updated_count"`
 }
 
+// BulkSetRecordMemberRequest defines model for BulkSetRecordMemberRequest.
+type BulkSetRecordMemberRequest struct {
+	// MemberId Active household-member identifier to set, or null to clear attribution.
+	MemberId *int64 `json:"member_id"`
+
+	// RecordIds Journal-record identifiers to update.
+	RecordIds []int64 `json:"record_ids"`
+}
+
 // BulkSetRecordReconciliationRequest defines model for BulkSetRecordReconciliationRequest.
 type BulkSetRecordReconciliationRequest struct {
 	// ReconciliationStatus Whether a journal record has been reconciled with its external or expected source.
@@ -3091,6 +3100,9 @@ type BulkReassignJournalRecordAccountJSONRequestBody = BulkReassignRecordsAccoun
 // BulkCategorizeJournalRecordsJSONRequestBody defines body for BulkCategorizeJournalRecords for application/json ContentType.
 type BulkCategorizeJournalRecordsJSONRequestBody = BulkCategorizeRecordsRequest
 
+// BulkSetJournalRecordMemberJSONRequestBody defines body for BulkSetJournalRecordMember for application/json ContentType.
+type BulkSetJournalRecordMemberJSONRequestBody = BulkSetRecordMemberRequest
+
 // BulkSetJournalRecordReconciliationJSONRequestBody defines body for BulkSetJournalRecordReconciliation for application/json ContentType.
 type BulkSetJournalRecordReconciliationJSONRequestBody = BulkSetRecordReconciliationRequest
 
@@ -3413,6 +3425,11 @@ type ClientInterface interface {
 	BulkCategorizeJournalRecordsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	BulkCategorizeJournalRecords(ctx context.Context, body BulkCategorizeJournalRecordsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// BulkSetJournalRecordMemberWithBody request with any body
+	BulkSetJournalRecordMemberWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	BulkSetJournalRecordMember(ctx context.Context, body BulkSetJournalRecordMemberJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// BulkSetJournalRecordReconciliationWithBody request with any body
 	BulkSetJournalRecordReconciliationWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -4375,6 +4392,30 @@ func (c *Client) BulkCategorizeJournalRecordsWithBody(ctx context.Context, conte
 
 func (c *Client) BulkCategorizeJournalRecords(ctx context.Context, body BulkCategorizeJournalRecordsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewBulkCategorizeJournalRecordsRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) BulkSetJournalRecordMemberWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewBulkSetJournalRecordMemberRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) BulkSetJournalRecordMember(ctx context.Context, body BulkSetJournalRecordMemberJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewBulkSetJournalRecordMemberRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -8268,6 +8309,46 @@ func NewBulkCategorizeJournalRecordsRequestWithBody(server string, contentType s
 	return req, nil
 }
 
+// NewBulkSetJournalRecordMemberRequest calls the generic BulkSetJournalRecordMember builder with application/json body
+func NewBulkSetJournalRecordMemberRequest(server string, body BulkSetJournalRecordMemberJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewBulkSetJournalRecordMemberRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewBulkSetJournalRecordMemberRequestWithBody generates requests for BulkSetJournalRecordMember with any type of body
+func NewBulkSetJournalRecordMemberRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/records/bulk/member")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewBulkSetJournalRecordReconciliationRequest calls the generic BulkSetJournalRecordReconciliation builder with application/json body
 func NewBulkSetJournalRecordReconciliationRequest(server string, body BulkSetJournalRecordReconciliationJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -10823,6 +10904,11 @@ type ClientWithResponsesInterface interface {
 
 	BulkCategorizeJournalRecordsWithResponse(ctx context.Context, body BulkCategorizeJournalRecordsJSONRequestBody, reqEditors ...RequestEditorFn) (*BulkCategorizeJournalRecordsResponse, error)
 
+	// BulkSetJournalRecordMemberWithBodyWithResponse request with any body
+	BulkSetJournalRecordMemberWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*BulkSetJournalRecordMemberResponse, error)
+
+	BulkSetJournalRecordMemberWithResponse(ctx context.Context, body BulkSetJournalRecordMemberJSONRequestBody, reqEditors ...RequestEditorFn) (*BulkSetJournalRecordMemberResponse, error)
+
 	// BulkSetJournalRecordReconciliationWithBodyWithResponse request with any body
 	BulkSetJournalRecordReconciliationWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*BulkSetJournalRecordReconciliationResponse, error)
 
@@ -12624,6 +12710,39 @@ func (r BulkCategorizeJournalRecordsResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r BulkCategorizeJournalRecordsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type BulkSetJournalRecordMemberResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *BulkRecordOperationResponse
+	JSON400      *InvalidRequest
+	JSON401      *Unauthenticated
+	JSON403      *Forbidden
+}
+
+// Status returns HTTPResponse.Status
+func (r BulkSetJournalRecordMemberResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r BulkSetJournalRecordMemberResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r BulkSetJournalRecordMemberResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -14673,6 +14792,23 @@ func (c *ClientWithResponses) BulkCategorizeJournalRecordsWithResponse(ctx conte
 		return nil, err
 	}
 	return ParseBulkCategorizeJournalRecordsResponse(rsp)
+}
+
+// BulkSetJournalRecordMemberWithBodyWithResponse request with arbitrary body returning *BulkSetJournalRecordMemberResponse
+func (c *ClientWithResponses) BulkSetJournalRecordMemberWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*BulkSetJournalRecordMemberResponse, error) {
+	rsp, err := c.BulkSetJournalRecordMemberWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseBulkSetJournalRecordMemberResponse(rsp)
+}
+
+func (c *ClientWithResponses) BulkSetJournalRecordMemberWithResponse(ctx context.Context, body BulkSetJournalRecordMemberJSONRequestBody, reqEditors ...RequestEditorFn) (*BulkSetJournalRecordMemberResponse, error) {
+	rsp, err := c.BulkSetJournalRecordMember(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseBulkSetJournalRecordMemberResponse(rsp)
 }
 
 // BulkSetJournalRecordReconciliationWithBodyWithResponse request with arbitrary body returning *BulkSetJournalRecordReconciliationResponse
@@ -17597,6 +17733,53 @@ func ParseBulkCategorizeJournalRecordsResponse(rsp *http.Response) (*BulkCategor
 	}
 
 	response := &BulkCategorizeJournalRecordsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest BulkRecordOperationResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseBulkSetJournalRecordMemberResponse parses an HTTP response from a BulkSetJournalRecordMemberWithResponse call
+func ParseBulkSetJournalRecordMemberResponse(rsp *http.Response) (*BulkSetJournalRecordMemberResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &BulkSetJournalRecordMemberResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
