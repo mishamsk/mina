@@ -23,7 +23,7 @@
 - `TransactionBrowserToolbar` owns filter-bar visibility and stable toolbar geometry independent of overlapping detail; pages retain URL-filter ownership and supply chip clearing that preserves standing search and class controls.
 - Transaction browsing explicitly requests every lifecycle by default and triggers one occurrence catch-up read per browser mount; account registers retain the API default that excludes expected transactions while including cancelled history.
 - Expected and cancelled lifecycle indicators take precedence; active pending and mixed-settlement indicators trail the ellipsizing title/memo region inside the description cell. Posted and no-balance active rows reserve no in-cell indicator space.
-- Detail lifecycle strips show only the civil initiated date and the applicable expected, cancelled, or active pending/mixed word. Record disclosures show server-derived settlement for owned/party rows only and never expose raw settlement timestamps.
+- Detail lifecycle strips show only the civil initiated date and the applicable expected, cancelled, or active pending/mixed word. Record disclosures show server-derived settlement and each stored pending and/or posted timestamp for owned/party rows only.
 - Transaction-row actions use the shared `RowActions` cluster and follow the owning [table row-action rule](../../../../docs/webui-design.md#tables-and-filtering).
 - Expected recurring rows replace the normal delete action with confirm and named-dismiss occurrence actions while retaining transaction detail; successful lifecycle actions use the standard transaction-mutation refresh fan-out.
 - `C::` currencies render as crypto-scale values with up to 8 decimals; other currencies render as fiat-scale 2-decimal values.

@@ -13,6 +13,13 @@ interface TransactionFixture {
   readonly transaction_id: number;
 }
 
+interface TransactionDetailFixture extends TransactionFixture {
+  readonly records: readonly {
+    readonly pending_date: string | null;
+    readonly posted_date?: string | null;
+  }[];
+}
+
 test.use({ timezoneId: "America/Los_Angeles" });
 
 const createAccount = async (
@@ -66,7 +73,34 @@ const firstRecordDisclosure = async (panel: Locator): Promise<Locator> => {
   return disclosure;
 };
 
-test("settlement timestamps stay hidden while initiated dates remain civil", async ({
+const expectMemoPairOnSameRow = async (disclosure: Locator): Promise<void> => {
+  const memoLabel = disclosure.locator("dt", { hasText: /^Memo$/ });
+  const memoValue = memoLabel.locator("xpath=following-sibling::dd[1]");
+  const [labelTop, valueTop] = await Promise.all([
+    memoLabel.evaluate((element) => element.getBoundingClientRect().top),
+    memoValue.evaluate((element) => element.getBoundingClientRect().top),
+  ]);
+  expect(Math.abs(labelTop - valueTop)).toBeLessThanOrEqual(1);
+};
+
+const formatStoredTimestamp = async (
+  page: Page,
+  value: string | null | undefined,
+): Promise<string> => {
+  if (!value) {
+    throw new Error("Expected the response to contain a settlement timestamp.");
+  }
+  return page.evaluate(
+    (timestamp) =>
+      new Intl.DateTimeFormat(undefined, {
+        dateStyle: "medium",
+        timeStyle: "medium",
+      }).format(new Date(timestamp)),
+    value,
+  );
+};
+
+test("settlement timestamps stay in record disclosures while initiated dates remain civil", async ({
   page,
 }, testInfo) => {
   const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
@@ -96,7 +130,7 @@ test("settlement timestamps stay hidden while initiated dates remain civil", asy
   });
   const directBody = await directResponse.text();
   expect(directResponse.ok(), directBody).toBe(true);
-  const direct = JSON.parse(directBody) as TransactionFixture;
+  const direct = JSON.parse(directBody) as TransactionDetailFixture;
 
   const instantResponse = await page.request.post("/api/transactions", {
     data: {
@@ -133,7 +167,15 @@ test("settlement timestamps stay hidden while initiated dates remain civil", asy
   });
   const instantBody = await instantResponse.text();
   expect(instantResponse.ok(), instantBody).toBe(true);
-  const instant = JSON.parse(instantBody) as TransactionFixture;
+  const instant = JSON.parse(instantBody) as TransactionDetailFixture;
+  const expectedPostedTimestamp = await formatStoredTimestamp(
+    page,
+    direct.records.find((record) => record.posted_date)?.posted_date,
+  );
+  const expectedPendingTimestamp = await formatStoredTimestamp(
+    page,
+    instant.records.find((record) => record.pending_date)?.pending_date,
+  );
 
   await page.goto("/transactions?page=1&pageSize=50");
   const directRow = page
@@ -182,7 +224,15 @@ test("settlement timestamps stay hidden while initiated dates remain civil", asy
   ).toHaveCount(0);
   const derivedDisclosure = await firstRecordDisclosure(directPanel);
   await expect(derivedDisclosure).toContainText(/Settlement\s*Posted/);
-  await expect(derivedDisclosure).not.toContainText(/\d{1,2}:\d{2}:\d{2}/);
+  await expect(
+    derivedDisclosure
+      .locator("dt", { hasText: /^Posted$/ })
+      .locator("xpath=following-sibling::dd[1]"),
+  ).toHaveText(expectedPostedTimestamp);
+  await expect(
+    derivedDisclosure.locator("dt", { hasText: /^Pending$/ }),
+  ).toHaveCount(0);
+  await expectMemoPairOnSameRow(derivedDisclosure);
   await expect(directPanel).not.toContainText("Invalid Date");
 
   const instantPanel = await openTransactionDetail(
@@ -194,6 +244,14 @@ test("settlement timestamps stay hidden while initiated dates remain civil", asy
   await expect(instantLifecycle).not.toContainText(/Jul 26|Posted|varies|→|–/);
   const instantDisclosure = await firstRecordDisclosure(instantPanel);
   await expect(instantDisclosure).toContainText(/Settlement\s*Pending/);
-  await expect(instantDisclosure).not.toContainText(/\d{1,2}:\d{2}:\d{2}/);
+  await expect(
+    instantDisclosure
+      .locator("dt", { hasText: /^Pending$/ })
+      .locator("xpath=following-sibling::dd[1]"),
+  ).toHaveText(expectedPendingTimestamp);
+  await expect(
+    instantDisclosure.locator("dt", { hasText: /^Posted$/ }),
+  ).toHaveCount(0);
+  await expectMemoPairOnSameRow(instantDisclosure);
   await expect(instantPanel).not.toContainText("Invalid Date");
 });

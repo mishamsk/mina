@@ -502,6 +502,22 @@ const DetailRecordsTable = ({
                             <dd>{settlementStatusLabel(record.settlement)}</dd>
                           </>
                         ) : null}
+                        {record.pending_date ? (
+                          <>
+                            <dt className="text-muted-foreground">Pending</dt>
+                            <dd className="font-mono">
+                              {formatInstantTimestamp(record.pending_date)}
+                            </dd>
+                          </>
+                        ) : null}
+                        {record.posted_date ? (
+                          <>
+                            <dt className="text-muted-foreground">Posted</dt>
+                            <dd className="font-mono">
+                              {formatInstantTimestamp(record.posted_date)}
+                            </dd>
+                          </>
+                        ) : null}
                         <dt className="text-muted-foreground">Role</dt>
                         <dd>{recordRoleLabel(record.record_role)}</dd>
                         <dt className="text-muted-foreground">Source</dt>
@@ -528,7 +544,9 @@ const DetailRecordsTable = ({
                             </dd>
                           </>
                         ) : null}
-                        <dt className="text-muted-foreground">Memo</dt>
+                        <dt className="text-muted-foreground sm:col-start-1">
+                          Memo
+                        </dt>
                         <dd className="break-words whitespace-pre-wrap sm:col-span-3">
                           {record.memo || "—"}
                         </dd>
