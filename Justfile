@@ -172,6 +172,7 @@ dev mode="" extra="": build
     stdout_log="$dev_dir/stdout.log"
     stderr_log="$dev_dir/stderr.log"
     access_log="$dev_dir/access.log"
+    tailscale_port_file="$dev_dir/tailscale-port"
     db_path="$dev_dir/mina.db"
     config_path="$dev_dir/config.toml"
     auth_path="$dev_dir/auth.toml"
@@ -225,6 +226,11 @@ dev mode="" extra="": build
             exit 1
         fi
         rm -f "$pid_file"
+        if [ -f "$tailscale_port_file" ]; then
+            tailscale_port="$(cat "$tailscale_port_file")"
+            tailscale serve --https="$tailscale_port" off
+            rm -f "$tailscale_port_file"
+        fi
     fi
 
     port="$(select_dev_port)"
@@ -249,6 +255,13 @@ dev mode="" extra="": build
 
     for _ in {1..50}; do
         if grep -q "listening http://127.0.0.1:$port" "$stdout_log"; then
+            if ! tailscale serve --https="$port" --bg "http://127.0.0.1:$port"; then
+                kill -TERM "$pid" 2>/dev/null || true
+                rm -f "$pid_file"
+                echo "failed to serve Mina over Tailscale" >&2
+                exit 1
+            fi
+            echo "$port" > "$tailscale_port_file"
             echo "mina listening at http://127.0.0.1:$port with pid $pid"
             if [ "$port" != "$default_port" ]; then
                 echo "default port $default_port was busy; selected high port $port"
@@ -278,6 +291,17 @@ dev-kill:
     set -euo pipefail
 
     pid_file="build/dev/mina.pid"
+    tailscale_port_file="build/dev/tailscale-port"
+
+    stop_tailscale_serve() {
+        if [ ! -f "$tailscale_port_file" ]; then
+            return
+        fi
+
+        tailscale_port="$(cat "$tailscale_port_file")"
+        tailscale serve --https="$tailscale_port" off
+        rm -f "$tailscale_port_file"
+    }
 
     print_detected_mina_serve() {
         detected_pids="$(pgrep -f '(^|.*/)mina serve([[:space:]]|$)' || true)"
@@ -300,6 +324,7 @@ dev-kill:
     }
 
     if [ ! -f "$pid_file" ]; then
+        stop_tailscale_serve
         echo "no background mina pid file found"
         print_detected_mina_serve
         exit 0
@@ -308,6 +333,7 @@ dev-kill:
     pid="$(cat "$pid_file")"
     if [ -z "$pid" ]; then
         rm -f "$pid_file"
+        stop_tailscale_serve
         echo "removed empty mina pid file"
         print_detected_mina_serve
         exit 0
@@ -315,6 +341,7 @@ dev-kill:
 
     if ! kill -0 "$pid" 2>/dev/null; then
         rm -f "$pid_file"
+        stop_tailscale_serve
         echo "removed stale mina pid file for pid $pid"
         print_detected_mina_serve
         exit 0
@@ -324,6 +351,7 @@ dev-kill:
     for _ in {1..50}; do
         if ! kill -0 "$pid" 2>/dev/null; then
             rm -f "$pid_file"
+            stop_tailscale_serve
             echo "stopped mina pid $pid"
             exit 0
         fi
@@ -332,6 +360,7 @@ dev-kill:
 
     kill -KILL "$pid"
     rm -f "$pid_file"
+    stop_tailscale_serve
     echo "force-stopped mina pid $pid"
 
 # Run all Go tests.
