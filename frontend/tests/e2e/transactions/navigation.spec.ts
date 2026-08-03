@@ -379,7 +379,7 @@ test("transactions page collapses low-priority columns instead of scrolling hori
       );
       const row =
         rows.find((candidate) =>
-          candidate.textContent?.includes("BlueCash → Target"),
+          candidate.textContent?.includes("Amex:BlueCash → merchant:Target"),
         ) ?? rows[0];
       const cells = row?.querySelectorAll("td");
       const rectFor = (cell: Element | null | undefined) => {
@@ -643,7 +643,7 @@ test("transactions page collapses low-priority columns instead of scrolling hori
   await page.setViewportSize({ width: 700, height: 720 });
   const foldedSpendRow = page
     .getByRole("row")
-    .filter({ hasText: "BlueCash → Target" })
+    .filter({ hasText: "Amex:BlueCash → merchant:Target" })
     .first();
   await expect(foldedSpendRow).toBeVisible();
   await foldedSpendRow.hover();

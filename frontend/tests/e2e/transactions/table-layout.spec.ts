@@ -98,7 +98,7 @@ test("transaction layouts balance localized date fit and description width", asy
   const fullText = (await truncatedLine.textContent())?.trim() ?? "";
   await expect(truncatedLine).toHaveCSS("text-overflow", "ellipsis");
   await truncatedLine.hover();
-  await expect(page.getByRole("tooltip")).toHaveText(fullText);
+  await expect(page.getByRole("tooltip")).toContainText(fullText);
 });
 
 test("mixed more-parts indicators stay inside the amount column where member first appears", async ({
@@ -523,7 +523,7 @@ test("transactions display currency symbols with code fallback", async ({
   await expect(
     page
       .getByRole("row")
-      .filter({ hasText: "BlueCash → Target" })
+      .filter({ hasText: "Amex:BlueCash → merchant:Target" })
       .first()
       .locator(".transactions-amount-column"),
   ).toContainText("-45.35 $");
@@ -583,7 +583,7 @@ test("transactions page help and leaf category chips", async ({
   const simpleSpendRow = page
     .getByRole("row")
     .filter({ has: page.getByRole("img", { name: "SPEND" }) })
-    .filter({ hasText: "BlueCash → Target" })
+    .filter({ hasText: "Amex:BlueCash → merchant:Target" })
     .first();
   await expect(simpleSpendRow).toBeVisible();
   await expect(
@@ -616,7 +616,7 @@ test("transactions page help and leaf category chips", async ({
         row.textContent?.includes("Mixed payroll correction"),
       );
       const ordinarySingleLine = rows.find((row) =>
-        row.textContent?.includes("BlueCash → Target"),
+        row.textContent?.includes("Amex:BlueCash → merchant:Target"),
       );
       return {
         mixed: mixed?.getBoundingClientRect().height,
@@ -1039,7 +1039,7 @@ test("transactions line composition uses compact dates and single-line leaf tags
           row.textContent?.includes(rowText.withoutMemo),
         );
         const ordinary = rows.find((row) =>
-          row.textContent?.includes("BlueCash → Target"),
+          row.textContent?.includes("Amex:BlueCash → merchant:Target"),
         );
         return {
           manyTag: manyTag?.getBoundingClientRect().height,

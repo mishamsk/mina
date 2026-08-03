@@ -50,6 +50,7 @@
   - Public authentication status bootstraps before the shell; enabled deployments show login, retain cookie sessions across reloads, expose global logout, and return to login when a protected request loses authorization.
   - Frontend styling is wired through Tailwind CSS v4 and shadcn/ui generated primitives.
   - The app shell shows a featured-account balance strip on every route when featured accounts exist, backed by account metadata and server balances.
+  - Accounts expose effective display labels for contextual transaction and balance presentation with full-FQN disambiguation; the Accounts side panel edits or clears the optional override, while hierarchy, search, selection, and navigation remain FQN-based.
   - Overview is the landing page, with active `owned` and `party` accounts grouped by FQN root, approximate USD subtotals, credit remaining, current-month spend/income pulse, and recent activity links.
 - Transactions page uses server-derived titles, lifecycle and settlement indicators/filters, date-jump pagination, bulk reference editing, and URL-addressable detail; record settlement controls apply only to owned/party records and raw settlement timestamps remain hidden.
   - Expected recurring occurrences use confirm/dismiss review actions; cancelled transactions remain history-preserving and restorable, while delete is a separate tombstone action.

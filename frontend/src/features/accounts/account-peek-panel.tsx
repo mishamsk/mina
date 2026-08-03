@@ -7,6 +7,7 @@ import { Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import {
   type LookupMaps,
+  transactionAccountFqnContext,
   TransactionDetailContent,
   TransactionDetailErrorContent,
   TransactionDetailLoadingContent,
@@ -84,12 +85,24 @@ export const AccountPeekPanel = ({
           <p className="font-heading text-muted-foreground text-xs font-semibold uppercase">
             Transaction peek
           </p>
-          <h2 className="font-heading text-xl font-bold">
-            {transaction?.display_title ??
-              (errorMessage
-                ? "Transaction unavailable"
-                : "Loading transaction")}
-          </h2>
+          {transaction ? (
+            <Tooltip
+              asChild
+              label={transactionAccountFqnContext(transaction, maps)}
+              className="max-w-full"
+            >
+              <h2
+                className="font-heading text-xl font-bold [overflow-wrap:anywhere]"
+                tabIndex={0}
+              >
+                {transaction.display_title}
+              </h2>
+            </Tooltip>
+          ) : (
+            <h2 className="font-heading text-xl font-bold">
+              {errorMessage ? "Transaction unavailable" : "Loading transaction"}
+            </h2>
+          )}
         </div>
         <Tooltip label="Close transaction peek" asChild>
           <Button

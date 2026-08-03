@@ -26,7 +26,7 @@
 - Direct `AppDB.db` access is limited to open, attach, detach, migration setup, connection or transaction creation, and close paths.
 - DuckDB indexes are created with quoted one-part names on fully qualified tables because DuckDB rejects database-qualified index names in `CREATE INDEX`.
 - Store code owns DB-facing row types and conversion between app service types and database column values.
-- Store code returns account FQN/type and nullable category intent metadata for service-owned semantic decisions.
+- Store code returns account FQN/type and nullable category intent metadata for service-owned semantic decisions, plus nullable display-label overrides for presentation.
 - Transaction repositories return semantic metadata for service-owned classification and bulk semantic validation.
 - Repositories bind and scan DuckDB `DATE`, `TIMESTAMP`, and decimal columns through app service value types.
 - Exchange-rate loading queries infer needed currencies and latest active USD-pair dates from active accounting rows only.

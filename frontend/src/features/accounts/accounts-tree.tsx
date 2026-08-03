@@ -77,6 +77,11 @@ const accountSearchMatches = (account: Account, search: string): boolean =>
   search.trim() === "" ||
   account.fqn.toLowerCase().includes(search.trim().toLowerCase());
 
+const accountTreeName = (account: Account): string =>
+  account.display_label_override
+    ? `${account.fqn} (${account.display_label_override})`
+    : account.fqn;
+
 const interactiveTargetSelector =
   "a, button, input, select, textarea, summary, [role='button'], " +
   "[contenteditable='true'], " +
@@ -644,7 +649,7 @@ export const AccountsTree = ({
                     aria-keyshortcuts="Enter Space"
                     aria-label={
                       account
-                        ? `Open account ${row.fqn}`
+                        ? `Open account ${accountTreeName(account)}`
                         : `Open account group ${row.fqn}`
                     }
                     tabIndex={0}
@@ -687,15 +692,27 @@ export const AccountsTree = ({
                       >
                         {account ? (
                           <div className="flex min-w-0 flex-wrap items-center gap-2">
-                            <span
-                              data-testid="accounts-tree-fqn"
-                              className="min-w-0"
-                            >
-                              <FqnPath
-                                collapseAncestors={false}
+                            <span className="min-w-0 flex-1 overflow-hidden">
+                              <Tooltip
                                 focusable={false}
-                                value={row.fqn}
-                              />
+                                label={accountTreeName(account)}
+                                className="w-full gap-2 overflow-hidden font-mono text-sm"
+                              >
+                                <span
+                                  data-testid="accounts-tree-fqn"
+                                  className="text-foreground shrink-0 font-medium"
+                                >
+                                  {account.fqn}
+                                </span>
+                                {account.display_label_override ? (
+                                  <span
+                                    data-testid="accounts-tree-display-label"
+                                    className="text-muted-foreground min-w-0 truncate"
+                                  >
+                                    ({account.display_label_override})
+                                  </span>
+                                ) : null}
+                              </Tooltip>
                             </span>
                             {hasCreditLimit ? <CreditLimitIndicator /> : null}
                             {rowHidden ? (

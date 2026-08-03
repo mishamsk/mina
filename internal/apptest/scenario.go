@@ -82,6 +82,20 @@ func (s *Scenario) AccountWithType(fqn string, accountType models.WritableAccoun
 	return *response.JSON201
 }
 
+// AccountWithDisplayLabel creates an account fixture with an explicit display label and semantic type.
+func (s *Scenario) AccountWithDisplayLabel(fqn string, displayLabel string, accountType models.WritableAccountType) models.Account {
+	s.client.t.Helper()
+
+	response, err := s.client.REST().CreateAccountWithResponse(context.Background(), models.CreateAccountRequest{
+		Fqn:          fqn,
+		DisplayLabel: &displayLabel,
+		AccountType:  accountType,
+	})
+	requireNoClientError(s.client, "create account with display label", err)
+	requireStatus(s.client, "create account with display label", response.StatusCode(), http.StatusCreated, response.Body)
+	return *response.JSON201
+}
+
 // AccountWithCurrency creates an account fixture with a currency through the API client.
 func (s *Scenario) AccountWithCurrency(fqn string, currency string) models.Account {
 	s.client.t.Helper()

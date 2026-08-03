@@ -13,6 +13,8 @@
 - Account deletion controls consume the API `deletable` signal verbatim; eligibility rules remain backend-owned.
 - Accounts-tree credit-limit indicators consume the API `has_credit_limit_history` signal rather than inferring history from balance rows.
 - Fixed `system` accounts remain visible and selectable where ledger references are allowed, but Accounts and account-detail surfaces expose no mutation controls for them.
+- Account leaves in the Accounts tree render full FQNs with custom display-label overrides in parentheses; headers, group balance rows, and register account columns render effective display labels with full-FQN tooltips. Tree grouping, search, sorting, and restructure behavior remains FQN-owned.
+- Account create/edit forms initialize the optional label from `display_label_override`; blank writes `null` to restore automatic FQN-derived presentation.
 - Account and credit-limit presentation follows the owning [Accounts specification](../../../../docs/webui-design.md#5-accounts-chart-of-accounts--phase-2).
 
 ## Boundaries

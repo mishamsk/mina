@@ -1,10 +1,10 @@
 import { RefreshCw } from "lucide-react";
 import { Banknote } from "pixelarticons/react";
-import { Link } from "react-router";
 
 import { Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { AccountDisplayLabel } from "@/features/ledger";
 import { formatDecimalAmount } from "@/features/ledger/format";
 import { cn } from "@/lib/utils";
 import type { FeaturedBalanceRow } from "@/store";
@@ -37,8 +37,8 @@ const collapsedTooltipLabel = (rows: readonly FeaturedBalanceRow[]): string =>
   rows
     .map((row) =>
       row.account.account_type === "party"
-        ? `${row.account.fqn} ${partyBalanceLabel(row)}: ${formatBalance(row)}`
-        : `${row.account.fqn} ${formatBalance(row)}`,
+        ? `${row.account.display_label} (${row.account.fqn}) ${partyBalanceLabel(row)}: ${formatBalance(row)}`
+        : `${row.account.display_label} (${row.account.fqn}) ${formatBalance(row)}`,
     )
     .join("; ");
 
@@ -78,15 +78,12 @@ const ExpandedBalanceGroup = ({
           className="grid min-h-8 grid-cols-[minmax(0,1fr)_minmax(0,50%)] items-center gap-2 px-2 py-1"
         >
           <div className="min-w-0">
-            <Tooltip label={row.account.fqn} asChild className="min-w-0">
-              <Link
-                to={`/accounts/${row.account.account_id}`}
-                data-testid="featured-balance-name"
-                className="block truncate font-mono text-xs font-medium text-[var(--frame-foreground)] hover:underline"
-              >
-                {row.account.name}
-              </Link>
-            </Tooltip>
+            <AccountDisplayLabel
+              account={row.account}
+              className="block text-xs text-[var(--frame-foreground)]"
+              testId="featured-balance-name"
+              to={`/accounts/${row.account.account_id}`}
+            />
             {row.account.account_type === "party" ? (
               <span className="block truncate font-mono text-xs text-[var(--frame-muted)]">
                 {partyBalanceLabel(row)}

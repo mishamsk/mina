@@ -9,7 +9,7 @@ import type {
 import { FavoriteStarIcon } from "@/components/favorite-star-icon";
 import { Tooltip } from "@/components/tooltip";
 import { Badge } from "@/components/ui/badge";
-import { AmountText, FqnPath } from "@/features/ledger";
+import { AccountDisplayLabel, AmountText } from "@/features/ledger";
 import { formatLocalCivilDate } from "@/utils/date";
 
 import { AccountTypeBadge } from "./account-type-badge";
@@ -64,15 +64,9 @@ export const AccountHeader = ({
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 space-y-3">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <FqnPath
-              value={account.fqn}
-              collapseAncestors={false}
+            <AccountDisplayLabel
+              account={account}
               className="text-lg font-semibold sm:text-xl"
-              leafClassName={
-                account.fqn.includes(":")
-                  ? "max-w-[calc(100%-2ch)] shrink-0"
-                  : undefined
-              }
             />
             {accountCreditLimitHistory.length > 0 ? (
               <CreditLimitIndicator />

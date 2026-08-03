@@ -1,3 +1,4 @@
+export { AccountDisplayLabel } from "./account-display-label";
 export { AmountText, ApproximateUsdAmount, MixedAmounts } from "./amount-text";
 export { BulkActionBar } from "./bulk-action-bar";
 export { ClassBadge } from "./class-badge";
@@ -26,6 +27,7 @@ export {
   recordStatus,
   settlementStatusLabel,
   sumDecimalStrings,
+  transactionAccountFqnContext,
   transactionClassLabel,
   transactionHasMoreParts,
 } from "./format";

@@ -31,10 +31,11 @@ func (s *AccountStore) Create(ctx context.Context, input accounts.CreateInput) (
 	err := s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
 		row := tx.QueryRowContext(
 			ctx,
-			`INSERT INTO `+s.db.accountingName("account")+` (fqn, account_type, is_hidden, is_featured, currency, external_id, external_system)
-VALUES (?, ?, ?, ?, ?, ?, ?)
-RETURNING account_id, fqn, account_type, is_hidden, is_featured, currency, external_id, external_system, parent_fqn, name, level, created_at, updated_at, tombstoned_at`,
+			`INSERT INTO `+s.db.accountingName("account")+` (fqn, display_label, account_type, is_hidden, is_featured, currency, external_id, external_system)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING account_id, fqn, display_label, account_type, is_hidden, is_featured, currency, external_id, external_system, parent_fqn, name, level, created_at, updated_at, tombstoned_at`,
 			input.FQN,
+			input.DisplayLabel,
 			enumValue(input.AccountType),
 			input.IsHidden,
 			input.IsFeatured,
@@ -62,7 +63,7 @@ RETURNING account_id, fqn, account_type, is_hidden, is_featured, currency, exter
 
 // Get returns an account by ID.
 func (s *AccountStore) Get(ctx context.Context, id int64, includeTombstoned bool) (accounts.Account, error) {
-	query := `SELECT account_id, fqn, account_type, is_hidden, is_featured, currency, external_id, external_system, parent_fqn, name, level, created_at, updated_at, tombstoned_at
+	query := `SELECT account_id, fqn, display_label, account_type, is_hidden, is_featured, currency, external_id, external_system, parent_fqn, name, level, created_at, updated_at, tombstoned_at
 FROM ` + s.db.accountingName("account") + `
 WHERE account_id = ?`
 	args := []any{id}
@@ -106,7 +107,7 @@ WHERE 1 = 1`
 		return services.PaginatedList[accounts.Account]{}, err
 	}
 
-	query := `SELECT account_id, fqn, account_type, is_hidden, is_featured, currency, external_id, external_system, parent_fqn, name, level, created_at, updated_at, tombstoned_at
+	query := `SELECT account_id, fqn, display_label, account_type, is_hidden, is_featured, currency, external_id, external_system, parent_fqn, name, level, created_at, updated_at, tombstoned_at
 ` + filterQuery
 	query, args = appendServiceListOrderAndPage(query, args, opts.List, accountSortColumns, services.SortKeyFQN, "account_id")
 
@@ -222,6 +223,10 @@ func (s *AccountStore) UpdateMutable(ctx context.Context, id int64, input accoun
 		setClauses = append(setClauses, "account_type = CAST(? AS "+s.db.accountingName("account_type")+")")
 		args = append(args, enumValue(*input.AccountType))
 	}
+	if input.DisplayLabel.Specified {
+		setClauses = append(setClauses, "display_label = ?")
+		args = append(args, input.DisplayLabel.Value)
+	}
 	if input.Currency.Specified {
 		setClauses = append(setClauses, "currency = ?")
 		args = append(args, input.Currency.Value)
@@ -255,7 +260,7 @@ WHERE account_id = ? AND tombstoned_at IS NULL`
 		query += " AND external_id IS NOT NULL"
 	}
 	query += `
-RETURNING account_id, fqn, account_type, is_hidden, is_featured, currency, external_id, external_system, parent_fqn, name, level, created_at, updated_at, tombstoned_at`
+RETURNING account_id, fqn, display_label, account_type, is_hidden, is_featured, currency, external_id, external_system, parent_fqn, name, level, created_at, updated_at, tombstoned_at`
 
 	row := s.db.query().QueryRowContext(ctx, query, args...)
 	account, err := scanAccount(row)
@@ -359,6 +364,7 @@ type accountScanner interface {
 func scanAccount(scanner accountScanner) (accounts.Account, error) {
 	var account accounts.Account
 	var accountType string
+	var displayLabel sql.NullString
 	var currency sql.NullString
 	var externalID sql.NullString
 	var externalSystem sql.NullString
@@ -369,6 +375,7 @@ func scanAccount(scanner accountScanner) (accounts.Account, error) {
 	if err := scanner.Scan(
 		&account.ID,
 		&account.FQN,
+		&displayLabel,
 		&accountType,
 		&account.IsHidden,
 		&account.IsFeatured,
@@ -385,6 +392,9 @@ func scanAccount(scanner accountScanner) (accounts.Account, error) {
 		return accounts.Account{}, err
 	}
 	account.AccountType = accounts.AccountType(strings.ToLower(accountType))
+	if displayLabel.Valid {
+		account.DisplayLabelOverride = &displayLabel.String
+	}
 	account.CreatedAt = createdAt.UTC()
 	account.UpdatedAt = updatedAt.UTC()
 	if currency.Valid {

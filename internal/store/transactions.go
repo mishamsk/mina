@@ -962,7 +962,7 @@ LEFT JOIN ` + s.db.accountingName("category") + ` c ON c.category_id = jr.catego
 
 	query := `SELECT jr.record_id, jr.transaction_id, jr.account_id, jr.member_id, jr.currency, jr.amount, jr.amount_usd, jr.category_id,
 	` + runningBalanceSelect + `, jr.tag_ids, jr.memo, jr.pending_date, jr.posted_date, CAST(tx.lifecycle_status AS VARCHAR), jr.reconciliation_status, jr.source, jr.external_id, jr.external_system,
-	tx.initiated_date, jr.created_at, jr.updated_at, jr.tombstoned_at, a.account_type, a.name, a.fqn, c.economic_intent
+	tx.initiated_date, jr.created_at, jr.updated_at, jr.tombstoned_at, a.account_type, a.display_label, a.fqn, c.economic_intent
 ` + fromQuery + "\n" + runningBalanceJoin + "\n" + whereQuery
 	sortColumns, ok := recordSortColumns[opts.SortKey]
 	if !ok {
@@ -1272,7 +1272,7 @@ func scanJournalRecord(scanner journalRecordScanner) (transactions.JournalRecord
 	var updatedAt time.Time
 	var tombstonedAt sql.NullTime
 	var accountType sql.NullString
-	var accountName sql.NullString
+	var accountDisplayLabelOverride sql.NullString
 	var accountFQN sql.NullString
 	var economicIntent sql.NullString
 	if err := scanner.Scan(
@@ -1299,7 +1299,7 @@ func scanJournalRecord(scanner journalRecordScanner) (transactions.JournalRecord
 		&updatedAt,
 		&tombstonedAt,
 		&accountType,
-		&accountName,
+		&accountDisplayLabelOverride,
 		&accountFQN,
 		&economicIntent,
 	); err != nil {
@@ -1354,8 +1354,8 @@ func scanJournalRecord(scanner journalRecordScanner) (transactions.JournalRecord
 	if accountType.Valid {
 		record.AccountType = accounts.AccountType(strings.ToLower(accountType.String))
 	}
-	if accountName.Valid {
-		record.AccountName = accountName.String
+	if accountDisplayLabelOverride.Valid {
+		record.AccountDisplayLabelOverride = &accountDisplayLabelOverride.String
 	}
 	if accountFQN.Valid {
 		record.AccountFQN = accountFQN.String
@@ -1381,7 +1381,7 @@ func recordsByTransactionIDs(ctx context.Context, queryer rowsQuerier, db *AppDB
 		`SELECT jr.record_id, jr.transaction_id, jr.account_id, jr.member_id, jr.currency, jr.amount, jr.amount_usd, jr.category_id,
 	CAST(NULL AS DECIMAL(18,8)) AS running_balance,
 	jr.tag_ids, jr.memo, jr.pending_date, jr.posted_date, CAST(tx.lifecycle_status AS VARCHAR), jr.reconciliation_status, jr.source, jr.external_id, jr.external_system,
-	tx.initiated_date, jr.created_at, jr.updated_at, jr.tombstoned_at, a.account_type, a.name, a.fqn, c.economic_intent
+	tx.initiated_date, jr.created_at, jr.updated_at, jr.tombstoned_at, a.account_type, a.display_label, a.fqn, c.economic_intent
 FROM `+db.accountingName("journal_record")+` jr
 JOIN `+db.accountingName("transaction")+` tx ON tx.transaction_id = jr.transaction_id
 JOIN `+db.accountingName("account")+` a ON a.account_id = jr.account_id

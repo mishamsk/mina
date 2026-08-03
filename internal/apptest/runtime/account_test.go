@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"slices"
 	"testing"
 	"time"
 
@@ -420,6 +421,174 @@ func TestAccountCreateReadListUpdateDeleteBoundary(t *testing.T) {
 	assertAccountIDs(t, withTombstones.JSON200.Accounts, []int64{created.JSON201.AccountId, hidden.JSON201.AccountId, visibleDeleted.JSON201.AccountId})
 	assertAccountTypes(t, withTombstones.JSON200.Accounts, []httpclient.AccountType{httpclient.AccountTypeOwned, httpclient.AccountTypeOwned, httpclient.AccountTypeOwned})
 	assertAccountFeatured(t, withTombstones.JSON200.Accounts, []bool{true, true, false})
+}
+
+func TestAccountDisplayLabelsBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	ctx := context.Background()
+
+	oneSegment, err := client.REST().CreateAccountWithResponse(ctx, httpclient.CreateAccountRequest{
+		Fqn:         "Wallet",
+		AccountType: httpclient.WritableAccountTypeOwned,
+	})
+	requireClientResponse(t, "create one-segment display-label fallback", err, oneSegment.StatusCode(), http.StatusCreated, oneSegment.Body)
+	if oneSegment.JSON201.DisplayLabel != "Wallet" {
+		t.Fatalf("one-segment display_label = %q, want Wallet", oneSegment.JSON201.DisplayLabel)
+	}
+	if oneSegment.JSON201.DisplayLabelOverride != nil {
+		t.Fatalf("one-segment display_label_override = %q, want null", *oneSegment.JSON201.DisplayLabelOverride)
+	}
+
+	multiSegment, err := client.REST().CreateAccountWithResponse(ctx, httpclient.CreateAccountRequest{
+		Fqn:         "banks:Chase:checking:Joint",
+		AccountType: httpclient.WritableAccountTypeOwned,
+	})
+	requireClientResponse(t, "create multi-segment display-label fallback", err, multiSegment.StatusCode(), http.StatusCreated, multiSegment.Body)
+	if multiSegment.JSON201.DisplayLabel != "checking:Joint" {
+		t.Fatalf("multi-segment display_label = %q, want checking:Joint", multiSegment.JSON201.DisplayLabel)
+	}
+	if multiSegment.JSON201.DisplayLabelOverride != nil {
+		t.Fatalf("multi-segment display_label_override = %q, want null", *multiSegment.JSON201.DisplayLabelOverride)
+	}
+
+	explicitLabel := "Amazon"
+	explicit, err := client.REST().CreateAccountWithResponse(ctx, httpclient.CreateAccountRequest{
+		Fqn:          "merchant:Amazon:flow",
+		DisplayLabel: &explicitLabel,
+		AccountType:  httpclient.WritableAccountTypeFlow,
+	})
+	requireClientResponse(t, "create explicit display label", err, explicit.StatusCode(), http.StatusCreated, explicit.Body)
+	if explicit.JSON201.DisplayLabel != explicitLabel {
+		t.Fatalf("explicit display_label = %q, want %q", explicit.JSON201.DisplayLabel, explicitLabel)
+	}
+	if explicit.JSON201.DisplayLabelOverride == nil || *explicit.JSON201.DisplayLabelOverride != explicitLabel {
+		t.Fatalf("explicit display_label_override = %v, want %q", explicit.JSON201.DisplayLabelOverride, explicitLabel)
+	}
+	if explicit.JSON201.Name != "flow" {
+		t.Fatalf("explicit name = %q, want flow", explicit.JSON201.Name)
+	}
+
+	read, err := client.REST().GetAccountWithResponse(ctx, explicit.JSON201.AccountId, nil)
+	requireClientResponse(t, "get explicit display label", err, read.StatusCode(), http.StatusOK, read.Body)
+	if read.JSON200.DisplayLabel != explicitLabel {
+		t.Fatalf("read display_label = %q, want %q", read.JSON200.DisplayLabel, explicitLabel)
+	}
+	if read.JSON200.DisplayLabelOverride == nil || *read.JSON200.DisplayLabelOverride != explicitLabel {
+		t.Fatalf("read display_label_override = %v, want %q", read.JSON200.DisplayLabelOverride, explicitLabel)
+	}
+	if read.JSON200.Name != "flow" {
+		t.Fatalf("read name = %q, want flow", read.JSON200.Name)
+	}
+
+	listed, err := client.REST().ListAccountsWithResponse(ctx, nil)
+	requireClientResponse(t, "list display labels", err, listed.StatusCode(), http.StatusOK, listed.Body)
+	listedFQNs := make([]string, 0, len(listed.JSON200.Accounts))
+	labelsByFQN := make(map[string]string, len(listed.JSON200.Accounts))
+	overridesByFQN := make(map[string]*string, len(listed.JSON200.Accounts))
+	namesByFQN := make(map[string]string, len(listed.JSON200.Accounts))
+	for _, account := range listed.JSON200.Accounts {
+		listedFQNs = append(listedFQNs, account.Fqn)
+		labelsByFQN[account.Fqn] = account.DisplayLabel
+		overridesByFQN[account.Fqn] = account.DisplayLabelOverride
+		namesByFQN[account.Fqn] = account.Name
+	}
+	if !slices.IsSorted(listedFQNs) {
+		t.Fatalf("listed account FQNs = %q, want FQN order", listedFQNs)
+	}
+	if labelsByFQN[multiSegment.JSON201.Fqn] != "checking:Joint" || labelsByFQN[explicit.JSON201.Fqn] != explicitLabel {
+		t.Fatalf("listed display labels = %+v", labelsByFQN)
+	}
+	if namesByFQN[explicit.JSON201.Fqn] != "flow" {
+		t.Fatalf("listed names = %+v, want %q name flow", namesByFQN, explicit.JSON201.Fqn)
+	}
+	if overridesByFQN[multiSegment.JSON201.Fqn] != nil || overridesByFQN[explicit.JSON201.Fqn] == nil || *overridesByFQN[explicit.JSON201.Fqn] != explicitLabel {
+		t.Fatalf("listed display label overrides = %+v", overridesByFQN)
+	}
+
+	hidden := true
+	preserved, err := client.REST().UpdateAccountWithResponse(ctx, explicit.JSON201.AccountId, httpclient.UpdateAccountRequest{
+		IsHidden: &hidden,
+	})
+	requireClientResponse(t, "preserve omitted display label", err, preserved.StatusCode(), http.StatusOK, preserved.Body)
+	if preserved.JSON200.DisplayLabel != explicitLabel {
+		t.Fatalf("preserved display_label = %q, want %q", preserved.JSON200.DisplayLabel, explicitLabel)
+	}
+	if preserved.JSON200.DisplayLabelOverride == nil || *preserved.JSON200.DisplayLabelOverride != explicitLabel {
+		t.Fatalf("preserved display_label_override = %v, want %q", preserved.JSON200.DisplayLabelOverride, explicitLabel)
+	}
+	if !preserved.JSON200.IsHidden {
+		t.Fatal("preserved account is_hidden = false, want true")
+	}
+
+	updatedLabel := "Amazon balance"
+	updated, err := client.REST().UpdateAccountWithResponse(ctx, explicit.JSON201.AccountId, httpclient.UpdateAccountRequest{
+		DisplayLabel: nullable.NewNullableWithValue(updatedLabel),
+	})
+	requireClientResponse(t, "update display label", err, updated.StatusCode(), http.StatusOK, updated.Body)
+	if updated.JSON200.DisplayLabel != updatedLabel {
+		t.Fatalf("updated display_label = %q, want %q", updated.JSON200.DisplayLabel, updatedLabel)
+	}
+	if updated.JSON200.DisplayLabelOverride == nil || *updated.JSON200.DisplayLabelOverride != updatedLabel {
+		t.Fatalf("updated display_label_override = %v, want %q", updated.JSON200.DisplayLabelOverride, updatedLabel)
+	}
+
+	cleared, err := client.REST().UpdateAccountWithResponse(ctx, explicit.JSON201.AccountId, httpclient.UpdateAccountRequest{
+		DisplayLabel: nullable.NewNullNullable[string](),
+	})
+	requireClientResponse(t, "clear display label", err, cleared.StatusCode(), http.StatusOK, cleared.Body)
+	if cleared.JSON200.DisplayLabel != "Amazon:flow" {
+		t.Fatalf("cleared display_label = %q, want Amazon:flow", cleared.JSON200.DisplayLabel)
+	}
+	if cleared.JSON200.DisplayLabelOverride != nil {
+		t.Fatalf("cleared display_label_override = %q, want null", *cleared.JSON200.DisplayLabelOverride)
+	}
+
+	customAgain, err := client.REST().UpdateAccountWithResponse(ctx, explicit.JSON201.AccountId, httpclient.UpdateAccountRequest{
+		DisplayLabel: nullable.NewNullableWithValue(explicitLabel),
+	})
+	requireClientResponse(t, "restore explicit display label", err, customAgain.StatusCode(), http.StatusOK, customAgain.Body)
+
+	restructure := restructureAccounts(t, client, "merchant:Amazon", "merchant:AmazonStore")
+	if restructure.JSON200.MovedCount != 1 {
+		t.Fatalf("explicit-label restructure moved_count = %d, want 1", restructure.JSON200.MovedCount)
+	}
+	assertAccountDisplayLabel(t, client, explicit.JSON201.AccountId, explicitLabel)
+
+	restructure = restructureAccounts(t, client, "banks:Chase:checking", "banks:Chase:spending")
+	if restructure.JSON200.MovedCount != 1 {
+		t.Fatalf("fallback-label restructure moved_count = %d, want 1", restructure.JSON200.MovedCount)
+	}
+	assertAccountDisplayLabel(t, client, multiSegment.JSON201.AccountId, "spending:Joint")
+
+	for index, invalid := range []string{"", " leading", "trailing "} {
+		invalidCreate, err := client.REST().CreateAccountWithResponse(ctx, httpclient.CreateAccountRequest{
+			Fqn:          fmt.Sprintf("invalid:label:%d", index),
+			DisplayLabel: &invalid,
+			AccountType:  httpclient.WritableAccountTypeFlow,
+		})
+		requireNoTransportError(t, "reject invalid create display label", err)
+		if invalidCreate.StatusCode() != http.StatusBadRequest || invalidCreate.JSON400.Error.Code != httpclient.APIErrorCodeInvalidRequest {
+			t.Fatalf("invalid create display label %q response = %d %+v", invalid, invalidCreate.StatusCode(), invalidCreate.JSON400)
+		}
+	}
+
+	invalidUpdate := " surrounding "
+	rejectedUpdate, err := client.REST().UpdateAccountWithResponse(ctx, oneSegment.JSON201.AccountId, httpclient.UpdateAccountRequest{
+		DisplayLabel: nullable.NewNullableWithValue(invalidUpdate),
+	})
+	requireNoTransportError(t, "reject invalid update display label", err)
+	if rejectedUpdate.StatusCode() != http.StatusBadRequest || rejectedUpdate.JSON400.Error.Code != httpclient.APIErrorCodeInvalidRequest {
+		t.Fatalf("invalid update display label response = %d %+v", rejectedUpdate.StatusCode(), rejectedUpdate.JSON400)
+	}
+}
+
+func assertAccountDisplayLabel(t *testing.T, client *apptest.Client, accountID int64, want string) {
+	t.Helper()
+	response, err := client.REST().GetAccountWithResponse(context.Background(), accountID, nil)
+	requireClientResponse(t, "get account display label", err, response.StatusCode(), http.StatusOK, response.Body)
+	if response.JSON200.DisplayLabel != want {
+		t.Fatalf("display_label = %q, want %q", response.JSON200.DisplayLabel, want)
+	}
 }
 
 func TestAccountTypeChangeBoundary(t *testing.T) {

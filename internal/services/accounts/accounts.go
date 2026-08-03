@@ -35,6 +35,8 @@ func ValidAccountType(value AccountType) bool {
 type Account struct {
 	ID                    int64
 	FQN                   string
+	DisplayLabel          string
+	DisplayLabelOverride  *string
 	AccountType           AccountType
 	IsHidden              bool
 	IsFeatured            bool
@@ -64,6 +66,7 @@ type AccountBalance struct {
 // CreateInput contains fields for creating an account.
 type CreateInput struct {
 	FQN            string
+	DisplayLabel   *string
 	AccountType    AccountType
 	IsHidden       bool
 	IsFeatured     bool
@@ -81,6 +84,7 @@ type OptionalStringUpdate struct {
 // UpdateInput contains mutable account fields.
 type UpdateInput struct {
 	AccountType    *AccountType
+	DisplayLabel   OptionalStringUpdate
 	Currency       OptionalStringUpdate
 	IsHidden       *bool
 	IsFeatured     *bool
@@ -196,6 +200,9 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (Account, error
 	if err := validateCurrency(input.Currency); err != nil {
 		return Account{}, err
 	}
+	if err := validateDisplayLabel(input.DisplayLabel); err != nil {
+		return Account{}, err
+	}
 	if err := validateExternalIdentifiers(input.ExternalID, input.ExternalSystem); err != nil {
 		return Account{}, err
 	}
@@ -221,7 +228,7 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (Account, error
 		return Account{}, err
 	}
 
-	return account, nil
+	return withEffectiveDisplayLabel(account), nil
 }
 
 // ValidateActiveReferences returns active account references keyed by ID.
@@ -324,7 +331,7 @@ func (s *Service) Get(ctx context.Context, id int64, includeTombstoned bool) (Ac
 		return Account{}, err
 	}
 
-	return account, nil
+	return withEffectiveDisplayLabel(account), nil
 }
 
 // List returns accounts using default visibility rules unless explicitly overridden.
@@ -339,6 +346,9 @@ func (s *Service) List(ctx context.Context, opts ListOptions) (services.Paginate
 	}
 	if err := s.populateDeleteability(ctx, list.Items); err != nil {
 		return services.PaginatedList[Account]{}, err
+	}
+	for index := range list.Items {
+		list.Items[index] = withEffectiveDisplayLabel(list.Items[index])
 	}
 
 	return list, nil
@@ -399,6 +409,11 @@ func (s *Service) UpdateMutable(ctx context.Context, id int64, input UpdateInput
 	}
 	if input.Currency.Specified {
 		if err := validateCurrency(input.Currency.Value); err != nil {
+			return Account{}, err
+		}
+	}
+	if input.DisplayLabel.Specified {
+		if err := validateDisplayLabel(input.DisplayLabel.Value); err != nil {
 			return Account{}, err
 		}
 	}
@@ -490,7 +505,7 @@ func (s *Service) UpdateMutable(ctx context.Context, id int64, input UpdateInput
 		return Account{}, err
 	}
 
-	return account, nil
+	return withEffectiveDisplayLabel(account), nil
 }
 
 // Restructure atomically rewrites an active account FQN subtree from one path to another.
@@ -611,6 +626,7 @@ func singleLeafMove(moved map[int64]accountReferenceState, from string) bool {
 
 func (input UpdateInput) hasChanges() bool {
 	return input.AccountType != nil ||
+		input.DisplayLabel.Specified ||
 		input.Currency.Specified ||
 		input.IsHidden != nil ||
 		input.IsFeatured != nil ||
@@ -782,6 +798,33 @@ func validateCurrency(currency *string) error {
 	}
 
 	return nil
+}
+
+func validateDisplayLabel(label *string) error {
+	if label == nil {
+		return nil
+	}
+	if *label == "" || strings.TrimSpace(*label) != *label {
+		return services.InvalidRequest("display_label must be non-empty without leading or trailing whitespace")
+	}
+	return nil
+}
+
+func withEffectiveDisplayLabel(account Account) Account {
+	account.DisplayLabel = EffectiveDisplayLabel(account.FQN, account.DisplayLabelOverride)
+	return account
+}
+
+// EffectiveDisplayLabel returns an account's explicit label or its FQN-derived fallback.
+func EffectiveDisplayLabel(fqn string, override *string) string {
+	if override != nil {
+		return *override
+	}
+	segments := strings.Split(fqn, ":")
+	if len(segments) > 2 {
+		segments = segments[len(segments)-2:]
+	}
+	return strings.Join(segments, ":")
 }
 
 func validateExternalIdentifiers(externalID *string, externalSystem *string) error {

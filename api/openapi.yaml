@@ -3628,6 +3628,8 @@ components:
       required:
         - account_id
         - fqn
+        - display_label
+        - display_label_override
         - account_type
         - is_hidden
         - is_featured
@@ -3642,6 +3644,13 @@ components:
           format: int64
         fqn:
           type: string
+        display_label:
+          type: string
+          description: "Effective non-unique presentation label. An explicit override wins; otherwise Mina derives the final one or two FQN segments."
+        display_label_override:
+          type: string
+          nullable: true
+          description: "Stored custom presentation label, or null when display_label is derived from the FQN."
         account_type:
           $ref: "#/components/schemas/AccountType"
         is_hidden:
@@ -4058,6 +4067,10 @@ components:
         fqn:
           description: "Colon-separated hierarchical FQN for the account leaf."
           type: string
+        display_label:
+          description: "Optional non-unique presentation label. Custom values must be non-empty without leading or trailing whitespace. Null or omission uses the final one or two FQN segments."
+          type: string
+          nullable: true
         account_type:
           $ref: "#/components/schemas/WritableAccountType"
         is_hidden:
@@ -6179,6 +6192,14 @@ components:
       type: object
       additionalProperties: false
       properties:
+        display_label:
+          description: "Set a custom non-unique presentation label without leading or trailing whitespace, set null to restore the FQN-derived fallback, or omit to leave unchanged. Custom values must be non-empty."
+          type: string
+          nullable: true
+          x-go-type: nullable.Nullable[string]
+          x-go-type-skip-optional-pointer: true
+          x-go-type-import:
+            path: github.com/oapi-codegen/nullable
         account_type:
           $ref: "#/components/schemas/WritableAccountType"
         currency:

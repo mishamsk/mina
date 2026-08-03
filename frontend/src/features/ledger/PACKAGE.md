@@ -15,8 +15,9 @@
 - Shared browser bulk-edit interaction follows the owning [Bulk operations specification](../../../../docs/webui-design.md#bulk-operations).
 - Bulk reference edits share one reasoned per-transaction predicate between prediction and apply; only transactions with records in the applied mutation count as updated.
 - Transaction-row lifted member display ignores unattributed records.
-- The transaction detail panel is read-only: it renders no inline editors; record rows only toggle inert exact-value disclosures, account paths navigate to account registers, editing goes through its Edit/Duplicate/Split modal launches, and entity chips filter the underlying list.
+- The transaction detail panel is read-only: it renders no inline editors; record rows only toggle inert exact-value disclosures, account display-label links navigate to account registers, editing goes through its Edit/Duplicate/Split modal launches, and entity chips filter the underlying list.
 - Transaction detail and account-register peek share the same read-only transaction-detail content component; behavior follows the owning [Transactions specification](../../../../docs/webui-design.md#2-transactions--phase-2-core-screen).
+- Shared contextual account mentions render the REST-provided effective display label with a full-FQN tooltip; account selection, assignment, filtering, and navigation controls remain FQN-based.
 - Transaction detail panel renders a transaction snapshot passed by the owning page; expected occurrences expose only Confirm/Dismiss, and successful modal edits use the same refresh fan-out as the browser.
 - Transaction detail panel owns tombstone confirmation plus cancel/restore controls and delegates each transaction mutation to the owning page.
 - `useTransactionBrowserPage` composes shared browser snapshots, page-granular date jumps with a transient row anchor, transaction detail, row tombstones, pagination, and notices; pages supply their URL filter semantics.

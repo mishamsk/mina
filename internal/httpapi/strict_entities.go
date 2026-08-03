@@ -88,6 +88,7 @@ func writableAccountTypeParam(value *openapi.WritableAccountType) *accounts.Acco
 func (s *strictServer) CreateAccount(ctx context.Context, request openapi.CreateAccountRequestObject) (openapi.CreateAccountResponseObject, error) {
 	account, err := s.deps.Accounts.Create(ctx, accounts.CreateInput{
 		FQN:            request.Body.Fqn,
+		DisplayLabel:   request.Body.DisplayLabel,
 		AccountType:    accounts.AccountType(request.Body.AccountType),
 		IsHidden:       request.Body.IsHidden != nil && *request.Body.IsHidden,
 		IsFeatured:     request.Body.IsFeatured != nil && *request.Body.IsFeatured,
@@ -140,6 +141,7 @@ func (s *strictServer) GetAccount(ctx context.Context, request openapi.GetAccoun
 func (s *strictServer) UpdateAccount(ctx context.Context, request openapi.UpdateAccountRequestObject) (openapi.UpdateAccountResponseObject, error) {
 	account, err := s.deps.Accounts.UpdateMutable(ctx, request.AccountId, accounts.UpdateInput{
 		AccountType:    writableAccountTypeParam(request.Body.AccountType),
+		DisplayLabel:   optionalNullableString(request.Body.DisplayLabel),
 		Currency:       optionalNullableString(request.Body.Currency),
 		IsHidden:       request.Body.IsHidden,
 		IsFeatured:     request.Body.IsFeatured,
@@ -421,6 +423,8 @@ func accountAPIResponse(account accounts.Account) openapi.Account {
 	return openapi.Account{
 		AccountId:             account.ID,
 		Fqn:                   account.FQN,
+		DisplayLabel:          account.DisplayLabel,
+		DisplayLabelOverride:  account.DisplayLabelOverride,
 		AccountType:           openapi.AccountType(account.AccountType),
 		IsHidden:              account.IsHidden,
 		IsFeatured:            account.IsFeatured,

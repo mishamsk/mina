@@ -17,12 +17,14 @@
 - Account group hidden state is derived from active account leaves, including hidden leaves.
 - Account path hide/unhide targets active leaves at or under the path and invalidates the account reference cache.
 - Featured account state is presentation metadata and does not affect accounting semantics or reference validation.
+- Optional custom display labels are validated by the service; account reads expose an effective label using the custom value or the final one or two FQN segments, while references retain authoritative FQNs.
+- FQNs remain authoritative identity and hierarchy; restructuring changes only FQN-derived display labels and preserves custom labels.
 - Balance reads return active `owned` and `party` accounts only; current includes posted and pending records, posted-only excludes pending, and cancelled and expected records are excluded.
 - Explicit account filters on balance reads must reference active accounts.
 
 ## Boundaries
 
-- Owns: account hierarchy validation and derivation, account-type and account-currency transition validation, currency validation, external identifier validation, hidden/featured/tombstoned use-case rules, active record-reference validation, and active-FQN conflict mapping.
+- Owns: account hierarchy and display-label validation and derivation, account-type and account-currency transition validation, currency validation, external identifier validation, hidden/featured/tombstoned use-case rules, active record-reference validation, and active-FQN conflict mapping.
 - Does not own: HTTP DTOs, SQL queries, database row types, or process configuration.
 
 ## Testing Notes

@@ -284,7 +284,7 @@ func TestDerivedAccountingSemanticsWorkedExamples(t *testing.T) {
 				}
 			},
 			class:        httpclient.TransactionClassMixed,
-			displayTitle: "payroll",
+			displayTitle: "Acme Payroll",
 			shapes: []expectedShape{
 				{shape: httpclient.TransactionShapeTypeSpend, amounts: displayAmounts("USD", "-15.00000000")},
 				{shape: httpclient.TransactionShapeTypeIncome, amounts: displayAmounts("USD", "3000.00000000")},
@@ -330,7 +330,7 @@ func TestDerivedAccountingSemanticsWorkedExamples(t *testing.T) {
 				}
 			},
 			class:          httpclient.TransactionClassAdjustment,
-			displayTitle:   "Joint",
+			displayTitle:   "checking:Joint",
 			primaryAmounts: displayAmounts("USD", "1000.00000000"),
 			shapes:         []expectedShape{{shape: httpclient.TransactionShapeTypeAdjustment, amounts: displayAmounts("USD", "1000.00000000")}},
 			roles:          []httpclient.RecordRole{httpclient.RecordRoleBalance, httpclient.RecordRoleAdjustment},
@@ -861,6 +861,11 @@ func newSemanticFixture(t *testing.T, client *apptest.Client) *semanticFixture {
 	t.Helper()
 	scenario := client.Scenario()
 	systems := fixedSystemAccounts(t, client)
+	employer := scenario.AccountWithDisplayLabel(
+		"employers:Acme:payroll",
+		"Acme Payroll",
+		httpclient.WritableAccountTypeFlow,
+	)
 
 	return &semanticFixture{
 		checking:        scenario.AccountWithCurrency("banks:Chase:checking:Joint", "USD"),
@@ -875,7 +880,7 @@ func newSemanticFixture(t *testing.T, client *apptest.Client) *semanticFixture {
 		supermarket:     scenario.AccountWithType("merchants:Supermarket", httpclient.WritableAccountTypeFlow),
 		fees:            scenario.AccountWithType("banks:Chase:fees", httpclient.WritableAccountTypeFlow),
 		interest:        scenario.AccountWithType("banks:Chase:interest", httpclient.WritableAccountTypeFlow),
-		employer:        scenario.AccountWithType("employers:Acme:payroll", httpclient.WritableAccountTypeFlow),
+		employer:        employer,
 		lisbon:          scenario.AccountWithType("merchants:Travel:Dining:Lisbon", httpclient.WritableAccountTypeFlow),
 		merchantA:       scenario.AccountWithType("merchants:Market:A", httpclient.WritableAccountTypeFlow),
 		exchange:        systems["system:exchange"],

@@ -17,6 +17,7 @@ import {
 } from "@/features/accounts";
 import { PageHeader } from "@/features/app-shell";
 import {
+  AccountDisplayLabel,
   buildLookupMaps,
   captureTransactionEntryLaunchContext,
   defaultTransactionPageSize,
@@ -234,7 +235,18 @@ const AccountPageContent = ({ accountId }: { readonly accountId: number }) => {
       aria-labelledby="account-title"
     >
       <PageHeader
-        title={account?.name ?? "Account"}
+        title={
+          account ? (
+            <AccountDisplayLabel
+              account={account}
+              className="text-2xl font-bold text-[var(--frame-foreground)]"
+              focusable={false}
+            />
+          ) : (
+            "Account"
+          )
+        }
+        titleClassName="normal-case!"
         titleId="account-title"
         eyebrow="Register"
         help={

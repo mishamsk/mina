@@ -7,18 +7,19 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  AccountDisplayLabel,
   AmountText,
   ApproximateUsdAmount,
   ClassIcon,
   displayStatusLabel,
   formatInitiatedDateParts,
-  FqnPath,
   lineDisplayAmounts,
   lineMemo,
   lineStatus,
   MorePartsIndicator,
   StatusIcon,
   sumDecimalStrings,
+  transactionAccountFqnContext,
   transactionClassLabel,
   transactionHasMoreParts,
   transactionPartsLabel,
@@ -188,12 +189,10 @@ const BalanceRow = ({ row }: { readonly row: OverviewBalanceRow }) => {
     >
       <div className="min-w-0">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <Link
+          <AccountDisplayLabel
+            account={row.account}
             to={`/accounts/${row.account.account_id}`}
-            className="focus-visible:outline-ring inline-flex min-w-0 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
-          >
-            <FqnPath value={row.account.fqn} />
-          </Link>
+          />
           {row.account.is_featured ? (
             <Badge variant="secondary" className="text-[10px]">
               Featured
@@ -341,6 +340,7 @@ const PulseTile = ({
 
 const recentActivityTooltipLabel = (
   transaction: Transaction,
+  accountFqnContext: string,
   memo: string | undefined,
   displayStatus: ReturnType<typeof lineStatus>,
 ): string =>
@@ -348,6 +348,7 @@ const recentActivityTooltipLabel = (
     `Class ${transactionClassLabel(transaction.transaction_class)}`,
     displayStatus ? `Status ${displayStatusLabel(displayStatus)}` : undefined,
     `Description ${transaction.display_title}`,
+    accountFqnContext,
     memo ? `Memo ${memo}` : undefined,
     transactionHasMoreParts(transaction)
       ? `All parts ${transactionPartsLabel(transaction)}`
@@ -357,8 +358,10 @@ const recentActivityTooltipLabel = (
     .join(". ");
 
 const RecentActivityLine = ({
+  accountFqnContext,
   transaction,
 }: {
+  readonly accountFqnContext: string;
   readonly transaction: Transaction;
 }) => {
   const memo = lineMemo(transaction);
@@ -376,7 +379,12 @@ const RecentActivityLine = ({
     <li>
       <Tooltip
         asChild
-        label={recentActivityTooltipLabel(transaction, memo, displayStatus)}
+        label={recentActivityTooltipLabel(
+          transaction,
+          accountFqnContext,
+          memo,
+          displayStatus,
+        )}
       >
         <Link
           to={`/transactions?transaction=${transaction.transaction_id}`}
@@ -403,15 +411,9 @@ const RecentActivityLine = ({
             ) : null}
           </span>
           <span className="min-w-0">
-            <Tooltip
-              focusable={false}
-              label={transaction.display_title}
-              className="block min-w-0"
-            >
-              <span className="block truncate font-mono text-sm font-semibold">
-                {transaction.display_title}
-              </span>
-            </Tooltip>
+            <span className="block truncate font-mono text-sm font-semibold">
+              {transaction.display_title}
+            </span>
             {memo ? (
               <Tooltip focusable={false} label={memo} className="block min-w-0">
                 <span className="text-muted-foreground block truncate text-xs">
@@ -456,6 +458,14 @@ export const OverviewDashboard = () => {
   const groups = useMemo(
     () => groupedBalances(snapshot?.balanceRows ?? []),
     [snapshot?.balanceRows],
+  );
+  const accountsById = useMemo(
+    () =>
+      new Map(
+        snapshot?.accounts.map((account) => [account.account_id, account]) ??
+          [],
+      ),
+    [snapshot?.accounts],
   );
 
   return (
@@ -529,6 +539,11 @@ export const OverviewDashboard = () => {
                     {snapshot.recentTransactions.map((transaction) => (
                       <RecentActivityLine
                         key={transaction.transaction_id}
+                        accountFqnContext={transactionAccountFqnContext(
+                          transaction,
+                          { accountsById },
+                          { includeDisplayTitle: false },
+                        )}
                         transaction={transaction}
                       />
                     ))}

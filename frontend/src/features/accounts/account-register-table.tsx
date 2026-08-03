@@ -13,12 +13,14 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  AccountDisplayLabel,
   AmountText,
   displayStatusLabel,
   FqnPath,
   type LookupMaps,
   recordStatus,
   StatusIcon,
+  transactionAccountFqnContext,
 } from "@/features/ledger";
 import { cn } from "@/lib/utils";
 import { formatLocalCivilDateParts } from "@/utils/date";
@@ -406,7 +408,7 @@ export const AccountRegisterTable = ({
                   {showAccount ? (
                     <td className="account-register-account-column px-3 py-2">
                       {lookupsLoaded && account ? (
-                        <FqnPath value={account.fqn} />
+                        <AccountDisplayLabel account={account} />
                       ) : (
                         <span className="text-muted-foreground font-mono text-xs">
                           {lookupsLoaded
@@ -421,7 +423,7 @@ export const AccountRegisterTable = ({
                   <td className="account-register-counterparty-column px-3 py-2">
                     {transaction ? (
                       <Tooltip
-                        label={transaction.display_title}
+                        label={transactionAccountFqnContext(transaction, maps)}
                         className="block min-w-0"
                       >
                         <div className="truncate font-medium">

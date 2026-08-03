@@ -34,6 +34,14 @@ export type DemoSeedResponse = {
 export type Account = {
     account_id: number;
     fqn: string;
+    /**
+     * Effective non-unique presentation label. An explicit override wins; otherwise Mina derives the final one or two FQN segments.
+     */
+    display_label: string;
+    /**
+     * Stored custom presentation label, or null when display_label is derived from the FQN.
+     */
+    display_label_override: string | null;
     account_type: AccountType;
     is_hidden: boolean;
     is_featured: boolean;
@@ -245,6 +253,10 @@ export type CreateAccountRequest = {
      * Colon-separated hierarchical FQN for the account leaf.
      */
     fqn: string;
+    /**
+     * Optional non-unique presentation label. Custom values must be non-empty without leading or trailing whitespace. Null or omission uses the final one or two FQN segments.
+     */
+    display_label?: string | null;
     account_type: WritableAccountType;
     /**
      * Whether the entity is excluded from default lists.
@@ -1314,6 +1326,10 @@ export type UpdateCategoryRequest = {
 };
 
 export type UpdateAccountRequest = {
+    /**
+     * Set a custom non-unique presentation label without leading or trailing whitespace, set null to restore the FQN-derived fallback, or omit to leave unchanged. Custom values must be non-empty.
+     */
+    display_label?: string | null;
     account_type?: WritableAccountType;
     /**
      * Set null for multi-currency, or set a code for single-currency. Omit to leave unchanged.

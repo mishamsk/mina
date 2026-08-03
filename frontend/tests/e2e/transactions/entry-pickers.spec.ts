@@ -220,12 +220,12 @@ test("entry category picker completes hierarchy segments and preserves full-path
   });
   await fundingPicker.fill("merchant");
   await expect(page.locator("#spend-fundingAccountId-options")).toContainText(
-    "No matches",
+    "merchant:Amazon:gift_card",
   );
   await expect(
     page
       .locator("#spend-fundingAccountId-options")
-      .getByRole("option", { name: /merchant/i }),
+      .getByRole("option", { name: /merchant:Amazon:flow/i }),
   ).toHaveCount(0);
 
   const merchantPicker = page.getByRole("combobox", { name: "Merchant" });

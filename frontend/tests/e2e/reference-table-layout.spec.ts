@@ -595,13 +595,12 @@ test("favorite stars stay inside their shared unclipped slot across table layout
 
       await page.goto(`/accounts?q=${encodeURIComponent(accountParent)}`);
       await setRootFontSize();
-      const accountRows = page.getByTestId("accounts-tree-row");
-      const filledAccountRow = accountRows
-        .filter({ hasText: accountFilled })
-        .first();
-      const unfilledAccountRow = accountRows
-        .filter({ hasText: accountUnfilled })
-        .first();
+      const filledAccountRow = page.getByRole("button", {
+        name: `Open account ${accountFilled}`,
+      });
+      const unfilledAccountRow = page.getByRole("button", {
+        name: `Open account ${accountUnfilled}`,
+      });
       const accountGroupRow = page.getByRole("button", {
         exact: true,
         name: `Open account group ${accountParent}`,

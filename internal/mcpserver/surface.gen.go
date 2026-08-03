@@ -394,7 +394,7 @@ func Operations() []Operation {
 			MCP: MCPOperation{
 				Group: "accounts", Name: "create",
 				ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: false,
-				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"account_type\":{\"description\":\"User-writable account semantic type. System accounts are installed and managed only by Mina.\",\"enum\":[\"owned\",\"party\",\"flow\"],\"type\":\"string\"},\"currency\":{\"anyOf\":[{\"pattern\":\"^([A-Z]{3}|C::.+)$\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Use null or omit for a multi-currency account; use an ISO 4217 or `C::` crypto code for a single-currency account.\"},\"external_id\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Optional identifier assigned by an external system.\"},\"external_system\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Optional namespace for `external_id`, such as a provider name.\"},\"fqn\":{\"description\":\"Colon-separated hierarchical FQN for the account leaf.\",\"type\":\"string\"},\"is_featured\":{\"default\":false,\"description\":\"Whether the entity is featured in prominent selection and display surfaces.\",\"type\":\"boolean\"},\"is_hidden\":{\"default\":false,\"description\":\"Whether the entity is excluded from default lists.\",\"type\":\"boolean\"}},\"required\":[\"account_type\",\"fqn\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"account_type\":{\"description\":\"User-writable account semantic type. System accounts are installed and managed only by Mina.\",\"enum\":[\"owned\",\"party\",\"flow\"],\"type\":\"string\"},\"currency\":{\"anyOf\":[{\"pattern\":\"^([A-Z]{3}|C::.+)$\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Use null or omit for a multi-currency account; use an ISO 4217 or `C::` crypto code for a single-currency account.\"},\"display_label\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Optional non-unique presentation label. Custom values must be non-empty without leading or trailing whitespace. Null or omission uses the final one or two FQN segments.\"},\"external_id\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Optional identifier assigned by an external system.\"},\"external_system\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Optional namespace for `external_id`, such as a provider name.\"},\"fqn\":{\"description\":\"Colon-separated hierarchical FQN for the account leaf.\",\"type\":\"string\"},\"is_featured\":{\"default\":false,\"description\":\"Whether the entity is featured in prominent selection and display surfaces.\",\"type\":\"boolean\"},\"is_hidden\":{\"default\":false,\"description\":\"Whether the entity is excluded from default lists.\",\"type\":\"boolean\"}},\"required\":[\"account_type\",\"fqn\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Body: BodyDescriptor{
@@ -413,6 +413,12 @@ func Operations() []Operation {
 							Name:        "currency",
 							Type:        "string",
 							Description: "Use null or omit for a multi-currency account; use an ISO 4217 or `C::` crypto code for a single-currency account.",
+							Required:    false,
+						},
+						{
+							Name:        "display_label",
+							Type:        "string",
+							Description: "Optional non-unique presentation label. Custom values must be non-empty without leading or trailing whitespace. Null or omission uses the final one or two FQN segments.",
 							Required:    false,
 						},
 						{
@@ -3609,7 +3615,7 @@ func Operations() []Operation {
 			MCP: MCPOperation{
 				Group: "accounts", Name: "update",
 				ReadOnly: false, Destructive: false, Idempotent: true, OpenWorld: false,
-				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"account_id\":{\"description\":\"Account identifier to target or filter by.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"body\":{\"additionalProperties\":false,\"properties\":{\"account_type\":{\"description\":\"User-writable account semantic type. System accounts are installed and managed only by Mina.\",\"enum\":[\"owned\",\"party\",\"flow\"],\"type\":\"string\"},\"currency\":{\"anyOf\":[{\"pattern\":\"^([A-Z]{3}|C::.+)$\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Set null for multi-currency, or set a code for single-currency. Omit to leave unchanged.\"},\"external_id\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Optional identifier assigned by an external system.\"},\"external_system\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Optional namespace for `external_id`, such as a provider name.\"},\"is_featured\":{\"description\":\"Whether the account is featured in prominent selection and display surfaces.\",\"type\":\"boolean\"},\"is_hidden\":{\"description\":\"Whether the account is excluded from default lists.\",\"type\":\"boolean\"}},\"type\":\"object\"}},\"required\":[\"account_id\",\"body\"],\"type\":\"object\"}"),
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"account_id\":{\"description\":\"Account identifier to target or filter by.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"body\":{\"additionalProperties\":false,\"properties\":{\"account_type\":{\"description\":\"User-writable account semantic type. System accounts are installed and managed only by Mina.\",\"enum\":[\"owned\",\"party\",\"flow\"],\"type\":\"string\"},\"currency\":{\"anyOf\":[{\"pattern\":\"^([A-Z]{3}|C::.+)$\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Set null for multi-currency, or set a code for single-currency. Omit to leave unchanged.\"},\"display_label\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Set a custom non-unique presentation label without leading or trailing whitespace, set null to restore the FQN-derived fallback, or omit to leave unchanged. Custom values must be non-empty.\"},\"external_id\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Optional identifier assigned by an external system.\"},\"external_system\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Optional namespace for `external_id`, such as a provider name.\"},\"is_featured\":{\"description\":\"Whether the account is featured in prominent selection and display surfaces.\",\"type\":\"boolean\"},\"is_hidden\":{\"description\":\"Whether the account is excluded from default lists.\",\"type\":\"boolean\"}},\"type\":\"object\"}},\"required\":[\"account_id\",\"body\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -3636,6 +3642,12 @@ func Operations() []Operation {
 							Name:        "currency",
 							Type:        "string",
 							Description: "Set null for multi-currency, or set a code for single-currency. Omit to leave unchanged.",
+							Required:    false,
+						},
+						{
+							Name:        "display_label",
+							Type:        "string",
+							Description: "Set a custom non-unique presentation label without leading or trailing whitespace, set null to restore the FQN-derived fallback, or omit to leave unchanged. Custom values must be non-empty.",
 							Required:    false,
 						},
 						{

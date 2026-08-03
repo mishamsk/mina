@@ -3,6 +3,8 @@ CREATE TABLE account (
 	account_id INTEGER PRIMARY KEY DEFAULT nextval('primary_key_gen_seq'),
 	-- Colon-separated hierarchical account path, e.g. checking:Chase:Primary.
 	fqn TEXT NOT NULL,
+	-- Optional presentation label; NULL uses the account-service fallback from the final one or two FQN segments.
+	display_label TEXT,
 	-- Explicit semantic account type used for balances and transaction classification.
 	account_type account_type NOT NULL,
 	-- Excludes active rows from default lists while keeping them selectable by explicit query.
@@ -30,6 +32,7 @@ CREATE TABLE account (
 );
 
 COMMENT ON COLUMN account.fqn IS 'Colon-separated hierarchical account path, e.g. checking:Chase:Primary.';
+COMMENT ON COLUMN account.display_label IS 'Optional presentation label; NULL uses the account-service fallback from the final one or two FQN segments.';
 COMMENT ON COLUMN account.account_type IS 'Explicit semantic account type used for balances and transaction classification.';
 COMMENT ON COLUMN account.is_hidden IS 'Excludes active rows from default lists while keeping them selectable by explicit query.';
 COMMENT ON COLUMN account.is_featured IS 'Marks active rows for prominent UI/account-picker placement without changing accounting semantics.';

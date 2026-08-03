@@ -24,6 +24,12 @@ const createAccount = async (page: Page, fqn: string): Promise<void> => {
   expect(response.ok()).toBe(true);
 };
 
+const accountRowAccessibleName = (
+  fqn: string,
+  displayLabelOverride?: string,
+): string =>
+  `Open account ${fqn}${displayLabelOverride ? ` (${displayLabelOverride})` : ""}`;
+
 const createCategory = async (page: Page, fqn: string): Promise<void> => {
   const response = await page.request.post("/api/categories", {
     data: { economic_intent: "expense", fqn, is_hidden: false },
@@ -364,14 +370,14 @@ test("Accounts rows fold independently when their action counts differ", async (
 
   await page.goto("/accounts");
   await page.getByLabel("Search").fill(`zzE2EMixed${unique}`);
-  const parentRow = page
-    .getByTestId("accounts-tree-row")
-    .filter({ hasText: parentFqn })
-    .first();
-  const leafRow = page
-    .getByTestId("accounts-tree-row")
-    .filter({ hasText: leafFqn })
-    .first();
+  const parentRow = page.getByRole("button", {
+    exact: true,
+    name: accountRowAccessibleName(parentFqn),
+  });
+  const leafRow = page.getByRole("button", {
+    exact: true,
+    name: accountRowAccessibleName(leafFqn),
+  });
   const parentActions = parentRow.locator(".row-actions");
   const leafActions = leafRow.locator(".row-actions");
   await expect(parentRow).toBeVisible();
@@ -460,10 +466,9 @@ test("disabled row delete stays still and does not invoke its action", async ({
   });
 
   await page.goto(`/accounts?q=${encodeURIComponent(fqn)}`);
-  const row = page
-    .getByTestId("accounts-tree-row")
-    .filter({ hasText: fqn })
-    .first();
+  const row = page.getByRole("button", {
+    name: accountRowAccessibleName(fqn),
+  });
   const deleteButton = row.getByRole("button", { name: "Delete account" });
   await expect(row).toBeVisible();
   await expect(deleteButton).toHaveAttribute("aria-disabled", "true");

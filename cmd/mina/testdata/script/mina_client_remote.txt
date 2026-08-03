@@ -20,12 +20,12 @@ stdout '"transactions":[1-9][0-9]*'
 exec mina client --server http://127.0.0.1:$PORT transactions list --limit 5
 stdout '"transactions":\['
 stdout '"initiated_date":"2026-07-15"'
-stdout '"transaction_id":844'
+stdout '"transaction_id":846'
 ! stderr .
 
 # A path argument selects the transaction observed in the prior list.
-exec mina client --server http://127.0.0.1:$PORT transactions get 844
-stdout '"transaction_id":844'
+exec mina client --server http://127.0.0.1:$PORT transactions get 846
+stdout '"transaction_id":846'
 stdout '"records":\['
 ! stderr .
 

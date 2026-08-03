@@ -205,17 +205,24 @@ func (b *seedBuilder) seedAccounts(ctx context.Context) error {
 		{"merchant:CVS", accounts.AccountTypeFlow, strPtr("USD"), false},
 		{"merchant:ConEd", accounts.AccountTypeFlow, strPtr("USD"), false},
 		{"merchant:PowellsBooks", accounts.AccountTypeFlow, strPtr("USD"), false},
+		{"merchant:Amazon:flow", accounts.AccountTypeFlow, strPtr("USD"), false},
+		{"merchant:Amazon:gift_card", accounts.AccountTypeOwned, strPtr("USD"), false},
 		{"merchant:unspecified", accounts.AccountTypeFlow, nil, false},
 		{"insurer:StateFarm", accounts.AccountTypeFlow, strPtr("USD"), false},
 		{"person:Friend:Jordan", accounts.AccountTypeParty, strPtr("USD"), false},
 		{"person:Pool:BeachHouse", accounts.AccountTypeParty, strPtr("USD"), false},
 	}
 	for _, input := range accountInputs {
+		var displayLabel *string
+		if input.fqn == "merchant:Amazon:flow" {
+			displayLabel = strPtr("Amazon")
+		}
 		account, err := b.services.Accounts.Create(ctx, accounts.CreateInput{
-			FQN:         input.fqn,
-			AccountType: input.accountType,
-			Currency:    input.currency,
-			IsFeatured:  input.featured,
+			FQN:          input.fqn,
+			DisplayLabel: displayLabel,
+			AccountType:  input.accountType,
+			Currency:     input.currency,
+			IsFeatured:   input.featured,
 		})
 		if err != nil {
 			return fmt.Errorf("create account %q: %w", input.fqn, err)
@@ -793,6 +800,15 @@ func (b *seedBuilder) seedSemanticCoverage(ctx context.Context) error {
 		b.rec("bank:Chase:Sapphire", "Avery", "USD", -4200, -4200, "", []string{"Shared:Family"}, "Reimbursable client dinner"),
 		b.rec("employers:Acme:expenses", "", "USD", 4200, 4200, "", []string{"Shared:Family"}, "Reimbursable client dinner"),
 	); err != nil {
+		return err
+	}
+	if err := b.tx(ctx, b.templateDate("2026-05-29"),
+		b.rec("bank:Chase:joint_checking", "", "USD", -10000, -10000, "", []string{"Shared:Family"}, "Fund Amazon gift card"),
+		b.rec("merchant:Amazon:gift_card", "", "USD", 10000, 10000, "", []string{"Shared:Family"}, "Fund Amazon gift card"),
+	); err != nil {
+		return err
+	}
+	if err := b.simpleSpend(ctx, b.templateDate("2026-05-30"), "merchant:Amazon:gift_card", "merchant:Amazon:flow", "Shopping:Household", 3500, "Amazon gift card purchase", []string{"Shared:Family"}); err != nil {
 		return err
 	}
 

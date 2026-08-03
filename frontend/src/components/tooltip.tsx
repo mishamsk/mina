@@ -20,7 +20,9 @@ interface TooltipProps {
   readonly className?: string;
   readonly disabled?: boolean;
   readonly focusable?: boolean;
+  readonly forceOpen?: boolean;
   readonly label: string;
+  readonly onEscape?: () => void;
 }
 
 const suppressFocusTooltipAttribute = "data-mina-suppress-focus-tooltip";
@@ -56,14 +58,28 @@ export const Tooltip = ({
   className,
   disabled = false,
   focusable = true,
+  forceOpen = false,
   label,
+  onEscape,
 }: TooltipProps) => {
   const [open, setOpen] = useState(false);
+  const [forcedOpenState, setForcedOpenState] = useState({
+    dismissed: false,
+    source: forceOpen,
+  });
   const forwardEscapeTargetRef = useRef<EventTarget | null>(null);
   const suppressNextOpenRef = useRef(false);
+  if (forcedOpenState.source !== forceOpen) {
+    setForcedOpenState({ dismissed: false, source: forceOpen });
+  }
+  const forcedOpenDismissed =
+    forcedOpenState.source === forceOpen && forcedOpenState.dismissed;
+  const effectiveOpen = disabled
+    ? false
+    : (forceOpen && !forcedOpenDismissed) || open;
 
   useEffect(() => {
-    if (open || !forwardEscapeTargetRef.current) {
+    if (effectiveOpen || !forwardEscapeTargetRef.current) {
       return;
     }
 
@@ -84,7 +100,7 @@ export const Tooltip = ({
     return () => {
       window.clearTimeout(timeout);
     };
-  }, [open]);
+  }, [effectiveOpen]);
 
   const handleFocusCapture = (event: FocusEvent<HTMLElement>) => {
     if (
@@ -108,6 +124,12 @@ export const Tooltip = ({
       return;
     }
 
+    if (nextOpen) {
+      setForcedOpenState({ dismissed: false, source: forceOpen });
+    } else if (forceOpen) {
+      setForcedOpenState({ dismissed: true, source: forceOpen });
+    }
+
     if (!nextOpen) {
       suppressNextOpenRef.current = false;
     }
@@ -120,10 +142,11 @@ export const Tooltip = ({
     // tooltip unmounts so exactly one interactive ladder level handles it.
     event.stopPropagation();
     forwardEscapeTargetRef.current = event.target;
+    onEscape?.();
   };
 
   return (
-    <TooltipRoot open={disabled ? false : open} onOpenChange={handleOpenChange}>
+    <TooltipRoot open={effectiveOpen} onOpenChange={handleOpenChange}>
       {asChild ? (
         <TooltipTrigger
           asChild

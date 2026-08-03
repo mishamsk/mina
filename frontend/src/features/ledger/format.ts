@@ -104,6 +104,29 @@ export const buildLookupMaps = (
   tagsById: new Map(lookups?.tags.map((tag) => [tag.tag_id, tag]) ?? []),
 });
 
+export const transactionAccountFqnContext = (
+  transaction: Transaction,
+  maps: Pick<LookupMaps, "accountsById">,
+  options: { readonly includeDisplayTitle?: boolean } = {},
+): string => {
+  const fqns = Array.from(
+    new Set(
+      transaction.records.flatMap((record) => {
+        const account = maps.accountsById.get(record.account_id);
+        return account ? [account.fqn] : [];
+      }),
+    ),
+  );
+  const accountContext =
+    fqns.length > 0 ? `Accounts: ${fqns.join("; ")}` : undefined;
+  if (options.includeDisplayTitle === false) {
+    return accountContext ?? "";
+  }
+  return accountContext
+    ? `${transaction.display_title}. ${accountContext}`
+    : transaction.display_title;
+};
+
 export const formatInitiatedDate = (value: string): string => {
   return formatLocalCivilDate(value);
 };

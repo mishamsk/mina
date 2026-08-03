@@ -28,6 +28,7 @@ import { cn } from "@/lib/utils";
 import type { LedgerLookupsSnapshot } from "@/store";
 import { formatInstantTimestamp, localCivilDate } from "@/utils/date";
 
+import { AccountDisplayLabel } from "./account-display-label";
 import { AmountText } from "./amount-text";
 import { ClassBadge } from "./class-badge";
 import {
@@ -41,6 +42,7 @@ import {
   type LookupMaps,
   recordRoleLabel,
   settlementStatusLabel,
+  transactionAccountFqnContext,
 } from "./format";
 import { FqnPath } from "./fqn-path";
 import { RecordRoleIcon, StatusIcon } from "./line-icons";
@@ -369,9 +371,9 @@ const DetailRecordsTable = ({
                     data-label="Account"
                   >
                     {account ? (
-                      <FqnPath
+                      <AccountDisplayLabel
+                        account={account}
                         to={`/accounts/${account.account_id}`}
-                        value={account.fqn}
                       />
                     ) : (
                       "Unknown account"
@@ -889,12 +891,28 @@ export const TransactionDetailPanel = ({
           <p className="font-heading text-muted-foreground text-xs font-semibold uppercase">
             Transaction detail
           </p>
-          <h2
-            id="transaction-detail-title"
-            className="font-heading text-xl font-bold [overflow-wrap:anywhere]"
-          >
-            {transaction?.display_title ?? "Loading transaction"}
-          </h2>
+          {transaction ? (
+            <Tooltip
+              asChild
+              label={transactionAccountFqnContext(transaction, maps)}
+              className="max-w-full"
+            >
+              <h2
+                id="transaction-detail-title"
+                className="font-heading text-xl font-bold [overflow-wrap:anywhere]"
+                tabIndex={0}
+              >
+                {transaction.display_title}
+              </h2>
+            </Tooltip>
+          ) : (
+            <h2
+              id="transaction-detail-title"
+              className="font-heading text-xl font-bold [overflow-wrap:anywhere]"
+            >
+              Loading transaction
+            </h2>
+          )}
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {transaction?.lifecycle_status === "active" && onEdit ? (

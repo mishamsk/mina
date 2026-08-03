@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/oapi-codegen/nullable"
+
 	"github.com/mishamsk/mina/internal/apptest"
 	"github.com/mishamsk/mina/internal/httpclient"
 )
@@ -22,7 +24,7 @@ func TestShorthandTransactionCreateSignsAndDefaults(t *testing.T) {
 		Amount:                "12.34",
 	})
 	assertTransactionClass(t, "spend", spend, httpclient.TransactionClassSpend)
-	assertTransactionDisplayTitle(t, "spend", spend, "Primary → Coffee")
+	assertTransactionDisplayTitle(t, "spend", spend, "Shorthand:Primary → Shorthand:Coffee")
 	assertRecordAmount(t, spend, refs.checkingAccountID, "-12.34000000")
 	assertRecordAmount(t, spend, refs.merchantAccountID, "12.34000000")
 	assertDefaultShorthandRecords(t, spend)
@@ -36,7 +38,7 @@ func TestShorthandTransactionCreateSignsAndDefaults(t *testing.T) {
 		Amount:               "100.00",
 	})
 	assertTransactionClass(t, "income", income, httpclient.TransactionClassIncome)
-	assertTransactionDisplayTitle(t, "income", income, "Employer → Primary")
+	assertTransactionDisplayTitle(t, "income", income, "Shorthand:Employer → Shorthand:Primary")
 	assertRecordAmount(t, income, refs.checkingAccountID, "100.00000000")
 	assertRecordAmount(t, income, refs.employerAccountID, "-100.00000000")
 
@@ -49,7 +51,7 @@ func TestShorthandTransactionCreateSignsAndDefaults(t *testing.T) {
 		Amount:                "5.67",
 	})
 	assertTransactionClass(t, "refund", refund, httpclient.TransactionClassRefund)
-	assertTransactionDisplayTitle(t, "refund", refund, "Coffee → Primary")
+	assertTransactionDisplayTitle(t, "refund", refund, "Shorthand:Coffee → Shorthand:Primary")
 	assertRecordAmount(t, refund, refs.checkingAccountID, "5.67000000")
 	assertRecordAmount(t, refund, refs.merchantAccountID, "-5.67000000")
 
@@ -61,9 +63,47 @@ func TestShorthandTransactionCreateSignsAndDefaults(t *testing.T) {
 		Amount:               "25.00",
 	})
 	assertTransactionClass(t, "transfer", transfer, httpclient.TransactionClassTransfer)
-	assertTransactionDisplayTitle(t, "transfer", transfer, "Primary → Reserve")
+	assertTransactionDisplayTitle(t, "transfer", transfer, "Shorthand:Primary → Shorthand:Reserve")
 	assertRecordAmount(t, transfer, refs.checkingAccountID, "-25.00000000")
 	assertRecordAmount(t, transfer, refs.savingsAccountID, "25.00000000")
+}
+
+func TestTransactionDirectionalTitleUsesExplicitAndFallbackDisplayLabels(t *testing.T) {
+	client := newSharedClient(t)
+	scenario := client.Scenario()
+	funding := scenario.AccountWithCurrency("wallet:Everyday", "USD")
+	category := scenario.CategoryWithIntent("Shopping:Online", httpclient.CategoryEconomicIntentExpense)
+	merchant := scenario.AccountWithDisplayLabel("merchant:Amazon:flow", "Amazon", httpclient.WritableAccountTypeFlow)
+
+	transaction := createSpendTransaction(t, client, httpclient.CreateSpendTransactionRequest{
+		InitiatedDate:         apptest.Date("2024-04-30"),
+		FundingAccountId:      funding.AccountId,
+		CounterpartyAccountId: merchant.AccountId,
+		CategoryId:            category.CategoryId,
+		Currency:              "USD",
+		Amount:                "12.34",
+	})
+	assertTransactionClass(t, "display-label spend", transaction, httpclient.TransactionClassSpend)
+	assertTransactionDisplayTitle(t, "display-label spend", transaction, "wallet:Everyday → Amazon")
+
+	updatedLabel := "Amazon Store"
+	updated, err := client.REST().UpdateAccountWithResponse(context.Background(), merchant.AccountId, httpclient.UpdateAccountRequest{
+		DisplayLabel: nullable.NewNullableWithValue(updatedLabel),
+	})
+	requireClientResponse(t, "update referenced account display label", err, updated.StatusCode(), http.StatusOK, updated.Body)
+
+	reread, err := client.REST().GetTransactionWithResponse(context.Background(), transaction.TransactionId)
+	requireClientResponse(t, "reread transaction after display-label update", err, reread.StatusCode(), http.StatusOK, reread.Body)
+	assertTransactionDisplayTitle(t, "updated display-label spend", *reread.JSON200, "wallet:Everyday → Amazon Store")
+
+	cleared, err := client.REST().UpdateAccountWithResponse(context.Background(), merchant.AccountId, httpclient.UpdateAccountRequest{
+		DisplayLabel: nullable.NewNullNullable[string](),
+	})
+	requireClientResponse(t, "clear referenced account display label", err, cleared.StatusCode(), http.StatusOK, cleared.Body)
+
+	reread, err = client.REST().GetTransactionWithResponse(context.Background(), transaction.TransactionId)
+	requireClientResponse(t, "reread transaction after display-label clear", err, reread.StatusCode(), http.StatusOK, reread.Body)
+	assertTransactionDisplayTitle(t, "cleared display-label spend", *reread.JSON200, "wallet:Everyday → Amazon:flow")
 }
 
 func TestShorthandTransactionCreateOptionalFieldsAmountUSDAndReadShapes(t *testing.T) {

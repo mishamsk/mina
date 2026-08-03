@@ -1,6 +1,6 @@
 import { Reload } from "pixelarticons/react";
 import { useCallback, useMemo, useRef } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 
 import { type Account, type AccountBalance, type JournalRecord } from "@/api";
 import { PageHelp } from "@/components/page-help";
@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/features/app-shell";
 import {
+  AccountDisplayLabel,
   AmountText,
   ApproximateUsdAmount,
   buildLookupMaps,
@@ -195,12 +196,10 @@ const GroupSubtotals = ({
                 className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-2"
                 data-testid="account-group-balance-row"
               >
-                <Link
+                <AccountDisplayLabel
+                  account={row.account}
                   to={`/accounts/${row.account.account_id}`}
-                  className="focus-visible:outline-ring min-w-0 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
-                >
-                  <FqnPath value={row.account.fqn} />
-                </Link>
+                />
                 <AmountText
                   amount={{
                     amount: row.balance.current_balance,

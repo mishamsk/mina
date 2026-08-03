@@ -344,6 +344,10 @@ charge is `spend` of the charge; cash back at a supermarket is `spend`.
 | `transfer` | Neutral primary amount. Moved amount shown separately. |
 | `mixed` | Shape amounts, with no synthetic total. |
 
+Transaction titles use effective account display labels for directional,
+adjustment, and dominant-counterparty summaries. This presentation choice does
+not participate in record roles, shapes, classes, or amounts.
+
 `mixed` now means a genuine conflict — spending and income in the same
 transaction, for example — rather than any transaction with more than one moving
 part.

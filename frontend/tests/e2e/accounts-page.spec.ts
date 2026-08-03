@@ -5,8 +5,17 @@ interface AccountFixture {
   readonly account_id: number;
   readonly account_type: "flow" | "owned" | "party" | "system";
   readonly currency: string | null;
+  readonly display_label: string;
+  readonly display_label_override: string | null;
   readonly fqn: string;
 }
+
+const accountTreeAccessibleName = (
+  account: Pick<AccountFixture, "display_label_override" | "fqn">,
+): string =>
+  `Open account ${account.fqn}${
+    account.display_label_override ? ` (${account.display_label_override})` : ""
+  }`;
 
 interface CategoryFixture {
   readonly category_id: number;
@@ -83,11 +92,13 @@ const createAccount = async (
   {
     accountType = "owned",
     currency = "USD",
+    displayLabel,
     fqn,
     hidden = false,
   }: {
     readonly accountType?: "flow" | "owned" | "party";
     readonly currency?: string | null;
+    readonly displayLabel?: string;
     readonly fqn: string;
     readonly hidden?: boolean;
   },
@@ -96,6 +107,7 @@ const createAccount = async (
     data: {
       account_type: accountType,
       currency,
+      display_label: displayLabel,
       fqn,
       is_hidden: hidden,
     },
@@ -397,10 +409,9 @@ test("transaction quick-delete refreshes reference deleteability without a reloa
 
   await page.goto("/accounts");
   await page.getByLabel("Search").fill(feesAccount.fqn);
-  const feesRow = page
-    .getByTestId("accounts-tree-row")
-    .filter({ hasText: feesAccount.fqn })
-    .first();
+  const feesRow = page.getByRole("button", {
+    name: accountTreeAccessibleName(feesAccount),
+  });
   const feesRowDelete = feesRow.getByRole("button", {
     name: "Delete account",
   });
@@ -539,7 +550,7 @@ test("transaction quick-delete refreshes reference deleteability without a reloa
   await expect(categoryRow).toHaveCount(0);
 });
 
-test("accounts tree gives Name column available width before truncating FQNs", async ({
+test("accounts tree shows full FQNs with custom labels in parentheses", async ({
   browserName,
   page,
 }) => {
@@ -553,47 +564,40 @@ test("accounts tree gives Name column available width before truncating FQNs", a
     "recurring",
     "fees",
   ].join(":");
-  await Promise.all([
+  const [shortAccount, deepAccount] = await Promise.all([
     createAccount(page, { fqn: shortFqn }),
-    createAccount(page, { fqn: deepFqn }),
+    createAccount(page, { displayLabel: "Household fees", fqn: deepFqn }),
   ]);
 
   await page.setViewportSize({ width: 1920, height: 900 });
   await page.goto("/accounts");
-  const shortPath = page
-    .getByTestId("accounts-tree-fqn")
-    .filter({ hasText: shortFqn });
+  const shortRow = page.getByRole("button", {
+    name: accountTreeAccessibleName(shortAccount),
+  });
+  const shortPath = shortRow.getByTestId("accounts-tree-fqn");
   await expect(shortPath).toHaveText(shortFqn);
-  await expect
-    .poll(() =>
-      shortPath.evaluate((element) =>
-        [...element.querySelectorAll<HTMLElement>("span")].every(
-          (span) => span.scrollWidth <= span.clientWidth + 1,
-        ),
-      ),
-    )
-    .toBe(true);
+  await expect(shortRow.getByTestId("accounts-tree-display-label")).toHaveCount(
+    0,
+  );
 
   await page.setViewportSize({ width: 1200, height: 900 });
   const deepPath = page
-    .getByTestId("accounts-tree-fqn")
-    .filter({ hasText: deepFqn });
+    .getByRole("button", {
+      name: accountTreeAccessibleName(deepAccount),
+    })
+    .getByTestId("accounts-tree-fqn");
   await expect(deepPath).toHaveText(deepFqn);
-  await expect
-    .poll(() =>
-      deepPath.evaluate((element) => {
-        const ancestors = element.querySelector<HTMLElement>(
-          ".text-muted-foreground",
-        );
-        return (
-          ancestors !== null && ancestors.scrollWidth > ancestors.clientWidth
-        );
-      }),
-    )
-    .toBe(true);
+  const deepRow = page.getByRole("button", {
+    name: accountTreeAccessibleName(deepAccount),
+  });
+  await expect(deepRow.getByTestId("accounts-tree-display-label")).toHaveText(
+    "(Household fees)",
+  );
+  await deepRow.focus();
+  await expect(deepRow).toBeFocused();
 });
 
-test("register headers use available width before truncating FQNs", async ({
+test("register headers fit display labels while group headers retain FQNs", async ({
   browserName,
   page,
 }) => {
@@ -675,16 +679,30 @@ test("register headers use available width before truncating FQNs", async ({
       )
       .toBe(true);
   };
+  const expectDisplayLabel = async (
+    header: Locator,
+    displayLabel: string,
+    fqn: string,
+  ) => {
+    const label = header.getByText(displayLabel, { exact: true }).first();
+    await expect(label).toBeVisible();
+    await label.hover();
+    await expect(page.getByRole("tooltip")).toHaveText(
+      displayLabel === fqn ? fqn : `${displayLabel} · ${fqn}`,
+    );
+    await page.mouse.move(0, 0);
+  };
 
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(
     `/accounts/${leafDominatedAccount.account_id}?page=1&pageSize=25`,
   );
   const leafDominatedAccountHeader = page.getByTestId("account-header");
-  const leafDominatedAccountPath = leafDominatedAccountHeader
-    .locator(".inline-flex.overflow-hidden.font-mono")
-    .first();
-  await expectFullPath(leafDominatedAccountPath, leafDominatedAccount.fqn);
+  await expectDisplayLabel(
+    leafDominatedAccountHeader,
+    leafDominatedAccount.display_label,
+    leafDominatedAccount.fqn,
+  );
   await expectNoHeaderOverflow(leafDominatedAccountHeader);
 
   await page.goto(
@@ -702,14 +720,11 @@ test("register headers use available width before truncating FQNs", async ({
 
   await page.goto(`/accounts/${account.account_id}?page=1&pageSize=25`);
   const accountHeader = page.getByTestId("account-header");
-  const accountPath = accountHeader
-    .locator(".inline-flex.overflow-hidden.font-mono")
-    .first();
-  await expectFullPath(accountPath, account.fqn);
+  await expectDisplayLabel(accountHeader, account.display_label, account.fqn);
   await expectNoHeaderOverflow(accountHeader);
 
   await page.setViewportSize({ width: 480, height: 900 });
-  await expectMiddleTruncation(accountPath, account.fqn);
+  await expectDisplayLabel(accountHeader, account.display_label, account.fqn);
   await expectNoHeaderOverflow(accountHeader);
 
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -730,10 +745,11 @@ test("register headers use available width before truncating FQNs", async ({
 
   await page.goto(`/accounts/${longAccount.account_id}?page=1&pageSize=25`);
   const longAccountHeader = page.getByTestId("account-header");
-  const longAccountPath = longAccountHeader
-    .locator(".inline-flex.overflow-hidden.font-mono")
-    .first();
-  await expectLongLeafTruncation(longAccountPath, longAccount.fqn);
+  await expectDisplayLabel(
+    longAccountHeader,
+    longAccount.display_label,
+    longAccount.fqn,
+  );
   await expectNoHeaderOverflow(longAccountHeader);
 
   await page.goto(
@@ -911,7 +927,9 @@ test("account page renders header and paginated running-balance register", async
   expect(balance).toBeDefined();
   expect(firstRecord.running_balance).toBe(balance?.current_balance);
 
-  await expect(page.getByRole("heading", { name: "Card" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: account.display_label }),
+  ).toBeVisible();
   await expect(page.getByText("Owned", { exact: true })).toBeVisible();
   await expect(page.getByText("USD", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("Current", { exact: true })).toBeVisible();
@@ -945,7 +963,9 @@ test("account page renders header and paginated running-balance register", async
     .filter({ hasText: firstRecord.memo ?? "" })
     .first();
   await expect(firstRow).toBeVisible();
-  await expect(firstRow).toContainText("Card → PowellsBooks");
+  await expect(firstRow).toContainText(
+    `${account.display_label} → ${merchant.display_label}`,
+  );
   await expect(firstRow).toContainText("PowellsBooks");
   await expect(firstRow).toContainText(
     formatUsdMarkerAmount(firstRecord.amount),
@@ -974,7 +994,9 @@ test("account page renders header and paginated running-balance register", async
   await expect(
     peekPanel.getByTestId("transaction-detail-records-table"),
   ).toContainText(firstRecord.memo ?? "");
-  await expect(peekPanel.getByText("Card").first()).toBeVisible();
+  await expect(
+    peekPanel.getByText(account.display_label, { exact: true }).first(),
+  ).toBeVisible();
   await expect(
     peekPanel.getByText("merchant:PowellsBooks").first(),
   ).toBeVisible();
@@ -1009,7 +1031,9 @@ test("account page renders header and paginated running-balance register", async
     .getByTestId("account-register-row")
     .filter({ hasText: secondRecord.memo ?? "" })
     .first();
-  await page.getByRole("heading", { exact: true, name: "Card" }).click();
+  await page
+    .getByRole("heading", { exact: true, name: account.display_label })
+    .click();
   await expect(peekPanel).toBeHidden();
   await expect(page).not.toHaveURL(/[?&]record=/);
 
@@ -1430,7 +1454,7 @@ test("account tree rows and entry links navigate to account register pages", asy
     .first();
   await expect(jointTreeRow).toHaveAttribute(
     "aria-label",
-    "Open account bank:Chase:joint_checking",
+    accountTreeAccessibleName(joint),
     { timeout: 10_000 },
   );
   await jointTreeRow.click();
@@ -1639,7 +1663,7 @@ test("account restructure invalidates a cached register before revisit", async (
 
   await expect(page.getByRole("heading", { name: "New" })).toBeVisible();
   await expect(page.getByTestId("account-header")).toContainText(
-    destinationFqn,
+    `${unique}:New`,
   );
   await expect(
     page.getByTestId("account-register-row").filter({
@@ -2166,6 +2190,189 @@ test("accounts page manages account forms, credit limits, and tombstone delete",
   await expect(
     page.getByTestId("accounts-tree-row").filter({ hasText: "Checking" }),
   ).toHaveCount(0, { timeout: 10_000 });
+});
+
+test("account form creates edits and clears display label overrides", async ({
+  browserName,
+  page,
+}) => {
+  const unique = Date.now().toString(36);
+  const fqn = `e2e:labels:${browserName}:${unique}:Primary`;
+  const fallbackLabel = `${unique}:Primary`;
+
+  await page.goto("/accounts");
+  await page.getByRole("button", { name: "New account" }).click();
+  const createPanel = page.getByRole("dialog", { name: "Create account" });
+  const createLabel = createPanel.getByLabel("Display label (optional)");
+  await expect(createPanel).toBeVisible();
+  await expect(createLabel).toHaveValue("");
+  await expect(
+    createPanel.getByText(
+      "Leave blank to use the final one or two FQN segments automatically.",
+    ),
+  ).toBeVisible();
+
+  await createLabel.fill(" Daily spending");
+  await createLabel.blur();
+  await expect(
+    createPanel.getByText("Remove leading or trailing whitespace."),
+  ).toBeVisible();
+  await expect(createLabel).toHaveAccessibleDescription(
+    "Leave blank to use the final one or two FQN segments automatically. Remove leading or trailing whitespace.",
+  );
+  await createLabel.fill("Daily spending");
+  await expect(
+    createPanel.getByText("Remove leading or trailing whitespace."),
+  ).toHaveCount(0);
+  await expect(createLabel).toHaveAccessibleDescription(
+    "Leave blank to use the final one or two FQN segments automatically.",
+  );
+  await createPanel.getByLabel("FQN").fill(fqn);
+
+  const createAccountResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/accounts" && response.request().method() === "POST"
+    );
+  });
+  await createPanel.getByRole("button", { name: "Create" }).click();
+  const createdResponse = await createAccountResponse;
+  expect(createdResponse.status()).toBe(201);
+  expect(createdResponse.request().postDataJSON()).toMatchObject({
+    display_label: "Daily spending",
+  });
+  const created = (await createdResponse.json()) as AccountFixture;
+  expect(created.display_label_override).toBe("Daily spending");
+  await expect(page.getByText("Account created.")).toBeVisible();
+
+  await page.getByLabel("Search").fill(fqn);
+  const createdAccountRow = page.getByRole("button", {
+    name: `Open account ${fqn} (Daily spending)`,
+  });
+  await expect(createdAccountRow.getByTestId("accounts-tree-fqn")).toHaveText(
+    fqn,
+  );
+  await expect(
+    createdAccountRow.getByTestId("accounts-tree-display-label"),
+  ).toHaveText("(Daily spending)");
+
+  await createdAccountRow.getByRole("button", { name: "Edit account" }).click();
+  const editPanel = page.getByRole("dialog", { name: "Edit account" });
+  const editLabel = editPanel.getByLabel("Display label (optional)");
+  await expect(editLabel).toHaveValue("Daily spending");
+  await editLabel.fill("Everyday");
+  const updateLabelResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === `/api/accounts/${created.account_id}` &&
+      response.request().method() === "PATCH"
+    );
+  });
+  await editPanel.getByRole("button", { name: "Save" }).click();
+  const updatedResponse = await updateLabelResponse;
+  expect(updatedResponse.status()).toBe(200);
+  expect(updatedResponse.request().postDataJSON()).toMatchObject({
+    display_label: "Everyday",
+  });
+  await expect(editPanel).toBeHidden();
+  const updatedAccountRow = page.getByRole("button", {
+    name: `Open account ${fqn} (Everyday)`,
+  });
+  await expect(updatedAccountRow.getByTestId("accounts-tree-fqn")).toHaveText(
+    fqn,
+  );
+  await expect(
+    updatedAccountRow.getByTestId("accounts-tree-display-label"),
+  ).toHaveText("(Everyday)");
+
+  await updatedAccountRow.getByRole("button", { name: "Edit account" }).click();
+  await expect(editPanel).toBeVisible();
+  await expect(editLabel).toHaveValue("Everyday");
+  await editLabel.fill("");
+  const clearLabelResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === `/api/accounts/${created.account_id}` &&
+      response.request().method() === "PATCH"
+    );
+  });
+  await editPanel.getByRole("button", { name: "Save" }).click();
+  const clearedResponse = await clearLabelResponse;
+  expect(clearedResponse.status()).toBe(200);
+  expect(clearedResponse.request().postDataJSON()).toMatchObject({
+    display_label: null,
+  });
+  const cleared = (await clearedResponse.json()) as AccountFixture;
+  expect(cleared.display_label).toBe(fallbackLabel);
+  expect(cleared.display_label_override).toBeNull();
+  await expect(editPanel).toBeHidden();
+  const automaticAccountRow = page.getByRole("button", {
+    name: `Open account ${fqn}`,
+  });
+  await expect(automaticAccountRow.getByTestId("accounts-tree-fqn")).toHaveText(
+    fqn,
+  );
+  await expect(
+    automaticAccountRow.getByTestId("accounts-tree-display-label"),
+  ).toHaveCount(0);
+
+  await automaticAccountRow
+    .getByRole("button", { name: "Edit account" })
+    .click();
+  await expect(editLabel).toHaveValue("");
+});
+
+test("account form uses a single-line display label while saving", async ({
+  browserName,
+  page,
+}) => {
+  const unique = Date.now().toString(36);
+  const fqn = `e2e:single-line-label:${browserName}:${unique}`;
+  const originalLabel = "Daily Spending";
+  const updatedLabel = "Daily Spending account";
+  const account = await createAccount(page, {
+    displayLabel: originalLabel,
+    fqn,
+  });
+
+  await page.goto(`/accounts?q=${encodeURIComponent(fqn)}`);
+  const accountRow = page
+    .getByTestId("accounts-tree-row")
+    .filter({ hasText: originalLabel });
+  await accountRow.getByRole("button", { name: "Edit account" }).click();
+  const editPanel = page.getByRole("dialog", { name: "Edit account" });
+  const displayLabel = editPanel.getByLabel("Display label (optional)");
+  await expect(displayLabel).toHaveAttribute("type", "text");
+  await expect(displayLabel).toHaveValue(originalLabel);
+  await displayLabel.fill(updatedLabel);
+
+  let releasePatch = () => {};
+  const patchGate = new Promise<void>((resolve) => {
+    releasePatch = resolve;
+  });
+  await page.route(
+    `**/api/accounts/${account.account_id}`,
+    async (route) => {
+      await patchGate;
+      await route.continue();
+    },
+    { times: 1 },
+  );
+  const updateResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === `/api/accounts/${account.account_id}` &&
+      response.request().method() === "PATCH"
+    );
+  });
+  await editPanel.getByRole("button", { name: "Save" }).click();
+  await expect(displayLabel).toBeDisabled();
+  releasePatch();
+  const response = await updateResponse;
+  expect(response.status()).toBe(200);
+  expect(response.request().postDataJSON()).toMatchObject({
+    display_label: updatedLabel,
+  });
 });
 
 test("accounts form clears API field errors after editing the field", async ({

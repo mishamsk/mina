@@ -14,8 +14,7 @@ import {
   expect,
   expectAccountLinkNavigation,
   expectDatelessReadOnlyDetailGrid,
-  expectFocusedAccountPathExpanded,
-  expectFocusedTwoSegmentAccountPathWhole,
+  expectFocusedAccountLabel,
   expectKeyboardDisclosure,
   expectMouseDisclosure,
   expectTransactionFilterUrl,
@@ -392,15 +391,15 @@ test("detail and peek account paths navigate without record-row side effects", a
   let panel = await openUrlTransactionDetail(page, transaction.transaction_id);
   let accountLink = panel.getByRole("link", {
     exact: true,
-    name: account.fqn,
+    name: account.display_label,
   });
   let recordRow = accountLink.locator("xpath=ancestor::tr");
   await expect(accountLink).toHaveCount(1);
   await expect(recordRow.getByRole("link")).toHaveCount(1);
   await expect(recordRow).toHaveAttribute("aria-expanded", "false");
-  await expectFocusedTwoSegmentAccountPathWhole(
+  await expectFocusedAccountLabel(
     panel.locator(`a[href='/accounts/${merchant.account_id}']`),
-    merchant.fqn,
+    merchant,
   );
   await expect(page.locator("[data-slot='tooltip-content']")).toBeVisible();
   await accountLink.click();
@@ -409,7 +408,7 @@ test("detail and peek account paths navigate without record-row side effects", a
   panel = await openUrlTransactionDetail(page, transaction.transaction_id);
   accountLink = panel.getByRole("link", {
     exact: true,
-    name: account.fqn,
+    name: account.display_label,
   });
   recordRow = accountLink.locator("xpath=ancestor::tr");
   await recordRow.focus();
@@ -417,14 +416,14 @@ test("detail and peek account paths navigate without record-row side effects", a
   await expect(recordRow).toHaveAttribute("aria-expanded", "true");
   await recordRow.press("Enter");
   await expect(recordRow).toHaveAttribute("aria-expanded", "false");
-  await expectFocusedAccountPathExpanded(accountLink, account.fqn);
+  await expectFocusedAccountLabel(accountLink, account);
   await accountLink.press("Enter");
   await expectAccountLinkNavigation(page, account);
 
   panel = await openAccountTransactionPeek(page, merchant, memo);
   accountLink = panel.getByRole("link", {
     exact: true,
-    name: account.fqn,
+    name: account.display_label,
   });
   recordRow = accountLink.locator("xpath=ancestor::tr");
   await expect(accountLink).toHaveCount(1);
@@ -436,7 +435,7 @@ test("detail and peek account paths navigate without record-row side effects", a
   panel = await openAccountTransactionPeek(page, merchant, memo);
   accountLink = panel.getByRole("link", {
     exact: true,
-    name: account.fqn,
+    name: account.display_label,
   });
   recordRow = accountLink.locator("xpath=ancestor::tr");
   await recordRow.focus();
@@ -444,7 +443,7 @@ test("detail and peek account paths navigate without record-row side effects", a
   await expect(recordRow).toHaveAttribute("aria-expanded", "true");
   await recordRow.press("Enter");
   await expect(recordRow).toHaveAttribute("aria-expanded", "false");
-  await expectFocusedAccountPathExpanded(accountLink, account.fqn);
+  await expectFocusedAccountLabel(accountLink, account);
   await accountLink.press("Enter");
   await expectAccountLinkNavigation(page, account);
 });

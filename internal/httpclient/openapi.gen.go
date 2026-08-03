@@ -1128,10 +1128,16 @@ type Account struct {
 	Currency *string `json:"currency,omitempty"`
 
 	// Deletable Populated in listAccounts responses. True when the active account has no active dependent resources and can be tombstone-deleted.
-	Deletable      *bool   `json:"deletable,omitempty"`
-	ExternalId     *string `json:"external_id,omitempty"`
-	ExternalSystem *string `json:"external_system,omitempty"`
-	Fqn            string  `json:"fqn"`
+	Deletable *bool `json:"deletable,omitempty"`
+
+	// DisplayLabel Effective non-unique presentation label. An explicit override wins; otherwise Mina derives the final one or two FQN segments.
+	DisplayLabel string `json:"display_label"`
+
+	// DisplayLabelOverride Stored custom presentation label, or null when display_label is derived from the FQN.
+	DisplayLabelOverride *string `json:"display_label_override"`
+	ExternalId           *string `json:"external_id,omitempty"`
+	ExternalSystem       *string `json:"external_system,omitempty"`
+	Fqn                  string  `json:"fqn"`
 
 	// HasCreditLimitHistory Populated in listAccounts responses. True when the account has active credit-limit history.
 	HasCreditLimitHistory *bool      `json:"has_credit_limit_history,omitempty"`
@@ -1366,6 +1372,9 @@ type CreateAccountRequest struct {
 
 	// Currency Use null or omit for a multi-currency account; use an ISO 4217 or `C::` crypto code for a single-currency account.
 	Currency *string `json:"currency,omitempty"`
+
+	// DisplayLabel Optional non-unique presentation label. Custom values must be non-empty without leading or trailing whitespace. Null or omission uses the final one or two FQN segments.
+	DisplayLabel *string `json:"display_label,omitempty"`
 
 	// ExternalId Optional identifier assigned by an external system.
 	ExternalId *string `json:"external_id,omitempty"`
@@ -2345,6 +2354,9 @@ type UpdateAccountRequest struct {
 
 	// Currency Set null for multi-currency, or set a code for single-currency. Omit to leave unchanged.
 	Currency nullable.Nullable[string] `json:"currency,omitempty"`
+
+	// DisplayLabel Set a custom non-unique presentation label without leading or trailing whitespace, set null to restore the FQN-derived fallback, or omit to leave unchanged. Custom values must be non-empty.
+	DisplayLabel nullable.Nullable[string] `json:"display_label,omitempty"`
 
 	// ExternalId Optional identifier assigned by an external system.
 	ExternalId nullable.Nullable[string] `json:"external_id,omitempty"`

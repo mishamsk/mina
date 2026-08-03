@@ -7,6 +7,7 @@ import { test } from "@tests/e2e/test";
 
 interface AccountFixture {
   readonly account_id: number;
+  readonly display_label: string;
   readonly fqn: string;
 }
 

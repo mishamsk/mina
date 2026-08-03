@@ -42,6 +42,7 @@ import { cn } from "@/lib/utils";
 import type { LedgerLookupsSnapshot } from "@/store";
 import { localTodayISODate } from "@/utils/date";
 
+import { AccountDisplayLabel } from "./account-display-label";
 import { AmountText } from "./amount-text";
 import {
   type ActiveBulkEditor,
@@ -66,6 +67,7 @@ import {
   lineTags,
   type LookupMaps,
   simpleTransactionAmountRecords,
+  transactionAccountFqnContext,
   transactionHasMoreParts,
 } from "./format";
 import { FqnPath } from "./fqn-path";
@@ -549,7 +551,7 @@ const RecordsTable = ({
                   }
                 >
                   {account ? (
-                    <FqnPath value={account.fqn} />
+                    <AccountDisplayLabel account={account} />
                   ) : (
                     "Unknown account"
                   )}
@@ -1659,7 +1661,13 @@ export const TransactionBrowser = ({
                           className="min-w-0 flex-1"
                           data-testid="transaction-description-text"
                         >
-                          <Tooltip label={title} className="block min-w-0">
+                          <Tooltip
+                            label={transactionAccountFqnContext(
+                              transaction,
+                              maps,
+                            )}
+                            className="block min-w-0"
+                          >
                             <div
                               className={cn(
                                 "truncate font-medium",

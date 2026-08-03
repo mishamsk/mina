@@ -6,6 +6,7 @@ import {
 
 interface AccountFixture {
   readonly account_id: number;
+  readonly display_label: string;
   readonly fqn: string;
 }
 
@@ -767,41 +768,19 @@ const expectKeyboardDisclosure = async (panel: Locator): Promise<void> => {
   await expect(row).toHaveAttribute("aria-expanded", "false");
 };
 
-const expectFocusedAccountPathExpanded = async (
+const expectFocusedAccountLabel = async (
   link: Locator,
-  value: string,
+  account: AccountFixture,
 ): Promise<void> => {
-  const segments = value.split(":");
-  const collapsedAncestors = `${segments[0]}:…:`;
-  const fullAncestors = `${segments.slice(0, -1).join(":")}:`;
-  const visualAncestors = link.locator("span[aria-hidden='true']");
-  const collapsed = visualAncestors.filter({
-    hasText: collapsedAncestors,
-  });
-  const expanded = visualAncestors.filter({ hasText: fullAncestors });
-
-  await expect(collapsed).toBeVisible();
-  await expect(expanded).toBeHidden();
+  await expect(link).toHaveText(account.display_label);
   expect(await link.evaluate((element) => element.tabIndex)).toBe(0);
   await link.focus();
   await expect(link).toBeFocused();
-  await expect(collapsed).toBeHidden();
-  await expect(expanded).toBeVisible();
-};
-
-const expectFocusedTwoSegmentAccountPathWhole = async (
-  link: Locator,
-  value: string,
-): Promise<void> => {
-  const segments = value.split(":");
-  expect(segments).toHaveLength(2);
-  const ancestor = link.locator("span").filter({ hasText: `${segments[0]}:` });
-
-  await expect(ancestor).toBeVisible();
-  expect(await link.evaluate((element) => element.tabIndex)).toBe(0);
-  await link.focus();
-  await expect(link).toBeFocused();
-  await expect(ancestor).toBeVisible();
+  await expect(link.page().getByRole("tooltip")).toHaveText(
+    account.display_label === account.fqn
+      ? account.fqn
+      : `${account.display_label} · ${account.fqn}`,
+  );
 };
 
 const expectAccountLinkNavigation = async (
@@ -1710,8 +1689,7 @@ export {
   expectAmountMarkerRightEdgesAligned,
   expectCollapsedRowActionsKeepAmountVisible,
   expectDatelessReadOnlyDetailGrid,
-  expectFocusedAccountPathExpanded,
-  expectFocusedTwoSegmentAccountPathWhole,
+  expectFocusedAccountLabel,
   expectInlineSaveKeepsTransactionTableStable,
   expectKeyboardDisclosure,
   expectMouseDisclosure,

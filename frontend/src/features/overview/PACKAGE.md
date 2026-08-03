@@ -8,6 +8,7 @@
 
 - `refreshOverview` refetches only after an Overview snapshot exists or is already loading.
 - Overview balance groups sort featured accounts first within each FQN root.
+- Overview balance rows use effective account display labels with full-FQN tooltips while grouping and ordering remain FQN-based.
 
 ## Boundaries
 

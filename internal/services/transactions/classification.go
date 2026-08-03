@@ -53,7 +53,12 @@ func LineDisplayAmountsForSemanticRecords(records []SemanticRecord) (Transaction
 
 func classifyTransaction(transaction Transaction) (Transaction, error) {
 	records := make([]SemanticRecord, 0, len(transaction.Records))
-	for _, record := range transaction.Records {
+	for index := range transaction.Records {
+		record := &transaction.Records[index]
+		record.AccountDisplayLabel = accounts.EffectiveDisplayLabel(
+			record.AccountFQN,
+			record.AccountDisplayLabelOverride,
+		)
 		records = append(records, SemanticRecord{
 			Currency:       record.Currency,
 			Amount:         record.Amount,
@@ -527,7 +532,7 @@ func transactionDisplayTitle(transaction Transaction) string {
 		}
 	}
 	if transaction.Class == TransactionClassAdjustment {
-		if name, ok := uniqueAccountName(transaction.Records, func(record JournalRecord) bool {
+		if name, ok := uniqueAccountDisplayLabel(transaction.Records, func(record JournalRecord) bool {
 			return record.Role == RecordRoleBalance
 		}); ok {
 			return name
@@ -578,26 +583,26 @@ func titlePredicates(class TransactionClass) (func(JournalRecord) bool, func(Jou
 }
 
 func directionalAccountTitle(records []JournalRecord, from, to func(JournalRecord) bool) string {
-	fromName, ok := uniqueAccountName(records, from)
+	fromName, ok := uniqueAccountDisplayLabel(records, from)
 	if !ok {
 		return ""
 	}
-	toName, ok := uniqueAccountName(records, to)
+	toName, ok := uniqueAccountDisplayLabel(records, to)
 	if !ok {
 		return ""
 	}
 	return fromName + " → " + toName
 }
 
-func uniqueAccountName(records []JournalRecord, include func(JournalRecord) bool) (string, bool) {
+func uniqueAccountDisplayLabel(records []JournalRecord, include func(JournalRecord) bool) (string, bool) {
 	name := ""
 	var accountID int64
 	for _, record := range records {
-		if !include(record) || record.AccountName == "" {
+		if !include(record) || record.AccountDisplayLabel == "" {
 			continue
 		}
 		if name == "" {
-			name = record.AccountName
+			name = record.AccountDisplayLabel
 			accountID = record.AccountID
 			continue
 		}
@@ -655,12 +660,12 @@ func dominantRecordTitle(records []JournalRecord, include func(JournalRecord) bo
 	var maxAmount DisplayAmount
 	found := false
 	for _, record := range records {
-		if !include(record) || strings.TrimSpace(record.AccountName) == "" {
+		if !include(record) || strings.TrimSpace(record.AccountDisplayLabel) == "" {
 			continue
 		}
 		amount := record.Amount.Abs()
 		if !found || amount.Cmp(maxAmount.Amount) > 0 {
-			title = record.AccountName
+			title = record.AccountDisplayLabel
 			maxAmount = DisplayAmount{Amount: amount}
 			found = true
 		}

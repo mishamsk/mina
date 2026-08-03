@@ -376,6 +376,12 @@ func Operations() []Operation {
 							Required:    false,
 						},
 						{
+							Name:        "display_label",
+							Type:        "string",
+							Description: "Optional non-unique presentation label. Custom values must be non-empty without leading or trailing whitespace. Null or omission uses the final one or two FQN segments.",
+							Required:    false,
+						},
+						{
 							Name:        "external_id",
 							Type:        "string",
 							Description: "Optional identifier assigned by an external system.",
@@ -3359,6 +3365,12 @@ func Operations() []Operation {
 							Name:        "currency",
 							Type:        "string",
 							Description: "Set null for multi-currency, or set a code for single-currency. Omit to leave unchanged.",
+							Required:    false,
+						},
+						{
+							Name:        "display_label",
+							Type:        "string",
+							Description: "Set a custom non-unique presentation label without leading or trailing whitespace, set null to restore the FQN-derived fallback, or omit to leave unchanged. Custom values must be non-empty.",
 							Required:    false,
 						},
 						{

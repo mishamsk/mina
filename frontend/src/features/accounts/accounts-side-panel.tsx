@@ -42,6 +42,7 @@ import { refreshAccountsAfterMutation } from "./use-accounts-resource";
 type AccountFormField =
   | "creditLimit"
   | "currency"
+  | "displayLabel"
   | "effectiveDate"
   | "externalId"
   | "externalSystem"
@@ -55,6 +56,7 @@ interface AccountFormState {
   readonly accountType: WritableAccountType;
   readonly currency: string;
   readonly currencyMode: "multi" | "single";
+  readonly displayLabel: string;
   readonly externalId: string;
   readonly externalSystem: string;
   readonly fqn: string;
@@ -90,6 +92,7 @@ const blankForm = (): AccountFormState => ({
   accountType: "owned",
   currency: "USD",
   currencyMode: "single",
+  displayLabel: "",
   externalId: "",
   externalSystem: "",
   fqn: "",
@@ -104,6 +107,7 @@ const formFromAccount = (account: Account | undefined): AccountFormState =>
           account.account_type === "system" ? "owned" : account.account_type,
         currency: account.currency ?? "USD",
         currencyMode: account.currency == null ? "multi" : "single",
+        displayLabel: account.display_label_override ?? "",
         externalId: account.external_id ?? "",
         externalSystem: account.external_system ?? "",
         fqn: account.fqn,
@@ -114,6 +118,9 @@ const formFromAccount = (account: Account | undefined): AccountFormState =>
 
 const fieldErrorsFromAPI = (message: string): AccountFormErrors => {
   const lower = message.toLowerCase();
+  if (lower.includes("display_label")) {
+    return { displayLabel: message };
+  }
   if (lower.includes("fqn") || lower.includes("name")) {
     return { fqn: message };
   }
@@ -143,6 +150,7 @@ const hasErrors = (errors: AccountFormErrors): boolean =>
 
 const accountFormErrorFields: readonly AccountFormField[] = [
   "currency",
+  "displayLabel",
   "externalId",
   "externalSystem",
   "fqn",
@@ -182,6 +190,9 @@ const validateForm = (
   if (mode === "create" && !form.fqn.trim()) {
     errors.fqn = "FQN is required.";
   }
+  if (form.displayLabel !== form.displayLabel.trim()) {
+    errors.displayLabel = "Remove leading or trailing whitespace.";
+  }
   const currency = normalizeCurrency(form.currency);
   if (form.currencyMode === "single") {
     if (!currency) {
@@ -217,8 +228,18 @@ const validateCreditLimitField = (
   field: AccountFormField,
 ): string | undefined => validateCreditLimitDraft(draft)[field];
 
-const FieldError = ({ message }: { readonly message: string | undefined }) =>
-  message ? <p className="text-destructive text-xs">{message}</p> : null;
+const FieldError = ({
+  id,
+  message,
+}: {
+  readonly id?: string;
+  readonly message: string | undefined;
+}) =>
+  message ? (
+    <p id={id} className="text-destructive text-xs">
+      {message}
+    </p>
+  ) : null;
 
 const Field = ({
   children,
@@ -641,6 +662,11 @@ const AccountsSidePanelContent = ({
       mode === "edit" &&
       account !== undefined &&
       currency !== (account.currency ?? null);
+    const displayLabel = form.displayLabel || null;
+    const displayLabelChanged =
+      mode === "edit" &&
+      account !== undefined &&
+      displayLabel !== account.display_label_override;
 
     setSaving(true);
     const result =
@@ -648,6 +674,7 @@ const AccountsSidePanelContent = ({
         ? await createLedgerAccount({
             account_type: form.accountType,
             currency,
+            display_label: displayLabel,
             external_id: normalizeNullableString(form.externalId),
             external_system: normalizeNullableString(form.externalSystem),
             fqn: form.fqn.trim(),
@@ -658,6 +685,7 @@ const AccountsSidePanelContent = ({
           ? await updateLedgerAccount(account.account_id, {
               ...(accountTypeChanged ? { account_type: form.accountType } : {}),
               ...(currencyChanged ? { currency } : {}),
+              ...(displayLabelChanged ? { display_label: displayLabel } : {}),
               external_id: normalizeNullableString(form.externalId),
               external_system: normalizeNullableString(form.externalSystem),
               is_featured: form.isFeatured,
@@ -674,7 +702,7 @@ const AccountsSidePanelContent = ({
     if (result.data) {
       await refreshAccountsAfterMutation({
         account: result.data,
-        bulk: accountTypeChanged || currencyChanged,
+        bulk: accountTypeChanged || currencyChanged || displayLabelChanged,
       });
       if (!panelSessionActiveRef.current) {
         return;
@@ -931,6 +959,47 @@ const AccountsSidePanelContent = ({
               }}
             />
             <FieldError message={fieldErrors.fqn} />
+          </Field>
+
+          <Field
+            htmlFor="account-display-label"
+            label="Display label (optional)"
+          >
+            <input
+              id="account-display-label"
+              type="text"
+              disabled={saving}
+              aria-describedby={
+                fieldErrors.displayLabel
+                  ? "account-display-label-help account-display-label-error"
+                  : "account-display-label-help"
+              }
+              aria-invalid={fieldErrors.displayLabel ? true : undefined}
+              className="bg-card disabled:bg-muted h-9 border-2 border-[var(--border-ink)] px-2 font-mono text-sm shadow-[var(--shadow-pixel)] disabled:shadow-none"
+              placeholder="Automatic from FQN"
+              value={form.displayLabel}
+              onBlur={() => {
+                setFieldError(
+                  "displayLabel",
+                  validateFormField(form, mode, "displayLabel"),
+                );
+              }}
+              onChange={(event) => {
+                updateForm({ displayLabel: event.target.value });
+                setFieldError("displayLabel", undefined);
+              }}
+            />
+            <p
+              id="account-display-label-help"
+              className="text-muted-foreground font-body text-xs"
+            >
+              Leave blank to use the final one or two FQN segments
+              automatically.
+            </p>
+            <FieldError
+              id="account-display-label-error"
+              message={fieldErrors.displayLabel}
+            />
           </Field>
 
           <div className="grid gap-3 sm:grid-cols-2">

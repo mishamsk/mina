@@ -5,6 +5,7 @@ interface AccountFixture {
   readonly account_id: number;
   readonly account_type: "flow" | "owned" | "party" | "system";
   readonly currency: string | null;
+  readonly display_label: string;
   readonly fqn: string;
 }
 
@@ -34,6 +35,11 @@ const createAccount = async (
   return (await response.json()) as AccountFixture;
 };
 
+const accountTreeRow = (page: Page, account: AccountFixture) =>
+  page.getByRole("button", {
+    name: `Open account ${account.fqn}`,
+  });
+
 test("accounts tree shows single-currency credit-limit history without a matching balance row", async ({
   page,
 }) => {
@@ -54,9 +60,7 @@ test("accounts tree shows single-currency credit-limit history without a matchin
   expect(limitResponse.ok()).toBe(true);
 
   await page.goto(`/accounts?q=${encodeURIComponent(account.fqn)}`);
-  const accountRow = page
-    .getByTestId("accounts-tree-row")
-    .filter({ hasText: account.fqn });
+  const accountRow = accountTreeRow(page, account);
   await expect(accountRow).toBeVisible();
   await expect(accountRow.getByTestId("credit-limit-indicator")).toBeVisible();
 
@@ -92,9 +96,7 @@ test("non-owned credit-limit history can be deleted to unlock currency", async (
   expect(limitResponse.ok()).toBe(true);
 
   await page.goto(`/accounts?q=${encodeURIComponent(account.fqn)}`);
-  const accountRow = page
-    .getByTestId("accounts-tree-row")
-    .filter({ hasText: account.fqn });
+  const accountRow = accountTreeRow(page, account);
   await accountRow.getByRole("button", { name: "Edit account" }).click();
   const editPanel = page.getByRole("dialog", { name: "Edit account" });
   await expect(editPanel.getByLabel("Currency mode")).toBeDisabled();
@@ -147,9 +149,7 @@ test("empty credit-limit history does not lock currency controls while loading",
   );
 
   await page.goto(`/accounts?q=${encodeURIComponent(account.fqn)}`);
-  const accountRow = page
-    .getByTestId("accounts-tree-row")
-    .filter({ hasText: account.fqn });
+  const accountRow = accountTreeRow(page, account);
   await accountRow.getByRole("button", { name: "Edit account" }).click();
   const editPanel = page.getByRole("dialog", { name: "Edit account" });
 
@@ -181,9 +181,7 @@ test("a concurrent credit limit leaves a visible currency save error", async ({
   });
 
   await page.goto(`/accounts?q=${encodeURIComponent(account.fqn)}`);
-  const row = page
-    .getByTestId("accounts-tree-row")
-    .filter({ hasText: account.fqn });
+  const row = accountTreeRow(page, account);
   await row.getByRole("button", { name: "Edit account" }).click();
   const editPanel = page.getByRole("dialog", { name: "Edit account" });
   await expect(
@@ -194,9 +192,7 @@ test("a concurrent credit limit leaves a visible currency save error", async ({
 
   const concurrentPage = await page.context().newPage();
   await concurrentPage.goto(`/accounts?q=${encodeURIComponent(account.fqn)}`);
-  const concurrentRow = concurrentPage
-    .getByTestId("accounts-tree-row")
-    .filter({ hasText: account.fqn });
+  const concurrentRow = accountTreeRow(concurrentPage, account);
   await concurrentRow.getByRole("button", { name: "Edit account" }).click();
   const concurrentPanel = concurrentPage.getByRole("dialog", {
     name: "Edit account",
@@ -229,9 +225,7 @@ test("long crypto currency codes remain fully visible", async ({ page }) => {
   });
 
   await page.goto(`/accounts?q=${encodeURIComponent(account.fqn)}`);
-  const row = page
-    .getByTestId("accounts-tree-row")
-    .filter({ hasText: account.fqn });
+  const row = accountTreeRow(page, account);
   const renderedCurrency = row.locator("td").nth(2).getByText(currency, {
     exact: true,
   });
@@ -251,9 +245,7 @@ test("currency save keeps its account form mounted until refresh completes", asy
     fqn: `accounts:close-save:${unique}`,
   });
   await page.goto(`/accounts?q=${encodeURIComponent(account.fqn)}`);
-  const row = page
-    .getByTestId("accounts-tree-row")
-    .filter({ hasText: account.fqn });
+  const row = accountTreeRow(page, account);
   await row.getByRole("button", { name: "Edit account" }).click();
   const editPanel = page.getByRole("dialog", { name: "Edit account" });
   await editPanel.getByLabel("Currency mode").click();

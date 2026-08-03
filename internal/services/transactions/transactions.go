@@ -87,34 +87,35 @@ type Transaction struct {
 
 // JournalRecord is one debit or credit entry inside a transaction.
 type JournalRecord struct {
-	ID                   int64
-	TransactionID        int64
-	InitiatedDate        values.CivilDate
-	AccountID            int64
-	AccountName          string
-	AccountFQN           string
-	AccountType          accounts.AccountType
-	MemberID             *int64
-	Currency             string
-	Amount               values.Decimal
-	AmountUSD            *values.Decimal
-	RunningBalance       *values.Decimal
-	CategoryID           *int64
-	EconomicIntent       categories.CategoryEconomicIntent
-	Role                 RecordRole
-	TagIDs               []int64
-	Memo                 *string
-	PendingDate          *time.Time
-	PostedDate           *time.Time
-	LifecycleStatus      LifecycleStatus
-	Settlement           *SettlementStatus
-	ReconciliationStatus ReconciliationStatus
-	Source               Source
-	ExternalID           *string
-	ExternalSystem       *string
-	CreatedAt            time.Time
-	UpdatedAt            time.Time
-	TombstonedAt         *time.Time
+	ID                          int64
+	TransactionID               int64
+	InitiatedDate               values.CivilDate
+	AccountID                   int64
+	AccountDisplayLabel         string
+	AccountDisplayLabelOverride *string
+	AccountFQN                  string
+	AccountType                 accounts.AccountType
+	MemberID                    *int64
+	Currency                    string
+	Amount                      values.Decimal
+	AmountUSD                   *values.Decimal
+	RunningBalance              *values.Decimal
+	CategoryID                  *int64
+	EconomicIntent              categories.CategoryEconomicIntent
+	Role                        RecordRole
+	TagIDs                      []int64
+	Memo                        *string
+	PendingDate                 *time.Time
+	PostedDate                  *time.Time
+	LifecycleStatus             LifecycleStatus
+	Settlement                  *SettlementStatus
+	ReconciliationStatus        ReconciliationStatus
+	Source                      Source
+	ExternalID                  *string
+	ExternalSystem              *string
+	CreatedAt                   time.Time
+	UpdatedAt                   time.Time
+	TombstonedAt                *time.Time
 }
 
 // CreateInput contains fields for creating or replacing a transaction.

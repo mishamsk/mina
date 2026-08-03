@@ -31,6 +31,7 @@ func TestSeedDemoThroughREST(t *testing.T) {
 	assertSeededRecurringDemoData(t, client, *seeded.JSON200, anchorDate.Time)
 	assertSeededFeaturedBalanceAccounts(t, client)
 	assertSeededPlausibleBalances(t, client)
+	assertSeededAmazonDisplayLabels(t, client)
 }
 
 func TestSeedDemoThroughRESTDefaultsToClockLocalDate(t *testing.T) {
@@ -649,6 +650,102 @@ func assertSeededPlausibleBalances(t *testing.T, client *apptest.Client) {
 	}
 }
 
+func assertSeededAmazonDisplayLabels(t *testing.T, client *apptest.Client) {
+	t.Helper()
+	ctx := context.Background()
+
+	accountsResponse, err := client.REST().ListAccountsWithResponse(ctx, nil)
+	if err != nil {
+		t.Fatalf("list accounts for Amazon display labels: %v", err)
+	}
+	if accountsResponse.StatusCode() != http.StatusOK {
+		t.Fatalf("list accounts for Amazon display labels status = %d, want %d; body %s", accountsResponse.StatusCode(), http.StatusOK, accountsResponse.Body)
+	}
+	accountsByFQN := make(map[string]httpclient.Account, len(accountsResponse.JSON200.Accounts))
+	for _, account := range accountsResponse.JSON200.Accounts {
+		accountsByFQN[account.Fqn] = account
+	}
+	flow, flowFound := accountsByFQN["merchant:Amazon:flow"]
+	if !flowFound || flow.AccountType != httpclient.AccountTypeFlow || flow.DisplayLabel != "Amazon" {
+		t.Fatalf("seeded Amazon flow account = %+v, found %t; want flow with display label Amazon", flow, flowFound)
+	}
+	giftCard, giftCardFound := accountsByFQN["merchant:Amazon:gift_card"]
+	if !giftCardFound || giftCard.AccountType != httpclient.AccountTypeOwned || giftCard.DisplayLabel != "Amazon:gift_card" {
+		t.Fatalf("seeded Amazon gift-card account = %+v, found %t; want owned with fallback display label Amazon:gift_card", giftCard, giftCardFound)
+	}
+
+	balancesResponse, err := client.REST().ListAccountBalancesWithResponse(ctx, nil)
+	if err != nil {
+		t.Fatalf("list balances for Amazon display labels: %v", err)
+	}
+	if balancesResponse.StatusCode() != http.StatusOK {
+		t.Fatalf("list balances for Amazon display labels status = %d, want %d; body %s", balancesResponse.StatusCode(), http.StatusOK, balancesResponse.Body)
+	}
+	var giftCardBalance string
+	for _, balance := range balancesResponse.JSON200.Balances {
+		if balance.AccountId == giftCard.AccountId && balance.Currency == "USD" {
+			giftCardBalance = balance.CurrentBalance
+			break
+		}
+	}
+	if giftCardBalance != "65.00000000" {
+		t.Fatalf("seeded Amazon gift-card balance = %q, want 65.00000000", giftCardBalance)
+	}
+
+	transactionsResponse, err := client.REST().ListTransactionsWithResponse(ctx, nil)
+	if err != nil {
+		t.Fatalf("list transactions for Amazon display labels: %v", err)
+	}
+	if transactionsResponse.StatusCode() != http.StatusOK {
+		t.Fatalf("list transactions for Amazon display labels status = %d, want %d; body %s", transactionsResponse.StatusCode(), http.StatusOK, transactionsResponse.Body)
+	}
+	type expectedActivity struct {
+		class   httpclient.TransactionClass
+		amounts map[int64]string
+		found   bool
+	}
+	wantActivities := map[string]*expectedActivity{
+		"Chase:joint_checking → Amazon:gift_card": {
+			class: httpclient.TransactionClassTransfer,
+			amounts: map[int64]string{
+				accountsByFQN["bank:Chase:joint_checking"].AccountId: "-100.00000000",
+				giftCard.AccountId: "100.00000000",
+			},
+		},
+		"Amazon:gift_card → Amazon": {
+			class: httpclient.TransactionClassSpend,
+			amounts: map[int64]string{
+				giftCard.AccountId: "-35.00000000",
+				flow.AccountId:     "35.00000000",
+			},
+		},
+	}
+	for _, transaction := range transactionsResponse.JSON200.Transactions {
+		activity, ok := wantActivities[transaction.DisplayTitle]
+		if !ok {
+			continue
+		}
+		if transaction.TransactionClass != activity.class {
+			t.Fatalf("seeded transaction %q class = %q, want %q", transaction.DisplayTitle, transaction.TransactionClass, activity.class)
+		}
+		gotAmounts := make(map[int64]string, len(transaction.Records))
+		for _, record := range transaction.Records {
+			gotAmounts[record.AccountId] = record.Amount
+		}
+		for accountID, amount := range activity.amounts {
+			if gotAmounts[accountID] != amount {
+				t.Fatalf("seeded transaction %q account %d amount = %q, want %q", transaction.DisplayTitle, accountID, gotAmounts[accountID], amount)
+			}
+		}
+		activity.found = true
+	}
+	for title, activity := range wantActivities {
+		if !activity.found {
+			t.Fatalf("seeded demo missing display title %q", title)
+		}
+	}
+}
+
 func assertDemoSemanticCoverage(
 	t *testing.T,
 	accounts []httpclient.Account,
@@ -677,6 +774,8 @@ func assertDemoSemanticCoverage(
 		"employers:Acme:salary":     httpclient.AccountTypeFlow,
 		"employers:Acme:expenses":   httpclient.AccountTypeParty,
 		"merchant:unspecified":      httpclient.AccountTypeFlow,
+		"merchant:Amazon:flow":      httpclient.AccountTypeFlow,
+		"merchant:Amazon:gift_card": httpclient.AccountTypeOwned,
 		"person:Friend:Jordan":      httpclient.AccountTypeParty,
 		"system:opening_balance":    httpclient.AccountTypeSystem,
 	} {
@@ -694,6 +793,8 @@ func assertDemoSemanticCoverage(
 		}
 	}
 	wantMerchants := []string{
+		"merchant:Amazon:flow",
+		"merchant:Amazon:gift_card",
 		"merchant:BlueBottle",
 		"merchant:CVS",
 		"merchant:ConEd",
