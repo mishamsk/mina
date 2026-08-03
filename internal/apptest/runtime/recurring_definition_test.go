@@ -827,7 +827,7 @@ func assertPendingRecurringTransaction(t *testing.T, transaction *httpclient.Get
 }
 
 func TestRecurringDefinitionConfirmNextBoundary(t *testing.T) {
-	now := time.Now()
+	now := apptest.Timestamp("2026-08-02T07:01:51Z")
 	clock := apptest.NewFakeClock(now)
 	client := newSharedClient(t, apptest.WithClock(clock))
 	refs := createRecurringDefinitionRefs(t, client, "RecurringConfirmNext")
