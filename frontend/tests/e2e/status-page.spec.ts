@@ -289,7 +289,10 @@ test("shell renders and navigates between routed pages", async ({ page }) => {
   await expect(primaryNav).toBeVisible();
   await expect(
     primaryNav.getByRole("button", { name: "New transaction" }),
-  ).toBeEnabled();
+  ).toHaveCount(0);
+  await expect(
+    page.locator("main").getByRole("button", { name: "New transaction" }),
+  ).toHaveCount(0);
   await expect(
     primaryNav.getByRole("link", { name: "Overview" }),
   ).toBeVisible();
@@ -308,6 +311,9 @@ test("shell renders and navigates between routed pages", async ({ page }) => {
 
   await expect(page).toHaveURL(/\/status$/);
   await expect(page.getByRole("heading", { name: "Status" })).toBeVisible();
+  await expect(
+    page.locator("main").getByRole("button", { name: "New transaction" }),
+  ).toHaveCount(0);
   await expect(balanceStrip.getByText("Joint")).toBeVisible();
 
   await primaryNav.getByRole("link", { name: "Transactions" }).click();
@@ -315,6 +321,9 @@ test("shell renders and navigates between routed pages", async ({ page }) => {
   await expect(page).toHaveURL(/\/transactions$/);
   await expect(
     page.getByRole("heading", { name: "Transactions" }),
+  ).toBeVisible();
+  await expect(
+    page.locator("header").getByRole("button", { name: "New transaction" }),
   ).toBeVisible();
 
   await page.getByRole("button", { name: "Collapse sidebar" }).click();

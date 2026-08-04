@@ -19,12 +19,10 @@ import { PageHeader } from "@/features/app-shell";
 import {
   AccountDisplayLabel,
   buildLookupMaps,
-  captureTransactionEntryLaunchContext,
   defaultTransactionPageSize,
   refreshLedgerLookups,
   transactionPageSizeOptions,
 } from "@/features/ledger";
-import { openTransactionEntryPanel } from "@/store";
 
 const pageSizes = transactionPageSizeOptions;
 const defaultPageSize = defaultTransactionPageSize;
@@ -285,12 +283,6 @@ const AccountPageContent = ({ accountId }: { readonly accountId: number }) => {
           lookupErrorMessage={resource.lookups.errorMessage}
           lookupsLoaded={Boolean(resource.lookups.snapshot)}
           maps={maps}
-          onNewTransaction={() => {
-            openTransactionEntryPanel(
-              undefined,
-              captureTransactionEntryLaunchContext(),
-            );
-          }}
           onNextPage={() => {
             setSearchParams((current) =>
               writePageParams(current, {

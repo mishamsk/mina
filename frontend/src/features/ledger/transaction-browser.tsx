@@ -115,7 +115,7 @@ interface TransactionBrowserProps {
   readonly onFilterMember?: (memberId: number) => void;
   readonly onFilterTag?: (tagId: number) => void;
   readonly onClearSelection: () => void;
-  readonly onNewTransaction: () => void;
+  readonly onNewTransaction?: () => void;
   readonly onDeleteTransaction: (transaction: Transaction) => Promise<void>;
   readonly onDismissRecurringOccurrence: (
     transaction: Transaction,
@@ -1151,15 +1151,17 @@ export const TransactionBrowser = ({
               Transaction lines appear here after activity is created or demo
               data is seeded.
             </p>
-            <Button
-              type="button"
-              className="mt-5"
-              data-transaction-empty-action
-              onClick={onNewTransaction}
-            >
-              <Plus aria-hidden="true" />
-              New transaction
-            </Button>
+            {onNewTransaction ? (
+              <Button
+                type="button"
+                className="mt-5"
+                data-transaction-empty-action
+                onClick={onNewTransaction}
+              >
+                <Plus aria-hidden="true" />
+                New transaction
+              </Button>
+            ) : null}
           </div>
         </div>
         {editDockSurface}

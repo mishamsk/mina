@@ -1624,6 +1624,9 @@ test("account restructure invalidates a cached register before revisit", async (
   ]);
   await page.goto(`/accounts/${account.account_id}`);
   await expect(page.getByText("No records", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "New transaction" }),
+  ).toHaveCount(0);
 
   await page.goto("/accounts");
   const transferResponse = await page.request.post(

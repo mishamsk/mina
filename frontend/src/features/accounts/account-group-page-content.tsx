@@ -13,14 +13,12 @@ import {
   AmountText,
   ApproximateUsdAmount,
   buildLookupMaps,
-  captureTransactionEntryLaunchContext,
   defaultTransactionPageSize,
   FqnPath,
   refreshLedgerLookups,
   sumDecimalStrings,
   transactionPageSizeOptions,
 } from "@/features/ledger";
-import { openTransactionEntryPanel } from "@/store";
 
 import { AccountPeekPanel } from "./account-peek-panel";
 import { AccountRegisterTable } from "./account-register-table";
@@ -311,12 +309,6 @@ const GroupRegister = ({ prefix }: { readonly prefix: string }) => {
         lookupErrorMessage={resource.lookups.errorMessage}
         lookupsLoaded={Boolean(resource.lookups.snapshot)}
         maps={maps}
-        onNewTransaction={() => {
-          openTransactionEntryPanel(
-            undefined,
-            captureTransactionEntryLaunchContext(),
-          );
-        }}
         onNextPage={() => {
           setSearchParams((current) =>
             writePageParams(current, {

@@ -24,7 +24,7 @@ import {
   transactionClasses,
   type TransactionFilters,
 } from "@/models/transaction-filters";
-import { openTransactionEntryLaunch, openTransactionEntryPanel } from "@/store";
+import { openTransactionEntryLaunch } from "@/store";
 
 export interface ReferenceDrilldownPageProps {
   readonly exactOnly?: boolean;
@@ -441,12 +441,6 @@ export const ReferenceDrilldownPage = ({
           }}
           onFilterTag={(tagId) => {
             addEntityFilter("tag", tagId);
-          }}
-          onNewTransaction={() => {
-            openTransactionEntryPanel(
-              undefined,
-              captureTransactionEntryLaunchContext(),
-            );
           }}
           onDeleteTransaction={browser.deleteTransactionFromRow}
           onDismissRecurringOccurrence={

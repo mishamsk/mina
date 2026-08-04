@@ -1,4 +1,4 @@
-import { Plus, Reload } from "pixelarticons/react";
+import { Reload } from "pixelarticons/react";
 import { type KeyboardEvent, useRef } from "react";
 
 import type { DisplayAmount, JournalRecord, Transaction } from "@/api";
@@ -31,7 +31,6 @@ interface AccountRegisterTableProps {
   readonly lookupErrorMessage: string | undefined;
   readonly lookupsLoaded: boolean;
   readonly maps: LookupMaps;
-  readonly onNewTransaction: () => void;
   readonly onNextPage: () => void;
   readonly onOpenRecord: (record: JournalRecord, opener: HTMLElement) => void;
   readonly onPageSizeChange: (pageSize: number) => void;
@@ -141,7 +140,6 @@ export const AccountRegisterTable = ({
   lookupErrorMessage,
   lookupsLoaded,
   maps,
-  onNewTransaction,
   onNextPage,
   onOpenRecord,
   onPageSizeChange,
@@ -216,10 +214,6 @@ export const AccountRegisterTable = ({
               activity exists.
             </p>
           </div>
-          <Button type="button" onClick={onNewTransaction}>
-            <Plus aria-hidden="true" />
-            New transaction
-          </Button>
         </div>
       </div>
     );

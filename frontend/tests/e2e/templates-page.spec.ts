@@ -653,8 +653,11 @@ test("partial income and refund templates project flow amounts", async ({
     },
   ]);
 
-  await page.goto("/templates");
-  await page.getByRole("button", { name: "New transaction" }).first().click();
+  await page.goto("/transactions");
+  await page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" })
+    .click();
   const editor = page.getByRole("dialog", { name: "Transaction editor" });
   const templatePicker = editor.getByRole("combobox", {
     name: "Start from a template",

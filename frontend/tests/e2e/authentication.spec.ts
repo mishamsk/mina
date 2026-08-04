@@ -274,7 +274,9 @@ test("logout failure remains visible while the transaction editor is open", asyn
     });
   });
   await page.getByRole("button", { name: "Log out" }).click();
-  await page.getByRole("button", { name: "New transaction" }).first().click();
+  const overviewHeading = page.getByRole("heading", { name: "Overview" });
+  await overviewHeading.focus();
+  await page.keyboard.press("n");
   await expect(
     page.getByRole("button", { name: "Close transaction editor" }),
   ).toBeVisible();

@@ -152,7 +152,11 @@ test("a captured BlueCash Target spend without amounts is offered for Spend and 
   await editTemplate.getByRole("button", { name: "Save template" }).click();
   await expect(editTemplate).toHaveCount(0);
 
-  await page.getByRole("button", { name: "New transaction" }).first().click();
+  await page.goto("/transactions");
+  await page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" })
+    .click();
 
   const entryEditor = page.getByRole("dialog", { name: "Transaction editor" });
   const templatePicker = entryEditor.getByRole("combobox", {

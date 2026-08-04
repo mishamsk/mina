@@ -766,36 +766,48 @@ test("command palette opens entry tabs from any page without clobbering plain op
   await page.getByRole("combobox", { name: "Command search" }).fill("exchange");
   await page.getByRole("option", { name: "New exchange" }).click();
   await expect(page).toHaveURL(/\/overview\?entry=new%3Aexchange$/);
-  await expect(page.getByRole("tab", { name: "Exchange" })).toHaveAttribute(
+  const editor = page.getByRole("dialog", { name: "Transaction editor" });
+  const templatePicker = editor.getByRole("combobox", {
+    name: "Start from a template",
+  });
+  await expect(editor.getByRole("tab", { name: "Exchange" })).toHaveAttribute(
     "aria-selected",
     "true",
   );
+  await expect(templatePicker).toBeEnabled();
+  await expect(templatePicker).toHaveAttribute("aria-expanded", "true");
 
-  const pageNewTransactionButton = page
-    .locator("main")
-    .getByRole("button", { name: "New transaction" });
-
-  await page.getByRole("button", { name: "Close transaction editor" }).click();
-  await pageNewTransactionButton.click();
-  await expect(page.getByRole("tab", { name: "Spend" })).toHaveAttribute(
+  await page.keyboard.press("Escape");
+  await expect(editor).toBeVisible();
+  await expect(templatePicker).toHaveAttribute("aria-expanded", "false");
+  await page.keyboard.press("Escape");
+  await expect(page).toHaveURL(/\/overview$/);
+  await expect(editor).toHaveCount(0);
+  await expect(
+    page.locator("main").getByRole("button", { name: "New transaction" }),
+  ).toHaveCount(0);
+  await overviewLink.focus();
+  await page.keyboard.press("n");
+  await expect(editor.getByRole("tab", { name: "Spend" })).toHaveAttribute(
     "aria-selected",
     "true",
   );
+  await expect(templatePicker).toBeEnabled();
+  await expect(templatePicker).toHaveAttribute("aria-expanded", "true");
 
-  await page.getByRole("button", { name: "Close transaction editor" }).click();
-  await expect(pageNewTransactionButton).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(editor).toBeVisible();
+  await expect(templatePicker).toHaveAttribute("aria-expanded", "false");
+  await page.keyboard.press("Escape");
+  await expect(page).toHaveURL(/\/overview$/);
+  await expect(editor).toHaveCount(0);
+  await expect(overviewLink).toBeFocused();
+
   await openPalette(page);
   await page.getByRole("combobox", { name: "Command search" }).fill("income");
   await page.getByRole("option", { name: "New income" }).click();
   await expect(page).toHaveURL(/\/overview\?entry=new%3Aincome$/);
   await expect(page.getByRole("tab", { name: "Income" })).toHaveAttribute(
-    "aria-selected",
-    "true",
-  );
-
-  await page.getByRole("button", { name: "Close transaction editor" }).click();
-  await pageNewTransactionButton.click();
-  await expect(page.getByRole("tab", { name: "Spend" })).toHaveAttribute(
     "aria-selected",
     "true",
   );

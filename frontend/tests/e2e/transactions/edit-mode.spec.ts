@@ -559,6 +559,7 @@ test("concurrent amount saves prune selected rows that leave the active filter",
   releaseSaves?.();
   await expect(firstRow).toHaveCount(0);
   await expect(secondRow).toHaveCount(0);
+  await expect(page.locator("[data-transaction-empty-action]")).toBeFocused();
   await expect(header).toContainText("0 selected");
   await expect(
     page

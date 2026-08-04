@@ -10,7 +10,6 @@ import {
   ListBox,
   Logout,
   Menu,
-  Plus,
   Search,
   SettingsCog2,
   User,
@@ -152,38 +151,6 @@ const SidebarNav = ({
     })}
   </nav>
 );
-
-const NewTransactionButton = ({
-  collapsed,
-}: {
-  readonly collapsed: boolean;
-}) => {
-  const button = (
-    <Button
-      type="button"
-      data-entry-modal-restore-target
-      className={cn("w-full", collapsed && "px-0")}
-      aria-label="New transaction"
-      onClick={() => {
-        openTransactionEntryPanel(
-          undefined,
-          captureTransactionEntryLaunchContext(),
-        );
-      }}
-    >
-      <Plus aria-hidden="true" />
-      <span className={cn(collapsed && "sr-only")}>New transaction</span>
-    </Button>
-  );
-
-  return collapsed ? (
-    <Tooltip label="New transaction" className="w-full">
-      {button}
-    </Tooltip>
-  ) : (
-    button
-  );
-};
 
 const CommandPaletteButton = ({
   collapsed,
@@ -570,7 +537,6 @@ export const AppShell = ({ children }: AppShellProps) => {
 
         <div className="flex flex-1 flex-col gap-5 overflow-y-auto p-3">
           <div className="flex flex-col gap-2">
-            <NewTransactionButton collapsed={sidebarCollapsed} />
             <CommandPaletteButton collapsed={sidebarCollapsed} />
           </div>
 

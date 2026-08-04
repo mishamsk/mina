@@ -1,9 +1,11 @@
+import { Plus } from "pixelarticons/react";
 import { useCallback, useEffect, useMemo } from "react";
 import { useLocation, useSearchParams } from "react-router";
 
 import type { Transaction } from "@/api";
 import { PageHelp } from "@/components/page-help";
 import { Toast, toastDurationMs } from "@/components/toast";
+import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/features/app-shell";
 import {
   captureTransactionEntryLaunchContext,
@@ -193,6 +195,16 @@ export const TransactionsPage = () => {
             Read-only transaction lines open full detail on click, Enter, or
             Space. Edit mode adds quick changes and eligible amount inputs.
           </PageHelp>
+        }
+        actions={
+          <Button
+            type="button"
+            data-entry-modal-restore-target
+            onClick={openEntryPanel}
+          >
+            <Plus aria-hidden="true" />
+            New transaction
+          </Button>
         }
         toolbar={
           <TransactionBrowserToolbar

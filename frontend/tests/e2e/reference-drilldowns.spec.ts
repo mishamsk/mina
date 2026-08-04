@@ -428,7 +428,9 @@ test("a dock edit that empties a drill-down restores usable focus", async ({
 
   await expect(row).toHaveCount(0);
   await expect(editor).toHaveCount(0);
-  await expect(page.locator("[data-transaction-empty-action]")).toBeFocused();
+  await expect(
+    page.locator("[data-transaction-detail-restore-target]"),
+  ).toBeFocused();
 });
 
 test("a dock edit focuses the removed row's nearest drill-down neighbor", async ({
@@ -543,6 +545,9 @@ test("drill-down renders the transaction empty state for a matching entity with 
   await expect(
     page.getByRole("heading", { name: "No transactions" }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "New transaction" }),
+  ).toHaveCount(0);
 });
 
 test("category drill-down rolls visible descendants, excludes hidden descendants, and exact scope narrows them", async ({
