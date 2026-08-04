@@ -1,6 +1,7 @@
 import { test } from "@tests/e2e/test";
 import {
   type AccountFixture,
+  activateTransactionRow,
   captureSearchDebounce,
   type CategoryFixture,
   clickRowAction,
@@ -298,7 +299,7 @@ test("debounced search preserves transaction detail URL state", async ({
     page.getByRole("searchbox", { name: "Search" }),
     unique,
   );
-  await row.getByRole("button", { name: "Open transaction detail" }).click();
+  await row.click();
   await runCapturedSearchDebounce(page, unique);
   await page.clock.runFor(350);
 
@@ -767,7 +768,7 @@ test("transactions inline recurring occurrences support lifecycle filtering, con
     overdueActionsMenu.getByRole("button", {
       name: "Open transaction detail",
     }),
-  ).toBeVisible();
+  ).toHaveCount(0);
   await expect(
     overdueActionsMenu.getByRole("button", { name: "Confirm occurrence" }),
   ).toBeVisible();
@@ -1235,7 +1236,7 @@ test("multi-part transaction rows show one honest amount or only the indicator",
   await expect(exchangeRow).not.toContainText("100.00 €");
   await expect(exchangeRow.getByTestId("more-parts-indicator")).toHaveCount(0);
 
-  await clickRowAction(page, spendTransferRow, "Open transaction detail");
+  await activateTransactionRow(spendTransferRow);
   const detail = page.getByTestId("transaction-detail-panel");
   await expect(detail).toBeVisible();
   await expect(
@@ -1762,7 +1763,7 @@ test("transaction entity chips add filters in place", async ({
   });
   await expect(page.getByText(`Tag ${tag.name}`)).toBeVisible();
 
-  await clickRowAction(page, targetRow, "Open transaction detail");
+  await activateTransactionRow(targetRow);
   const panel = page.getByRole("dialog", { name: target.display_title });
   await expect(panel).toBeVisible();
 });

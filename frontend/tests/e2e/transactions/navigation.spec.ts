@@ -646,13 +646,6 @@ test("transactions page collapses low-priority columns instead of scrolling hori
     .filter({ hasText: "Amex:BlueCash → merchant:Target" })
     .first();
   await expect(foldedSpendRow).toBeVisible();
-  await foldedSpendRow.hover();
-  await foldedSpendRow
-    .getByRole("button", { name: "More row actions" })
-    .click();
-  await page
-    .locator('[data-slot="popover-content"]')
-    .getByRole("button", { name: "Open transaction detail" })
-    .click();
+  await foldedSpendRow.click();
   await expect(page).toHaveURL(/[?&]transaction=\d+(?:&|$)/);
 });

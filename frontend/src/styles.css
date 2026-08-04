@@ -280,11 +280,11 @@
   }
 
   .transactions-table .transactions-description-column {
-    width: 25%;
+    width: 26%;
   }
 
   .transactions-table--edit-mode .transactions-description-column {
-    width: calc(25% - 2.25rem);
+    width: calc(26% - 2.25rem);
   }
 
   .transactions-table .transactions-category-column {
@@ -304,7 +304,7 @@
   }
 
   .transactions-table .transactions-actions-column {
-    width: 17%;
+    width: 20%;
   }
 
   .transactions-table--edit-mode .transactions-actions-column {

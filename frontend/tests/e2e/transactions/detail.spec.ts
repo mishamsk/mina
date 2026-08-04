@@ -1,6 +1,7 @@
 import { test } from "@tests/e2e/test";
 import {
   type AccountFixture,
+  activateTransactionRow,
   type CategoryFixture,
   chooseOptionByKeyboard,
   clickRowAction,
@@ -310,7 +311,8 @@ test("transaction rows and detail create date-free template drafts", async ({
   await expect(editor).toHaveCount(0);
   await expect(overflowAction).toBeFocused();
 
-  await clickRowAction(page, row, "Open transaction detail");
+  await row.focus();
+  await row.press("Enter");
   const panel = page.getByTestId("transaction-detail-panel");
   const detailCreateAction = panel.getByRole("button", {
     name: "Create template",
@@ -438,7 +440,8 @@ test("template save reports a failed refresh outside Templates", async ({
   const row = page.locator(
     `[data-transaction-id="${transaction.transaction_id}"]`,
   );
-  await clickRowAction(page, row, "Open transaction detail");
+  await row.focus();
+  await row.press("Enter");
   const panel = page.getByTestId("transaction-detail-panel");
   await panel.getByRole("button", { name: "Create template" }).click();
   const editor = page.getByRole("dialog", { name: "New template" });
@@ -567,7 +570,7 @@ test("transaction detail panel shows full records and supports deep links", asyn
   await expect(page).not.toHaveURL(/[?&]entry=/);
   await expect(newTransactionButton).toBeFocused();
 
-  await clickRowAction(page, detailRow, "Open transaction detail");
+  await activateTransactionRow(detailRow);
 
   await expect(page).toHaveURL(
     new RegExp(`[?&]transaction=${transaction.transaction_id}(?:&|$)`),
@@ -714,7 +717,7 @@ test("transaction detail panel shows full records and supports deep links", asyn
   await expect(alternatePanel).toBeVisible();
   await page.keyboard.press("Escape");
 
-  await clickRowAction(page, detailRow, "Open transaction detail");
+  await activateTransactionRow(detailRow);
   await expect(panel).toBeVisible();
 
   await page.keyboard.press("Escape");
@@ -736,7 +739,7 @@ test("transaction detail panel shows full records and supports deep links", asyn
   await expect(entryPanel).toHaveCount(0);
   await expect(page).toHaveURL(/\/transactions\?page=1&pageSize=50$/);
 
-  await clickRowAction(page, detailRow, "Open transaction detail");
+  await activateTransactionRow(detailRow);
   await expect(panel).toBeVisible();
   await page.keyboard.press("KeyN");
   await expect(entryPanel).toBeVisible();
@@ -915,7 +918,7 @@ test("transaction detail panel is read-only while category chips keep filtering"
   await expect(panel).toBeVisible();
   await expect(row).toBeVisible();
   await expect(
-    panel.getByRole("button", { exact: true, name: "Edit transaction" }),
+    panel.getByRole("button", { exact: true, name: "Edit" }),
   ).toBeVisible();
   await expect(panel.locator("td[data-label][tabindex]")).toHaveCount(0);
   await expect(panel.locator("input, textarea, select")).toHaveCount(0);
@@ -982,7 +985,7 @@ test("transaction detail panel is read-only while category chips keep filtering"
     })
     .first();
   await expect(expectedRow).toBeVisible();
-  await clickRowAction(page, expectedRow, "Open transaction detail");
+  await activateTransactionRow(expectedRow);
   const expectedPanel = page.getByTestId("transaction-detail-panel");
   await expect(expectedPanel).toBeVisible();
   await expect(
@@ -1444,10 +1447,8 @@ test("toolbar filter trigger opens after transaction detail closes", async ({
   await page.goto("/transactions?page=1&pageSize=50");
   await expect(page.getByText("Description")).toBeVisible();
 
-  await clickRowAction(
-    page,
+  await activateTransactionRow(
     page.getByRole("row").filter({ hasText: memo }).first(),
-    "Open transaction detail",
   );
   const panel = page.getByRole("dialog", { name: transaction.display_title });
   await expect(panel).toBeVisible();
@@ -1497,10 +1498,8 @@ test("Escape closes filter popover before transaction detail panel", async ({
   await page.goto("/transactions?page=1&pageSize=50");
   await expect(page.getByText("Description")).toBeVisible();
 
-  await clickRowAction(
-    page,
+  await activateTransactionRow(
     page.getByRole("row").filter({ hasText: memo }).first(),
-    "Open transaction detail",
   );
   const panel = page.getByRole("dialog", { name: transaction.display_title });
   await expect(panel).toBeVisible();
@@ -1733,7 +1732,7 @@ test("transaction detail delete confirms, tombstones, and refreshes the row", as
 
   const detailRow = page.getByRole("row").filter({ hasText: memo }).first();
   await expect(detailRow).toBeVisible();
-  await clickRowAction(page, detailRow, "Open transaction detail");
+  await activateTransactionRow(detailRow);
 
   const panel = page.getByRole("dialog", { name: transaction.display_title });
   await expect(panel).toBeVisible();
@@ -1820,17 +1819,13 @@ test("transaction detail edit preserves imported sources through a fitting short
 
   await page.goto("/transactions?page=1&pageSize=50");
   await expect(page.getByText("Description")).toBeVisible();
-  await clickRowAction(
-    page,
+  await activateTransactionRow(
     page.getByRole("row").filter({ hasText: memo }).first(),
-    "Open transaction detail",
   );
 
   const detailPanel = page.getByTestId("transaction-detail-panel");
   await expect(detailPanel).toBeVisible();
-  await detailPanel
-    .getByRole("button", { exact: true, name: "Edit transaction" })
-    .click();
+  await detailPanel.getByRole("button", { exact: true, name: "Edit" }).click();
 
   const entryPanel = page.getByRole("dialog", {
     name: "Transaction editor",
@@ -1962,10 +1957,8 @@ test("sparse shorthand metadata survives merchant removal while Duplicate uses A
   const transaction = (await response.json()) as TransactionDetailFixture;
 
   await page.goto("/transactions?page=1&pageSize=50");
-  await clickRowAction(
-    page,
+  await activateTransactionRow(
     page.getByRole("row").filter({ hasText: memo }).first(),
-    "Open transaction detail",
   );
   const detailPanel = page.getByTestId("transaction-detail-panel");
   await detailPanel.getByRole("button", { name: "Duplicate" }).click();
@@ -2110,14 +2103,12 @@ test("transaction detail edit preserves imported sources through the journal edi
 
   await page.goto("/transactions?page=1&pageSize=50");
   await expect(page.getByText("Description")).toBeVisible();
-  await clickRowAction(
-    page,
+  await activateTransactionRow(
     page.getByRole("row").filter({ hasText: memo }).first(),
-    "Open transaction detail",
   );
   await page
     .getByRole("dialog")
-    .getByRole("button", { exact: true, name: "Edit transaction" })
+    .getByRole("button", { exact: true, name: "Edit" })
     .click();
 
   await expect(
@@ -2182,14 +2173,12 @@ test("shorthand edit escalation saves as a replacement", async ({
 
   await page.goto("/transactions?page=1&pageSize=50");
   await expect(page.getByText("Description")).toBeVisible();
-  await clickRowAction(
-    page,
+  await activateTransactionRow(
     page.getByRole("row").filter({ hasText: memo }).first(),
-    "Open transaction detail",
   );
   await page
     .getByRole("dialog")
-    .getByRole("button", { exact: true, name: "Edit transaction" })
+    .getByRole("button", { exact: true, name: "Edit" })
     .click();
   const entryPanel = page.getByRole("dialog", {
     name: "Transaction editor",
@@ -2281,10 +2270,8 @@ test("transaction detail duplicate prefills a new entry", async ({
   await page.goto("/transactions?page=1&pageSize=50");
   await ledgerLookups;
   await expect(page.getByText("Description")).toBeVisible();
-  await clickRowAction(
-    page,
+  await activateTransactionRow(
     page.getByRole("row").filter({ hasText: memo }).first(),
-    "Open transaction detail",
   );
 
   const detailPanel = page.getByTestId("transaction-detail-panel");
@@ -2298,7 +2285,7 @@ test("transaction detail duplicate prefills a new entry", async ({
       exact: true,
       name: "Edit transaction",
     }),
-  ).toBeVisible();
+  ).toHaveCount(0);
   await expect(
     detailFooter.getByRole("button", { name: "Duplicate" }),
   ).toBeVisible();
@@ -2309,8 +2296,8 @@ test("transaction detail duplicate prefills a new entry", async ({
     detailFooter.getByRole("button", { name: "Delete" }),
   ).toBeVisible();
   await expect(
-    detailFooter.getByRole("button", { name: "Edit transaction" }),
-  ).toHaveCount(0);
+    detailFooter.getByRole("button", { exact: true, name: "Edit" }),
+  ).toBeVisible();
 
   await duplicateButton.click();
   const entryPanel = page.getByRole("dialog", {
@@ -2381,11 +2368,11 @@ test("transaction detail split opens journal replacement and surfaces replace er
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
   const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const category = findByFqn(categories, "Entertainment:Books");
-  const splitAccount = await createAccount(
-    page,
-    `merchant:SplitTarget:${unique}`,
-    "flow",
-  );
+  const [splitAccount, splitTag, splitMember] = await Promise.all([
+    createAccount(page, `merchant:SplitTarget:${unique}`, "flow"),
+    createTag(page, `E2E:Split:${unique}`),
+    createMember(page, `E2E Split ${unique}`),
+  ]);
   const memo = `E2E split source ${unique}`;
   const splitMemo = `E2E split added ${unique}`;
 
@@ -2397,7 +2384,9 @@ test("transaction detail split opens journal replacement and surfaces replace er
       currency: "USD",
       funding_account_id: fundingAccount.account_id,
       initiated_date: "2026-07-05",
+      member_id: splitMember.member_id,
       memo,
+      tag_ids: [splitTag.tag_id],
     },
   });
   expect(spendResponse.ok(), await spendResponse.text()).toBe(true);
@@ -2405,10 +2394,8 @@ test("transaction detail split opens journal replacement and surfaces replace er
 
   await page.goto("/transactions?page=1&pageSize=50");
   await expect(page.getByText("Description")).toBeVisible();
-  await clickRowAction(
-    page,
+  await activateTransactionRow(
     page.getByRole("row").filter({ hasText: memo }).first(),
-    "Open transaction detail",
   );
   const detailPanel = page.getByTestId("transaction-detail-panel");
   await detailPanel.getByRole("button", { name: "Split" }).click();
@@ -2428,12 +2415,48 @@ test("transaction detail split opens journal replacement and surfaces replace er
   await expect(journalRecord(page, 1).getByLabel("Amount")).toHaveValue("-30");
   await expect(journalRecord(page, 2).getByLabel("Amount")).toHaveValue("30");
 
-  await journalRecord(page, 2).getByLabel("Amount").fill("20.00");
-  await page.getByRole("button", { name: "Add record" }).click();
-  const thirdRecord = journalRecord(page, 3);
-  await chooseOptionByKeyboard(page, "Account", unique, splitAccount.fqn, {
-    scope: thirdRecord,
+  const seededRecord = journalRecord(page, 3);
+  await expect(seededRecord.getByLabel("Record 3 account")).toHaveValue(
+    merchantAccount.fqn,
+  );
+  await expect(seededRecord.getByLabel("Amount")).toHaveValue("");
+  await expect(seededRecord.getByLabel("Currency")).toHaveValue("USD");
+  await expect(seededRecord.getByLabel("Record 3 category")).toHaveValue("");
+  await expect(
+    seededRecord.getByTestId("entity-multi-picker-selected"),
+  ).toContainText(splitTag.name);
+  await expect(seededRecord.getByLabel("Record 3 member")).toHaveValue(
+    splitMember.name,
+  );
+  await expect(seededRecord.getByLabel("Memo")).toHaveValue(memo);
+
+  await page.getByRole("button", { name: "Close transaction editor" }).click();
+  await expect(
+    page.getByRole("alertdialog", { name: "Discard entry draft" }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("dialog", { name: "Transaction editor" }),
+  ).toHaveCount(0);
+  await detailPanel.getByRole("button", { name: "Split" }).click();
+  const reopenedEditor = page.getByRole("dialog", {
+    name: "Transaction editor",
   });
+  await expect(
+    reopenedEditor.getByRole("heading", { name: "Edit journal" }),
+  ).toBeVisible();
+  await expect(reopenedEditor.getByLabel("Date")).toBeFocused();
+
+  await journalRecord(page, 2).getByLabel("Amount").fill("20.00");
+  const thirdRecord = journalRecord(page, 3);
+  const accountPicker = thirdRecord.getByRole("combobox", { name: "Account" });
+  await accountPicker.fill(unique);
+  const accountOptionsId = await accountPicker.getAttribute("aria-controls");
+  expect(accountOptionsId).not.toBeNull();
+  await page
+    .locator(`#${accountOptionsId}`)
+    .getByRole("option", { name: splitAccount.fqn })
+    .click();
+  await expect(accountPicker).toHaveValue(splitAccount.fqn);
   await chooseOptionByKeyboard(
     page,
     "Category",
@@ -2484,36 +2507,36 @@ test("transaction detail split opens journal replacement and surfaces replace er
         amount: "-30.00000000",
         category_id: null,
         currency: "USD",
-        member_id: null,
+        member_id: splitMember.member_id,
         memo,
         settlement: "posted",
         reconciliation_status: "reconciled",
         source: "manual",
-        tag_ids: [],
+        tag_ids: [splitTag.tag_id],
       },
       {
         account_id: merchantAccount.account_id,
         amount: "20.00000000",
         category_id: category.category_id,
         currency: "USD",
-        member_id: null,
+        member_id: splitMember.member_id,
         memo,
         settlement: null,
         reconciliation_status: "reconciled",
         source: "manual",
-        tag_ids: [],
+        tag_ids: [splitTag.tag_id],
       },
       {
         account_id: splitAccount.account_id,
         amount: "10.00000000",
         category_id: category.category_id,
         currency: "USD",
-        member_id: null,
+        member_id: splitMember.member_id,
         memo: splitMemo,
         settlement: null,
         reconciliation_status: "unreconciled",
         source: "manual",
-        tag_ids: [],
+        tag_ids: [splitTag.tag_id],
       },
     ]),
   );
@@ -2568,7 +2591,7 @@ test("transaction row quick-delete confirms, handles errors, and preserves row b
   );
   const rowCountBeforeDelete = await transactionRows.count();
 
-  await clickRowAction(page, row, "Open transaction detail");
+  await activateTransactionRow(row);
   await expect(
     page.getByRole("dialog", { name: transaction.display_title }),
   ).toBeVisible();

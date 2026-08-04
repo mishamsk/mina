@@ -177,6 +177,18 @@ func Operations() []Operation {
 					Type:     "object",
 					Properties: []BodyPropertyDescriptor{
 						{
+							Name:        "pending_date",
+							Type:        "string",
+							Description: "Exact UTC pending time to apply when setting pending or posted. Omission preserves each record's existing pending time; when setting pending, a record without one defaults to the operation time.",
+							Required:    false,
+						},
+						{
+							Name:        "posted_date",
+							Type:        "string",
+							Description: "Exact UTC posted time to apply when setting posted; omit when setting pending. When setting posted, omission preserves each record's existing posted time or defaults to the later of the operation time and its pending time.",
+							Required:    false,
+						},
+						{
 							Name:        "record_ids",
 							Type:        "array",
 							Description: "Journal-record identifiers to update.",

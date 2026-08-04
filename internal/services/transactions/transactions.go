@@ -544,13 +544,22 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (Transaction, e
 	if err := validateTransactionInput(input); err != nil {
 		return Transaction{}, err
 	}
+	defaultSettlementDate := SettlementTimestampFromInitiatedDate(input.InitiatedDate)
+	if err := validateCreateSettlementDefaults(input.Records, defaultSettlementDate); err != nil {
+		return Transaction{}, err
+	}
 	if err := s.inferMissingAmountUSD(ctx, &input); err != nil {
 		return Transaction{}, err
 	}
 
 	var transaction Transaction
 	if err := s.refs.SerializeReferenceOperation(func() error {
-		persistInput, err := s.preparePersistInput(ctx, input, LifecycleStatusActive)
+		persistInput, err := s.preparePersistInput(
+			ctx,
+			input,
+			LifecycleStatusActive,
+			defaultSettlementDate,
+		)
 		if err != nil {
 			return err
 		}
@@ -576,6 +585,16 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (Transaction, e
 	return transaction, nil
 }
 
+func validateCreateSettlementDefaults(records []JournalRecordInput, defaultDate time.Time) error {
+	for index, record := range records {
+		intent := record.Settlement
+		if intent != nil && intent.Status == SettlementStatusPosted && intent.PostedDate == nil && intent.PendingDate != nil && defaultDate.Before(*intent.PendingDate) {
+			return services.InvalidRequest(indexedField(index, "settlement") + ".posted_date must not precede pending_date")
+		}
+	}
+	return nil
+}
+
 // Replace validates and replaces a transaction and its journal records.
 func (s *Service) Replace(ctx context.Context, id int64, input CreateInput) (Transaction, error) {
 	if id <= 0 {
@@ -593,7 +612,7 @@ func (s *Service) Replace(ctx context.Context, id int64, input CreateInput) (Tra
 		if err := s.validateActiveTransactionMutation(ctx, id); err != nil {
 			return err
 		}
-		persistInput, err := s.preparePersistInput(ctx, input, LifecycleStatusActive)
+		persistInput, err := s.preparePersistInput(ctx, input, LifecycleStatusActive, s.clock.Now().UTC())
 		if err != nil {
 			return err
 		}
@@ -1226,11 +1245,11 @@ func (s *Service) BulkReassignAccount(ctx context.Context, recordIDs []int64, ac
 }
 
 // BulkSetSettlement changes settlement on selected active balance records.
-func (s *Service) BulkSetSettlement(ctx context.Context, recordIDs []int64, settlement SettlementStatus) (BulkRecordOperationResponse, error) {
+func (s *Service) BulkSetSettlement(ctx context.Context, recordIDs []int64, settlement SettlementIntent) (BulkRecordOperationResponse, error) {
 	if err := validateRecordSelection(recordIDs); err != nil {
 		return BulkRecordOperationResponse{}, err
 	}
-	if !validSettlementStatus(settlement) {
+	if !validSettlementStatus(settlement.Status) {
 		return BulkRecordOperationResponse{}, services.InvalidRequest("settlement must be pending or posted")
 	}
 
@@ -1277,7 +1296,12 @@ func (s *Service) BulkSetReconciliation(ctx context.Context, recordIDs []int64, 
 	return bulkRecordOperationResponse(recordIDs, updated), nil
 }
 
-func (s *Service) preparePersistInput(ctx context.Context, input CreateInput, lifecycle LifecycleStatus) (PersistInput, error) {
+func (s *Service) preparePersistInput(
+	ctx context.Context,
+	input CreateInput,
+	lifecycle LifecycleStatus,
+	defaultSettlementDate time.Time,
+) (PersistInput, error) {
 	dictionaries, err := s.semanticDictionaries(ctx, input.Records)
 	if err != nil {
 		return PersistInput{}, err
@@ -1295,10 +1319,9 @@ func (s *Service) preparePersistInput(ctx context.Context, input CreateInput, li
 		LifecycleStatus: lifecycle,
 		Records:         make([]PersistJournalRecordInput, 0, len(input.Records)),
 	}
-	defaultDate := SettlementTimestampFromInitiatedDate(input.InitiatedDate)
 	for index, record := range input.Records {
 		account := dictionaries.accounts[record.AccountID]
-		pendingDate, postedDate, err := normalizeSettlement(index, account.AccountType, lifecycle, record.Settlement, defaultDate)
+		pendingDate, postedDate, err := normalizeSettlement(index, account.AccountType, lifecycle, record.Settlement, defaultSettlementDate)
 		if err != nil {
 			return PersistInput{}, err
 		}
@@ -1351,7 +1374,7 @@ func NormalizeSettlementIntent(field string, intent SettlementIntent, defaultDat
 	switch intent.Status {
 	case SettlementStatusPending:
 		if postedDate != nil {
-			return nil, nil, services.InvalidRequest(field + ".posted_date must be omitted for pending settlement")
+			return nil, nil, services.InvalidRequest(settlementField(field, "posted_date") + " must be omitted for pending settlement")
 		}
 		if pendingDate == nil {
 			pendingDate = &defaultDate
@@ -1359,15 +1382,25 @@ func NormalizeSettlementIntent(field string, intent SettlementIntent, defaultDat
 	case SettlementStatusPosted:
 		if postedDate == nil {
 			postedDate = &defaultDate
+			if pendingDate != nil && postedDate.Before(*pendingDate) {
+				postedDate = pendingDate
+			}
 		}
 	default:
-		return nil, nil, services.InvalidRequest(field + ".status must be pending or posted")
+		return nil, nil, services.InvalidRequest(settlementField(field, "status") + " must be pending or posted")
 	}
 	if pendingDate != nil && postedDate != nil && postedDate.Before(*pendingDate) {
-		return nil, nil, services.InvalidRequest(field + ".posted_date must not precede pending_date")
+		return nil, nil, services.InvalidRequest(settlementField(field, "posted_date") + " must not precede pending_date")
 	}
 
 	return pendingDate, postedDate, nil
+}
+
+func settlementField(prefix, name string) string {
+	if prefix == "" {
+		return name
+	}
+	return prefix + "." + name
 }
 
 func semanticRecordsFromDictionaries(inputs []JournalRecordInput, dictionaries semanticDictionaries) ([]SemanticRecord, error) {
@@ -1507,7 +1540,7 @@ func (s *Service) validateNoExpectedRecurringOccurrenceRecords(ctx context.Conte
 	return nil
 }
 
-func (s *Service) normalizedBulkSettlement(ctx context.Context, recordIDs []int64, settlement SettlementStatus) ([]*time.Time, []*time.Time, error) {
+func (s *Service) normalizedBulkSettlement(ctx context.Context, recordIDs []int64, settlement SettlementIntent) ([]*time.Time, []*time.Time, error) {
 	affected, err := s.repo.TransactionsByRecordIDs(ctx, recordIDs)
 	if errors.Is(err, services.ErrInvalidReference) {
 		return nil, nil, services.InvalidRequest("records missing or inactive resource")
@@ -1540,21 +1573,28 @@ func (s *Service) normalizedBulkSettlement(ctx context.Context, recordIDs []int6
 	postedDates := make([]*time.Time, 0, len(recordIDs))
 	for _, recordID := range recordIDs {
 		record := records[recordID]
-		pendingDate := record.PendingDate
-		postedDate := record.PostedDate
-		switch settlement {
+		recordSettlement := SettlementIntent{
+			Status:      settlement.Status,
+			PendingDate: record.PendingDate,
+			PostedDate:  record.PostedDate,
+		}
+		switch settlement.Status {
 		case SettlementStatusPending:
-			if pendingDate == nil {
-				pendingDate = &now
+			if settlement.PendingDate != nil {
+				recordSettlement.PendingDate = settlement.PendingDate
 			}
-			postedDate = nil
+			recordSettlement.PostedDate = settlement.PostedDate
 		case SettlementStatusPosted:
-			if postedDate == nil {
-				postedDate = &now
-				if pendingDate != nil && postedDate.Before(*pendingDate) {
-					postedDate = pendingDate
-				}
+			if settlement.PendingDate != nil {
+				recordSettlement.PendingDate = settlement.PendingDate
 			}
+			if settlement.PostedDate != nil {
+				recordSettlement.PostedDate = settlement.PostedDate
+			}
+		}
+		pendingDate, postedDate, err := NormalizeSettlementIntent("", recordSettlement, now)
+		if err != nil {
+			return nil, nil, err
 		}
 		pendingDates = append(pendingDates, pendingDate)
 		postedDates = append(postedDates, postedDate)

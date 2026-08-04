@@ -1,6 +1,7 @@
 import { test } from "@tests/e2e/test";
 import {
   type AccountFixture,
+  activateTransactionRow,
   type CategoryFixture,
   chooseOptionByKeyboard,
   clickRowAction,
@@ -706,18 +707,14 @@ test("create-mode advanced drafts stay independent when switching tabs and keepi
     });
   await page.getByRole("button", { name: "Close transaction editor" }).click();
 
-  await clickRowAction(
-    page,
+  await activateTransactionRow(
     page.getByRole("row").filter({ hasText: editMemo }).first(),
-    "Open transaction detail",
   );
   const detailPanel = page.getByRole("dialog", {
     name: transaction.display_title,
   });
   await expect(detailPanel).toBeVisible();
-  await detailPanel
-    .getByRole("button", { exact: true, name: "Edit transaction" })
-    .click();
+  await detailPanel.getByRole("button", { exact: true, name: "Edit" }).click();
 
   const discardDialog = page.getByRole("alertdialog", {
     name: "Discard entry draft",
@@ -766,14 +763,12 @@ test("the modal protects an in-flight edit from underlying saved-transaction act
   await page.goto(
     `/transactions?page=1&pageSize=50&q=${encodeURIComponent(unique)}`,
   );
-  await clickRowAction(
-    page,
+  await activateTransactionRow(
     page.getByRole("row").filter({ hasText: initialMemo }).first(),
-    "Open transaction detail",
   );
   await page
     .getByRole("dialog")
-    .getByRole("button", { exact: true, name: "Edit transaction" })
+    .getByRole("button", { exact: true, name: "Edit" })
     .click();
 
   const entryPanel = page.getByRole("dialog", {
@@ -1116,14 +1111,12 @@ test("the entry modal blocks the command palette while an edit is active", async
   expect(spendResponse.ok(), await spendResponse.text()).toBe(true);
 
   await page.goto("/transactions?page=1&pageSize=50");
-  await clickRowAction(
-    page,
+  await activateTransactionRow(
     page.getByRole("row").filter({ hasText: memo }).first(),
-    "Open transaction detail",
   );
   await page
     .getByRole("dialog")
-    .getByRole("button", { exact: true, name: "Edit transaction" })
+    .getByRole("button", { exact: true, name: "Edit" })
     .click();
 
   const entryPanel = page.getByRole("dialog", {

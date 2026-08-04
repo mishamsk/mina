@@ -43,6 +43,7 @@ export interface TransactionEntryTabDraft {
   readonly memberId: number | undefined;
   readonly merchantAccountId: number | undefined;
   readonly memo: string;
+  readonly recordAsPending: boolean;
   readonly sourceAccountId: number | undefined;
   readonly soldAccountId: number | undefined;
   readonly spendMerchants: readonly SpendMerchantDraft[];
@@ -57,6 +58,8 @@ export interface JournalRecordRowDraft {
   readonly draftId: string;
   readonly memberId: number | undefined;
   readonly memo: string;
+  readonly pendingDateTime: string;
+  readonly postedDateTime: string;
   readonly sourceAmount: string | undefined;
   readonly sourceAmountUsd: string | null | undefined;
   readonly sourceCurrency: string | undefined;
@@ -64,7 +67,6 @@ export interface JournalRecordRowDraft {
   readonly sourceExternalSystem: string | null | undefined;
   readonly sourcePendingDate: string | null | undefined;
   readonly sourcePostedDate: string | null | undefined;
-  readonly sourceSettlement: JournalRecordDraftSettlement | null | undefined;
   readonly settlement: JournalRecordDraftSettlement;
   readonly reconciliationStatus: JournalRecordDraftReconciliationStatus;
   readonly source: "imported" | "manual";
@@ -73,6 +75,7 @@ export interface JournalRecordRowDraft {
 
 export interface AdvancedTransactionEntryDraft {
   readonly date: string;
+  readonly originatingShorthandTab?: Exclude<TransactionEntryType, "advanced">;
   readonly records: readonly JournalRecordRowDraft[];
 }
 

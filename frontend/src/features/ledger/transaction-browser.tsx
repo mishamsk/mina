@@ -3,7 +3,6 @@ import {
   Check,
   Close,
   Copy,
-  Open,
   Pencil,
   Plus,
   Reload,
@@ -55,9 +54,12 @@ import {
 } from "./edit-mode-prediction";
 import {
   buildLookupMaps,
+  canSplitTransaction,
   displayAmountKey,
   formatInitiatedDate,
   formatInitiatedDateParts,
+  isActiveWhollyPendingTransaction,
+  isExpectedRecurringOccurrence,
   lineCategory,
   lineDisplayAmounts,
   lineMember,
@@ -72,6 +74,10 @@ import { FqnPath } from "./fqn-path";
 import { ClassIcon, StatusIcon } from "./line-icons";
 import { MemberChip } from "./member-chip";
 import { MixedSentinel, MorePartsIndicator } from "./mixed-sentinel";
+import {
+  defaultPostSettlementDateTimeValue,
+  settlementDateTimeToISO,
+} from "./settlement-date";
 import { TagChip, tagChipMicroHeightClass } from "./tag-chip";
 import { TransactionAmountInput } from "./transaction-amount-input";
 import type { AmountSavePageRefresh } from "./transaction-amount-update";
@@ -82,6 +88,7 @@ import {
   TransactionEditDock,
 } from "./transaction-edit-dock";
 import { transactionPageSizeOptions } from "./transaction-page-position";
+import { TransactionPostDialog } from "./transaction-post-dialog";
 import {
   focusTransactionRowFallback,
   transactionRowSelector,
@@ -128,6 +135,10 @@ interface TransactionBrowserProps {
   ) => void;
   readonly onPageSizeChange: (pageSize: number) => void;
   readonly onPreviousPage: () => void;
+  readonly onPostTransaction: (
+    transaction: Transaction,
+    postedDate?: string,
+  ) => Promise<void>;
   readonly onSetEditMode: (enabled: boolean) => void;
   readonly onSplitTransaction?: (
     transaction: Transaction,
@@ -479,6 +490,7 @@ export const TransactionBrowser = ({
   onOpenTransaction,
   onPageSizeChange,
   onPreviousPage,
+  onPostTransaction,
   onSetEditMode,
   onSplitTransaction,
   onSelectRange,
@@ -503,6 +515,16 @@ export const TransactionBrowser = ({
   const [deleteErrorMessage, setDeleteErrorMessage] = useState<
     string | undefined
   >();
+  const [postDialog, setPostDialog] = useState<{
+    readonly opener: HTMLElement;
+    readonly postedDateTime: string;
+    readonly rowIndex: number;
+    readonly sourcePostedDate: string;
+    readonly transaction: Transaction;
+  }>();
+  const [postErrorMessage, setPostErrorMessage] = useState<
+    string | undefined
+  >();
   const [dismissDialog, setDismissDialog] = useState<{
     readonly opener: HTMLElement;
     readonly rowIndex: number;
@@ -518,7 +540,9 @@ export const TransactionBrowser = ({
   >();
   const [occurrenceActionErrorMessage, setOccurrenceActionErrorMessage] =
     useState<string | undefined>();
-  const [lifecycleActionBusyId, setLifecycleActionBusyId] = useState<number>();
+  const [lifecycleActionsBusy, setLifecycleActionsBusy] = useState<
+    ReadonlyMap<number, "cancel" | "post" | "restore">
+  >(() => new Map());
   const [lifecycleActionErrorMessage, setLifecycleActionErrorMessage] =
     useState<string>();
   const [dateJumpHighlight, setDateJumpHighlight] = useState<{
@@ -841,8 +865,15 @@ export const TransactionBrowser = ({
   );
 
   const changeLifecycle = useCallback(
-    async (transaction: Transaction, action: "cancel" | "restore") => {
-      setLifecycleActionBusyId(transaction.transaction_id);
+    async (
+      transaction: Transaction,
+      action: "cancel" | "restore",
+      opener: HTMLElement,
+    ) => {
+      focusWithoutTooltip(opener, { preventScroll: true });
+      setLifecycleActionsBusy((current) =>
+        new Map(current).set(transaction.transaction_id, action),
+      );
       setLifecycleActionErrorMessage(undefined);
       try {
         await onChangeTransactionLifecycle(transaction, action);
@@ -851,11 +882,97 @@ export const TransactionBrowser = ({
           error instanceof Error ? error.message : "The API request failed.",
         );
       } finally {
-        setLifecycleActionBusyId(undefined);
+        setLifecycleActionsBusy((current) => {
+          const next = new Map(current);
+          next.delete(transaction.transaction_id);
+          return next;
+        });
       }
     },
     [onChangeTransactionLifecycle],
   );
+
+  const restorePostFocus = useCallback(
+    (transaction: Transaction, rowIndex: number, opener: HTMLElement) => {
+      window.requestAnimationFrame(() => {
+        const activeElement = document.activeElement;
+        if (
+          activeElement instanceof HTMLElement &&
+          activeElement !== opener &&
+          activeElement !== document.body &&
+          activeElement.matches(
+            "a, button, input, select, textarea, [contenteditable='true'], " +
+              "[tabindex]:not([tabindex='-1'])",
+          )
+        ) {
+          return;
+        }
+        if (opener.isConnected && opener.getClientRects().length > 0) {
+          focusWithoutTooltip(opener, { preventScroll: true });
+          return;
+        }
+        const row = rootRef.current?.querySelector<HTMLElement>(
+          `[data-transaction-id="${transaction.transaction_id}"]`,
+        );
+        if (row) {
+          row.focus({ preventScroll: true });
+        } else {
+          focusTransactionRowFallback(rootRef.current, rowIndex);
+        }
+      });
+    },
+    [],
+  );
+
+  const closePostConfirmation = () => {
+    if (
+      postDialog &&
+      lifecycleActionsBusy.get(postDialog.transaction.transaction_id) === "post"
+    ) {
+      return;
+    }
+    const dialog = postDialog;
+    setPostErrorMessage(undefined);
+    setPostDialog(undefined);
+    if (dialog) {
+      restorePostFocus(dialog.transaction, dialog.rowIndex, dialog.opener);
+    }
+  };
+
+  const confirmPost = async () => {
+    if (!postDialog) {
+      return;
+    }
+    const postedDate = settlementDateTimeToISO(
+      postDialog.postedDateTime,
+      postDialog.sourcePostedDate,
+    );
+    if (!postedDate) {
+      setPostErrorMessage("Enter a valid posted date.");
+      return;
+    }
+    const { opener, rowIndex, transaction } = postDialog;
+    setPostDialog(undefined);
+    setLifecycleActionsBusy((current) =>
+      new Map(current).set(transaction.transaction_id, "post"),
+    );
+    setPostErrorMessage(undefined);
+    setLifecycleActionErrorMessage(undefined);
+    try {
+      await onPostTransaction(transaction, postedDate);
+    } catch (error) {
+      setLifecycleActionErrorMessage(
+        error instanceof Error ? error.message : "The API request failed.",
+      );
+    } finally {
+      setLifecycleActionsBusy((current) => {
+        const next = new Map(current);
+        next.delete(transaction.transaction_id);
+        return next;
+      });
+      restorePostFocus(transaction, rowIndex, opener);
+    }
+  };
 
   const confirmDismiss = useCallback(async () => {
     if (!dismissDialog) {
@@ -1156,8 +1273,12 @@ export const TransactionBrowser = ({
                     displayStatus === "expected" &&
                     transaction.initiated_date < today;
                   const expectedOccurrence =
-                    displayStatus === "expected" &&
-                    transaction.recurring_occurrence_id !== null;
+                    isExpectedRecurringOccurrence(transaction);
+                  const whollyPending =
+                    isActiveWhollyPendingTransaction(transaction);
+                  const lifecycleBusyAction = lifecycleActionsBusy.get(
+                    transaction.transaction_id,
+                  );
                   const selectable = transaction.lifecycle_status === "active";
                   const selected = selectedTransactionIds.has(
                     transaction.transaction_id,
@@ -1556,13 +1677,6 @@ export const TransactionBrowser = ({
                               expectedOccurrence
                                 ? [
                                     {
-                                      icon: <Open aria-hidden="true" />,
-                                      label: "Open transaction detail",
-                                      onSelect: (opener) => {
-                                        onOpenTransaction(transaction, opener);
-                                      },
-                                    },
-                                    {
                                       disabled: occurrenceActionBusy,
                                       disabledReason: occurrenceActionBusy
                                         ? "Occurrence action in progress."
@@ -1599,17 +1713,16 @@ export const TransactionBrowser = ({
                                     },
                                   ]
                                 : [
-                                    {
-                                      icon: <Open aria-hidden="true" />,
-                                      label: "Open transaction detail",
-                                      onSelect: (opener) => {
-                                        onOpenTransaction(transaction, opener);
-                                      },
-                                    },
                                     ...(transaction.lifecycle_status ===
                                       "active" && onEditTransaction
                                       ? [
                                           {
+                                            disabled:
+                                              lifecycleBusyAction === "post",
+                                            disabledReason:
+                                              lifecycleBusyAction === "post"
+                                                ? "Posting transaction."
+                                                : undefined,
                                             icon: <Pencil aria-hidden="true" />,
                                             label: "Edit transaction",
                                             onSelect: (opener: HTMLElement) => {
@@ -1647,10 +1760,16 @@ export const TransactionBrowser = ({
                                         );
                                       },
                                     },
-                                    ...(transaction.lifecycle_status ===
-                                      "active" && onSplitTransaction
+                                    ...(canSplitTransaction(transaction) &&
+                                    onSplitTransaction
                                       ? [
                                           {
+                                            disabled:
+                                              lifecycleBusyAction === "post",
+                                            disabledReason:
+                                              lifecycleBusyAction === "post"
+                                                ? "Posting transaction."
+                                                : undefined,
                                             icon: (
                                               <Scissors aria-hidden="true" />
                                             ),
@@ -1664,20 +1783,71 @@ export const TransactionBrowser = ({
                                           },
                                         ]
                                       : []),
-                                    ...(transaction.lifecycle_status ===
-                                      "active" &&
-                                    transaction.settlement === "pending"
+                                    ...(whollyPending
                                       ? [
                                           {
                                             disabled:
-                                              lifecycleActionBusyId ===
-                                              transaction.transaction_id,
+                                              Boolean(lifecycleBusyAction),
+                                            disabledReason:
+                                              lifecycleBusyAction === "cancel"
+                                                ? "Cancelling transaction."
+                                                : lifecycleBusyAction ===
+                                                    "restore"
+                                                  ? "Restoring transaction."
+                                                  : undefined,
+                                            id: "post-transaction",
+                                            icon: <Check aria-hidden="true" />,
+                                            label:
+                                              lifecycleBusyAction === "post"
+                                                ? "Posting transaction"
+                                                : "Post transaction",
+                                            onSelect: (opener: HTMLElement) => {
+                                              setPostErrorMessage(undefined);
+                                              const postedDate =
+                                                defaultPostSettlementDateTimeValue();
+                                              const openPostDialog = () => {
+                                                setPostDialog({
+                                                  opener,
+                                                  postedDateTime:
+                                                    postedDate.dateTime,
+                                                  rowIndex: transactionIndex,
+                                                  sourcePostedDate:
+                                                    postedDate.sourceDate,
+                                                  transaction,
+                                                });
+                                              };
+                                              if (
+                                                opener.classList.contains(
+                                                  "row-actions-overflow",
+                                                )
+                                              ) {
+                                                window.setTimeout(
+                                                  openPostDialog,
+                                                  0,
+                                                );
+                                              } else {
+                                                openPostDialog();
+                                              }
+                                            },
+                                          },
+                                          {
+                                            disabled:
+                                              Boolean(lifecycleBusyAction),
+                                            disabledReason:
+                                              lifecycleBusyAction === "post"
+                                                ? "Posting transaction."
+                                                : undefined,
+                                            id: "cancel-transaction",
                                             icon: <Close aria-hidden="true" />,
-                                            label: "Cancel transaction",
-                                            onSelect: () => {
+                                            label:
+                                              lifecycleBusyAction === "cancel"
+                                                ? "Cancelling transaction"
+                                                : "Cancel transaction",
+                                            onSelect: (opener: HTMLElement) => {
                                               void changeLifecycle(
                                                 transaction,
                                                 "cancel",
+                                                opener,
                                               );
                                             },
                                           },
@@ -1688,20 +1858,29 @@ export const TransactionBrowser = ({
                                       ? [
                                           {
                                             disabled:
-                                              lifecycleActionBusyId ===
-                                              transaction.transaction_id,
+                                              Boolean(lifecycleBusyAction),
+                                            id: "restore-transaction",
                                             icon: <Reload aria-hidden="true" />,
-                                            label: "Restore transaction",
-                                            onSelect: () => {
+                                            label:
+                                              lifecycleBusyAction === "restore"
+                                                ? "Restoring transaction"
+                                                : "Restore transaction",
+                                            onSelect: (opener: HTMLElement) => {
                                               void changeLifecycle(
                                                 transaction,
                                                 "restore",
+                                                opener,
                                               );
                                             },
                                           },
                                         ]
                                       : []),
                                     {
+                                      disabled: lifecycleBusyAction === "post",
+                                      disabledReason:
+                                        lifecycleBusyAction === "post"
+                                          ? "Posting transaction."
+                                          : undefined,
                                       icon: <Trash aria-hidden="true" />,
                                       label: "Delete transaction",
                                       onSelect: (opener) => {
@@ -1812,6 +1991,31 @@ export const TransactionBrowser = ({
         </div>
         {editDockSurface}
       </div>
+      {postDialog ? (
+        <TransactionPostDialog
+          errorMessage={postErrorMessage}
+          onConfirm={() => {
+            void confirmPost();
+          }}
+          onOpenChange={(open) => {
+            if (!open) {
+              closePostConfirmation();
+            }
+          }}
+          onPostedDateTimeChange={(postedDateTime) => {
+            setPostDialog((current) =>
+              current ? { ...current, postedDateTime } : current,
+            );
+            setPostErrorMessage(undefined);
+          }}
+          pending={
+            lifecycleActionsBusy.get(postDialog.transaction.transaction_id) ===
+            "post"
+          }
+          postedDateTime={postDialog.postedDateTime}
+          transaction={postDialog.transaction}
+        />
+      ) : null}
       <ConfirmationDialog
         confirmIcon={<Trash aria-hidden="true" />}
         confirmLabel="Delete transaction"

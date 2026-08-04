@@ -188,7 +188,7 @@ func Operations() []Operation {
 			MCP: MCPOperation{
 				Group: "records", Name: "bulk_set_settlement",
 				ReadOnly: false, Destructive: true, Idempotent: true, OpenWorld: false,
-				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"record_ids\":{\"description\":\"Journal-record identifiers to update.\",\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"minItems\":1,\"type\":\"array\",\"uniqueItems\":true},\"settlement\":{\"description\":\"Server-derived balance-record settlement.\",\"enum\":[\"pending\",\"posted\"],\"type\":\"string\"}},\"required\":[\"record_ids\",\"settlement\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"pending_date\":{\"description\":\"Exact UTC pending time to apply when setting pending or posted. Omission preserves each record's existing pending time; when setting pending, a record without one defaults to the operation time.\",\"format\":\"date-time\",\"type\":\"string\"},\"posted_date\":{\"description\":\"Exact UTC posted time to apply when setting posted; omit when setting pending. When setting posted, omission preserves each record's existing posted time or defaults to the later of the operation time and its pending time.\",\"format\":\"date-time\",\"type\":\"string\"},\"record_ids\":{\"description\":\"Journal-record identifiers to update.\",\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"minItems\":1,\"type\":\"array\",\"uniqueItems\":true},\"settlement\":{\"description\":\"Server-derived balance-record settlement.\",\"enum\":[\"pending\",\"posted\"],\"type\":\"string\"}},\"required\":[\"record_ids\",\"settlement\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Body: BodyDescriptor{
@@ -196,6 +196,18 @@ func Operations() []Operation {
 					Required: true,
 					Type:     "object",
 					Properties: []BodyPropertyDescriptor{
+						{
+							Name:        "pending_date",
+							Type:        "string",
+							Description: "Exact UTC pending time to apply when setting pending or posted. Omission preserves each record's existing pending time; when setting pending, a record without one defaults to the operation time.",
+							Required:    false,
+						},
+						{
+							Name:        "posted_date",
+							Type:        "string",
+							Description: "Exact UTC posted time to apply when setting posted; omit when setting pending. When setting posted, omission preserves each record's existing posted time or defaults to the later of the operation time and its pending time.",
+							Required:    false,
+						},
 						{
 							Name:        "record_ids",
 							Type:        "array",

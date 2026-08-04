@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 export interface RowActionButton {
   readonly disabled?: boolean;
   readonly disabledReason?: string;
+  readonly id?: string;
   readonly icon: ReactNode;
   readonly kind?: "button";
   readonly label: string;
@@ -21,6 +22,7 @@ export interface RowActionButton {
 export interface RowActionToggle {
   readonly disabled?: boolean;
   readonly disabledReason?: string;
+  readonly id?: string;
   readonly icon: ReactNode;
   readonly kind: "toggle";
   readonly label: string;
@@ -78,9 +80,10 @@ const isActionDisabled = (action: ActionableRowAction): boolean =>
   Boolean(action.disabled);
 
 const primaryActionKey = (action: ActionableRowAction): string =>
-  action.kind === "toggle" && action.slot
+  action.id ??
+  (action.kind === "toggle" && action.slot
     ? `toggle:${action.slot}`
-    : action.label;
+    : action.label);
 
 const ToggleIcon = ({ icon }: { readonly icon: ReactNode }) => (
   <span aria-hidden="true" className={toggleIconClassName}>
@@ -331,7 +334,7 @@ export const RowActions = ({
                 const disabled = isActionDisabled(action);
                 const button = (
                   <Button
-                    key={action.label}
+                    key={primaryActionKey(action)}
                     type="button"
                     variant="ghost"
                     size="sm"
@@ -370,7 +373,7 @@ export const RowActions = ({
 
                 return (
                   <Tooltip
-                    key={action.label}
+                    key={primaryActionKey(action)}
                     label={action.disabledReason ?? action.label}
                     asChild
                   >

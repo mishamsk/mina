@@ -1318,6 +1318,12 @@ type BulkSetRecordReconciliationRequest struct {
 
 // BulkSetRecordSettlementRequest defines model for BulkSetRecordSettlementRequest.
 type BulkSetRecordSettlementRequest struct {
+	// PendingDate Exact UTC pending time to apply when setting pending or posted. Omission preserves each record's existing pending time; when setting pending, a record without one defaults to the operation time.
+	PendingDate *time.Time `json:"pending_date,omitempty"`
+
+	// PostedDate Exact UTC posted time to apply when setting posted; omit when setting pending. When setting posted, omission preserves each record's existing posted time or defaults to the later of the operation time and its pending time.
+	PostedDate *time.Time `json:"posted_date,omitempty"`
+
 	// RecordIds Journal-record identifiers to update.
 	RecordIds []int64 `json:"record_ids"`
 

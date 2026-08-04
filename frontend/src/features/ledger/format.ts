@@ -341,6 +341,23 @@ export const lineStatus = (
       ? transaction.settlement
       : undefined;
 
+export const isActiveWhollyPendingTransaction = (
+  transaction: Transaction,
+): boolean =>
+  transaction.lifecycle_status === "active" &&
+  transaction.settlement === "pending";
+
+export const isExpectedRecurringOccurrence = (
+  transaction: Transaction,
+): boolean =>
+  transaction.lifecycle_status === "expected" &&
+  transaction.recurring_occurrence_id !== null;
+
+export const canSplitTransaction = (transaction: Transaction): boolean =>
+  transaction.lifecycle_status === "active" &&
+  (transaction.transaction_class === "spend" ||
+    transaction.transaction_class === "income");
+
 export const recordStatus = (
   record: JournalRecord,
 ): TransactionDisplayStatus | undefined =>

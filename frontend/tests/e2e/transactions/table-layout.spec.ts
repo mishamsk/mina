@@ -728,7 +728,7 @@ test("transactions page help and leaf category chips", async ({
   const directRowActions = simpleSpendRow.locator(".row-actions-buttons");
   await expect(
     directRowActions.getByRole("button", { name: "Open transaction detail" }),
-  ).toBeVisible();
+  ).toHaveCount(0);
   await expect(
     directRowActions.getByRole("button", { name: "Delete transaction" }),
   ).toBeVisible();

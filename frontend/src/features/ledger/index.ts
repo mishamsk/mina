@@ -14,6 +14,7 @@ export {
 } from "./entry-panel";
 export {
   buildLookupMaps,
+  canSplitTransaction,
   displayAmountKey,
   displayStatusLabel,
   formatInitiatedDate,

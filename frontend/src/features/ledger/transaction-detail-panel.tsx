@@ -35,10 +35,13 @@ import { AmountText } from "./amount-text";
 import { ClassBadge } from "./class-badge";
 import {
   buildLookupMaps,
+  canSplitTransaction,
   detailDisplayAmounts,
   displayAmountKey,
   displayStatusLabel,
   formatInitiatedDate,
+  isActiveWhollyPendingTransaction,
+  isExpectedRecurringOccurrence,
   lineMemo,
   lineStatus,
   type LookupMaps,
@@ -49,8 +52,13 @@ import {
 import { FqnPath } from "./fqn-path";
 import { RecordRoleIcon, StatusIcon } from "./line-icons";
 import { MemberChip } from "./member-chip";
+import {
+  defaultPostSettlementDateTimeValue,
+  settlementDateTimeToISO,
+} from "./settlement-date";
 import { TagChip } from "./tag-chip";
 import { TransactionDeleteDescription } from "./transaction-delete-description";
+import { TransactionPostDialog } from "./transaction-post-dialog";
 
 interface TransactionDetailPanelProps {
   readonly errorMessage: string | undefined;
@@ -69,13 +77,19 @@ interface TransactionDetailPanelProps {
     opener?: HTMLElement,
   ) => void;
   readonly onEdit?: (transaction: Transaction, opener?: HTMLElement) => void;
+  readonly onPost: (
+    transaction: Transaction,
+    postedDate?: string,
+  ) => Promise<void>;
   readonly onSplit?: (transaction: Transaction, opener?: HTMLElement) => void;
   readonly onFilterCategory?: (categoryId: number) => void;
   readonly onRestoreFocus: () => void;
   readonly transaction: Transaction | undefined;
+  readonly transactionId: number;
 }
 
 const floatingOverlaySelectors = [
+  "[data-slot='confirmation-dialog-content']",
   "[data-page-help-content]",
   "[data-slot='select-content']",
 ] as const;
@@ -684,31 +698,58 @@ export const TransactionDetailPanel = ({
   onDismissOccurrence,
   onDuplicate,
   onEdit,
+  onPost,
   onSplit,
   onFilterCategory,
   onRestoreFocus,
   transaction,
+  transactionId,
 }: TransactionDetailPanelProps) => {
   const panelRef = useRef<HTMLElement | null>(null);
   const deleteButtonRef = useRef<HTMLButtonElement | null>(null);
   const dismissButtonRef = useRef<HTMLButtonElement | null>(null);
   const lifecycleButtonRef = useRef<HTMLButtonElement | null>(null);
+  const editButtonRef = useRef<HTMLButtonElement | null>(null);
+  const postButtonRef = useRef<HTMLButtonElement | null>(null);
+  const completedPostFocusTransactionIdsRef = useRef(new Set<number>());
+  const postFocusSourceByTransactionIdRef = useRef(
+    new Map<number, HTMLElement | null>(),
+  );
+  const transactionIdRef = useRef(transaction?.transaction_id);
   const restoreLifecycleFocusRef = useRef(false);
   const restoreFocusOnCloseRef = useRef(true);
   const maps = useMemo(() => buildLookupMaps(lookups), [lookups]);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [confirmDismissOpen, setConfirmDismissOpen] = useState(false);
+  const [confirmPostOpen, setConfirmPostOpen] = useState(false);
+  const [postDialogTransaction, setPostDialogTransaction] = useState<
+    Transaction | undefined
+  >();
   const [deleteErrorMessage, setDeleteErrorMessage] = useState<
     string | undefined
   >();
   const [dismissErrorMessage, setDismissErrorMessage] = useState<
     string | undefined
   >();
+  const [postErrorMessage, setPostErrorMessage] = useState<
+    string | undefined
+  >();
+  const [postedDateTime, setPostedDateTime] = useState("");
+  const [sourcePostedDate, setSourcePostedDate] = useState("");
   const [deleting, setDeleting] = useState(false);
   const [dismissing, setDismissing] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [changingLifecycle, setChangingLifecycle] = useState(false);
-  const [lifecycleErrorMessage, setLifecycleErrorMessage] = useState<string>();
+  const [postingTransactionIds, setPostingTransactionIds] = useState<
+    ReadonlySet<number>
+  >(() => new Set());
+  const [lifecycleActionError, setLifecycleActionError] = useState<
+    | {
+        readonly message: string;
+        readonly transactionId: Transaction["transaction_id"];
+      }
+    | undefined
+  >();
   const [occurrenceActionError, setOccurrenceActionError] = useState<
     | {
         readonly message: string;
@@ -716,6 +757,15 @@ export const TransactionDetailPanel = ({
       }
     | undefined
   >();
+  const [renderedPostTransactionId, setRenderedPostTransactionId] =
+    useState(transactionId);
+  if (renderedPostTransactionId !== transactionId) {
+    setRenderedPostTransactionId(transactionId);
+    setConfirmPostOpen(false);
+    setPostDialogTransaction(undefined);
+    setPostErrorMessage(undefined);
+    setPostedDateTime("");
+  }
 
   const closePanel = useCallback(() => {
     setOccurrenceActionError(undefined);
@@ -723,7 +773,7 @@ export const TransactionDetailPanel = ({
   }, [onClose]);
 
   useOutsidePointerClose({
-    enabled: !confirmDeleteOpen && !confirmDismissOpen,
+    enabled: !confirmDeleteOpen && !confirmDismissOpen && !confirmPostOpen,
     floatingOverlaySelectors,
     onOutsideClose: () => {
       restoreFocusOnCloseRef.current = false;
@@ -755,6 +805,10 @@ export const TransactionDetailPanel = ({
   }, [dismissing]);
 
   useEffect(() => {
+    transactionIdRef.current = transaction?.transaction_id;
+  }, [transaction?.transaction_id]);
+
+  useEffect(() => {
     restoreFocusOnCloseRef.current = true;
     window.requestAnimationFrame(() => {
       panelRef.current?.focus({ preventScroll: true });
@@ -770,6 +824,55 @@ export const TransactionDetailPanel = ({
       lifecycleButtonRef.current?.focus({ preventScroll: true });
     });
   }, [changingLifecycle, transaction?.lifecycle_status]);
+
+  useEffect(() => {
+    const transactionId = transaction?.transaction_id;
+    for (const completedTransactionId of completedPostFocusTransactionIdsRef.current) {
+      if (completedTransactionId !== transactionId) {
+        completedPostFocusTransactionIdsRef.current.delete(
+          completedTransactionId,
+        );
+        postFocusSourceByTransactionIdRef.current.delete(
+          completedTransactionId,
+        );
+      }
+    }
+    if (
+      transactionId === undefined ||
+      postingTransactionIds.has(transactionId) ||
+      !completedPostFocusTransactionIdsRef.current.delete(transactionId)
+    ) {
+      return;
+    }
+    const focusSource =
+      postFocusSourceByTransactionIdRef.current.get(transactionId);
+    postFocusSourceByTransactionIdRef.current.delete(transactionId);
+    window.requestAnimationFrame(() => {
+      if (transactionIdRef.current !== transactionId) {
+        return;
+      }
+      const activeElement = document.activeElement;
+      if (
+        activeElement instanceof HTMLElement &&
+        activeElement !== focusSource &&
+        activeElement !== document.body &&
+        activeElement.matches(
+          "a, button, input, select, textarea, [contenteditable='true'], " +
+            "[tabindex]:not([tabindex='-1'])",
+        )
+      ) {
+        return;
+      }
+      (postButtonRef.current?.isConnected
+        ? postButtonRef.current
+        : editButtonRef.current
+      )?.focus({ preventScroll: true });
+    });
+  }, [
+    postingTransactionIds,
+    transaction?.settlement,
+    transaction?.transaction_id,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -867,22 +970,89 @@ export const TransactionDetailPanel = ({
     }
     restoreLifecycleFocusRef.current = true;
     setChangingLifecycle(true);
-    setLifecycleErrorMessage(undefined);
+    setLifecycleActionError(undefined);
     try {
       await onChangeLifecycle(transaction, action);
     } catch (error) {
-      setLifecycleErrorMessage(
-        error instanceof Error ? error.message : "The API request failed.",
-      );
+      setLifecycleActionError({
+        message:
+          error instanceof Error ? error.message : "The API request failed.",
+        transactionId: transaction.transaction_id,
+      });
     } finally {
       setChangingLifecycle(false);
     }
   };
 
+  const openPostConfirmation = () => {
+    if (!transaction) {
+      return;
+    }
+    setPostErrorMessage(undefined);
+    const postedDate = defaultPostSettlementDateTimeValue();
+    setPostedDateTime(postedDate.dateTime);
+    setSourcePostedDate(postedDate.sourceDate);
+    setPostDialogTransaction(transaction);
+    setConfirmPostOpen(true);
+  };
+
+  const closePostConfirmation = () => {
+    if (
+      postDialogTransaction &&
+      postingTransactionIds.has(postDialogTransaction.transaction_id)
+    ) {
+      return;
+    }
+    setPostErrorMessage(undefined);
+    setConfirmPostOpen(false);
+    setPostDialogTransaction(undefined);
+    window.requestAnimationFrame(() => {
+      postButtonRef.current?.focus({ preventScroll: true });
+    });
+  };
+
+  const confirmPost = async () => {
+    if (!postDialogTransaction) {
+      return;
+    }
+    const postedDate = settlementDateTimeToISO(
+      postedDateTime,
+      sourcePostedDate,
+    );
+    if (!postedDate) {
+      setPostErrorMessage("Enter a valid posted date.");
+      return;
+    }
+    const transactionId = postDialogTransaction.transaction_id;
+    postFocusSourceByTransactionIdRef.current.set(
+      transactionId,
+      postButtonRef.current,
+    );
+    setConfirmPostOpen(false);
+    setPostDialogTransaction(undefined);
+    setPostingTransactionIds((current) => new Set(current).add(transactionId));
+    setPostErrorMessage(undefined);
+    setLifecycleActionError(undefined);
+    try {
+      await onPost(postDialogTransaction, postedDate);
+    } catch (error) {
+      setLifecycleActionError({
+        message:
+          error instanceof Error ? error.message : "The API request failed.",
+        transactionId,
+      });
+    } finally {
+      completedPostFocusTransactionIdsRef.current.add(transactionId);
+      setPostingTransactionIds((current) => {
+        const next = new Set(current);
+        next.delete(transactionId);
+        return next;
+      });
+    }
+  };
+
   const expectedOccurrence =
-    transaction !== undefined &&
-    transaction.lifecycle_status === "expected" &&
-    transaction.recurring_occurrence_id !== null;
+    transaction !== undefined && isExpectedRecurringOccurrence(transaction);
   const expectedOccurrenceActionsAvailable =
     expectedOccurrence &&
     onConfirmOccurrence !== undefined &&
@@ -896,6 +1066,43 @@ export const TransactionDetailPanel = ({
     occurrenceActionError.transactionId === transaction?.transaction_id
       ? occurrenceActionError.message
       : undefined;
+  const posting =
+    transaction !== undefined &&
+    postingTransactionIds.has(transaction.transaction_id);
+  const lifecycleErrorMessage =
+    lifecycleActionError !== undefined &&
+    lifecycleActionError.transactionId === transaction?.transaction_id
+      ? lifecycleActionError.message
+      : undefined;
+  const lifecycleActionsDisabledReason = posting
+    ? "Posting transaction."
+    : changingLifecycle
+      ? "Transaction lifecycle update in progress."
+      : undefined;
+  const postButton = (
+    <Button
+      ref={postButtonRef}
+      type="button"
+      variant="outline"
+      disabled={posting || changingLifecycle}
+      onClick={openPostConfirmation}
+    >
+      <Check aria-hidden="true" />
+      {posting ? "Posting" : "Post"}
+    </Button>
+  );
+  const cancelButton = (
+    <Button
+      ref={lifecycleButtonRef}
+      type="button"
+      variant="outline"
+      disabled={posting || changingLifecycle}
+      onClick={() => void changeLifecycle("cancel")}
+    >
+      <Close aria-hidden="true" />
+      Cancel
+    </Button>
+  );
 
   return (
     <aside
@@ -935,18 +1142,6 @@ export const TransactionDetailPanel = ({
           )}
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          {transaction?.lifecycle_status === "active" && onEdit ? (
-            <Button
-              type="button"
-              aria-label="Edit transaction"
-              onClick={(event) => {
-                onEdit(transaction, event.currentTarget);
-              }}
-            >
-              <MagicEdit aria-hidden="true" />
-              Edit
-            </Button>
-          ) : null}
           <Button
             type="button"
             variant="outline"
@@ -1030,6 +1225,25 @@ export const TransactionDetailPanel = ({
             ) : null
           ) : (
             <>
+              {transaction.lifecycle_status === "active" && onEdit ? (
+                <Tooltip
+                  disabled={!posting}
+                  focusable={posting}
+                  label="Posting transaction."
+                >
+                  <Button
+                    ref={editButtonRef}
+                    type="button"
+                    disabled={posting}
+                    onClick={(event) => {
+                      onEdit(transaction, event.currentTarget);
+                    }}
+                  >
+                    <MagicEdit aria-hidden="true" />
+                    Edit
+                  </Button>
+                </Tooltip>
+              ) : null}
               <Button
                 type="button"
                 variant="outline"
@@ -1055,30 +1269,42 @@ export const TransactionDetailPanel = ({
                   Duplicate
                 </Button>
               ) : null}
-              {transaction.lifecycle_status === "active" && onSplit ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={(event) => {
-                    onSplit(transaction, event.currentTarget);
-                  }}
+              {canSplitTransaction(transaction) && onSplit ? (
+                <Tooltip
+                  disabled={!posting}
+                  focusable={posting}
+                  label="Posting transaction."
                 >
-                  <Scissors aria-hidden="true" />
-                  Split
-                </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={posting}
+                    onClick={(event) => {
+                      onSplit(transaction, event.currentTarget);
+                    }}
+                  >
+                    <Scissors aria-hidden="true" />
+                    Split
+                  </Button>
+                </Tooltip>
               ) : null}
-              {transaction.lifecycle_status === "active" &&
-              transaction.settlement === "pending" ? (
-                <Button
-                  ref={lifecycleButtonRef}
-                  type="button"
-                  variant="outline"
-                  disabled={changingLifecycle}
-                  onClick={() => void changeLifecycle("cancel")}
-                >
-                  <Close aria-hidden="true" />
-                  Cancel
-                </Button>
+              {isActiveWhollyPendingTransaction(transaction) ? (
+                <div className="flex shrink-0 flex-nowrap gap-2">
+                  <Tooltip
+                    disabled={!lifecycleActionsDisabledReason}
+                    focusable={Boolean(lifecycleActionsDisabledReason)}
+                    label={lifecycleActionsDisabledReason ?? ""}
+                  >
+                    {postButton}
+                  </Tooltip>
+                  <Tooltip
+                    disabled={!lifecycleActionsDisabledReason}
+                    focusable={Boolean(lifecycleActionsDisabledReason)}
+                    label={lifecycleActionsDisabledReason ?? ""}
+                  >
+                    {cancelButton}
+                  </Tooltip>
+                </div>
               ) : null}
               {transaction.lifecycle_status === "cancelled" ? (
                 <Button
@@ -1092,15 +1318,22 @@ export const TransactionDetailPanel = ({
                   Restore
                 </Button>
               ) : null}
-              <Button
-                ref={deleteButtonRef}
-                type="button"
-                variant="destructive"
-                onClick={openDeleteConfirmation}
+              <Tooltip
+                disabled={!posting}
+                focusable={posting}
+                label="Posting transaction."
               >
-                <Trash aria-hidden="true" />
-                Delete
-              </Button>
+                <Button
+                  ref={deleteButtonRef}
+                  type="button"
+                  variant="destructive"
+                  disabled={posting}
+                  onClick={openDeleteConfirmation}
+                >
+                  <Trash aria-hidden="true" />
+                  Delete
+                </Button>
+              </Tooltip>
             </>
           )}
           {lifecycleErrorMessage ? (
@@ -1114,6 +1347,26 @@ export const TransactionDetailPanel = ({
         <p className="text-destructive px-4 pb-4 text-sm" role="alert">
           {occurrenceActionErrorMessage}
         </p>
+      ) : null}
+      {confirmPostOpen && postDialogTransaction ? (
+        <TransactionPostDialog
+          errorMessage={postErrorMessage}
+          onConfirm={() => {
+            void confirmPost();
+          }}
+          onOpenChange={(open) => {
+            if (!open) {
+              closePostConfirmation();
+            }
+          }}
+          onPostedDateTimeChange={(value) => {
+            setPostedDateTime(value);
+            setPostErrorMessage(undefined);
+          }}
+          pending={false}
+          postedDateTime={postedDateTime}
+          transaction={postDialogTransaction}
+        />
       ) : null}
       <ConfirmationDialog
         confirmIcon={<Trash aria-hidden="true" />}

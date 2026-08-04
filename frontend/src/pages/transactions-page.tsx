@@ -271,6 +271,7 @@ export const TransactionsPage = () => {
                 Math.max(defaultTransactionPage, browser.page - 1),
               );
             }}
+            onPostTransaction={browser.postTransaction}
             onSetEditMode={browser.setEditMode}
             onSplitTransaction={splitTransaction}
             onSelectRange={browser.selectTransactionRange}
@@ -315,12 +316,14 @@ export const TransactionsPage = () => {
             onDismissOccurrence={browser.dismissRecurringOccurrenceFromRow}
             onDuplicate={duplicateTransaction}
             onEdit={editTransaction}
+            onPost={browser.postTransaction}
             onSplit={splitTransaction}
             onFilterCategory={(categoryId) => {
               addEntityFilter("category", categoryId);
             }}
             onRestoreFocus={browser.detail.restoreDetailFocus}
             transaction={browser.detail.transaction}
+            transactionId={browser.detail.selectedTransactionId}
           />
         ) : null}
       </div>

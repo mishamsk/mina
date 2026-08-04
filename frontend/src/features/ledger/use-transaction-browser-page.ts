@@ -382,6 +382,36 @@ export const useTransactionBrowserPage = ({
     [detail, displayedPageParams, showNotice],
   );
 
+  const postTransaction = useCallback(
+    async (transaction: Transaction, postedDate?: string) => {
+      const recordIds = transaction.records
+        .filter(
+          (record) => !record.tombstoned_at && record.settlement === "pending",
+        )
+        .map((record) => record.record_id);
+      if (recordIds.length === 0) {
+        throw new Error("This transaction has no pending balance records.");
+      }
+
+      const result = await updateJournalRecordsSettlement(recordIds, "posted", {
+        postedDate,
+      });
+      if (result.error) {
+        throw new Error(apiErrorMessage(result.error));
+      }
+      await refreshTransactionPageAfterSave(
+        displayedPageParams,
+        transaction.transaction_id,
+        transaction,
+        transaction,
+        { pageRefreshMode: "blocking" },
+      );
+      await detail.refreshSelectedTransactionDetail(transaction.transaction_id);
+      showNotice("Transaction posted.");
+    },
+    [detail, displayedPageParams, showNotice],
+  );
+
   const confirmRecurringOccurrenceFromRow = useCallback(
     async (transaction: Transaction) => {
       if (transaction.recurring_occurrence_id === null) {
@@ -733,6 +763,7 @@ export const useTransactionBrowserPage = ({
     pageSize,
     params,
     pendingAmountSave,
+    postTransaction,
     refreshErrorMessage,
     selectPageTransactions,
     selectTransactionRange,

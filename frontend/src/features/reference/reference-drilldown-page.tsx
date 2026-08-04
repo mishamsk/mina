@@ -472,6 +472,7 @@ export const ReferenceDrilldownPage = ({
           onPreviousPage={() => {
             browser.setPage(Math.max(defaultTransactionPage, browser.page - 1));
           }}
+          onPostTransaction={browser.postTransaction}
           onSetEditMode={browser.setEditMode}
           onSplitTransaction={(transaction) => {
             openTransactionEntryLaunch(
@@ -531,6 +532,7 @@ export const ReferenceDrilldownPage = ({
               captureTransactionEntryLaunchContext(),
             );
           }}
+          onPost={browser.postTransaction}
           onFilterCategory={(categoryId) => {
             addEntityFilter("category", categoryId);
           }}
@@ -542,6 +544,7 @@ export const ReferenceDrilldownPage = ({
             );
           }}
           transaction={browser.detail.transaction}
+          transactionId={browser.detail.selectedTransactionId}
         />
       ) : null}
     </div>

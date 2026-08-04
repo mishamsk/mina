@@ -851,15 +851,15 @@ const clickRowAction = async (
     return;
   }
 
-  if (label === "Open transaction detail") {
-    await row.focus();
-    await page.keyboard.press("Enter");
-    return;
-  }
-
   await expect(overflow).toBeVisible();
   const menu = await openRowActionsMenu(page, row);
   await menu.getByRole("button", { name: label }).click();
+};
+
+const activateTransactionRow = async (row: Locator): Promise<void> => {
+  await expect(row).toBeVisible();
+  await row.focus();
+  await row.press("Enter");
 };
 
 const expectCollapsedRowActionsKeepAmountVisible = async (row: Locator) => {
@@ -1526,6 +1526,7 @@ const expectAdvancedBalanceStatus = async (
 };
 
 export {
+  activateTransactionRow,
   amountChipsFitCell,
   boundingBoxesOverlap,
   captureSearchDebounce,

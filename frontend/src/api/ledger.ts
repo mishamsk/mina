@@ -1085,9 +1085,18 @@ export const updateJournalRecordsMember = (
 export const updateJournalRecordsSettlement = (
   recordIds: readonly number[],
   settlement: SettlementStatus,
+  dates: {
+    readonly pendingDate?: string;
+    readonly postedDate?: string;
+  } = {},
 ) =>
   bulkSetJournalRecordSettlement({
-    body: { record_ids: [...recordIds], settlement },
+    body: {
+      ...(dates.pendingDate ? { pending_date: dates.pendingDate } : {}),
+      ...(dates.postedDate ? { posted_date: dates.postedDate } : {}),
+      record_ids: [...recordIds],
+      settlement,
+    },
   });
 
 export const updateJournalRecordsReconciliation = (

@@ -1,6 +1,5 @@
 import { expect } from "@playwright/test";
 import { test } from "@tests/e2e/test";
-import { clickRowAction } from "@tests/e2e/transactions/support";
 
 test("login validates required fields inline", async ({
   authenticatedBackend,
@@ -109,7 +108,8 @@ test("reauthentication preserves transaction detail focus", async ({
   const postedRow = page
     .locator("[data-transaction-row]:not(:has([data-display-status]))")
     .first();
-  await clickRowAction(page, postedRow, "Open transaction detail");
+  await postedRow.focus();
+  await postedRow.press("Enter");
   const detailPanel = page.getByTestId("transaction-detail-panel");
   await expect(detailPanel).toBeFocused();
 

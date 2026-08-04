@@ -420,6 +420,14 @@ export type BulkSetRecordSettlementRequest = {
      */
     record_ids: Array<number>;
     settlement: SettlementStatus;
+    /**
+     * Exact UTC pending time to apply when setting pending or posted. Omission preserves each record's existing pending time; when setting pending, a record without one defaults to the operation time.
+     */
+    pending_date?: string;
+    /**
+     * Exact UTC posted time to apply when setting posted; omit when setting pending. When setting posted, omission preserves each record's existing posted time or defaults to the later of the operation time and its pending time.
+     */
+    posted_date?: string;
 };
 
 export type BulkSetRecordReconciliationRequest = {

@@ -28,6 +28,7 @@ import { Separator } from "@/components/ui/separator";
 import { CommandPalette } from "@/features/command-palette";
 import { BalanceStrip } from "@/features/featured-balances";
 import {
+  canSplitTransaction,
   captureTransactionEntryLaunchContext,
   EntryModal,
   refreshLedgerLookups,
@@ -404,7 +405,11 @@ export const AppShell = ({ children }: AppShellProps) => {
       entryParam,
       () => {
         void fetchTransactionById(transactionId).then((result) => {
-          if (result.data && !result.data.tombstoned_at) {
+          if (
+            result.data &&
+            !result.data.tombstoned_at &&
+            (type !== "split" || canSplitTransaction(result.data))
+          ) {
             resolveTransactionEntryRoute(entryParam, {
               transaction: result.data,
               type,
@@ -415,7 +420,9 @@ export const AppShell = ({ children }: AppShellProps) => {
             entryParam,
             apiErrorMessage(
               result.error,
-              `Transaction #${transactionId} could not be found.`,
+              type === "split"
+                ? `Transaction #${transactionId} is unavailable for Split.`
+                : `Transaction #${transactionId} could not be found.`,
             ),
           );
         });

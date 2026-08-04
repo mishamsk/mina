@@ -387,7 +387,11 @@ func (s *strictServer) BulkReassignJournalRecordAccount(ctx context.Context, req
 }
 
 func (s *strictServer) BulkSetJournalRecordSettlement(ctx context.Context, request openapi.BulkSetJournalRecordSettlementRequestObject) (openapi.BulkSetJournalRecordSettlementResponseObject, error) {
-	response, err := s.deps.Transactions.BulkSetSettlement(ctx, request.Body.RecordIds, transactions.SettlementStatus(request.Body.Settlement))
+	response, err := s.deps.Transactions.BulkSetSettlement(ctx, request.Body.RecordIds, transactions.SettlementIntent{
+		Status:      transactions.SettlementStatus(request.Body.Settlement),
+		PendingDate: nullableTimestampFromOpenAPI(request.Body.PendingDate),
+		PostedDate:  nullableTimestampFromOpenAPI(request.Body.PostedDate),
+	})
 	if err != nil {
 		return nil, err
 	}

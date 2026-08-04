@@ -536,6 +536,109 @@ func TestRecordBulkSettlementAndTransactionLifecycleBoundary(t *testing.T) {
 	apptest.AssertTransactionLifecycle(t, restored.JSON200, httpclient.TransactionLifecycleStatusActive)
 }
 
+func TestRecordBulkSettlementAcceptsExplicitEventTimesBoundary(t *testing.T) {
+	now := apptest.Timestamp("2026-08-04T15:30:00Z")
+	client := newSharedClient(t, apptest.WithClock(apptest.NewFakeClock(now)))
+	refs := createSearchRefs(t, client)
+	transaction := createTransaction(t, client, settlementTransactionRequest(refs.transactionRefs, "2024-03-10", httpclient.SettlementStatusPending))
+	balanceRecordID := transaction.JSON201.Records[0].RecordId
+	pendingDate := apptest.Timestamp("2024-03-11T09:00:00Z")
+	postedDate := apptest.Timestamp("2024-03-12T14:45:00Z")
+
+	posted, err := client.REST().BulkSetJournalRecordSettlementWithResponse(context.Background(), httpclient.BulkSetRecordSettlementRequest{
+		RecordIds:   []int64{balanceRecordID},
+		Settlement:  httpclient.SettlementStatusPosted,
+		PendingDate: &pendingDate,
+		PostedDate:  &postedDate,
+	})
+	requireNoTransportError(t, "set explicit settlement dates", err)
+	if posted.StatusCode() != http.StatusOK {
+		t.Fatalf("set explicit settlement dates status = %d, want %d; body %s", posted.StatusCode(), http.StatusOK, posted.Body)
+	}
+
+	read := getTransaction(t, client, transaction.JSON201.TransactionId)
+	assertRecordLifecycleDates(t, "explicit bulk settlement dates", read.JSON200.Records, &pendingDate, &postedDate)
+}
+
+func TestRecordBulkSettlementPostsMultipleRecordsAtExplicitTimeBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	fixture := newSemanticFixture(t, client)
+	checkingPendingDate := apptest.Timestamp("2024-03-11T09:00:00Z")
+	savingsPendingDate := apptest.Timestamp("2024-03-11T10:00:00Z")
+	postedDate := apptest.Timestamp("2024-03-12T14:45:00Z")
+	checking := semanticRecord(fixture.checking.AccountId, "-30.00", "USD", nil)
+	checking.Settlement = &httpclient.SettlementIntent{
+		Status:      httpclient.SettlementStatusPending,
+		PendingDate: &checkingPendingDate,
+	}
+	savings := semanticRecord(fixture.savings.AccountId, "20.00", "USD", nil)
+	savings.Settlement = &httpclient.SettlementIntent{
+		Status:      httpclient.SettlementStatusPending,
+		PendingDate: &savingsPendingDate,
+	}
+	transaction := createTransaction(t, client, classificationRequest(
+		checking,
+		savings,
+		semanticRecord(fixture.merchantA.AccountId, "10.00", "USD", &fixture.expense.CategoryId),
+	))
+	balanceRecordIDs := []int64{
+		transaction.JSON201.Records[0].RecordId,
+		transaction.JSON201.Records[1].RecordId,
+	}
+
+	posted, err := client.REST().BulkSetJournalRecordSettlementWithResponse(context.Background(), httpclient.BulkSetRecordSettlementRequest{
+		RecordIds:  balanceRecordIDs,
+		Settlement: httpclient.SettlementStatusPosted,
+		PostedDate: &postedDate,
+	})
+	requireNoTransportError(t, "post multiple pending balance records", err)
+	if posted.StatusCode() != http.StatusOK {
+		t.Fatalf("post multiple pending balance records status = %d, want %d; body %s", posted.StatusCode(), http.StatusOK, posted.Body)
+	}
+	assertBulkResponse(t, posted.JSON200, balanceRecordIDs)
+
+	read := getTransaction(t, client, transaction.JSON201.TransactionId)
+	for index, wantPendingDate := range []*time.Time{&checkingPendingDate, &savingsPendingDate} {
+		record := read.JSON200.Records[index]
+		if record.PendingDate == nil || !record.PendingDate.Equal(*wantPendingDate) {
+			t.Fatalf("posted record %d pending_date = %v, want %v", record.RecordId, record.PendingDate, wantPendingDate)
+		}
+		if record.PostedDate == nil || !record.PostedDate.Equal(postedDate) {
+			t.Fatalf("posted record %d posted_date = %v, want %v", record.RecordId, record.PostedDate, postedDate)
+		}
+	}
+}
+
+func TestRecordBulkSettlementReportsTopLevelDateFieldsBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	refs := createSearchRefs(t, client)
+	transaction := createTransaction(t, client, settlementTransactionRequest(refs.transactionRefs, "2024-03-10", httpclient.SettlementStatusPending))
+	balanceRecordID := transaction.JSON201.Records[0].RecordId
+	pendingDate := apptest.Timestamp("2024-03-11T09:00:00Z")
+	postedDate := apptest.Timestamp("2024-03-10T09:00:00Z")
+
+	pendingWithPostedDate, err := client.REST().BulkSetJournalRecordSettlementWithResponse(context.Background(), httpclient.BulkSetRecordSettlementRequest{
+		RecordIds:  []int64{balanceRecordID},
+		Settlement: httpclient.SettlementStatusPending,
+		PostedDate: &postedDate,
+	})
+	requireNoTransportError(t, "set pending with posted date", err)
+	if pendingWithPostedDate.JSON400 == nil || pendingWithPostedDate.JSON400.Error.Message != "posted_date must be omitted for pending settlement" {
+		t.Fatalf("pending posted_date error = %+v, want top-level field path", pendingWithPostedDate.JSON400)
+	}
+
+	postedBeforePending, err := client.REST().BulkSetJournalRecordSettlementWithResponse(context.Background(), httpclient.BulkSetRecordSettlementRequest{
+		RecordIds:   []int64{balanceRecordID},
+		Settlement:  httpclient.SettlementStatusPosted,
+		PendingDate: &pendingDate,
+		PostedDate:  &postedDate,
+	})
+	requireNoTransportError(t, "set posted before pending date", err)
+	if postedBeforePending.JSON400 == nil || postedBeforePending.JSON400.Error.Message != "posted_date must not precede pending_date" {
+		t.Fatalf("posted-before-pending error = %+v, want top-level field path", postedBeforePending.JSON400)
+	}
+}
+
 func TestRecordBulkSettlementPostsBeforeDefaultPendingTimestampBoundary(t *testing.T) {
 	now := apptest.Timestamp("2026-08-02T07:01:51Z")
 	client := newSharedClient(t, apptest.WithClock(apptest.NewFakeClock(now)))

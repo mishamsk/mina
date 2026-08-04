@@ -18,8 +18,8 @@
 - Exported semantic record and classification contracts let adjacent services reuse transaction classification without owning transaction persistence behavior.
 - The transactions service owns `amount_usd` backfill for active journal records still storing `NULL`.
 - Create/replace produce active transactions and accept settlement intent only for owned/party records; recurring materialization alone creates expected transactions.
-- The service normalizes settlement intent into explicit dates, preserves imported exact timestamps, and clears dates from flow/system records.
-- Bulk settlement and reconciliation are separate operations; settlement targets owned/party records and computes timestamps once per request.
+- The service normalizes settlement intent into explicit dates, defaults create dates from the initiated date and later-change dates from the operation clock, preserves supplied exact timestamps, and clears dates from flow/system records.
+- Bulk settlement and reconciliation are separate operations; settlement targets owned/party records, accepts optional exact dates, and computes any default timestamp once per request.
 - `Cancel` changes a wholly pending active transaction to cancelled; `Restore` changes only its lifecycle back to active. Both preserve record dates and reconciliation.
 - Runtime may trigger backfill after non-canceled exchange-rate load attempts; backfill never overwrites non-`NULL` values.
 - Composition may subscribe to create/replace currency-usage changes to invalidate dependent planning caches.

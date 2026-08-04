@@ -4357,6 +4357,14 @@ components:
             minimum: 1
         settlement:
           $ref: "#/components/schemas/SettlementStatus"
+        pending_date:
+          type: string
+          description: Exact UTC pending time to apply when setting pending or posted. Omission preserves each record's existing pending time; when setting pending, a record without one defaults to the operation time.
+          format: date-time
+        posted_date:
+          type: string
+          description: Exact UTC posted time to apply when setting posted; omit when setting pending. When setting posted, omission preserves each record's existing posted time or defaults to the later of the operation time and its pending time.
+          format: date-time
     BulkSetRecordReconciliationRequest:
       type: object
       additionalProperties: false

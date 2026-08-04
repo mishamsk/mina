@@ -471,7 +471,8 @@ func TestTransactionRecordFieldsBoundary(t *testing.T) {
 }
 
 func TestTransactionSettlementNormalizationAndExactTimestampsBoundary(t *testing.T) {
-	client := newSharedClient(t)
+	clock := apptest.NewFakeClock(apptest.Timestamp("2026-08-04T15:30:00Z"))
+	client := newSharedClient(t, apptest.WithClock(clock))
 	refs := createTransactionRefs(t, client)
 
 	directPostedRequest := settlementTransactionRequest(refs, "2024-03-10", httpclient.SettlementStatusPosted)
@@ -481,6 +482,8 @@ func TestTransactionSettlementNormalizationAndExactTimestampsBoundary(t *testing
 		t.Fatalf("direct posted transaction settlement = %q, want posted", directPosted.JSON201.Settlement)
 	}
 
+	replacementTime := apptest.Timestamp("2026-08-04T15:31:00Z")
+	clock.Set(replacementTime)
 	directPostedReplacement := settlementTransactionRequest(refs, "2024-03-14", httpclient.SettlementStatusPosted)
 	replaced, err := client.REST().ReplaceTransactionWithResponse(
 		context.Background(),
@@ -491,7 +494,54 @@ func TestTransactionSettlementNormalizationAndExactTimestampsBoundary(t *testing
 	if replaced.StatusCode() != http.StatusOK {
 		t.Fatalf("replace direct posted status = %d, want %d; body %s", replaced.StatusCode(), http.StatusOK, replaced.Body)
 	}
-	assertRecordLifecycleDates(t, "direct posted replace", replaced.JSON200.Records, nil, apptest.TimestampPtr("2024-03-14T23:59:59Z"))
+	assertRecordLifecycleDates(t, "direct posted replace", replaced.JSON200.Records, nil, &replacementTime)
+
+	pendingOperationTime := apptest.Timestamp("2026-08-04T15:32:00Z")
+	clock.Set(pendingOperationTime)
+	setPending, err := client.REST().BulkSetJournalRecordSettlementWithResponse(
+		context.Background(),
+		httpclient.BulkSetRecordSettlementRequest{
+			RecordIds:  []int64{replaced.JSON200.Records[0].RecordId},
+			Settlement: httpclient.SettlementStatusPending,
+		},
+	)
+	requireNoTransportError(t, "set replaced transaction pending", err)
+	if setPending.StatusCode() != http.StatusOK {
+		t.Fatalf("set replaced transaction pending status = %d, want %d; body %s", setPending.StatusCode(), http.StatusOK, setPending.Body)
+	}
+	pendingAfterEditMode := getTransaction(t, client, directPosted.JSON201.TransactionId)
+	assertRecordLifecycleDates(t, "pending after edit mode", pendingAfterEditMode.JSON200.Records, &pendingOperationTime, nil)
+
+	advancedReplacementTime := apptest.Timestamp("2026-08-04T15:33:00Z")
+	clock.Set(advancedReplacementTime)
+	advancedPostedRequest := settlementTransactionRequest(refs, "2024-03-14", httpclient.SettlementStatusPosted)
+	advancedPostedRequest.Records[0].Settlement.PendingDate = &pendingOperationTime
+	advancedPosted, err := client.REST().ReplaceTransactionWithResponse(
+		context.Background(),
+		directPosted.JSON201.TransactionId,
+		httpclient.UpdateTransactionRequest(advancedPostedRequest),
+	)
+	requireNoTransportError(t, "post edit-mode pending transaction through replacement", err)
+	if advancedPosted.StatusCode() != http.StatusOK {
+		t.Fatalf("post edit-mode pending replacement status = %d, want %d; body %s", advancedPosted.StatusCode(), http.StatusOK, advancedPosted.Body)
+	}
+	assertRecordLifecycleDates(t, "posted after edit mode", advancedPosted.JSON200.Records, &pendingOperationTime, &advancedReplacementTime)
+
+	sameDayPendingRequest := settlementTransactionRequest(refs, "2026-08-04", httpclient.SettlementStatusPending)
+	sameDayPending := createTransaction(t, client, sameDayPendingRequest)
+	sameDayPendingDate := apptest.Timestamp("2026-08-04T23:59:59Z")
+	sameDayPostedRequest := settlementTransactionRequest(refs, "2026-08-04", httpclient.SettlementStatusPosted)
+	sameDayPostedRequest.Records[0].Settlement.PendingDate = &sameDayPendingDate
+	sameDayPosted, err := client.REST().ReplaceTransactionWithResponse(
+		context.Background(),
+		sameDayPending.JSON201.TransactionId,
+		httpclient.UpdateTransactionRequest(sameDayPostedRequest),
+	)
+	requireNoTransportError(t, "post same-day pending transaction through replacement", err)
+	if sameDayPosted.StatusCode() != http.StatusOK {
+		t.Fatalf("post same-day pending replacement status = %d, want %d; body %s", sameDayPosted.StatusCode(), http.StatusOK, sameDayPosted.Body)
+	}
+	assertRecordLifecycleDates(t, "same-day pending replacement", sameDayPosted.JSON200.Records, &sameDayPendingDate, &sameDayPendingDate)
 
 	pendingRequest := settlementTransactionRequest(refs, "2024-03-12", httpclient.SettlementStatusPending)
 	pending := createTransaction(t, client, pendingRequest)
@@ -501,7 +551,8 @@ func TestTransactionSettlementNormalizationAndExactTimestampsBoundary(t *testing
 		t.Fatalf("pending transaction settlement = %q, want pending", pending.JSON201.Settlement)
 	}
 
-	postStartedAt := time.Now().UTC().Add(-time.Second)
+	bulkPostedOperationTime := apptest.Timestamp("2026-08-04T15:34:00Z")
+	clock.Set(bulkPostedOperationTime)
 	posted, err := client.REST().BulkSetJournalRecordSettlementWithResponse(
 		context.Background(),
 		httpclient.BulkSetRecordSettlementRequest{
@@ -521,7 +572,9 @@ func TestTransactionSettlementNormalizationAndExactTimestampsBoundary(t *testing
 		if record.PendingDate == nil || !record.PendingDate.Equal(*wantPending) {
 			t.Fatalf("pending-then-posted record %d pending_date = %v, want %v", index, record.PendingDate, wantPending)
 		}
-		assertLifecycleTimestampBetween(t, "pending-then-posted posted_date", record.PostedDate, postStartedAt, time.Now().UTC().Add(time.Second))
+		if record.PostedDate == nil || !record.PostedDate.Equal(bulkPostedOperationTime) {
+			t.Fatalf("pending-then-posted record %d posted_date = %v, want %v", index, record.PostedDate, bulkPostedOperationTime)
+		}
 	}
 
 	explicitPending := apptest.Timestamp("2024-03-11T18:30:00Z")
@@ -1211,6 +1264,13 @@ func TestTransactionCreateSettlementValidationBoundary(t *testing.T) {
 		PostedDate:  &postedDate,
 	}
 
+	omittedPostedBeforePending := balancedTransactionRequest(refs)
+	omittedPostedBeforePendingDate := apptest.Timestamp("2024-03-11T00:00:00Z")
+	omittedPostedBeforePending.Records[0].Settlement = &httpclient.SettlementIntent{
+		Status:      httpclient.SettlementStatusPosted,
+		PendingDate: &omittedPostedBeforePendingDate,
+	}
+
 	for _, tc := range []struct {
 		name    string
 		request httpclient.CreateTransactionRequest
@@ -1218,6 +1278,7 @@ func TestTransactionCreateSettlementValidationBoundary(t *testing.T) {
 		{name: "omitted on balance record", request: omittedBalance},
 		{name: "present on flow record", request: flowSettlement},
 		{name: "posted before pending", request: postedBeforePending},
+		{name: "omitted posted before pending", request: omittedPostedBeforePending},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			response, err := client.REST().CreateTransactionWithResponse(context.Background(), tc.request)
