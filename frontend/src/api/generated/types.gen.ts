@@ -798,10 +798,6 @@ export type TransactionTemplateRecordRequest = {
      * Optional memo text for the journal records.
      */
     memo?: string | null;
-    /**
-     * Reconciliation-status value or optional template default for the journal record.
-     */
-    reconciliation_status?: ReconciliationStatus | null;
 };
 
 export type RecurringDefinitionWriteRequest = {
@@ -1188,6 +1184,10 @@ export type TransactionTemplate = {
     updated_at: string;
     tombstoned_at?: string | null;
     records: Array<TransactionTemplateRecord>;
+    /**
+     * Server-derived manual-entry shorthands compatible with the supplied template defaults.
+     */
+    compatible_shorthands: Array<TransactionTemplateShorthandType>;
 };
 
 export type TransactionTemplateRecord = {
@@ -1203,11 +1203,12 @@ export type TransactionTemplateRecord = {
     amount: string | null;
     tag_ids: Array<number>;
     memo: string | null;
-    reconciliation_status: ReconciliationStatus | null;
     created_at: string;
     updated_at: string;
     tombstoned_at?: string | null;
 };
+
+export type TransactionTemplateShorthandType = 'spend' | 'income' | 'refund' | 'transfer';
 
 export type TransactionTemplateListResponse = {
     transaction_templates: Array<TransactionTemplate>;

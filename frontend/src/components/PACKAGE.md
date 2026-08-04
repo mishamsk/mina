@@ -8,6 +8,7 @@
 
 - Components here have no Mina accounting meaning; if a component could have come from npm, it belongs here.
 - Shared tooltips are Esc-transparent: Esc dismisses the tooltip and continues to the active interactive overlay's ladder.
+- Confirmation dialogs dismiss on Esc when no action is pending; pending dialogs remain open.
 
 ## Boundaries
 

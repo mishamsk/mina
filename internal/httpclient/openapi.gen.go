@@ -612,6 +612,30 @@ func (e TransactionShapeType) Valid() bool {
 	}
 }
 
+// Defines values for TransactionTemplateShorthandType.
+const (
+	Income   TransactionTemplateShorthandType = "income"
+	Refund   TransactionTemplateShorthandType = "refund"
+	Spend    TransactionTemplateShorthandType = "spend"
+	Transfer TransactionTemplateShorthandType = "transfer"
+)
+
+// Valid indicates whether the value is a known member of the TransactionTemplateShorthandType enum.
+func (e TransactionTemplateShorthandType) Valid() bool {
+	switch e {
+	case Income:
+		return true
+	case Refund:
+		return true
+	case Spend:
+		return true
+	case Transfer:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for WritableAccountType.
 const (
 	WritableAccountTypeFlow  WritableAccountType = "flow"
@@ -2283,15 +2307,17 @@ type TransactionShapeType string
 
 // TransactionTemplate defines model for TransactionTemplate.
 type TransactionTemplate struct {
-	CreatedAt             time.Time                   `json:"created_at"`
-	Fqn                   string                      `json:"fqn"`
-	Level                 int                         `json:"level"`
-	Name                  string                      `json:"name"`
-	ParentFqn             *string                     `json:"parent_fqn"`
-	Records               []TransactionTemplateRecord `json:"records"`
-	TombstonedAt          *time.Time                  `json:"tombstoned_at,omitempty"`
-	TransactionTemplateId int64                       `json:"transaction_template_id"`
-	UpdatedAt             time.Time                   `json:"updated_at"`
+	// CompatibleShorthands Server-derived manual-entry shorthands compatible with the supplied template defaults.
+	CompatibleShorthands  []TransactionTemplateShorthandType `json:"compatible_shorthands"`
+	CreatedAt             time.Time                          `json:"created_at"`
+	Fqn                   string                             `json:"fqn"`
+	Level                 int                                `json:"level"`
+	Name                  string                             `json:"name"`
+	ParentFqn             *string                            `json:"parent_fqn"`
+	Records               []TransactionTemplateRecord        `json:"records"`
+	TombstonedAt          *time.Time                         `json:"tombstoned_at,omitempty"`
+	TransactionTemplateId int64                              `json:"transaction_template_id"`
+	UpdatedAt             time.Time                          `json:"updated_at"`
 }
 
 // TransactionTemplateListResponse defines model for TransactionTemplateListResponse.
@@ -2306,18 +2332,17 @@ type TransactionTemplateRecord struct {
 	AccountId *int64 `json:"account_id"`
 
 	// Amount JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.
-	Amount                      *string               `json:"amount"`
-	CategoryId                  *int64                `json:"category_id"`
-	CreatedAt                   time.Time             `json:"created_at"`
-	Currency                    *string               `json:"currency"`
-	MemberId                    *int64                `json:"member_id"`
-	Memo                        *string               `json:"memo"`
-	ReconciliationStatus        *ReconciliationStatus `json:"reconciliation_status"`
-	TagIds                      []int64               `json:"tag_ids"`
-	TombstonedAt                *time.Time            `json:"tombstoned_at,omitempty"`
-	TransactionTemplateId       int64                 `json:"transaction_template_id"`
-	TransactionTemplateRecordId int64                 `json:"transaction_template_record_id"`
-	UpdatedAt                   time.Time             `json:"updated_at"`
+	Amount                      *string    `json:"amount"`
+	CategoryId                  *int64     `json:"category_id"`
+	CreatedAt                   time.Time  `json:"created_at"`
+	Currency                    *string    `json:"currency"`
+	MemberId                    *int64     `json:"member_id"`
+	Memo                        *string    `json:"memo"`
+	TagIds                      []int64    `json:"tag_ids"`
+	TombstonedAt                *time.Time `json:"tombstoned_at,omitempty"`
+	TransactionTemplateId       int64      `json:"transaction_template_id"`
+	TransactionTemplateRecordId int64      `json:"transaction_template_record_id"`
+	UpdatedAt                   time.Time  `json:"updated_at"`
 }
 
 // TransactionTemplateRecordRequest defines model for TransactionTemplateRecordRequest.
@@ -2340,12 +2365,12 @@ type TransactionTemplateRecordRequest struct {
 	// Memo Optional memo text for the journal records.
 	Memo *string `json:"memo,omitempty"`
 
-	// ReconciliationStatus Reconciliation-status value or optional template default for the journal record.
-	ReconciliationStatus *ReconciliationStatus `json:"reconciliation_status,omitempty"`
-
 	// TagIds Tag identifiers to assign to the journal records.
 	TagIds *[]int64 `json:"tag_ids,omitempty"`
 }
+
+// TransactionTemplateShorthandType defines model for TransactionTemplateShorthandType.
+type TransactionTemplateShorthandType string
 
 // TransactionTemplateWriteRequest defines model for TransactionTemplateWriteRequest.
 type TransactionTemplateWriteRequest struct {

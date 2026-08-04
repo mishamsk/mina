@@ -5,7 +5,6 @@ import (
 
 	"github.com/mishamsk/mina/internal/httpapi/openapi"
 	"github.com/mishamsk/mina/internal/services"
-	"github.com/mishamsk/mina/internal/services/transactions"
 	"github.com/mishamsk/mina/internal/services/transactiontemplates"
 )
 
@@ -22,8 +21,12 @@ func (s *strictServer) ListTransactionTemplates(ctx context.Context, request ope
 		return nil, err
 	}
 
+	responses, err := transactionTemplateAPIResponses(templateList.Items)
+	if err != nil {
+		return nil, err
+	}
 	return openapi.ListTransactionTemplates200JSONResponse{
-		TransactionTemplates: transactionTemplateAPIResponses(templateList.Items),
+		TransactionTemplates: responses,
 		TotalCount:           templateList.TotalCount,
 	}, nil
 }
@@ -39,7 +42,11 @@ func (s *strictServer) CreateTransactionTemplate(ctx context.Context, request op
 		return nil, err
 	}
 
-	return openapi.CreateTransactionTemplate201JSONResponse(transactionTemplateAPIResponse(template)), nil
+	response, err := transactionTemplateAPIResponse(template)
+	if err != nil {
+		return nil, err
+	}
+	return openapi.CreateTransactionTemplate201JSONResponse(response), nil
 }
 
 func (s *strictServer) RestructureTransactionTemplates(ctx context.Context, request openapi.RestructureTransactionTemplatesRequestObject) (openapi.RestructureTransactionTemplatesResponseObject, error) {
@@ -65,7 +72,11 @@ func (s *strictServer) GetTransactionTemplate(ctx context.Context, request opena
 		return nil, err
 	}
 
-	return openapi.GetTransactionTemplate200JSONResponse(transactionTemplateAPIResponse(template)), nil
+	response, err := transactionTemplateAPIResponse(template)
+	if err != nil {
+		return nil, err
+	}
+	return openapi.GetTransactionTemplate200JSONResponse(response), nil
 }
 
 func (s *strictServer) ReplaceTransactionTemplate(ctx context.Context, request openapi.ReplaceTransactionTemplateRequestObject) (openapi.ReplaceTransactionTemplateResponseObject, error) {
@@ -79,7 +90,11 @@ func (s *strictServer) ReplaceTransactionTemplate(ctx context.Context, request o
 		return nil, err
 	}
 
-	return openapi.ReplaceTransactionTemplate200JSONResponse(transactionTemplateAPIResponse(template)), nil
+	response, err := transactionTemplateAPIResponse(template)
+	if err != nil {
+		return nil, err
+	}
+	return openapi.ReplaceTransactionTemplate200JSONResponse(response), nil
 }
 
 func transactionTemplateWriteAPIInput(request openapi.TransactionTemplateWriteRequest) (transactiontemplates.WriteInput, error) {
@@ -99,21 +114,24 @@ func transactionTemplateRecordAPIInputs(records []openapi.TransactionTemplateRec
 			return nil, err
 		}
 		inputs = append(inputs, transactiontemplates.TemplateRecordInput{
-			CategoryID:           record.CategoryId,
-			AccountID:            record.AccountId,
-			MemberID:             record.MemberId,
-			Currency:             record.Currency,
-			Amount:               amount,
-			TagIDs:               cloneOptionalInt64Slice(record.TagIds),
-			Memo:                 record.Memo,
-			ReconciliationStatus: transactionAPIReconciliationStatusPtr(record.ReconciliationStatus),
+			CategoryID: record.CategoryId,
+			AccountID:  record.AccountId,
+			MemberID:   record.MemberId,
+			Currency:   record.Currency,
+			Amount:     amount,
+			TagIDs:     cloneOptionalInt64Slice(record.TagIds),
+			Memo:       record.Memo,
 		})
 	}
 
 	return inputs, nil
 }
 
-func transactionTemplateAPIResponse(template transactiontemplates.Template) openapi.TransactionTemplate {
+func transactionTemplateAPIResponse(template transactiontemplates.Template) (openapi.TransactionTemplate, error) {
+	compatibleShorthands, err := transactionTemplateCompatibleShorthandsAPIResponse(template.CompatibleShorthands)
+	if err != nil {
+		return openapi.TransactionTemplate{}, err
+	}
 	return openapi.TransactionTemplate{
 		TransactionTemplateId: template.ID,
 		Fqn:                   template.FQN,
@@ -124,16 +142,40 @@ func transactionTemplateAPIResponse(template transactiontemplates.Template) open
 		UpdatedAt:             template.UpdatedAt.UTC(),
 		TombstonedAt:          nullableTimestampTime(template.TombstonedAt),
 		Records:               transactionTemplateRecordAPIResponses(template.Records),
-	}
+		CompatibleShorthands:  compatibleShorthands,
+	}, nil
 }
 
-func transactionTemplateAPIResponses(templates []transactiontemplates.Template) []openapi.TransactionTemplate {
+func transactionTemplateAPIResponses(templates []transactiontemplates.Template) ([]openapi.TransactionTemplate, error) {
 	responses := make([]openapi.TransactionTemplate, 0, len(templates))
 	for _, template := range templates {
-		responses = append(responses, transactionTemplateAPIResponse(template))
+		response, err := transactionTemplateAPIResponse(template)
+		if err != nil {
+			return nil, err
+		}
+		responses = append(responses, response)
 	}
 
-	return responses
+	return responses, nil
+}
+
+func transactionTemplateCompatibleShorthandsAPIResponse(compatible []transactiontemplates.TemplateShorthandType) ([]openapi.TransactionTemplateShorthandType, error) {
+	response := make([]openapi.TransactionTemplateShorthandType, 0, len(compatible))
+	for _, shorthand := range compatible {
+		switch shorthand {
+		case transactiontemplates.TemplateShorthandSpend:
+			response = append(response, openapi.Spend)
+		case transactiontemplates.TemplateShorthandIncome:
+			response = append(response, openapi.Income)
+		case transactiontemplates.TemplateShorthandRefund:
+			response = append(response, openapi.Refund)
+		case transactiontemplates.TemplateShorthandTransfer:
+			response = append(response, openapi.Transfer)
+		default:
+			return nil, services.InvalidRequest("unsupported template shorthand compatibility")
+		}
+	}
+	return response, nil
 }
 
 func transactionTemplateRecordAPIResponse(record transactiontemplates.TemplateRecord) openapi.TransactionTemplateRecord {
@@ -147,7 +189,6 @@ func transactionTemplateRecordAPIResponse(record transactiontemplates.TemplateRe
 		Amount:                      nullableDecimalString(record.Amount),
 		TagIds:                      cloneInt64Slice(record.TagIDs),
 		Memo:                        record.Memo,
-		ReconciliationStatus:        transactionTemplateReconciliationStatusAPIResponse(record.ReconciliationStatus),
 		CreatedAt:                   record.CreatedAt.UTC(),
 		UpdatedAt:                   record.UpdatedAt.UTC(),
 		TombstonedAt:                nullableTimestampTime(record.TombstonedAt),
@@ -161,13 +202,4 @@ func transactionTemplateRecordAPIResponses(records []transactiontemplates.Templa
 	}
 
 	return responses
-}
-
-func transactionTemplateReconciliationStatusAPIResponse(status *transactions.ReconciliationStatus) *openapi.ReconciliationStatus {
-	if status == nil {
-		return nil
-	}
-	value := openapi.ReconciliationStatus(*status)
-
-	return &value
 }

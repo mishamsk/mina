@@ -520,7 +520,7 @@ func (s *Service) Classify(ctx context.Context, records []ClassificationRecordIn
 	if err != nil {
 		return Classification{}, err
 	}
-	return classifySemanticRecords(semanticRecords)
+	return ClassifySemanticRecords(semanticRecords)
 }
 
 func validateClassificationRecord(index int, record ClassificationRecordInput) error {
@@ -1286,7 +1286,7 @@ func (s *Service) preparePersistInput(ctx context.Context, input CreateInput, li
 	if err != nil {
 		return PersistInput{}, err
 	}
-	if _, err := classifySemanticRecords(records); err != nil {
+	if _, err := ClassifySemanticRecords(records); err != nil {
 		return PersistInput{}, err
 	}
 

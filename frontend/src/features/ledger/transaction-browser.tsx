@@ -1,4 +1,5 @@
 import {
+  CardText,
   Check,
   Close,
   Copy,
@@ -35,10 +36,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { transactionTemplateRecordsFromTransaction } from "@/features/templates";
 import { useElementOverflow } from "@/hooks/use-element-overflow";
 import { cn } from "@/lib/utils";
 import type { LedgerLookupsSnapshot } from "@/store";
 import {
+  openNewTemplateEditor,
   setTransactionAmountDraftInvalid,
   setTransactionAmountSavePending,
   useTransactionEditModeStore,
@@ -1632,6 +1635,18 @@ export const TransactionBrowser = ({
                                           },
                                         ]
                                       : []),
+                                    {
+                                      icon: <CardText aria-hidden="true" />,
+                                      label: "Create template",
+                                      onSelect: (opener) => {
+                                        openNewTemplateEditor(
+                                          opener,
+                                          transactionTemplateRecordsFromTransaction(
+                                            transaction,
+                                          ),
+                                        );
+                                      },
+                                    },
                                     ...(transaction.lifecycle_status ===
                                       "active" && onSplitTransaction
                                       ? [

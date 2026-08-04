@@ -15,6 +15,7 @@
 - The transactions service owns hypothetical account-type-change validation by reclassifying every active transaction that references the account with the proposed type.
 - Spend, refund, income, and transfer shorthand use cases build ordinary same-currency transactions; Exchange resolves each single-currency side from its account, requires an explicit currency for each multi-currency side, and builds the four-record two-currency `system:exchange` form.
 - Dry-run classification consumes only account, currency, amount, and optional category semantics; it resolves active references and derives roles, shapes, class, and amounts without requiring balance, except that exchange exclusivity still applies.
+- Exported semantic record and classification contracts let adjacent services reuse transaction classification without owning transaction persistence behavior.
 - The transactions service owns `amount_usd` backfill for active journal records still storing `NULL`.
 - Create/replace produce active transactions and accept settlement intent only for owned/party records; recurring materialization alone creates expected transactions.
 - The service normalizes settlement intent into explicit dates, preserves imported exact timestamps, and clears dates from flow/system records.

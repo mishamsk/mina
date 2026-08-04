@@ -1,4 +1,5 @@
 import {
+  CardText,
   Check,
   Close,
   Copy,
@@ -23,9 +24,10 @@ import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { transactionTemplateRecordsFromTransaction } from "@/features/templates";
 import { useOutsidePointerClose } from "@/hooks/use-outside-pointer-close";
 import { cn } from "@/lib/utils";
-import type { LedgerLookupsSnapshot } from "@/store";
+import { type LedgerLookupsSnapshot, openNewTemplateEditor } from "@/store";
 import { formatInstantTimestamp, localCivilDate } from "@/utils/date";
 
 import { AccountDisplayLabel } from "./account-display-label";
@@ -1028,6 +1030,19 @@ export const TransactionDetailPanel = ({
             ) : null
           ) : (
             <>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={(event) => {
+                  openNewTemplateEditor(
+                    event.currentTarget,
+                    transactionTemplateRecordsFromTransaction(transaction),
+                  );
+                }}
+              >
+                <CardText aria-hidden="true" />
+                Create template
+              </Button>
               {onDuplicate ? (
                 <Button
                   type="button"

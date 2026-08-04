@@ -15,6 +15,7 @@ import { SettingsPage } from "./settings-page";
 import { StatusPage } from "./status-page";
 import { TagPage } from "./tag-page";
 import { TagsPage } from "./tags-page";
+import { TemplatesPage } from "./templates-page";
 import { TransactionsPage } from "./transactions-page";
 
 export const AppRoutes = () => (
@@ -33,6 +34,7 @@ export const AppRoutes = () => (
       <Route path="/tags/:tagId" element={<TagPage />} />
       <Route path="/members" element={<MembersPage />} />
       <Route path="/members/:memberId" element={<MemberPage />} />
+      <Route path="/templates" element={<TemplatesPage />} />
       <Route path="/status" element={<StatusPage />} />
       <Route path="/settings" element={<SettingsPage />} />
       <Route path="*" element={<Navigate to="/overview" replace />} />

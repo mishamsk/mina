@@ -35,9 +35,14 @@ import {
   transactionEntrySavedEvent,
   useLedgerLookupsResource,
 } from "@/features/ledger";
+import {
+  refreshTransactionTemplates,
+  TemplateEditorModal,
+} from "@/features/templates";
 import { cn } from "@/lib/utils";
 import type { TransactionEntryType } from "@/models/ui-state";
 import {
+  closeTemplateEditor,
   closeTransactionEntryPanel,
   failTransactionEntryRoute,
   getCommandPaletteSnapshot,
@@ -49,17 +54,19 @@ import {
   resolveTransactionEntryRoute,
   setSidebarCollapsed,
   toggleCommandPalette,
+  upsertTransactionTemplate,
   useAuthenticationView,
   useCommandPaletteOpen,
   useLastTransactionsPageSearch,
   usePreferencesView,
+  useTemplateEditorView,
   useTransactionEntryPanelView,
 } from "@/store";
 
 type PixelIcon = ComponentType<SVGProps<SVGSVGElement>>;
 
 interface NavItem {
-  readonly disabled?: boolean;
+  readonly entryModalRestoreTarget?: boolean;
   readonly icon: PixelIcon;
   readonly label: string;
   readonly to: To;
@@ -69,7 +76,7 @@ const referenceNavItems: readonly NavItem[] = [
   { icon: Folder, label: "Categories", to: "/categories" },
   { icon: Hash, label: "Tags", to: "/tags" },
   { icon: User, label: "Members", to: "/members" },
-  { disabled: true, icon: CardText, label: "Templates", to: "/templates" },
+  { icon: CardText, label: "Templates", to: "/templates" },
 ];
 
 const utilityNavItems: readonly NavItem[] = [
@@ -78,7 +85,7 @@ const utilityNavItems: readonly NavItem[] = [
 ];
 
 const modalOverlaySelector =
-  "[role='alertdialog'], [role='dialog'][aria-modal='true'], [data-page-help-content], [data-slot='popover-content'], [data-slot='select-content'][data-state='open']";
+  "[role='alertdialog'], [role='dialog'][aria-modal='true'], [data-global-shortcut-blocking-overlay], [data-page-help-content], [data-slot='popover-content'], [data-slot='select-content'][data-state='open']";
 
 const isVisibleOverlay = (element: Element): boolean =>
   element instanceof HTMLElement && element.getClientRects().length > 0;
@@ -111,35 +118,6 @@ const navLinkClass = ({ collapsed }: { collapsed: boolean }) =>
     collapsed && "justify-center px-0",
   );
 
-const DisabledNavItem = ({
-  collapsed,
-  icon: Icon,
-  label,
-}: Pick<NavItem, "icon" | "label"> & { readonly collapsed: boolean }) => {
-  const item = (
-    <button
-      type="button"
-      disabled
-      aria-label={label}
-      className={cn(
-        "font-heading flex h-9 w-full items-center gap-3 border-2 border-transparent px-2 text-sm font-semibold text-[var(--frame-muted)] uppercase opacity-60",
-        collapsed && "justify-center px-0",
-      )}
-    >
-      <Icon className="size-4 shrink-0" aria-hidden="true" />
-      <span className={cn(collapsed && "sr-only")}>{label}</span>
-    </button>
-  );
-
-  return collapsed ? (
-    <Tooltip label={label} asChild>
-      <span className="flex w-full">{item}</span>
-    </Tooltip>
-  ) : (
-    item
-  );
-};
-
 const SidebarNav = ({
   collapsed,
   items,
@@ -149,20 +127,12 @@ const SidebarNav = ({
 }) => (
   <nav className="flex flex-col gap-1">
     {items.map((item) => {
-      if (item.disabled) {
-        return (
-          <DisabledNavItem
-            key={item.label}
-            collapsed={collapsed}
-            icon={item.icon}
-            label={item.label}
-          />
-        );
-      }
-
       const navLink = (
         <NavLink
           className={navLinkClass({ collapsed })}
+          data-entry-modal-restore-target={
+            item.entryModalRestoreTarget ? "" : undefined
+          }
           key={item.label}
           to={item.to}
         >
@@ -286,14 +256,23 @@ export const AppShell = ({ children }: AppShellProps) => {
   const authentication = useAuthenticationView();
   const commandPaletteOpen = useCommandPaletteOpen();
   const entryModal = useTransactionEntryPanelView();
+  const templateEditor = useTemplateEditorView();
   const [logoutPending, setLogoutPending] = useState(false);
   const [logoutError, setLogoutError] = useState<string>();
   const logoutButtonRef = useRef<HTMLButtonElement>(null);
   const [entrySaveNotice, setEntrySaveNotice] = useState<
-    { readonly id: number; readonly message: string } | undefined
+    | {
+        readonly avoidDetailActions?: boolean;
+        readonly id: number;
+        readonly message: string;
+        readonly tone?: "error" | "success";
+      }
+    | undefined
   >();
   const entrySaveNoticeIdRef = useRef(0);
-  const lookups = useLedgerLookupsResource(entryModal.open);
+  const lookups = useLedgerLookupsResource(
+    entryModal.open || templateEditor.open,
+  );
   const [searchParams, setSearchParams] = useSearchParams();
   const entryParam = searchParams.get("entry");
   const previousEntryParamRef = useRef(entryParam);
@@ -316,6 +295,7 @@ export const AppShell = ({ children }: AppShellProps) => {
     { icon: Home, label: "Overview", to: "/overview" },
     {
       icon: ListBox,
+      entryModalRestoreTarget: true,
       label: "Transactions",
       to: {
         pathname: "/transactions",
@@ -452,6 +432,7 @@ export const AppShell = ({ children }: AppShellProps) => {
 
   const closeEntryModal = useCallback(() => {
     closingEntryRef.current = true;
+    previousEntryParamRef.current = null;
     historyEntryClosePendingRef.current = false;
     setSearchParams(
       () => {
@@ -671,11 +652,45 @@ export const AppShell = ({ children }: AppShellProps) => {
         </div>
       </main>
       <CommandPalette />
+      {templateEditor.launch ? (
+        <TemplateEditorModal
+          key={templateEditor.launch.key}
+          launch={templateEditor.launch}
+          loadingLookups={lookups.loading}
+          lookups={lookups.snapshot}
+          lookupsErrorMessage={lookups.errorMessage}
+          open={templateEditor.open}
+          onClose={closeTemplateEditor}
+          onLookupsRetry={refreshLedgerLookups}
+          onSaved={(message, template) => {
+            const avoidDetailActions = searchParams.has("transaction");
+            upsertTransactionTemplate(template);
+            const noticeId = ++entrySaveNoticeIdRef.current;
+            setEntrySaveNotice({
+              avoidDetailActions,
+              id: noticeId,
+              message,
+              tone: "success",
+            });
+            void refreshTransactionTemplates().then((refreshed) => {
+              if (!refreshed && entrySaveNoticeIdRef.current === noticeId) {
+                entrySaveNoticeIdRef.current += 1;
+                setEntrySaveNotice({
+                  avoidDetailActions,
+                  id: entrySaveNoticeIdRef.current,
+                  message: `${message} Template choices could not be refreshed.`,
+                  tone: "error",
+                });
+              }
+            });
+          }}
+        />
+      ) : null}
       <EntryModal
         errorMessage={entryModal.errorMessage}
         globalNotice={logoutError}
         initialTab={entryModal.initialTab}
-        initialTemplateFqn={entryModal.initialTemplateFqn}
+        initialTemplateId={entryModal.initialTemplateId}
         launch={entryModal.launch}
         loading={entryModal.loading}
         loadingCreate={entryModal.requestedEntry?.startsWith("duplicate:")}
@@ -710,20 +725,30 @@ export const AppShell = ({ children }: AppShellProps) => {
               context.operation === "updated"
                 ? "Transaction updated."
                 : "Transaction saved.",
+            tone: "success",
           });
         }}
       />
-      {!entryModal.open ? (
+      {!entryModal.open && !templateEditor.open ? (
         <Toast
           key={entrySaveNotice?.id ?? "empty"}
-          className="text-[var(--color-money-in)]"
+          className={
+            entrySaveNotice?.tone === "error"
+              ? "text-destructive"
+              : "text-[var(--color-money-in)]"
+          }
+          containerClassName={
+            entrySaveNotice?.avoidDetailActions
+              ? "top-20 bottom-auto"
+              : undefined
+          }
           message={entrySaveNotice?.message}
           onDismiss={() => {
             setEntrySaveNotice(undefined);
           }}
         />
       ) : null}
-      {!entryModal.open ? (
+      {!entryModal.open && !templateEditor.open ? (
         <Toast
           containerClassName="bottom-16 z-[80]"
           className="text-destructive"

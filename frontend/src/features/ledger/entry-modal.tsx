@@ -9,11 +9,13 @@ import {
 } from "react";
 
 import type { Transaction } from "@/api";
+import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { Toast } from "@/components/toast";
 import { focusWithoutTooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { TransactionEntryType } from "@/models/ui-state";
+import { deleteTransactionEntryDraft } from "@/services/indexeddb";
 import type { LedgerLookupsSnapshot } from "@/store";
 
 import {
@@ -26,7 +28,7 @@ interface EntryModalProps {
   readonly errorMessage?: string;
   readonly globalNotice?: string;
   readonly initialTab?: TransactionEntryType;
-  readonly initialTemplateFqn?: string;
+  readonly initialTemplateId?: number;
   readonly launch?: EntryPanelLaunch;
   readonly lookups: LedgerLookupsSnapshot | undefined;
   readonly lookupsErrorMessage?: string;
@@ -39,7 +41,11 @@ interface EntryModalProps {
     transaction: Transaction,
     context: EntryPanelSaveContext,
   ) => Promise<void>;
-  readonly notice?: { readonly id: number; readonly message: string };
+  readonly notice?: {
+    readonly id: number;
+    readonly message: string;
+    readonly tone?: "error" | "success";
+  };
   readonly onNoticeDismiss: () => void;
   readonly open: boolean;
   readonly recentTransactions?: readonly Transaction[];
@@ -125,7 +131,7 @@ export const EntryModal = ({
   errorMessage,
   globalNotice,
   initialTab,
-  initialTemplateFqn,
+  initialTemplateId,
   launch,
   lookups,
   lookupsErrorMessage,
@@ -142,14 +148,21 @@ export const EntryModal = ({
   requestCloseRef,
 }: EntryModalProps) => {
   const [attentionFlash, setAttentionFlash] = useState(false);
+  const [clearDraftError, setClearDraftError] = useState<string>();
+  const [clearDraftOpen, setClearDraftOpen] = useState(false);
+  const [clearingDraft, setClearingDraft] = useState(false);
+  const [draftCleared, setDraftCleared] = useState(false);
   const closeRequestRef = useRef<(() => void) | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
   const datalistEscapePendingRef = useRef(false);
   const datalistKeyboardCommitTargetRef = useRef<HTMLInputElement | null>(null);
   const datalistPointerTargetRef = useRef<HTMLInputElement | null>(null);
+  const pointerLaunchAtRef = useRef(0);
   const pointerLaunchTargetRef = useRef<HTMLElement | null>(null);
   const restoreFocusTargetRef = useRef<HTMLElement | null>(null);
   const statusCloseButtonRef = useRef<HTMLButtonElement>(null);
+  const clearDraftButtonRef = useRef<HTMLButtonElement>(null);
+  const lookupsRetryButtonRef = useRef<HTMLButtonElement>(null);
   const requestClose = useCallback(() => {
     (closeRequestRef.current ?? onClose)();
   }, [onClose]);
@@ -166,6 +179,7 @@ export const EntryModal = ({
             )
           : null;
       pointerLaunchTargetRef.current = target;
+      pointerLaunchAtRef.current = window.performance.now();
     };
     document.addEventListener("pointerdown", rememberPointerLaunchTarget, {
       capture: true,
@@ -208,6 +222,29 @@ export const EntryModal = ({
     });
   };
 
+  const clearUnavailableDraft = async () => {
+    if (clearingDraft) {
+      return;
+    }
+    setClearingDraft(true);
+    setClearDraftError(undefined);
+    try {
+      await deleteTransactionEntryDraft();
+    } catch {
+      setClearDraftError("The saved draft could not be deleted. Try again.");
+      setClearingDraft(false);
+      return;
+    }
+    setClearingDraft(false);
+    setClearDraftOpen(false);
+    setDraftCleared(true);
+    window.requestAnimationFrame(() => {
+      focusWithoutTooltip(lookupsRetryButtonRef.current, {
+        preventScroll: true,
+      });
+    });
+  };
+
   return (
     <Dialog.Root
       open={open}
@@ -234,16 +271,20 @@ export const EntryModal = ({
           aria-describedby={undefined}
           onCloseAutoFocus={(event) => {
             event.preventDefault();
+            setDraftCleared(false);
             const fallback =
               document.querySelector<HTMLElement>(listRestoreSelector) ??
               document.querySelector<HTMLElement>(appShellRestoreSelector);
             const restoreFocusTarget = restoreFocusTargetRef.current;
+            pointerLaunchAtRef.current = 0;
             pointerLaunchTargetRef.current = null;
             restoreFocusTargetRef.current = null;
-            focusWithoutTooltip(
-              restoreFocusTarget?.isConnected ? restoreFocusTarget : fallback,
-              { preventScroll: true },
-            );
+            window.requestAnimationFrame(() => {
+              focusWithoutTooltip(
+                restoreFocusTarget?.isConnected ? restoreFocusTarget : fallback,
+                { preventScroll: true },
+              );
+            });
           }}
           onEscapeKeyDown={(event) => {
             if (
@@ -359,13 +400,18 @@ export const EntryModal = ({
           onOpenAutoFocus={(event) => {
             event.preventDefault();
             const activeElement = document.activeElement;
-            restoreFocusTargetRef.current = pointerLaunchTargetRef.current
-              ?.isConnected
-              ? pointerLaunchTargetRef.current
-              : activeElement instanceof HTMLElement &&
-                  activeElement !== document.body
-                ? activeElement
+            const recentPointerTarget =
+              window.performance.now() - pointerLaunchAtRef.current < 500 &&
+              pointerLaunchTargetRef.current?.isConnected
+                ? pointerLaunchTargetRef.current
                 : null;
+            restoreFocusTargetRef.current =
+              recentPointerTarget ??
+              (activeElement instanceof HTMLElement &&
+              activeElement !== document.body &&
+              activeElement.isConnected
+                ? activeElement
+                : null);
             focusWithoutTooltip(contentRef.current, { preventScroll: true });
           }}
         >
@@ -408,16 +454,34 @@ export const EntryModal = ({
                       {errorMessage ?? lookupsErrorMessage}
                     </p>
                     {lookupsErrorMessage && !errorMessage ? (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => {
-                          void onLookupsRetry();
-                        }}
-                      >
-                        <Reload aria-hidden="true" />
-                        Retry
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          ref={lookupsRetryButtonRef}
+                          type="button"
+                          variant="outline"
+                          onClick={() => {
+                            setDraftCleared(false);
+                            void onLookupsRetry();
+                          }}
+                        >
+                          <Reload aria-hidden="true" />
+                          Retry
+                        </Button>
+                        {!launch ? (
+                          <Button
+                            ref={clearDraftButtonRef}
+                            type="button"
+                            variant="outline"
+                            disabled={draftCleared}
+                            onClick={() => {
+                              setClearDraftError(undefined);
+                              setClearDraftOpen(true);
+                            }}
+                          >
+                            {draftCleared ? "Draft cleared" : "Clear draft"}
+                          </Button>
+                        ) : null}
+                      </div>
                     ) : null}
                   </div>
                 </div>
@@ -428,7 +492,7 @@ export const EntryModal = ({
               <EntryPanel
                 closeRequestRef={closeRequestRef}
                 initialTab={initialTab}
-                initialTemplateFqn={initialTemplateFqn}
+                initialTemplateId={initialTemplateId}
                 launch={launch}
                 lookups={lookups}
                 onClose={onClose}
@@ -438,7 +502,11 @@ export const EntryModal = ({
               />
               <Toast
                 key={notice?.id ?? "empty"}
-                className="text-[var(--color-money-in)]"
+                className={
+                  notice?.tone === "error"
+                    ? "text-destructive"
+                    : "text-[var(--color-money-in)]"
+                }
                 containerClassName="z-[80]"
                 message={notice?.message}
                 onDismiss={onNoticeDismiss}
@@ -451,6 +519,37 @@ export const EntryModal = ({
             message={globalNotice}
             onDismiss={onGlobalNoticeDismiss}
           />
+          <ConfirmationDialog
+            cancelLabel="Keep draft"
+            confirmLabel="Clear draft"
+            errorMessage={clearDraftError}
+            onConfirm={() => {
+              void clearUnavailableDraft();
+            }}
+            onOpenChange={(nextOpen) => {
+              if (clearingDraft) {
+                return;
+              }
+              setClearDraftOpen(nextOpen);
+              if (!nextOpen) {
+                setClearDraftError(undefined);
+                window.requestAnimationFrame(() => {
+                  focusWithoutTooltip(clearDraftButtonRef.current, {
+                    preventScroll: true,
+                  });
+                });
+              }
+            }}
+            open={clearDraftOpen}
+            pending={clearingDraft}
+            pendingLabel="Clearing"
+            title="Clear entry draft?"
+          >
+            <p>
+              Every field in the saved draft will return to its blank default.
+              This cannot be undone.
+            </p>
+          </ConfirmationDialog>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

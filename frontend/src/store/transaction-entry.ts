@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 import { useShallow } from "zustand/react/shallow";
 
-import type { Transaction } from "@/api";
+import type { Transaction, TransactionTemplate } from "@/api";
 import type { TransactionEntryType } from "@/models/ui-state";
 
 import {
@@ -25,7 +25,7 @@ export interface TransactionEntryLaunch {
 interface TransactionEntryModalState {
   readonly errorMessage: string | undefined;
   readonly initialTab: TransactionEntryType | undefined;
-  readonly initialTemplateFqn: string | undefined;
+  readonly initialTemplateId: number | undefined;
   readonly launch: TransactionEntryLaunch | undefined;
   readonly loading: boolean;
   readonly open: boolean;
@@ -36,7 +36,7 @@ interface TransactionEntryModalState {
 const initialTransactionEntryModalState: TransactionEntryModalState = {
   errorMessage: undefined,
   initialTab: undefined,
-  initialTemplateFqn: undefined,
+  initialTemplateId: undefined,
   launch: undefined,
   loading: false,
   open: false,
@@ -57,7 +57,7 @@ export const useTransactionEntryPanelView = (): TransactionEntryModalState =>
     useShallow((state) => ({
       errorMessage: state.errorMessage,
       initialTab: state.initialTab,
-      initialTemplateFqn: state.initialTemplateFqn,
+      initialTemplateId: state.initialTemplateId,
       launch: state.launch,
       loading: state.loading,
       open: state.open,
@@ -85,7 +85,7 @@ export const openTransactionEntryPanel = (
       {
         errorMessage: undefined,
         initialTab,
-        initialTemplateFqn: undefined,
+        initialTemplateId: undefined,
         launch: undefined,
         loading: false,
         open: true,
@@ -109,7 +109,7 @@ export const openTransactionEntryLaunch = (
       {
         errorMessage: undefined,
         initialTab: undefined,
-        initialTemplateFqn: undefined,
+        initialTemplateId: undefined,
         launch,
         loading: false,
         open: true,
@@ -132,7 +132,7 @@ export const loadTransactionEntryRoute = (
       {
         errorMessage: undefined,
         initialTab: undefined,
-        initialTemplateFqn: undefined,
+        initialTemplateId: undefined,
         launch: undefined,
         loading: true,
         open: true,
@@ -188,7 +188,7 @@ export const openTransactionEntryRoute = (
       {
         errorMessage: undefined,
         initialTab,
-        initialTemplateFqn: undefined,
+        initialTemplateId: undefined,
         launch: undefined,
         loading: false,
         open: true,
@@ -202,20 +202,24 @@ export const openTransactionEntryRoute = (
 };
 
 export const openTransactionEntryTemplate = (
-  templateFqn: string,
+  template: TransactionTemplate,
   context: TransactionEntryLaunchContext = { recentTransactions: [] },
 ): void => {
   prepareEntryOpen(() => {
+    const initialTab =
+      template.compatible_shorthands.length === 1
+        ? template.compatible_shorthands[0]!
+        : "advanced";
     useTransactionEntryPanelStore.setState(
       {
         errorMessage: undefined,
-        initialTab: "advanced",
-        initialTemplateFqn: templateFqn,
+        initialTab,
+        initialTemplateId: template.transaction_template_id,
         launch: undefined,
         loading: false,
         open: true,
         recentTransactions: context.recentTransactions,
-        requestedEntry: "new:journal",
+        requestedEntry: `new:${initialTab === "advanced" ? "journal" : initialTab}`,
       },
       false,
       "TransactionEntryModalStore/openTransactionEntryTemplate",
@@ -229,7 +233,7 @@ export const closeTransactionEntryPanel = (): void => {
     {
       errorMessage: undefined,
       initialTab: undefined,
-      initialTemplateFqn: undefined,
+      initialTemplateId: undefined,
       launch: undefined,
       loading: false,
       open: false,

@@ -410,14 +410,6 @@ func newAccountingServices(
 	categoryService := categories.NewService(categoryStore, referenceSerializer)
 	tagService := tags.NewService(tagStore, referenceSerializer)
 	memberService := members.NewService(memberStore, referenceSerializer)
-	templateService := transactiontemplates.NewService(
-		store.NewTransactionTemplateStore(appDB),
-		accountService,
-		categoryService,
-		tagService,
-		memberService,
-		referenceSerializer,
-	)
 	transactionService := transactions.NewService(
 		store.NewTransactionStore(appDB),
 		accountService,
@@ -428,6 +420,14 @@ func newAccountingServices(
 		referenceSerializer,
 		opts.clock(),
 		currencyUsageChanged,
+	)
+	templateService := transactiontemplates.NewService(
+		store.NewTransactionTemplateStore(appDB),
+		accountService,
+		categoryService,
+		tagService,
+		memberService,
+		referenceSerializer,
 	)
 	accountService.SetTypeChangeValidator(transactionService)
 	return appServices{

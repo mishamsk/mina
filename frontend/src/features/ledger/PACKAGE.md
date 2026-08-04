@@ -25,6 +25,7 @@
 - Expected and cancelled lifecycle indicators take precedence; active pending and mixed-settlement indicators trail the ellipsizing title/memo region inside the description cell. Posted and no-balance active rows reserve no in-cell indicator space.
 - Detail lifecycle strips show only the civil initiated date and the applicable expected, cancelled, or active pending/mixed word. Record disclosures show server-derived settlement and each stored pending and/or posted timestamp for owned/party rows only.
 - Transaction-row actions use the shared `RowActions` cluster and follow the owning [table row-action rule](../../../../docs/webui-design.md#tables-and-filtering).
+- Ordinary active and cancelled transaction rows and full detail panels can launch the app-shell template editor over their current context; expected occurrences, Edit mode, and account-register peeks cannot. Close preserves the underlying detail and restores the invoking action's focus.
 - Expected recurring rows replace the normal delete action with confirm and named-dismiss occurrence actions while retaining transaction detail; successful lifecycle actions use the standard transaction-mutation refresh fan-out.
 - `C::` currencies render as crypto-scale values with up to 8 decimals; other currencies render as fiat-scale 2-decimal values.
 - Shared FQN picker interaction follows the owning [Pickers specification](../../../../docs/webui-design.md#pickers); an open multi-picker option list stacks above its selected-chip region on every surface.
@@ -36,6 +37,7 @@
 - Entry supports spend, income, refund, transfer, and exchange shorthand endpoints; spend merchant rows share one draft representation, spend/income/refund balance fields accept `owned` and `party` accounts, Transfer may compose an ordinary expense charge, and Advanced previews the server's dry classification. Transaction-entry interaction follows the owning [Transaction entry specification](../../../../docs/webui-design.md#3-transaction-entry--phase-2).
 - Saved transactions reopen in shorthand when non-empty memo/member values agree and tag sets are uniform across the shape; unchanged shorthand edits preserve the original per-record placement of those values.
 - The app-shell-owned `EntryModal` is the single create/edit/split/duplicate surface on every route; `?entry=` owns its shareable launch state and composes with page URL state.
+- Transaction-template responses own their server-derived compatible shorthand types; entry copies supplied raw defaults into a selected compatible tab, opens a sole match automatically, and otherwise falls back to Advanced without reclassifying records in the browser.
 - Opening `EntryModal` exits Edit mode and clears its transient selection, dock, and amount state.
 - Saved-transaction Edit/Split saves are full replacements owned by `EntryModal`; successful saves fan out to displayed transaction browsers, detail, balances, overview, registers, and reference snapshots.
 - Saved-transaction Duplicate reuses entry prefill mapping but stays on the create path.

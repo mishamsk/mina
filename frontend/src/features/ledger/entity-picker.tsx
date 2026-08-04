@@ -10,12 +10,16 @@ import {
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
+import { FqnPath } from "./fqn-path";
+
 export interface EntityOption {
   readonly detail?: string;
   readonly hidden?: boolean;
   readonly id: number;
   readonly label: string;
+  readonly metadata?: string;
   readonly searchLabel: string;
+  readonly selectedLabel?: string;
 }
 
 type CreateEntityOption = (fqn: string) => Promise<EntityOption>;
@@ -34,6 +38,7 @@ interface EntityPickerProps {
   readonly labelClassName?: string;
   readonly onChange: (id: number | undefined) => void;
   readonly onOpenChange?: (open: boolean) => void;
+  readonly openOnFocus?: boolean;
   readonly options: readonly EntityOption[];
   readonly placeholder?: string;
   readonly value: number | undefined;
@@ -257,6 +262,7 @@ export const EntityPicker = ({
   labelClassName,
   onChange,
   onOpenChange,
+  openOnFocus = true,
   options,
   placeholder = "Search",
   value,
@@ -488,7 +494,9 @@ export const EntityPicker = ({
 
   return (
     <Popover open={open && !disabled} onOpenChange={updatePopoverOpen}>
-      <div className={cn("relative flex flex-col gap-1", open && "z-50")}>
+      <div
+        className={cn("relative flex min-w-0 flex-col gap-1", open && "z-50")}
+      >
         <label
           htmlFor={id}
           className={cn("text-sm font-semibold", labelClassName)}
@@ -507,7 +515,10 @@ export const EntityPicker = ({
             aria-expanded={open && !disabled}
             aria-autocomplete="list"
             aria-activedescendant={activeOptionId}
-            className="bg-card h-9 shrink-0 border-2 border-[var(--border-ink)] px-2 text-sm shadow-[var(--shadow-pixel)]"
+            className={cn(
+              "bg-card h-9 w-full shrink-0 border-2 border-[var(--border-ink)] px-2 text-sm shadow-[var(--shadow-pixel)]",
+              selected?.hidden && "pr-8",
+            )}
             disabled={disabled}
             placeholder={placeholder}
             value={query}
@@ -546,7 +557,7 @@ export const EntityPicker = ({
               }
             }}
             onFocus={() => {
-              if (disabled) {
+              if (disabled || !openOnFocus) {
                 return;
               }
               const nextQuery = selected?.searchLabel ?? query;
@@ -690,6 +701,15 @@ export const EntityPicker = ({
             }}
           />
         </PopoverAnchor>
+        {selected?.hidden ? (
+          <EyeOff
+            aria-label="Hidden"
+            className={cn(
+              "text-muted-foreground pointer-events-none absolute right-2 size-4 -translate-y-1/2",
+              labelClassName === "sr-only" ? "top-1/2" : "top-[2.625rem]",
+            )}
+          />
+        ) : null}
         <span id={`${id}-context`} className="sr-only">
           {contextText}
         </span>
@@ -833,16 +853,77 @@ export const EntityPicker = ({
                     }}
                   >
                     {row.kind === "leaf" ? (
-                      <span className="flex min-w-0 flex-col items-start">
-                        <span className="flex items-center gap-1 font-medium">
+                      <span className="flex w-full min-w-0 flex-col items-start overflow-hidden">
+                        <span className="flex max-w-full min-w-0 items-center gap-1 font-medium">
                           {row.option.hidden ? (
-                            <EyeOff aria-label="Hidden" className="size-3" />
+                            <EyeOff
+                              aria-label="Hidden"
+                              className="size-3 shrink-0"
+                            />
                           ) : null}
-                          {row.option.label}
+                          <Tooltip
+                            className="min-w-0"
+                            focusable={false}
+                            label={row.option.label}
+                          >
+                            <span
+                              className={cn(
+                                "block",
+                                rowIndex === clampedActiveIndex
+                                  ? "break-all whitespace-normal"
+                                  : "truncate",
+                              )}
+                            >
+                              {row.option.label}
+                            </span>
+                          </Tooltip>
                         </span>
-                        {row.option.detail ? (
-                          <span className="text-muted-foreground font-mono text-xs">
-                            {row.option.detail}
+                        {row.option.detail || row.option.metadata ? (
+                          <span className="flex max-w-full min-w-0 items-center gap-1 text-xs">
+                            {row.option.detail ? (
+                              row.option.detail === row.option.searchLabel ? (
+                                <FqnPath
+                                  className="min-w-0 flex-1 text-xs"
+                                  focusable={false}
+                                  value={row.option.detail}
+                                />
+                              ) : (
+                                <Tooltip
+                                  className={cn(
+                                    "text-muted-foreground block min-w-0 flex-1 font-mono text-xs",
+                                    rowIndex === clampedActiveIndex
+                                      ? "break-all whitespace-normal"
+                                      : "truncate",
+                                  )}
+                                  focusable={false}
+                                  label={row.option.detail}
+                                >
+                                  {row.option.detail}
+                                </Tooltip>
+                              )
+                            ) : null}
+                            {row.option.detail && row.option.metadata ? (
+                              <span
+                                aria-hidden="true"
+                                className="text-muted-foreground shrink-0"
+                              >
+                                ·
+                              </span>
+                            ) : null}
+                            {row.option.metadata ? (
+                              <Tooltip
+                                className={cn(
+                                  "text-muted-foreground block max-w-[45%] shrink-0 font-mono text-xs",
+                                  rowIndex === clampedActiveIndex
+                                    ? "break-all whitespace-normal"
+                                    : "truncate",
+                                )}
+                                focusable={false}
+                                label={row.option.metadata}
+                              >
+                                {row.option.metadata}
+                              </Tooltip>
+                            ) : null}
                           </span>
                         ) : null}
                       </span>
@@ -960,7 +1041,7 @@ export const EntityMultiPicker = ({
   );
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex min-w-0 flex-col gap-2">
       <EntityPicker
         autoFocus={autoFocus}
         clearOnSelect
@@ -997,39 +1078,46 @@ export const EntityMultiPicker = ({
       />
       {selectedOptions.length > 0 ? (
         <div
-          className="relative z-40 flex flex-wrap gap-1 p-0.5"
+          className="relative z-40 flex w-full min-w-0 flex-wrap gap-1 overflow-x-hidden p-0.5"
           data-testid="entity-multi-picker-selected"
         >
-          {selectedOptions.map((option) => (
-            <span
-              key={option.id}
-              className="bg-muted inline-flex h-7 max-w-full min-w-0 items-center gap-1 border border-[var(--border-ink)] px-2 font-mono text-xs shadow-[var(--shadow-chip)]"
-            >
-              {option.hidden ? (
-                <EyeOff aria-label="Hidden" className="size-3" />
-              ) : null}
-              <Tooltip focusable={false} label={option.label}>
-                <span className="block truncate">{option.label}</span>
-              </Tooltip>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-xs"
-                className="shrink-0"
-                aria-label={`Remove ${option.label}`}
-                disabled={disabled}
-                onClick={() => {
-                  const nextValue = valueRef.current.filter(
-                    (idValue) => idValue !== option.id,
-                  );
-                  valueRef.current = nextValue;
-                  onChange(nextValue);
-                }}
+          {selectedOptions.map((option) => {
+            const selectedLabel = option.selectedLabel ?? option.label;
+            return (
+              <span
+                key={option.id}
+                className="bg-muted inline-flex h-7 max-w-full min-w-0 items-center gap-1 border border-[var(--border-ink)] px-2 font-mono text-xs shadow-[var(--shadow-chip)]"
               >
-                <Close aria-hidden="true" />
-              </Button>
-            </span>
-          ))}
+                {option.hidden ? (
+                  <EyeOff aria-label="Hidden" className="size-3 shrink-0" />
+                ) : null}
+                <Tooltip
+                  className="min-w-0 flex-1"
+                  focusable={false}
+                  label={selectedLabel}
+                >
+                  <span className="block truncate">{selectedLabel}</span>
+                </Tooltip>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="shrink-0"
+                  aria-label={`Remove ${selectedLabel}`}
+                  disabled={disabled}
+                  onClick={() => {
+                    const nextValue = valueRef.current.filter(
+                      (idValue) => idValue !== option.id,
+                    );
+                    valueRef.current = nextValue;
+                    onChange(nextValue);
+                  }}
+                >
+                  <Close aria-hidden="true" />
+                </Button>
+              </span>
+            );
+          })}
         </div>
       ) : null}
     </div>

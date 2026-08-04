@@ -1,5 +1,5 @@
 import { AlertDialog } from "radix-ui";
-import type { ReactNode } from "react";
+import { type ReactNode, useLayoutEffect } from "react";
 
 import { Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,24 @@ export const ConfirmationDialog = ({
   pendingLabel,
   title,
 }: ConfirmationDialogProps) => {
+  useLayoutEffect(() => {
+    if (!open) {
+      return;
+    }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || pending) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      onOpenChange(false);
+    };
+    window.addEventListener("keydown", closeOnEscape, { capture: true });
+    return () => {
+      window.removeEventListener("keydown", closeOnEscape, { capture: true });
+    };
+  }, [onOpenChange, open, pending]);
+
   const cancelControl = (
     <AlertDialog.Cancel asChild>
       <Button

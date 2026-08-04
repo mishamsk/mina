@@ -9,6 +9,7 @@ interface FqnPathBaseProps {
   readonly collapseAncestors?: boolean;
   readonly focusable?: boolean;
   readonly leafClassName?: string;
+  readonly truncate?: boolean;
   readonly variant?: "full" | "full-chip" | "leaf-chip";
   readonly value: string;
 }
@@ -38,6 +39,7 @@ export const FqnPath = ({
   leafClassName,
   onActivate,
   to,
+  truncate = true,
   value,
   variant = "full",
 }: FqnPathProps) => {
@@ -61,7 +63,8 @@ export const FqnPath = ({
         <span
           aria-hidden={hasCollapsedAncestors || undefined}
           className={cn(
-            "text-muted-foreground max-w-full min-w-0 truncate",
+            "text-muted-foreground max-w-full min-w-0",
+            truncate ? "truncate" : "break-all whitespace-normal",
             to && "decoration-1 underline-offset-2 group-hover:underline",
             hasCollapsedAncestors && to && "group-focus-visible:hidden",
             ancestorClassName,
@@ -84,7 +87,8 @@ export const FqnPath = ({
       <span
         aria-hidden={hasCollapsedAncestors || undefined}
         className={cn(
-          "text-foreground max-w-full min-w-0 truncate font-medium",
+          "text-foreground max-w-full min-w-0 font-medium",
+          truncate ? "truncate" : "break-all whitespace-normal",
           to && "decoration-1 underline-offset-2 group-hover:underline",
           leafClassName,
         )}
@@ -167,7 +171,8 @@ export const FqnPath = ({
   }
 
   const pathClassName = cn(
-    "inline-flex max-w-full min-w-0 overflow-hidden font-mono text-sm",
+    "inline-flex max-w-full min-w-0 font-mono text-sm",
+    truncate ? "overflow-hidden" : "flex-wrap whitespace-normal",
     onActivate &&
       "focus-visible:outline-ring hover:bg-muted active:bg-muted cursor-pointer border-0 bg-transparent p-0 text-left focus-visible:outline-2 focus-visible:outline-offset-2",
     className,

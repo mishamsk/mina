@@ -11,7 +11,6 @@ INSERT INTO demo.transaction_template_record (
 	amount,
 	tag_ids,
 	memo,
-	reconciliation_status,
 	created_at,
 	updated_at,
 	tombstoned_at
@@ -26,7 +25,6 @@ VALUES (
 	NULL,
 	[],
 	'template memo' || chr(12288),
-	NULL,
 	CURRENT_TIMESTAMP,
 	CURRENT_TIMESTAMP,
 	NULL

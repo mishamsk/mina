@@ -1,5 +1,6 @@
 import {
   Archive,
+  CardText,
   Chart,
   Check,
   EyeOff,
@@ -32,11 +33,9 @@ import {
   fetchAccountGroupsForLookups,
   fetchTransactionPage,
   type GroupState,
-  listTransactionTemplates,
   startDatabaseBackupRun,
   startExchangeRateLoadingRun,
   type Transaction,
-  type TransactionTemplate,
 } from "@/api";
 import { Toast, toastDurationMs } from "@/components/toast";
 import { focusWithoutTooltip, Tooltip } from "@/components/tooltip";
@@ -60,6 +59,7 @@ import {
   transactionPartsLabel,
 } from "@/features/ledger";
 import { formatDecimalAmount } from "@/features/ledger/format";
+import { useTransactionTemplatesResource } from "@/features/templates/use-transaction-templates-resource";
 import { cn } from "@/lib/utils";
 import type { TransactionEntryType } from "@/models/ui-state";
 import {
@@ -417,29 +417,14 @@ export const CommandPalette = () => {
       query: "",
       transactions: [],
     });
-  const [templates, setTemplates] = useState<readonly TransactionTemplate[]>(
-    [],
+  const templatesResource = useTransactionTemplatesResource(open);
+  const templates = useMemo(
+    () => templatesResource.snapshot?.templates ?? [],
+    [templatesResource.snapshot],
   );
   const query = searchState.query;
   const transactionSearchMode = query.startsWith("'");
   const transactionQuery = transactionSearchMode ? query.slice(1) : "";
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-    let active = true;
-    void listTransactionTemplates({
-      query: { limit: 500, offset: 0, sort: "fqn", sort_dir: "asc" },
-    }).then((result) => {
-      if (active && result.data) {
-        setTemplates(result.data.transaction_templates);
-      }
-    });
-    return () => {
-      active = false;
-    };
-  }, [open]);
 
   const showNotice = useCallback(
     (message: string, kind: PaletteNotice["kind"]) => {
@@ -548,6 +533,14 @@ export const CommandPalette = () => {
       },
       {
         group: "Navigation",
+        icon: CardText,
+        id: "page-templates",
+        keywords: ["transaction templates", "reusable"],
+        label: "Templates",
+        to: "/templates",
+      },
+      {
+        group: "Navigation",
         icon: Chart,
         id: "page-status",
         keywords: ["health"],
@@ -618,9 +611,10 @@ export const CommandPalette = () => {
     ];
     const templateCommands: readonly CommandItem[] = templates.map(
       (template) => ({
+        accessibleLabel: `Use ${template.fqn}`,
         action: () => {
           openTransactionEntryTemplate(
-            template.fqn,
+            template,
             captureTransactionEntryLaunchContext(),
           );
         },
@@ -630,6 +624,16 @@ export const CommandPalette = () => {
         id: `entry-template-${template.transaction_template_id}`,
         keywords: [template.fqn, template.name, "template"],
         label: `Use ${template.fqn}`,
+        renderLabel: (
+          <span className="flex min-w-0 items-center">
+            <span className="shrink-0">Use&nbsp;</span>
+            <FqnPath
+              value={template.fqn}
+              focusable={false}
+              className="min-w-0 flex-1 text-sm"
+            />
+          </span>
+        ),
       }),
     );
 

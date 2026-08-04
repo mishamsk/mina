@@ -24,6 +24,7 @@ import type {
   SetHiddenByPathRequest,
   SettlementStatus,
   Transaction,
+  TransactionTemplateWriteRequest,
   UpdateAccountRequest,
   UpdateCategoryRequest,
   UpdateMemberHiddenRequest,
@@ -50,6 +51,7 @@ import {
   createSpendTransaction,
   createTag as createGeneratedTag,
   createTransaction as createGeneratedTransaction,
+  createTransactionTemplate as createGeneratedTransactionTemplate,
   createTransferTransaction,
   deleteAccount as deleteGeneratedAccount,
   deleteCategory as deleteGeneratedCategory,
@@ -57,6 +59,7 @@ import {
   deleteMember as deleteGeneratedMember,
   deleteTag as deleteGeneratedTag,
   deleteTransaction,
+  deleteTransactionTemplate as deleteGeneratedTransactionTemplate,
   dismissRecurringOccurrence as dismissGeneratedRecurringOccurrence,
   getAccount,
   getTransaction,
@@ -73,11 +76,14 @@ import {
   listTagGroups,
   listTags,
   listTransactions,
+  listTransactionTemplates,
   replaceTransaction as replaceGeneratedTransaction,
+  replaceTransactionTemplate as replaceGeneratedTransactionTemplate,
   restoreTransaction,
   restructureAccounts as restructureGeneratedAccounts,
   restructureCategories as restructureGeneratedCategories,
   restructureTags as restructureGeneratedTags,
+  restructureTransactionTemplates as restructureGeneratedTransactionTemplates,
   searchAccountJournalRecords,
   searchJournalRecords,
   setAccountHiddenByPath as setGeneratedAccountHiddenByPath,
@@ -110,6 +116,47 @@ export interface GroupRecordsPageParams {
 }
 
 const lookupLimit = 500;
+
+const listTransactionTemplatesPage = (offset: number) =>
+  listTransactionTemplates({
+    query: {
+      limit: lookupLimit,
+      offset,
+      sort: "fqn",
+      sort_dir: "asc",
+    },
+  });
+
+export const fetchAllTransactionTemplates = async () => {
+  const firstPage = await listTransactionTemplatesPage(0);
+  if (
+    !firstPage.data ||
+    firstPage.data.transaction_templates.length >= firstPage.data.total_count
+  ) {
+    return firstPage;
+  }
+
+  const transactionTemplates = [...firstPage.data.transaction_templates];
+  for (
+    let offset = lookupLimit;
+    offset < firstPage.data.total_count;
+    offset += lookupLimit
+  ) {
+    const page = await listTransactionTemplatesPage(offset);
+    if (!page.data) {
+      return page;
+    }
+    transactionTemplates.push(...page.data.transaction_templates);
+  }
+
+  return {
+    ...firstPage,
+    data: {
+      ...firstPage.data,
+      transaction_templates: transactionTemplates,
+    },
+  };
+};
 
 const listAccountsPageForLookups = (offset: number) =>
   listAccounts({
@@ -299,6 +346,30 @@ export const deleteTransactionById = (transactionId: number) =>
       transaction_id: transactionId,
     },
   });
+
+export const deleteTransactionTemplateById = (transactionTemplateId: number) =>
+  deleteGeneratedTransactionTemplate({
+    path: {
+      transaction_template_id: transactionTemplateId,
+    },
+  });
+
+export const createLedgerTransactionTemplate = (
+  request: TransactionTemplateWriteRequest,
+) => createGeneratedTransactionTemplate({ body: request });
+
+export const replaceLedgerTransactionTemplate = (
+  transactionTemplateId: number,
+  request: TransactionTemplateWriteRequest,
+) =>
+  replaceGeneratedTransactionTemplate({
+    body: request,
+    path: { transaction_template_id: transactionTemplateId },
+  });
+
+export const restructureLedgerTransactionTemplates = (
+  request: RestructureRequest,
+) => restructureGeneratedTransactionTemplates({ body: request });
 
 export const cancelTransactionById = (transactionId: number) =>
   cancelTransaction({ path: { transaction_id: transactionId } });

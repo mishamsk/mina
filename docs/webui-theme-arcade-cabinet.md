@@ -134,6 +134,7 @@ Theme treatments for the shared component inventory in `docs/webui-design.md`:
 - `BalanceMeter`: segmented block bar per currency — mint ink when balanced, yellow while unbalanced.
 - `EntryModal` / dialogs / `CommandPalette`: landmark treatment — white surface, ink outline, pixel shadow, mono bold uppercase title; internal scrolling with the title and submit row always visible.
 - `EntryModal` additionally: `--frame` scrim at ~65% (no blur); single-step appear per stepped motion; backdrop click flashes the modal outline one step; rail micro-rows in 12px mono with session rows stamping in (session-tick styling); footer general errors use destructive red, while the separate attention strip uses yellow ink; full-screen takeover below the narrow breakpoint.
+- `TemplateEditorModal` reuses the stage frame, hard scrim, pinned header/footer, one body scroll region, and narrow full-screen takeover without the transaction rail or score treatment.
 - `BalanceStrip`: mono amounts in `--frame-foreground` on the frame; no accent fills so the strip stays glanceable.
 - Toasts: landmark treatment, one-line, auto-dismiss; success uses mint ink text, not a mint fill.
 - Empty states: small pixel-art sprite (inline SVG, ≤ 4 colors from the accent palette), mono bold uppercase headline, sans explanation, primary action button.

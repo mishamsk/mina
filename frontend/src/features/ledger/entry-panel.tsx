@@ -1,4 +1,4 @@
-import { Check, Close, Plus, Trash } from "pixelarticons/react";
+import { Check, Close, Plus, Reload, Trash } from "pixelarticons/react";
 import {
   type MutableRefObject,
   type ReactNode,
@@ -32,7 +32,6 @@ import {
   createTransfer,
   type CreateTransferTransactionRequest,
   type JournalRecord,
-  listTransactionTemplates,
   type Member,
   replaceLedgerTransaction,
   type Tag,
@@ -51,6 +50,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  refreshTransactionTemplates,
+  useTransactionTemplatesResource,
+} from "@/features/templates/use-transaction-templates-resource";
 import type {
   AdvancedTransactionEntryDraft,
   JournalRecordRowDraft,
@@ -103,7 +107,7 @@ import { refreshLedgerLookups } from "./use-transactions-resource";
 export interface EntryPanelProps {
   readonly closeRequestRef?: MutableRefObject<(() => void) | null>;
   readonly initialTab?: TransactionEntryType;
-  readonly initialTemplateFqn?: string;
+  readonly initialTemplateId?: number;
   readonly launch?: EntryPanelLaunch;
   readonly lookups: LedgerLookupsSnapshot | undefined;
   readonly onClose: () => void;
@@ -594,6 +598,155 @@ const defaultDraft = (): TransactionEntryDraft => ({
   },
 });
 
+const templateEntryType = (
+  template: TransactionTemplate,
+): TransactionEntryType =>
+  template.compatible_shorthands.length === 1
+    ? template.compatible_shorthands[0]!
+    : "advanced";
+
+const advancedDraftFromTemplate = (
+  template: TransactionTemplate,
+): AdvancedTransactionEntryDraft => {
+  const records = template.records
+    .filter((record) => !record.tombstoned_at)
+    .map((record) => ({
+      ...blankRecordRowDraft(),
+      accountId: record.account_id ?? undefined,
+      amount: record.amount ?? "",
+      categoryId: record.category_id ?? undefined,
+      currency: record.currency ?? "USD",
+      memberId: record.member_id ?? undefined,
+      memo: record.memo ?? "",
+      tagIds: [...record.tag_ids],
+    }));
+  return {
+    date: localTodayISODate(),
+    records: records.length > 0 ? records : blankAdvancedDraft().records,
+  };
+};
+
+const draftFromTemplate = (
+  template: TransactionTemplate,
+  targetTab: TransactionEntryType,
+  lookups: LedgerLookupsSnapshot | undefined,
+): TransactionEntryDraft => {
+  const nextDraft = defaultDraft();
+  if (targetTab === "advanced" || targetTab === "exchange") {
+    return {
+      ...nextDraft,
+      activeTab: "advanced",
+      advanced: advancedDraftFromTemplate(template),
+    };
+  }
+
+  const records = template.records.filter((record) => !record.tombstoned_at);
+  const balanceRecords = records.filter((record) =>
+    isMovementAccountType(
+      accountTypeForId(lookups, record.account_id ?? undefined),
+    ),
+  );
+  const flowRecords = records.filter(
+    (record) =>
+      accountTypeForId(lookups, record.account_id ?? undefined) === "flow",
+  );
+  const amountFromRecord = (record: (typeof records)[number] | undefined) =>
+    record?.amount ? inputAmountFromTemplateRecord(record.amount) : "";
+  const amountMagnitudeFromRecord = (
+    record: (typeof records)[number] | undefined,
+  ) => {
+    if (!record?.amount) {
+      return "";
+    }
+    const mantissa = signedAmountMantissa(record.amount);
+    return mantissa === undefined
+      ? record.amount
+      : formatMantissa(mantissa < 0n ? -mantissa : mantissa);
+  };
+  const firstMemberID = records.find(
+    (record) => record.member_id !== null,
+  )?.member_id;
+  const firstMemo = records.find((record) => record.memo !== null)?.memo;
+  const common = {
+    memberId: firstMemberID ?? undefined,
+    memo: firstMemo ?? "",
+    tagIds: [...(records[0]?.tag_ids ?? [])],
+  };
+  const currency =
+    records.find((record) => record.currency !== null)?.currency ?? "";
+  let tabDraft: TransactionEntryTabDraft;
+  switch (targetTab) {
+    case "spend":
+      tabDraft = {
+        ...blankSpendTabDraft(),
+        ...common,
+        currency,
+        fundingAccountId: balanceRecords[0]?.account_id ?? undefined,
+        spendMerchants: flowRecords.map((record) => ({
+          accountId: record.account_id ?? undefined,
+          amount: amountFromRecord(record),
+          categoryId: record.category_id ?? undefined,
+          draftId: newJournalRecordDraftId(),
+        })),
+      };
+      break;
+    case "income":
+      tabDraft = {
+        ...blankTabDraft(),
+        ...common,
+        amount:
+          amountMagnitudeFromRecord(balanceRecords[0]) ||
+          amountMagnitudeFromRecord(flowRecords[0]),
+        categoryId: flowRecords[0]?.category_id ?? undefined,
+        currency,
+        destinationAccountId: balanceRecords[0]?.account_id ?? undefined,
+        sourceAccountId: flowRecords[0]?.account_id ?? undefined,
+      };
+      break;
+    case "refund":
+      tabDraft = {
+        ...blankTabDraft(),
+        ...common,
+        amount:
+          amountMagnitudeFromRecord(balanceRecords[0]) ||
+          amountMagnitudeFromRecord(flowRecords[0]),
+        categoryId: flowRecords[0]?.category_id ?? undefined,
+        currency,
+        destinationAccountId: balanceRecords[0]?.account_id ?? undefined,
+        merchantAccountId: flowRecords[0]?.account_id ?? undefined,
+      };
+      break;
+    case "transfer": {
+      const source = balanceRecords.find(
+        (record) => (signedAmountMantissa(record.amount ?? "") ?? 0n) < 0n,
+      );
+      const destination = balanceRecords.find(
+        (record) => (signedAmountMantissa(record.amount ?? "") ?? 0n) > 0n,
+      );
+      const charge = flowRecords[0];
+      tabDraft = {
+        ...blankTabDraft(),
+        ...common,
+        amount: amountFromRecord(destination),
+        chargeAccountId: charge?.account_id ?? undefined,
+        chargeAmount: amountFromRecord(charge),
+        chargeCategoryId: charge?.category_id ?? undefined,
+        chargeEnabled: charge !== undefined,
+        currency,
+        destinationAccountId: destination?.account_id ?? undefined,
+        sourceAccountId: source?.account_id ?? undefined,
+      };
+      break;
+    }
+  }
+
+  return {
+    ...nextDraft,
+    activeTab: targetTab,
+    tabs: { ...nextDraft.tabs, [targetTab]: tabDraft },
+  };
+};
+
 const migrateStoredRecordRowDraft = (
   storedRow: Partial<JournalRecordRowDraft> | undefined,
 ): JournalRecordRowDraft => ({
@@ -729,13 +882,16 @@ const entityOption = (
   entity: Account | Category | Tag,
   id: number,
 ): EntityOption => ({
-  detail:
-    "account_id" in entity
-      ? `${entity.fqn} · ${entity.currency ? `${entity.currency} · Single-currency` : "Multi-currency"}`
-      : entity.fqn,
+  detail: entity.fqn,
   hidden: entity.is_hidden,
   id,
   label: entity.name,
+  metadata:
+    "account_id" in entity
+      ? entity.currency
+        ? `${entity.currency} · Single-currency`
+        : "Multi-currency"
+      : undefined,
   searchLabel: entity.fqn,
 });
 
@@ -840,6 +996,11 @@ const absoluteMantissa = (amount: string): bigint | undefined => {
 const inputAmountFromRecord = (record: JournalRecord): string => {
   const mantissa = absoluteMantissa(record.amount);
   return mantissa === undefined ? "" : formatMantissa(mantissa);
+};
+
+const inputAmountFromTemplateRecord = (amount: string): string => {
+  const mantissa = signedAmountMantissa(amount);
+  return mantissa === undefined ? amount : formatMantissa(mantissa);
 };
 
 const writableRecordSource = (
@@ -2472,7 +2633,7 @@ const EntryRailRow = ({
 export const EntryPanel = ({
   closeRequestRef,
   initialTab,
-  initialTemplateFqn,
+  initialTemplateId,
   launch,
   lookups: lookupSnapshot,
   onClose,
@@ -2504,13 +2665,19 @@ export const EntryPanel = ({
     readonly Transaction[]
   >([]);
   const [categoryRetryToken, setCategoryRetryToken] = useState(0);
-  const [templateQuery, setTemplateQuery] = useState("");
-  const [templates, setTemplates] = useState<readonly TransactionTemplate[]>(
-    [],
-  );
+  const appliedInitialTemplateRef = useRef<number | undefined>(undefined);
   const [replacement, setReplacement] = useState<
     ReplacementContext | undefined
   >();
+  const templatesResource = useTransactionTemplatesResource(
+    open && !replacement,
+  );
+  const templatesColdLoading =
+    templatesResource.loading && !templatesResource.snapshot;
+  const templates = useMemo(
+    () => templatesResource.snapshot?.templates ?? [],
+    [templatesResource.snapshot],
+  );
   const [pendingLaunchDraft, setPendingLaunchDraft] = useState<
     PendingLaunchDraft | undefined
   >();
@@ -2524,6 +2691,15 @@ export const EntryPanel = ({
     useState<DraftPersistenceMode>("ordinary");
   const [confirmDiscardDraftOpen, setConfirmDiscardDraftOpen] = useState(false);
   const [discardingPendingLaunch, setDiscardingPendingLaunch] = useState(false);
+  const [pendingTemplateApplication, setPendingTemplateApplication] = useState<{
+    readonly targetTab: TransactionEntryType;
+    readonly template: TransactionTemplate;
+  }>();
+  const [confirmTemplateReplaceOpen, setConfirmTemplateReplaceOpen] =
+    useState(false);
+  const [confirmClearDraftOpen, setConfirmClearDraftOpen] = useState(false);
+  const [clearingDraft, setClearingDraft] = useState(false);
+  const [clearDraftError, setClearDraftError] = useState<string>();
   const [confirmCloseDiscardOpen, setConfirmCloseDiscardOpen] = useState(false);
   const [attentionErrorCount, setAttentionErrorCount] = useState(0);
   const [inlineCreatedLookups, setInlineCreatedLookups] = useState<{
@@ -2532,6 +2708,8 @@ export const EntryPanel = ({
     readonly tags: readonly Tag[];
   }>({ accounts: [], categories: [], tags: [] });
   const [pickerLifecycle, setPickerLifecycle] = useState(0);
+  const [templatePickerOpenOnFocus, setTemplatePickerOpenOnFocus] =
+    useState(true);
   const lookups = useMemo<LedgerLookupsSnapshot | undefined>(() => {
     if (!lookupSnapshot) {
       return undefined;
@@ -2561,9 +2739,9 @@ export const EntryPanel = ({
   const addAdvancedRecordButtonRef = useRef<HTMLButtonElement>(null);
   const advancedRemoveButtonRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const addMerchantButtonRef = useRef<HTMLButtonElement>(null);
+  const clearDraftButtonRef = useRef<HTMLButtonElement>(null);
   const merchantRemoveButtonRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const dateInputRef = useRef<HTMLInputElement>(null);
-  const templateInputRef = useRef<HTMLInputElement>(null);
   const rememberedActiveTabRef = useRef<TransactionEntryType>("spend");
   const initialTabOverrideRef = useRef<TransactionEntryType | undefined>(
     undefined,
@@ -2585,6 +2763,17 @@ export const EntryPanel = ({
   const ordinaryBaselineMustPersistRef = useRef(false);
   const ordinaryDraftStoredRef = useRef(false);
   const lastStoredDraftFingerprintRef = useRef<string | undefined>(undefined);
+  const templateFocusDeferredRef = useRef(false);
+
+  const focusTemplatePicker = useCallback(() => {
+    setTemplatePickerOpenOnFocus(false);
+    window.requestAnimationFrame(() => {
+      focusWithoutTooltip(document.getElementById("entry-template"), {
+        preventScroll: true,
+      });
+      setTemplatePickerOpenOnFocus(true);
+    });
+  }, []);
 
   const requestClose = useCallback(() => {
     const modifiedReplacement =
@@ -2648,6 +2837,27 @@ export const EntryPanel = ({
     ? tabConfigs[activeShorthandTab]
     : undefined;
   const activeCategoryCreationIntent = activeConfig?.categoryIntents[0];
+  const availableTemplates = useMemo(
+    () =>
+      activeTab === "advanced"
+        ? templates
+        : activeTab === "exchange"
+          ? []
+          : templates.filter((template) =>
+              template.compatible_shorthands.includes(activeTab),
+            ),
+    [activeTab, templates],
+  );
+  const templateOptions = useMemo<readonly EntityOption[]>(
+    () =>
+      availableTemplates.map((template) => ({
+        detail: template.fqn,
+        id: template.transaction_template_id,
+        label: template.name,
+        searchLabel: template.fqn,
+      })),
+    [availableTemplates],
+  );
   const launchKey = launch
     ? `${launch.type}:${launch.transaction.transaction_id}`
     : `create:${initialTab ?? "remembered"}`;
@@ -2757,10 +2967,12 @@ export const EntryPanel = ({
           storedDraft === undefined
             ? getUiPreferencesSnapshot().transactionEntryActiveTab
             : migratedDraft.activeTab;
-        const ordinaryDraft = initialTab
+        const launchInitialTab =
+          initialTemplateId === undefined ? initialTab : undefined;
+        const ordinaryDraft = launchInitialTab
           ? {
               ...migratedDraft,
-              activeTab: initialTab,
+              activeTab: launchInitialTab,
             }
           : {
               ...migratedDraft,
@@ -2771,7 +2983,9 @@ export const EntryPanel = ({
           persistence: "ordinary" as const,
         };
         rememberedActiveTabRef.current = rememberedActiveTab;
-        initialTabOverrideRef.current = launchDraft ? undefined : initialTab;
+        initialTabOverrideRef.current = launchDraft
+          ? undefined
+          : launchInitialTab;
         userSelectedActiveTabRef.current = false;
         setPendingLaunchDraft(undefined);
         setConfirmDiscardDraftOpen(false);
@@ -2829,7 +3043,14 @@ export const EntryPanel = ({
     return () => {
       active = false;
     };
-  }, [initialTab, launch, launchKey, launchLookupsReady, open]);
+  }, [
+    initialTab,
+    initialTemplateId,
+    launch,
+    launchKey,
+    launchLookupsReady,
+    open,
+  ]);
 
   useEffect(() => {
     if (!open || !currentDraftReady || draftPersistence !== "ordinary") {
@@ -2876,26 +3097,40 @@ export const EntryPanel = ({
   }, [currentDraftReady, draft, draftForStorage, draftPersistence, open]);
 
   useEffect(() => {
-    if (!open || !currentDraftReady) {
+    if (!open) {
+      templateFocusDeferredRef.current = false;
+      return;
+    }
+    if (!currentDraftReady) {
+      return;
+    }
+    if (!replacement && templatesColdLoading) {
+      templateFocusDeferredRef.current = true;
       return;
     }
 
+    const templateFocusWasDeferred = templateFocusDeferredRef.current;
+    templateFocusDeferredRef.current = false;
     const activeElement = document.activeElement;
     const animationFrame = window.requestAnimationFrame(() => {
       if (
-        document.activeElement !== activeElement &&
-        entryPanelRef.current?.contains(document.activeElement)
+        entryPanelRef.current?.contains(document.activeElement) &&
+        (templateFocusWasDeferred || document.activeElement !== activeElement)
       ) {
         return;
       }
-      (replacement ? dateInputRef.current : templateInputRef.current)?.focus({
-        preventScroll: true,
-      });
+      if (replacement) {
+        dateInputRef.current?.focus({ preventScroll: true });
+      } else {
+        focusWithoutTooltip(document.getElementById("entry-template"), {
+          preventScroll: true,
+        });
+      }
     });
     return () => {
       window.cancelAnimationFrame(animationFrame);
     };
-  }, [currentDraftReady, open, replacement]);
+  }, [currentDraftReady, open, replacement, templatesColdLoading]);
 
   const selectedEntityIds = useMemo(() => {
     const accountIds = new Set<number>();
@@ -3645,81 +3880,140 @@ export const EntryPanel = ({
   };
 
   const applyTemplate = useCallback(
-    (template: TransactionTemplate) => {
-      const records = template.records
-        .filter((record) => !record.tombstoned_at)
-        .map((record) => ({
-          ...blankRecordRowDraft(),
-          accountId: record.account_id ?? undefined,
-          amount: record.amount ?? "",
-          categoryId: record.category_id ?? undefined,
-          currency: record.currency ?? "USD",
-          memberId: record.member_id ?? undefined,
-          memo: record.memo ?? "",
-          reconciliationStatus: record.reconciliation_status ?? "unreconciled",
-          tagIds: [...record.tag_ids],
-        }));
+    (template: TransactionTemplate, targetTab: TransactionEntryType) => {
       userSelectedActiveTabRef.current = true;
-      if (!replacement) {
-        rememberedActiveTabRef.current = "advanced";
-        setTransactionEntryActiveTab("advanced");
-      }
-      setDraft((currentDraft) => ({
-        ...currentDraft,
-        activeTab: "advanced",
-        advanced: {
-          date: currentDraft.advanced.date || localTodayISODate(),
-          records: records.length > 0 ? records : blankAdvancedDraft().records,
-        },
-      }));
-      setTemplateQuery(template.fqn);
+      initialTabOverrideRef.current = undefined;
+      rememberedActiveTabRef.current = targetTab;
+      setTransactionEntryActiveTab(targetTab);
+      setPickerLifecycle((current) => current + 1);
+      setDraft(draftFromTemplate(template, targetTab, lookups));
       setFieldErrors({});
+      setMerchantFieldErrors({});
       setAdvancedFieldErrors({});
       setGeneralError(undefined);
+      setClassification(undefined);
+      setClassificationError(undefined);
+      setExchangeRate(undefined);
+      setExchangeRateError(undefined);
+      focusTemplatePicker();
     },
-    [replacement],
+    [focusTemplatePicker, lookups],
   );
 
-  useEffect(() => {
-    if (!open || replacement || templates.length > 0) {
-      return;
-    }
-    let active = true;
-    void listTransactionTemplates({
-      query: { limit: 500, offset: 0, sort: "fqn", sort_dir: "asc" },
-    }).then((result) => {
-      if (!active || !result.data) {
+  const requestTemplateApplication = useCallback(
+    (template: TransactionTemplate, targetTab: TransactionEntryType) => {
+      if (draftHasUserInput(draft, defaultDraft())) {
+        setPendingTemplateApplication({ targetTab, template });
+        setConfirmTemplateReplaceOpen(true);
         return;
       }
-      setTemplates(result.data.transaction_templates);
-    });
-    return () => {
-      active = false;
-    };
-  }, [open, replacement, templates.length]);
+      applyTemplate(template, targetTab);
+    },
+    [applyTemplate, draft],
+  );
+
+  const confirmTemplateApplication = useCallback(() => {
+    if (!pendingTemplateApplication) {
+      return;
+    }
+    applyTemplate(
+      pendingTemplateApplication.template,
+      pendingTemplateApplication.targetTab,
+    );
+    setPendingTemplateApplication(undefined);
+    setConfirmTemplateReplaceOpen(false);
+  }, [applyTemplate, pendingTemplateApplication]);
+
+  const resetCreateDraft = useCallback(async () => {
+    if (clearingDraft) {
+      return;
+    }
+    setClearingDraft(true);
+    setClearDraftError(undefined);
+    try {
+      await deleteTransactionEntryDraft();
+    } catch {
+      setClearDraftError("The saved draft could not be deleted. Try again.");
+      setConfirmClearDraftOpen(true);
+      setClearingDraft(false);
+      return;
+    }
+
+    const blankDraft = defaultDraft();
+    ordinaryDraftBaselineRef.current = blankDraft;
+    ordinaryBaselineMustPersistRef.current = false;
+    ordinaryDraftStoredRef.current = false;
+    lastStoredDraftFingerprintRef.current = undefined;
+    launchDraftBaselineRef.current = undefined;
+    initialTabOverrideRef.current = undefined;
+    userSelectedActiveTabRef.current = true;
+    rememberedActiveTabRef.current = "spend";
+    setTransactionEntryActiveTab("spend");
+    setDraftPersistence("ordinary");
+    setDraft(blankDraft);
+    setPickerLifecycle((current) => current + 1);
+    setPendingTemplateApplication(undefined);
+    setConfirmTemplateReplaceOpen(false);
+    setConfirmClearDraftOpen(false);
+    setFieldErrors({});
+    setMerchantFieldErrors({});
+    setAdvancedFieldErrors({});
+    setGeneralError(undefined);
+    setClassification(undefined);
+    setClassificationError(undefined);
+    setExchangeRate(undefined);
+    setExchangeRateError(undefined);
+    setClearingDraft(false);
+    focusTemplatePicker();
+  }, [clearingDraft, focusTemplatePicker]);
+
+  const requestClearDraft = useCallback(() => {
+    setClearDraftError(undefined);
+    if (draftHasUserInput(draft, defaultDraft())) {
+      setConfirmClearDraftOpen(true);
+      return;
+    }
+    void resetCreateDraft();
+  }, [draft, resetCreateDraft]);
 
   useEffect(() => {
-    if (!open || !currentDraftReady || replacement || !initialTemplateFqn) {
+    if (!open) {
+      appliedInitialTemplateRef.current = undefined;
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (
+      !open ||
+      !currentDraftReady ||
+      replacement ||
+      initialTemplateId === undefined ||
+      appliedInitialTemplateRef.current === initialTemplateId
+    ) {
       return;
     }
     const initialTemplate = templates.find(
-      (template) => template.fqn === initialTemplateFqn,
+      (template) => template.transaction_template_id === initialTemplateId,
     );
     if (!initialTemplate) {
       return;
     }
     const timeoutId = window.setTimeout(() => {
-      applyTemplate(initialTemplate);
+      appliedInitialTemplateRef.current = initialTemplateId;
+      requestTemplateApplication(
+        initialTemplate,
+        templateEntryType(initialTemplate),
+      );
     });
     return () => {
       window.clearTimeout(timeoutId);
     };
   }, [
-    applyTemplate,
     currentDraftReady,
-    initialTemplateFqn,
+    initialTemplateId,
     open,
     replacement,
+    requestTemplateApplication,
     templates,
   ]);
 
@@ -4277,7 +4571,11 @@ export const EntryPanel = ({
       className="bg-card flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden"
       aria-labelledby="entry-panel-title"
       onKeyDown={(event) => {
-        if (confirmDiscardDraftOpen) {
+        if (
+          confirmDiscardDraftOpen ||
+          confirmTemplateReplaceOpen ||
+          confirmClearDraftOpen
+        ) {
           return;
         }
         if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
@@ -4309,10 +4607,11 @@ export const EntryPanel = ({
       <div
         role="tablist"
         aria-label="Transaction type"
+        aria-busy={clearingDraft}
         className="grid grid-cols-6 border-b-2 border-[var(--border-ink)]"
       >
         {entryTypes.map((entryType) => {
-          const disabled = !tabIsAvailable(entryType);
+          const disabled = clearingDraft || !tabIsAvailable(entryType);
           return (
             <button
               key={entryType}
@@ -4340,41 +4639,73 @@ export const EntryPanel = ({
       </div>
 
       {!replacement ? (
-        <div className="border-b-2 border-[var(--border-ink)] bg-[var(--band)] px-4 py-3">
+        <div
+          aria-busy={clearingDraft}
+          inert={clearingDraft ? true : undefined}
+          className="border-b-2 border-[var(--border-ink)] bg-[var(--band)] px-4 py-3"
+        >
           <div className="mx-auto flex w-full max-w-[560px] flex-col gap-1">
-            <label htmlFor="entry-template" className="text-sm font-semibold">
-              Start from a template
-            </label>
-            <input
-              id="entry-template"
-              ref={templateInputRef}
-              type="text"
-              list="entry-template-options"
-              autoComplete="off"
-              className="bg-card disabled:bg-muted h-9 border-2 border-[var(--border-ink)] px-2 text-sm shadow-[var(--shadow-chip)] disabled:cursor-wait"
-              disabled={!currentDraftReady}
-              placeholder="Type a template name or skip"
-              value={templateQuery}
-              onChange={(event) => {
-                const value = event.target.value;
-                setTemplateQuery(value);
-                const template = templates.find(
-                  (candidate) =>
-                    candidate.fqn === value || candidate.name === value,
-                );
-                if (template) {
-                  applyTemplate(template);
-                }
-              }}
-            />
-            <datalist id="entry-template-options">
-              {templates.map((template) => (
-                <option
-                  key={template.transaction_template_id}
-                  value={template.fqn}
+            {templatesColdLoading ? (
+              <div className="flex flex-col gap-1">
+                <span className="text-sm font-semibold">
+                  Start from a template
+                </span>
+                <Skeleton
+                  className="h-9 w-full"
+                  data-testid="entry-template-loading"
                 />
-              ))}
-            </datalist>
+                <span className="sr-only" role="status">
+                  Loading template choices
+                </span>
+              </div>
+            ) : (
+              <EntityPicker
+                key={`entry-template-${pickerLifecycle}`}
+                id="entry-template"
+                clearOnSelect
+                disabled={!currentDraftReady || clearingDraft}
+                label="Start from a template"
+                openOnFocus={templatePickerOpenOnFocus}
+                options={templateOptions}
+                placeholder="Type a template name or skip"
+                value={undefined}
+                onChange={(templateId) => {
+                  if (templateId === undefined) {
+                    return;
+                  }
+                  const template = availableTemplates.find(
+                    (candidate) =>
+                      candidate.transaction_template_id === templateId,
+                  );
+                  if (template) {
+                    requestTemplateApplication(template, activeTab);
+                  }
+                }}
+              />
+            )}
+            {templatesResource.errorMessage ? (
+              <div
+                className="border-destructive text-destructive mt-1 flex items-center justify-between gap-2 border-2 px-2 py-1 text-xs"
+                role="alert"
+              >
+                <span>
+                  {templatesResource.snapshot
+                    ? "Template choices could not be refreshed."
+                    : "Templates could not be loaded."}
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    void refreshTransactionTemplates();
+                  }}
+                >
+                  <Reload aria-hidden="true" />
+                  Retry
+                </Button>
+              </div>
+            ) : null}
           </div>
         </div>
       ) : null}
@@ -4390,6 +4721,8 @@ export const EntryPanel = ({
           id={`${activeTab}-entry-panel`}
           role="tabpanel"
           aria-labelledby={`${activeTab}-entry-tab`}
+          aria-busy={clearingDraft}
+          inert={clearingDraft ? true : undefined}
           className={`flex min-h-0 min-w-0 flex-1 flex-col ${
             ready ? "" : "hidden"
           }`}
@@ -5389,6 +5722,18 @@ export const EntryPanel = ({
               <div className="flex flex-wrap justify-end gap-2">
                 {!replacement ? (
                   <Button
+                    ref={clearDraftButtonRef}
+                    type="button"
+                    variant="outline"
+                    disabled={saving || clearingDraft}
+                    onClick={requestClearDraft}
+                  >
+                    <Trash aria-hidden="true" />
+                    {clearingDraft ? "Clearing" : "Clear draft"}
+                  </Button>
+                ) : null}
+                {!replacement ? (
+                  <Button
                     type="button"
                     variant="outline"
                     disabled={submitDisabled}
@@ -5416,6 +5761,8 @@ export const EntryPanel = ({
           <aside
             className="bg-card hidden min-h-0 w-[280px] shrink-0 flex-col overflow-y-auto border-l-2 border-[var(--border-ink)] xl:flex"
             aria-label="Transaction entry context"
+            aria-busy={clearingDraft}
+            inert={clearingDraft ? true : undefined}
           >
             <section className="flex flex-col gap-1 p-3">
               <h3 className="font-heading text-xs font-bold uppercase">
@@ -5474,6 +5821,63 @@ export const EntryPanel = ({
       >
         <p>
           Opening this saved transaction will replace the current entry draft.
+        </p>
+      </ConfirmationDialog>
+      <ConfirmationDialog
+        cancelLabel="Keep draft"
+        confirmIcon={<Trash aria-hidden="true" />}
+        confirmLabel="Replace draft"
+        errorMessage={undefined}
+        onConfirm={confirmTemplateApplication}
+        onOpenChange={(nextOpen) => {
+          setConfirmTemplateReplaceOpen(nextOpen);
+          if (!nextOpen) {
+            setPendingTemplateApplication(undefined);
+            focusTemplatePicker();
+          }
+        }}
+        open={confirmTemplateReplaceOpen}
+        pending={false}
+        pendingLabel="Replacing"
+        title="Replace entry draft?"
+      >
+        <p>
+          This template will permanently replace every unsaved field in the
+          current draft.
+        </p>
+      </ConfirmationDialog>
+      <ConfirmationDialog
+        cancelLabel="Keep draft"
+        cancelPendingTooltip="Draft deletion is in progress."
+        confirmIcon={<Trash aria-hidden="true" />}
+        confirmLabel="Clear draft"
+        confirmPendingTooltip="Draft deletion is already in progress."
+        errorMessage={clearDraftError}
+        onConfirm={() => {
+          void resetCreateDraft();
+        }}
+        onOpenChange={(nextOpen) => {
+          if (clearingDraft) {
+            return;
+          }
+          setConfirmClearDraftOpen(nextOpen);
+          if (!nextOpen) {
+            setClearDraftError(undefined);
+            window.requestAnimationFrame(() => {
+              focusWithoutTooltip(clearDraftButtonRef.current, {
+                preventScroll: true,
+              });
+            });
+          }
+        }}
+        open={confirmClearDraftOpen}
+        pending={clearingDraft}
+        pendingLabel="Clearing"
+        title="Clear entry draft?"
+      >
+        <p>
+          Every unsaved field will return to its blank default. This cannot be
+          undone; saved entries from this session will remain.
         </p>
       </ConfirmationDialog>
       <ConfirmationDialog

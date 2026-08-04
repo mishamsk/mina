@@ -1,5 +1,6 @@
 import { test } from "@tests/e2e/test";
 import {
+  type AccountFixture,
   type CategoryFixture,
   chooseOptionByKeyboard,
   clickRowAction,
@@ -8,10 +9,416 @@ import {
   createTag,
   expect,
   fillAndExpectValue,
+  findByFqn,
   journalRecord,
+  listFixtures,
   type Route,
   waitForLedgerLookups,
 } from "@tests/e2e/transactions/support";
+
+test("template cold load preserves focus in an edited field", async ({
+  page,
+}) => {
+  let releaseTemplates: (() => void) | undefined;
+  const templatesRequested = new Promise<void>((resolve) => {
+    void page.route("**/api/transaction-templates**", async (route) => {
+      if (route.request().method() !== "GET") {
+        await route.continue();
+        return;
+      }
+      resolve();
+      await new Promise<void>((release) => {
+        releaseTemplates = release;
+      });
+      await route.continue();
+    });
+  });
+
+  await page.goto("/transactions?page=1&pageSize=25");
+  await page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" })
+    .click();
+  await templatesRequested;
+  const loadingSkeleton = page.getByTestId("entry-template-loading");
+  await expect(loadingSkeleton).toBeVisible();
+  await expect(page.getByText("Loading templates…")).toHaveCount(0);
+  const amount = page
+    .getByRole("group", { name: "Merchant 1" })
+    .getByLabel("Amount");
+  await amount.fill("12.34");
+  await expect(amount).toBeFocused();
+
+  releaseTemplates?.();
+  const templatePicker = page.getByRole("combobox", {
+    name: "Start from a template",
+  });
+  await expect(templatePicker).toBeVisible();
+  await expect(amount).toBeFocused();
+  await expect(amount).toHaveValue("12.34");
+});
+
+test("template cold load focuses the picker when the dialog remains idle", async ({
+  page,
+}) => {
+  let releaseTemplates: (() => void) | undefined;
+  const templatesRequested = new Promise<void>((resolve) => {
+    void page.route("**/api/transaction-templates**", async (route) => {
+      if (route.request().method() !== "GET") {
+        await route.continue();
+        return;
+      }
+      resolve();
+      await new Promise<void>((release) => {
+        releaseTemplates = release;
+      });
+      await route.continue();
+    });
+  });
+
+  await page.goto("/transactions?page=1&pageSize=25");
+  await page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" })
+    .click();
+  await templatesRequested;
+  await expect(page.getByTestId("entry-template-loading")).toBeVisible();
+
+  releaseTemplates?.();
+  await expect(
+    page.getByRole("combobox", { name: "Start from a template" }),
+  ).toBeFocused();
+});
+
+test("template picker constrains long paths and exposes the full path", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const leaf = "UnbrokenTemplateSegment".repeat(12);
+  const fqn = `E2E:${unique}:${leaf}`;
+  const response = await page.request.post("/api/transaction-templates", {
+    data: { fqn, records: [{}] },
+  });
+  expect(response.ok(), await response.text()).toBe(true);
+  const templateId = (
+    (await response.json()) as { transaction_template_id: number }
+  ).transaction_template_id;
+
+  await page.goto("/transactions?page=1&pageSize=25");
+  await page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" })
+    .click();
+  const editor = page.getByRole("dialog", { name: "Transaction editor" });
+  await editor.getByRole("tab", { name: "Advanced" }).click();
+  await editor
+    .getByRole("combobox", { name: "Start from a template" })
+    .fill(unique);
+  const option = page.getByRole("option").filter({ hasText: fqn });
+  await expect(option).toBeVisible();
+  const activeLabel = option.getByText(leaf, { exact: true }).first();
+  await expect(activeLabel).toHaveCSS("white-space", "normal");
+  const [optionBox, listboxBox] = await Promise.all([
+    option.boundingBox(),
+    page.getByRole("listbox").boundingBox(),
+  ]);
+  expect(optionBox).not.toBeNull();
+  expect(listboxBox).not.toBeNull();
+  expect(optionBox!.width).toBeLessThanOrEqual(listboxBox!.width);
+  await expect
+    .poll(() =>
+      activeLabel.evaluate(
+        (element) => element.scrollWidth <= element.clientWidth,
+      ),
+    )
+    .toBe(true);
+  await option.locator("[data-slot='tooltip-trigger']").last().hover();
+  await expect(page.getByRole("tooltip")).toHaveText(fqn);
+
+  const deleted = await page.request.delete(
+    `/api/transaction-templates/${templateId}`,
+  );
+  expect(deleted.ok(), await deleted.text()).toBe(true);
+});
+
+test("keeping a restored draft preserves its active tab after a template launch", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const fqn = `E2E:${unique}:Spend launch`;
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const funding = findByFqn(accounts, "cash:Wallet");
+  const merchant = findByFqn(accounts, "merchant:PowellsBooks");
+  const category = findByFqn(categories, "Entertainment:Books");
+  const response = await page.request.post("/api/transaction-templates", {
+    data: {
+      fqn,
+      records: [
+        {
+          account_id: funding.account_id,
+          amount: "-6.00000000",
+          currency: "USD",
+        },
+        {
+          account_id: merchant.account_id,
+          amount: "6.00000000",
+          category_id: category.category_id,
+          currency: "USD",
+        },
+      ],
+    },
+  });
+  expect(response.ok(), await response.text()).toBe(true);
+  const templateId = (
+    (await response.json()) as { transaction_template_id: number }
+  ).transaction_template_id;
+
+  await page.goto("/transactions?page=1&pageSize=25");
+  await page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" })
+    .click();
+  const editor = page.getByRole("dialog", { name: "Transaction editor" });
+  await editor.getByRole("tab", { name: "Income" }).click();
+  await editor.getByLabel("Memo").fill(`Keep ${unique}`);
+  await editor
+    .getByRole("button", { name: "Close transaction editor" })
+    .click();
+
+  await page.keyboard.press("Control+K");
+  await page.getByRole("combobox", { name: "Command search" }).fill(fqn);
+  await page.getByRole("option", { name: `Use ${fqn}` }).click();
+  const replaceDialog = page.getByRole("alertdialog", {
+    name: "Replace entry draft?",
+  });
+  await expect(replaceDialog).toBeVisible();
+  await expect(page.locator("#income-entry-tab")).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await page.keyboard.press("Escape");
+  await expect(replaceDialog).toBeHidden();
+  await expect(editor).toBeVisible();
+  await expect(editor.getByRole("tab", { name: "Income" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(editor.getByLabel("Memo")).toHaveValue(`Keep ${unique}`);
+
+  const deleted = await page.request.delete(
+    `/api/transaction-templates/${templateId}`,
+  );
+  expect(deleted.ok(), await deleted.text()).toBe(true);
+});
+
+test("template picker filters server matches, browses hierarchy, and applies without provenance", async ({
+  page,
+}, testInfo) => {
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const base = `E2ETemplatePicker:${unique}`;
+  const coffeeFqn = `${base}:Food:Coffee`;
+  const teaFqn = `${base}:Food:Tea`;
+  const partialFqn = `${base}:Advanced:Partial`;
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const funding = findByFqn(accounts, "cash:Wallet");
+  const merchant = findByFqn(accounts, "merchant:PowellsBooks");
+  const category = findByFqn(categories, "Entertainment:Books");
+  const createTemplate = async (
+    fqn: string,
+    amount: string,
+    memo: string,
+    complete = true,
+  ): Promise<number> => {
+    const response = await page.request.post("/api/transaction-templates", {
+      data: {
+        fqn,
+        records: [
+          {
+            account_id: funding.account_id,
+            amount: complete ? `-${amount}` : undefined,
+            currency: "USD",
+            memo,
+            tag_ids: [],
+          },
+          {
+            account_id: merchant.account_id,
+            amount,
+            category_id: category.category_id,
+            currency: "USD",
+            memo,
+            tag_ids: [],
+          },
+        ],
+      },
+    });
+    expect(response.ok(), await response.text()).toBe(true);
+    return ((await response.json()) as { transaction_template_id: number })
+      .transaction_template_id;
+  };
+  const [coffeeId, teaId] = await Promise.all([
+    createTemplate(coffeeFqn, "12.50000000", `Coffee ${unique}`),
+    createTemplate(teaFqn, "8.25000000", `Tea ${unique}`, false),
+  ]);
+  const partialResponse = await page.request.post(
+    "/api/transaction-templates",
+    { data: { fqn: partialFqn, records: [{ memo: `Partial ${unique}` }] } },
+  );
+  expect(partialResponse.ok(), await partialResponse.text()).toBe(true);
+  const partialId = (
+    (await partialResponse.json()) as { transaction_template_id: number }
+  ).transaction_template_id;
+
+  await page.goto("/transactions?page=1&pageSize=25");
+  await page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" })
+    .click();
+  const editor = page.getByRole("dialog", { name: "Transaction editor" });
+  const templatePicker = editor.getByRole("combobox", {
+    name: "Start from a template",
+  });
+  await expect(templatePicker).toBeFocused();
+
+  await templatePicker.fill(`${base}:`);
+  await expect(page.getByTestId("entry-template-breadcrumb")).toBeVisible();
+  await expect(
+    page.getByRole("option", { name: new RegExp(`${base}:Food, group`) }),
+  ).toBeVisible();
+  await page
+    .getByRole("option", { name: new RegExp(`${base}:Food, group`) })
+    .click();
+  await expect(page.getByTestId("entry-template-breadcrumb")).toContainText(
+    "Food",
+  );
+  await expect(
+    page.getByRole("option").filter({ hasText: coffeeFqn }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("option").filter({ hasText: partialFqn }),
+  ).toHaveCount(0);
+
+  await templatePicker.fill(unique);
+  await expect(
+    page.getByRole("option").filter({ hasText: coffeeFqn }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("option").filter({ hasText: teaFqn }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("option").filter({ hasText: partialFqn }),
+  ).toHaveCount(0);
+  await templatePicker.fill("Coffee");
+  await templatePicker.press("Enter");
+
+  await expect(templatePicker).toHaveValue("");
+  await expect(templatePicker).toBeFocused();
+  await expect(templatePicker).toHaveAttribute("aria-expanded", "false");
+  await expect(editor.getByRole("tab", { name: "Spend" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(
+    editor.getByRole("combobox", { name: "Funding account" }),
+  ).toHaveValue(funding.fqn);
+  await expect(editor.getByRole("combobox", { name: "Merchant" })).toHaveValue(
+    merchant.fqn,
+  );
+  await expect(editor.getByRole("combobox", { name: "Category" })).toHaveValue(
+    category.fqn,
+  );
+  await expect(
+    editor.getByRole("group", { name: "Merchant 1" }).getByLabel("Amount"),
+  ).toHaveValue("12.5");
+  await expect(editor.getByLabel("Memo")).toHaveValue(`Coffee ${unique}`);
+
+  await editor.getByRole("tab", { name: "Income" }).click();
+  await templatePicker.fill(unique);
+  await expect(
+    page.getByRole("option").filter({ hasText: coffeeFqn }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("option").filter({ hasText: partialFqn }),
+  ).toHaveCount(0);
+  await editor.getByRole("tab", { name: "Advanced" }).click();
+  await templatePicker.fill(unique);
+  await expect(
+    page.getByRole("option").filter({ hasText: coffeeFqn }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("option").filter({ hasText: partialFqn }),
+  ).toBeVisible();
+  await editor.getByRole("tab", { name: "Spend" }).click();
+  await expect(editor.getByLabel("Memo")).toHaveValue(`Coffee ${unique}`);
+
+  await templatePicker.fill("Tea");
+  await templatePicker.press("Enter");
+  const replaceDialog = page.getByRole("alertdialog", {
+    name: "Replace entry draft?",
+  });
+  await expect(replaceDialog).toBeVisible();
+  await replaceDialog.getByRole("button", { name: "Keep draft" }).click();
+  await expect(editor.getByLabel("Memo")).toHaveValue(`Coffee ${unique}`);
+  await expect(templatePicker).toBeFocused();
+  await expect(templatePicker).toHaveAttribute("aria-expanded", "false");
+  await templatePicker.fill("Tea");
+  await templatePicker.press("Enter");
+  await replaceDialog.getByRole("button", { name: "Replace draft" }).click();
+  await expect(editor.getByLabel("Memo")).toHaveValue(`Tea ${unique}`);
+  await expect(
+    editor.getByRole("group", { name: "Merchant 1" }).getByLabel("Amount"),
+  ).toHaveValue("8.25");
+  await expect(templatePicker).toHaveValue("");
+  await expect(templatePicker).toBeFocused();
+  await expect(templatePicker).toHaveAttribute("aria-expanded", "false");
+
+  await editor.getByRole("button", { name: "Clear draft" }).click();
+  const clearDialog = page.getByRole("alertdialog", {
+    name: "Clear entry draft?",
+  });
+  await expect(clearDialog).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(clearDialog).toBeHidden();
+  await expect(editor).toBeVisible();
+  await expect(editor.getByLabel("Memo")).toHaveValue(`Tea ${unique}`);
+  await editor.getByRole("button", { name: "Clear draft" }).click();
+  await clearDialog.getByRole("button", { name: "Clear draft" }).click();
+  await expect(editor.getByLabel("Memo")).toHaveValue("");
+  await expect(templatePicker).toBeFocused();
+  await expect(page.getByRole("button", { name: /undo/i })).toHaveCount(0);
+
+  await editor
+    .getByRole("button", { name: "Close transaction editor" })
+    .click();
+  await page.keyboard.press("Control+K");
+  const commandSearch = page.getByRole("combobox", { name: "Command search" });
+  await commandSearch.fill(coffeeFqn);
+  await page.getByRole("option", { name: `Use ${coffeeFqn}` }).click();
+  await expect(editor.getByRole("tab", { name: "Spend" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(
+    editor.getByRole("group", { name: "Merchant 1" }).getByLabel("Amount"),
+  ).toHaveValue("12.5");
+  await expect(templatePicker).toHaveValue("");
+  await editor
+    .getByRole("button", { name: "Close transaction editor" })
+    .click();
+
+  for (const templateId of [coffeeId, teaId, partialId]) {
+    const response = await page.request.delete(
+      `/api/transaction-templates/${templateId}`,
+    );
+    expect(response.ok(), await response.text()).toBe(true);
+  }
+});
 
 test("entry category picker completes hierarchy segments and preserves full-path escape hatches", async ({
   page,
@@ -701,6 +1108,17 @@ test("keyboard spend entry creates a transaction and keeps sticky fields", async
   ).toHaveValue("bank:Chase:Sapphire");
   await expect(page.getByLabel("Amount")).toHaveValue("");
 
+  await page.getByRole("button", { name: "Clear draft" }).click();
+  const clearDialog = page.getByRole("alertdialog", {
+    name: "Clear entry draft?",
+  });
+  await clearDialog.getByRole("button", { name: "Clear draft" }).click();
+  await expect(page.getByText("Entries this session: 1")).toBeVisible();
+  await expect(page.getByLabel("Start from a template")).toBeFocused();
+  await expect(
+    page.getByRole("combobox", { name: "Funding account" }),
+  ).toHaveValue("");
+
   await page.getByRole("button", { name: "Close transaction editor" }).click();
   await expect(
     page.getByRole("dialog", { name: "Transaction editor" }),
@@ -718,7 +1136,7 @@ test("keyboard spend entry creates a transaction and keeps sticky fields", async
   await committedCurrency.press("ArrowDown");
   await committedCurrency.press("Enter");
   await expect(committedCurrency).toHaveValue("USD");
-  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Close transaction editor" }).click();
   await expect(
     page.getByRole("dialog", { name: "Transaction editor" }),
   ).toBeHidden();

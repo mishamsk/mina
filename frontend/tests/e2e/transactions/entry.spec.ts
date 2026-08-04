@@ -37,7 +37,7 @@ test("the entry modal traps focus while lookups load", async ({ page }) => {
   });
 
   try {
-    await page.goto("/settings");
+    await page.goto("/transactions");
     const launcher = page
       .locator("header")
       .getByRole("button", { name: "New transaction" });
@@ -53,6 +53,165 @@ test("the entry modal traps focus while lookups load", async ({ page }) => {
   } finally {
     releaseCategories();
   }
+});
+
+test("clear draft confirms hand-entered and restored work and deletes persistence", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const memo = `Restored clear ${unique}`;
+  await page.goto("/transactions?page=1&pageSize=25");
+  await page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" })
+    .click();
+  const editor = page.getByRole("dialog", { name: "Transaction editor" });
+  const entryForm = editor.locator("form[role='tabpanel']");
+  const releasePristineDeletion =
+    await delayTransactionEntryDraftDeletion(page);
+  await editor.getByRole("button", { name: "Clear draft" }).click();
+  await expect(entryForm).toHaveAttribute("inert", "");
+  await expect(editor.getByRole("tab", { name: "Income" })).toBeDisabled();
+  await expect(editor.getByLabel("Start from a template")).toBeDisabled();
+  const memoField = editor.getByLabel("Memo");
+  await memoField.evaluate((element) => element.focus());
+  await page.keyboard.type("must not be entered");
+  await expect(memoField).toHaveValue("");
+  await releasePristineDeletion();
+  await expect(entryForm).not.toHaveAttribute("inert", "");
+  await expect(memoField).toBeEditable();
+
+  await memoField.fill(memo);
+  await editor.getByRole("button", { name: "Clear draft" }).click();
+  let clearDialog = page.getByRole("alertdialog", {
+    name: "Clear entry draft?",
+  });
+  await expect(clearDialog).toBeVisible();
+  await clearDialog.getByRole("button", { name: "Keep draft" }).click();
+  await expect(editor.getByLabel("Memo")).toHaveValue(memo);
+  await expect(
+    editor.getByRole("button", { name: "Clear draft" }),
+  ).toBeFocused();
+  await editor
+    .getByRole("button", { name: "Close transaction editor" })
+    .click();
+  await expect
+    .poll(async () => readStoredTransactionEntryDraft(page))
+    .toMatchObject({
+      tabs: { spend: { memo } },
+    });
+
+  await page.reload();
+  await page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" })
+    .click();
+  await expect(editor.getByLabel("Memo")).toHaveValue(memo);
+  await editor.getByRole("button", { name: "Clear draft" }).click();
+  clearDialog = page.getByRole("alertdialog", {
+    name: "Clear entry draft?",
+  });
+  await clearDialog.getByRole("button", { name: "Clear draft" }).click();
+  await expect(editor.getByLabel("Memo")).toHaveValue("");
+  await expect(editor.getByLabel("Start from a template")).toBeFocused();
+  await expect
+    .poll(async () => readStoredTransactionEntryDraft(page))
+    .toBeUndefined();
+  await expect(page.getByRole("button", { name: /undo/i })).toHaveCount(0);
+});
+
+test("each unavailable-lookup session can clear its restored draft", async ({
+  page,
+}, testInfo) => {
+  const memo = `Unavailable lookup draft ${testInfo.project.name} ${Date.now()}`;
+  const laterMemo = `Later unavailable draft ${testInfo.project.name} ${Date.now()}`;
+  const tagFqn = `E2EUnavailable:${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  await page.goto("/transactions?page=1&pageSize=25");
+  await page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" })
+    .click();
+  const editor = page.getByRole("dialog", { name: "Transaction editor" });
+  await editor.getByLabel("Memo").fill(memo);
+  await editor
+    .getByRole("button", { name: "Close transaction editor" })
+    .click();
+  await expect
+    .poll(async () => readStoredTransactionEntryDraft(page))
+    .toMatchObject({ tabs: { spend: { memo } } });
+
+  await page.route("**/api/categories?**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      json: { error: { code: "internal_error", message: "lookups down" } },
+      status: 500,
+    });
+  });
+  await page.reload();
+  await page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" })
+    .click();
+  await expect(editor.getByText("Editor resources unavailable")).toBeVisible();
+  await editor.getByRole("button", { name: "Clear draft" }).click();
+  const clearDialog = page.getByRole("alertdialog", {
+    name: "Clear entry draft?",
+  });
+  await clearDialog.getByRole("button", { name: "Clear draft" }).click();
+  await expect
+    .poll(async () => readStoredTransactionEntryDraft(page))
+    .toBeUndefined();
+  await expect(editor.getByRole("button", { name: "Retry" })).toBeFocused();
+
+  await editor
+    .getByRole("button", { name: "Close transaction editor" })
+    .click();
+  await page.unroute("**/api/categories?**");
+  await page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" })
+    .click();
+  await expect(editor.getByLabel("Start from a template")).toBeFocused();
+  await expect(editor.getByLabel("Memo")).toHaveValue("");
+
+  await editor.getByLabel("Memo").fill(laterMemo);
+  await expect
+    .poll(async () => readStoredTransactionEntryDraft(page))
+    .toMatchObject({ tabs: { spend: { memo: laterMemo } } });
+  await page.route("**/api/categories?**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      json: {
+        error: { code: "internal_error", message: "lookups down again" },
+      },
+      status: 500,
+    });
+  });
+  const lookupFailure = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === "/api/categories" &&
+      response.request().method() === "GET" &&
+      response.status() === 500,
+  );
+  const tagsPicker = editor.getByRole("combobox", { name: "Tags" });
+  await tagsPicker.fill(tagFqn);
+  await expect(
+    page.getByRole("option", { name: `Create ${tagFqn}` }),
+  ).toBeVisible();
+  await tagsPicker.press("Enter");
+  await lookupFailure;
+
+  await expect(editor.getByText("lookups down again")).toBeVisible();
+  const laterClearButton = editor.getByRole("button", { name: "Clear draft" });
+  await expect(laterClearButton).toBeEnabled();
+  await laterClearButton.click();
+  await page
+    .getByRole("alertdialog", { name: "Clear entry draft?" })
+    .getByRole("button", { name: "Clear draft" })
+    .click();
+  await expect
+    .poll(async () => readStoredTransactionEntryDraft(page))
+    .toBeUndefined();
 });
 
 test("pristine create drafts do not block saved transaction launches", async ({
@@ -853,10 +1012,18 @@ test("advanced journal account picker keeps suggestions filtered but resolves ex
     secondRecord.getByRole("combobox", { name: "Account" }),
     "correction",
   );
+  const correctionOption = page
+    .locator("#advanced-record-1-account-options")
+    .getByRole("option")
+    .filter({ hasText: correctionAccount.fqn });
+  await expect(correctionOption).toBeVisible();
   await expect(
-    page
-      .locator("#advanced-record-1-account-options")
-      .getByText(correctionAccount.fqn),
+    correctionOption.locator(".text-muted-foreground", {
+      hasText: "system:",
+    }),
+  ).toBeVisible();
+  await expect(
+    correctionOption.locator(".text-foreground", { hasText: "correction" }),
   ).toBeVisible();
   await chooseOptionByKeyboard(
     page,
@@ -885,6 +1052,21 @@ test("advanced journal account picker keeps suggestions filtered but resolves ex
   ).toContainText("No matches");
   await hiddenAccountPicker.fill(hiddenFlowFqn);
   await expect(hiddenAccountPicker).toHaveValue(hiddenFlowFqn);
+  const hiddenMarker = fourthRecord.getByLabel("Hidden", { exact: true });
+  await expect(hiddenMarker).toBeVisible();
+  const [pickerBox, markerBox] = await Promise.all([
+    hiddenAccountPicker.boundingBox(),
+    hiddenMarker.boundingBox(),
+  ]);
+  expect(pickerBox).not.toBeNull();
+  expect(markerBox).not.toBeNull();
+  expect(
+    Math.abs(
+      pickerBox!.y +
+        pickerBox!.height / 2 -
+        (markerBox!.y + markerBox!.height / 2),
+    ),
+  ).toBeLessThanOrEqual(1);
   await chooseOptionByKeyboard(
     page,
     "Category",
@@ -1070,10 +1252,10 @@ test("entry modal deep links compose with history and report missing transaction
   });
 
   await page.goto("/overview");
-  await page
-    .locator("main")
-    .getByRole("button", { name: "New transaction" })
-    .click();
+  const overviewHeading = page.getByRole("heading", { name: "Overview" });
+  await expect(overviewHeading).toBeVisible();
+  await overviewHeading.focus();
+  await page.keyboard.press("n");
   await expect(page).toHaveURL(/[?&]entry=new(?:&|$)/);
   await expect(entryModal).toBeVisible();
   await page.goBack();

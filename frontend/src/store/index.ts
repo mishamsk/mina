@@ -123,6 +123,29 @@ export {
   useTagsStore,
 } from "./tags";
 export {
+  closeTemplateEditor,
+  getTemplateEditorSnapshot,
+  openEditTemplateEditor,
+  openNewTemplateEditor,
+  type TemplateEditorLaunch,
+  useTemplateEditorView,
+} from "./template-editor";
+export {
+  getTransactionTemplatesSnapshot,
+  invalidateTransactionTemplates,
+  isCurrentTransactionTemplatesLoad,
+  removeTransactionTemplate,
+  restructureTransactionTemplates,
+  setTransactionTemplates,
+  setTransactionTemplatesError,
+  setTransactionTemplatesLoading,
+  startTransactionTemplatesLoad,
+  type TransactionTemplatesSnapshot,
+  upsertTransactionTemplate,
+  useTransactionTemplatesStore,
+  useTransactionTemplatesView,
+} from "./templates";
+export {
   cancelDeferredTransactionEntryOpen,
   exitTransactionEditModeForEntry,
   getTransactionEditModeSnapshot,

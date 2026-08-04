@@ -57,19 +57,17 @@ func TestTransactionTemplateCreateReadListScenarios(t *testing.T) {
 	fullCurrency := "USD"
 	debitAmount := "-30"
 	creditAmount := "20"
-	reconciliationStatus := httpclient.Unreconciled
 	full := createTransactionTemplate(t, client, httpclient.TransactionTemplateWriteRequest{
 		Fqn: "Transfers:Planning",
 		Records: []httpclient.TransactionTemplateRecordRequest{
 			{
-				CategoryId:           apptest.Int64Ptr(refs.CategoryID),
-				AccountId:            &refs.CheckingAccountID,
-				MemberId:             &refs.MemberID,
-				Currency:             &fullCurrency,
-				Amount:               &debitAmount,
-				TagIds:               &coffeeTags,
-				Memo:                 &fullMemo,
-				ReconciliationStatus: &reconciliationStatus,
+				CategoryId: apptest.Int64Ptr(refs.CategoryID),
+				AccountId:  &refs.CheckingAccountID,
+				MemberId:   &refs.MemberID,
+				Currency:   &fullCurrency,
+				Amount:     &debitAmount,
+				TagIds:     &coffeeTags,
+				Memo:       &fullMemo,
 			},
 			{
 				CategoryId: apptest.Int64Ptr(refs.CategoryID),
@@ -84,12 +82,9 @@ func TestTransactionTemplateCreateReadListScenarios(t *testing.T) {
 	if len(fullRead.JSON200.Records) != 2 {
 		t.Fatalf("full template record count = %d, want 2; body %+v", len(fullRead.JSON200.Records), fullRead.JSON200)
 	}
-	assertRichTemplateRecord(t, fullRead.JSON200.Records[0], refs, debitAmount, fullMemo, reconciliationStatus)
+	assertRichTemplateRecord(t, fullRead.JSON200.Records[0], refs, debitAmount, fullMemo)
 	if fullRead.JSON200.Records[1].Amount == nil || *fullRead.JSON200.Records[1].Amount != "20.00000000" {
 		t.Fatalf("second amount = %v, want 20.00000000", fullRead.JSON200.Records[1].Amount)
-	}
-	if fullRead.JSON200.Records[1].ReconciliationStatus != nil {
-		t.Fatalf("second reconciliation status = %v, want nil", fullRead.JSON200.Records[1].ReconciliationStatus)
 	}
 
 	list, err := client.REST().ListTransactionTemplatesWithResponse(context.Background(), nil)
@@ -155,6 +150,341 @@ func TestTransactionTemplateCreateReadListScenarios(t *testing.T) {
 		partial.JSON201.TransactionTemplateId,
 		full.JSON201.TransactionTemplateId,
 	})
+}
+
+func TestTransactionTemplateDerivedShorthandCompatibilities(t *testing.T) {
+	client := newSharedClient(t)
+	fixture := newSemanticFixture(t, client)
+	tag := client.Scenario().Tag("Templates:Shorthand")
+	member := client.Scenario().Member("Template Shorthand Member")
+	systems := fixedSystemAccounts(t, client)
+	memo := "Shared template defaults"
+	tags := []int64{tag.TagId}
+	currencyUSD := "USD"
+	currencyEUR := "EUR"
+	record := func(accountID int64, categoryID *int64, currency, amount string) httpclient.TransactionTemplateRecordRequest {
+		return httpclient.TransactionTemplateRecordRequest{
+			AccountId:  &accountID,
+			CategoryId: categoryID,
+			Currency:   &currency,
+			Amount:     &amount,
+			MemberId:   &member.MemberId,
+			TagIds:     &tags,
+			Memo:       &memo,
+		}
+	}
+
+	created := map[string]httpclient.TransactionTemplate{}
+	create := func(name string, records []httpclient.TransactionTemplateRecordRequest) httpclient.TransactionTemplate {
+		t.Helper()
+		response := createTransactionTemplate(t, client, httpclient.TransactionTemplateWriteRequest{
+			Fqn:     "Shorthand:" + name,
+			Records: records,
+		})
+		created[name] = *response.JSON201
+		return *response.JSON201
+	}
+
+	spend := create("Spend", []httpclient.TransactionTemplateRecordRequest{
+		record(fixture.checking.AccountId, nil, currencyUSD, "-12"),
+		record(fixture.restaurant.AccountId, &fixture.expense.CategoryId, currencyUSD, "5"),
+		record(fixture.supermarket.AccountId, &fixture.groceries.CategoryId, currencyUSD, "7"),
+	})
+	assertTemplateCompatibleShorthands(t, spend, []httpclient.TransactionTemplateShorthandType{httpclient.Spend}, "create spend")
+
+	sparseSpendRecords := []httpclient.TransactionTemplateRecordRequest{
+		record(fixture.checking.AccountId, nil, currencyUSD, "-12"),
+		record(fixture.restaurant.AccountId, &fixture.expense.CategoryId, currencyUSD, "12"),
+	}
+	sparseSpendRecords[1].MemberId = nil
+	sparseSpendRecords[1].Memo = nil
+	sparseSpend := create("Sparse spend metadata", sparseSpendRecords)
+	assertTemplateCompatibleShorthands(t, sparseSpend, []httpclient.TransactionTemplateShorthandType{httpclient.Spend}, "create sparse spend metadata")
+
+	emptyMemo := ""
+	emptyMemoRecords := []httpclient.TransactionTemplateRecordRequest{
+		record(fixture.checking.AccountId, nil, currencyUSD, "-4"),
+		record(fixture.restaurant.AccountId, &fixture.expense.CategoryId, currencyUSD, "4"),
+	}
+	for index := range emptyMemoRecords {
+		emptyMemoRecords[index].Memo = &emptyMemo
+	}
+	emptyMemoSpend := create("Empty memo", emptyMemoRecords)
+	assertTemplateCompatibleShorthands(t, emptyMemoSpend, []httpclient.TransactionTemplateShorthandType{httpclient.Spend}, "create empty memo spend")
+
+	income := create("Income", []httpclient.TransactionTemplateRecordRequest{
+		record(fixture.employer.AccountId, &fixture.salary.CategoryId, currencyUSD, "-100"),
+		record(fixture.checking.AccountId, nil, currencyUSD, "100"),
+	})
+	assertTemplateCompatibleShorthands(t, income, []httpclient.TransactionTemplateShorthandType{httpclient.Income}, "create income")
+
+	refund := create("Refund", []httpclient.TransactionTemplateRecordRequest{
+		record(fixture.restaurant.AccountId, &fixture.expense.CategoryId, currencyUSD, "-20"),
+		record(fixture.checking.AccountId, nil, currencyUSD, "20"),
+	})
+	assertTemplateCompatibleShorthands(t, refund, []httpclient.TransactionTemplateShorthandType{httpclient.Refund}, "create refund")
+
+	transfer := create("Transfer", []httpclient.TransactionTemplateRecordRequest{
+		record(fixture.checking.AccountId, nil, currencyUSD, "-105"),
+		record(fixture.savings.AccountId, nil, currencyUSD, "100"),
+		record(fixture.fees.AccountId, &fixture.feesCategory.CategoryId, currencyUSD, "5"),
+	})
+	assertTemplateCompatibleShorthands(t, transfer, []httpclient.TransactionTemplateShorthandType{httpclient.Transfer}, "create charged transfer")
+
+	partialChargedTransferRecords := []httpclient.TransactionTemplateRecordRequest{
+		record(fixture.checking.AccountId, nil, currencyUSD, "-105"),
+		record(fixture.savings.AccountId, nil, currencyUSD, "100"),
+		record(fixture.fees.AccountId, &fixture.feesCategory.CategoryId, currencyUSD, "5"),
+	}
+	partialChargedTransferRecords[2].Amount = nil
+	partialChargedTransfer := create("Partial charged transfer", partialChargedTransferRecords)
+	assertTemplateCompatibleShorthands(t, partialChargedTransfer, []httpclient.TransactionTemplateShorthandType{httpclient.Transfer}, "create charged transfer without charge amount")
+
+	party := client.Scenario().AccountWithType("people:Templates:Jordan", httpclient.WritableAccountTypeParty)
+	partyTransfer := create("Party transfer", []httpclient.TransactionTemplateRecordRequest{
+		record(fixture.checking.AccountId, nil, currencyUSD, "-105"),
+		record(party.AccountId, nil, currencyUSD, "100"),
+		record(fixture.fees.AccountId, &fixture.feesCategory.CategoryId, currencyUSD, "5"),
+	})
+	assertTemplateCompatibleShorthands(t, partyTransfer, []httpclient.TransactionTemplateShorthandType{httpclient.Transfer}, "create charged transfer to party")
+
+	ordinaryTransfer := create("Ordinary transfer", []httpclient.TransactionTemplateRecordRequest{
+		record(fixture.checking.AccountId, nil, currencyUSD, "-80"),
+		record(fixture.savings.AccountId, nil, currencyUSD, "80"),
+	})
+	assertTemplateCompatibleShorthands(t, ordinaryTransfer, []httpclient.TransactionTemplateShorthandType{httpclient.Transfer}, "create transfer")
+
+	exchange := create("Exchange", []httpclient.TransactionTemplateRecordRequest{
+		record(fixture.checking.AccountId, nil, currencyUSD, "-110"),
+		record(systems["system:exchange"].AccountId, nil, currencyUSD, "110"),
+		record(fixture.cashEUR.AccountId, nil, currencyEUR, "100"),
+		record(systems["system:exchange"].AccountId, nil, currencyEUR, "-100"),
+	})
+	assertTemplateCompatibleShorthands(t, exchange, nil, "create exchange")
+
+	amountlessExpenseRecords := []httpclient.TransactionTemplateRecordRequest{
+		record(fixture.checking.AccountId, nil, currencyUSD, "-20"),
+		record(fixture.restaurant.AccountId, &fixture.expense.CategoryId, currencyUSD, "20"),
+	}
+	for index := range amountlessExpenseRecords {
+		amountlessExpenseRecords[index].Amount = nil
+		amountlessExpenseRecords[index].Currency = nil
+	}
+	amountlessExpense := create("Amountless expense", amountlessExpenseRecords)
+	assertTemplateCompatibleShorthands(
+		t,
+		amountlessExpense,
+		[]httpclient.TransactionTemplateShorthandType{httpclient.Spend, httpclient.Refund},
+		"amountless expense",
+	)
+
+	amountlessMultiMerchantRecords := []httpclient.TransactionTemplateRecordRequest{
+		record(fixture.checking.AccountId, nil, currencyUSD, "-12"),
+		record(fixture.restaurant.AccountId, &fixture.expense.CategoryId, currencyUSD, "5"),
+		record(fixture.supermarket.AccountId, &fixture.groceries.CategoryId, currencyUSD, "7"),
+	}
+	for index := range amountlessMultiMerchantRecords {
+		amountlessMultiMerchantRecords[index].Amount = nil
+	}
+	amountlessMultiMerchant := create("Amountless multi-merchant expense", amountlessMultiMerchantRecords)
+	assertTemplateCompatibleShorthands(
+		t,
+		amountlessMultiMerchant,
+		[]httpclient.TransactionTemplateShorthandType{httpclient.Spend},
+		"amountless multi-merchant expense",
+	)
+
+	partlyFilledExpenseRecords := []httpclient.TransactionTemplateRecordRequest{
+		record(fixture.checking.AccountId, nil, currencyUSD, "20"),
+		record(fixture.restaurant.AccountId, &fixture.expense.CategoryId, currencyUSD, "-20"),
+	}
+	partlyFilledExpenseRecords[1].Amount = nil
+	partlyFilledExpense := create("Partly filled expense", partlyFilledExpenseRecords)
+	assertTemplateCompatibleShorthands(
+		t,
+		partlyFilledExpense,
+		[]httpclient.TransactionTemplateShorthandType{httpclient.Spend, httpclient.Refund},
+		"partly filled expense ignores all amounts",
+	)
+
+	amountlessIncomeRecords := []httpclient.TransactionTemplateRecordRequest{
+		record(fixture.employer.AccountId, &fixture.salary.CategoryId, currencyUSD, "-100"),
+		record(fixture.checking.AccountId, nil, currencyUSD, "100"),
+	}
+	for index := range amountlessIncomeRecords {
+		amountlessIncomeRecords[index].Amount = nil
+		amountlessIncomeRecords[index].Currency = nil
+	}
+	amountlessIncome := create("Amountless income", amountlessIncomeRecords)
+	assertTemplateCompatibleShorthands(t, amountlessIncome, []httpclient.TransactionTemplateShorthandType{httpclient.Income}, "amountless income")
+
+	partlyFilledIncomeRecords := []httpclient.TransactionTemplateRecordRequest{
+		record(fixture.employer.AccountId, &fixture.salary.CategoryId, currencyUSD, "-100"),
+		record(fixture.checking.AccountId, nil, currencyUSD, "100"),
+	}
+	partlyFilledIncomeRecords[1].Amount = nil
+	partlyFilledIncome := create("Partly filled income", partlyFilledIncomeRecords)
+	assertTemplateCompatibleShorthands(t, partlyFilledIncome, []httpclient.TransactionTemplateShorthandType{httpclient.Income}, "partly filled income ignores all amounts")
+
+	amountlessTransferRecords := []httpclient.TransactionTemplateRecordRequest{
+		record(fixture.checking.AccountId, nil, currencyUSD, "-80"),
+		record(fixture.savings.AccountId, nil, currencyUSD, "80"),
+	}
+	for index := range amountlessTransferRecords {
+		amountlessTransferRecords[index].Amount = nil
+	}
+	amountlessTransfer := create("Amountless transfer", amountlessTransferRecords)
+	assertTemplateCompatibleShorthands(t, amountlessTransfer, nil, "amountless transfer")
+
+	partlyFilledTransferRecords := []httpclient.TransactionTemplateRecordRequest{
+		record(fixture.checking.AccountId, nil, currencyUSD, "-80"),
+		record(fixture.savings.AccountId, nil, currencyUSD, "80"),
+	}
+	partlyFilledTransferRecords[1].Amount = nil
+	partlyFilledTransfer := create("Partly filled transfer", partlyFilledTransferRecords)
+	assertTemplateCompatibleShorthands(t, partlyFilledTransfer, nil, "partly filled transfer requires both directional amounts")
+
+	for name, template := range created {
+		read := getTransactionTemplate(t, client, template.TransactionTemplateId)
+		assertTemplateCompatibleShorthands(t, *read.JSON200, template.CompatibleShorthands, "get "+name)
+	}
+	list, err := client.REST().ListTransactionTemplatesWithResponse(context.Background(), nil)
+	if err != nil || list.StatusCode() != http.StatusOK {
+		t.Fatalf("list shorthand templates status = %d, err = %v; body %s", list.StatusCode(), err, list.Body)
+	}
+	for name, template := range created {
+		index := slices.IndexFunc(list.JSON200.TransactionTemplates, func(candidate httpclient.TransactionTemplate) bool {
+			return candidate.TransactionTemplateId == template.TransactionTemplateId
+		})
+		if index < 0 {
+			t.Fatalf("list missing %s template id %d", name, template.TransactionTemplateId)
+		}
+		assertTemplateCompatibleShorthands(t, list.JSON200.TransactionTemplates[index], template.CompatibleShorthands, "list "+name)
+	}
+
+	replaced, err := client.REST().ReplaceTransactionTemplateWithResponse(context.Background(), transfer.TransactionTemplateId, httpclient.TransactionTemplateWriteRequest{
+		Fqn: "Shorthand:Transfer",
+		Records: []httpclient.TransactionTemplateRecordRequest{
+			record(fixture.employer.AccountId, &fixture.salary.CategoryId, currencyUSD, "-75"),
+			record(fixture.savings.AccountId, nil, currencyUSD, "75"),
+		},
+	})
+	if err != nil || replaced.StatusCode() != http.StatusOK {
+		t.Fatalf("replace shorthand template status = %d, err = %v; body %s", replaced.StatusCode(), err, replaced.Body)
+	}
+	assertTemplateCompatibleShorthands(t, *replaced.JSON200, []httpclient.TransactionTemplateShorthandType{httpclient.Income}, "replace")
+	assertTemplateCompatibleShorthands(t, *getTransactionTemplate(t, client, transfer.TransactionTemplateId).JSON200, []httpclient.TransactionTemplateShorthandType{httpclient.Income}, "get after replace")
+
+	owned := httpclient.WritableAccountTypeOwned
+	updated, err := client.REST().UpdateAccountWithResponse(context.Background(), fixture.restaurant.AccountId, httpclient.UpdateAccountRequest{AccountType: &owned})
+	if err != nil || updated.StatusCode() != http.StatusOK {
+		t.Fatalf("update shorthand reference semantics status = %d, err = %v; body %s", updated.StatusCode(), err, updated.Body)
+	}
+	assertTemplateCompatibleShorthands(t, *getTransactionTemplate(t, client, spend.TransactionTemplateId).JSON200, nil, "account semantic change")
+}
+
+func TestTransactionTemplateShorthandConservativeNoMatch(t *testing.T) {
+	client := newSharedClient(t)
+	fixture := newSemanticFixture(t, client)
+	systems := fixedSystemAccounts(t, client)
+	usd := "USD"
+	eur := "EUR"
+	record := func(accountID int64, categoryID *int64, currency, amount string) httpclient.TransactionTemplateRecordRequest {
+		return httpclient.TransactionTemplateRecordRequest{AccountId: &accountID, CategoryId: categoryID, Currency: &currency, Amount: &amount}
+	}
+
+	tests := []struct {
+		name    string
+		records []httpclient.TransactionTemplateRecordRequest
+	}{
+		{name: "insufficient", records: []httpclient.TransactionTemplateRecordRequest{{CategoryId: &fixture.expense.CategoryId}}},
+		{name: "account currency mismatch", records: []httpclient.TransactionTemplateRecordRequest{
+			record(fixture.checking.AccountId, nil, eur, "-10"),
+			record(fixture.restaurant.AccountId, &fixture.expense.CategoryId, eur, "10"),
+		}},
+		{name: "category intent mismatch", records: []httpclient.TransactionTemplateRecordRequest{
+			record(fixture.checking.AccountId, nil, usd, "-10"),
+			record(fixture.employer.AccountId, &fixture.salary.CategoryId, usd, "10"),
+		}},
+		{name: "lossy imbalance", records: []httpclient.TransactionTemplateRecordRequest{
+			record(fixture.checking.AccountId, nil, usd, "-9"),
+			record(fixture.restaurant.AccountId, &fixture.expense.CategoryId, usd, "10"),
+		}},
+		{name: "ambiguous balances", records: []httpclient.TransactionTemplateRecordRequest{
+			record(fixture.checking.AccountId, nil, usd, "-10"),
+			record(fixture.savings.AccountId, nil, usd, "5"),
+			record(fixture.cash.AccountId, nil, usd, "5"),
+		}},
+		{name: "mixed", records: []httpclient.TransactionTemplateRecordRequest{
+			record(fixture.restaurant.AccountId, &fixture.expense.CategoryId, usd, "5"),
+			record(fixture.employer.AccountId, &fixture.salary.CategoryId, usd, "-5"),
+		}},
+		{name: "adjustment", records: []httpclient.TransactionTemplateRecordRequest{
+			record(fixture.checking.AccountId, nil, usd, "10"),
+			record(systems["system:correction"].AccountId, nil, usd, "-10"),
+		}},
+		{name: "clawback", records: []httpclient.TransactionTemplateRecordRequest{
+			record(fixture.checking.AccountId, nil, usd, "-10"),
+			record(fixture.employer.AccountId, &fixture.salary.CategoryId, usd, "10"),
+		}},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			created := createTransactionTemplate(t, client, httpclient.TransactionTemplateWriteRequest{
+				Fqn:     "NoMatch:" + test.name,
+				Records: test.records,
+			})
+			assertTemplateCompatibleShorthands(t, *created.JSON201, nil, "create")
+			read := getTransactionTemplate(t, client, created.JSON201.TransactionTemplateId)
+			assertTemplateCompatibleShorthands(t, *read.JSON200, nil, "get")
+		})
+	}
+
+	firstMemo := "first"
+	secondMemo := "second"
+	nonuniform := []httpclient.TransactionTemplateRecordRequest{
+		record(fixture.checking.AccountId, nil, usd, "-10"),
+		record(fixture.restaurant.AccountId, &fixture.expense.CategoryId, usd, "10"),
+	}
+	nonuniform[0].Memo = &firstMemo
+	nonuniform[1].Memo = &secondMemo
+	created := createTransactionTemplate(t, client, httpclient.TransactionTemplateWriteRequest{Fqn: "NoMatch:nonuniform defaults", Records: nonuniform})
+	assertTemplateCompatibleShorthands(t, *created.JSON201, nil, "nonuniform memo")
+
+	firstMember := client.Scenario().Member("First nonuniform template member")
+	secondMember := client.Scenario().Member("Second nonuniform template member")
+	nonuniformMembers := []httpclient.TransactionTemplateRecordRequest{
+		record(fixture.checking.AccountId, nil, usd, "-10"),
+		record(fixture.restaurant.AccountId, &fixture.expense.CategoryId, usd, "10"),
+	}
+	nonuniformMembers[0].MemberId = &firstMember.MemberId
+	nonuniformMembers[1].MemberId = &secondMember.MemberId
+	created = createTransactionTemplate(t, client, httpclient.TransactionTemplateWriteRequest{Fqn: "NoMatch:nonuniform members", Records: nonuniformMembers})
+	assertTemplateCompatibleShorthands(t, *created.JSON201, nil, "nonuniform member")
+
+	firstTag := client.Scenario().Tag("Templates:Nonuniform:First")
+	secondTag := client.Scenario().Tag("Templates:Nonuniform:Second")
+	firstTags := []int64{firstTag.TagId}
+	secondTags := []int64{secondTag.TagId}
+	nonuniformTags := []httpclient.TransactionTemplateRecordRequest{
+		record(fixture.checking.AccountId, nil, usd, "-10"),
+		record(fixture.restaurant.AccountId, &fixture.expense.CategoryId, usd, "10"),
+	}
+	nonuniformTags[0].TagIds = &firstTags
+	nonuniformTags[1].TagIds = &secondTags
+	created = createTransactionTemplate(t, client, httpclient.TransactionTemplateWriteRequest{Fqn: "NoMatch:nonuniform tags", Records: nonuniformTags})
+	assertTemplateCompatibleShorthands(t, *created.JSON201, nil, "nonuniform tags")
+}
+
+func assertTemplateCompatibleShorthands(t *testing.T, template httpclient.TransactionTemplate, want []httpclient.TransactionTemplateShorthandType, label string) {
+	t.Helper()
+	if template.CompatibleShorthands == nil {
+		t.Fatalf("%s compatible shorthands = nil, want required array", label)
+	}
+	if !slices.Equal(template.CompatibleShorthands, want) {
+		t.Fatalf("%s compatible shorthands = %v, want %v", label, template.CompatibleShorthands, want)
+	}
 }
 
 func TestTransactionTemplateReplaceDeleteAndDuplicateFQN(t *testing.T) {
@@ -555,14 +885,6 @@ func TestTransactionTemplateValidationErrors(t *testing.T) {
 		},
 	})
 
-	unsupportedReconciliationStatus := httpclient.ReconciliationStatus("unknown")
-	assertInvalidTransactionTemplateCreate(t, client, "unsupported reconciliation status", httpclient.TransactionTemplateWriteRequest{
-		Fqn: "Invalid:ReconciliationStatus",
-		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: apptest.Int64Ptr(refs.CategoryID), ReconciliationStatus: &unsupportedReconciliationStatus},
-		},
-	})
-
 	missingRecords, err := client.REST().CreateTransactionTemplateWithBodyWithResponse(context.Background(), "application/json", apptest.JSONReader(map[string]any{
 		"fqn": "Invalid:MissingRecords",
 	}))
@@ -666,10 +988,12 @@ func TestTransactionTemplateReferenceChecks(t *testing.T) {
 	})
 
 	hidden := true
+	currencyUSD := "USD"
 	hiddenCategory := client.Scenario().CategoryWithHidden("Templates:HiddenCategory", hidden)
 	hiddenAccountResponse, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
 		Fqn:         "expense:HiddenMerchant",
 		AccountType: httpclient.WritableAccountTypeFlow,
+		Currency:    &currencyUSD,
 		IsHidden:    &hidden,
 	})
 	if err != nil {
@@ -677,6 +1001,18 @@ func TestTransactionTemplateReferenceChecks(t *testing.T) {
 	}
 	if hiddenAccountResponse.StatusCode() != http.StatusCreated {
 		t.Fatalf("hidden account status = %d, want %d; body %s", hiddenAccountResponse.StatusCode(), http.StatusCreated, hiddenAccountResponse.Body)
+	}
+	hiddenFundingResponse, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
+		Fqn:         "checking:HiddenFunding",
+		AccountType: httpclient.WritableAccountTypeOwned,
+		Currency:    &currencyUSD,
+		IsHidden:    &hidden,
+	})
+	if err != nil {
+		t.Fatalf("hidden funding account request: %v", err)
+	}
+	if hiddenFundingResponse.StatusCode() != http.StatusCreated {
+		t.Fatalf("hidden funding account status = %d, want %d; body %s", hiddenFundingResponse.StatusCode(), http.StatusCreated, hiddenFundingResponse.Body)
 	}
 	hiddenTagResponse, err := client.REST().CreateTagWithResponse(context.Background(), httpclient.CreateTagRequest{
 		Fqn:      "Templates:HiddenTag",
@@ -689,23 +1025,34 @@ func TestTransactionTemplateReferenceChecks(t *testing.T) {
 		t.Fatalf("hidden tag status = %d, want %d; body %s", hiddenTagResponse.StatusCode(), http.StatusCreated, hiddenTagResponse.Body)
 	}
 	hiddenTagIDs := []int64{hiddenTagResponse.JSON201.TagId}
+	fundingAmount := "-10"
+	merchantAmount := "10"
 	created := createTransactionTemplate(t, client, httpclient.TransactionTemplateWriteRequest{
 		Fqn: "References:HiddenActive",
 		Records: []httpclient.TransactionTemplateRecordRequest{
 			{
+				AccountId: &hiddenFundingResponse.JSON201.AccountId,
+				Amount:    &fundingAmount,
+				Currency:  &currencyUSD,
+				TagIds:    &hiddenTagIDs,
+			},
+			{
 				CategoryId: apptest.Int64Ptr(hiddenCategory.CategoryId),
 				AccountId:  &hiddenAccountResponse.JSON201.AccountId,
+				Amount:     &merchantAmount,
+				Currency:   &currencyUSD,
 				TagIds:     &hiddenTagIDs,
 			},
 		},
 	})
-	if created.JSON201.Records[0].CategoryId == nil ||
-		*created.JSON201.Records[0].CategoryId != hiddenCategory.CategoryId ||
-		created.JSON201.Records[0].AccountId == nil ||
-		*created.JSON201.Records[0].AccountId != hiddenAccountResponse.JSON201.AccountId {
-		t.Fatalf("hidden active references not returned as selected: %+v", created.JSON201.Records[0])
+	if created.JSON201.Records[1].CategoryId == nil ||
+		*created.JSON201.Records[1].CategoryId != hiddenCategory.CategoryId ||
+		created.JSON201.Records[1].AccountId == nil ||
+		*created.JSON201.Records[1].AccountId != hiddenAccountResponse.JSON201.AccountId {
+		t.Fatalf("hidden active references not returned as selected: %+v", created.JSON201.Records[1])
 	}
-	assertInt64s(t, created.JSON201.Records[0].TagIds, hiddenTagIDs)
+	assertInt64s(t, created.JSON201.Records[1].TagIds, hiddenTagIDs)
+	assertTemplateCompatibleShorthands(t, *created.JSON201, []httpclient.TransactionTemplateShorthandType{httpclient.Spend}, "hidden active references")
 }
 
 func TestTransactionTemplateTransportValidation(t *testing.T) {
@@ -732,6 +1079,39 @@ func TestTransactionTemplateTransportValidation(t *testing.T) {
 	}
 	if unknownField.StatusCode() != http.StatusBadRequest {
 		t.Fatalf("unknown field status = %d, want %d; body %s", unknownField.StatusCode(), http.StatusBadRequest, unknownField.Body)
+	}
+
+	removedRecordFieldBody := map[string]any{
+		"fqn": "Transport:RemovedRecordField",
+		"records": []map[string]any{{
+			"category_id":           refs.CategoryID,
+			"reconciliation_status": "unreconciled",
+		}},
+	}
+	removedCreateField, err := client.REST().CreateTransactionTemplateWithBodyWithResponse(context.Background(), "application/json", apptest.JSONReader(removedRecordFieldBody))
+	if err != nil {
+		t.Fatalf("removed create record field request: %v", err)
+	}
+	if removedCreateField.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("removed create record field status = %d, want %d; body %s", removedCreateField.StatusCode(), http.StatusBadRequest, removedCreateField.Body)
+	}
+
+	replaceTarget := createTransactionTemplate(t, client, httpclient.TransactionTemplateWriteRequest{
+		Fqn:     "Transport:ReplaceTarget",
+		Records: []httpclient.TransactionTemplateRecordRequest{{CategoryId: apptest.Int64Ptr(refs.CategoryID)}},
+	})
+	removedRecordFieldBody["fqn"] = replaceTarget.JSON201.Fqn
+	removedReplaceField, err := client.REST().ReplaceTransactionTemplateWithBodyWithResponse(
+		context.Background(),
+		replaceTarget.JSON201.TransactionTemplateId,
+		"application/json",
+		apptest.JSONReader(removedRecordFieldBody),
+	)
+	if err != nil {
+		t.Fatalf("removed replace record field request: %v", err)
+	}
+	if removedReplaceField.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("removed replace record field status = %d, want %d; body %s", removedReplaceField.StatusCode(), http.StatusBadRequest, removedReplaceField.Body)
 	}
 
 	badPath, err := client.REST().GetTransactionTemplateWithResponse(context.Background(), 0)
@@ -835,14 +1215,13 @@ func assertRequiredOnlyTemplateRecord(t *testing.T, record httpclient.Transactio
 	if record.CategoryId == nil || *record.CategoryId != categoryID {
 		t.Fatalf("category_id = %v, want %d", record.CategoryId, categoryID)
 	}
-	if record.AccountId != nil || record.MemberId != nil || record.Currency != nil || record.Amount != nil || record.Memo != nil || record.ReconciliationStatus != nil {
-		t.Fatalf("optional defaults = account:%v member:%v currency:%v amount:%v memo:%v reconciliation:%v, want all nil",
+	if record.AccountId != nil || record.MemberId != nil || record.Currency != nil || record.Amount != nil || record.Memo != nil {
+		t.Fatalf("optional defaults = account:%v member:%v currency:%v amount:%v memo:%v, want all nil",
 			record.AccountId,
 			record.MemberId,
 			record.Currency,
 			record.Amount,
 			record.Memo,
-			record.ReconciliationStatus,
 		)
 	}
 	if len(record.TagIds) != 0 {
@@ -883,7 +1262,6 @@ func assertRichTemplateRecord(
 	refs transactionTemplateRefs,
 	amount string,
 	memo string,
-	reconciliationStatus httpclient.ReconciliationStatus,
 ) {
 	t.Helper()
 
@@ -904,9 +1282,6 @@ func assertRichTemplateRecord(
 	}
 	if record.Memo == nil || *record.Memo != memo {
 		t.Fatalf("memo = %v, want %q", record.Memo, memo)
-	}
-	if record.ReconciliationStatus == nil || *record.ReconciliationStatus != reconciliationStatus {
-		t.Fatalf("reconciliation_status = %v, want %q", record.ReconciliationStatus, reconciliationStatus)
 	}
 	assertInt64s(t, record.TagIds, []int64{refs.TagID})
 }

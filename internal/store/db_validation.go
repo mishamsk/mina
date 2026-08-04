@@ -19,7 +19,7 @@ import (
 )
 
 // PinnedMigrationContentHash is the validator-reviewed sha256 of embedded migration SQL.
-const PinnedMigrationContentHash = "8c5568e75091258d8fa527cbc38db8f1592ed7c0f2a1cd846088bc74963ac0d4"
+const PinnedMigrationContentHash = "d2b7c75e8982e22e2d35ddcdbcf0d9925a06e44523214618f5fc7b7ef2876359"
 
 const validationTrimSpaceCharactersSQL = `' ' || ` +
 	`chr(9) || chr(10) || chr(11) || chr(12) || chr(13) || ` +

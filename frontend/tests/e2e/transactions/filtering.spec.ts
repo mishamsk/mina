@@ -787,7 +787,9 @@ test("transactions inline recurring occurrences support lifecycle filtering, con
   });
   await expect(entryPanel).toBeVisible();
   await expect(dueRow).toHaveCount(0);
-  await page.keyboard.press("Escape");
+  await entryPanel
+    .getByRole("button", { name: "Close transaction editor" })
+    .click();
   await expect(entryPanel).toHaveCount(0);
   await page.setViewportSize({ width: 700, height: 720 });
 

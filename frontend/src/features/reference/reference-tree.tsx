@@ -128,7 +128,7 @@ const referenceTreeSkeletonGridClass = (
   compact: boolean,
 ) =>
   hasBadgeColumn
-    ? "grid grid-cols-[52%_24%_24%] sm:grid-cols-[minmax(0,1fr)_20%_11.25rem]"
+    ? "grid grid-cols-[52%_24%_24%] sm:grid-cols-[minmax(0,1fr)_20%_var(--reference-tree-actions-width)]"
     : compact
       ? `grid ${compactReferenceTableGridClassName}`
       : "grid grid-cols-[76%_24%] sm:grid-cols-[82%_18%]";
@@ -143,6 +143,9 @@ const referenceTreeClickableRowClassName =
   "hover:bg-[color-mix(in_srgb,var(--band),var(--table-header)_28%)] " +
   "focus-within:bg-[color-mix(in_srgb,var(--band),var(--table-header)_28%)]";
 
+const referenceTreeActionsWidthClassName =
+  "[--reference-tree-actions-width:11.25rem]";
+
 const ReferenceTreeSkeleton = ({
   compact,
   hasBadgeColumn,
@@ -151,6 +154,7 @@ const ReferenceTreeSkeleton = ({
   readonly hasBadgeColumn: boolean;
 }) => (
   <div
+    data-testid="reference-tree-loading"
     className="bg-card border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]"
     aria-hidden="true"
   >
@@ -199,17 +203,19 @@ const nameColumnWidthClass = (hasBadgeColumn: boolean, compact: boolean) =>
 
 const actionsColumnWidthClass = (hasBadgeColumn: boolean, compact: boolean) =>
   hasBadgeColumn
-    ? "w-[24%] px-3 py-2 text-center sm:w-[11.25rem]"
+    ? "w-[24%] px-3 py-2 text-center sm:w-[var(--reference-tree-actions-width)]"
     : compact
       ? `${compactReferenceTableActionsColumnClassName} px-3 py-2 text-right`
       : "w-[24%] px-3 py-2 text-center sm:w-[18%]";
 
 interface ReferenceTreeProps<TLeaf extends ReferenceLeaf, TGroup> {
+  readonly actionsColumnWidthClassName?: string;
   readonly badgeHeader?: string;
   readonly compact?: boolean;
   readonly emptyAction?: ReactNode;
   readonly emptyDescription: string;
   readonly emptyFilteredDescription: string;
+  readonly emptySprite?: ReactNode;
   readonly emptyTitle: string;
   readonly errorMessage?: string;
   readonly groups: readonly TGroup[] | undefined;
@@ -219,7 +225,10 @@ interface ReferenceTreeProps<TLeaf extends ReferenceLeaf, TGroup> {
   readonly loading: boolean;
   readonly loadErrorTitle: string;
   readonly onRetry?: () => void;
-  readonly onRowClick?: (row: ReferenceTreeRow<TLeaf, TGroup>) => void;
+  readonly onRowClick?: (
+    row: ReferenceTreeRow<TLeaf, TGroup>,
+    opener: HTMLElement,
+  ) => void;
   readonly rowActivationLabel?: (
     row: ReferenceTreeRow<TLeaf, TGroup>,
   ) => string;
@@ -252,11 +261,13 @@ export const ReferenceTree = <
   TLeaf extends ReferenceLeaf,
   TGroup extends ReferenceGroup,
 >({
+  actionsColumnWidthClassName,
   badgeHeader,
   compact = false,
   emptyAction,
   emptyDescription,
   emptyFilteredDescription,
+  emptySprite,
   emptyTitle,
   errorMessage,
   groups,
@@ -285,7 +296,11 @@ export const ReferenceTree = <
   if (loading && !leaves) {
     return (
       <div
-        className={compact ? compactReferenceTableFrameClassName : undefined}
+        className={cn(
+          referenceTreeActionsWidthClassName,
+          actionsColumnWidthClassName,
+          compact && compactReferenceTableFrameClassName,
+        )}
       >
         <ReferenceTreeSkeleton
           compact={compact}
@@ -338,6 +353,7 @@ export const ReferenceTree = <
           compact && compactReferenceTableFrameClassName,
         )}
       >
+        {emptySprite}
         <div className="space-y-1">
           <p className="font-heading text-base font-semibold uppercase">
             {emptyTitle}
@@ -355,6 +371,8 @@ export const ReferenceTree = <
     <div
       className={cn(
         referenceTableFrameClassName,
+        referenceTreeActionsWidthClassName,
+        actionsColumnWidthClassName,
         compact && compactReferenceTableFrameClassName,
       )}
       data-testid={referenceTableFrameTestId}
@@ -416,7 +434,7 @@ export const ReferenceTree = <
                     ) {
                       return;
                     }
-                    onRowClick(row);
+                    onRowClick(row, event.currentTarget);
                   }}
                   onKeyDown={(event) => {
                     if (!onRowClick || event.defaultPrevented) {
@@ -431,7 +449,7 @@ export const ReferenceTree = <
                       return;
                     }
                     event.preventDefault();
-                    onRowClick(row);
+                    onRowClick(row, event.currentTarget);
                   }}
                 >
                   <td className="min-w-0 px-3 py-2">

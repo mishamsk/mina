@@ -13,6 +13,7 @@ export interface RestructureSubmitInput {
 interface RestructureDialogProps {
   readonly entityLabel: string;
   readonly errorMessage?: string;
+  readonly escapeDisabled?: boolean;
   readonly fromFqn: string;
   readonly hint: string;
   readonly onClearError?: () => void;
@@ -26,6 +27,7 @@ const title = "Move or rename";
 export const RestructureDialog = ({
   entityLabel,
   errorMessage,
+  escapeDisabled = false,
   fromFqn,
   hint,
   onClearError,
@@ -58,7 +60,7 @@ export const RestructureDialog = ({
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        if (event.defaultPrevented) {
+        if (event.defaultPrevented || escapeDisabled) {
           return;
         }
         event.preventDefault();
@@ -71,7 +73,7 @@ export const RestructureDialog = ({
     return () => {
       document.removeEventListener("keydown", onKeyDown, { capture: true });
     };
-  }, [closeDialog]);
+  }, [closeDialog, escapeDisabled]);
 
   const submit = async () => {
     if (saving) {
@@ -106,6 +108,7 @@ export const RestructureDialog = ({
       role="dialog"
       aria-labelledby={titleId}
       aria-describedby={descriptionId}
+      data-global-shortcut-blocking-overlay
       className="bg-card fixed top-4 right-4 bottom-4 z-50 flex w-[min(520px,calc(100vw-2rem))] max-w-full flex-col border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]"
       tabIndex={-1}
     >

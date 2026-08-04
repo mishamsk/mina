@@ -6,12 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"strings"
 	"time"
 
 	duckdb "github.com/duckdb/duckdb-go/v2"
 	"github.com/mishamsk/mina/internal/services"
-	"github.com/mishamsk/mina/internal/services/transactions"
 	"github.com/mishamsk/mina/internal/services/transactiontemplates"
 )
 
@@ -359,15 +357,14 @@ func insertTransactionTemplateRecord(
 	args = append(args, tagListArgs...)
 	args = append(args,
 		record.Memo,
-		nullableEnumValue(record.ReconciliationStatus),
 	)
 
 	if _, err := tx.ExecContext(
 		ctx,
 		`INSERT INTO `+db.accountingName("transaction_template_record")+` (
-	transaction_template_id, category_id, account_id, member_id, currency, amount, tag_ids, memo, reconciliation_status
+	transaction_template_id, category_id, account_id, member_id, currency, amount, tag_ids, memo
 )
-VALUES (?, ?, ?, ?, ?, ?, `+tagListExpr+`, ?, CAST(? AS `+db.accountingName("reconciliation_status")+`))`,
+VALUES (?, ?, ?, ?, ?, ?, `+tagListExpr+`, ?)`,
 		args...,
 	); err != nil {
 		return fmt.Errorf("insert transaction template record: %w", err)
@@ -388,7 +385,6 @@ func scanTransactionTemplateRecord(scanner transactionTemplateRecordScanner) (tr
 	var amount sql.Null[duckdb.Decimal]
 	var tagIDs []any
 	var memo sql.NullString
-	var reconciliationStatus sql.NullString
 	var createdAt time.Time
 	var updatedAt time.Time
 	var tombstonedAt sql.NullTime
@@ -402,7 +398,6 @@ func scanTransactionTemplateRecord(scanner transactionTemplateRecordScanner) (tr
 		&amount,
 		&tagIDs,
 		&memo,
-		&reconciliationStatus,
 		&createdAt,
 		&updatedAt,
 		&tombstonedAt,
@@ -434,10 +429,6 @@ func scanTransactionTemplateRecord(scanner transactionTemplateRecordScanner) (tr
 	if memo.Valid {
 		record.Memo = &memo.String
 	}
-	if reconciliationStatus.Valid {
-		status := transactions.ReconciliationStatus(strings.ToLower(reconciliationStatus.String))
-		record.ReconciliationStatus = &status
-	}
 	record.CreatedAt = createdAt.UTC()
 	record.UpdatedAt = updatedAt.UTC()
 	record.TombstonedAt = nullableTimeFromSQL(tombstonedAt)
@@ -462,7 +453,7 @@ func transactionTemplateRecordsByTemplateIDs(
 	rows, err := queryer.QueryContext(
 		ctx,
 		`SELECT transaction_template_record_id, transaction_template_id, category_id, account_id, member_id, currency, amount,
-	tag_ids, memo, reconciliation_status, created_at, updated_at, tombstoned_at
+	tag_ids, memo, created_at, updated_at, tombstoned_at
 FROM `+db.accountingName("transaction_template_record")+`
 WHERE transaction_template_id IN (`+placeholders(len(templateIDs))+`) AND tombstoned_at IS NULL
 ORDER BY transaction_template_id ASC, transaction_template_record_id ASC`,
@@ -511,14 +502,6 @@ func activeTransactionTemplateExists(ctx context.Context, queryer rowQuerier, db
 	}
 
 	return true, nil
-}
-
-func nullableEnumValue[T ~string](value *T) any {
-	if value == nil {
-		return nil
-	}
-
-	return enumValue(*value)
 }
 
 var transactionTemplateSortColumns = map[services.SortKey][]string{

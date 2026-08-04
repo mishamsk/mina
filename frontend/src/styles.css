@@ -578,6 +578,17 @@
     }
   }
 
+  @container row-actions (width < 220px) {
+    .row-actions--foldable[data-row-actions-count="7"]
+      :is(.row-actions-buttons, .row-actions-buttons > *) {
+      display: none !important;
+    }
+
+    .row-actions--foldable[data-row-actions-count="7"] .row-actions-overflow {
+      display: inline-flex !important;
+    }
+  }
+
   .account-register-table .account-register-date-column {
     width: 12%;
   }

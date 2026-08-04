@@ -76,6 +76,407 @@ test("cold transaction detail deep link restores outside the list snapshot", asy
   await expectTransactionsPageUrl(page, 1, 25, { q: missingSearch });
 });
 
+test("a captured BlueCash Target spend without amounts is offered for Spend and Refund", async ({
+  page,
+}, testInfo) => {
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const templateFqn = `E2E:${unique}:BlueCash Target`;
+  const accounts = await listFixtures<AccountFixture>(
+    page,
+    "/api/accounts",
+    "accounts",
+  );
+  const blueCash = findByFqn(accounts, "bank:Amex:BlueCash");
+  const target = findByFqn(accounts, "merchant:Target");
+  const transactionsResponse = await page.request.get(
+    `/api/transactions?limit=500&offset=0&sort=initiated_date&sort_dir=desc&account_id=${blueCash.account_id}&search=${encodeURIComponent("Household supplies")}`,
+  );
+  expect(transactionsResponse.ok(), await transactionsResponse.text()).toBe(
+    true,
+  );
+  const transactionsBody = (await transactionsResponse.json()) as {
+    readonly transactions: readonly TransactionDetailFixture[];
+  };
+  const transaction = transactionsBody.transactions.find(
+    (candidate) =>
+      candidate.records.some(
+        (record) => record.account_id === blueCash.account_id,
+      ) &&
+      candidate.records.some(
+        (record) => record.account_id === target.account_id,
+      ),
+  );
+  expect(transaction, "demo BlueCash to Target spend").toBeDefined();
+
+  await page.goto(
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent("Household supplies")}`,
+  );
+  const row = page.locator(
+    `[data-transaction-id="${transaction!.transaction_id}"]`,
+  );
+  await expect(row).toBeVisible();
+  await clickRowAction(page, row, "Create template");
+
+  const templateEditor = page.getByRole("dialog", { name: "New template" });
+  await templateEditor.getByLabel("Template FQN").fill(templateFqn);
+  const createResponsePromise = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/transaction-templates" &&
+      response.request().method() === "POST"
+    );
+  });
+  await templateEditor.getByRole("button", { name: "Create template" }).click();
+  const createResponse = await createResponsePromise;
+  expect(createResponse.status(), await createResponse.text()).toBe(201);
+  const template = (await createResponse.json()) as {
+    readonly compatible_shorthands: readonly string[];
+    readonly records: readonly unknown[];
+    readonly transaction_template_id: number;
+  };
+  expect(template.compatible_shorthands).toEqual(["spend"]);
+  await expect(templateEditor).toHaveCount(0);
+
+  await page.goto("/templates");
+  const templateRow = page
+    .getByTestId("templates-tree-row")
+    .filter({ hasText: templateFqn });
+  await templateRow.getByRole("button", { name: "Edit template" }).click();
+  const editTemplate = page.getByRole("dialog", { name: "Edit template" });
+  const amountFields = editTemplate.getByLabel("Amount (optional)");
+  await expect(amountFields).toHaveCount(2);
+  await amountFields.nth(0).fill("");
+  await amountFields.nth(1).fill("");
+  await editTemplate.getByRole("button", { name: "Save template" }).click();
+  await expect(editTemplate).toHaveCount(0);
+
+  await page.getByRole("button", { name: "New transaction" }).first().click();
+
+  const entryEditor = page.getByRole("dialog", { name: "Transaction editor" });
+  const templatePicker = entryEditor.getByRole("combobox", {
+    name: "Start from a template",
+  });
+  await templatePicker.fill(templateFqn);
+  await templatePicker.press("Enter");
+  await expect(
+    entryEditor.getByRole("heading", { name: "New spend" }),
+  ).toBeVisible();
+  await expect(entryEditor.getByLabel("Funding account")).toHaveValue(
+    blueCash.fqn,
+  );
+  const merchant = entryEditor.getByRole("group", { name: "Merchant 1" });
+  await expect(merchant.getByLabel("Merchant account")).toHaveValue(target.fqn);
+  await expect(merchant.getByLabel("Category")).toHaveValue(
+    "Shopping:Household",
+  );
+  await expect(merchant.getByLabel("Amount")).toHaveValue("");
+  await expect(entryEditor.getByLabel("Member")).toHaveValue("Morgan");
+  await expect(entryEditor.getByLabel("Memo")).toHaveValue(
+    "Household supplies",
+  );
+
+  await entryEditor.getByRole("button", { name: "Clear draft" }).click();
+  await page
+    .getByRole("alertdialog", { name: "Clear entry draft?" })
+    .getByRole("button", { name: "Clear draft" })
+    .click();
+  await entryEditor.getByRole("tab", { name: "Refund" }).click();
+  await templatePicker.fill(templateFqn);
+  await templatePicker.press("Enter");
+  await expect(
+    entryEditor.getByRole("heading", { name: "New refund" }),
+  ).toBeVisible();
+  await expect(entryEditor.getByLabel("Destination account")).toHaveValue(
+    blueCash.fqn,
+  );
+  await expect(entryEditor.getByLabel("Merchant")).toHaveValue(target.fqn);
+  await expect(entryEditor.getByLabel("Category")).toHaveValue(
+    "Shopping:Household",
+  );
+  await expect(entryEditor.getByLabel("Amount")).toHaveValue("");
+
+  const deleteTemplateResponse = await page.request.delete(
+    `/api/transaction-templates/${template.transaction_template_id}`,
+  );
+  expect(deleteTemplateResponse.ok(), await deleteTemplateResponse.text()).toBe(
+    true,
+  );
+});
+
+test("transaction rows and detail create date-free template drafts", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 720, height: 900 });
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const [accounts, categories, tag, member, partyAccount] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+    createTag(page, `E2E:TemplateCapture:${unique}:Reviewed`),
+    createMember(page, `Template capture ${unique}`),
+    createAccount(page, `people:E2E:TemplateCapture:${unique}`, "party", "USD"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
+  const category = findByFqn(categories, "Entertainment:Books");
+  const memo = `E2E template capture ${unique}`;
+  const createResponse = await page.request.post("/api/transactions", {
+    data: {
+      initiated_date: "2026-07-22",
+      records: [
+        {
+          account_id: fundingAccount.account_id,
+          amount: "-30.00000000",
+          category_id: null,
+          currency: "USD",
+          member_id: member.member_id,
+          memo,
+          reconciliation_status: "reconciled",
+          settlement: { status: "posted" },
+          source: "manual",
+          tag_ids: [tag.tag_id],
+        },
+        {
+          account_id: merchantAccount.account_id,
+          amount: "10.00000000",
+          category_id: category.category_id,
+          currency: "USD",
+          member_id: null,
+          memo: `${memo} merchant`,
+          reconciliation_status: "unreconciled",
+          settlement: null,
+          source: "manual",
+          tag_ids: [tag.tag_id],
+        },
+        {
+          account_id: partyAccount.account_id,
+          amount: "20.00000000",
+          category_id: null,
+          currency: "USD",
+          member_id: member.member_id,
+          memo: `${memo} share`,
+          reconciliation_status: "unreconciled",
+          settlement: { status: "pending" },
+          source: "manual",
+          tag_ids: [],
+        },
+      ],
+    },
+  });
+  expect(createResponse.ok(), await createResponse.text()).toBe(true);
+  const transaction = (await createResponse.json()) as TransactionDetailFixture;
+
+  await page.goto(
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(memo)}`,
+  );
+  const row = page.locator(
+    `[data-transaction-id="${transaction.transaction_id}"]`,
+  );
+  await expect(row).toBeVisible();
+  const overflowAction = row.getByRole("button", { name: "More row actions" });
+  await clickRowAction(page, row, "Create template");
+
+  const editor = page.getByRole("dialog", { name: "New template" });
+  await expect(editor.getByLabel("Template FQN")).toBeFocused();
+  await expect(editor.getByLabel("Template FQN")).toHaveValue("");
+  await expect(editor.getByLabel("Date")).toHaveCount(0);
+  await expect(editor).not.toContainText("2026-07-22");
+  const editorRecords = editor
+    .getByLabel("Template records")
+    .locator("section");
+  await expect(editorRecords).toHaveCount(3);
+  await expect(
+    editorRecords.nth(0).getByLabel("Account (optional)"),
+  ).toHaveValue(fundingAccount.fqn);
+  await expect(
+    editorRecords.nth(0).getByLabel("Amount (optional)"),
+  ).toHaveValue("-30");
+  await expect(
+    editorRecords.nth(0).getByLabel("Currency (optional)"),
+  ).toHaveValue("USD");
+  await expect(
+    editorRecords.nth(0).getByLabel("Member (optional)"),
+  ).toHaveValue(member.name);
+  await expect(editorRecords.nth(0).getByLabel("Memo (optional)")).toHaveValue(
+    memo,
+  );
+  await expect(editorRecords.nth(0)).toContainText(tag.name);
+  await expect(
+    editorRecords.nth(1).getByLabel("Category (optional)"),
+  ).toHaveValue(category.fqn);
+
+  await editor.getByRole("button", { name: "Cancel" }).click();
+  await expect(editor).toHaveCount(0);
+  await expect(overflowAction).toBeFocused();
+
+  await clickRowAction(page, row, "Open transaction detail");
+  const panel = page.getByTestId("transaction-detail-panel");
+  const detailCreateAction = panel.getByRole("button", {
+    name: "Create template",
+  });
+  await expect(detailCreateAction).toBeVisible();
+  await detailCreateAction.click();
+  const detailEditor = page.getByRole("dialog", { name: "New template" });
+  await expect(page.getByTestId("template-editor-overlay")).toHaveAttribute(
+    "data-modal-overlay",
+    "true",
+  );
+  const templateFqn = `E2E:${unique}:Captured transaction`;
+  await detailEditor.getByLabel("Template FQN").fill(templateFqn);
+  const templateRequestPromise = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return (
+      url.pathname === "/api/transaction-templates" &&
+      request.method() === "POST"
+    );
+  });
+  const templateResponsePromise = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/transaction-templates" &&
+      response.request().method() === "POST"
+    );
+  });
+  await detailEditor.getByRole("button", { name: "Create template" }).click();
+  const templateRequest = await templateRequestPromise;
+  const templatePayload = templateRequest.postDataJSON() as Record<
+    string,
+    unknown
+  >;
+  expect(Object.keys(templatePayload).sort()).toEqual(["fqn", "records"]);
+  expect(templatePayload).toEqual({
+    fqn: templateFqn,
+    records: transaction.records.map((record) => ({
+      account_id: record.account_id,
+      amount: record.amount,
+      category_id: record.category_id,
+      currency: record.currency,
+      member_id: record.member_id ?? null,
+      memo: record.memo ?? null,
+      tag_ids: [...record.tag_ids],
+    })),
+  });
+  const templateResponse = await templateResponsePromise;
+  expect(templateResponse.status(), await templateResponse.text()).toBe(201);
+  const createdTemplate = (await templateResponse.json()) as {
+    readonly transaction_template_id: number;
+  };
+  await expect(detailEditor).toHaveCount(0);
+  await expect(panel).toBeVisible();
+  await expect(detailCreateAction).toBeFocused();
+  const templateNotice = page.getByRole("button", {
+    name: "Dismiss notice: Template created.",
+  });
+  await expect(templateNotice).toBeVisible();
+  const [noticeBox, deleteBox] = await Promise.all([
+    templateNotice.boundingBox(),
+    panel.getByRole("button", { name: "Delete" }).boundingBox(),
+  ]);
+  expect(noticeBox).not.toBeNull();
+  expect(deleteBox).not.toBeNull();
+  expect(
+    noticeBox!.x < deleteBox!.x + deleteBox!.width &&
+      noticeBox!.x + noticeBox!.width > deleteBox!.x &&
+      noticeBox!.y < deleteBox!.y + deleteBox!.height &&
+      noticeBox!.y + noticeBox!.height > deleteBox!.y,
+  ).toBe(false);
+
+  await panel.getByRole("button", { name: "Close transaction detail" }).click();
+  await page.keyboard.press("Control+K");
+  const commandSearch = page.getByRole("combobox", { name: "Command search" });
+  await commandSearch.fill(templateFqn);
+  const useTemplate = page.getByRole("option", {
+    name: `Use ${templateFqn}`,
+  });
+  await expect(useTemplate).toBeVisible();
+  await useTemplate.click();
+  const entryEditor = page.getByRole("dialog", { name: "Transaction editor" });
+  await expect(entryEditor.getByLabel("Start from a template")).toHaveValue("");
+  await expect(entryEditor.getByLabel("Date")).not.toHaveValue("2026-07-22");
+  await expect(entryEditor.getByLabel("Record 1 memo")).toHaveValue(memo);
+  await expect(entryEditor.getByLabel("Record 3 amount")).toHaveValue(
+    "20.00000000",
+  );
+  await entryEditor
+    .getByRole("button", { name: "Close transaction editor" })
+    .click();
+
+  const deleteTemplateResponse = await page.request.delete(
+    `/api/transaction-templates/${createdTemplate.transaction_template_id}`,
+  );
+  expect(deleteTemplateResponse.ok(), await deleteTemplateResponse.text()).toBe(
+    true,
+  );
+  await deleteTransaction(page, transaction);
+});
+
+test("template save reports a failed refresh outside Templates", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const memo = `E2E template refresh failure ${unique}`;
+  const templateFqn = `E2E:${unique}:Refresh failure feedback`;
+  const transaction = await createSearchSpend(page, memo);
+  await page.route("**/api/transaction-templates?*", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({
+      body: JSON.stringify({
+        error: { code: "internal_error", message: "refresh unavailable" },
+      }),
+      contentType: "application/json",
+      status: 500,
+    });
+  });
+
+  await page.goto(
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(memo)}`,
+  );
+  const row = page.locator(
+    `[data-transaction-id="${transaction.transaction_id}"]`,
+  );
+  await clickRowAction(page, row, "Open transaction detail");
+  const panel = page.getByTestId("transaction-detail-panel");
+  await panel.getByRole("button", { name: "Create template" }).click();
+  const editor = page.getByRole("dialog", { name: "New template" });
+  await editor.getByLabel("Template FQN").fill(templateFqn);
+  const saveResponsePromise = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/transaction-templates" &&
+      response.request().method() === "POST"
+    );
+  });
+  await editor.getByRole("button", { name: "Create template" }).click();
+  const created = (await (await saveResponsePromise).json()) as {
+    readonly transaction_template_id: number;
+  };
+
+  await expect(editor).toHaveCount(0);
+  const failedRefreshNotice = page.getByRole("button", {
+    name: "Dismiss notice: Template created. Template choices could not be refreshed.",
+  });
+  await expect(failedRefreshNotice).toBeVisible();
+  await page.keyboard.press("n");
+  const entryEditor = page.getByRole("dialog", { name: "Transaction editor" });
+  await expect(entryEditor).toBeVisible();
+  await expect(failedRefreshNotice).toHaveCSS("color", "rgb(200, 30, 30)");
+  await entryEditor
+    .getByRole("button", { name: "Close transaction editor" })
+    .click();
+
+  const deleteTemplateResponse = await page.request.delete(
+    `/api/transaction-templates/${created.transaction_template_id}`,
+  );
+  expect(deleteTemplateResponse.ok(), await deleteTemplateResponse.text()).toBe(
+    true,
+  );
+  await deleteTransaction(page, transaction);
+});
+
 test("transaction detail panel shows full records and supports deep links", async ({
   page,
 }, testInfo) => {
@@ -612,6 +1013,12 @@ test("transaction detail panel is read-only while category chips keep filtering"
     expectedPanel.getByRole("button", { name: "Delete" }),
   ).toHaveCount(0);
   await expect(
+    expectedPanel.getByRole("button", { name: "Create template" }),
+  ).toHaveCount(0);
+  await expect(
+    expectedRow.getByRole("button", { name: "Create template" }),
+  ).toHaveCount(0);
+  await expect(
     expectedPanel.getByRole("button", { name: "Confirm occurrence" }),
   ).toBeVisible();
   await expect(
@@ -784,6 +1191,9 @@ test("detail lifecycle and dateless records cover variants in detail and peek", 
   await expect(
     cancelledRow.getByRole("button", { name: "Split transaction" }),
   ).toHaveCount(0);
+  await expect(
+    cancelledRow.getByRole("button", { name: "Create template" }),
+  ).toHaveCount(1);
   const mixedIndicators = mixedRow.getByTestId("transaction-status-indicators");
   await expect(mixedIndicators).toHaveAttribute("data-display-status", "mixed");
   await expect(
@@ -936,6 +1346,9 @@ test("detail lifecycle and dateless records cover variants in detail and peek", 
     expectedDetail.getByRole("button", { name: "Edit transaction" }),
   ).toHaveCount(0);
   await expect(
+    expectedDetail.getByRole("button", { name: "Create template" }),
+  ).toHaveCount(0);
+  await expect(
     expectedDetail.getByRole("button", { name: "Confirm occurrence" }),
   ).toBeVisible();
   await expect(
@@ -947,6 +1360,9 @@ test("detail lifecycle and dateless records cover variants in detail and peek", 
     cancelled.transaction_id,
   );
   await expectCancelledSurface(cancelledDetail, "decluttered");
+  await expect(
+    cancelledDetail.getByRole("button", { name: "Create template" }),
+  ).toBeVisible();
   await expect(
     cancelledDetail.getByRole("button", { name: "Edit transaction" }),
   ).toHaveCount(0);
@@ -979,6 +1395,9 @@ test("detail lifecycle and dateless records cover variants in detail and peek", 
     simpleMemo,
   );
   await expectSimpleSurface(simplePeek, "full");
+  await expect(
+    simplePeek.getByRole("button", { name: "Create template" }),
+  ).toHaveCount(0);
   await expectMouseDisclosure(simplePeek, simpleMemo);
 
   const mixedPeek = await openAccountTransactionPeek(
@@ -987,6 +1406,9 @@ test("detail lifecycle and dateless records cover variants in detail and peek", 
     mixedMemo,
   );
   await expectMixedSurface(mixedPeek, "full");
+  await expect(
+    mixedPeek.getByRole("button", { name: "Create template" }),
+  ).toHaveCount(0);
   await expectKeyboardDisclosure(mixedPeek);
 });
 
@@ -1915,8 +2337,12 @@ test("transaction detail duplicate prefills a new entry", async ({
   await expect(entryPanel).toHaveCount(0);
   await expect(page).not.toHaveURL(/[?&]entry=/);
   await expect(duplicateButton).toBeFocused();
+  await detailPanel
+    .getByRole("button", { name: "Close transaction detail" })
+    .click();
+  await expect(detailPanel).toHaveCount(0);
   await page
-    .locator("aside")
+    .locator("header")
     .getByRole("button", { name: "New transaction" })
     .click();
   await expect(

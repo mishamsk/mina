@@ -30,13 +30,13 @@ func ValidateTransactionSemantics(transaction Transaction) error {
 			EconomicIntent: record.EconomicIntent,
 		})
 	}
-	_, err := classifySemanticRecords(records)
+	_, err := ClassifySemanticRecords(records)
 	return err
 }
 
 // LineDisplayAmountsForSemanticRecords derives recurring-definition summary fields.
 func LineDisplayAmountsForSemanticRecords(records []SemanticRecord) (TransactionClass, []DisplayAmount, error) {
-	classified, err := classifySemanticRecords(records)
+	classified, err := ClassifySemanticRecords(records)
 	if err != nil {
 		return "", nil, err
 	}
@@ -68,7 +68,7 @@ func classifyTransaction(transaction Transaction) (Transaction, error) {
 			EconomicIntent: record.EconomicIntent,
 		})
 	}
-	classified, err := classifySemanticRecords(records)
+	classified, err := ClassifySemanticRecords(records)
 	if err != nil {
 		return Transaction{}, err
 	}
@@ -152,7 +152,8 @@ func deriveRecordSettlement(index int, lifecycle LifecycleStatus, record Journal
 	return nil, services.InvalidRequest(fmt.Sprintf("records[%d] active or cancelled balance record requires settlement dates", index))
 }
 
-func classifySemanticRecords(records []SemanticRecord) (Classification, error) {
+// ClassifySemanticRecords validates and derives transaction semantics from resolved records.
+func ClassifySemanticRecords(records []SemanticRecord) (Classification, error) {
 	if len(records) == 0 {
 		return Classification{}, services.InvalidRequest("transaction requires semantic records")
 	}

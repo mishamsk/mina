@@ -11,6 +11,7 @@ import {
   invalidateAllAccountRegisterPages,
   invalidateAllAccountTransactionCache,
   invalidateTransactionPages,
+  invalidateTransactionTemplates,
   mergeAccountHeaderAccount,
   mergeAccountsPageAccount,
   removeAccountsPageAccount,
@@ -107,6 +108,7 @@ export const refreshAccountsAfterMutation = async (options?: {
   readonly bulk?: boolean;
   readonly preserveAccountHeader?: boolean;
   readonly removedAccountId?: number;
+  readonly templateCompatibilityChanged?: boolean;
 }): Promise<void> => {
   if (options?.account && options.preserveAccountHeader) {
     mergeAccountHeaderAccount(options.account);
@@ -117,6 +119,9 @@ export const refreshAccountsAfterMutation = async (options?: {
     invalidateAllAccountRegisterPages();
     invalidateAllAccountTransactionCache();
     invalidateTransactionPages();
+  }
+  if (options?.templateCompatibilityChanged) {
+    invalidateTransactionTemplates();
   }
   await refreshAccountsPage();
   if (options?.account) {

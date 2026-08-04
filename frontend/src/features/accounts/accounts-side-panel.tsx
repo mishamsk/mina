@@ -703,6 +703,7 @@ const AccountsSidePanelContent = ({
       await refreshAccountsAfterMutation({
         account: result.data,
         bulk: accountTypeChanged || currencyChanged || displayLabelChanged,
+        templateCompatibilityChanged: accountTypeChanged || currencyChanged,
       });
       if (!panelSessionActiveRef.current) {
         return;

@@ -195,6 +195,43 @@ test("command palette opens from the transactions page", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "New spend" })).toHaveCount(0);
 });
 
+test("long template paths stay within the narrow command palette", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const fqn = `E2E:${unique}:${"UnbrokenTemplateSegment".repeat(12)}`;
+  const createResponse = await page.request.post("/api/transaction-templates", {
+    data: { fqn, records: [{}] },
+  });
+  expect(createResponse.ok(), await createResponse.text()).toBe(true);
+  const template = (await createResponse.json()) as {
+    readonly transaction_template_id: number;
+  };
+
+  await page.setViewportSize({ height: 800, width: 480 });
+  await page.goto("/overview");
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
+  await openPalette(page);
+  const dialog = page.getByRole("dialog", { name: "Command Palette" });
+  await dialog.getByRole("combobox", { name: "Command search" }).fill(unique);
+  const option = dialog.getByRole("option", { name: `Use ${fqn}` });
+  await expect(option).toBeVisible();
+  const viewport = dialog.getByRole("listbox", { name: "Command results" });
+  expect(
+    await viewport.evaluate(
+      (element) => element.scrollWidth <= element.clientWidth + 1,
+    ),
+  ).toBe(true);
+
+  await option.locator("[data-slot='tooltip-trigger']").hover();
+  await expect(page.getByRole("tooltip")).toHaveText(fqn);
+
+  const deleteResponse = await page.request.delete(
+    `/api/transaction-templates/${template.transaction_template_id}`,
+  );
+  expect(deleteResponse.ok(), await deleteResponse.text()).toBe(true);
+});
+
 test("command palette toggles transaction edit-mode mode", async ({ page }) => {
   await page.goto("/transactions");
   await expect(page.getByText("Description")).toBeVisible();

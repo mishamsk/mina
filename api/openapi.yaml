@@ -5001,11 +5001,6 @@ components:
           description: "Optional memo text for the journal records."
           type: string
           nullable: true
-        reconciliation_status:
-          description: "Reconciliation-status value or optional template default for the journal record."
-          allOf:
-            - $ref: "#/components/schemas/ReconciliationStatus"
-          nullable: true
     RecurringDefinitionWriteRequest:
       type: object
       additionalProperties: false
@@ -5808,6 +5803,7 @@ components:
         - created_at
         - updated_at
         - records
+        - compatible_shorthands
       properties:
         transaction_template_id:
           type: integer
@@ -5835,6 +5831,12 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/TransactionTemplateRecord"
+        compatible_shorthands:
+          type: array
+          uniqueItems: true
+          description: "Server-derived manual-entry shorthands compatible with the supplied template defaults."
+          items:
+            $ref: "#/components/schemas/TransactionTemplateShorthandType"
     TransactionTemplateRecord:
       type: object
       additionalProperties: false
@@ -5848,7 +5850,6 @@ components:
         - amount
         - tag_ids
         - memo
-        - reconciliation_status
         - created_at
         - updated_at
       properties:
@@ -5888,10 +5889,6 @@ components:
         memo:
           type: string
           nullable: true
-        reconciliation_status:
-          allOf:
-            - $ref: "#/components/schemas/ReconciliationStatus"
-          nullable: true
         created_at:
           type: string
           format: date-time
@@ -5902,6 +5899,9 @@ components:
           type: string
           format: date-time
           nullable: true
+    TransactionTemplateShorthandType:
+      type: string
+      enum: [spend, income, refund, transfer]
     TransactionTemplateListResponse:
       type: object
       additionalProperties: false

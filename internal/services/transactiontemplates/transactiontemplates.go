@@ -12,21 +12,21 @@ import (
 	"github.com/mishamsk/mina/internal/services/categories"
 	"github.com/mishamsk/mina/internal/services/members"
 	"github.com/mishamsk/mina/internal/services/tags"
-	"github.com/mishamsk/mina/internal/services/transactions"
 	"github.com/mishamsk/mina/internal/services/values"
 )
 
 // Template is a hierarchical, date-free set of reusable transaction record defaults.
 type Template struct {
-	ID           int64
-	FQN          string
-	ParentFQN    *string
-	Name         string
-	Level        int
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
-	TombstonedAt *time.Time
-	Records      []TemplateRecord
+	ID                   int64
+	FQN                  string
+	ParentFQN            *string
+	Name                 string
+	Level                int
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
+	TombstonedAt         *time.Time
+	Records              []TemplateRecord
+	CompatibleShorthands []TemplateShorthandType
 }
 
 // ActiveFQN is the active template path data needed for hierarchy checks.
@@ -37,19 +37,18 @@ type ActiveFQN struct {
 
 // TemplateRecord is one reusable journal-record default inside a template.
 type TemplateRecord struct {
-	ID                   int64
-	TemplateID           int64
-	CategoryID           *int64
-	AccountID            *int64
-	MemberID             *int64
-	Currency             *string
-	Amount               *values.Decimal
-	TagIDs               []int64
-	Memo                 *string
-	ReconciliationStatus *transactions.ReconciliationStatus
-	CreatedAt            time.Time
-	UpdatedAt            time.Time
-	TombstonedAt         *time.Time
+	ID           int64
+	TemplateID   int64
+	CategoryID   *int64
+	AccountID    *int64
+	MemberID     *int64
+	Currency     *string
+	Amount       *values.Decimal
+	TagIDs       []int64
+	Memo         *string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+	TombstonedAt *time.Time
 }
 
 // WriteInput contains fields for creating or replacing a transaction template.
@@ -60,14 +59,13 @@ type WriteInput struct {
 
 // TemplateRecordInput is one record default inside a transaction template write request.
 type TemplateRecordInput struct {
-	CategoryID           *int64
-	AccountID            *int64
-	MemberID             *int64
-	Currency             *string
-	Amount               *values.Decimal
-	TagIDs               []int64
-	Memo                 *string
-	ReconciliationStatus *transactions.ReconciliationStatus
+	CategoryID *int64
+	AccountID  *int64
+	MemberID   *int64
+	Currency   *string
+	Amount     *values.Decimal
+	TagIDs     []int64
+	Memo       *string
 }
 
 // Repository persists transaction-template state.
@@ -162,7 +160,7 @@ func (s *Service) Create(ctx context.Context, input WriteInput) (Template, error
 		return Template{}, err
 	}
 
-	return template, nil
+	return s.withCompatibleShorthands(ctx, template)
 }
 
 // Get returns an active transaction template with nested active record defaults by ID.
@@ -179,7 +177,7 @@ func (s *Service) Get(ctx context.Context, id int64) (Template, error) {
 		return Template{}, err
 	}
 
-	return template, nil
+	return s.withCompatibleShorthands(ctx, template)
 }
 
 // List returns active transaction templates with nested active record defaults.
@@ -188,7 +186,17 @@ func (s *Service) List(ctx context.Context, opts services.ListOptions) (services
 		return services.PaginatedList[Template]{}, err
 	}
 
-	return s.repo.List(ctx, opts)
+	list, err := s.repo.List(ctx, opts)
+	if err != nil {
+		return services.PaginatedList[Template]{}, err
+	}
+	for index := range list.Items {
+		list.Items[index], err = s.withCompatibleShorthands(ctx, list.Items[index])
+		if err != nil {
+			return services.PaginatedList[Template]{}, err
+		}
+	}
+	return list, nil
 }
 
 func (s *Service) ensureFQNAvailable(ctx context.Context, fqn string) error {
@@ -249,6 +257,15 @@ func (s *Service) Replace(ctx context.Context, id int64, input WriteInput) (Temp
 		return Template{}, err
 	}
 
+	return s.withCompatibleShorthands(ctx, template)
+}
+
+func (s *Service) withCompatibleShorthands(ctx context.Context, template Template) (Template, error) {
+	compatible, err := s.compatibleShorthands(ctx, template.Records)
+	if err != nil {
+		return Template{}, err
+	}
+	template.CompatibleShorthands = compatible
 	return template, nil
 }
 
@@ -388,14 +405,6 @@ func validateTemplateRecordShape(index int, record TemplateRecordInput) error {
 	if record.Memo != nil && strings.TrimSpace(*record.Memo) != *record.Memo {
 		return services.InvalidRequest(indexedField(index, "memo") + " must not have leading or trailing whitespace")
 	}
-	if record.ReconciliationStatus != nil {
-		switch *record.ReconciliationStatus {
-		case transactions.ReconciliationStatusReconciled, transactions.ReconciliationStatusUnreconciled:
-		default:
-			return services.InvalidRequest(indexedField(index, "reconciliation_status") + " must be reconciled or unreconciled")
-		}
-	}
-
 	return nil
 }
 
