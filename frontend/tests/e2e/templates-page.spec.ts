@@ -1330,6 +1330,7 @@ test("failed template refresh preserves the loaded tree", async ({
   );
 
   await page.goto("/accounts");
+  await expect(page.getByRole("searchbox", { name: "Search" })).toBeVisible();
   await openPalette(page);
   await page.getByRole("combobox", { name: "Command search" }).fill(createdFqn);
   await expect(

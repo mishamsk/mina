@@ -6,6 +6,7 @@ import {
   createTag,
   deleteTransaction,
   expect,
+  fillAndExpectValue,
   findByFqn,
   getTransactionDetail,
   listFixtures,
@@ -383,6 +384,9 @@ test("eligible amount inputs save independently of selection and preserve keyboa
   await dockSaveResponse;
   await page.unroute(`**${reconciliationPath}`, holdDockSave);
   await expect(firstInput).not.toHaveAttribute("aria-disabled", /.+/);
+  await expect(
+    page.getByRole("status").filter({ hasText: "2 records updated." }),
+  ).toBeVisible();
 
   const orderedInputs = page.locator(
     "input[data-testid^='transaction-'][data-testid$='-amount-input']",
@@ -808,10 +812,6 @@ test("concurrent failed amount saves do not steal focus or retry", async ({
   );
   let requestCount = 0;
   let releaseSaves: (() => void) | undefined;
-  let markBothStarted: (() => void) | undefined;
-  const bothStarted = new Promise<void>((resolve) => {
-    markBothStarted = resolve;
-  });
   const savesGate = new Promise<void>((resolve) => {
     releaseSaves = resolve;
   });
@@ -821,9 +821,6 @@ test("concurrent failed amount saves do not steal focus or retry", async ({
       return;
     }
     requestCount += 1;
-    if (requestCount === 2) {
-      markBothStarted?.();
-    }
     await savesGate;
     await route.fulfill({
       contentType: "application/json",
@@ -834,15 +831,15 @@ test("concurrent failed amount saves do not steal focus or retry", async ({
     });
   });
 
-  await firstInput.fill("17.01");
+  await fillAndExpectValue(firstInput, "17.01");
   await firstInput.press("Enter");
-  await secondInput.fill("18.02");
+  await expect.poll(() => requestCount).toBe(1);
+  await fillAndExpectValue(secondInput, "18.02");
   await secondInput.press("Enter");
-  await bothStarted;
+  await expect.poll(() => requestCount).toBe(2);
   releaseSaves?.();
   await expect(page.getByRole("alert")).toHaveCount(2);
   await expect(secondInput).toBeFocused();
-  await page.waitForTimeout(250);
   expect(requestCount).toBe(2);
 
   await page.unroute("**/api/transactions/*");

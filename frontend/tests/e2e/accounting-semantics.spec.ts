@@ -151,17 +151,22 @@ test("Refund is money coming back and Exchange shows the server-derived effectiv
     "Shopping:Household",
   );
 
-  const refundRequest = page.waitForRequest(
-    (request) =>
-      new URL(request.url()).pathname === "/api/transactions/refund" &&
-      request.method() === "POST",
+  const refundResponse = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === "/api/transactions/refund" &&
+      response.request().method() === "POST",
   );
   await editor.getByRole("button", { name: "Save and add another" }).click();
-  expect((await refundRequest).postDataJSON()).toMatchObject({
+  const savedRefund = await refundResponse;
+  expect(savedRefund.ok()).toBe(true);
+  expect(savedRefund.request().postDataJSON()).toMatchObject({
     amount: "34.99000000",
   });
+  await expect(editor.getByText("Entries this session: 1")).toBeVisible();
 
-  await editor.getByRole("tab", { name: "Exchange" }).click();
+  const exchangeTab = editor.getByRole("tab", { name: "Exchange" });
+  await exchangeTab.click();
+  await expect(exchangeTab).toHaveAttribute("aria-selected", "true");
   const exchange = editor.getByRole("tabpanel", { name: "Exchange" });
   await exchange.getByLabel("Date").fill("2026-05-30");
   await chooseOption(

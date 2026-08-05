@@ -20,6 +20,7 @@ import {
   expectMouseDisclosure,
   expectTransactionFilterUrl,
   expectTransactionsPageUrl,
+  fillAndExpectValue,
   findByFqn,
   journalRecord,
   listFixtures,
@@ -579,8 +580,11 @@ test("transaction detail panel shows full records and supports deep links", asyn
   await expect(page).toHaveURL(
     new RegExp(`[?&]transaction=${transaction.transaction_id}(?:&|$)`),
   );
-  const panel = page.getByRole("dialog", { name: transaction.display_title });
+  const panel = page.getByTestId("transaction-detail-panel");
   await expect(panel).toBeVisible();
+  await expect(panel).toHaveRole("dialog");
+  await expect(panel.getByTestId("transaction-lifecycle")).toBeVisible();
+  await expect(panel).toHaveAccessibleName(transaction.display_title);
   await expect(panel).not.toHaveAttribute("aria-modal", "true");
   const classBadge = panel.getByTestId("class-badge");
   await expect(classBadge).toHaveRole("img");
@@ -2279,6 +2283,9 @@ test("transaction detail duplicate prefills a new entry", async ({
   );
 
   const detailPanel = page.getByTestId("transaction-detail-panel");
+  await expectTransactionsPageUrl(page, 1, 50, {
+    transaction: String(transaction.transaction_id),
+  });
   const detailHeader = detailPanel.locator(":scope > div").first();
   const duplicateButton = detailPanel.getByRole("button", {
     name: "Duplicate",
@@ -2310,6 +2317,10 @@ test("transaction detail duplicate prefills a new entry", async ({
   await expect(
     entryPanel.getByRole("heading", { name: "New spend" }),
   ).toBeVisible();
+  await expectTransactionsPageUrl(page, 1, 50, {
+    entry: `duplicate:${transaction.transaction_id}`,
+    transaction: String(transaction.transaction_id),
+  });
   await expect(detailPanel).toBeVisible();
   const spendPanel = entryPanel.getByRole("tabpanel", { name: "Spend" });
   await expect(spendPanel.getByLabel("Amount")).toHaveValue("16.45");
@@ -2324,18 +2335,22 @@ test("transaction detail duplicate prefills a new entry", async ({
         },
       },
     });
-  await page.getByRole("button", { name: "Close transaction editor" }).click();
+  await expectTransactionsPageUrl(page, 1, 50, {
+    entry: `duplicate:${transaction.transaction_id}`,
+    transaction: String(transaction.transaction_id),
+  });
+  await spendPanel.getByLabel("Memo").press("Escape");
   await expect(entryPanel).toHaveCount(0);
-  await expect(page).not.toHaveURL(/[?&]entry=/);
+  await expectTransactionsPageUrl(page, 1, 50, {
+    transaction: String(transaction.transaction_id),
+  });
   await expect(duplicateButton).toBeFocused();
   await detailPanel
     .getByRole("button", { name: "Close transaction detail" })
     .click();
   await expect(detailPanel).toHaveCount(0);
-  await page
-    .locator("header")
-    .getByRole("button", { name: "New transaction" })
-    .click();
+  await expectTransactionsPageUrl(page, 1, 50);
+  await page.keyboard.press("KeyN");
   await expect(
     entryPanel.getByRole("heading", { name: "New spend" }),
   ).toBeVisible();
@@ -2402,7 +2417,8 @@ test("transaction detail split opens journal replacement and surfaces replace er
     page.getByRole("row").filter({ hasText: memo }).first(),
   );
   const detailPanel = page.getByTestId("transaction-detail-panel");
-  await detailPanel.getByRole("button", { name: "Split" }).click();
+  const splitButton = detailPanel.getByRole("button", { name: "Split" });
+  await splitButton.click();
 
   await expect(
     page.getByRole("heading", { name: "Edit journal" }),
@@ -2441,7 +2457,11 @@ test("transaction detail split opens journal replacement and surfaces replace er
   await expect(
     page.getByRole("dialog", { name: "Transaction editor" }),
   ).toHaveCount(0);
-  await detailPanel.getByRole("button", { name: "Split" }).click();
+  await expectTransactionsPageUrl(page, 1, 50, {
+    transaction: String(transaction.transaction_id),
+  });
+  await expect(splitButton).toBeFocused();
+  await splitButton.click();
   const reopenedEditor = page.getByRole("dialog", {
     name: "Transaction editor",
   });
@@ -2450,16 +2470,20 @@ test("transaction detail split opens journal replacement and surfaces replace er
   ).toBeVisible();
   await expect(reopenedEditor.getByLabel("Date")).toBeFocused();
 
-  await journalRecord(page, 2).getByLabel("Amount").fill("20.00");
+  await fillAndExpectValue(
+    journalRecord(page, 2).getByLabel("Amount"),
+    "20.00",
+  );
   const thirdRecord = journalRecord(page, 3);
   const accountPicker = thirdRecord.getByRole("combobox", { name: "Account" });
-  await accountPicker.fill(unique);
+  await fillAndExpectValue(accountPicker, unique);
   const accountOptionsId = await accountPicker.getAttribute("aria-controls");
   expect(accountOptionsId).not.toBeNull();
-  await page
+  const splitAccountOption = page
     .locator(`#${accountOptionsId}`)
-    .getByRole("option", { name: splitAccount.fqn })
-    .click();
+    .getByRole("option", { name: splitAccount.fqn });
+  await expect(splitAccountOption).toBeVisible();
+  await splitAccountOption.click();
   await expect(accountPicker).toHaveValue(splitAccount.fqn);
   await chooseOptionByKeyboard(
     page,

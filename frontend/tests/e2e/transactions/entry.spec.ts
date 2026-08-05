@@ -463,10 +463,17 @@ test("dirty and stale-pristine entry drafts use their initialization baseline", 
     name: "Discarding",
   });
   await expect(discardingButton).toBeFocused();
-  await discardingButton.locator("..").hover();
-  await expect(page.getByRole("tooltip")).toHaveText(
-    "Draft deletion is already in progress.",
-  );
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("tooltip")).toHaveCount(0);
+  await discardDialog
+    .getByRole("button", { name: "Discarding" })
+    .locator("..")
+    .hover();
+  await expect(
+    page
+      .getByRole("tooltip")
+      .filter({ hasText: "Draft deletion is already in progress." }),
+  ).toBeVisible();
   await expect(
     entryPanel.getByRole("heading", { name: "Edit spend" }),
   ).toBeVisible();

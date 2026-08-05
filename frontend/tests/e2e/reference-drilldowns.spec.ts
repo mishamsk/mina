@@ -109,18 +109,31 @@ const expectReferenceRowActivation = async (
   page: Page,
   {
     destination,
+    destinationReady,
     row,
     sourcePath,
   }: {
     readonly destination: RegExp | string;
+    readonly destinationReady: Locator;
     readonly row: Locator;
     readonly sourcePath: string;
   },
 ): Promise<void> => {
+  const expectDestinationReady = async () => {
+    await expect(destinationReady).toBeVisible();
+    await expect(page.getByTestId("featured-balance-skeleton")).toHaveCount(0);
+    await expect(
+      page.getByText("Featured balances could not be loaded.", {
+        exact: true,
+      }),
+    ).toHaveCount(0);
+  };
+
   await page.goto(sourcePath);
   await expect(row).toBeVisible();
   await row.click();
   await expect(page).toHaveURL(destination);
+  await expectDestinationReady();
 
   await page.goto(sourcePath);
   await expect(row).toBeVisible();
@@ -128,6 +141,7 @@ const expectReferenceRowActivation = async (
   await expect(row).toBeFocused();
   await row.press("Enter");
   await expect(page).toHaveURL(destination);
+  await expectDestinationReady();
 
   await page.goto(sourcePath);
   await expect(row).toBeVisible();
@@ -135,6 +149,7 @@ const expectReferenceRowActivation = async (
   await expect(row).toBeFocused();
   await row.press("Space");
   await expect(page).toHaveURL(destination);
+  await expectDestinationReady();
 };
 
 test("reference rows activate their detail and register routes", async ({
@@ -149,26 +164,40 @@ test("reference rows activate their detail and register routes", async ({
 
   await expectReferenceRowActivation(page, {
     destination: new RegExp(`/accounts/${account.account_id}$`),
+    destinationReady: page.getByText("No records", { exact: true }),
     row: page.getByLabel(`Open account ${account.fqn}`),
     sourcePath: `/accounts?q=${encodeURIComponent(account.fqn)}`,
   });
   await expectReferenceRowActivation(page, {
     destination: `/accounts/group?prefix=${encodeURIComponent(accountPrefix)}`,
+    destinationReady: page.getByText("No records", { exact: true }),
     row: page.getByLabel(`Open account group ${accountPrefix}`),
     sourcePath: `/accounts?q=${encodeURIComponent(account.fqn)}`,
   });
   await expectReferenceRowActivation(page, {
     destination: new RegExp(`/categories/${category.category_id}$`),
+    destinationReady: page.getByRole("heading", {
+      level: 2,
+      name: "No transactions",
+    }),
     row: page.getByLabel(`Open category ${category.fqn}`),
     sourcePath: `/categories?q=${encodeURIComponent(category.fqn)}`,
   });
   await expectReferenceRowActivation(page, {
     destination: new RegExp(`/tags/${tag.tag_id}$`),
+    destinationReady: page.getByRole("heading", {
+      level: 2,
+      name: "No transactions",
+    }),
     row: page.getByLabel(`Open tag ${tag.fqn}`),
     sourcePath: `/tags?q=${encodeURIComponent(tag.fqn)}`,
   });
   await expectReferenceRowActivation(page, {
     destination: new RegExp(`/members/${member.member_id}$`),
+    destinationReady: page.getByRole("heading", {
+      level: 2,
+      name: "No transactions",
+    }),
     row: page.getByLabel(`Open member ${member.name}`),
     sourcePath: `/members?q=${encodeURIComponent(member.name)}`,
   });
