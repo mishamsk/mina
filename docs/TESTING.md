@@ -29,6 +29,10 @@ They should be the vast majority of the test suite.
 - Do not run SQL or inspect database tables from `app-test` functions.
 - Do not mock controllers, services, or stores.
 
+Top-level concurrent app tests use the `TestConcurrent*` naming convention.
+They stay in the normal `just test` suite; `just test-race-concurrency` reruns
+only that focused slice with the Go race detector and disabled result reuse.
+
 ## Coupling Rule
 
 An `app-test` must not need changes when any of these change:

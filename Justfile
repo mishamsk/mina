@@ -368,6 +368,11 @@ dev-kill:
 test:
     go test ./...
 
+# Run focused concurrent app tests with the Go race detector.
+[group('dev-tooling')]
+test-race-concurrency:
+    go test -race ./internal/apptest/runtime -run '^TestConcurrent' -count=1
+
 # Run REST integration tests.
 [group('dev-tooling')]
 test-integration: frontend-build

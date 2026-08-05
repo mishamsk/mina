@@ -20,6 +20,9 @@ jobs:
           - name: test
             recipe: test
             frontend: false
+          - name: test-race-concurrency
+            recipe: test-race-concurrency
+            frontend: false
           - name: test-integration
             recipe: test-integration
             frontend: true
