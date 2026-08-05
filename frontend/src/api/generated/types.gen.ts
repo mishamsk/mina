@@ -26,6 +26,7 @@ export type DemoSeedResponse = {
     tags: number;
     exchange_rates: number;
     credit_limit_entries: number;
+    transaction_templates: number;
     transactions: number;
     recurring_definitions: number;
     recurring_occurrences: number;

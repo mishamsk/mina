@@ -13,6 +13,7 @@
 - Demo account FQNs group products and roles under real-world entity prefixes; unnamed merchants share `merchant:unspecified`, and physical cash stores accept multiple currencies.
 - Amazon flow and owned gift-card sibling accounts exercise explicit and FQN-derived display labels through balanced transfer and spend activity.
 - Demo transactions use derived semantics: categories only on flow records, fixed-system exchanges, split flow records for multi-merchant and mortgage spending, and uncategorized party-balance movements.
+- Demo transaction templates include complete shorthand-compatible defaults and one intentionally incomplete Advanced-journal default.
 - Demo seeding assumes callers provide a new empty accounting schema.
 - Demo seeding expects runtime to provide one atomic persistence boundary around the full seed.
 

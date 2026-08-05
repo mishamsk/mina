@@ -16,6 +16,7 @@ import (
 	"github.com/mishamsk/mina/internal/services/recurring"
 	"github.com/mishamsk/mina/internal/services/tags"
 	"github.com/mishamsk/mina/internal/services/transactions"
+	"github.com/mishamsk/mina/internal/services/transactiontemplates"
 	"github.com/mishamsk/mina/internal/services/values"
 )
 
@@ -39,6 +40,7 @@ type Services struct {
 	CreditLimits  *creditlimits.Service
 	ExchangeRates *exchangerates.Service
 	Recurring     *recurring.Service
+	Templates     *transactiontemplates.Service
 	Transactions  *transactions.Service
 }
 
@@ -50,6 +52,7 @@ type Summary struct {
 	Tags                 int
 	ExchangeRates        int
 	CreditLimitEntries   int
+	TransactionTemplates int
 	Transactions         int
 	RecurringDefinitions int
 	RecurringOccurrences int
@@ -155,6 +158,9 @@ func (b *seedBuilder) seed(ctx context.Context) error {
 		return err
 	}
 	if err := b.seedRecurringDefinitions(ctx); err != nil {
+		return err
+	}
+	if err := b.seedTransactionTemplates(ctx); err != nil {
 		return err
 	}
 
@@ -308,6 +314,69 @@ func (b *seedBuilder) seedTags(ctx context.Context) error {
 		}
 		b.tags[fqn] = tag.ID
 		b.summary.Tags++
+	}
+
+	return nil
+}
+
+func (b *seedBuilder) seedTransactionTemplates(ctx context.Context) error {
+	const cleaningMerchantFQN = "merchant:BrightHomeCleaning"
+	cleaningMerchant, err := b.services.Accounts.Create(ctx, accounts.CreateInput{
+		FQN:         cleaningMerchantFQN,
+		AccountType: accounts.AccountTypeFlow,
+		Currency:    strPtr("USD"),
+	})
+	if err != nil {
+		return fmt.Errorf("create account %q: %w", cleaningMerchantFQN, err)
+	}
+	b.accounts[cleaningMerchantFQN] = cleaningMerchant.ID
+	b.summary.Accounts++
+
+	const cleaningCategoryFQN = "Housing:Cleaning"
+	cleaningCategory, err := b.services.Categories.Create(ctx, categories.CreateInput{
+		FQN:            cleaningCategoryFQN,
+		EconomicIntent: categories.CategoryEconomicIntentExpense,
+	})
+	if err != nil {
+		return fmt.Errorf("create category %q: %w", cleaningCategoryFQN, err)
+	}
+	b.cats[cleaningCategoryFQN] = cleaningCategory.ID
+	b.summary.Categories++
+
+	inputs := []transactiontemplates.WriteInput{
+		{
+			FQN: "Household:Cleaning:Cash Payment",
+			Records: []transactiontemplates.TemplateRecordInput{
+				b.templateRecord("cash:Wallet", "Morgan", "USD", -12000, "", []string{"Projects:Home"}, "Household cleaning"),
+				b.templateRecord(cleaningMerchantFQN, "", "USD", 12000, cleaningCategoryFQN, []string{"Projects:Home"}, "Household cleaning"),
+			},
+		},
+		{
+			FQN: "Income:Freelance Deposit",
+			Records: []transactiontemplates.TemplateRecordInput{
+				b.templateRecord("bank:Chase:joint_checking", "Morgan", "USD", 85000, "", []string{"Income"}, "Freelance design"),
+				b.templateRecord("clients:NorthstarDesign", "", "USD", -85000, "Income:Freelance", []string{"Income"}, "Freelance design"),
+			},
+		},
+		{
+			FQN: "Cash:ATM Withdrawal",
+			Records: []transactiontemplates.TemplateRecordInput{
+				b.templateRecord("bank:Chase:joint_checking", "", "USD", -12000, "", []string{"Cash"}, "ATM withdrawal"),
+				b.templateRecord("cash:Wallet", "", "USD", 12000, "", []string{"Cash"}, "ATM withdrawal"),
+			},
+		},
+		{
+			FQN: "Household:Cleaning:Finish in Advanced",
+			Records: []transactiontemplates.TemplateRecordInput{
+				b.templateRecord("cash:Wallet", "Morgan", "USD", -12000, "", []string{"Projects:Home"}, ""),
+			},
+		},
+	}
+	for _, input := range inputs {
+		if _, err := b.services.Templates.Create(ctx, input); err != nil {
+			return fmt.Errorf("create transaction template %q: %w", input.FQN, err)
+		}
+		b.summary.TransactionTemplates++
 	}
 
 	return nil
@@ -902,6 +971,43 @@ func (b *seedBuilder) rec(
 		Settlement:           settlement,
 		ReconciliationStatus: transactions.ReconciliationStatusReconciled,
 		Source:               transactions.SourceManual,
+	}
+}
+
+func (b *seedBuilder) templateRecord(
+	accountFQN string,
+	memberName string,
+	currency string,
+	amountCents int,
+	categoryFQN string,
+	tagFQNs []string,
+	memo string,
+) transactiontemplates.TemplateRecordInput {
+	accountID := b.accounts[accountFQN]
+	var memberID *int64
+	if memberName != "" {
+		id := b.members[memberName]
+		memberID = &id
+	}
+	var categoryID *int64
+	if categoryFQN != "" {
+		id := b.cats[categoryFQN]
+		categoryID = &id
+	}
+	tagIDs := make([]int64, 0, len(tagFQNs))
+	for _, fqn := range tagFQNs {
+		tagIDs = append(tagIDs, b.tags[fqn])
+	}
+	amount := money(amountCents)
+
+	return transactiontemplates.TemplateRecordInput{
+		AccountID:  &accountID,
+		MemberID:   memberID,
+		Currency:   strPtr(currency),
+		Amount:     &amount,
+		CategoryID: categoryID,
+		TagIDs:     tagIDs,
+		Memo:       strPtr(memo),
 	}
 }
 

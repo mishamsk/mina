@@ -1775,6 +1775,7 @@ type DemoSeedResponse struct {
 	RecurringDefinitions int `json:"recurring_definitions"`
 	RecurringOccurrences int `json:"recurring_occurrences"`
 	Tags                 int `json:"tags"`
+	TransactionTemplates int `json:"transaction_templates"`
 	Transactions         int `json:"transactions"`
 }
 

@@ -21,6 +21,7 @@ func (s *strictServer) SeedDemo(ctx context.Context, request openapi.SeedDemoReq
 		RecurringDefinitions: summary.RecurringDefinitions,
 		RecurringOccurrences: summary.RecurringOccurrences,
 		Tags:                 summary.Tags,
+		TransactionTemplates: summary.TransactionTemplates,
 		Transactions:         summary.Transactions,
 	}, nil
 }

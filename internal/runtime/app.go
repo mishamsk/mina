@@ -523,6 +523,7 @@ func demoDependencies(s appServices) demo.Services {
 		CreditLimits:  s.CreditLimits,
 		ExchangeRates: s.ExchangeRates,
 		Recurring:     s.Recurring,
+		Templates:     s.Templates,
 		Transactions:  s.Transactions,
 	}
 }

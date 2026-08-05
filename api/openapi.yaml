@@ -3616,6 +3616,7 @@ components:
         - tags
         - exchange_rates
         - credit_limit_entries
+        - transaction_templates
         - transactions
         - recurring_definitions
         - recurring_occurrences
@@ -3636,6 +3637,9 @@ components:
           type: integer
           minimum: 0
         credit_limit_entries:
+          type: integer
+          minimum: 0
+        transaction_templates:
           type: integer
           minimum: 0
         transactions:

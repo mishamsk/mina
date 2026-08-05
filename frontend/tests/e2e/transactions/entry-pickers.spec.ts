@@ -976,6 +976,7 @@ test("keyboard spend entry creates a transaction and keeps sticky fields", async
   await page.keyboard.press("KeyN");
   await expect(page.getByRole("heading", { name: "New spend" })).toBeVisible();
   await expect(page.getByLabel("Start from a template")).toBeFocused();
+  await page.getByLabel("Start from a template").press("Escape");
   await expect(page.evaluate(() => window.scrollY)).resolves.toBe(0);
   await expect(
     page.evaluate(

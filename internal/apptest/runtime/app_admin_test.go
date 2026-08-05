@@ -28,6 +28,7 @@ func TestSeedDemoThroughREST(t *testing.T) {
 		t.Fatalf("seeded transactions = %d, want at least 100", seeded.JSON200.Transactions)
 	}
 	assertSeededRESTCounts(t, client, *seeded.JSON200, anchorDate.Time)
+	assertSeededTransactionTemplatesExist(t, client)
 	assertSeededRecurringDemoData(t, client, *seeded.JSON200, anchorDate.Time)
 	assertSeededFeaturedBalanceAccounts(t, client)
 	assertSeededPlausibleBalances(t, client)
@@ -398,6 +399,20 @@ func assertSeededRESTCounts(t *testing.T, client *apptest.Client, seeded httpcli
 		t.Fatalf("listed transactions = %d, want %d", len(transactions.JSON200.Transactions), seeded.Transactions)
 	}
 	assertDemoSemanticCoverage(t, accounts.JSON200.Accounts, categories.JSON200.Categories, transactions.JSON200.Transactions, anchorDate)
+}
+
+func assertSeededTransactionTemplatesExist(t *testing.T, client *apptest.Client) {
+	t.Helper()
+	templatesResponse, err := client.REST().ListTransactionTemplatesWithResponse(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("list seeded transaction templates request: %v", err)
+	}
+	if templatesResponse.StatusCode() != http.StatusOK {
+		t.Fatalf("list seeded transaction templates status = %d, want %d; body %s", templatesResponse.StatusCode(), http.StatusOK, templatesResponse.Body)
+	}
+	if len(templatesResponse.JSON200.TransactionTemplates) == 0 {
+		t.Fatal("seeded transaction templates are empty")
+	}
 }
 
 func assertSeededRecurringDemoData(t *testing.T, client *apptest.Client, seeded httpclient.DemoSeedResponse, today time.Time) {
@@ -796,6 +811,7 @@ func assertDemoSemanticCoverage(
 		"merchant:Amazon:flow",
 		"merchant:Amazon:gift_card",
 		"merchant:BlueBottle",
+		"merchant:BrightHomeCleaning",
 		"merchant:CVS",
 		"merchant:ConEd",
 		"merchant:MTA",
