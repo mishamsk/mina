@@ -475,7 +475,9 @@ test("Done exits Edit mode after a pending amount save succeeds", async ({
     await route.continue();
   };
   await page.route(`**${savePath}`, holdSave);
-  await amountInput.fill("21.50");
+  await amountInput.selectText();
+  await amountInput.pressSequentially("21.50");
+  await expect(amountInput).toHaveValue("21.50");
   await amountInput.press("Enter");
   await saveStarted;
   await expect(
@@ -615,7 +617,9 @@ test("opening transaction entry waits for a pending amount save", async ({
   };
   await page.route(`**${savePath}`, failSave);
 
-  await amountInput.fill("18.76");
+  await amountInput.selectText();
+  await amountInput.pressSequentially("18.76");
+  await expect(amountInput).toHaveValue("18.76");
   await amountInput.press("Enter");
   await saveStarted;
   await page
@@ -679,7 +683,9 @@ test("saved entry routes load after a pending amount save", async ({
   };
   await page.route(`**${transactionPath}`, holdSave);
 
-  await amountInput.fill("18.76");
+  await amountInput.selectText();
+  await amountInput.pressSequentially("18.76");
+  await expect(amountInput).toHaveValue("18.76");
   await amountInput.press("Enter");
   await saveStarted;
   await page.evaluate((entry) => {
@@ -749,7 +755,9 @@ test("Browser Back cancels an entry route deferred behind an amount save", async
     await route.continue();
   });
 
-  await amountInput.fill("18.76");
+  await amountInput.selectText();
+  await amountInput.pressSequentially("18.76");
+  await expect(amountInput).toHaveValue("18.76");
   await amountInput.press("Enter");
   await saveStarted;
   await page.evaluate((entry) => {

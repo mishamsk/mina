@@ -30,7 +30,7 @@ export const App = () => {
       const activeElement = document.activeElement;
       if (
         activeElement instanceof HTMLElement &&
-        activeElement.closest("[role='dialog']")
+        activeElement !== document.body
       ) {
         return;
       }

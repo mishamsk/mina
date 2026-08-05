@@ -271,6 +271,9 @@ export const EntryModal = ({
           aria-describedby={undefined}
           onCloseAutoFocus={(event) => {
             event.preventDefault();
+            if (contentRef.current?.dataset.state === "open") {
+              return;
+            }
             setDraftCleared(false);
             const fallback =
               document.querySelector<HTMLElement>(listRestoreSelector) ??

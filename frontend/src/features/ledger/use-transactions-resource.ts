@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef } from "react";
 
 import {
   apiErrorDetails,
@@ -133,25 +133,27 @@ const loadLedgerLookups = async (
 };
 
 export const useTransactionsResource = (params: TransactionPageParams) => {
+  const pageKey = transactionPageKey(params);
+  const requestKey = transactionPageRequestKey(params);
   const page = useTransactionPageView(params);
   const lookups = useLedgerLookupsView();
   const catchupPromiseRef = useRef<Promise<unknown> | undefined>(undefined);
 
   useEffect(
     () => () => {
-      cancelPageRefreshCallback(params);
+      pendingPageRefreshCallbacks.delete(pageKey);
     },
-    [params],
+    [pageKey, requestKey],
   );
 
-  useEffect(() => {
+  const loadPage = useEffectEvent((isActive: () => boolean) => {
+    const requestParams = params;
     const snapshot = getTransactionsSnapshot();
-    const key = transactionPageKey(params);
-    const requestKey = transactionPageRequestKey(params);
+    const key = transactionPageKey(requestParams);
     const pageAtLoadStart = snapshot.pages[key];
     const pageGenerationAtLoadStart = snapshot.pageGeneration;
     if (!pageAtLoadStart) {
-      cancelPageRefreshCallback(params);
+      cancelPageRefreshCallback(requestParams);
     }
     if (
       (pageAtLoadStart && !snapshot.stalePageKeys[key]) ||
@@ -161,9 +163,8 @@ export const useTransactionsResource = (params: TransactionPageParams) => {
       return;
     }
 
-    let active = true;
     if (!pageAtLoadStart) {
-      setTransactionPageLoading(params);
+      setTransactionPageLoading(requestParams);
     }
 
     catchupPromiseRef.current ??= triggerRecurringOccurrenceCatchup().catch(
@@ -171,11 +172,14 @@ export const useTransactionsResource = (params: TransactionPageParams) => {
     );
 
     void catchupPromiseRef.current
-      .then(() => fetchTransactionPage(params))
+      .then(() => fetchTransactionPage(requestParams))
       .then((result) => {
-        if (!active) {
+        if (!isActive()) {
           if (!pageAtLoadStart) {
-            clearTransactionPageLoading(params, pageGenerationAtLoadStart);
+            clearTransactionPageLoading(
+              requestParams,
+              pageGenerationAtLoadStart,
+            );
           }
           return;
         }
@@ -183,14 +187,17 @@ export const useTransactionsResource = (params: TransactionPageParams) => {
           getTransactionsSnapshot().pageGeneration !== pageGenerationAtLoadStart
         ) {
           if (!pageAtLoadStart) {
-            clearTransactionPageLoading(params, pageGenerationAtLoadStart);
+            clearTransactionPageLoading(
+              requestParams,
+              pageGenerationAtLoadStart,
+            );
           }
           return;
         }
 
         if (result.data) {
           const effectiveParams = effectivePageParams(
-            params,
+            requestParams,
             result.data.offset,
           );
           if (pageAtLoadStart) {
@@ -201,14 +208,14 @@ export const useTransactionsResource = (params: TransactionPageParams) => {
               pageAtLoadStart,
             );
             if (refreshed) {
-              settlePageRefreshCallbacks(params);
+              settlePageRefreshCallbacks(requestParams);
             }
           } else {
             setTransactionPage(
               effectiveParams,
               result.data.total_count,
               result.data.transactions,
-              params,
+              requestParams,
             );
           }
           return;
@@ -216,22 +223,32 @@ export const useTransactionsResource = (params: TransactionPageParams) => {
 
         if (pageAtLoadStart) {
           const repeatedFailure = markTransactionPageStale(
-            params,
+            requestParams,
             pageAtLoadStart,
             apiErrorDetails(result.error),
           );
           if (repeatedFailure) {
-            settlePageRefreshCallbacks(params);
+            settlePageRefreshCallbacks(requestParams);
           }
         } else {
-          setTransactionPageError(params, apiErrorMessage(result.error));
+          setTransactionPageError(requestParams, apiErrorMessage(result.error));
         }
       });
+  });
 
+  useEffect(() => {
+    let active = true;
+    loadPage(() => active);
     return () => {
       active = false;
     };
-  }, [page.generation, page.refreshFailed, page.snapshot, page.stale, params]);
+  }, [
+    page.generation,
+    page.refreshFailed,
+    page.snapshot,
+    page.stale,
+    requestKey,
+  ]);
 
   useEffect(() => {
     const snapshot = getTransactionsSnapshot();

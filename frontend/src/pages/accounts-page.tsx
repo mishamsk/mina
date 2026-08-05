@@ -139,8 +139,8 @@ export const AccountsPage = () => {
 
     if (result.data) {
       closeRestructureDialog();
-      showNotice(`Moved ${result.data.moved_count} account(s).`);
       await refreshAccountsAfterMutation({ bulk: true });
+      showNotice(`Moved ${result.data.moved_count} account(s).`);
       return;
     }
 

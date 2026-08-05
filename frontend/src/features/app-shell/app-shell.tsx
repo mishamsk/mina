@@ -54,6 +54,7 @@ import {
   resolveTransactionEntryRoute,
   setSidebarCollapsed,
   toggleCommandPalette,
+  transactionEntryWillOpenEvent,
   upsertTransactionTemplate,
   useAuthenticationView,
   useCommandPaletteOpen,
@@ -254,6 +255,19 @@ export const AppShell = ({ children }: AppShellProps) => {
   const lastTransactionsPageSearch = useLastTransactionsPageSearch();
 
   useEffect(() => {
+    const markEntryUrlOpening = () => {
+      openingEntryUrlRef.current = true;
+    };
+    window.addEventListener(transactionEntryWillOpenEvent, markEntryUrlOpening);
+    return () => {
+      window.removeEventListener(
+        transactionEntryWillOpenEvent,
+        markEntryUrlOpening,
+      );
+    };
+  }, []);
+
+  useEffect(() => {
     if (!logoutPending && logoutError && !commandPaletteOpen) {
       focusWithoutTooltip(logoutButtonRef.current, { preventScroll: true });
     }
@@ -276,6 +290,14 @@ export const AppShell = ({ children }: AppShellProps) => {
 
   useEffect(() => {
     if (
+      closingEntryRef.current &&
+      !previousEntryParamRef.current &&
+      !entryParam &&
+      entryModal.open
+    ) {
+      closingEntryRef.current = false;
+    }
+    if (
       closingEntryRef.current ||
       (previousEntryParamRef.current && !entryParam) ||
       !entryModal.open ||
@@ -293,25 +315,22 @@ export const AppShell = ({ children }: AppShellProps) => {
       },
       { replace: Boolean(entryParam) },
     );
-    window.queueMicrotask(() => {
-      openingEntryUrlRef.current = false;
-    });
   }, [entryModal.open, entryModal.requestedEntry, entryParam, setSearchParams]);
 
   useEffect(() => {
     const previousEntryParam = previousEntryParamRef.current;
     previousEntryParamRef.current = entryParam;
     if (openingEntryUrlRef.current) {
-      return;
+      if (entryParam !== entryModal.requestedEntry) {
+        return;
+      }
+      openingEntryUrlRef.current = false;
     }
     if (entryParam && entryParam !== previousEntryParam) {
       entryDetailParamRef.current = searchParams.get("transaction");
     }
     if (!entryParam) {
       if (historyEntryClosePendingRef.current) {
-        return;
-      }
-      if (openingEntryUrlRef.current) {
         return;
       }
       closingEntryRef.current = false;
@@ -405,6 +424,7 @@ export const AppShell = ({ children }: AppShellProps) => {
   ]);
 
   const closeEntryModal = useCallback(() => {
+    openingEntryUrlRef.current = false;
     closingEntryRef.current = true;
     previousEntryParamRef.current = null;
     historyEntryClosePendingRef.current = false;

@@ -12,6 +12,7 @@
 - Account type or currency changes invalidate the snapshot so its server-derived shorthand compatibilities are refetched before reuse.
 - Client-derived groups follow the prefix-free FQN hierarchy and never become accounting resources.
 - The app shell owns one transient template-editor launch; create/edit drafts are never persisted or URL-backed.
+- Deferred initial focus yields to a control already used in the editor; lookup retries preserve that latest control across recovery.
 - Template records are partial defaults: every field is independently optional, active hidden references already selected on a record remain resolvable, fresh choices exclude hidden references, and tombstoned references are unavailable.
 - Transaction capture maps active records in response order and copies only account, category, member, currency, native amount, tags, and memo; dates and transaction-only metadata never enter the draft.
 - Edit preserves the FQN; hierarchy changes remain owned by restructure.

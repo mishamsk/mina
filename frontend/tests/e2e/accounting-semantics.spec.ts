@@ -9,7 +9,9 @@ const chooseOption = async (
   value: string,
 ): Promise<void> => {
   const picker = scope.getByRole("combobox", { name: label });
-  await picker.fill(search);
+  await picker.selectText();
+  await picker.pressSequentially(search);
+  await expect(picker).toHaveValue(search);
   const optionsId = await picker.getAttribute("aria-controls");
   expect(optionsId).not.toBeNull();
   const option = page

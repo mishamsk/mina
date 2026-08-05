@@ -258,9 +258,29 @@ export const TemplateEditorModal = ({
     if (retryingLookups) {
       return;
     }
+    const editor = contentRef.current;
+    let latestFocusedControl: HTMLElement | undefined;
+    const rememberFocusedControl = (event: FocusEvent) => {
+      if (
+        event.target instanceof HTMLElement &&
+        event.target !== lookupsRetryButtonRef.current
+      ) {
+        latestFocusedControl = event.target;
+      }
+    };
+    editor?.addEventListener("focusin", rememberFocusedControl);
+    const focusAtRetryStart = document.activeElement;
     setRetainedLookupsErrorMessage(visibleLookupsErrorMessage);
     setRetryingLookups(true);
     window.requestAnimationFrame(() => {
+      if (
+        document.activeElement instanceof HTMLElement &&
+        document.activeElement !== focusAtRetryStart &&
+        document.activeElement !== lookupsRetryButtonRef.current &&
+        contentRef.current?.contains(document.activeElement)
+      ) {
+        return;
+      }
       focusWithoutTooltip(lookupsRetryButtonRef.current, {
         preventScroll: true,
       });
@@ -268,16 +288,21 @@ export const TemplateEditorModal = ({
     try {
       await onLookupsRetry();
     } finally {
+      editor?.removeEventListener("focusin", rememberFocusedControl);
       const retryButton = lookupsRetryButtonRef.current;
-      const focusMovedWithinEditor =
-        document.activeElement instanceof HTMLElement &&
-        contentRef.current?.contains(document.activeElement) &&
-        document.activeElement !== retryButton;
+      const activeElement = document.activeElement;
+      const focusTarget =
+        activeElement instanceof HTMLElement &&
+        editor?.contains(activeElement) &&
+        activeElement !== retryButton
+          ? activeElement
+          : latestFocusedControl;
       setRetryingLookups(false);
       setRetainedLookupsErrorMessage(undefined);
       window.requestAnimationFrame(() => {
         window.requestAnimationFrame(() => {
-          if (focusMovedWithinEditor) {
+          if (focusTarget?.isConnected) {
+            focusWithoutTooltip(focusTarget, { preventScroll: true });
             return;
           }
           const currentRetryButton = lookupsRetryButtonRef.current;
@@ -611,6 +636,12 @@ export const TemplateEditorModal = ({
             onOpenAutoFocus={(event) => {
               event.preventDefault();
               window.requestAnimationFrame(() => {
+                if (
+                  document.activeElement instanceof HTMLElement &&
+                  contentRef.current?.contains(document.activeElement)
+                ) {
+                  return;
+                }
                 focusWithoutTooltip(fqnRef.current ?? contentRef.current, {
                   preventScroll: true,
                 });

@@ -810,9 +810,20 @@ export const TransactionDetailPanel = ({
 
   useEffect(() => {
     restoreFocusOnCloseRef.current = true;
-    window.requestAnimationFrame(() => {
+    const focusSource = document.activeElement;
+    const frame = window.requestAnimationFrame(() => {
+      if (
+        document.activeElement instanceof HTMLElement &&
+        document.activeElement !== document.body &&
+        document.activeElement !== focusSource
+      ) {
+        return;
+      }
       panelRef.current?.focus({ preventScroll: true });
     });
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
   }, [transaction?.transaction_id]);
 
   useEffect(() => {
