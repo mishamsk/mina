@@ -21,9 +21,11 @@ mina --config-file "$HOME/.config/mina/config.toml" auth init owner@example.com
 mina --config-file "$HOME/.config/mina/config.toml" serve --db "$HOME/mina.duckdb"
 ```
 
-Open the server URL and sign in with the password entered by `auth init`. If Mina was already running when `auth_file` was added, restart it first. Docker has its own bootstrap workflow in the [README](../README.md#quick-start).
+Open the server URL and sign in with the password entered by `auth init`. If Mina was already running when `auth_file` was added, restart it first. Docker has its own installer and bootstrap workflow in the [README](../README.md#docker-compose-deployment).
 
 Docker fresh initialization reads `MINA_INITIAL_ADMIN_EMAIL` and `MINA_INITIAL_ADMIN_PASSWORD` from the operator environment or private deployment `.env`, creates `auth.toml` through this CLI-owned writer, then clears both variables before Mina starts. They are ignored when operator-owned config or authentication state already exists.
+
+The Compose installer defaults the initial email to `admin@local`, generates the password, then creates an `automation` API key through `mina auth` and restarts Mina. It stores the one-time API-key secret in the private deployment `.env`; it never edits `auth.toml` directly.
 
 ## Operate It
 

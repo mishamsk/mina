@@ -5,6 +5,7 @@
 - `Dockerfile`: multi-stage frontend, Go, and Debian slim runtime image.
 - `Dockerfile.dockerignore`: repository-root build context exclusions.
 - `compose.yaml`: supported deployment baseline.
+- `install.sh`: noninteractive fresh-deployment installer for the supported Compose baseline.
 - `config-template.toml`: immutable operational-config template shipped in the image.
 - `entrypoint.sh`: dispatches Docker-only initialization, bootstraps config for `serve`, then directly executes Mina.
 - `volume-init.sh`: root-only named-volume ownership preparation.
@@ -19,6 +20,7 @@
 - `/config/mina` is writable; first `serve` stages the image template and initializes `auth.toml` through `mina auth` only when `config.toml` is absent.
 - `/data/mina.duckdb` is the fixed Compose database path; `/cache/mina` remains the app's normal XDG cache layout.
 - `.env.example` documents numeric Compose identity, an omitted-by-default database-encryption assignment, and required fresh-initialization administrator inputs without containing usable credentials.
+- The installer-generated `.env` also owns a path-derived Compose project name, loopback port settings, generated bootstrap and encryption secrets, and the CLI-created automation API key.
 - Compose forwards `MINA_DATABASE_ENCRYPTION_KEY` from the operator environment or deployment `.env`; the secret is absent from the Compose file, config template, and image, and `.env` must remain private and outside version control.
 - Backups bind independently to `/backups` and never derive from database storage.
 - Utility commands such as `version` and `db validate` do not bootstrap or require writable config.
@@ -39,6 +41,16 @@
 - Fresh-serve bootstrap installs config last, preserves any existing auth file, and is retryable after interruption.
 - Fresh auth creation requires non-placeholder `MINA_INITIAL_ADMIN_EMAIL` and `MINA_INITIAL_ADMIN_PASSWORD`, initializes only through `mina auth`, and clears both inputs before the long-running Mina process starts.
 - Existing config is never replaced or opted into authentication; a configured missing auth file fails closed.
+
+## Installer Contract
+
+- `install.sh` defaults to the current directory, administrator `admin@local`, localhost port `8080`, and the supported `main` image; flags may override the directory, email, port, or image without prompting.
+- The installer resolves the supported source ref once and downloads `compose.yaml` and `.env.example` from that full commit.
+- The target must be absent or empty, and its deterministic Compose project must have no containers, network, database volume, or cache volume. There is no update or overwrite mode.
+- Installer-created config and backup directories are mode `0700`; `.env`, generated configuration, and CLI-owned authentication state are private files.
+- OpenSSL generates independent 256-bit database-encryption and administrator-password secrets with tracing disabled before secret handling.
+- Fresh startup creates `auth.toml` through the image entrypoint's auth CLI flow. The installer creates the automation key through `mina auth`, stores only its returned secret as `MINA_API_KEY`, restarts Mina, and verifies authenticated API access.
+- Success requires the public health endpoint and generated API key to work. Failure removes only installer-created Compose resources and files so the same fresh-state command can be retried.
 
 ## Image Contract
 
@@ -84,6 +96,7 @@
 - `just docker-manifest-check IMAGE` verifies that a remote image index contains `linux/amd64` and `linux/arm64`.
 - `just test-docker` builds real images unless `MINA_IMAGE` is supplied.
 - The publication workflow runs `MINA_IMAGE=ghcr.io/mishamsk/mina:<full-commit-sha> just test-docker` against the published registry image before promotion.
-- The lifecycle test covers required non-default authentication bootstrap, private bind permissions, config/auth preservation, named-volume ownership and `down` persistence, encrypted creation, explicit encrypted import/restore, hardening, authenticated reachability, recreation, restart, image replacement, encrypted backups, correct/wrong/missing-key validation, and destructive test cleanup.
+- The lifecycle test first covers a fresh noninteractive installer run, generated private state, authenticated and encrypted boot, API-key use, health, and refusal of the resulting deployment without modification.
+- It then covers required non-default authentication bootstrap, private bind permissions, config/auth preservation, named-volume ownership and `down` persistence, encrypted creation, explicit encrypted import/restore, hardening, authenticated reachability, recreation, restart, image replacement, encrypted backups, correct/wrong/missing-key validation, and destructive test cleanup.
 - It also builds and runs the non-native supported architecture when local emulation is available and reports an explicit limitation otherwise.
 - Docker tests must leave no test containers, networks, tagged test images, or temporary state.

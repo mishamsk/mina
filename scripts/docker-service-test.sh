@@ -4,6 +4,7 @@ set -Eeuo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 COMPOSE_FILE="$ROOT_DIR/docker/compose.yaml"
 CONFIG_TEMPLATE="$ROOT_DIR/docker/config-template.toml"
+INSTALLER="$ROOT_DIR/docker/install.sh"
 RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$"
 RUN_ID_SLUG="$(printf '%s' "$RUN_ID" | tr '[:upper:]' '[:lower:]')"
 PROJECT="mina-docker-test-${RUN_ID_SLUG}"
@@ -14,10 +15,13 @@ BACKUP_DIR="$WORK_DIR/backups"
 IMPORT_CONFIG_DIR="$WORK_DIR/import-config"
 IMPORT_BACKUP_DIR="$WORK_DIR/import-backups"
 SEED_DIR="$WORK_DIR/seed"
+INSTALL_DIR="$WORK_DIR/installed"
+INSTALL_OUTPUT="$WORK_DIR/installer.output"
 DATA_VOLUME="${PROJECT}_mina-data"
 CACHE_VOLUME="${PROJECT}_mina-cache"
 IMPORT_DATA_VOLUME="${IMPORT_PROJECT}_mina-data"
 IMPORT_CACHE_VOLUME="${IMPORT_PROJECT}_mina-cache"
+INSTALL_PROJECT=""
 DOCKER_CONFIG_DIR="${DOCKER_CONFIG:-$HOME/.docker}"
 DEMO_OVERRIDE="$WORK_DIR/demo-override.yaml"
 TRAEFIK_OVERRIDE="$WORK_DIR/traefik-overlay.yaml"
@@ -220,6 +224,9 @@ diagnostics() {
         docker logs --tail 200 "$cid" >&2 || true
     fi
     compose_import ps -a >&2 || true
+    if [[ -f "$INSTALL_DIR/compose.yaml" ]]; then
+        (cd "$INSTALL_DIR" && docker compose ps -a) >&2 || true
+    fi
 }
 
 cleanup() {
@@ -232,6 +239,9 @@ cleanup() {
     done
     compose_import down --volumes --remove-orphans >/dev/null 2>&1 || true
     compose_base down --volumes --remove-orphans >/dev/null 2>&1 || true
+    if [[ -f "$INSTALL_DIR/compose.yaml" ]]; then
+        (cd "$INSTALL_DIR" && docker compose down --volumes --remove-orphans) >/dev/null 2>&1 || true
+    fi
     if [[ -n "$OWNED_IMAGES" ]]; then
         while IFS= read -r image; do
             [[ -n "$image" ]] || continue
@@ -485,6 +495,47 @@ assert_private_file() {
         printf 'host file mode for %s = %s, want no group or other permissions\n' "$path" "$mode" >&2
         exit 1
     fi
+}
+
+test_compose_installer() {
+    local source_sha api_key
+
+    log "fresh noninteractive Compose install"
+    source_sha="$(git -C "$ROOT_DIR" rev-parse HEAD)"
+    MINA_INSTALL_ARTIFACT_BASE_URL="file://$ROOT_DIR" \
+    MINA_INSTALL_SOURCE_SHA="$source_sha" \
+    MINA_INSTALL_SKIP_PULL=true \
+        "$INSTALLER" \
+            --dir "$INSTALL_DIR" \
+            --port "$HOST_PORT" \
+            --image "$INITIAL_IMAGE" >"$INSTALL_OUTPUT"
+
+    diff -u \
+        <(printf '%s\n' .env backups compose.yaml config config/auth.toml config/auth.toml.lock config/config.toml) \
+        <(cd "$INSTALL_DIR" && find . -mindepth 1 -maxdepth 2 -print | sed 's#^\./##' | LC_ALL=C sort)
+
+    INSTALL_PROJECT="$(sed -n 's/^COMPOSE_PROJECT_NAME=//p' "$INSTALL_DIR/.env")"
+    api_key="$(sed -n 's/^MINA_API_KEY=//p' "$INSTALL_DIR/.env")"
+    (cd "$INSTALL_DIR" && docker compose exec -T -e "MINA_API_KEY=$api_key" mina \
+        mina client --server http://127.0.0.1:8080 accounts list --limit 1 >/dev/null)
+    curl --fail --silent --show-error \
+        -H "Authorization: Bearer $api_key" \
+        "$(api_url '/api/accounts?limit=1')" >/dev/null
+
+    log "installer refusal preserves existing deployment"
+    if MINA_INSTALL_ARTIFACT_BASE_URL="file://$ROOT_DIR" \
+        MINA_INSTALL_SOURCE_SHA="$source_sha" \
+        MINA_INSTALL_SKIP_PULL=true \
+        "$INSTALLER" --dir "$INSTALL_DIR" >"$WORK_DIR/installer-refusal.output" 2>&1; then
+        printf 'installer unexpectedly accepted an existing deployment\n' >&2
+        exit 1
+    fi
+    grep -F 'deployment directory is not empty' "$WORK_DIR/installer-refusal.output" >/dev/null
+    curl --fail --silent --show-error \
+        -H "Authorization: Bearer $api_key" \
+        "$(api_url '/api/accounts?limit=1')" >/dev/null
+
+    (cd "$INSTALL_DIR" && docker compose down --volumes --remove-orphans)
 }
 
 assert_config_bootstrapped() {
@@ -1246,7 +1297,8 @@ smoke_non_native_platform() {
 
 assert_no_owned_docker_objects() {
     local project
-    for project in "$PROJECT" "$IMPORT_PROJECT"; do
+    for project in "$PROJECT" "$IMPORT_PROJECT" "$INSTALL_PROJECT"; do
+        [[ -n "$project" ]] || continue
         if docker ps -a --filter "label=com.docker.compose.project=$project" -q | grep -q .; then
             printf 'compose containers remain for %s\n' "$project" >&2
             exit 1
@@ -1277,6 +1329,7 @@ select_port
 prepare_filesystem
 prepare_images
 CURRENT_IMAGE="$INITIAL_IMAGE"
+test_compose_installer
 assert_default_compose_config
 assert_config_permission_failure
 assert_fresh_bootstrap_inputs_required

@@ -26,9 +26,10 @@
   - Public authentication status/login/logout contracts and protected REST behavior accepting browser sessions or revocable API keys.
   - OpenAPI discovery through `GET /api/openapi.json`.
 - Implemented runtime/demo behavior:
-  - Supported Docker image and Compose deployment run Mina as a configured host UID/GID with a read-only root, independent config/backup binds, named database/cache volumes, localhost-only publishing by default, fresh-deployment authentication bootstrap, env-only database-key forwarding, and baked signed `httpfs` artifacts for both supported architectures.
+  - A noninteractive fresh-state installer provisions the supported Docker Compose deployment with private generated credentials, authenticated encrypted storage, a CLI-created automation API key, health verification, and safe refusal of existing deployment state.
+  - The supported Docker image and Compose deployment run Mina as a configured host UID/GID with a read-only root, independent config/backup binds, named database/cache volumes, localhost-only publishing by default, fresh-deployment authentication bootstrap, env-only database-key forwarding, and baked signed `httpfs` artifacts for both supported architectures.
   - Docker publication workflows build multi-architecture GHCR SHA images and guard `main` promotion behind registry-image Compose lifecycle verification.
-  - `just test-docker` runs a real encrypted Docker lifecycle check covering authentication persistence, Compose health, demo-data retention across recreation/restart/image replacement, encrypted backups/restores, database validation, and cleanup.
+  - `just test-docker` runs a real installer and encrypted Docker lifecycle check covering fresh provisioning/refusal, API-key access, authentication persistence, Compose health, demo-data retention across recreation/restart/image replacement, encrypted backups/restores, database validation, and cleanup.
   - Runtime opens one app for the process lifetime and composes REST, embedded Streamable HTTP MCP at `/mcp`, and embedded web UI handlers.
   - Optional config-backed authentication loads one immutable startup snapshot; CLI-only atomic mutations manage users, long-lived browser sessions, and revocable API keys outside the accounting database.
   - Runtime runs non-blocking startup and recurring operations in `serve`, with operation status and manual trigger APIs protected when authentication is enabled.

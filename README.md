@@ -35,202 +35,164 @@ Mina is still moving quickly. See [VISION.md](VISION.md) for the full destinatio
 
 ## Quick Start
 
-The supported deployment path is Docker Compose. It keeps Mina bound to localhost, gives the database and cache persistent volumes, and configures scheduled backups. Encryption is recommended for every persistent deployment.
-
-```bash
-mkdir -p "$HOME/mina-deployment"
-cd "$HOME/mina-deployment"
-curl -fsSLo compose.yaml \
-  https://raw.githubusercontent.com/mishamsk/mina/main/docker/compose.yaml
-curl -fsSLo .env.example \
-  https://raw.githubusercontent.com/mishamsk/mina/main/docker/.env.example
-
-mkdir -p config backups
-chmod 0700 config backups
-cp .env.example .env
-chmod 0600 .env
-
-# Edit .env manually (or ask an agent to edit it): set MINA_UID/MINA_GID,
-# replace both initial-admin placeholders, and uncomment and set a generated
-# database key. Keep its assignment absent only when deliberately choosing
-# plaintext database and backup files.
-
-docker compose pull
-docker compose up -d
-docker compose ps
-```
-
-Generate and store the database key and initial administrator password in a password manager. `openssl rand -base64 32` is suitable for either secret. Shell-exported values override `.env`, so automation may pre-export `MINA_UID`, `MINA_GID`, `MINA_INITIAL_ADMIN_EMAIL`, `MINA_INITIAL_ADMIN_PASSWORD`, and `MINA_DATABASE_ENCRYPTION_KEY` before the Compose commands instead of writing secrets into `.env`.
-
-The initial-admin variables are consumed only if first startup must create `auth.toml`; Mina removes them from the long-running process environment. Existing config and authentication files are never changed by later values.
-
-Open <http://127.0.0.1:8080>. The image is `ghcr.io/mishamsk/mina:main`; the Compose health check uses `GET /api/health`. Existing deployments with a config file are never silently opted into authentication or overwritten.
-
-Prefer to delegate? Give your coding agent this prompt:
+Give this to a coding agent:
 
 ```text
-Set up a safe Mina demo for me. The project is https://github.com/mishamsk/mina.
+Set up Mina for me from https://github.com/mishamsk/mina.
 
-Do not assume the repository is already on this machine. Fetch and read the current README and any setup files it links to from the main branch before doing anything. Then determine whether you are running on my personal computer or on a remote server; ask me only if you cannot tell safely.
+Read the current README before acting. Unless I explicitly ask for persistent storage, use one of its exact one-command ephemeral demo paths. Keep Mina on 127.0.0.1, do not create a database or config file, and do not overwrite an existing deployment or use a busy port. Verify /api/health and that the browser UI loads, then tell me the local URL, the command you used, how to stop it, and that its data disappears when it stops.
 
-- On a personal computer, prefer a local Mina binary and run an ephemeral demo with no database file, bound only to 127.0.0.1. Use a published release when one exists; otherwise follow the README's mise installation path from main.
-- On a remote server, use the repository's supported Docker Compose setup with persistent state and backups. Seed demo data only on the first start, make sure later restarts do not try to seed it again, keep Mina bound to the server's loopback interface, and give me an SSH tunnel or existing private-network URL. Never expose Mina directly to the public internet.
-
-Do not overwrite an existing Mina database, config, deployment, or port. Verify /api/health and that the UI loads. Then tell me what you chose and why, the URL I should open, where state and backups live (or that the demo is ephemeral), and the exact commands to stop, restart, and remove the demo.
+If I ask for a persistent deployment, use the README's Compose installer instead. Keep its authentication, encryption, private files, backups, and loopback binding intact; never expose Mina directly to the public internet.
 ```
 
-### Release Binary
+### Try the Demo
 
-Download the archive for your platform from [GitHub Releases](https://github.com/mishamsk/mina/releases), put `mina` on your `PATH`, then start a persistent local instance. Supply the key only through the process environment:
+With Go and its platform C/C++ build prerequisites installed, run Mina directly from the public module:
 
 ```bash
-printf 'Mina database encryption key: ' >&2
-IFS= read -rs MINA_DATABASE_ENCRYPTION_KEY
-printf '\n' >&2
-export MINA_DATABASE_ENCRYPTION_KEY
-mina serve --db "$HOME/mina.duckdb"
+go run github.com/mishamsk/mina/cmd/mina@main serve --demo
 ```
 
-Generate a new key with `openssl rand -base64 32`, store it in a password manager, and enter it at the prompt above. Confirm database creation, then open <http://127.0.0.1:8080>. Run `mina serve --help` for config, host, port, logging, and demo options.
-
-A release binary's first encrypted writable start downloads DuckDB's signed, version-matched `httpfs` extension, so a clean installation needs outbound network access. Supported Docker images bundle the extension and are the offline-capable deployment path.
-
-### Install With mise
-
-If you already use [mise](https://mise.jdx.dev/), its Go backend can build and activate Mina globally from source:
+Or let [mise](https://mise.jdx.dev/) provide Go:
 
 ```bash
-mise use -g go:github.com/mishamsk/mina/cmd/mina@latest
-printf 'Mina database encryption key: ' >&2
-IFS= read -rs MINA_DATABASE_ENCRYPTION_KEY
-printf '\n' >&2
-export MINA_DATABASE_ENCRYPTION_KEY
-mina serve --db "$HOME/mina.duckdb"
+mise x go@1.26 -- go run github.com/mishamsk/mina/cmd/mina@main serve --demo
 ```
 
-Generate and store the key before the first persistent start, as described above. This route requires the Go/CGO build prerequisites used by DuckDB. Release binaries or Compose are less adventurous.
+Open <http://127.0.0.1:8080>. The demo uses in-memory accounting state, so everything disappears when the process stops. Both commands fetch and build source on first use.
 
-### Try Demo Data
+### Deploy with Docker
 
-For a disposable look around, omit `--db` and seed deterministic demo data:
+For an encrypted, authenticated deployment with persistent data and backups, install Docker with Compose v2, `curl`, and OpenSSL, then run:
 
 ```bash
-mina serve --demo
+curl -fsSL https://raw.githubusercontent.com/mishamsk/mina/main/docker/install.sh | sh -s -- --dir "$HOME/mina"
 ```
 
-No database file means the accounting state disappears when Mina stops. Demo seeding is only accepted for new state.
+The command is noninteractive, defaults the administrator to `admin@local`, prints the generated credentials once, and starts Mina at <http://127.0.0.1:8080>. See the [full Compose guide](#docker-compose-deployment) before changing exposure, secrets, storage, or update behavior.
 
-### Enable Authentication for a Native Install
+## REST, MCP & CLI
 
-Add `auth_file = "auth.toml"` to the loaded `config.toml`, initialize the first user with `mina auth init owner@example.com`, then start or restart Mina and sign in. The [authentication guide](docs/authentication.md) has the complete native workflow, API-key setup, and security tradeoffs. The auth file itself is CLI-owned and must never be edited by hand.
+The browser UI is Mina's primary human interface. The same running server also exposes:
 
-## Data, Backups, and Privacy
+- REST health at `/api/health` and its OpenAPI document at `/api/openapi.json`.
+- Streamable HTTP MCP at `/mcp` for agents.
+- A generated REST-backed CLI through `mina client --server URL`.
+- Local one-shot CLI access through `mina client --db PATH` when no server owns that database.
 
-With the Compose setup:
+When `auth_file` is configured, authenticated REST accepts a browser cookie or API key. The remote CLI and stdio MCP read `MINA_API_KEY`; Streamable HTTP MCP clients send the same secret as bearer authentication. When `auth_file` is omitted, REST and Streamable HTTP MCP accept unauthenticated requests:
 
-- `mina-data` holds the portable accounting database, encrypted with AES-256-GCM when `MINA_DATABASE_ENCRYPTION_KEY` is present.
-- `mina-cache` holds rebuildable provider data.
-- `./config/config.toml` holds operational configuration.
-- `./config/auth.toml` holds CLI-managed authentication state for fresh deployments; do not edit it by hand.
-- `./backups` receives database backups; the template keeps 14 and schedules a daily backup at `03:00` UTC. Backups from an encrypted database use the same key and are encrypted too.
-
-The key is intentionally not a Mina setting: there is no TOML field, CLI flag, REST/MCP/UI input, or settings-snapshot value for it. Compose forwards it from the operator's shell environment or deployment `.env` file. Keep `.env` mode `0600`, out of version control and ordinary deployment backups, and keep a separate copy of the key in a password manager. A key/file mismatch fails without changing the database; omit the assignment and shell export only when intentionally using plaintext state.
-
-Losing the key makes the encrypted database and every encrypted backup unrecoverable. Keep the key separately from the database and backups, retain tested independent backup copies, and test restore with `MINA_DATABASE_ENCRYPTION_KEY` set before relying on them. Encryption protects files at rest; it is not authentication and Mina does not claim NIST, FIPS, or other compliance certification.
-
-Named volumes survive `docker compose down`. `docker compose down --volumes` deletes them. A backup on the same machine is useful; a tested copy elsewhere is an actual recovery plan.
-
-Trigger a backup from the UI command palette or through the API with `MINA_API_KEY` set to a valid key:
+Install the host binary first with the same Go and platform C/C++ build prerequisites as the demo. Compose does not install it on the host:
 
 ```bash
-curl -fsS -X POST \
-  -H "Authorization: Bearer $MINA_API_KEY" \
-  http://127.0.0.1:8080/api/background-operations/database-backup/runs
+go install github.com/mishamsk/mina/cmd/mina@main
 ```
 
-Mina is local-first, not magically private. Authentication limits network access, while encryption reduces exposure from copied files; neither protects a compromised running process or disclosed credentials. Keep the listener, credentials, encryption key, files, and backup copies inside boundaries you trust.
+Go installs `mina` in `GOBIN`, or in `GOPATH/bin` when `GOBIN` is unset. Add that directory to `PATH`, then run:
 
-Manage Compose users and API keys through Mina's auth CLI. Every mutation requires a service restart; API-key secrets are displayed only once:
+```bash
+export MINA_SERVER_URL=http://127.0.0.1:8080
+export MINA_API_KEY='<API key>'
+
+mina client --server "$MINA_SERVER_URL" transactions list --limit 5
+mina mcp stdio --server "$MINA_SERVER_URL"
+```
+
+Run `mina client --help`, `mina mcp --help`, or inspect the OpenAPI document for the available surface. Mina's MCP tools describe their own inputs; agents should confirm before mutations and use filtered list/search operations for discovery.
+
+## Security and Data
+
+- Mina is alpha software. Keep tested, independent backups of every persistent database you care about.
+- Mina serves plain HTTP and binds to loopback by default. Use only a local machine or trusted private network, or place it behind a TLS-terminating reverse proxy with access controls. Never publish it directly to the internet.
+- Authentication is household access control, not roles, hosted identity, or transport encryption. When `auth_file` is configured, REST accepts browser sessions or API keys and network MCP accepts API keys only; without `auth_file`, both accept unauthenticated requests. A local `mina client --db` session is deliberately trusted.
+- Persistent DuckDB files and Mina-created database backups use AES-256-GCM when `MINA_DATABASE_ENCRYPTION_KEY` is present. The key is environment-only: it has no TOML setting, CLI flag, REST/MCP/UI input, or settings-snapshot value.
+- Losing the encryption key makes the database and its encrypted backups unrecoverable. Keep a separate password-manager copy away from the data and backup files, and test restores with the key before relying on them. A wrong or missing key fails without changing the database.
+- Encryption protects copied files at rest; authentication limits application access. Neither protects a compromised running process, disclosed credentials, or observable plain-HTTP traffic, and Mina makes no compliance-certification claim.
+- Only `mina auth` may change `auth.toml`; never edit it by hand. API-key secrets are returned once when created and must be handled like passwords.
+- Keep local config, authentication state, credential files, and backups private. Mina database backups do not include config or authentication state, so back those up separately and keep independent database copies outside the Mina host.
+
+The [authentication guide](docs/authentication.md) covers native setup, browser-session behavior, user and API-key lifecycle, and recovery details.
+
+## Docker Compose Deployment
+
+Compose is Mina's supported persistent deployment. It keeps the listener on `127.0.0.1`, runs Mina as your numeric host UID/GID with a read-only container filesystem, enables authentication and database encryption, and configures scheduled backups.
+
+### Install
+
+Prerequisites:
+
+- Docker Engine or Docker Desktop with `docker compose` v2 and a running daemon.
+- `curl` and OpenSSL available to an ordinary non-root host user.
+- An absent or empty deployment directory and an unused local port, `8080` by default.
+
+Run the installer from anywhere:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mishamsk/mina/main/docker/install.sh | sh -s -- --dir "$HOME/mina"
+```
+
+Use `--email you@example.com` to replace the default `admin@local`, or `--port PORT` when `8080` is unavailable. `--image IMAGE` is available for an intentional image override. The script never prompts.
+
+Before creating state, the installer verifies its prerequisites and refuses a nonempty target or an existing Compose project, database volume, config, auth file, `.env`, or backup directory. It resolves `main` once, downloads `compose.yaml` and `.env.example` from that exact commit, and installs only the Compose file, private config and backup directories, and a mode-`0600` `.env`.
+
+The installer generates independent database and administrator secrets, starts the service, creates the `automation` API key only through `mina auth`, stores it as `MINA_API_KEY` in `.env`, restarts Mina, then verifies health and authenticated API access. It prints the initial password and API key once on success. Copy the password, API key, and database encryption key from the private `.env` to a password manager.
+
+If setup fails, the installer exits nonzero and removes only the files, containers, network, and volumes it created. Fix the reported cause and rerun the same command. An existing deployment is never an update target for the installer.
+
+### Stored State
+
+Inside the deployment directory:
+
+- `.env` contains deployment identity and credentials, including the env-only database key and automation API key. Keep it mode `0600`, out of version control, and outside ordinary deployment backups.
+- `config/config.toml` contains operational settings.
+- `config/auth.toml` contains CLI-owned authentication state.
+- `backups/` receives database backups.
+
+Compose also creates project-scoped `mina-data` and `mina-cache` volumes. `mina-data` holds the portable accounting database; `mina-cache` is rebuildable provider data. The template keeps 14 database backups and schedules one daily at `03:00` UTC. Backups of an encrypted database use the same key and remain encrypted.
+
+### Operate and Update
+
+Run Compose commands from the deployment directory:
+
+```bash
+cd "$HOME/mina"
+
+docker compose ps
+docker compose stop
+docker compose up -d
+```
+
+Update the supported `main` image after taking and copying a backup:
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+Migrations move forward only; downgrades are not supported. The installer does not replace an existing deployment or refresh its Compose template.
+
+Manage users and API keys through Mina's auth CLI, then restart the service so the new authentication snapshot takes effect:
 
 ```bash
 docker compose run --rm --no-deps mina auth user list
 docker compose run --rm --no-deps mina auth user add another@example.com
-docker compose run --rm --no-deps mina auth api-key create automation
+docker compose run --rm --no-deps mina auth api-key create another-client
 docker compose restart mina
 ```
 
-## Operating Compose
-
-Update and recreate Mina. Compose automatically reuses the encrypted database
-key from the deployment `.env` file. If the key is not stored there, export it
-in the shell before running these commands. For a plaintext database, keep
-`MINA_DATABASE_ENCRYPTION_KEY` absent from both sources.
+Trigger an immediate database backup from the browser command palette or with the installed automation key:
 
 ```bash
-docker compose pull
-docker compose up -d
+MINA_API_KEY="$(sed -n 's/^MINA_API_KEY=//p' .env)"
+MINA_HOST_PORT="$(sed -n 's/^MINA_HOST_PORT=//p' .env)"
+curl -fsS -X POST \
+  -H "Authorization: Bearer $MINA_API_KEY" \
+  "http://127.0.0.1:$MINA_HOST_PORT/api/background-operations/database-backup/runs"
 ```
 
-Stop it gracefully:
+`docker compose down` removes containers and the network but preserves named volumes. `docker compose down --volumes` deletes the database and cache volumes and is destructive. A backup on the same machine is useful, but only a tested independent copy is a recovery plan.
 
-```bash
-docker compose stop
-```
-
-For trusted remote access, keep Mina private behind a TLS-terminating proxy with access controls and a private network such as Tailscale. Do not publish Mina's port directly to the internet.
-
-## Releases and Compatibility
-
-Normal builds follow the tip of `main`. Mina will only get a semantic version tag and GitHub release when that exact build is ready enough to release, or once compatibility rules are in place and breaking changes are handled deliberately.
-
-The goal is to always provide a forward migration path for databases and configuration. Downgrades are not supported: after Mina upgrades your data, do not expect an older build to understand it. Back up before updating.
-
-## REST API
-
-When Mina is running:
-
-- Health: `<Mina server URL>/api/health`
-- OpenAPI document: `<Mina server URL>/api/openapi.json`
-- Protected REST operations: `Authorization: Bearer <API key>`
-
-## MCP and CLI Clients
-
-Mina provides programmatic CLI and MCP clients for agents and scripts. Both are REST-backed interfaces that effectively wrap Mina's REST surface, while leaving room for client-specific features over time.
-
-`<Mina server URL>` is `http://<host>:<port>`, using the `--host` and `--port` values passed to `mina serve`.
-
-### MCP
-
-The running Mina server exposes Streamable HTTP MCP at `<Mina server URL>/mcp`. When `auth_file` is configured, supply `Authorization: Bearer <API key>`; when it is omitted, connect without that header. For authenticated stdio operation, configure the equivalent of:
-
-```text
-MINA_API_KEY='<API key>' mina mcp stdio --server "$MINA_SERVER_URL"
-```
-
-Omit `MINA_API_KEY` when Mina authentication is disabled.
-
-> [!CAUTION]
-> Authentication does not make plain HTTP safe from observers. Keep MCP on a trusted private network or behind a TLS-terminating reverse proxy; never publish it directly to the internet.
-
-All MCP tools document their purpose and inputs in the server; agents should use filtered list or search tools for discovery, get tools for known IDs, and ask for confirmation before using any tool that creates, changes, or deletes data. Client-specific configuration and Mina's transport behavior are covered by the [CLI and MCP architecture](docs/cli-mcp-architecture.md).
-
-### CLI Client
-
-The REST-backed CLI can operate on the running server:
-
-```bash
-MINA_API_KEY='<API key>' \
-  mina client --server "$MINA_SERVER_URL" transactions list --limit 5
-```
-
-For one-off commands against a database file not already owned by `mina serve`, use `--db PATH` for an in-process local session without starting a server:
-
-```bash
-mina client --db ./mina.duckdb transactions list --limit 5
-```
-
-Run `mina client --help` and command-level `--help` for the available operations and input flags.
-Authentication setup and API-key lifecycle are covered by the [authentication guide](docs/authentication.md).
+For trusted remote access, keep the Compose port bound to loopback and use an authenticated TLS proxy, SSH tunnel, or private-network loopback forwarder such as Tailscale Serve; a private network alone cannot reach a loopback-only listener. Preserve the named volumes, independent config/backup binds, non-root identity, hardening, and health check when adding a proxy overlay.
 
 ## Contributing
 
