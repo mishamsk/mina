@@ -1773,7 +1773,7 @@ func Operations() []Operation {
 			Method:      "GET",
 			Path:        "/api/accounts/balances",
 			Summary:     "List current and posted-only balances for active tracked accounts.",
-			Description: "Returns server-computed per-currency balances for active `owned` and `party` accounts. `current_balance` includes pending and posted records; `posted_balance` includes posted records only; cancelled and expected records are excluded. Accounts with `account.currency` and no records return a zero row for that currency.",
+			Description: "Returns server-computed per-currency balances for active `owned` and `party` accounts. `current_balance` includes pending and posted records; `posted_balance` includes posted records only; cancelled and expected records are excluded. When a current effective credit limit exists, `remaining_credit` is the limit plus the signed current balance. Accounts with `account.currency` and no records return a zero row for that currency.",
 			CLI:         CLIOperation{Area: "accounts", Name: "list-balances"},
 			Input: InputDescriptor{
 				Query: []ParameterDescriptor{

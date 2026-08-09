@@ -764,7 +764,10 @@ const AccountsSidePanelContent = ({
         currencyMode: "single",
       }));
       setFieldError("type", undefined);
-      await Promise.all([loadHistory(), refreshAccountsAfterMutation()]);
+      await Promise.all([
+        loadHistory(),
+        refreshAccountsAfterMutation({ registerAccountId: account.account_id }),
+      ]);
       if (!panelSessionActiveRef.current) {
         return;
       }
@@ -780,7 +783,7 @@ const AccountsSidePanelContent = ({
   };
 
   const deleteCreditLimit = async (entry: CreditLimitHistory) => {
-    if (deletingCreditLimitId) {
+    if (!account || deletingCreditLimitId) {
       return;
     }
     setDeletingCreditLimitId(entry.credit_limit_history_id);
@@ -803,7 +806,7 @@ const AccountsSidePanelContent = ({
       setHistoryResolved(true);
       const [nextHistory] = await Promise.all([
         loadHistory(),
-        refreshAccountsAfterMutation(),
+        refreshAccountsAfterMutation({ registerAccountId: account.account_id }),
       ]);
       if (!panelSessionActiveRef.current) {
         return;

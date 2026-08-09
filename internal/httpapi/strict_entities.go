@@ -8,6 +8,7 @@ import (
 	"github.com/mishamsk/mina/internal/services"
 	"github.com/mishamsk/mina/internal/services/accounts"
 	"github.com/mishamsk/mina/internal/services/categories"
+	"github.com/mishamsk/mina/internal/services/creditlimits"
 	"github.com/mishamsk/mina/internal/services/members"
 	"github.com/mishamsk/mina/internal/services/tags"
 	"github.com/mishamsk/mina/internal/services/values"
@@ -48,13 +49,17 @@ func (s *strictServer) ListAccountBalances(ctx context.Context, request openapi.
 		return nil, err
 	}
 
-	currentLimits, err := s.deps.CreditLimits.CurrentByAccounts(ctx, accountIDsFromBalances(balances), values.LocalCivilDateFromTime(s.deps.clock().Now()))
+	currentLimits, err := s.deps.CreditLimits.CurrentByAccounts(ctx, accountIDsFromBalances(balances))
+	if err != nil {
+		return nil, err
+	}
+	responses, err := accountBalanceAPIResponses(balances, currentLimits)
 	if err != nil {
 		return nil, err
 	}
 
 	return openapi.ListAccountBalances200JSONResponse{
-		Balances: accountBalanceAPIResponses(balances, currentLimits),
+		Balances: responses,
 	}, nil
 }
 
@@ -480,11 +485,18 @@ func groupStateAPIResponses(groups []services.FQNGroupState) []openapi.GroupStat
 	return responses
 }
 
-func accountBalanceAPIResponse(balance accounts.AccountBalance, currentLimits map[int64]values.Decimal) openapi.AccountBalance {
+func accountBalanceAPIResponse(balance accounts.AccountBalance, currentLimits map[int64]values.Decimal) (openapi.AccountBalance, error) {
 	var creditLimit *string
+	var remainingCredit *string
 	if limit, ok := currentLimits[balance.AccountID]; ok {
-		value := limit.String()
-		creditLimit = &value
+		limitValue := limit.String()
+		creditLimit = &limitValue
+		remaining, err := creditlimits.RemainingCredit(limit, balance.CurrentBalance)
+		if err != nil {
+			return openapi.AccountBalance{}, err
+		}
+		remainingValue := remaining.String()
+		remainingCredit = &remainingValue
 	}
 
 	return openapi.AccountBalance{
@@ -494,17 +506,22 @@ func accountBalanceAPIResponse(balance accounts.AccountBalance, currentLimits ma
 		CurrentBalance:    balance.CurrentBalance.String(),
 		CurrentBalanceUsd: balance.CurrentBalanceUSD.String(),
 		PostedBalance:     balance.PostedBalance.String(),
+		RemainingCredit:   remainingCredit,
 		UnconvertedCount:  balance.UnconvertedCount,
-	}
+	}, nil
 }
 
-func accountBalanceAPIResponses(balances []accounts.AccountBalance, currentLimits map[int64]values.Decimal) []openapi.AccountBalance {
+func accountBalanceAPIResponses(balances []accounts.AccountBalance, currentLimits map[int64]values.Decimal) ([]openapi.AccountBalance, error) {
 	responses := make([]openapi.AccountBalance, 0, len(balances))
 	for _, balance := range balances {
-		responses = append(responses, accountBalanceAPIResponse(balance, currentLimits))
+		response, err := accountBalanceAPIResponse(balance, currentLimits)
+		if err != nil {
+			return nil, err
+		}
+		responses = append(responses, response)
 	}
 
-	return responses
+	return responses, nil
 }
 
 func accountIDsFromBalances(balances []accounts.AccountBalance) []int64 {

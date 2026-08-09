@@ -11,6 +11,13 @@ interface CategoryFixture {
   readonly fqn: string;
 }
 
+interface BalanceFixture {
+  readonly account_id: number;
+  readonly currency: string;
+  readonly current_balance: string;
+  readonly remaining_credit?: string;
+}
+
 const waitForStatusDetailsPreference = async (page: Page) => {
   await page.waitForFunction(
     () =>
@@ -75,6 +82,41 @@ const updateAccountFeatured = async (
     },
   );
   expect(response.ok()).toBe(true);
+};
+
+const createCreditLimit = async (
+  page: Page,
+  account: AccountFixture,
+  creditLimit: string,
+): Promise<void> => {
+  const response = await page.request.post(
+    `/api/accounts/${account.account_id}/credit-limit-history`,
+    {
+      data: {
+        credit_limit: creditLimit,
+        effective_date: "2026-05-01",
+      },
+    },
+  );
+  expect(response.ok()).toBe(true);
+};
+
+const getAccountBalance = async (
+  page: Page,
+  account: AccountFixture,
+): Promise<BalanceFixture> => {
+  const response = await page.request.get(
+    `/api/accounts/balances?account_ids=${account.account_id}`,
+  );
+  expect(response.ok()).toBe(true);
+  const body = (await response.json()) as {
+    readonly balances: readonly BalanceFixture[];
+  };
+  const balance = body.balances.find(
+    (candidate) => candidate.account_id === account.account_id,
+  );
+  expect(balance).toBeDefined();
+  return balance as BalanceFixture;
 };
 
 const createCategory = async (
@@ -384,6 +426,7 @@ test("featured balance strip follows account metadata and transaction saves", as
     "USD",
   );
   const category = await createCategory(page, `E2E:Featured:${unique}`);
+  await createCreditLimit(page, fundingAccount, "100.00");
 
   await page.goto("/transactions?page=1&pageSize=25");
   await expect(
@@ -398,7 +441,26 @@ test("featured balance strip follows account metadata and transaction saves", as
   const featuredRow = balanceStrip
     .getByTestId("featured-balance-row")
     .filter({ hasText: featuredLeaf });
-  await expect(featuredRow).toContainText("0.00 $");
+  const balanceBeforeSave = await getAccountBalance(page, fundingAccount);
+  expect(balanceBeforeSave.remaining_credit).toBeDefined();
+  const remainingCreditLabel = featuredRow.getByText("Remaining credit", {
+    exact: true,
+  });
+  await expect(remainingCreditLabel).toBeVisible();
+  await expect(remainingCreditLabel).not.toHaveAttribute("title");
+  await expect
+    .poll(() =>
+      remainingCreditLabel.evaluate(
+        (label) => label.scrollWidth > label.clientWidth,
+      ),
+    )
+    .toBe(true);
+  await remainingCreditLabel.hover();
+  await expect(page.getByRole("tooltip")).toHaveText("Remaining credit");
+  await page.mouse.move(0, 0);
+  await expect(featuredRow).toContainText(
+    `${Number(balanceBeforeSave.remaining_credit).toFixed(2)} $`,
+  );
   const beforeSaveText = await featuredRow.innerText();
 
   await page
@@ -422,7 +484,11 @@ test("featured balance strip follows account metadata and transaction saves", as
 
   await expect(page.getByText("Entries this session: 1")).toBeVisible();
   await expect.poll(() => featuredRow.innerText()).not.toBe(beforeSaveText);
-  await expect(featuredRow).toContainText("-12.34 $");
+  const balanceAfterSave = await getAccountBalance(page, fundingAccount);
+  expect(balanceAfterSave.remaining_credit).toBeDefined();
+  await expect(featuredRow).toContainText(
+    `${Number(balanceAfterSave.remaining_credit).toFixed(2)} $`,
+  );
 });
 
 test("featured balance strip separates and labels party balances", async ({

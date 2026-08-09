@@ -769,8 +769,12 @@ func TestRecordSearchPaginationBoundary(t *testing.T) {
 }
 
 func TestAccountRecordRunningBalanceBoundary(t *testing.T) {
-	client := newSharedClient(t)
+	localZone := time.FixedZone("local-test", -7*60*60)
+	clock := apptest.NewFakeClock(time.Date(2026, 7, 4, 23, 30, 0, 0, localZone))
+	client := newSharedClient(t, apptest.WithClock(clock))
 	refs := createSearchRefs(t, client)
+	createCreditLimitHistory(t, client, refs.CheckingAccountId, "30.00", "2026-01-01")
+	createCreditLimitHistory(t, client, refs.CheckingAccountId, "50.00", "2026-07-05")
 
 	const sharedInitiatedDate = "2024-01-01"
 
@@ -812,6 +816,7 @@ func TestAccountRecordRunningBalanceBoundary(t *testing.T) {
 		second.JSON201.Records[0].RecordId,
 	})
 	assertRecordRunningBalances(t, page.JSON200.Records, []string{"-12.34000000", "-24.68000000", "-37.02000000"})
+	assertRecordRemainingCredits(t, page.JSON200.Records, []string{"17.66000000", "5.32000000", "-7.02000000"})
 
 	sortDesc := httpclient.SearchAccountJournalRecordsParamsSortDirDesc
 	newestFirstPage, err := client.REST().SearchAccountJournalRecordsWithResponse(context.Background(), refs.CheckingAccountId, &httpclient.SearchAccountJournalRecordsParams{
@@ -830,6 +835,7 @@ func TestAccountRecordRunningBalanceBoundary(t *testing.T) {
 		cancelled.JSON201.Records[0].RecordId,
 	})
 	assertRecordRunningBalances(t, newestFirstPage.JSON200.Records, []string{"-37.02000000", "-24.68000000", "-12.34000000"})
+	assertRecordRemainingCredits(t, newestFirstPage.JSON200.Records, []string{"-7.02000000", "5.32000000", "17.66000000"})
 
 	filteredMemo := "Second"
 	filtered, err := client.REST().SearchAccountJournalRecordsWithResponse(context.Background(), refs.CheckingAccountId, &httpclient.SearchAccountJournalRecordsParams{
@@ -842,6 +848,7 @@ func TestAccountRecordRunningBalanceBoundary(t *testing.T) {
 	}
 	assertRecordIDs(t, filtered.JSON200.Records, []int64{second.JSON201.Records[0].RecordId})
 	assertRecordRunningBalances(t, filtered.JSON200.Records, []string{"-37.02000000"})
+	assertRecordRemainingCredits(t, filtered.JSON200.Records, []string{"-7.02000000"})
 
 	withoutRunningBalance, err := client.REST().SearchAccountJournalRecordsWithResponse(context.Background(), refs.CheckingAccountId, nil)
 	requireNoTransportError(t, "search account records without running balance", err)
@@ -851,9 +858,36 @@ func TestAccountRecordRunningBalanceBoundary(t *testing.T) {
 	if withoutRunningBalance.JSON200.Records[0].RunningBalance != nil {
 		t.Fatalf("running_balance without opt-in = %v, want nil", withoutRunningBalance.JSON200.Records[0].RunningBalance)
 	}
+	if withoutRunningBalance.JSON200.Records[0].RemainingCredit != nil {
+		t.Fatalf("remaining_credit without running-balance opt-in = %v, want nil", withoutRunningBalance.JSON200.Records[0].RemainingCredit)
+	}
 
 	if first.JSON201.Records[0].RunningBalance != nil {
 		t.Fatalf("create response running_balance = %v, want nil", first.JSON201.Records[0].RunningBalance)
+	}
+	if first.JSON201.Records[0].RemainingCredit != nil {
+		t.Fatalf("create response remaining_credit = %v, want nil", first.JSON201.Records[0].RemainingCredit)
+	}
+	transactionRead, err := client.REST().GetTransactionWithResponse(context.Background(), first.JSON201.TransactionId)
+	requireNoTransportError(t, "read transaction without remaining credit", err)
+	if transactionRead.StatusCode() != http.StatusOK {
+		t.Fatalf("read transaction status = %d, want %d; body %s", transactionRead.StatusCode(), http.StatusOK, transactionRead.Body)
+	}
+	for _, record := range transactionRead.JSON200.Records {
+		if record.RemainingCredit != nil {
+			t.Fatalf("transaction read remaining_credit = %v, want nil; record = %+v", record.RemainingCredit, record)
+		}
+	}
+
+	genericRecords, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), nil)
+	requireNoTransportError(t, "search generic records without remaining credit", err)
+	if genericRecords.StatusCode() != http.StatusOK {
+		t.Fatalf("search generic records status = %d, want %d; body %s", genericRecords.StatusCode(), http.StatusOK, genericRecords.Body)
+	}
+	for _, record := range genericRecords.JSON200.Records {
+		if record.RemainingCredit != nil {
+			t.Fatalf("generic record remaining_credit = %v, want nil; record = %+v", record.RemainingCredit, record)
+		}
 	}
 }
 
@@ -902,6 +936,11 @@ func TestAccountRecordRunningBalanceByCurrency(t *testing.T) {
 		secondUSDResponse.JSON201.Records[0].RecordId,
 	})
 	assertRecordRunningBalances(t, response.JSON200.Records, []string{"-12.34000000", "-10.00000000", "-13.34000000"})
+	for _, record := range response.JSON200.Records {
+		if record.RemainingCredit != nil {
+			t.Fatalf("remaining_credit without current limit = %v, want nil; record = %+v", record.RemainingCredit, record)
+		}
+	}
 }
 
 func ptrTo[T any](value T) *T {
@@ -1035,6 +1074,19 @@ func assertRecordRunningBalances(t *testing.T, records []httpclient.JournalRecor
 	for index, record := range records {
 		if record.RunningBalance == nil || *record.RunningBalance != want[index] {
 			t.Fatalf("running_balance at %d = %v, want %q; records = %+v", index, record.RunningBalance, want[index], records)
+		}
+	}
+}
+
+func assertRecordRemainingCredits(t *testing.T, records []httpclient.JournalRecord, want []string) {
+	t.Helper()
+
+	if len(records) != len(want) {
+		t.Fatalf("record count = %d, want %d; records = %+v", len(records), len(want), records)
+	}
+	for index, record := range records {
+		if record.RemainingCredit == nil || *record.RemainingCredit != want[index] {
+			t.Fatalf("remaining_credit at %d = %v, want %q; records = %+v", index, record.RemainingCredit, want[index], records)
 		}
 	}
 }

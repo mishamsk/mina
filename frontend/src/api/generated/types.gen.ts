@@ -129,6 +129,10 @@ export type AccountBalance = {
      */
     credit_limit?: string;
     /**
+     * JSON string, not a JSON number. Present only when `credit_limit` is present; bank-facing remaining credit derived as the current credit limit plus the signed `current_balance`, without clamping or absolute-value conversion. May be negative when the account is over limit. Responses use fixed-scale formatting with exactly 8 fractional digits.
+     */
+    remaining_credit?: string;
+    /**
      * JSON string, not a JSON number. Approximate USD-equivalent DECIMAL(18,8) aggregate using stored journal-record amount_usd values only; no query-time exchange-rate conversion is performed. Partial when unconverted_count is greater than zero. Responses use fixed-scale formatting with exactly 8 fractional digits.
      */
     current_balance_usd: string;
@@ -1079,6 +1083,10 @@ export type JournalRecord = {
      * JSON string or null, not a JSON number. Present on account-record listings when requested; aggregate DECIMAL(18,8) balance after this record in the record currency, with pending and posted records included and cancelled and expected records excluded. Responses use fixed-scale formatting with exactly 8 fractional digits.
      */
     running_balance?: string | null;
+    /**
+     * JSON string, not a JSON number. Present only on `GET /api/accounts/{account_id}/records` when `include_running_balance=true` supplies `running_balance` and the account has a credit limit effective on the API runtime clock's local civil date. Derived for every returned row as that current limit plus the signed running balance, without clamping or absolute-value conversion; historical limits are not reconstructed. May be negative when the account is over limit. Responses use fixed-scale formatting with exactly 8 fractional digits.
+     */
+    remaining_credit?: string;
     category_id: number | null;
     record_role: RecordRole;
     tag_ids: Array<number>;

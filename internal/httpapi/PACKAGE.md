@@ -23,6 +23,7 @@
 - Strict-server handlers consume generated request objects and generated `request.Params`; they map DTOs to service inputs, call services, and map service outputs, errors, and statuses to generated responses.
 - Full background-operation envelope listing maps optional enum-validated operation filtering and page parameters to the operation-run service; concrete per-operation endpoints own typed run-detail mapping and the service owns newest-first semantics.
 - Strict-server mappers parse OpenAPI string decimal fields into service value types; generated OpenAPI date values are mapped directly without string round-trips.
+- Account-balance responses derive remaining credit from each current balance and the existing current-limit batch; account-register responses perform one service-current limit lookup only when running balances are requested and apply that limit to every returned row.
 - Direct raw query parsing in `internal/httpapi` is disallowed unless a specific transport rule cannot be expressed through OpenAPI validation or generated params; document any exception near the code.
 - Generated binding errors, OpenAPI validation errors, and strict handler errors all map to Mina's stable JSON error envelope before responses leave the adapter.
 - HTTP handlers call service use cases; they do not own domain validation or SQL.

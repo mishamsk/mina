@@ -20,9 +20,13 @@ interface BalanceStripProps {
 }
 
 const formatBalance = (row: FeaturedBalanceRow): string =>
-  `${formatDecimalAmount(row.balance.current_balance, row.balance.currency, {
-    positiveSign: false,
-  })} ${currencyDisplayMarker(row.balance.currency)}`;
+  `${formatDecimalAmount(
+    row.balance.remaining_credit ?? row.balance.current_balance,
+    row.balance.currency,
+    {
+      positiveSign: false,
+    },
+  )} ${currencyDisplayMarker(row.balance.currency)}`;
 
 const partyBalanceLabel = (row: FeaturedBalanceRow): string => {
   if (row.balance.current_balance.startsWith("-")) {
@@ -33,12 +37,18 @@ const partyBalanceLabel = (row: FeaturedBalanceRow): string => {
     : "Owed to household";
 };
 
+const balanceLabel = (row: FeaturedBalanceRow): string | undefined =>
+  row.balance.remaining_credit !== undefined
+    ? "Remaining credit"
+    : row.account.account_type === "party"
+      ? partyBalanceLabel(row)
+      : undefined;
+
 const collapsedTooltipLabel = (rows: readonly FeaturedBalanceRow[]): string =>
   rows
-    .map((row) =>
-      row.account.account_type === "party"
-        ? `${row.account.display_label} (${row.account.fqn}) ${partyBalanceLabel(row)}: ${formatBalance(row)}`
-        : `${row.account.display_label} (${row.account.fqn}) ${formatBalance(row)}`,
+    .map(
+      (row) =>
+        `${row.account.display_label} (${row.account.fqn})${balanceLabel(row) ? ` ${balanceLabel(row)}:` : ""} ${formatBalance(row)}`,
     )
     .join("; ");
 
@@ -48,9 +58,11 @@ const BalanceAmount = ({ row }: { readonly row: FeaturedBalanceRow }) => (
     className="max-w-full min-w-0 text-right font-mono text-xs leading-5 break-all text-[var(--frame-foreground)] tabular-nums"
   >
     <span>
-      {formatDecimalAmount(row.balance.current_balance, row.balance.currency, {
-        positiveSign: false,
-      })}
+      {formatDecimalAmount(
+        row.balance.remaining_credit ?? row.balance.current_balance,
+        row.balance.currency,
+        { positiveSign: false },
+      )}
     </span>
     <span className="text-[var(--frame-muted)]">
       {` ${currencyDisplayMarker(row.balance.currency)}`}
@@ -84,10 +96,15 @@ const ExpandedBalanceGroup = ({
               testId="featured-balance-name"
               to={`/accounts/${row.account.account_id}`}
             />
-            {row.account.account_type === "party" ? (
-              <span className="block truncate font-mono text-xs text-[var(--frame-muted)]">
-                {partyBalanceLabel(row)}
-              </span>
+            {balanceLabel(row) ? (
+              <Tooltip
+                className="block min-w-0"
+                label={balanceLabel(row) ?? ""}
+              >
+                <span className="block truncate font-mono text-xs text-[var(--frame-muted)]">
+                  {balanceLabel(row)}
+                </span>
+              </Tooltip>
             ) : null}
           </div>
           <BalanceAmount row={row} />

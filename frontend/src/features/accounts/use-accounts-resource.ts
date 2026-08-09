@@ -8,6 +8,7 @@ import {
   clearAccountsPageLoading,
   getAccountsSnapshot,
   invalidateAccountHeaders,
+  invalidateAccountRegisterPages,
   invalidateAllAccountRegisterPages,
   invalidateAllAccountTransactionCache,
   invalidateTransactionPages,
@@ -107,6 +108,7 @@ export const refreshAccountsAfterMutation = async (options?: {
   readonly account?: Account;
   readonly bulk?: boolean;
   readonly preserveAccountHeader?: boolean;
+  readonly registerAccountId?: number;
   readonly removedAccountId?: number;
   readonly templateCompatibilityChanged?: boolean;
 }): Promise<void> => {
@@ -119,6 +121,8 @@ export const refreshAccountsAfterMutation = async (options?: {
     invalidateAllAccountRegisterPages();
     invalidateAllAccountTransactionCache();
     invalidateTransactionPages();
+  } else if (options?.registerAccountId !== undefined) {
+    invalidateAccountRegisterPages(options.registerAccountId);
   }
   if (options?.templateCompatibilityChanged) {
     invalidateTransactionTemplates();

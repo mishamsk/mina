@@ -438,7 +438,7 @@ func newAccountingServices(
 			Tags:          tagService,
 			Members:       memberService,
 			Accounts:      accountService,
-			CreditLimits:  creditlimits.NewService(store.NewCreditLimitHistoryStore(appDB), accountService, referenceSerializer),
+			CreditLimits:  creditlimits.NewService(store.NewCreditLimitHistoryStore(appDB), accountService, referenceSerializer, opts.clock()),
 			ExchangeRates: exchangeRates,
 			Transactions:  transactionService,
 			Templates:     templateService,

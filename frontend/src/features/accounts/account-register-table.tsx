@@ -78,9 +78,16 @@ const displayAmount = (
 const skeletonTemplate = (
   showAccount: boolean,
   showRunningBalance: boolean,
+  showRemainingCredit: boolean,
 ): string => {
+  if (showAccount && showRunningBalance && showRemainingCredit) {
+    return "grid-cols-[7rem_minmax(9rem,1fr)_minmax(9rem,1.2fr)_minmax(7rem,1fr)_minmax(7rem,1fr)_6rem_8rem_8rem_8rem]";
+  }
   if (showAccount && showRunningBalance) {
     return "grid-cols-[7rem_minmax(9rem,1fr)_minmax(10rem,1.2fr)_minmax(8rem,1fr)_minmax(8rem,1fr)_6rem_8rem_8rem]";
+  }
+  if (showRunningBalance && showRemainingCredit) {
+    return "grid-cols-[7rem_minmax(9rem,1.4fr)_minmax(7rem,1fr)_minmax(7rem,1fr)_6rem_8rem_8rem_8rem]";
   }
   if (showAccount) {
     return "grid-cols-[7rem_minmax(10rem,1fr)_minmax(10rem,1.2fr)_minmax(8rem,1fr)_minmax(8rem,1fr)_6rem_8rem]";
@@ -93,18 +100,30 @@ const skeletonTemplate = (
 
 const AccountRegisterSkeleton = ({
   showAccount,
+  showRemainingCredit,
   showRunningBalance,
 }: {
   readonly showAccount: boolean;
+  readonly showRemainingCredit: boolean;
   readonly showRunningBalance: boolean;
 }) => {
-  const template = skeletonTemplate(showAccount, showRunningBalance);
-  const columnCount = 6 + (showAccount ? 1 : 0) + (showRunningBalance ? 1 : 0);
+  const template = skeletonTemplate(
+    showAccount,
+    showRunningBalance,
+    showRemainingCredit,
+  );
+  const columnCount =
+    6 +
+    (showAccount ? 1 : 0) +
+    (showRunningBalance ? 1 : 0) +
+    (showRemainingCredit ? 1 : 0);
 
   return (
     <div
       className="bg-card min-h-0 flex-1 overflow-hidden border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]"
       aria-hidden="true"
+      data-column-count={columnCount}
+      data-testid="account-register-skeleton"
     >
       <div
         className={cn(
@@ -158,12 +177,21 @@ export const AccountRegisterTable = ({
   transactionsById,
 }: AccountRegisterTableProps) => {
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const showRemainingCredit =
+    showRunningBalance &&
+    (records
+      ? records.some(
+          (record) =>
+            record.running_balance != null && record.remaining_credit != null,
+        )
+      : !showAccount);
 
   if (loading && !records) {
     return (
       <div ref={rootRef} className="flex h-full min-h-0 flex-col gap-3">
         <AccountRegisterSkeleton
           showAccount={showAccount}
+          showRemainingCredit={showRemainingCredit}
           showRunningBalance={showRunningBalance}
         />
       </div>
@@ -260,6 +288,8 @@ export const AccountRegisterTable = ({
             "account-register-table w-full table-fixed border-collapse text-sm",
             showAccount && "account-register-table--with-account",
             !showRunningBalance && "account-register-table--without-running",
+            showRemainingCredit &&
+              "account-register-table--with-remaining-credit",
           )}
         >
           <colgroup>
@@ -274,6 +304,9 @@ export const AccountRegisterTable = ({
             <col className="account-register-amount-column" />
             {showRunningBalance ? (
               <col className="account-register-running-column" />
+            ) : null}
+            {showRemainingCredit ? (
+              <col className="account-register-remaining-column" />
             ) : null}
           </colgroup>
           <thead className="sticky top-0 z-10 bg-[var(--table-header)]">
@@ -299,7 +332,23 @@ export const AccountRegisterTable = ({
               </th>
               {showRunningBalance ? (
                 <th className="account-register-running-column px-3 py-2 text-right">
-                  Running
+                  Balance
+                </th>
+              ) : null}
+              {showRemainingCredit ? (
+                <th
+                  aria-label="Remaining credit"
+                  className="account-register-remaining-column px-3 py-2 text-right"
+                >
+                  <span className="account-register-remaining-label">
+                    Remaining credit
+                  </span>
+                  <span
+                    aria-hidden="true"
+                    className="account-register-remaining-label--compact"
+                  >
+                    Credit
+                  </span>
                 </th>
               ) : null}
             </tr>
@@ -318,6 +367,10 @@ export const AccountRegisterTable = ({
               const amount = displayAmount(record.amount, record.currency);
               const runningBalance = displayAmount(
                 record.running_balance,
+                record.currency,
+              );
+              const remainingCredit = displayAmount(
+                record.remaining_credit,
                 record.currency,
               );
               const displayStatus = recordStatus(record);
@@ -487,6 +540,8 @@ export const AccountRegisterTable = ({
                         )}
                         positiveSign
                         tone="neutral"
+                        truncate
+                        overflowTooltip
                       />
                     ) : null}
                   </td>
@@ -496,8 +551,28 @@ export const AccountRegisterTable = ({
                         <AmountText
                           amount={runningBalance}
                           className="justify-end"
+                          overflowTooltip
                           positiveSign={false}
                           tone="neutral"
+                          truncate
+                        />
+                      ) : (
+                        <span className="text-muted-foreground font-mono">
+                          -
+                        </span>
+                      )}
+                    </td>
+                  ) : null}
+                  {showRemainingCredit ? (
+                    <td className="account-register-remaining-column px-3 py-2 text-right whitespace-nowrap">
+                      {remainingCredit ? (
+                        <AmountText
+                          amount={remainingCredit}
+                          className="justify-end"
+                          overflowTooltip
+                          positiveSign={false}
+                          tone="neutral"
+                          truncate
                         />
                       ) : (
                         <span className="text-muted-foreground font-mono">

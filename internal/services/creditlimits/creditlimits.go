@@ -52,19 +52,32 @@ type ReferenceSerializer interface {
 	SerializeReferenceOperation(func() error) error
 }
 
+// Clock supplies the current process time for effective credit-limit lookups.
+type Clock interface {
+	Now() time.Time
+}
+
 // Service owns credit limit history use cases and validation.
 type Service struct {
 	repo     Repository
 	accounts AccountReferenceValidator
 	refs     ReferenceSerializer
+	clock    Clock
+}
+
+// RemainingCredit derives bank-facing remaining credit from a current credit
+// limit and Mina's signed account balance.
+func RemainingCredit(creditLimit, balance values.Decimal) (values.Decimal, error) {
+	return creditLimit.Add(balance)
 }
 
 // NewService creates a credit limit history service backed by repo.
-func NewService(repo Repository, accounts AccountReferenceValidator, refs ReferenceSerializer) *Service {
+func NewService(repo Repository, accounts AccountReferenceValidator, refs ReferenceSerializer, clock Clock) *Service {
 	return &Service{
 		repo:     repo,
 		accounts: accounts,
 		refs:     refs,
+		clock:    clock,
 	}
 }
 
@@ -151,10 +164,11 @@ func (s *Service) ListByAccount(ctx context.Context, accountID int64, opts ListO
 // CurrentByAccounts returns current active credit limits keyed by account ID.
 //
 // Tombstoned rows are excluded. For each account, the row with the latest
-// effective date on or before asOf wins; ties are resolved by the highest
+// effective date on or before the service clock's local civil date wins; ties
+// are resolved by the highest
 // credit-limit history ID. Accounts with no applicable limit are absent from the
 // returned map; absence does not mean a zero credit limit.
-func (s *Service) CurrentByAccounts(ctx context.Context, accountIDs []int64, asOf values.CivilDate) (map[int64]values.Decimal, error) {
+func (s *Service) CurrentByAccounts(ctx context.Context, accountIDs []int64) (map[int64]values.Decimal, error) {
 	uniqueIDs := deduplicateIDs(accountIDs)
 	for _, id := range uniqueIDs {
 		if id <= 0 {
@@ -171,7 +185,7 @@ func (s *Service) CurrentByAccounts(ctx context.Context, accountIDs []int64, asO
 		return nil, err
 	}
 
-	return s.repo.CurrentByAccounts(ctx, uniqueIDs, asOf)
+	return s.repo.CurrentByAccounts(ctx, uniqueIDs, values.LocalCivilDateFromTime(s.clock.Now()))
 }
 
 // Delete tombstones a credit limit history entry.

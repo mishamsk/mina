@@ -35,6 +35,7 @@ interface BalanceFixture {
   readonly current_balance: string;
   readonly current_balance_usd: string;
   readonly posted_balance: string;
+  readonly remaining_credit?: string;
   readonly unconverted_count: number;
 }
 
@@ -48,6 +49,7 @@ interface JournalRecordFixture {
   readonly posted_date: string | null;
   readonly record_id: number;
   readonly running_balance?: string | null;
+  readonly remaining_credit?: string;
   readonly transaction_id: number;
 }
 
@@ -303,6 +305,7 @@ test("accounts page renders tree, URL toolbar state, balances, and sidebar navig
   );
   expect(jointBalance).toBeDefined();
   expect(sapphireBalance?.credit_limit).toBeDefined();
+  expect(sapphireBalance?.remaining_credit).toBeDefined();
 
   await expect(page.getByRole("heading", { name: "Accounts" })).toBeVisible();
   const accountsNavLink = page
@@ -367,6 +370,10 @@ test("accounts page renders tree, URL toolbar state, balances, and sidebar navig
     .getByTestId("accounts-tree-row")
     .filter({ hasText: "Sapphire" });
   await expect(sapphireRow).toBeVisible();
+  await expect(sapphireRow).toContainText("Remaining credit");
+  await expect(sapphireRow.getByTestId("amount-text")).toHaveText(
+    formatUsdMarkerAmount(sapphireBalance?.remaining_credit ?? "0"),
+  );
   await expect(sapphireRow.getByTestId("credit-limit-indicator")).toBeVisible();
   await expect(
     sapphireRow.getByRole("button", { exact: true, name: "Has credit limit" }),
@@ -766,7 +773,7 @@ test("register headers fit display labels while group headers retain FQNs", asyn
   await expectNoHeaderOverflow(longGroupHeader);
 });
 
-test("register amount cells stay single-line through the collapse ladder", async ({
+test("register standing cells stay single-line through the collapse ladder", async ({
   page,
 }) => {
   const accounts = await listFixtures<AccountFixture>(
@@ -775,35 +782,267 @@ test("register amount cells stay single-line through the collapse ladder", async
     "accounts",
   );
   const joint = findByFqn(accounts, "bank:Chase:joint_checking");
+  const sapphire = findByFqn(accounts, "bank:Chase:Sapphire");
 
-  for (const viewport of [
-    { width: 1440, height: 900 },
-    { width: 620, height: 900 },
+  for (const { account, viewports } of [
+    {
+      account: joint,
+      viewports: [
+        { width: 1440, height: 900 },
+        { width: 620, height: 900 },
+      ],
+    },
+    {
+      account: sapphire,
+      viewports: [
+        { width: 1440, height: 900 },
+        { width: 620, height: 900 },
+        { width: 480, height: 900 },
+      ],
+    },
   ]) {
-    await page.setViewportSize(viewport);
-    await page.goto(`/accounts/${joint.account_id}?page=1&pageSize=50`);
-    const amountCells = page.locator(
-      ".account-register-amount-column [data-testid='amount-text'], .account-register-running-column [data-testid='amount-text']",
+    for (const viewport of viewports) {
+      await page.setViewportSize(viewport);
+      await page.goto(`/accounts/${account.account_id}?page=1&pageSize=50`);
+      const amountCells = page.locator(
+        ".account-register-amount-column [data-testid='amount-text'], .account-register-running-column [data-testid='amount-text'], .account-register-remaining-column [data-testid='amount-text']",
+      );
+      await expect(amountCells.first()).toBeVisible();
+      await expect
+        .poll(() =>
+          amountCells.evaluateAll((elements) =>
+            elements.every((element) => {
+              const styles = window.getComputedStyle(element);
+              const rect = element.getBoundingClientRect();
+              const lineHeight = Number.parseFloat(styles.lineHeight);
+              const fontSize = Number.parseFloat(styles.fontSize);
+              return (
+                rect.width > 1 &&
+                styles.whiteSpace === "nowrap" &&
+                rect.height <=
+                  (Number.isFinite(lineHeight) ? lineHeight : fontSize * 1.4) *
+                    1.35
+              );
+            }),
+          ),
+        )
+        .toBe(true);
+      const narrowCreditRegister =
+        account.account_id === sapphire.account_id && viewport.width <= 620;
+      const balanceHeader = page.getByRole("columnheader", {
+        exact: true,
+        name: "Balance",
+      });
+      const remainingHeader = page.getByRole("columnheader", {
+        exact: true,
+        name: "Remaining credit",
+      });
+      await expect(balanceHeader).toHaveCount(1);
+      await expect(remainingHeader).toHaveCount(
+        account.account_id === sapphire.account_id ? 1 : 0,
+      );
+      if (!narrowCreditRegister) {
+        await expect(balanceHeader).toBeVisible();
+        if (account.account_id === sapphire.account_id) {
+          await expect(remainingHeader).toBeVisible();
+        }
+      }
+      if (narrowCreditRegister) {
+        await expect
+          .poll(() =>
+            page
+              .getByTestId("account-register-table-scroll")
+              .evaluate((container) => {
+                const counterparty = container.querySelector<HTMLElement>(
+                  "td.account-register-counterparty-column",
+                );
+                const containerRect = container.getBoundingClientRect();
+                const counterpartyRect = counterparty?.getBoundingClientRect();
+                return (
+                  counterpartyRect !== undefined &&
+                  Math.min(counterpartyRect.right, containerRect.right) -
+                    Math.max(counterpartyRect.left, containerRect.left) >
+                    1
+                );
+              }),
+          )
+          .toBe(true);
+        await expect
+          .poll(() =>
+            page
+              .getByTestId("account-register-table-scroll")
+              .evaluate((container) => {
+                const styles = window.getComputedStyle(container);
+                const amountTexts = container.querySelectorAll<HTMLElement>(
+                  "tbody tr:first-child :is(.account-register-amount-column, .account-register-running-column, .account-register-remaining-column) [data-testid='amount-text']",
+                );
+                return {
+                  amountCount: amountTexts.length,
+                  amountsContained: Array.from(amountTexts).every(
+                    (amountText) => {
+                      const cell = amountText.closest<HTMLElement>("td");
+                      if (!cell) {
+                        return false;
+                      }
+                      const amountRect = amountText.getBoundingClientRect();
+                      const cellRect = cell.getBoundingClientRect();
+                      return (
+                        amountRect.left >= cellRect.left - 1 &&
+                        amountRect.right <= cellRect.right + 1
+                      );
+                    },
+                  ),
+                  overflowX: styles.overflowX,
+                };
+              }),
+          )
+          .toEqual({
+            amountCount: 3,
+            amountsContained: true,
+            overflowX: "hidden",
+          });
+        await expect
+          .poll(() =>
+            page.getByTestId("account-header").evaluate((header) => {
+              const balanceRows = header.querySelectorAll<HTMLElement>(
+                ".account-header-standing dl > div",
+              );
+              const markers = header.querySelectorAll<HTMLElement>(
+                "[data-testid='amount-text'] > .shrink-0",
+              );
+              return (
+                balanceRows.length > 0 &&
+                Array.from(balanceRows).every((row) => {
+                  const labels = row.querySelectorAll<HTMLElement>("dt");
+                  const values = row.querySelectorAll<HTMLElement>("dd");
+                  return Array.from(labels).every((label, index) => {
+                    const value = values[index];
+                    if (!value) {
+                      return false;
+                    }
+                    const labelRect = label.getBoundingClientRect();
+                    const valueRect = value.getBoundingClientRect();
+                    return labelRect.right <= valueRect.left + 1;
+                  });
+                }) &&
+                markers.length > 0 &&
+                Array.from(markers).every(
+                  (marker) =>
+                    window.getComputedStyle(marker).display !== "none",
+                )
+              );
+            }),
+          )
+          .toBe(true);
+        await expect
+          .poll(() =>
+            page
+              .getByTestId("account-register-table-scroll")
+              .evaluate((container) => {
+                const row = container.querySelector<HTMLElement>(
+                  "[data-testid='account-register-row']",
+                );
+                if (!row) {
+                  return false;
+                }
+                const containerRect = container.getBoundingClientRect();
+                const rowRect = row.getBoundingClientRect();
+                const visibleHeight =
+                  Math.min(rowRect.bottom, containerRect.bottom) -
+                  Math.max(rowRect.top, containerRect.top);
+                return visibleHeight >= rowRect.height - 1;
+              }),
+          )
+          .toBe(true);
+      }
+      if (!narrowCreditRegister) {
+        await expect
+          .poll(() =>
+            page
+              .getByTestId("account-register-table-scroll")
+              .evaluate((container) => {
+                const date = container.querySelector<HTMLElement>(
+                  "th.account-register-date-column",
+                );
+                const remaining = container.querySelector<HTMLElement>(
+                  "th.account-register-remaining-column",
+                );
+                const containerRect = container.getBoundingClientRect();
+                const remainingRect = remaining?.getBoundingClientRect();
+                return (
+                  container.scrollWidth <= container.clientWidth + 1 &&
+                  (date?.clientWidth ?? 0) > 1 &&
+                  (remainingRect === undefined ||
+                    remainingRect.right <= containerRect.right + 1)
+                );
+              }),
+          )
+          .toBe(true);
+      }
+    }
+  }
+});
+
+test("register skeleton renders while its credit shape resolves", async ({
+  page,
+}) => {
+  const accounts = await listFixtures<AccountFixture>(
+    page,
+    "/api/accounts",
+    "accounts",
+  );
+  const sapphire = findByFqn(accounts, "bank:Chase:Sapphire");
+  let releaseHeader: () => void = () => undefined;
+  let releaseRecords: () => void = () => undefined;
+  let markHeaderRequested: () => void = () => undefined;
+  let markRecordsRequested: () => void = () => undefined;
+  const headerReleased = new Promise<void>((resolve) => {
+    releaseHeader = resolve;
+  });
+  const recordsReleased = new Promise<void>((resolve) => {
+    releaseRecords = resolve;
+  });
+  const headerRequested = new Promise<void>((resolve) => {
+    markHeaderRequested = resolve;
+  });
+  const recordsRequested = new Promise<void>((resolve) => {
+    markRecordsRequested = resolve;
+  });
+  await page.route(
+    new RegExp(`/api/accounts/${sapphire.account_id}(?:\\?|$)`),
+    async (route) => {
+      markHeaderRequested();
+      await headerReleased;
+      await route.continue();
+    },
+  );
+  await page.route(
+    new RegExp(`/api/accounts/${sapphire.account_id}/records(?:\\?|$)`),
+    async (route) => {
+      markRecordsRequested();
+      await recordsReleased;
+      await route.continue();
+    },
+  );
+
+  try {
+    await page.goto(`/accounts/${sapphire.account_id}?page=1&pageSize=50`);
+    await Promise.all([headerRequested, recordsRequested]);
+    await expect(page.getByTestId("account-register-skeleton")).toHaveAttribute(
+      "data-column-count",
+      "8",
     );
-    await expect(amountCells.first()).toBeVisible();
-    await expect
-      .poll(() =>
-        amountCells.evaluateAll((elements) =>
-          elements.every((element) => {
-            const styles = window.getComputedStyle(element);
-            const rect = element.getBoundingClientRect();
-            const lineHeight = Number.parseFloat(styles.lineHeight);
-            const fontSize = Number.parseFloat(styles.fontSize);
-            return (
-              styles.whiteSpace === "nowrap" &&
-              rect.height <=
-                (Number.isFinite(lineHeight) ? lineHeight : fontSize * 1.4) *
-                  1.35
-            );
-          }),
-        ),
-      )
-      .toBe(true);
+    releaseHeader();
+    await expect(
+      page.getByTestId("account-header").getByText("Remaining credit"),
+    ).toBeVisible();
+    await expect(page.getByTestId("account-register-skeleton")).toHaveAttribute(
+      "data-column-count",
+      "8",
+    );
+  } finally {
+    releaseHeader();
+    releaseRecords();
   }
 });
 
@@ -849,6 +1088,7 @@ test("account page renders header and paginated running-balance register", async
         funding_account_id: account.account_id,
         initiated_date: `2026-05-${String(index).padStart(2, "0")}`,
         memo: `E2E account register ${unique} ${String(index).padStart(2, "0")}`,
+        ...(index === 27 ? { settlement: { status: "pending" } } : {}),
       },
     });
     expect(response.ok()).toBe(true);
@@ -912,36 +1152,51 @@ test("account page renders header and paginated running-balance register", async
     ),
     "first transaction",
   );
-  if (!firstRecord.posted_date || !secondRecord.posted_date) {
-    throw new Error("directly posted register records need posted dates");
-  }
+  expect(firstRecord.posted_date).toBeUndefined();
+  expect(firstRecord.pending_date).toBeTruthy();
+  expect(secondRecord.posted_date).toBeTruthy();
   expect(recordsBody.total_count).toBe(27);
   expect(
-    Date.parse(firstRecord.posted_date),
+    Date.parse(firstRecord.initiated_date),
     "records are reverse chronological",
-  ).toBeGreaterThan(Date.parse(secondRecord.posted_date));
+  ).toBeGreaterThan(Date.parse(secondRecord.initiated_date));
 
   const balance = balancesBody.balances.find(
     (row) => row.account_id === account.account_id,
   );
   expect(balance).toBeDefined();
   expect(firstRecord.running_balance).toBe(balance?.current_balance);
+  expect(firstRecord.remaining_credit).toBe(balance?.remaining_credit);
 
   await expect(
     page.getByRole("heading", { name: account.display_label }),
   ).toBeVisible();
   await expect(page.getByText("Owned", { exact: true })).toBeVisible();
   await expect(page.getByText("USD", { exact: true }).first()).toBeVisible();
-  await expect(page.getByText("Current", { exact: true })).toBeVisible();
-  await expect(page.getByText("Posted", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Remaining credit", { exact: true }).first(),
+  ).toBeVisible();
+  await expect(page.getByText("Full balance", { exact: true })).toBeVisible();
+  await expect(page.getByText("Posted balance", { exact: true })).toBeVisible();
+  await expect(page.getByText("Current", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Posted", { exact: true })).toHaveCount(0);
   await expect(page.getByText("Current USD")).toHaveCount(0);
   await expect(page.getByText("Posted USD")).toHaveCount(0);
   const accountHeader = page.getByTestId("account-header");
   const currentBalanceText = formatUsdMarkerAmount(
     balance?.current_balance ?? "0",
   );
-  expect(balance?.posted_balance).toBe(balance?.current_balance);
-  await expect(accountHeader.getByText(currentBalanceText)).toHaveCount(2);
+  const postedBalanceText = formatUsdMarkerAmount(
+    balance?.posted_balance ?? "0",
+  );
+  expect(balance?.posted_balance).not.toBe(balance?.current_balance);
+  await expect(accountHeader.getByText(currentBalanceText)).toHaveCount(1);
+  await expect(accountHeader.getByText(postedBalanceText)).toHaveCount(1);
+  await expect(
+    accountHeader.getByText(
+      formatUsdMarkerAmount(balance?.remaining_credit ?? "0"),
+    ),
+  ).toHaveCount(1);
   await expect(page.getByText("Credit limit", { exact: true })).toBeVisible();
   await expect(page.getByText("Credit limit USD")).toHaveCount(0);
   await expect(accountHeader.getByText("5,000.00 $")).toHaveCount(2);
@@ -972,6 +1227,9 @@ test("account page renders header and paginated running-balance register", async
   );
   await expect(firstRow).toContainText(
     formatUsdMarkerAmount(firstRecord.running_balance ?? "0"),
+  );
+  await expect(firstRow).toContainText(
+    formatUsdMarkerAmount(firstRecord.remaining_credit ?? "0"),
   );
 
   await expect(
@@ -1339,6 +1597,9 @@ test("account group page renders subtotals and combined prefix register", async 
   await expect(page.getByRole("columnheader", { name: "Running" })).toHaveCount(
     0,
   );
+  await expect(
+    page.getByRole("columnheader", { name: "Remaining credit" }),
+  ).toHaveCount(0);
   await expect(
     page
       .locator(`[data-record-id="${walletRecord.record_id}"]`)

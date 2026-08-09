@@ -112,6 +112,7 @@ Canonical rendering rules; every screen uses these so the product reads as one s
 ### Balances
 
 - A displayed account balance includes posted and pending records; expected and cancelled records are excluded. Account pages additionally show a posted-only figure.
+- Accounts with a current effective credit limit use the server-derived remaining credit as their primary standing in the featured-account strip, Overview leaves, Accounts tree, and account page. The account page leads with `Remaining credit` and retains `Full balance`, `Posted balance`, and `Credit limit`; accounts without a current limit retain their existing balance labels and values. Group balance rows and USD subtotals remain signed accounting aggregates and never sum remaining credit.
 - Balance semantics follow account type per `docs/accounting-semantics.md`: `owned` and `party` accounts surface balances as household state, presented as separate groupings; `flow` and `system` accounts never appear in balance views.
 
 ### Hierarchical names (accounts, categories, tags, templates)
@@ -222,7 +223,7 @@ Each screen below lists purpose, layout, behavior, primary data sources, and pha
 ### 1. Overview (dashboard) — Phase 2
 
 - Purpose: current balances on main accounts at a glance, plus a pulse of recent activity. The landing page.
-- Balances: `owned` and `party` accounts grouped by FQN root prefix (`banks`, `cash`, `people`, …), each group listing account display labels with full-FQN tooltips, currency, and current balance; group subtotal as `≈ USD`. `party` groups read as amounts owed to or by the household, never as household funds. Prominent accounts surface on top. Credit cards show balance and, when known, remaining credit against the current limit.
+- Balances: `owned` and `party` accounts grouped by FQN root prefix (`banks`, `cash`, `people`, …), each group listing account display labels with full-FQN tooltips, currency, and primary standing; group subtotal as `≈ USD`. `party` groups read as amounts owed to or by the household, never as household funds. Prominent accounts surface on top. Accounts with a current credit limit lead with server-derived remaining credit; all others lead with current balance.
 - Month pulse: current-month spend and income totals as plain numbers (no charts; charts arrive with Phase 3 reporting).
 - Recent activity: the latest classified transaction lines, linking into Transactions.
 - Later phases add net-worth trend, richer summaries (Phase 3), and budget status (Phase 4) — as additions, not a redesign.
@@ -262,10 +263,10 @@ Each screen below lists purpose, layout, behavior, primary data sources, and pha
 ### 4. Account and group pages — Phase 2
 
 - Purpose: one account's (or account group's) activity and standing; the drill-down target from Overview, the balance strip, and Accounts.
-- Account page header: effective display label with a full-FQN tooltip, account type badge, currency mode, labeled flat favorite toggle, current balance and posted-only balance, credit limit with history (when present), external link metadata, hidden marker. Fixed system accounts replace mutation controls with a read-only indicator.
-- The currency appears in the header exactly once as a compact chip next to the type badge (sized like it): an ISO/crypto code for single-currency, or `Multi-currency` for `NULL`. Balance figures carry each amount's own currency marker — labels stay plain ("Current", "Posted", "Credit limit") — and the balances block right-aligns with the content edge on wide screens, mirroring the account name's left margin.
+- Account page header: effective display label with a full-FQN tooltip, account type badge, currency mode, labeled flat favorite toggle, account standing, credit limit with history (when present), external link metadata, hidden marker. With a current effective limit, standing leads with `Remaining credit` and retains `Full balance`, `Posted balance`, and `Credit limit`; otherwise it retains `Current` and `Posted`. Fixed system accounts replace mutation controls with a read-only indicator.
+- The currency appears in the header exactly once as a compact chip next to the type badge (sized like it): an ISO/crypto code for single-currency, or `Multi-currency` for `NULL`. Balance figures carry each amount's own currency marker; the conditional labels above stay plain, and the balances block right-aligns with the content edge on wide screens, mirroring the account name's left margin.
 - Register: the shared browser in records shape — the account's records with date, transaction counterparty, category, memo, statuses, signed amount, defaulting to newest first. Selecting a record opens the side peek panel showing the full containing transaction; arrow keys walk rows while the panel follows; "Open transaction" jumps to full detail/edit.
-- Running balance: a per-record running balance column, shown in date-ordered views in either direction and hidden whenever filters, search, or non-chronological sort would make it misleading.
+- Running balance: a per-record `Balance` column, shown in date-ordered views in either direction and hidden whenever filters, search, or non-chronological sort would make it misleading. Individual account registers add a separate `Remaining credit` column only when the API supplies both values; group registers remain unchanged. Both numeric columns are right-aligned and single-line; at phone width, credit-register rows stack identity/date above labeled Amount, Balance, and Remaining values without horizontal panning.
 - Group pages: every non-leaf FQN node is a page — subtotal balances of child `owned` and `party` accounts plus a combined register across the whole prefix (e.g. `banks:Chase:*`), which naturally includes the group's `flow` accounts (fees, interest) per the prefix-grouping semantics.
 
 ### 5. Accounts (chart of accounts) — Phase 2

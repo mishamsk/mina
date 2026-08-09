@@ -1191,6 +1191,9 @@ type AccountBalance struct {
 	// PostedBalance JSON string, not a JSON number. Posted-only aggregate DECIMAL(18,8) balance in this currency; cancelled and expected records excluded. Responses use fixed-scale formatting with exactly 8 fractional digits.
 	PostedBalance string `json:"posted_balance"`
 
+	// RemainingCredit JSON string, not a JSON number. Present only when `credit_limit` is present; bank-facing remaining credit derived as the current credit limit plus the signed `current_balance`, without clamping or absolute-value conversion. May be negative when the account is over limit. Responses use fixed-scale formatting with exactly 8 fractional digits.
+	RemainingCredit *string `json:"remaining_credit,omitempty"`
+
 	// UnconvertedCount Count of active non-cancelled records contributing to this balance row that do not have amount_usd.
 	UnconvertedCount int64 `json:"unconverted_count"`
 }
@@ -1918,6 +1921,9 @@ type JournalRecord struct {
 
 	// RecordRole Accounting role derived independently from one record's account, sign, and category intent.
 	RecordRole RecordRole `json:"record_role"`
+
+	// RemainingCredit JSON string, not a JSON number. Present only on `GET /api/accounts/{account_id}/records` when `include_running_balance=true` supplies `running_balance` and the account has a credit limit effective on the API runtime clock's local civil date. Derived for every returned row as that current limit plus the signed running balance, without clamping or absolute-value conversion; historical limits are not reconstructed. May be negative when the account is over limit. Responses use fixed-scale formatting with exactly 8 fractional digits.
+	RemainingCredit *string `json:"remaining_credit,omitempty"`
 
 	// RunningBalance JSON string or null, not a JSON number. Present on account-record listings when requested; aggregate DECIMAL(18,8) balance after this record in the record currency, with pending and posted records included and cancelled and expected records excluded. Responses use fixed-scale formatting with exactly 8 fractional digits.
 	RunningBalance *string `json:"running_balance,omitempty"`

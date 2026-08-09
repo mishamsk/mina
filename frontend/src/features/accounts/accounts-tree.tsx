@@ -185,18 +185,27 @@ const BalanceAmounts = ({
   <div className="flex min-w-0 flex-col items-end gap-1">
     {balances.map((balance) => {
       const amount: DisplayAmount = {
-        amount: balance.current_balance,
+        amount: balance.remaining_credit ?? balance.current_balance,
         currency: balance.currency,
       };
       return (
-        <AmountText
+        <div
           key={`${balance.currency}:${balance.current_balance}`}
-          amount={amount}
-          className="min-w-0 justify-end"
-          overflowTooltip
-          positiveSign={false}
-          tone="neutral"
-        />
+          className="min-w-0 text-right"
+        >
+          {balance.remaining_credit !== undefined ? (
+            <span className="text-muted-foreground block truncate font-mono text-xs">
+              Remaining credit
+            </span>
+          ) : null}
+          <AmountText
+            amount={amount}
+            className="min-w-0 justify-end"
+            overflowTooltip
+            positiveSign={false}
+            tone="neutral"
+          />
+        </div>
       );
     })}
   </div>

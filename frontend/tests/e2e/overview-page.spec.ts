@@ -12,6 +12,7 @@ interface BalanceFixture {
   readonly currency: string;
   readonly current_balance: string;
   readonly current_balance_usd: string;
+  readonly remaining_credit?: string;
 }
 
 interface CategoryFixture {
@@ -23,9 +24,6 @@ interface TransactionFixture {
   readonly display_title: string;
   readonly transaction_id: number;
 }
-
-const decimalScale = 8;
-const decimalFactor = 10n ** BigInt(decimalScale);
 
 const fixedBrowserDateScript = `
 {
@@ -63,29 +61,6 @@ const findByFqn = <T extends { readonly fqn: string }>(
   expect(fixture, `${fqn} fixture`).toBeDefined();
   return fixture as T;
 };
-
-const decimalUnits = (value: string): bigint => {
-  const negative = value.startsWith("-");
-  const absolute = negative ? value.slice(1) : value;
-  const [whole = "0", fraction = ""] = absolute.split(".");
-  const normalizedFraction = fraction.padEnd(decimalScale, "0").slice(0, 8);
-  const units =
-    BigInt(whole || "0") * decimalFactor + BigInt(normalizedFraction);
-  return negative ? -units : units;
-};
-
-const decimalString = (units: bigint): string => {
-  const negative = units < 0n;
-  const absolute = negative ? -units : units;
-  const whole = absolute / decimalFactor;
-  const fraction = (absolute % decimalFactor)
-    .toString()
-    .padStart(decimalScale, "0");
-  return `${negative ? "-" : ""}${whole}.${fraction}`;
-};
-
-const addDecimalStrings = (values: readonly string[]): string =>
-  decimalString(values.reduce((sum, value) => sum + decimalUnits(value), 0n));
 
 const formatDecimalAmount = (value: string): string => {
   const negative = value.startsWith("-");
@@ -173,10 +148,7 @@ test("overview landing page renders grouped balances, pulse, and recent activity
     (balance) => balance.account_id === sapphire.account_id,
   );
   expect(sapphireBalance?.credit_limit).toBeDefined();
-  const remainingCredit = addDecimalStrings([
-    sapphireBalance?.credit_limit ?? "0",
-    sapphireBalance?.current_balance ?? "0",
-  ]);
+  expect(sapphireBalance?.remaining_credit).toBeDefined();
 
   await page.goto("/");
 
@@ -205,7 +177,10 @@ test("overview landing page renders grouped balances, pulse, and recent activity
     .filter({ hasText: "BlueCash" });
   await expect(sapphireRow).toContainText("Remaining credit");
   await expect(sapphireRow).toContainText(
-    formatUsdMarkerAmount(remainingCredit),
+    formatUsdMarkerAmount(sapphireBalance?.remaining_credit ?? "0"),
+  );
+  await expect(sapphireRow.getByTestId("amount-chip")).toHaveText(
+    formatUsdMarkerAmount(sapphireBalance?.remaining_credit ?? "0"),
   );
   await expect(blueCashRow).toBeVisible();
 

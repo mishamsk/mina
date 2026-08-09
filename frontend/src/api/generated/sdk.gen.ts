@@ -605,7 +605,7 @@ export const setAccountHiddenByPath = <ThrowOnError extends boolean = false>(opt
 /**
  * List current and posted-only balances for active tracked accounts.
  *
- * Returns server-computed per-currency balances for active `owned` and `party` accounts. `current_balance` includes pending and posted records; `posted_balance` includes posted records only; cancelled and expected records are excluded. Accounts with `account.currency` and no records return a zero row for that currency.
+ * Returns server-computed per-currency balances for active `owned` and `party` accounts. `current_balance` includes pending and posted records; `posted_balance` includes posted records only; cancelled and expected records are excluded. When a current effective credit limit exists, `remaining_credit` is the limit plus the signed current balance. Accounts with `account.currency` and no records return a zero row for that currency.
  */
 export const listAccountBalances = <ThrowOnError extends boolean = false>(options?: Options<ListAccountBalancesData, ThrowOnError>): RequestResult<ListAccountBalancesResponses, ListAccountBalancesErrors, ThrowOnError> => (options?.client ?? client).get<ListAccountBalancesResponses, ListAccountBalancesErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }, {

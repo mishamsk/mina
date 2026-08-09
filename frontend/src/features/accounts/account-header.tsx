@@ -10,6 +10,7 @@ import { FavoriteStarIcon } from "@/components/favorite-star-icon";
 import { Tooltip } from "@/components/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { AccountDisplayLabel, AmountText } from "@/features/ledger";
+import { cn } from "@/lib/utils";
 import { formatLocalCivilDate } from "@/utils/date";
 
 import { AccountTypeBadge } from "./account-type-badge";
@@ -32,9 +33,35 @@ const BalanceAmount = ({
 }) => {
   const displayAmount: DisplayAmount = { amount, currency };
   return (
-    <AmountText amount={displayAmount} positiveSign={false} tone="neutral" />
+    <AmountText
+      amount={displayAmount}
+      className="min-w-0 justify-end"
+      overflowTooltip
+      positiveSign={false}
+      tone="neutral"
+      truncate
+    />
   );
 };
+
+const BalanceLabel = ({
+  emphasized = false,
+  label,
+}: {
+  readonly emphasized?: boolean;
+  readonly label: string;
+}) => (
+  <dt
+    className={cn(
+      "text-muted-foreground min-w-0",
+      emphasized && "font-semibold",
+    )}
+  >
+    <Tooltip label={label} className="block min-w-0">
+      <span className="block truncate">{label}</span>
+    </Tooltip>
+  </dt>
+);
 
 const MetadataValue = ({ value }: { readonly value: string }) => (
   <dd className="text-foreground min-w-0">
@@ -58,10 +85,10 @@ export const AccountHeader = ({
 
   return (
     <div
-      className="bg-card border-2 border-[var(--border-ink)] p-4 shadow-[var(--shadow-pixel)]"
+      className="bg-card border-2 border-[var(--border-ink)] p-2 shadow-[var(--shadow-pixel)] sm:p-4"
       data-testid="account-header"
     >
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+      <div className="flex flex-col gap-2 sm:gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 space-y-3">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <AccountDisplayLabel
@@ -131,27 +158,50 @@ export const AccountHeader = ({
           ) : null}
         </div>
 
-        <div className="flex flex-col gap-3 sm:flex-row lg:ml-auto lg:justify-end">
-          <div className="border-2 border-[var(--border-ink)] bg-[var(--band)] p-3 sm:min-w-56">
+        <div className="account-header-standing flex flex-col gap-2 sm:flex-row sm:gap-3 lg:ml-auto lg:justify-end">
+          <div className="border-2 border-[var(--border-ink)] bg-[var(--band)] p-1 sm:min-w-56 sm:p-3">
             <p className="font-heading text-xs font-semibold uppercase">
               Balances
             </p>
             {balances.length > 0 ? (
-              <dl className="mt-3 space-y-3">
+              <dl className="mt-1 space-y-1 sm:mt-3 sm:space-y-3">
                 {balances.map((balance) => (
                   <div
                     key={`${balance.currency}:${balance.current_balance}:${balance.posted_balance}`}
-                    className="grid grid-cols-[1fr_auto] gap-3 font-mono text-sm"
+                    className="grid grid-cols-[minmax(0,1fr)_minmax(0,max-content)] gap-1 font-mono text-xs sm:gap-3 sm:text-sm"
                   >
-                    <dt className="text-muted-foreground">Current</dt>
-                    <dd className="text-right">
+                    {balance.remaining_credit !== undefined ? (
+                      <>
+                        <BalanceLabel emphasized label="Remaining credit" />
+                        <dd className="min-w-0 overflow-hidden text-right font-semibold">
+                          <BalanceAmount
+                            amount={balance.remaining_credit}
+                            currency={balance.currency}
+                          />
+                        </dd>
+                      </>
+                    ) : null}
+                    <BalanceLabel
+                      label={
+                        balance.remaining_credit !== undefined
+                          ? "Full balance"
+                          : "Current"
+                      }
+                    />
+                    <dd className="min-w-0 overflow-hidden text-right">
                       <BalanceAmount
                         amount={balance.current_balance}
                         currency={balance.currency}
                       />
                     </dd>
-                    <dt className="text-muted-foreground">Posted</dt>
-                    <dd className="text-right">
+                    <BalanceLabel
+                      label={
+                        balance.remaining_credit !== undefined
+                          ? "Posted balance"
+                          : "Posted"
+                      }
+                    />
+                    <dd className="min-w-0 overflow-hidden text-right">
                       <BalanceAmount
                         amount={balance.posted_balance}
                         currency={balance.currency}
@@ -159,8 +209,8 @@ export const AccountHeader = ({
                     </dd>
                     {balance.credit_limit ? (
                       <>
-                        <dt className="text-muted-foreground">Credit limit</dt>
-                        <dd className="text-right">
+                        <BalanceLabel label="Credit limit" />
+                        <dd className="min-w-0 overflow-hidden text-right">
                           <BalanceAmount
                             amount={balance.credit_limit}
                             currency={balance.currency}
@@ -179,15 +229,15 @@ export const AccountHeader = ({
           </div>
 
           {latestCreditLimit && accountCurrency ? (
-            <div className="border-2 border-[var(--border-ink)] bg-[var(--band)] p-3">
+            <div className="border-2 border-[var(--border-ink)] bg-[var(--band)] p-1 sm:p-3">
               <p className="font-heading text-xs font-semibold uppercase">
                 Credit history
               </p>
-              <ul className="mt-3 space-y-2 font-mono text-sm">
+              <ul className="mt-1 space-y-1 font-mono text-xs sm:mt-3 sm:space-y-2 sm:text-sm">
                 {accountCreditLimitHistory.slice(0, 3).map((entry) => (
                   <li
                     key={entry.credit_limit_history_id}
-                    className="flex items-center justify-between gap-3"
+                    className="flex items-center justify-between gap-1 sm:gap-3"
                   >
                     <span className="text-muted-foreground">
                       {formatLocalCivilDate(entry.effective_date)}

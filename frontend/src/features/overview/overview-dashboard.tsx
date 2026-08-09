@@ -174,13 +174,8 @@ const RecentSkeleton = () => (
 );
 
 const BalanceRow = ({ row }: { readonly row: OverviewBalanceRow }) => {
-  const remainingCredit =
-    row.balance.credit_limit === undefined
-      ? undefined
-      : sumDecimalStrings([
-          row.balance.credit_limit,
-          row.balance.current_balance,
-        ]);
+  const primaryAmount =
+    row.balance.remaining_credit ?? row.balance.current_balance;
 
   return (
     <li
@@ -201,32 +196,22 @@ const BalanceRow = ({ row }: { readonly row: OverviewBalanceRow }) => {
         </div>
         <p className="text-muted-foreground mt-1 font-mono text-xs">
           {row.balance.currency}
-          {row.account.account_type === "party" ? (
+          {row.balance.remaining_credit !== undefined ? (
+            <>
+              <span aria-hidden="true"> · </span>
+              Remaining credit
+            </>
+          ) : row.account.account_type === "party" ? (
             <>
               <span aria-hidden="true"> · </span>
               {partyBalanceLabel(row.balance.current_balance)}
-            </>
-          ) : null}
-          {remainingCredit ? (
-            <>
-              <span aria-hidden="true"> · </span>
-              <span>Remaining credit </span>
-              <AmountText
-                amount={{
-                  amount: remainingCredit,
-                  currency: row.balance.currency,
-                }}
-                className="font-semibold"
-                positiveSign={false}
-                tone="neutral"
-              />
             </>
           ) : null}
         </p>
       </div>
       <AmountText
         amount={{
-          amount: row.balance.current_balance,
+          amount: primaryAmount,
           currency: row.balance.currency,
         }}
         chip

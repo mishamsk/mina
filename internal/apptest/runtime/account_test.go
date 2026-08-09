@@ -1015,7 +1015,10 @@ func TestAccountBalancesIncludeCurrentCreditLimits(t *testing.T) {
 
 	card := scenario.AccountWithCurrency("cards:Balances:Rewards", "USD")
 	backupCard := scenario.AccountWithCurrency("cards:Balances:Backup", "USD")
+	positiveCard := scenario.AccountWithCurrency("cards:Balances:Positive", "USD")
 	noHistory := scenario.AccountWithCurrency("checking:Balances:NoLimit", "USD")
+	merchant := scenario.AccountWithType("merchant:Balances:Credit", httpclient.WritableAccountTypeFlow)
+	expenseCategory := scenario.Category("BalanceTests:Credit")
 
 	createCreditLimitHistory(t, client, card.AccountId, "5000.00", "2026-01-01")
 	createCreditLimitHistory(t, client, card.AccountId, "7000.00", "2026-07-03")
@@ -1023,8 +1026,14 @@ func TestAccountBalancesIncludeCurrentCreditLimits(t *testing.T) {
 	tombstoned := createCreditLimitHistory(t, client, card.AccountId, "8000.00", "2026-07-04")
 	deleteCreditLimitHistory(t, client, tombstoned.JSON201.CreditLimitHistoryId)
 	createCreditLimitHistory(t, client, backupCard.AccountId, "3000.00", "2026-06-01")
+	createCreditLimitHistory(t, client, positiveCard.AccountId, "1000.00", "2026-06-01")
+	createBalanceTransaction(t, client, card.AccountId, merchant.AccountId, expenseCategory.CategoryId, "USD", "-1000.00", "1000.00", balanceStatePosted)
+	createBalanceTransaction(t, client, card.AccountId, merchant.AccountId, expenseCategory.CategoryId, "USD", "-500.00", "500.00", balanceStatePending)
+	createBalanceTransaction(t, client, card.AccountId, merchant.AccountId, expenseCategory.CategoryId, "USD", "-200.00", "200.00", balanceStateCancelled)
+	createBalanceTransaction(t, client, backupCard.AccountId, merchant.AccountId, expenseCategory.CategoryId, "USD", "-3500.00", "3500.00", balanceStatePosted)
+	createBalanceTransaction(t, client, positiveCard.AccountId, merchant.AccountId, expenseCategory.CategoryId, "USD", "200.00", "-200.00", balanceStatePosted)
 
-	accountIDs := []int64{card.AccountId, backupCard.AccountId, noHistory.AccountId}
+	accountIDs := []int64{card.AccountId, backupCard.AccountId, positiveCard.AccountId, noHistory.AccountId}
 	balances, err := client.REST().ListAccountBalancesWithResponse(context.Background(), &httpclient.ListAccountBalancesParams{AccountIds: &accountIDs})
 	if err != nil {
 		t.Fatalf("list account balances with credit limits request: %v", err)
@@ -1033,8 +1042,9 @@ func TestAccountBalancesIncludeCurrentCreditLimits(t *testing.T) {
 		t.Fatalf("list account balances with credit limits status = %d, want %d; body %s", balances.StatusCode(), http.StatusOK, balances.Body)
 	}
 	assertAccountBalances(t, balances.JSON200.Balances, []wantAccountBalance{
-		{accountID: card.AccountId, currency: "USD", current: "0.00000000", creditLimit: ptrTo("7000.00000000"), currentUSD: "0.00000000", posted: "0.00000000", unconvertedCount: 0},
-		{accountID: backupCard.AccountId, currency: "USD", current: "0.00000000", creditLimit: ptrTo("3000.00000000"), currentUSD: "0.00000000", posted: "0.00000000", unconvertedCount: 0},
+		{accountID: card.AccountId, currency: "USD", current: "-1500.00000000", creditLimit: ptrTo("7000.00000000"), remainingCredit: ptrTo("5500.00000000"), currentUSD: "-1500.00000000", posted: "-1000.00000000", unconvertedCount: 0},
+		{accountID: backupCard.AccountId, currency: "USD", current: "-3500.00000000", creditLimit: ptrTo("3000.00000000"), remainingCredit: ptrTo("-500.00000000"), currentUSD: "-3500.00000000", posted: "-3500.00000000", unconvertedCount: 0},
+		{accountID: positiveCard.AccountId, currency: "USD", current: "200.00000000", creditLimit: ptrTo("1000.00000000"), remainingCredit: ptrTo("1200.00000000"), currentUSD: "200.00000000", posted: "200.00000000", unconvertedCount: 0},
 		{accountID: noHistory.AccountId, currency: "USD", current: "0.00000000", currentUSD: "0.00000000", posted: "0.00000000", unconvertedCount: 0},
 	})
 }
@@ -1059,7 +1069,7 @@ func TestAccountBalancesUseLocalCivilDateForCurrentCreditLimits(t *testing.T) {
 		t.Fatalf("list account balances with local-date credit limit status = %d, want %d; body %s", balances.StatusCode(), http.StatusOK, balances.Body)
 	}
 	assertAccountBalances(t, balances.JSON200.Balances, []wantAccountBalance{
-		{accountID: card.AccountId, currency: "USD", current: "0.00000000", creditLimit: ptrTo("4000.00000000"), currentUSD: "0.00000000", posted: "0.00000000", unconvertedCount: 0},
+		{accountID: card.AccountId, currency: "USD", current: "0.00000000", creditLimit: ptrTo("4000.00000000"), remainingCredit: ptrTo("4000.00000000"), currentUSD: "0.00000000", posted: "0.00000000", unconvertedCount: 0},
 	})
 }
 
@@ -1679,6 +1689,7 @@ type wantAccountBalance struct {
 	currency         string
 	current          string
 	creditLimit      *string
+	remainingCredit  *string
 	currentUSD       string
 	posted           string
 	unconvertedCount int64
@@ -1695,6 +1706,7 @@ func assertAccountBalances(t *testing.T, balances []httpclient.AccountBalance, w
 			balance.Currency != want[index].currency ||
 			balance.CurrentBalance != want[index].current ||
 			!equalOptionalString(balance.CreditLimit, want[index].creditLimit) ||
+			!equalOptionalString(balance.RemainingCredit, want[index].remainingCredit) ||
 			balance.CurrentBalanceUsd != want[index].currentUSD ||
 			balance.PostedBalance != want[index].posted ||
 			balance.UnconvertedCount != want[index].unconvertedCount {

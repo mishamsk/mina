@@ -289,11 +289,13 @@ const startMina = async ({
       cause: error,
     });
   }
+  const inheritedEnvironment = { ...process.env };
+  delete inheritedEnvironment.MINA_DATABASE_ENCRYPTION_KEY;
   const child = spawn(minaBinary, args, {
     cwd: resolve(dirname(minaBinary), ".."),
     detached: process.platform !== "win32",
     env: {
-      ...process.env,
+      ...inheritedEnvironment,
       MINA_BACKUP_FILE_DIRECTORY: backupDirectory,
       MINA_FX_AUTO_LOAD_ENABLED: "false",
       ...environment,

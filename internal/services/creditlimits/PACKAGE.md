@@ -8,7 +8,8 @@
 
 - Account references are validated through the account service API before credit-limit history writes, account-scoped lists, and current-limit batch lookups.
 - Credit-limit history can be created only for a single-currency account and inherits that account's currency without storing a separate currency.
-- Current credit-limit lookups exclude tombstones, choose the latest effective date on or before the as-of date with highest-history-ID tie-breaking, and omit accounts with no applicable limit.
+- Current credit-limit lookups use the service clock's local civil date, exclude tombstones, choose the latest row effective on or before that date with highest-history-ID tie-breaking, and omit accounts with no applicable limit.
+- Remaining credit is derived once here as the current credit limit plus Mina's signed balance; decimal calculation errors propagate and over-limit results remain negative.
 
 ## Boundaries
 

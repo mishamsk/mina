@@ -7,7 +7,9 @@ import (
 
 	"github.com/mishamsk/mina/internal/httpapi/openapi"
 	"github.com/mishamsk/mina/internal/services"
+	"github.com/mishamsk/mina/internal/services/creditlimits"
 	"github.com/mishamsk/mina/internal/services/transactions"
+	"github.com/mishamsk/mina/internal/services/values"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -339,9 +341,29 @@ func (s *strictServer) SearchAccountJournalRecords(ctx context.Context, request 
 	if err != nil {
 		return nil, err
 	}
+	responses := journalRecordAPIResponses(records.Items)
+
+	if boolParam(request.Params.IncludeRunningBalance) && len(records.Items) > 0 {
+		currentLimits, err := s.deps.CreditLimits.CurrentByAccounts(
+			ctx,
+			[]int64{request.AccountId},
+		)
+		if err != nil {
+			return nil, err
+		}
+		if currentLimit, ok := currentLimits[request.AccountId]; ok {
+			if err := addRemainingCreditToJournalRecordAPIResponses(
+				records.Items,
+				responses,
+				currentLimit,
+			); err != nil {
+				return nil, err
+			}
+		}
+	}
 
 	return openapi.SearchAccountJournalRecords200JSONResponse{
-		Records:    journalRecordAPIResponses(records.Items),
+		Records:    responses,
 		TotalCount: records.TotalCount,
 	}, nil
 }
@@ -655,6 +677,25 @@ func journalRecordAPIResponses(records []transactions.JournalRecord) []openapi.J
 	}
 
 	return responses
+}
+
+func addRemainingCreditToJournalRecordAPIResponses(
+	records []transactions.JournalRecord,
+	responses []openapi.JournalRecord,
+	currentLimit values.Decimal,
+) error {
+	for i, record := range records {
+		if record.RunningBalance != nil {
+			remaining, err := creditlimits.RemainingCredit(currentLimit, *record.RunningBalance)
+			if err != nil {
+				return err
+			}
+			value := remaining.String()
+			responses[i].RemainingCredit = &value
+		}
+	}
+
+	return nil
 }
 
 func bulkRecordOperationAPIResponse(response transactions.BulkRecordOperationResponse) openapi.BulkRecordOperationResponse {
