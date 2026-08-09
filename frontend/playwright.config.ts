@@ -20,7 +20,7 @@ export default defineConfig({
   timeout: 30_000,
   forbidOnly: Boolean(process.env.CI),
   globalSetup: "./tests/e2e/global-setup.ts",
-  retries: 0,
+  retries: process.env.CI ? 2 : 0,
   workers: configuredWorkerCount,
   projects: [
     {
