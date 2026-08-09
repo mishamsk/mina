@@ -424,6 +424,225 @@ func TestExchangeRateValidationErrors(t *testing.T) {
 	}
 }
 
+func TestDailyExchangeRateSnapshotRebuildsFromPersistedRates(t *testing.T) {
+	const schema = "daily_exchange_rate_snapshot_rebuild"
+	setup := newSharedClient(t, apptest.WithAccountingSchema(schema))
+	createSourceExchangeRate(t, setup, "EUR", "2026-04-01T00:00:00Z", "1.00000000")
+	createSourceExchangeRate(t, setup, "EUR", "2026-04-03T00:00:00Z", "1.60000000")
+	createSourceExchangeRate(t, setup, "EUR", "2026-04-03T12:00:00Z", "1.10000000")
+	createSourceExchangeRate(t, setup, "CHF", "2026-04-02T00:00:00Z", "0.90000000")
+	setup.Close()
+
+	client := newSharedClient(t, apptest.WithAccountingSchema(schema))
+	response := waitForDailyExchangeRateCount(t, client, 4)
+	want := []struct {
+		currency     string
+		date         string
+		rate         string
+		interpolated bool
+	}{
+		{currency: "CHF", date: "2026-04-02", rate: "0.90000000", interpolated: false},
+		{currency: "EUR", date: "2026-04-01", rate: "1.00000000", interpolated: false},
+		{currency: "EUR", date: "2026-04-02", rate: "1.30000000", interpolated: true},
+		{currency: "EUR", date: "2026-04-03", rate: "1.10000000", interpolated: false},
+	}
+	if response.JSON200.TotalCount != int64(len(want)) || len(response.JSON200.ExchangeRates) != len(want) {
+		t.Fatalf("daily exchange rates = %+v, want %d bounded rows", response.JSON200, len(want))
+	}
+	for index, expected := range want {
+		got := response.JSON200.ExchangeRates[index]
+		if got.FromCurrency != "USD" || got.ToCurrency != expected.currency ||
+			got.EffectiveDate.Format("2006-01-02") != expected.date ||
+			got.Rate != expected.rate || got.Interpolated != expected.interpolated {
+			t.Fatalf("daily exchange rate %d = %+v, want date=%s rate=%s interpolated=%t", index, got, expected.date, expected.rate, expected.interpolated)
+		}
+	}
+
+	from := apptest.Date("2026-04-02")
+	to := apptest.Date("2026-04-03")
+	toCurrency := "EUR"
+	limit := 1
+	offset := 1
+	page, err := client.REST().ListDailyExchangeRatesWithResponse(context.Background(), &httpclient.ListDailyExchangeRatesParams{
+		ToCurrency:        &toCurrency,
+		EffectiveDateFrom: &from,
+		EffectiveDateTo:   &to,
+		Limit:             &limit,
+		Offset:            &offset,
+	})
+	if err != nil {
+		t.Fatalf("list filtered daily exchange rates: %v", err)
+	}
+	if page.StatusCode() != http.StatusOK {
+		t.Fatalf("list filtered daily exchange rates status = %d, want %d; body %s", page.StatusCode(), http.StatusOK, page.Body)
+	}
+	if page.JSON200.TotalCount != 2 || len(page.JSON200.ExchangeRates) != 1 ||
+		page.JSON200.ExchangeRates[0].EffectiveDate.Format("2006-01-02") != "2026-04-03" {
+		t.Fatalf("filtered daily exchange-rate page = %+v, want second of two matching rows", page.JSON200)
+	}
+}
+
+func TestDailyExchangeRateSnapshotOrdersUnfilteredPagesByCurrencyAndDate(t *testing.T) {
+	const schema = "daily_exchange_rate_snapshot_unfiltered_order"
+	setup := newSharedClient(t, apptest.WithAccountingSchema(schema))
+	createSourceExchangeRate(t, setup, "EUR", "2026-04-01T00:00:00Z", "1.10000000")
+	createSourceExchangeRate(t, setup, "CHF", "2026-04-03T00:00:00Z", "0.90000000")
+	setup.Close()
+
+	client := newSharedClient(t, apptest.WithAccountingSchema(schema))
+	waitForDailyExchangeRateCount(t, client, 2)
+
+	limit := 1
+	for offset, expected := range []struct {
+		currency string
+		date     string
+	}{
+		{currency: "CHF", date: "2026-04-03"},
+		{currency: "EUR", date: "2026-04-01"},
+	} {
+		page, err := client.REST().ListDailyExchangeRatesWithResponse(context.Background(), &httpclient.ListDailyExchangeRatesParams{
+			Limit:  &limit,
+			Offset: &offset,
+		})
+		if err != nil {
+			t.Fatalf("list unfiltered daily exchange-rate page %d: %v", offset, err)
+		}
+		if page.StatusCode() != http.StatusOK {
+			t.Fatalf("list unfiltered daily exchange-rate page %d status = %d, want %d; body %s", offset, page.StatusCode(), http.StatusOK, page.Body)
+		}
+		if page.JSON200.TotalCount != 2 || len(page.JSON200.ExchangeRates) != 1 {
+			t.Fatalf("unfiltered daily exchange-rate page %d = %+v, want one of two rows", offset, page.JSON200)
+		}
+		got := page.JSON200.ExchangeRates[0]
+		if got.ToCurrency != expected.currency || got.EffectiveDate.Format("2006-01-02") != expected.date {
+			t.Fatalf("unfiltered daily exchange-rate page %d row = %+v, want %s on %s", offset, got, expected.currency, expected.date)
+		}
+	}
+}
+
+func TestDailyExchangeRateSnapshotInterpolatesLargeValidRates(t *testing.T) {
+	const schema = "daily_exchange_rate_snapshot_large_rates"
+	setup := newSharedClient(t, apptest.WithAccountingSchema(schema))
+	createSourceExchangeRate(t, setup, "EUR", "2026-04-01T00:00:00Z", "100000.00000000")
+	createSourceExchangeRate(t, setup, "EUR", "2026-04-03T00:00:00Z", "9000000000.00000000")
+	setup.Close()
+
+	client := newSharedClient(t, apptest.WithAccountingSchema(schema))
+	response := waitForDailyExchangeRateCount(t, client, 3)
+	middle := response.JSON200.ExchangeRates[1]
+	if middle.EffectiveDate.Format("2006-01-02") != "2026-04-02" ||
+		middle.Rate != "4500050000.00000000" || !middle.Interpolated {
+		t.Fatalf("middle daily exchange rate = %+v, want interpolated 4500050000.00000000", middle)
+	}
+}
+
+func TestDailyExchangeRateSnapshotRoundsInterpolationTiesToEven(t *testing.T) {
+	const schema = "daily_exchange_rate_snapshot_half_even"
+	setup := newSharedClient(t, apptest.WithAccountingSchema(schema))
+	createSourceExchangeRate(t, setup, "EUR", "2026-04-01T00:00:00Z", "1.00000000")
+	createSourceExchangeRate(t, setup, "EUR", "2026-04-03T00:00:00Z", "1.00000003")
+	setup.Close()
+
+	client := newSharedClient(t, apptest.WithAccountingSchema(schema))
+	response := waitForDailyExchangeRateCount(t, client, 3)
+	middle := response.JSON200.ExchangeRates[1]
+	if middle.EffectiveDate.Format("2006-01-02") != "2026-04-02" ||
+		middle.Rate != "1.00000002" || !middle.Interpolated {
+		t.Fatalf("middle daily exchange rate = %+v, want half-even 1.00000002", middle)
+	}
+}
+
+func TestDailyExchangeRateSnapshotExcludesTombstonedSourceRates(t *testing.T) {
+	const schema = "daily_exchange_rate_snapshot_tombstoned_source"
+	setup := newSharedClient(t, apptest.WithAccountingSchema(schema))
+	createSourceExchangeRate(t, setup, "EUR", "2026-04-01T00:00:00Z", "1.00000000")
+	tombstoned, err := setup.REST().CreateExchangeRateWithResponse(context.Background(), httpclient.CreateExchangeRateRequest{
+		FromCurrency:  "USD",
+		ToCurrency:    "EUR",
+		Rate:          "9.00000000",
+		EffectiveDate: apptest.Timestamp("2026-04-02T00:00:00Z"),
+	})
+	requireClientResponse(t, "create source exchange rate to tombstone", err, tombstoned.StatusCode(), http.StatusCreated, tombstoned.Body)
+	createSourceExchangeRate(t, setup, "EUR", "2026-04-03T00:00:00Z", "1.20000000")
+	deleted, err := setup.REST().DeleteExchangeRateWithResponse(context.Background(), tombstoned.JSON201.ExchangeRateId)
+	requireClientResponse(t, "delete source exchange rate", err, deleted.StatusCode(), http.StatusNoContent, deleted.Body)
+	setup.Close()
+
+	client := newSharedClient(t, apptest.WithAccountingSchema(schema))
+	response := waitForDailyExchangeRateCount(t, client, 3)
+	middle := response.JSON200.ExchangeRates[1]
+	if middle.EffectiveDate.Format("2006-01-02") != "2026-04-02" ||
+		middle.Rate != "1.10000000" || !middle.Interpolated {
+		t.Fatalf("middle daily exchange rate = %+v, want interpolation excluding tombstoned source", middle)
+	}
+}
+
+func TestDailyExchangeRateSnapshotsAreIsolatedAcrossSimultaneousApps(t *testing.T) {
+	const firstSchema = "daily_exchange_rate_isolation_first"
+	const secondSchema = "daily_exchange_rate_isolation_second"
+
+	firstSetup := newSharedClient(t, apptest.WithAccountingSchema(firstSchema))
+	createSourceExchangeRate(t, firstSetup, "EUR", "2026-04-01T00:00:00Z", "1.10000000")
+	firstSetup.Close()
+	secondSetup := newSharedClient(t, apptest.WithAccountingSchema(secondSchema))
+	createSourceExchangeRate(t, secondSetup, "CHF", "2026-04-01T00:00:00Z", "0.90000000")
+	secondSetup.Close()
+
+	first := newSharedClient(t, apptest.WithAccountingSchema(firstSchema))
+	second := newSharedClient(t, apptest.WithAccountingSchema(secondSchema))
+
+	firstRates := waitForDailyExchangeRateCount(t, first, 1)
+	if firstRates.StatusCode() != http.StatusOK || len(firstRates.JSON200.ExchangeRates) != 1 ||
+		firstRates.JSON200.ExchangeRates[0].ToCurrency != "EUR" {
+		t.Fatalf("first app daily exchange rates = %+v, want isolated EUR row; body %s", firstRates.JSON200, firstRates.Body)
+	}
+
+	secondRates := waitForDailyExchangeRateCount(t, second, 1)
+	if secondRates.StatusCode() != http.StatusOK || len(secondRates.JSON200.ExchangeRates) != 1 ||
+		secondRates.JSON200.ExchangeRates[0].ToCurrency != "CHF" {
+		t.Fatalf("second app daily exchange rates = %+v, want isolated CHF row; body %s", secondRates.JSON200, secondRates.Body)
+	}
+}
+
+func waitForDailyExchangeRateCount(t *testing.T, client *apptest.Client, count int) *httpclient.ListDailyExchangeRatesResponse {
+	t.Helper()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		response, err := client.REST().ListDailyExchangeRatesWithResponse(context.Background(), nil)
+		if err != nil {
+			t.Fatalf("list daily exchange rates: %v", err)
+		}
+		if response.StatusCode() != http.StatusOK {
+			t.Fatalf("list daily exchange rates status = %d, want %d; body %s", response.StatusCode(), http.StatusOK, response.Body)
+		}
+		if len(response.JSON200.ExchangeRates) == count {
+			return response
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("daily exchange rate count = %d, want %d", len(response.JSON200.ExchangeRates), count)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func createSourceExchangeRate(t *testing.T, client *apptest.Client, toCurrency string, effectiveDate string, rate string) {
+	t.Helper()
+
+	created, err := client.REST().CreateExchangeRateWithResponse(context.Background(), httpclient.CreateExchangeRateRequest{
+		FromCurrency:  "USD",
+		ToCurrency:    toCurrency,
+		Rate:          rate,
+		EffectiveDate: apptest.Timestamp(effectiveDate),
+	})
+	if err != nil {
+		t.Fatalf("create source exchange rate: %v", err)
+	}
+	if created.StatusCode() != http.StatusCreated {
+		t.Fatalf("create source exchange rate status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
+	}
+}
+
 func assertExchangeRateEffectiveDate(t *testing.T, label string, got time.Time, want time.Time) {
 	t.Helper()
 

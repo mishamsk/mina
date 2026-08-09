@@ -10,12 +10,15 @@
 - Adding or editing an embedded migration requires re-pinning `PinnedMigrationContentHash`.
 - New FK-shaped columns must be registered in the validation reference registry or explicitly waived.
 - Database validation builds its pristine reference catalog in a scratch in-memory accounting schema.
-- `AppDB` owns the DuckDB process handle, selected accounting location, active transaction, and close policy.
-- Shared process-local runtime state lives in ephemeral `memory._mina_internal` tables, outside the portable accounting schema.
-- Operation runs use numeric IDs from a `_mina_internal` sequence and a store-owned DuckDB status enum.
+- `AppDB` owns the DuckDB process handle, selected accounting location, opaque app-unique runtime schema, active transaction, and close policy.
+- Each app's disposable runtime state lives under fixed store-owned object names in its `memory` runtime schema, outside portable accounting state, migrations, backups, and validation.
+- `AppDB` creates and safely qualifies its runtime schema internally; raw runtime identifiers do not cross store boundaries, and transaction-scoped copies retain the same schema.
+- Operation runs use app-local numeric IDs from a runtime-schema sequence and a store-owned DuckDB status enum.
+- Dense daily exchange rates are staged from active accounting `USD -> currency` rows outside the live table, then swapped transactionally; readers see the prior or replacement snapshot.
 - AppDB open helpers perform DuckDB-specific process DB open/reuse and one-time plaintext or AES-256-GCM file attach lifecycle; encrypted writes load OpenSSL through signed `httpfs`, while read-only encrypted opens require no extension.
 - Backup sources perform DuckDB attach/copy/detach mechanics, encrypt targets with the active primary key, and reject in-memory accounting sources.
-- Closing a writable `AppDB` explicitly checkpoints and detaches file-backed accounting state; read-only handles detach without checkpointing, and borrowed process handles remain open.
+- Closing an `AppDB` drops its complete runtime schema before file-backed cleanup and owned process-handle close; borrowed process handles remain open, and cleanup failures are combined.
+- Writable file-backed handles checkpoint before detaching; read-only file-backed handles detach without checkpointing.
 - Accounting locations cache rendered database and schema identifiers resolved with DuckDB keyword metadata at open time.
 - Schema-existence checks report the selected accounting schema before migration creates missing schemas.
 - Repository constructors receive `AppDB` and qualify accounting objects through `AppDB` helpers.
@@ -30,10 +33,11 @@
 - Transaction repositories return semantic metadata for service-owned classification and bulk semantic validation.
 - Repositories bind and scan DuckDB `DATE`, `TIMESTAMP`, and decimal columns through app service value types.
 - Exchange-rate loading queries infer needed currencies and latest active USD-pair dates from active accounting rows only.
+- Dense-rate queries deterministically interpolate bounded daily intervals, expose the committed snapshot through typed filters and pagination, and never expose runtime identifiers.
 - SQL casts on typed date/decimal columns are limited to store-owned expression keys such as active uniqueness indexes.
 - Query generation is not selected because the required DuckDB SQL features are not yet proven against a repo-owned generator. Manual query code must keep user values parameter-bound and dynamic identifiers selected from store-owned allowlists.
 - Database-specific constraint and foreign-key errors are mapped before returning from repository implementations.
-- Transaction repositories store normalized journal records and own active selected-record checks plus atomic writes for bulk operations.
+- Transaction repositories store normalized journal records, own active selected-record checks and atomic writes for bulk operations, and perform cache-backed unresolved `amount_usd` backfill as one bounded set update.
 - Transaction-template repositories store normalized partial record defaults.
 - Record-link repositories store pairwise journal-record settlement metadata; services own semantic validation and cascade-tombstone decisions.
 - Recurring repositories store normalized definition record shapes and permanent occurrence rows.
@@ -55,7 +59,7 @@
 
 ## Boundaries
 
-- Owns: SQL execution helpers, migration wiring, transactions, backup database copy mechanics, ephemeral runtime-operation tables, row types, and app-to-DB type conversion.
+- Owns: SQL execution helpers, migration wiring, transactions, backup database copy mechanics, runtime-schema DDL and queries, row types, and app-to-DB type conversion.
 - Does not own: process configuration, HTTP behavior, REST DTOs, or domain validation.
 
 ## Testing Notes

@@ -1660,6 +1660,60 @@ paths:
           $ref: "#/components/responses/InvalidRequest"
         "409":
           $ref: "#/components/responses/Conflict"
+  /api/exchange-rates/daily:
+    get:
+      operationId: listDailyExchangeRates
+      tags:
+        - exchange-rates
+      summary: List the committed dense daily exchange-rate snapshot.
+      parameters:
+        - name: to_currency
+          description: "Destination currency code filter, using ISO 4217 or the `C::` crypto prefix."
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^([A-Z]{3}|C::.+)$
+        - name: effective_date_from
+          description: "Inclusive lower effective-date bound."
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: effective_date_to
+          description: "Inclusive upper effective-date bound."
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: limit
+          description: "Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded."
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+        - name: offset
+          description: "Zero-based number of matching results to skip."
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "200":
+          description: Dense daily exchange rates in deterministic currency/date order.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DailyExchangeRateListResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
   /api/exchange-rates/{exchange_rate_id}:
     parameters:
       - name: exchange_rate_id
@@ -3984,6 +4038,51 @@ components:
           format: int64
           minimum: 0
           description: Count of matching exchange rates before limit and offset are applied.
+    DailyExchangeRate:
+      type: object
+      additionalProperties: false
+      required:
+        - from_currency
+        - to_currency
+        - rate
+        - effective_date
+        - interpolated
+      properties:
+        from_currency:
+          type: string
+          pattern: ^([A-Z]{3}|C::.+)$
+        to_currency:
+          type: string
+          pattern: ^([A-Z]{3}|C::.+)$
+        rate:
+          type: string
+          description: JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
+          pattern: ^[0-9]{1,10}(\.[0-9]{1,8})?$
+          not:
+            pattern: ^0{1,10}(\.0{1,8})?$
+          maxLength: 19
+        effective_date:
+          type: string
+          format: date
+        interpolated:
+          type: boolean
+          description: True when the row was derived between provider-backed source dates.
+    DailyExchangeRateListResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - exchange_rates
+        - total_count
+      properties:
+        exchange_rates:
+          type: array
+          items:
+            $ref: "#/components/schemas/DailyExchangeRate"
+        total_count:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Count of matching daily exchange rates before limit and offset are applied.
     APIError:
       type: object
       additionalProperties: false

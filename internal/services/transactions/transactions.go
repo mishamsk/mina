@@ -182,20 +182,6 @@ type ClassificationRecordInput struct {
 	CategoryID *int64
 }
 
-// AmountUSDBackfillRecord is one unresolved record needing amount-USD inference.
-type AmountUSDBackfillRecord struct {
-	RecordID   int64
-	Currency   string
-	Amount     values.Decimal
-	LookupDate values.CivilDate
-}
-
-// AmountUSDBackfillUpdate is one resolved amount-USD backfill update.
-type AmountUSDBackfillUpdate struct {
-	RecordID  int64
-	AmountUSD values.Decimal
-}
-
 // RecordSearchOptions controls journal record search filters.
 type RecordSearchOptions struct {
 	services.ListOptions
@@ -384,8 +370,7 @@ type Repository interface {
 	BulkReassignAccount(context.Context, []int64, int64, []*time.Time, []*time.Time) (int, error)
 	BulkSetSettlement(context.Context, []int64, []*time.Time, []*time.Time) (int, error)
 	BulkSetReconciliation(context.Context, []int64, ReconciliationStatus) (int, error)
-	ListMissingAmountUSDRecords(context.Context) ([]AmountUSDBackfillRecord, error)
-	BatchSetAmountUSD(context.Context, []AmountUSDBackfillUpdate) error
+	BackfillMissingAmountUSD(context.Context) error
 }
 
 // AccountReferenceValidator resolves active account references for transaction validation.
@@ -672,33 +657,7 @@ func (s *Service) inferMissingAmountUSD(ctx context.Context, input *CreateInput)
 
 // BackfillMissingAmountUSD fills unresolved journal records when amount USD can be derived.
 func (s *Service) BackfillMissingAmountUSD(ctx context.Context) error {
-	if s.amountUSDDeriver == nil {
-		return errors.New("transactions: amount USD deriver is not configured")
-	}
-
-	records, err := s.repo.ListMissingAmountUSDRecords(ctx)
-	if err != nil {
-		return err
-	}
-	updates := make([]AmountUSDBackfillUpdate, 0, len(records))
-	for _, record := range records {
-		amountUSD, err := s.amountUSDDeriver.SignedAmountUSD(ctx, record.Currency, record.Amount, record.LookupDate)
-		if err != nil {
-			return err
-		}
-		if amountUSD == nil {
-			continue
-		}
-		updates = append(updates, AmountUSDBackfillUpdate{
-			RecordID:  record.RecordID,
-			AmountUSD: *amountUSD,
-		})
-	}
-	if len(updates) == 0 {
-		return nil
-	}
-
-	return s.repo.BatchSetAmountUSD(ctx, updates)
+	return s.repo.BackfillMissingAmountUSD(ctx)
 }
 
 // Get returns a transaction with nested journal records by ID.

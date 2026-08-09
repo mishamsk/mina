@@ -8,7 +8,7 @@
   - App administration for seeding demo data.
   - Account, category, tag, and household member CRUD/list flows, including writable account-type and single-/multi-currency changes, fixed system-account protection, account/category/tag/member delete eligibility, member hidden-state updates and include-hidden listing, account/category/tag featured metadata, and category-intent filtering.
   - Explicit `owned`, `party`, `flow`, and fixed `system` account types plus `expense` and `income` category intents.
-  - Exchange-rate flows and account-denominated credit-limit-history flows, with credit limits restricted to single-currency accounts.
+  - Exchange-rate flows, including a read-only dense daily USD-rate snapshot, and account-denominated credit-limit-history flows, with credit limits restricted to single-currency accounts.
   - Transaction creation, read, paginated/date-anchored/filtered list, free-text transaction search across reference metadata, full replacement, and tombstone deletion with nested journal records.
   - Non-USD `amount_usd` inference on transaction writes using stored `USD -> currency` rates when resolvable.
   - Server-computed transaction month spend/income totals and account balances with USD-equivalent aggregation, unconverted counts, and current credit limits.
@@ -79,9 +79,9 @@
   - Store-owned accounting locations qualify migration and repository SQL against the selected database and schema.
   - Upgrade-only DuckDB migrations with schema-version tracking in the selected accounting location.
   - Atomic double-entry transaction persistence and replacement.
-  - Ephemeral runtime operation-run status is stored in the in-memory process database outside portable accounting state.
+  - Each app isolates ephemeral operation runs and dense exchange rates in an opaque in-memory runtime schema outside portable accounting state.
   - Store-owned database backup sources use DuckDB database copy into provider-owned target files and reject in-memory accounting sources.
-  - Exchange-rate loading infers non-USD journal-record needs, upserts active `USD -> currency` rates, and backfills resolvable null `amount_usd` values.
+  - Exchange-rate loading infers non-USD journal-record needs, upserts active `USD -> currency` rates, rebuilds the dense daily snapshot, and backfills resolvable null `amount_usd` values.
   - Transaction templates are stored as normalized active/tombstoned template and record-default rows with write-time reference checks.
   - Imported journal-record metadata rows store provider-neutral fields, raw provider payload JSON, and external provenance.
   - Pairwise record links are stored for refund and reimbursement settlement as metadata-only associations between journal records.

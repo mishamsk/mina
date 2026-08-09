@@ -2059,6 +2059,49 @@ func Operations() []Operation {
 			Invoke: invokeListCreditLimitHistory,
 		},
 		{
+			ID:          "listDailyExchangeRates",
+			Method:      "GET",
+			Path:        "/api/exchange-rates/daily",
+			Summary:     "List the committed dense daily exchange-rate snapshot.",
+			Description: "",
+			CLI:         CLIOperation{Area: "exchange-rates", Name: "list-daily"},
+			Input: InputDescriptor{
+				Query: []ParameterDescriptor{
+					{
+						Name:        "to_currency",
+						Type:        "string",
+						Description: "Destination currency code filter, using ISO 4217 or the `C::` crypto prefix.",
+						Required:    false,
+					},
+					{
+						Name:        "effective_date_from",
+						Type:        "string",
+						Description: "Inclusive lower effective-date bound.",
+						Required:    false,
+					},
+					{
+						Name:        "effective_date_to",
+						Type:        "string",
+						Description: "Inclusive upper effective-date bound.",
+						Required:    false,
+					},
+					{
+						Name:        "limit",
+						Type:        "integer",
+						Description: "Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.",
+						Required:    false,
+					},
+					{
+						Name:        "offset",
+						Type:        "integer",
+						Description: "Zero-based number of matching results to skip.",
+						Required:    false,
+					},
+				},
+			},
+			Invoke: invokeListDailyExchangeRates,
+		},
+		{
 			ID:          "listExchangeRates",
 			Method:      "GET",
 			Path:        "/api/exchange-rates",
@@ -5482,6 +5525,121 @@ func invokeListCreditLimitHistory(ctx context.Context, client httpclient.ClientW
 		params.Offset = &queryValue4
 	}
 	response, err := client.ListCreditLimitHistoryWithResponse(ctx, pathValue0, params)
+	if err != nil {
+		return InvocationResult{}, err
+	}
+	if response == nil {
+		return InvocationResult{}, errors.New("generated client returned no operation response")
+	}
+	return normalizeInvocationResult(response.Body, response.HTTPResponse)
+}
+
+func invokeListDailyExchangeRates(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
+	if err := validateInvocationInput(input, nil, []string{"effective_date_from", "effective_date_to", "limit", "offset", "to_currency"}, false, false); err != nil {
+		return InvocationResult{}, err
+	}
+	params := &httpclient.ListDailyExchangeRatesParams{}
+	queryValues0, querySupplied0 := input.Query["to_currency"]
+	if querySupplied0 {
+		if len(queryValues0) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "to_currency",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues0)),
+			}
+		}
+		var queryValue0 string
+		if err := parseInvocationValue(queryValues0[0], true, &queryValue0); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "to_currency",
+				Value:    queryValues0[0],
+				Err:      err,
+			}
+		}
+		params.ToCurrency = &queryValue0
+	}
+	queryValues1, querySupplied1 := input.Query["effective_date_from"]
+	if querySupplied1 {
+		if len(queryValues1) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "effective_date_from",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues1)),
+			}
+		}
+		var queryValue1 openapi_types.Date
+		if err := parseInvocationValue(queryValues1[0], true, &queryValue1); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "effective_date_from",
+				Value:    queryValues1[0],
+				Err:      err,
+			}
+		}
+		params.EffectiveDateFrom = &queryValue1
+	}
+	queryValues2, querySupplied2 := input.Query["effective_date_to"]
+	if querySupplied2 {
+		if len(queryValues2) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "effective_date_to",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues2)),
+			}
+		}
+		var queryValue2 openapi_types.Date
+		if err := parseInvocationValue(queryValues2[0], true, &queryValue2); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "effective_date_to",
+				Value:    queryValues2[0],
+				Err:      err,
+			}
+		}
+		params.EffectiveDateTo = &queryValue2
+	}
+	queryValues3, querySupplied3 := input.Query["limit"]
+	if querySupplied3 {
+		if len(queryValues3) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "limit",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues3)),
+			}
+		}
+		var queryValue3 int
+		if err := parseInvocationValue(queryValues3[0], false, &queryValue3); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "limit",
+				Value:    queryValues3[0],
+				Err:      err,
+			}
+		}
+		params.Limit = &queryValue3
+	}
+	queryValues4, querySupplied4 := input.Query["offset"]
+	if querySupplied4 {
+		if len(queryValues4) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "offset",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues4)),
+			}
+		}
+		var queryValue4 int
+		if err := parseInvocationValue(queryValues4[0], false, &queryValue4); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "offset",
+				Value:    queryValues4[0],
+				Err:      err,
+			}
+		}
+		params.Offset = &queryValue4
+	}
+	response, err := client.ListDailyExchangeRatesWithResponse(ctx, params)
 	if err != nil {
 		return InvocationResult{}, err
 	}

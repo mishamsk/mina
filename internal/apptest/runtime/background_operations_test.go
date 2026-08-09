@@ -639,11 +639,14 @@ func TestBackgroundOperationExpectedBehavior(t *testing.T) {
 			apptest.WithExchangeRateLoading(false),
 			apptest.WithExchangeRateProviderFactory(provider),
 		)
-		createForeignCurrencyTransaction(t, client, foreignCurrencyTransaction{
+		transaction := createForeignCurrencyTransaction(t, client, foreignCurrencyTransaction{
 			Currency:      "EUR",
-			InitiatedDate: "2026-03-31",
+			InitiatedDate: "2026-04-01",
 			PostedAt:      apptest.TimestampPtr("2026-04-01T12:00:00Z"),
 		})
+		assertRecordAmountUSDNil(t, transaction, transaction.Records[0].AccountId)
+		assertRecordAmountUSDNil(t, transaction, transaction.Records[1].AccountId)
+		createSourceExchangeRate(t, client, "EUR", "2026-04-01T00:00:00Z", "2.00000000")
 
 		started, err := client.REST().StartExchangeRateLoadingRunWithResponse(context.Background())
 		requireClientResponse(t, "start failing exchange-rate loading run", err, started.StatusCode(), http.StatusAccepted, started.Body)
@@ -655,6 +658,14 @@ func TestBackgroundOperationExpectedBehavior(t *testing.T) {
 		if run.Outcome != httpclient.BackgroundOperationRunOutcomeFailed || run.Error == nil || *run.Error != "provider unavailable" {
 			t.Fatalf("failure run = %+v, want failed run with provider error", run)
 		}
+		daily := waitForDailyExchangeRateCount(t, client, 1)
+		if daily.JSON200.ExchangeRates[0].ToCurrency != "EUR" || daily.JSON200.ExchangeRates[0].Rate != "2.00000000" {
+			t.Fatalf("daily rates after provider failure = %+v, want EUR rate 2.00000000", daily.JSON200)
+		}
+		read, err := client.REST().GetTransactionWithResponse(context.Background(), transaction.TransactionId)
+		requireClientResponse(t, "read transaction after provider failure", err, read.StatusCode(), http.StatusOK, read.Body)
+		assertRecordAmountUSD(t, *read.JSON200, transaction.Records[0].AccountId, "-5.00000000")
+		assertRecordAmountUSD(t, *read.JSON200, transaction.Records[1].AccountId, "5.00000000")
 
 		created, err := client.REST().CreateExchangeRateWithResponse(context.Background(), httpclient.CreateExchangeRateRequest{
 			FromCurrency:  "USD",

@@ -201,6 +201,28 @@ export type ExchangeRateListResponse = {
     total_count: number;
 };
 
+export type DailyExchangeRate = {
+    from_currency: string;
+    to_currency: string;
+    /**
+     * JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
+     */
+    rate: string;
+    effective_date: string;
+    /**
+     * True when the row was derived between provider-backed source dates.
+     */
+    interpolated: boolean;
+};
+
+export type DailyExchangeRateListResponse = {
+    exchange_rates: Array<DailyExchangeRate>;
+    /**
+     * Count of matching daily exchange rates before limit and offset are applied.
+     */
+    total_count: number;
+};
+
 export type ApiError = {
     code: 'invalid_request' | 'unauthenticated' | 'forbidden' | 'not_found' | 'method_not_allowed' | 'conflict' | 'internal_error';
     message: string;
@@ -3521,6 +3543,56 @@ export type CreateExchangeRateResponses = {
 };
 
 export type CreateExchangeRateResponse = CreateExchangeRateResponses[keyof CreateExchangeRateResponses];
+
+export type ListDailyExchangeRatesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Destination currency code filter, using ISO 4217 or the `C::` crypto prefix.
+         */
+        to_currency?: string;
+        /**
+         * Inclusive lower effective-date bound.
+         */
+        effective_date_from?: string;
+        /**
+         * Inclusive upper effective-date bound.
+         */
+        effective_date_to?: string;
+        /**
+         * Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.
+         */
+        limit?: number;
+        /**
+         * Zero-based number of matching results to skip.
+         */
+        offset?: number;
+    };
+    url: '/api/exchange-rates/daily';
+};
+
+export type ListDailyExchangeRatesErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+};
+
+export type ListDailyExchangeRatesError = ListDailyExchangeRatesErrors[keyof ListDailyExchangeRatesErrors];
+
+export type ListDailyExchangeRatesResponses = {
+    /**
+     * Dense daily exchange rates in deterministic currency/date order.
+     */
+    200: DailyExchangeRateListResponse;
+};
+
+export type ListDailyExchangeRatesResponse = ListDailyExchangeRatesResponses[keyof ListDailyExchangeRatesResponses];
 
 export type DeleteExchangeRateData = {
     body?: never;

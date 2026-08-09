@@ -26,6 +26,7 @@ import (
 	"github.com/mishamsk/mina/internal/services/creditlimits"
 	"github.com/mishamsk/mina/internal/services/dbvalidation"
 	"github.com/mishamsk/mina/internal/services/demo"
+	"github.com/mishamsk/mina/internal/services/exchangeratecache"
 	"github.com/mishamsk/mina/internal/services/exchangerateloading"
 	"github.com/mishamsk/mina/internal/services/exchangerates"
 	"github.com/mishamsk/mina/internal/services/health"
@@ -270,7 +271,7 @@ func newWithAppDB(ctx context.Context, appDB *store.AppDB, cfg appconfig.Config,
 	if err != nil {
 		return nil, err
 	}
-	services, err := newAppServices(appDB, cfg, opts, operationRepo, authenticationService)
+	services, err := newAppServices(ctx, appDB, cfg, opts, operationRepo, authenticationService)
 	if err != nil {
 		return nil, err
 	}
@@ -302,6 +303,7 @@ func newWithAppDB(ctx context.Context, appDB *store.AppDB, cfg appconfig.Config,
 		background:       backgroundRunner,
 		executionProfile: opts.ExecutionProfile,
 	}
+	backgroundRunner.Submit("dense exchange-rate cache rebuild", services.ExchangeRateCache.Rebuild)
 	if opts.automaticOperationsEnabled() && !opts.Operations.DeferStart {
 		app.StartOperations()
 	}
@@ -309,12 +311,24 @@ func newWithAppDB(ctx context.Context, appDB *store.AppDB, cfg appconfig.Config,
 	return app, nil
 }
 
-func newAppServices(appDB *store.AppDB, cfg appconfig.Config, opts Options, operationRepo operationruns.Repository, authenticationService *authentication.Service) (appServices, error) {
+func newAppServices(
+	ctx context.Context,
+	appDB *store.AppDB,
+	cfg appconfig.Config,
+	opts Options,
+	operationRepo operationruns.Repository,
+	authenticationService *authentication.Service,
+) (appServices, error) {
 	referenceSerializer := &referenceSerializer{}
 	services, err := newAccountingServices(appDB, cfg, opts, operationRepo, referenceSerializer)
 	if err != nil {
 		return appServices{}, err
 	}
+	denseExchangeRateStore, err := store.NewDenseExchangeRateStore(ctx, appDB)
+	if err != nil {
+		return appServices{}, err
+	}
+	services.ExchangeRateCache = exchangeratecache.NewService(denseExchangeRateStore)
 	settingsService, err := newSettingsService(cfg)
 	if err != nil {
 		return appServices{}, err
@@ -533,7 +547,13 @@ func newDemoService(appDB *store.AppDB, cfg appconfig.Config, opts Options, main
 		Clock: opts.clock(),
 		Atomic: func(ctx context.Context, fn func(demo.Services) error) error {
 			if err := appDB.WithTx(ctx, nil, func(txAppDB *store.AppDB) error {
-				txServices, err := newAccountingServices(txAppDB, cfg, opts, nil, mainServices.ReferenceSerializer)
+				txServices, err := newAccountingServices(
+					txAppDB,
+					cfg,
+					opts,
+					nil,
+					mainServices.ReferenceSerializer,
+				)
 				if err != nil {
 					return err
 				}
@@ -620,8 +640,8 @@ func newAppBackgroundRunner(cfg appconfig.Config, opts Options, services appServ
 	op := background.Operation{
 		ID:         operationruns.ExchangeRateLoadingOperationID,
 		Key:        string(operationruns.ExchangeRateLoadingOperationID),
-		Run:        exchangeRateOperationRun(services.ExchangeRateLoading.Load, services.Transactions.BackfillMissingAmountUSD),
-		StartupRun: startupExchangeRateLoad(cfg, opts, services.StartupExchangeRateLoading, services.Transactions.BackfillMissingAmountUSD),
+		Run:        exchangeRateOperationRun(services.ExchangeRateLoading.Load, services.ExchangeRateCache.Rebuild, services.Transactions.BackfillMissingAmountUSD),
+		StartupRun: startupExchangeRateLoad(cfg, opts, services.StartupExchangeRateLoading, services.ExchangeRateCache.Rebuild, services.Transactions.BackfillMissingAmountUSD),
 		Timeout:    2 * time.Minute,
 		MaxRetries: 2,
 	}
@@ -656,6 +676,7 @@ func startupExchangeRateLoad(
 	cfg appconfig.Config,
 	opts Options,
 	loader *exchangerateloading.Service,
+	rebuild func(context.Context) error,
 	backfill func(context.Context) error,
 ) background.OperationFunc {
 	return func(ctx context.Context) error {
@@ -666,28 +687,40 @@ func startupExchangeRateLoad(
 			}
 		}
 
-		return runExchangeRateLoadWithBackfill(ctx, loader.Load, backfill)
+		return runExchangeRateLoadWithBackfill(ctx, loader.Load, rebuild, backfill)
 	}
 }
 
-func exchangeRateOperationRun(run background.OperationFunc, backfill func(context.Context) error) background.OperationFunc {
+func exchangeRateOperationRun(
+	run background.OperationFunc,
+	rebuild func(context.Context) error,
+	backfill func(context.Context) error,
+) background.OperationFunc {
 	return func(ctx context.Context) error {
-		return runExchangeRateLoadWithBackfill(ctx, run, backfill)
+		return runExchangeRateLoadWithBackfill(ctx, run, rebuild, backfill)
 	}
 }
 
-func runExchangeRateLoadWithBackfill(ctx context.Context, run background.OperationFunc, backfill func(context.Context) error) error {
+func runExchangeRateLoadWithBackfill(
+	ctx context.Context,
+	run background.OperationFunc,
+	rebuild func(context.Context) error,
+	backfill func(context.Context) error,
+) error {
 	loadErr := run(ctx)
 	if errors.Is(loadErr, context.Canceled) || errors.Is(loadErr, context.DeadlineExceeded) {
 		return classifyExchangeRateOperationError(loadErr)
 	}
+	var rebuildErr error
+	if rebuild != nil {
+		rebuildErr = rebuild(ctx)
+	}
+	var backfillErr error
 	if backfill != nil {
-		if err := backfill(ctx); err != nil {
-			return classifyExchangeRateOperationError(err)
-		}
+		backfillErr = backfill(ctx)
 	}
 
-	return classifyExchangeRateOperationError(loadErr)
+	return classifyExchangeRateOperationError(errors.Join(loadErr, rebuildErr, backfillErr))
 }
 
 func classifyExchangeRateOperationError(err error) error {

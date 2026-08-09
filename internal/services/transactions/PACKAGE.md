@@ -16,12 +16,12 @@
 - Spend, refund, income, and transfer shorthand use cases build ordinary same-currency transactions; Exchange resolves each single-currency side from its account, requires an explicit currency for each multi-currency side, and builds the four-record two-currency `system:exchange` form.
 - Dry-run classification consumes only account, currency, amount, and optional category semantics; it resolves active references and derives roles, shapes, class, and amounts without requiring balance, except that exchange exclusivity still applies.
 - Exported semantic record and classification contracts let adjacent services reuse transaction classification without owning transaction persistence behavior.
-- The transactions service owns `amount_usd` backfill for active journal records still storing `NULL`.
+- The transactions service owns `amount_usd` backfill policy for active journal records still storing `NULL`; its repository applies the current dense-rate snapshot in one atomic set update using posted date before initiated date.
 - Create/replace produce active transactions and accept settlement intent only for owned/party records; recurring materialization alone creates expected transactions.
 - The service normalizes settlement intent into explicit dates, defaults create dates from the initiated date and later-change dates from the operation clock, preserves supplied exact timestamps, and clears dates from flow/system records.
 - Bulk settlement and reconciliation are separate operations; settlement targets owned/party records, accepts optional exact dates, and computes any default timestamp once per request.
 - `Cancel` changes a wholly pending active transaction to cancelled; `Restore` changes only its lifecycle back to active. Both preserve record dates and reconciliation.
-- Runtime may trigger backfill after non-canceled exchange-rate load attempts; backfill never overwrites non-`NULL` values.
+- Runtime triggers backfill after non-canceled exchange-rate load attempts; backfill copies signed USD amounts, converts cache-supported non-USD amounts at fixed scale, and never overwrites non-`NULL` values.
 - Composition may subscribe to create/replace currency-usage changes to invalidate dependent planning caches.
 - Running balances are only available on account-scoped record searches.
 - Record searches inherit transaction lifecycle and expose nullable server-derived settlement; running balances include active lifecycle only.

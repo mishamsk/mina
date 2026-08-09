@@ -12,7 +12,7 @@
 - One-shot apps open and migrate normally, skip startup database validation, and never start automatic operations.
 - Migration apps open and migrate normally, run startup database validation, skip authentication loading, and never start automatic operations.
 - One-shot apps register the same manual-operation REST handlers as long-running apps.
-- App instances own one initialized `AppDB`, app service bundle, REST handler, and web UI handler.
+- App instances own one initialized `AppDB`, its isolated disposable runtime state, app service bundle, REST handler, and web UI handler.
 - Startup demo seeding runs after app composition and before HTTP listen, using an explicit civil-date anchor when supplied and delegating history-window validation to the demo service.
 - File-backed startup demo seeding refuses when the selected accounting schema already exists.
 - Runtime decides DuckDB open policy and database lifecycle, then delegates DuckDB mechanics to store `AppDB` open helpers.
@@ -28,16 +28,17 @@
 - Runtime consumes the cache directory resolved by `internal/appconfig`.
 - Automatic operation execution requires both the long-running profile and enabled runtime operations.
 - Runtime dependencies carry only true side-effect seams such as clocks, network provider factories, and cache HTTP clients.
+- Composition creates each app's dense-rate cache and starts a best-effort initial rebuild as an unrecorded runner task; stale or empty snapshots do not block readiness in any execution profile, and runner close cancels and joins the rebuild.
 - Runtime operations start after app composition, publish operation status, and do not block app creation.
 - Runtime registers exchange-rate loading as startup, recurring, and manual-started work against one operation status surface.
-- Exchange-rate loading runs invoke transaction `amount_usd` backfill after non-canceled load attempts.
+- Exchange-rate loading runs request a dense-rate cache rebuild after every non-canceled attempt, then invoke cache-backed transaction `amount_usd` backfill against the currently committed snapshot even when rebuild is dropped or fails.
 - Runtime registers database backup as manual-started work when configured and recurring work only when a backup schedule is configured.
 - Runtime wires the concrete store backup source and file backup provider together.
 - Startup exchange-rate loading ensures and uses the configured Frankfurter file cache by default.
 - Recurring and manual exchange-rate loading use the targeted Frankfurter API provider.
-- Runtime operation status reads operation-run rows from ephemeral store-owned process tables.
+- Runtime operation status reads app-local operation-run rows from the app's ephemeral runtime schema.
 - Runtime operation failures are recorded and logged without failing app creation or normal HTTP readiness.
-- Runtime cancels operations and waits for them before closing `AppDB`.
+- Runtime cancels background work and waits for its functions to stop before closing `AppDB`; shutdown may discard incomplete operation status when `AppDB` removes the runtime schema.
 - Runtime composes REST, embedded Streamable HTTP MCP, and embedded UI handlers without changing protocol ownership.
 - Embedded MCP exists only in the long-running profile at `/mcp` and targets the isolated REST handler, never the composed root handler.
 - External REST accepts configured cookie or API-key authentication, external MCP accepts API keys only, and embedded MCP's isolated REST dispatch stays behind that one outer decision.

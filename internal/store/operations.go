@@ -28,16 +28,12 @@ type operationRunRow struct {
 }
 
 type operationRunRepository struct {
-	db    *AppDB
-	appID string
+	db *AppDB
 }
 
 // NewOperationRunRepository creates operation-run persistence for one app instance.
 func NewOperationRunRepository(ctx context.Context, db *AppDB) (operationruns.Repository, error) {
-	repo := &operationRunRepository{
-		db:    db,
-		appID: newOperationAppID(db),
-	}
+	repo := &operationRunRepository{db: db}
 	if err := repo.prepare(ctx); err != nil {
 		return nil, err
 	}
@@ -70,10 +66,10 @@ func (r *operationRunRepository) ListRunEnvelopes(
 	operationID *operationruns.OperationID,
 	opts operationruns.ListRunsOptions,
 ) (services.PaginatedList[operationruns.RunEnvelope], error) {
-	where := "WHERE app_id = ?"
-	args := []any{r.appID}
+	where := ""
+	args := []any{}
 	if operationID != nil {
-		where += " AND operation_id = ?"
+		where = "WHERE operation_id = ?"
 		args = append(args, *operationID)
 	}
 
@@ -81,7 +77,7 @@ func (r *operationRunRepository) ListRunEnvelopes(
 	if err := r.db.query().QueryRowContext(
 		ctx,
 		`SELECT COUNT(*)
-FROM `+operationRunTable()+`
+FROM `+r.db.runtimeName(operationRunTableName)+`
 `+where,
 		args...,
 	).Scan(&totalCount); err != nil {
@@ -89,7 +85,7 @@ FROM `+operationRunTable()+`
 	}
 
 	query := `SELECT operation_run_id, operation_id, status, trigger, started_at, completed_at, error
-FROM ` + operationRunTable() + `
+FROM ` + r.db.runtimeName(operationRunTableName) + `
 ` + where + `
 ORDER BY started_at DESC, operation_run_id DESC`
 	query, args = appendLimitOffset(query, args, opts.Limit, opts.Offset)
@@ -187,21 +183,10 @@ func mapOperationStoreError(err error) error {
 	return err
 }
 
-func newOperationAppID(db *AppDB) string {
-	return fmt.Sprintf("%p-%d", db, time.Now().UnixNano())
-}
-
 func (r *operationRunRepository) prepare(ctx context.Context) error {
 	if _, err := r.db.query().ExecContext(
 		ctx,
-		"CREATE SCHEMA IF NOT EXISTS "+systemSchemaQualifiedName(),
-	); err != nil {
-		return fmt.Errorf("create system operation schema: %w", err)
-	}
-
-	if _, err := r.db.query().ExecContext(
-		ctx,
-		`CREATE TYPE IF NOT EXISTS `+operationRunStatusType()+` AS ENUM (
+		`CREATE TYPE IF NOT EXISTS `+r.db.runtimeName(operationRunStatusTypeName)+` AS ENUM (
 	'running',
 	'succeeded',
 	'failed',
@@ -214,23 +199,22 @@ func (r *operationRunRepository) prepare(ctx context.Context) error {
 
 	if _, err := r.db.query().ExecContext(
 		ctx,
-		`CREATE SEQUENCE IF NOT EXISTS `+operationRunSequenceNameQualified()+` START 1`,
+		`CREATE SEQUENCE IF NOT EXISTS `+r.db.runtimeName(operationRunSequenceName)+` START 1`,
 	); err != nil {
 		return fmt.Errorf("create operation run sequence: %w", err)
 	}
 
 	if _, err := r.db.query().ExecContext(
 		ctx,
-		`CREATE TABLE IF NOT EXISTS `+operationRunTable()+` (
-	app_id TEXT NOT NULL,
+		`CREATE TABLE IF NOT EXISTS `+r.db.runtimeName(operationRunTableName)+` (
 	operation_run_id BIGINT NOT NULL,
 	operation_id TEXT NOT NULL,
-	status `+operationRunStatusType()+` NOT NULL,
+	status `+r.db.runtimeName(operationRunStatusTypeName)+` NOT NULL,
 	trigger TEXT NOT NULL,
 	started_at TIMESTAMP NOT NULL,
 	completed_at TIMESTAMP,
 	error TEXT,
-	PRIMARY KEY (app_id, operation_run_id)
+	PRIMARY KEY (operation_run_id)
 )`,
 	); err != nil {
 		return fmt.Errorf("create operation run table: %w", err)
@@ -243,8 +227,7 @@ func (r *operationRunRepository) createRun(ctx context.Context, row operationRun
 	var runID int64
 	if err := r.db.query().QueryRowContext(
 		ctx,
-		`INSERT INTO `+operationRunTable()+` (
-	app_id,
+		`INSERT INTO `+r.db.runtimeName(operationRunTableName)+` (
 	operation_run_id,
 	operation_id,
 	status,
@@ -252,9 +235,8 @@ func (r *operationRunRepository) createRun(ctx context.Context, row operationRun
 	started_at,
 	completed_at,
 	error
-) VALUES (?, `+operationRunSequenceNextVal()+`, ?, ?, ?, ?, ?, ?)
+) VALUES (`+r.db.runtimeSequenceNextVal(operationRunSequenceName)+`, ?, ?, ?, ?, ?, ?)
 RETURNING operation_run_id`,
-		r.appID,
 		row.OperationID,
 		row.Status,
 		row.Trigger,
@@ -273,9 +255,8 @@ func (r *operationRunRepository) getRun(ctx context.Context, runID int64) (opera
 	if err := r.db.query().QueryRowContext(
 		ctx,
 		`SELECT operation_run_id, operation_id, status, trigger, started_at, completed_at, error
-FROM `+operationRunTable()+`
-WHERE app_id = ? AND operation_run_id = ?`,
-		r.appID,
+FROM `+r.db.runtimeName(operationRunTableName)+`
+WHERE operation_run_id = ?`,
 		runID,
 	).Scan(
 		&row.RunID,
@@ -298,13 +279,12 @@ WHERE app_id = ? AND operation_run_id = ?`,
 func (r *operationRunRepository) finishRun(ctx context.Context, row operationRunRow) error {
 	result, err := r.db.query().ExecContext(
 		ctx,
-		`UPDATE `+operationRunTable()+`
+		`UPDATE `+r.db.runtimeName(operationRunTableName)+`
 SET status = ?, completed_at = ?, error = ?
-WHERE app_id = ? AND operation_run_id = ?`,
+WHERE operation_run_id = ?`,
 		row.Status,
 		row.CompletedAt,
 		row.Error,
-		r.appID,
 		row.RunID,
 	)
 	if err != nil {
@@ -326,9 +306,8 @@ func (r *operationRunRepository) runStats(ctx context.Context, operationID strin
 	if err := r.db.query().QueryRowContext(
 		ctx,
 		`SELECT COUNT(*)
-FROM `+operationRunTable()+`
-WHERE app_id = ? AND operation_id = ? AND status = 'running'`,
-		r.appID,
+FROM `+r.db.runtimeName(operationRunTableName)+`
+WHERE operation_id = ? AND status = 'running'`,
 		operationID,
 	).Scan(&runningCount); err != nil {
 		return 0, nil, false, fmt.Errorf("count running operation runs: %w", err)
@@ -338,9 +317,8 @@ WHERE app_id = ? AND operation_id = ? AND status = 'running'`,
 	if err := r.db.query().QueryRowContext(
 		ctx,
 		`SELECT COUNT(*)
-FROM `+operationRunTable()+`
-WHERE app_id = ? AND operation_id = ? AND status != 'running'`,
-		r.appID,
+FROM `+r.db.runtimeName(operationRunTableName)+`
+WHERE operation_id = ? AND status != 'running'`,
 		operationID,
 	).Scan(&count); err != nil {
 		return 0, nil, false, fmt.Errorf("count operation runs: %w", err)
@@ -353,11 +331,10 @@ WHERE app_id = ? AND operation_id = ? AND status != 'running'`,
 	if err := r.db.query().QueryRowContext(
 		ctx,
 		`SELECT operation_run_id, operation_id, status, trigger, started_at, completed_at, error
-FROM `+operationRunTable()+`
-WHERE app_id = ? AND operation_id = ? AND status != 'running'
+FROM `+r.db.runtimeName(operationRunTableName)+`
+WHERE operation_id = ? AND status != 'running'
 ORDER BY completed_at DESC, operation_run_id DESC
 LIMIT 1`,
-		r.appID,
 		operationID,
 	).Scan(
 		&row.RunID,
@@ -372,20 +349,4 @@ LIMIT 1`,
 	}
 
 	return count, &row, runningCount > 0, nil
-}
-
-func operationRunStatusType() string {
-	return systemSchemaObjectName(operationRunStatusTypeName)
-}
-
-func operationRunSequenceNameQualified() string {
-	return systemSchemaObjectName(operationRunSequenceName)
-}
-
-func operationRunSequenceNextVal() string {
-	return "nextval('memory._mina_internal." + operationRunSequenceName + "')"
-}
-
-func operationRunTable() string {
-	return systemSchemaObjectName(operationRunTableName)
 }

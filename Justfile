@@ -161,9 +161,10 @@ build-go:
 build: frontend-build build-go
 
 [doc('''Start the REST API in the background; pass -p to persist data in build/dev/mina.db.
+Pass --db <path> to use a specific Mina database.
 Pass --demo to seed deterministic demo data and enable login plus API authentication.''')]
 [group('demo')]
-dev mode="" extra="": build
+dev mode="" extra="" value="": build
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -179,6 +180,8 @@ dev mode="" extra="": build
     default_port=8080
     persist=false
     demo=false
+    custom_db_path=""
+    expect_db_path=false
 
     port_in_use() {
         (exec 3<>"/dev/tcp/127.0.0.1/$1") >/dev/null 2>&1
@@ -201,7 +204,16 @@ dev mode="" extra="": build
         exit 1
     }
 
-    for arg in {{ quote(mode) }} {{ quote(extra) }}; do
+    for arg in {{ quote(mode) }} {{ quote(extra) }} {{ quote(value) }}; do
+        if [ "$expect_db_path" = true ]; then
+            if [ -z "$arg" ]; then
+                echo "usage: just dev [-p | --db <path>] [--demo]" >&2
+                exit 2
+            fi
+            custom_db_path="$arg"
+            expect_db_path=false
+            continue
+        fi
         case "$arg" in
             "")
                 ;;
@@ -211,12 +223,19 @@ dev mode="" extra="": build
             "--demo")
                 demo=true
                 ;;
+            "--db")
+                expect_db_path=true
+                ;;
             *)
-                echo "usage: just dev [-p] [--demo]" >&2
+                echo "usage: just dev [-p | --db <path>] [--demo]" >&2
                 exit 2
                 ;;
         esac
     done
+    if [ "$expect_db_path" = true ] || { [ "$persist" = true ] && [ -n "$custom_db_path" ]; }; then
+        echo "usage: just dev [-p | --db <path>] [--demo]" >&2
+        exit 2
+    fi
 
     mkdir -p "$dev_dir"
     if [ -f "$pid_file" ]; then
@@ -236,19 +255,21 @@ dev mode="" extra="": build
     port="$(select_dev_port)"
     : > "$stdout_log"
     : > "$stderr_log"
-    mina_args=()
+    mina_command=(./bin/mina)
     serve_args=(serve --host 127.0.0.1 --port "$port" --access-log "$access_log")
     if [ "$persist" = true ]; then
         serve_args+=(--db "$db_path" --yes)
+    elif [ -n "$custom_db_path" ]; then
+        serve_args+=(--db "$custom_db_path" --yes)
     fi
     if [ "$demo" = true ]; then
         printf 'auth_file = "auth.toml"\n' > "$config_path"
         chmod 0600 "$config_path"
         install -m 0600 scripts/fixtures/demo-auth.toml "$auth_path"
-        mina_args+=(--config-file "$config_path")
+        mina_command+=(--config-file "$config_path")
         serve_args+=(--demo)
     fi
-    nohup ./bin/mina "${mina_args[@]}" "${serve_args[@]}" > "$stdout_log" 2> "$stderr_log" &
+    nohup "${mina_command[@]}" "${serve_args[@]}" > "$stdout_log" 2> "$stderr_log" &
     pid="$!"
     echo "$pid" > "$pid_file"
     disown "$pid"

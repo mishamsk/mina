@@ -122,52 +122,6 @@ WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 	return transaction, nil
 }
 
-// ListMissingAmountUSDRecords returns active records with unresolved amount_usd.
-func (s *TransactionStore) ListMissingAmountUSDRecords(ctx context.Context) ([]transactions.AmountUSDBackfillRecord, error) {
-	rows, err := s.db.query().QueryContext(
-		ctx,
-		`SELECT jr.record_id, jr.currency, jr.amount, t.initiated_date AS lookup_date
-FROM `+s.db.accountingName("journal_record")+` AS jr
-JOIN `+s.db.accountingName("transaction")+` AS t
-  ON t.transaction_id = jr.transaction_id
-WHERE jr.tombstoned_at IS NULL
-  AND t.tombstoned_at IS NULL
-  AND jr.amount_usd IS NULL
-ORDER BY jr.currency, lookup_date, jr.record_id`,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("query missing amount_usd records: %w", err)
-	}
-
-	records := []transactions.AmountUSDBackfillRecord{}
-	for rows.Next() {
-		var record transactions.AmountUSDBackfillRecord
-		var amount duckdb.Decimal
-		var lookupDate time.Time
-		if err := rows.Scan(&record.RecordID, &record.Currency, &amount, &lookupDate); err != nil {
-			return nil, fmt.Errorf("scan missing amount_usd record: %w", err)
-		}
-		parsedAmount, err := decimalFromDuckDB(amount)
-		if err != nil {
-			return nil, fmt.Errorf("scan missing amount_usd amount: %w", err)
-		}
-		record.Amount = parsedAmount
-		record.LookupDate = values.CivilDateFromTime(lookupDate)
-		records = append(records, record)
-	}
-	if err := rows.Err(); err != nil {
-		if closeErr := rows.Close(); closeErr != nil {
-			return nil, fmt.Errorf("iterate missing amount_usd records: %w; close rows: %w", err, closeErr)
-		}
-		return nil, fmt.Errorf("iterate missing amount_usd records: %w", err)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, fmt.Errorf("close missing amount_usd rows: %w", err)
-	}
-
-	return records, nil
-}
-
 // MonthTotals returns spend and income aggregates for active records in one civil month.
 func (s *TransactionStore) MonthTotals(ctx context.Context, monthRange transactions.MonthTotalsRange) (transactions.MonthActivityTotals, error) {
 	row := s.db.query().QueryRowContext(
@@ -234,31 +188,71 @@ WHERE total_kind IS NOT NULL`,
 	return totals, nil
 }
 
-// BatchSetAmountUSD sets resolved amount_usd values on active unresolved records.
-func (s *TransactionStore) BatchSetAmountUSD(ctx context.Context, updates []transactions.AmountUSDBackfillUpdate) error {
-	if len(updates) == 0 {
-		return nil
+// BackfillMissingAmountUSD fills every currently resolvable active record in one update.
+func (s *TransactionStore) BackfillMissingAmountUSD(ctx context.Context) error {
+	if _, err := s.db.query().ExecContext(ctx, `WITH candidate AS (
+	SELECT
+		jr.record_id,
+		jr.currency,
+		jr.amount,
+		CAST(jr.amount * 100000000::HUGEINT AS HUGEINT) * 100000000::HUGEINT AS division_numerator,
+		CAST(dense.rate * 100000000::HUGEINT AS HUGEINT) AS division_denominator
+	FROM `+s.db.accountingName("journal_record")+` AS jr
+	JOIN `+s.db.accountingName("transaction")+` AS t
+	  ON t.transaction_id = jr.transaction_id
+	LEFT JOIN `+s.db.runtimeName(denseExchangeRateTableName)+` AS dense
+	  ON dense.from_currency = 'USD'
+	 AND dense.to_currency = jr.currency
+	 AND dense.effective_date = COALESCE(CAST(jr.posted_date AS DATE), t.initiated_date)
+	WHERE jr.tombstoned_at IS NULL
+	  AND t.tombstoned_at IS NULL
+	  AND jr.amount_usd IS NULL
+),
+division AS (
+	SELECT
+		record_id,
+		currency,
+		amount,
+		division_numerator,
+		division_denominator,
+		division_numerator // division_denominator AS quotient,
+		division_numerator % division_denominator AS remainder
+	FROM candidate
+),
+resolved AS (
+	SELECT
+		record_id,
+		currency,
+		CASE
+			WHEN currency = 'USD' THEN amount
+			ELSE TRY_CAST((
+				quotient + CASE
+					WHEN abs(remainder) * 2 > division_denominator OR (
+						abs(remainder) * 2 = division_denominator AND abs(quotient) % 2 = 1
+					) THEN sign(division_numerator)
+					ELSE 0
+				END
+			) * CAST(0.00000001 AS DECIMAL(9,8)) AS DECIMAL(18,8))
+		END AS amount_usd
+	FROM division
+),
+nonzero AS (
+	SELECT record_id, amount_usd
+	FROM resolved
+	WHERE amount_usd IS NOT NULL
+	  AND (currency = 'USD' OR amount_usd <> CAST(0 AS DECIMAL(18,8)))
+)
+UPDATE `+s.db.accountingName("journal_record")+` AS target
+SET amount_usd = nonzero.amount_usd,
+    updated_at = CURRENT_TIMESTAMP
+FROM nonzero
+WHERE target.record_id = nonzero.record_id
+  AND target.tombstoned_at IS NULL
+  AND target.amount_usd IS NULL`); err != nil {
+		return fmt.Errorf("backfill missing amount_usd from dense rates: %w", err)
 	}
 
-	return s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
-		for _, update := range updates {
-			if _, err := tx.ExecContext(
-				ctx,
-				`UPDATE `+s.db.accountingName("journal_record")+`
-SET amount_usd = ?,
-    updated_at = CURRENT_TIMESTAMP
-WHERE record_id = ?
-  AND tombstoned_at IS NULL
-  AND amount_usd IS NULL`,
-				update.AmountUSD.LibraryDecimal(),
-				update.RecordID,
-			); err != nil {
-				return fmt.Errorf("backfill amount_usd record %d: %w", update.RecordID, err)
-			}
-		}
-
-		return nil
-	})
+	return nil
 }
 
 // Get returns a transaction with nested journal records.

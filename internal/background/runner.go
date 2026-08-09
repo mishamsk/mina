@@ -90,7 +90,7 @@ type Operation struct {
 	MaxRetries uint
 }
 
-// Runner executes registered background operations.
+// Runner executes registered background operations and owns unrecorded tasks.
 type Runner struct {
 	runs     *operationruns.Service
 	clock    Clock
@@ -99,6 +99,7 @@ type Runner struct {
 	mu         sync.Mutex
 	operations map[operationruns.OperationID]registeredOperation
 	running    map[string]int
+	closed     bool
 	ctx        context.Context
 	cancel     context.CancelFunc
 	wg         sync.WaitGroup
@@ -182,36 +183,51 @@ func parseSchedule(schedule string) (cron.Schedule, error) {
 func (r *Runner) Start() {
 	for _, op := range r.operations {
 		if op.Startup {
-			r.wg.Add(1)
-			go func() {
-				defer r.wg.Done()
-				_, _ = r.run(r.ctx, op.withStartupRun(), operationruns.RunTriggerStartup)
-			}()
+			r.Submit(string(op.ID), func(ctx context.Context) error {
+				_, err := r.run(ctx, op.withStartupRun(), operationruns.RunTriggerStartup)
+				return err
+			})
 		}
 		if op.schedule != nil {
-			r.wg.Add(1)
-			go func() {
-				defer r.wg.Done()
-				r.runRecurring(r.ctx, op)
-			}()
+			r.Submit(string(op.ID)+" schedule", func(ctx context.Context) error {
+				r.runRecurring(ctx, op)
+				return nil
+			})
 		}
 	}
 }
 
-// Close stops recurring loops and waits for runner-owned goroutines.
-func (r *Runner) Close() {
-	if r.cancel != nil {
-		r.cancel()
+// Submit sends named work to the runner without adding operation policy.
+// It returns whether the work was accepted.
+func (r *Runner) Submit(name string, run func(context.Context) error) bool {
+	if name == "" || run == nil {
+		return false
 	}
+	ctx, done, accepted := r.admit()
+	if !accepted {
+		return false
+	}
+	r.launch(name, ctx, done, run)
+
+	return true
+}
+
+// Close stops operations and tasks and waits for runner-owned goroutines.
+func (r *Runner) Close() {
+	r.mu.Lock()
+	if !r.closed {
+		r.closed = true
+		if r.cancel != nil {
+			r.cancel()
+		}
+	}
+	r.mu.Unlock()
 	r.wg.Wait()
 }
 
 // Trigger starts one registered operation asynchronously and returns an already recorded run envelope.
 func (r *Runner) Trigger(ctx context.Context, operationID operationruns.OperationID) (operationruns.RunEnvelope, error) {
 	if err := ctx.Err(); err != nil {
-		return operationruns.RunEnvelope{}, err
-	}
-	if err := r.ctx.Err(); err != nil {
 		return operationruns.RunEnvelope{}, err
 	}
 	op, ok := r.operations[operationID]
@@ -223,14 +239,40 @@ func (r *Runner) Trigger(ctx context.Context, operationID operationruns.Operatio
 		return operationruns.RunEnvelope{}, err
 	}
 	if run.Status == operationruns.RunStatusRunning {
-		r.wg.Add(1)
-		go func() {
-			defer r.wg.Done()
-			_, _ = r.finish(r.ctx, op, run)
-		}()
+		accepted := r.Submit(string(op.ID), func(ctx context.Context) error {
+			_, err := r.finish(ctx, op, run)
+			return err
+		})
+		if !accepted {
+			r.release(op.Key)
+			return operationruns.RunEnvelope{}, context.Canceled
+		}
 	}
 
 	return run, nil
+}
+
+func (r *Runner) admit() (context.Context, func(), bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.closed || r.ctx.Err() != nil {
+		return nil, nil, false
+	}
+	r.wg.Add(1)
+
+	return r.ctx, r.wg.Done, true
+}
+
+func (r *Runner) launch(name string, ctx context.Context, done func(), run func(context.Context) error) {
+	go func() {
+		defer done()
+		if err := runSafely(ctx, run); err != nil {
+			if ctx.Err() == nil {
+				r.log("%s background work failed: %s\n", name, err)
+			}
+		}
+	}()
 }
 
 func (r *Runner) runRecurring(ctx context.Context, op registeredOperation) {
@@ -245,7 +287,11 @@ func (r *Runner) runRecurring(ctx context.Context, op registeredOperation) {
 		}
 		now := r.clock.Now().UTC()
 		if !now.Before(next) {
-			_, _ = r.run(ctx, op, operationruns.RunTriggerScheduled)
+			if _, err := r.run(ctx, op, operationruns.RunTriggerScheduled); err != nil {
+				if ctx.Err() == nil {
+					r.log("%s scheduled run failed: %s\n", op.ID, err)
+				}
+			}
 			next = op.schedule.Next(now)
 			if next.IsZero() {
 				r.log("%s schedule has no next matching time\n", op.ID)
@@ -312,17 +358,19 @@ func (r *Runner) finish(
 	runCtx, cancel := context.WithTimeout(ctx, op.Timeout)
 	defer cancel()
 	err := r.invokeWithRetry(runCtx, op)
-	finishCtx := context.WithoutCancel(ctx)
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return operationruns.RunEnvelope{}, ctxErr
+	}
 	if err == nil || operationErrorKind(err) == ErrorKindAlreadyDone {
-		return r.runs.RecordRunSuccess(finishCtx, started)
+		return r.runs.RecordRunSuccess(ctx, started)
 	}
 	if operationErrorKind(err) == ErrorKindCanceled ||
 		errors.Is(err, context.Canceled) ||
 		errors.Is(err, context.DeadlineExceeded) {
-		return r.runs.RecordRunCancel(finishCtx, started, err)
+		return r.runs.RecordRunCancel(ctx, started, err)
 	}
 
-	run, finishErr := r.runs.RecordRunFailure(finishCtx, started, err)
+	run, finishErr := r.runs.RecordRunFailure(ctx, started, err)
 	if finishErr != nil {
 		return operationruns.RunEnvelope{}, finishErr
 	}
@@ -334,7 +382,7 @@ func (r *Runner) finish(
 func (r *Runner) invokeWithRetry(ctx context.Context, op registeredOperation) error {
 	maxTries := op.MaxRetries + 1
 	for attempt := uint(0); ; attempt++ {
-		err := invokeOperation(ctx, op.Run)
+		err := runSafely(ctx, op.Run)
 		if err == nil || operationErrorKind(err) != ErrorKindTransient || attempt+1 >= maxTries {
 			return err
 		}
@@ -357,14 +405,14 @@ func operationErrorKind(err error) ErrorKind {
 	return ErrorKindPermanent
 }
 
-func invokeOperation(ctx context.Context, fn OperationFunc) (err error) {
+func runSafely(ctx context.Context, run OperationFunc) (err error) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
-			err = fmt.Errorf("operation panic: %v", recovered)
+			err = fmt.Errorf("panic: %v", recovered)
 		}
 	}()
 
-	return fn(ctx)
+	return run(ctx)
 }
 
 func (r *Runner) reserve(key string) bool {

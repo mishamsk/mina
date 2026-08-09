@@ -70,7 +70,9 @@ Rules:
 - When a database file is provided, the app attaches it as the portable accounting-state database.
 - Accounting state lives in one DuckDB schema selected by app config plus explicit CLI overrides.
 - When no accounting-state database file is provided (e.g. for demos and tests) accounting state stored in a schema of the in-memory database.
+- Every app owns an opaque schema in the in-memory database for disposable runtime state; runtime schemas are outside portable accounting state, migrations, backups, and validation.
 - Store state owns the fully qualified accounting schema name, whether attached or in-memory.
+- `internal/store` owns runtime-schema creation, safe qualification, propagation across transaction-scoped repositories, and whole-schema cleanup.
 - `docs/data-model.md` is the source of truth for accounting-state tables, column types, generated columns, enum values, sequence use, arrays, timestamps, dates, and decimal precision.
 - Migrations are versioned and upgrade-only.
 - The database stores its schema version.

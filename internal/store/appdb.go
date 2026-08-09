@@ -21,6 +21,7 @@ type AppDB struct {
 	db            *sql.DB
 	tx            *sql.Tx
 	location      AccountingLocation
+	runtimeSchema string
 	encryptionKey string
 	close         func() error
 }
@@ -95,18 +96,26 @@ func openAppDB(
 	if err != nil {
 		return nil, err
 	}
+	runtimeSchema, err := newRuntimeSchemaName()
+	if err != nil {
+		return nil, err
+	}
 	appDB := &AppDB{
 		db:            db,
 		location:      location,
+		runtimeSchema: runtimeSchema,
 		encryptionKey: request.EncryptionKey,
 	}
 	appDB.close = func() error {
 		return close(appDB)
 	}
+	if err := appDB.prepareRuntimeSchema(ctx); err != nil {
+		return nil, err
+	}
 
 	if request.Path != "" {
 		if err := attach(ctx, appDB, request.Path); err != nil {
-			return nil, err
+			return nil, errors.Join(err, appDB.dropRuntimeSchema(context.Background()))
 		}
 	}
 
@@ -148,6 +157,18 @@ func (s *AppDB) accountingDatabaseName() string {
 	return s.location.database
 }
 
+func (s *AppDB) runtimeSchemaName() string {
+	return QuoteIdentifier("memory") + "." + QuoteIdentifier(s.runtimeSchema)
+}
+
+func (s *AppDB) runtimeName(object string) string {
+	return s.runtimeSchemaName() + "." + QuoteIdentifier(object)
+}
+
+func (s *AppDB) runtimeSequenceNextVal(sequence string) string {
+	return "nextval(" + quoteStringLiteral("memory."+s.runtimeSchema+"."+sequence) + ")"
+}
+
 func (s *AppDB) isInMemoryAccounting() bool {
 	return s.location.Database() == "memory"
 }
@@ -158,5 +179,8 @@ func (s *AppDB) Close() error {
 		return nil
 	}
 
-	return s.close()
+	return errors.Join(
+		s.dropRuntimeSchema(context.Background()),
+		s.close(),
+	)
 }

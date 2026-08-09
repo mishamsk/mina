@@ -38,9 +38,25 @@ func (s *AppDB) withTx(ctx context.Context, opts *sql.TxOptions, fn func(*sql.Tx
 	return withSQLTx(ctx, s.db, opts, fn)
 }
 
-// withSQLTx starts a transaction on a raw process DB and owns commit/rollback.
+// withSQLTx pins a transaction to one connection until commit or rollback finishes.
+// The transaction context is detached so caller cancellation cannot return an
+// aborted DuckDB connection to the pool before explicit rollback completes;
+// statements and the pre-commit check still honor the caller's context.
 func withSQLTx(ctx context.Context, db *sql.DB, opts *sql.TxOptions, fn func(*sql.Tx) error) (err error) {
-	tx, err := db.BeginTx(ctx, opts)
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("acquire transaction connection: %w", err)
+	}
+	defer func() {
+		if closeErr := conn.Close(); closeErr != nil {
+			err = errors.Join(err, fmt.Errorf("close transaction connection: %w", closeErr))
+		}
+	}()
+
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	tx, err := conn.BeginTx(context.WithoutCancel(ctx), opts)
 	if err != nil {
 		return fmt.Errorf("begin transaction: %w", err)
 	}
@@ -63,6 +79,9 @@ func withSQLTx(ctx context.Context, db *sql.DB, opts *sql.TxOptions, fn func(*sq
 	}()
 
 	if err := fn(tx); err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
 		return err
 	}
 

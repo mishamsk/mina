@@ -8,6 +8,7 @@
 
 - Operation IDs are stable public API identifiers.
 - Operation run IDs are numeric invocation IDs assigned by the repository at run start.
+- Operation runs are app-local, ephemeral runtime state; IDs need only be unique within one app.
 - Manual REST starts are delegated to the background runner.
 - Runtime startup and scheduled jobs record observable run attempts through this service.
 

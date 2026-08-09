@@ -280,6 +280,9 @@ func TestExchangeRateLoadingExpectedBehavior(t *testing.T) {
 		}
 
 		exact := createBackfillTransaction("2026-04-01", "10.00")
+		exactAgain := createBackfillTransaction("2026-04-01", "20.00")
+		large := createBackfillTransaction("2026-04-01", "1234567890.12345678")
+		largest := createBackfillTransaction("2026-04-01", "9999999999.99999999")
 		interior := createBackfillTransaction("2026-04-06", "11.00")
 		outside := createBackfillTransaction("2026-04-12", "12.00")
 
@@ -287,6 +290,12 @@ func TestExchangeRateLoadingExpectedBehavior(t *testing.T) {
 
 		assertRecordAmountUSD(t, readTransaction(exact.TransactionId), cash.AccountId, "-10.00000000")
 		assertRecordAmountUSD(t, readTransaction(exact.TransactionId), counterparty.AccountId, "10.00000000")
+		assertRecordAmountUSD(t, readTransaction(exactAgain.TransactionId), cash.AccountId, "-20.00000000")
+		assertRecordAmountUSD(t, readTransaction(exactAgain.TransactionId), counterparty.AccountId, "20.00000000")
+		assertRecordAmountUSD(t, readTransaction(large.TransactionId), cash.AccountId, "-1234567890.12345678")
+		assertRecordAmountUSD(t, readTransaction(large.TransactionId), counterparty.AccountId, "1234567890.12345678")
+		assertRecordAmountUSD(t, readTransaction(largest.TransactionId), cash.AccountId, "-9999999999.99999999")
+		assertRecordAmountUSD(t, readTransaction(largest.TransactionId), counterparty.AccountId, "9999999999.99999999")
 		assertRecordAmountUSD(t, readTransaction(interior.TransactionId), cash.AccountId, "-10.00000000")
 		assertRecordAmountUSD(t, readTransaction(interior.TransactionId), counterparty.AccountId, "10.00000000")
 		assertRecordAmountUSDNil(t, readTransaction(outside.TransactionId), cash.AccountId)
@@ -297,6 +306,76 @@ func TestExchangeRateLoadingExpectedBehavior(t *testing.T) {
 
 		assertRecordAmountUSD(t, readTransaction(outside.TransactionId), cash.AccountId, "-10.00000000")
 		assertRecordAmountUSD(t, readTransaction(outside.TransactionId), counterparty.AccountId, "10.00000000")
+	})
+
+	t.Run("leaves unrepresentable cache-backed conversion unresolved", func(t *testing.T) {
+		provider := apptest.NewFakeExchangeRateProvider()
+		provider.Set("EUR", "2026-04-01", "0.00000001")
+		client := newSharedClient(t, apptest.WithExchangeRateLoading(false), apptest.WithExchangeRateProviderFactory(provider))
+		cash := client.Scenario().AccountWithCurrency("cash:BackfillOverflow:EUR", "EUR")
+		counterparty := client.Scenario().Account("counterparty:BackfillOverflow:EUR")
+		category := client.Scenario().Category("BackfillOverflow:EUR")
+
+		response, err := client.REST().CreateTransactionWithResponse(context.Background(), httpclient.CreateTransactionRequest{
+			InitiatedDate: apptest.Date("2026-04-01"),
+			Records: []httpclient.CreateJournalRecordRequest{
+				{
+					AccountId:            cash.AccountId,
+					Amount:               "-100.00000000",
+					Currency:             "EUR",
+					Settlement:           apptest.PostedSettlement(),
+					ReconciliationStatus: httpclient.Reconciled,
+					Source:               httpclient.WritableSourceManual,
+				},
+				{
+					AccountId:            counterparty.AccountId,
+					Amount:               "100.00000000",
+					CategoryId:           apptest.Int64Ptr(category.CategoryId),
+					Currency:             "EUR",
+					ReconciliationStatus: httpclient.Reconciled,
+					Source:               httpclient.WritableSourceManual,
+				},
+			},
+		})
+		requireClientResponse(t, "create overflow backfill transaction", err, response.StatusCode(), http.StatusCreated, response.Body)
+		assertRecordAmountUSDNil(t, *response.JSON201, cash.AccountId)
+		assertRecordAmountUSDNil(t, *response.JSON201, counterparty.AccountId)
+
+		triggerAndWaitForExchangeRateLoad(t, client)
+
+		read, err := client.REST().GetTransactionWithResponse(context.Background(), response.JSON201.TransactionId)
+		requireClientResponse(t, "get overflow backfill transaction", err, read.StatusCode(), http.StatusOK, read.Body)
+		assertRecordAmountUSDNil(t, *read.JSON200, cash.AccountId)
+		assertRecordAmountUSDNil(t, *read.JSON200, counterparty.AccountId)
+	})
+
+	t.Run("rounds cache-backed conversions half-even and leaves rounded zero unresolved", func(t *testing.T) {
+		provider := apptest.NewFakeExchangeRateProvider()
+		provider.Set("EUR", "2026-04-01", "2.00000000")
+		provider.Set("CHF", "2026-04-01", "4.00000000")
+		client := newSharedClient(t, apptest.WithExchangeRateLoading(false), apptest.WithExchangeRateProviderFactory(provider))
+		halfEven := createForeignCurrencyTransaction(t, client, foreignCurrencyTransaction{
+			Currency:      "EUR",
+			InitiatedDate: "2026-04-01",
+			Amount:        "0.00000005",
+		})
+		roundedZero := createForeignCurrencyTransaction(t, client, foreignCurrencyTransaction{
+			Currency:      "CHF",
+			InitiatedDate: "2026-04-01",
+			Amount:        "0.00000001",
+		})
+
+		triggerAndWaitForExchangeRateLoad(t, client)
+
+		halfEvenRead, err := client.REST().GetTransactionWithResponse(context.Background(), halfEven.TransactionId)
+		requireClientResponse(t, "get half-even backfill transaction", err, halfEvenRead.StatusCode(), http.StatusOK, halfEvenRead.Body)
+		assertRecordAmountUSD(t, *halfEvenRead.JSON200, halfEven.Records[0].AccountId, "-0.00000002")
+		assertRecordAmountUSD(t, *halfEvenRead.JSON200, halfEven.Records[1].AccountId, "0.00000002")
+
+		roundedZeroRead, err := client.REST().GetTransactionWithResponse(context.Background(), roundedZero.TransactionId)
+		requireClientResponse(t, "get rounded-zero backfill transaction", err, roundedZeroRead.StatusCode(), http.StatusOK, roundedZeroRead.Body)
+		assertRecordAmountUSDNil(t, *roundedZeroRead.JSON200, roundedZero.Records[0].AccountId)
+		assertRecordAmountUSDNil(t, *roundedZeroRead.JSON200, roundedZero.Records[1].AccountId)
 	})
 
 	t.Run("loads prior bracket for first unresolved provider-gap date", func(t *testing.T) {
@@ -370,9 +449,9 @@ func TestExchangeRateLoadingExpectedBehavior(t *testing.T) {
 
 	t.Run("posted date wins over initiated date", func(t *testing.T) {
 		provider := apptest.NewFakeExchangeRateProvider()
-		provider.Set("EUR", "2026-04-02", "1.12000000")
+		provider.Set("EUR", "2026-04-02", "1.00000000")
 		client := newSharedClient(t, apptest.WithExchangeRateLoading(false), apptest.WithExchangeRateProviderFactory(provider))
-		createForeignCurrencyTransaction(t, client, foreignCurrencyTransaction{
+		created := createForeignCurrencyTransaction(t, client, foreignCurrencyTransaction{
 			Currency:      "EUR",
 			InitiatedDate: "2026-03-31",
 			PostedAt:      apptest.TimestampPtr("2026-04-02T12:00:00Z"),
@@ -382,13 +461,17 @@ func TestExchangeRateLoadingExpectedBehavior(t *testing.T) {
 
 		assertExchangeRateDateExists(t, client, "USD", "EUR", "2026-04-02")
 		assertExchangeRateDateMissing(t, client, "USD", "EUR", "2026-03-31")
+		read, err := client.REST().GetTransactionWithResponse(context.Background(), created.TransactionId)
+		requireClientResponse(t, "get posted-date backfill transaction", err, read.StatusCode(), http.StatusOK, read.Body)
+		assertRecordAmountUSD(t, *read.JSON200, created.Records[0].AccountId, "-10.00000000")
+		assertRecordAmountUSDNil(t, *read.JSON200, created.Records[1].AccountId)
 	})
 
 	t.Run("null posted date uses initiated date", func(t *testing.T) {
 		provider := apptest.NewFakeExchangeRateProvider()
-		provider.Set("EUR", "2026-03-31", "1.12000000")
+		provider.Set("EUR", "2026-03-31", "1.00000000")
 		client := newSharedClient(t, apptest.WithExchangeRateLoading(false), apptest.WithExchangeRateProviderFactory(provider))
-		createForeignCurrencyTransaction(t, client, foreignCurrencyTransaction{
+		created := createForeignCurrencyTransaction(t, client, foreignCurrencyTransaction{
 			Currency:      "EUR",
 			InitiatedDate: "2026-03-31",
 		})
@@ -396,6 +479,10 @@ func TestExchangeRateLoadingExpectedBehavior(t *testing.T) {
 		triggerAndWaitForExchangeRateLoad(t, client)
 
 		assertExchangeRateDateExists(t, client, "USD", "EUR", "2026-03-31")
+		read, err := client.REST().GetTransactionWithResponse(context.Background(), created.TransactionId)
+		requireClientResponse(t, "get initiated-date backfill transaction", err, read.StatusCode(), http.StatusOK, read.Body)
+		assertRecordAmountUSD(t, *read.JSON200, created.Records[0].AccountId, "-10.00000000")
+		assertRecordAmountUSD(t, *read.JSON200, created.Records[1].AccountId, "10.00000000")
 	})
 
 	t.Run("loads later rates without removing existing active rates", func(t *testing.T) {
@@ -439,6 +526,7 @@ type foreignCurrencyTransaction struct {
 	Currency      string
 	InitiatedDate string
 	PostedAt      *time.Time
+	Amount        string
 	AmountUSD     string
 }
 
@@ -450,6 +538,10 @@ func createForeignCurrencyTransaction(t *testing.T, client *apptest.Client, fixt
 	counterparty := client.Scenario().Account("counterparty:" + fqnSuffix)
 	category := client.Scenario().Category("Transfers:" + fqnSuffix)
 	pendingAt := apptest.Timestamp(fixture.InitiatedDate + "T12:00:00Z")
+	amount := fixture.Amount
+	if amount == "" {
+		amount = "10.00000000"
+	}
 	var sourceAmountUSD *string
 	var counterpartyAmountUSD *string
 	if fixture.AmountUSD != "" {
@@ -461,7 +553,7 @@ func createForeignCurrencyTransaction(t *testing.T, client *apptest.Client, fixt
 		Records: []httpclient.CreateJournalRecordRequest{
 			{
 				AccountId:            checking.AccountId,
-				Amount:               "-10.00000000",
+				Amount:               "-" + amount,
 				AmountUsd:            sourceAmountUSD,
 				Currency:             fixture.Currency,
 				Settlement:           &httpclient.SettlementIntent{Status: httpclient.SettlementStatusPosted, PendingDate: &pendingAt, PostedDate: fixture.PostedAt},
@@ -470,7 +562,7 @@ func createForeignCurrencyTransaction(t *testing.T, client *apptest.Client, fixt
 			},
 			{
 				AccountId:            counterparty.AccountId,
-				Amount:               "10.00000000",
+				Amount:               amount,
 				AmountUsd:            counterpartyAmountUSD,
 				CategoryId:           apptest.Int64Ptr(category.CategoryId),
 				Currency:             fixture.Currency,

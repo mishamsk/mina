@@ -1732,6 +1732,27 @@ type CreditLimitHistoryListResponse struct {
 	TotalCount int64 `json:"total_count"`
 }
 
+// DailyExchangeRate defines model for DailyExchangeRate.
+type DailyExchangeRate struct {
+	EffectiveDate openapi_types.Date `json:"effective_date"`
+	FromCurrency  string             `json:"from_currency"`
+
+	// Interpolated True when the row was derived between provider-backed source dates.
+	Interpolated bool `json:"interpolated"`
+
+	// Rate JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
+	Rate       string `json:"rate"`
+	ToCurrency string `json:"to_currency"`
+}
+
+// DailyExchangeRateListResponse defines model for DailyExchangeRateListResponse.
+type DailyExchangeRateListResponse struct {
+	ExchangeRates []DailyExchangeRate `json:"exchange_rates"`
+
+	// TotalCount Count of matching daily exchange rates before limit and offset are applied.
+	TotalCount int64 `json:"total_count"`
+}
+
 // DatabaseBackupRun defines model for DatabaseBackupRun.
 type DatabaseBackupRun struct {
 	CompletedAt    *time.Time                    `json:"completed_at,omitempty"`
@@ -2766,6 +2787,24 @@ type ListExchangeRatesParamsSort string
 // ListExchangeRatesParamsSortDir defines parameters for ListExchangeRates.
 type ListExchangeRatesParamsSortDir string
 
+// ListDailyExchangeRatesParams defines parameters for ListDailyExchangeRates.
+type ListDailyExchangeRatesParams struct {
+	// ToCurrency Destination currency code filter, using ISO 4217 or the `C::` crypto prefix.
+	ToCurrency *string `form:"to_currency,omitempty" json:"to_currency,omitempty"`
+
+	// EffectiveDateFrom Inclusive lower effective-date bound.
+	EffectiveDateFrom *openapi_types.Date `form:"effective_date_from,omitempty" json:"effective_date_from,omitempty"`
+
+	// EffectiveDateTo Inclusive upper effective-date bound.
+	EffectiveDateTo *openapi_types.Date `form:"effective_date_to,omitempty" json:"effective_date_to,omitempty"`
+
+	// Limit Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Offset Zero-based number of matching results to skip.
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
 // GetExchangeRateParams defines parameters for GetExchangeRate.
 type GetExchangeRateParams struct {
 	// IncludeTombstoned Include tombstoned entities; defaults to false.
@@ -3412,6 +3451,9 @@ type ClientInterface interface {
 	CreateExchangeRateWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	CreateExchangeRate(ctx context.Context, body CreateExchangeRateJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListDailyExchangeRates request
+	ListDailyExchangeRates(ctx context.Context, params *ListDailyExchangeRatesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteExchangeRate request
 	DeleteExchangeRate(ctx context.Context, exchangeRateId int64, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -4202,6 +4244,18 @@ func (c *Client) CreateExchangeRateWithBody(ctx context.Context, contentType str
 
 func (c *Client) CreateExchangeRate(ctx context.Context, body CreateExchangeRateJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCreateExchangeRateRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListDailyExchangeRates(ctx context.Context, params *ListDailyExchangeRatesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListDailyExchangeRatesRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -7421,6 +7475,108 @@ func NewCreateExchangeRateRequestWithBody(server string, contentType string, bod
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListDailyExchangeRatesRequest generates requests for ListDailyExchangeRates
+func NewListDailyExchangeRatesRequest(server string, params *ListDailyExchangeRatesParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/exchange-rates/daily")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.ToCurrency != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "to_currency", *params.ToCurrency, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.EffectiveDateFrom != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "effective_date_from", *params.EffectiveDateFrom, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.EffectiveDateTo != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "effective_date_to", *params.EffectiveDateTo, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Offset != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "offset", *params.Offset, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -10891,6 +11047,9 @@ type ClientWithResponsesInterface interface {
 
 	CreateExchangeRateWithResponse(ctx context.Context, body CreateExchangeRateJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateExchangeRateResponse, error)
 
+	// ListDailyExchangeRatesWithResponse request
+	ListDailyExchangeRatesWithResponse(ctx context.Context, params *ListDailyExchangeRatesParams, reqEditors ...RequestEditorFn) (*ListDailyExchangeRatesResponse, error)
+
 	// DeleteExchangeRateWithResponse request
 	DeleteExchangeRateWithResponse(ctx context.Context, exchangeRateId int64, reqEditors ...RequestEditorFn) (*DeleteExchangeRateResponse, error)
 
@@ -12317,6 +12476,38 @@ func (r CreateExchangeRateResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r CreateExchangeRateResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListDailyExchangeRatesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *DailyExchangeRateListResponse
+	JSON400      *InvalidRequest
+	JSON401      *Unauthenticated
+}
+
+// Status returns HTTPResponse.Status
+func (r ListDailyExchangeRatesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListDailyExchangeRatesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListDailyExchangeRatesResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -14665,6 +14856,15 @@ func (c *ClientWithResponses) CreateExchangeRateWithResponse(ctx context.Context
 		return nil, err
 	}
 	return ParseCreateExchangeRateResponse(rsp)
+}
+
+// ListDailyExchangeRatesWithResponse request returning *ListDailyExchangeRatesResponse
+func (c *ClientWithResponses) ListDailyExchangeRatesWithResponse(ctx context.Context, params *ListDailyExchangeRatesParams, reqEditors ...RequestEditorFn) (*ListDailyExchangeRatesResponse, error) {
+	rsp, err := c.ListDailyExchangeRates(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListDailyExchangeRatesResponse(rsp)
 }
 
 // DeleteExchangeRateWithResponse request returning *DeleteExchangeRateResponse
@@ -17178,6 +17378,46 @@ func ParseCreateExchangeRateResponse(rsp *http.Response) (*CreateExchangeRateRes
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListDailyExchangeRatesResponse parses an HTTP response from a ListDailyExchangeRatesWithResponse call
+func ParseListDailyExchangeRatesResponse(rsp *http.Response) (*ListDailyExchangeRatesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListDailyExchangeRatesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest DailyExchangeRateListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
 
 	}
 

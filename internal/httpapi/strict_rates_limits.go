@@ -6,6 +6,7 @@ import (
 	"github.com/mishamsk/mina/internal/httpapi/openapi"
 	"github.com/mishamsk/mina/internal/services"
 	"github.com/mishamsk/mina/internal/services/creditlimits"
+	"github.com/mishamsk/mina/internal/services/exchangeratecache"
 	"github.com/mishamsk/mina/internal/services/exchangerates"
 )
 
@@ -87,6 +88,25 @@ func (s *strictServer) ListExchangeRates(ctx context.Context, request openapi.Li
 
 	return openapi.ListExchangeRates200JSONResponse{
 		ExchangeRates: exchangeRateAPIResponses(rates.Items),
+		TotalCount:    rates.TotalCount,
+	}, nil
+}
+
+func (s *strictServer) ListDailyExchangeRates(ctx context.Context, request openapi.ListDailyExchangeRatesRequestObject) (openapi.ListDailyExchangeRatesResponseObject, error) {
+	params := request.Params
+	rates, err := s.deps.ExchangeRateCache.List(ctx, exchangeratecache.ListOptions{
+		ToCurrency:        params.ToCurrency,
+		EffectiveDateFrom: nullableCivilDateFromOpenAPI(params.EffectiveDateFrom),
+		EffectiveDateTo:   nullableCivilDateFromOpenAPI(params.EffectiveDateTo),
+		Limit:             params.Limit,
+		Offset:            offsetParam(params.Offset),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return openapi.ListDailyExchangeRates200JSONResponse{
+		ExchangeRates: dailyExchangeRateAPIResponses(rates.Items),
 		TotalCount:    rates.TotalCount,
 	}, nil
 }
@@ -179,6 +199,21 @@ func exchangeRateAPIResponses(rates []exchangerates.ExchangeRate) []openapi.Exch
 	responses := make([]openapi.ExchangeRate, 0, len(rates))
 	for _, rate := range rates {
 		responses = append(responses, exchangeRateAPIResponse(rate))
+	}
+
+	return responses
+}
+
+func dailyExchangeRateAPIResponses(rates []exchangeratecache.DailyRate) []openapi.DailyExchangeRate {
+	responses := make([]openapi.DailyExchangeRate, 0, len(rates))
+	for _, rate := range rates {
+		responses = append(responses, openapi.DailyExchangeRate{
+			FromCurrency:  rate.FromCurrency,
+			ToCurrency:    rate.ToCurrency,
+			EffectiveDate: openAPIDate(rate.EffectiveDate),
+			Rate:          rate.Rate.String(),
+			Interpolated:  rate.Interpolated,
+		})
 	}
 
 	return responses

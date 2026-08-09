@@ -368,6 +368,13 @@ operations:
       name: list
       description: Use to discover stored currency-pair rates or resolve rate IDs. Keep results bounded with limit (1-500), offset, pair/date filters, and tombstone exclusion; defaults sort by currency pair ascending.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
+  listDailyExchangeRates:
+    cli: {state: exposed, name: list-daily}
+    mcp:
+      state: exposed
+      name: list_daily
+      description: Get daily USD exchange rates for historical conversion and rate questions. Results include exact source-date values and bounded interpolated dates; filter by destination currency and inclusive dates, and keep pages bounded with limit (1-500) and offset.
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   createExchangeRate:
     cli: {state: exposed, name: create}
     mcp:
@@ -378,10 +385,8 @@ operations:
   getExchangeRate:
     cli: {state: exposed, name: get}
     mcp:
-      state: exposed
-      name: get
-      description: Use when you already have an exact exchange-rate ID and need one entry, optionally tombstoned. Use exchange_rates_list to discover IDs or filter by pair and date.
-      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
+      state: excluded
+      reason: Per-ID source-rate reads add no agent workflow beyond the filtered source-rate list and daily-rate tools.
   updateExchangeRate:
     cli: {state: exposed, name: update}
     mcp:

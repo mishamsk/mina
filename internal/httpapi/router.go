@@ -14,6 +14,7 @@ import (
 	"github.com/mishamsk/mina/internal/services/categories"
 	"github.com/mishamsk/mina/internal/services/creditlimits"
 	"github.com/mishamsk/mina/internal/services/demo"
+	"github.com/mishamsk/mina/internal/services/exchangeratecache"
 	"github.com/mishamsk/mina/internal/services/exchangerates"
 	"github.com/mishamsk/mina/internal/services/health"
 	"github.com/mishamsk/mina/internal/services/members"
@@ -29,21 +30,22 @@ const defaultLocalAPITimeout = 30 * time.Second
 
 // Dependencies are router inputs owned by higher-level composition.
 type Dependencies struct {
-	Settings       *settingservice.Service
-	Health         *health.Service
-	Operations     *operationruns.Service
-	Categories     *categories.Service
-	Tags           *tags.Service
-	Members        *members.Service
-	Accounts       *accounts.Service
-	CreditLimits   *creditlimits.Service
-	ExchangeRates  *exchangerates.Service
-	Transactions   *transactions.Service
-	Templates      *transactiontemplates.Service
-	Recurring      *recurring.Service
-	Demo           *demo.Service
-	Authentication *authentication.Service
-	Clock          Clock
+	Settings          *settingservice.Service
+	Health            *health.Service
+	Operations        *operationruns.Service
+	Categories        *categories.Service
+	Tags              *tags.Service
+	Members           *members.Service
+	Accounts          *accounts.Service
+	CreditLimits      *creditlimits.Service
+	ExchangeRates     *exchangerates.Service
+	ExchangeRateCache *exchangeratecache.Service
+	Transactions      *transactions.Service
+	Templates         *transactiontemplates.Service
+	Recurring         *recurring.Service
+	Demo              *demo.Service
+	Authentication    *authentication.Service
+	Clock             Clock
 }
 
 // Clock returns the current process time for HTTP adapter decisions.
