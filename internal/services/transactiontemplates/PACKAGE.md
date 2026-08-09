@@ -2,23 +2,17 @@
 
 ## Purpose
 
-- Owns transaction-template domain types, validation, use cases, and repository contracts.
+- Owns reusable, partial transaction-record defaults for manual entry and recurring-definition seeding.
 
 ## Implicit Contracts
 
-- Templates are hierarchical, date-free, reusable manual-entry defaults.
-- Template records are partial defaults and are not required to balance or form complete journal records.
-- Account, category, member, currency, amount, tags, and memo are independently optional record defaults.
-- Replace preserves template identity and `fqn`; rename and move operations go through restructure.
-- Referenced account, category, member, and tag IDs are validated through dictionary service APIs; hidden accounts, categories, and tags remain valid.
-- Successful writes and reads derive a non-persisted list of compatible shorthand types from resolved template records. Complete amounts use the transaction classifier; missing or partial amounts are ignored together for structural Spend, Refund, and Income compatibility. Transfer requires complete directional amounts, Exchange remains Advanced-only, and a valid template with no match remains readable.
-- Shorthand-wide optional member and memo defaults may be supplied on only some template records when every supplied value agrees; tags must remain uniform because template records always carry an explicit tag set.
+- Templates may contain partial, unbalanced records; consumers must complete and validate the resulting transaction.
+- Active template FQNs follow the shared [hierarchy rules](../../../docs/hierarchy-semantics.md): `Replace` preserves the FQN, while `Restructure` atomically moves or renames its active subtree.
+- Every mutation shares the dictionary reference serializer, preventing a referenced resource from being deleted between validation and persistence; references must be active, although hidden accounts, categories, and tags are valid.
+- `CompatibleShorthands` is derived, not persisted. Complete amounts use transaction classification; partial shapes may still match structural spend, refund, income, or charged-transfer entry. A valid template without a match returns an empty list.
+- Shorthand compatibility requires identical tags and no conflicting supplied member or memo values, because each shorthand has one shared value for those fields.
 
 ## Boundaries
 
-- Owns: template FQN validation, partial-record validation, optional currency/decimal rules, active reference validation, shorthand compatibility, reference-error mapping, and tombstone delete semantics.
-- Does not own: HTTP DTOs, transport string parsing, SQL queries, database row types, transaction date/source rules, recurring schedules, or process configuration.
-
-## Testing Notes
-
-- Transaction-template behavior is covered through runtime-constructed boundary tests.
+- Owns template validation and lifecycle, FQN operations, active-reference error mapping, and shorthand compatibility.
+- Does not own record completion or balancing, recurring schedules, persistence, or transport mapping.

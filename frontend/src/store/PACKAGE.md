@@ -2,37 +2,18 @@
 
 ## Purpose
 
-- Owns Zustand store modules, selectors, and persistence wiring.
+- Owns Zustand UI state, transient resource snapshots, and browser-state bootstrap.
 
 ## Implicit Contracts
 
-- Store modules expose React hooks and imperative accessors.
-- Store accessors must work inside and outside React components.
-- Store modules expose named helper functions for mutations instead of requiring callers to mutate through React hooks.
-- Helper functions use Redux-devtools-compatible action names: `StoreName/actionName`.
-- Helper function names use action verbs such as `setX`, `updateX`, `clearX`, `resetX`, `hydrateX`, and `invalidateX`.
-- Selector hooks that return object, array, `Map`, or `Set` values use `useShallow`.
-- Store updates use immutable replacement or object spreads.
-- Browser-state hydration runs before the app body renders.
-- Authentication lifecycle generation and invalidation wiring are initialized here during browser-state hydration.
-- Transaction-entry launches wait for every pending Edit-mode amount save, proceed only after all succeed, and are cancelled by a failed save or removal of the requested entry route.
-
-Example:
-
-```ts
-export const useWidgetView = () =>
-  useWidgetStore(useShallow((state) => ({ value: state.value })));
-
-export const setWidgetValue = (value: string): void => {
-  useWidgetStore.setState({ value }, false, "WidgetStore/setWidgetValue");
-};
-```
+- Bootstrap installs protected-request invalidation before loading authentication, then settles UI persistence before the app shell replaces its splash state; failure becomes bootstrap state rather than preventing the shell from mounting.
+- Authentication generation rejects late status and logout completions so an older request cannot restore a superseded session state.
+- Preference writes update memory first; an IndexedDB failure leaves that value active and records the persistence error.
+- A background transaction-page refresh replaces its snapshot only when it still matches the snapshot captured at refresh start; other loaded pages remain stale until their owner refetches them.
+- Transaction-entry route results apply only to their exact requested entry. An entry launch waits for Edit-mode amount saves to succeed, and cancellation or any failed save discards the deferred launch.
 
 ## Boundaries
 
-- Owns: browser UI state stores, transient resource snapshots, selector helpers, and persistence wiring.
-- Does not own: backend accounting state or IndexedDB opening/versioning details.
-
-## Testing Notes
-
-- No package-specific testing notes.
+- Owns browser-local state and the state-side of transient resource caching. Feature resource controllers own API loading and mutation invalidation fan-out; accounting data remains backend-owned. See [frontend architecture](../../../docs/frontend-architecture.md).
+- The app shell owns `entry` URL/history synchronization and route fetching; this package represents the requested entry and guards its result.
+- IndexedDB services own database opening, schema/versioning, and storage access; this package chooses only the UI state to hydrate or persist.

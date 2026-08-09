@@ -2,22 +2,18 @@
 
 ## Purpose
 
-- Owns Categories reference page resource loading, mutation refresh coordination, and category-specific presentation.
+- Owns Categories resource lifecycle, category-specific views and editor, and category-mutation refresh coordination.
 
 ## Implicit Contracts
 
-- Categories page loads the full category tree joined with derived group state and filters client-side.
-- Category mutations refresh Categories, ledger lookups, Overview, and category picker caches.
-- Bulk category mutations also invalidate transaction page snapshots.
-- Category-row deletes own their named confirmation in the page list; side-panel deletes retain their panel-owned confirmation.
-- Delete affordances use only the API `deletable` signal; dependent-resource rules remain backend-owned.
-- Category intent UI exposes only `expense` and `income`; role direction is derived from the flow-record sign by the backend.
+- The route and `reference` own URL state; this package receives `search` and `includeHidden` to filter a complete, hidden-inclusive category and group snapshot.
+- Keep the last loaded tree visible when refresh fails, and do not let an older request overwrite a newer load.
+- Every category mutation invalidates category pickers and refreshes Categories, ledger lookups, and Overview. Hierarchy-wide hide or restructure mutations must also invalidate transaction-page snapshots.
+- Editing changes only hidden state: FQN moves or renames use the hierarchy workflow, and economic intent is fixed when the category is created.
+- Use only the API `deletable` signal to enable deletion; the backend owns dependency rules.
+- The side panel focuses on open and delegates close focus recovery to its route; its nested delete confirmation returns focus to the panel delete control.
 
 ## Boundaries
 
-- Owns: Categories page resource snapshots, Categories screen UI, and category mutation refresh fan-out.
-- Does not own: REST endpoint generation, accounting validation, route registration, or transaction entry workflows.
-
-## Testing Notes
-
-- Frontend e2e tests cover Categories page rendering and URL-backed toolbar state.
+- Owns: category resource loading, category-specific UI, and mutation refresh fan-out.
+- Does not own: route registration or URL state, generic reference or hierarchy UI, generated REST setup, accounting validation, or transaction entry workflows.

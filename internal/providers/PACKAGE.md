@@ -2,20 +2,14 @@
 
 ## Purpose
 
-- Owns concrete external or local data providers for facts and artifacts such as exchange rates, bank transactions, or database backups.
+- Hosts concrete local and external implementations of service-owned provider contracts.
 
 ## Implicit Contracts
 
-- Providers implement service-owned interfaces.
-- Production concrete providers are constructed and imported only by runtime composition.
-- Inbound provider data is not Mina accounting state until a service accepts and persists it.
-- Backup providers own destination artifacts, not Mina's opened accounting database.
+- Production code imports and constructs concrete providers only in `internal/runtime`; consumers depend on the owning service contract.
+- Providers own source or destination representation and I/O; services own Mina domain validation, decisions, and persistence of data crossing the boundary.
 
 ## Boundaries
 
-- Owns: network/file side effects, external request construction, response parsing, destination artifact lifecycle, and provider-specific error normalization.
-- Does not own: app config source loading, SQL persistence, REST DTOs, CLI parsing, runtime composition, or domain decisions.
-
-## Testing Notes
-
-- Concrete provider behavior is covered through runtime-bound app tests or integration smoke tests.
+- Owns: provider-specific filesystem or network effects and source/destination format translation.
+- Does not own: configuration source loading, SQL persistence, REST or CLI behavior, domain decisions, or runtime composition.

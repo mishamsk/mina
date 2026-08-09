@@ -2,29 +2,20 @@
 
 ## Purpose
 
-- Loads source-backed app/operator configuration from defaults, local config, environment variables, and explicit overrides.
-- Owns source precedence and source metadata for app config fields.
+- Resolves local operational configuration, effective-source attribution, and the presentation metadata for its settings snapshot.
 
 ## Implicit Contracts
 
-- Precedence is defaults < config file < environment < overrides.
-- Config discovery is an explicit config file path, then `$XDG_CONFIG_HOME/mina/config.toml`, then the platform fallback.
-- The platform fallback is `$HOME/.config/mina/config.toml` on macOS and `mina/config.toml` under `os.UserConfigDir()` elsewhere.
-- If the platform config directory is unavailable, startup continues without a config file target.
-- Missing config files are valid; `Load` retains the resolved path for settings reporting.
-- `auth_file` is optional, has no environment or CLI override, and relative values resolve against the loaded config file's directory.
-- Every `fileConfig` leaf has one entry in the static settings metadata map; snapshot construction rejects missing or unknown entries.
-- Settings snapshot construction captures resolved process-config values and validates presentation-metadata completeness and consistency.
-- `DefaultConfig` does not inspect the filesystem or environment.
-- `Load` resolves Mina's app cache directory as `mina` under `XDG_CACHE_HOME` when set, otherwise under `os.UserCacheDir()`, unless `Overrides.CacheDir` is set.
-- `MINA_DATABASE_ENCRYPTION_KEY` is read through a dedicated env-only accessor and never enters `Config`, source metadata, TOML, overrides, or settings snapshots.
-- `MINA_API_KEY` is read through a dedicated env-only accessor for remote client composition and never enters ordinary config or settings snapshots.
+- Source precedence is defaults, TOML file, environment, then explicit overrides; source attribution must follow the winning value.
+- Discovery uses an explicit path, then `$XDG_CONFIG_HOME/mina/config.toml`, then `~/.config/mina/config.toml` on macOS or `os.UserConfigDir()/mina/config.toml` elsewhere. An unavailable platform directory yields no config target; a missing target is valid and is still reported as the resolved path.
+- Config files reject unknown TOML keys.
+- `auth_file` is optional, file-only, and resolves relative paths against the loaded config file's directory.
+- `Load`, rather than `DefaultConfig`, resolves the cache directory under `$XDG_CACHE_HOME/mina` or `os.UserCacheDir()/mina`; an explicit cache override is the only replacement.
+- Every TOML-backed field needs matching settings metadata with a compatible display type and unique group/field ordering. Snapshot construction rejects metadata or value-map drift so the runtime cannot expose an incomplete settings view.
+- `MINA_DATABASE_ENCRYPTION_KEY` and `MINA_API_KEY` use dedicated environment accessors and never enter ordinary config or settings snapshots; a present empty database-encryption key is invalid.
 
 ## Boundaries
 
-- Owns: config file parsing, environment variable parsing, app config merge policy, defaults, explicit overrides, effective-source tracking, and read-only settings metadata/snapshot derivation.
-- Does not own: authentication-file reads or writes, CLI flags, prompts, quiet mode, demo mode, access-log files, database files, listeners, database handles, clocks, writers, provider test seams, database lifecycle policy, service/provider option structs, domain validation, SQL, HTTP DTOs, or background runner mechanics.
-
-## Testing Notes
-
-- Config behavior defaults to `app-tests`; keep `e2e-tests` to representative CLI/config wiring smokes.
+- Owns config-file discovery and parsing, environment parsing, defaults, explicit overrides, effective-source tracking, and settings-snapshot metadata.
+- Runtime owns mode-specific defaults, operational validation, and snapshot composition; see [Settings Architecture](../../docs/settings-architecture.md).
+- Does not read authentication files or own CLI flags, database/listener lifecycle, services, providers, SQL, HTTP, or background execution.

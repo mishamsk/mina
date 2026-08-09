@@ -2,17 +2,14 @@
 
 ## Purpose
 
-- Owns frontend-only types not generated from OpenAPI.
+- Owns frontend UI-state shapes and canonical transaction-filter values that are not generated API DTOs.
 
 ## Implicit Contracts
 
-- Transaction filter state mirrors the REST class, shape, and record-role enums and their URL serialization.
+- Normalize transaction filters before REST mapping, URL serialization, or cache-key generation: IDs are positive, unique, and sorted; enum selections are allowed values in their declared order; blank optional text is absent. Derive signatures from that normalized form so equivalent selections share a snapshot.
+- Transaction-filter enum lists are constrained by generated REST types; update them when the supported REST enum set changes.
 
 ## Boundaries
 
-- Owns: browser UI types that have no backend DTO owner.
-- Does not own: OpenAPI-generated request or response DTOs.
-
-## Testing Notes
-
-- No package-specific testing notes.
+- Owns UI data shapes and transaction-filter canonicalization only.
+- Does not own generated API DTOs, transaction URL parsing or writing (ledger), or browser persistence and compatibility handling (services and stores).

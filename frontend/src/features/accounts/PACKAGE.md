@@ -2,27 +2,20 @@
 
 ## Purpose
 
-- Owns the chart-of-accounts screen resource loading, mutation refresh coordination, and Accounts-specific presentation.
+- Owns chart-of-accounts resources and management UI, plus reusable account and group register content.
 
 ## Implicit Contracts
 
-- The Accounts page uses one bounded accounts fetch joined with balances for `owned` and `party` accounts and filters that snapshot client-side.
-- Mutations refresh Accounts, featured balances, Overview, and ledger lookups so account pickers see current account state; account type or currency changes also invalidate server-derived template shorthand matches.
-- Account restructure success is announced after its mutation refresh completes, so the notice is a stable completion boundary for immediate follow-up interaction.
-- Account register and header snapshots discard fetch writes that predate invalidation; single-account metadata responses may merge into a mounted header instead.
-- Account and group registers run one occurrence catch-up read per mount, then use the default record query that excludes expected recurring records.
-- Account deletion controls consume the API `deletable` signal verbatim; eligibility rules remain backend-owned.
-- Accounts-tree credit-limit indicators consume the API `has_credit_limit_history` signal rather than inferring history from balance rows.
-- Fixed `system` accounts remain visible and selectable where ledger references are allowed, but Accounts and account-detail surfaces expose no mutation controls for them.
-- Account leaves in the Accounts tree render full FQNs with custom display-label overrides in parentheses; headers, group balance rows, and register account columns render effective display labels with full-FQN tooltips. Tree grouping, search, sorting, and restructure behavior remains FQN-owned.
-- Account create/edit forms initialize the optional label from `display_label_override`; blank writes `null` to restore automatic FQN-derived presentation.
-- Account and credit-limit presentation follows the owning [Accounts specification](../../../../docs/webui-design.md#5-accounts-chart-of-accounts--phase-2).
+- The chart snapshot includes hidden accounts but only its server-sorted first 500 rows; `q`, `type`, and `hidden` filter that snapshot locally and preserve unrelated URL parameters.
+- Register snapshots are keyed by their account or group request. An exact cache miss may keep the last snapshot for that target visible while fetching; header, register, and peek writes must reject results from an invalidated generation.
+- A cache-missing account or group register runs one occurrence catch-up per mounted resource before loading records; its record query keeps the API default that excludes expected occurrences.
+- `record`, `page`, and `pageSize` are register URL state. Changing page or page size clears `record`, preventing a peek from referring to a row outside the displayed page.
+- Account mutations use `refreshAccountsAfterMutation`: refresh the chart, featured balances, Overview, and ledger lookups before success feedback. Bulk mutations also discard account/group registers and cached peek transactions; type or currency changes additionally discard template compatibility.
+- Use API `deletable` and `has_credit_limit_history` signals as supplied; this package does not infer either rule. System accounts expose no mutation controls.
+- Management-panel callers restore focus to the opener (or New account fallback) on close. Peek callers restore focus to its opener or selected row, except outside-pointer close deliberately leaves focus unchanged.
 
 ## Boundaries
 
-- Owns: Accounts page resource snapshots, Accounts screen UI, and account mutation refresh fan-out.
-- Does not own: REST endpoint generation, accounting validation, route registration, app shell navigation, or transaction entry workflows.
-
-## Testing Notes
-
-- Frontend e2e tests cover Accounts page rendering, URL-backed toolbar state, and side-panel account workflows.
+- Owns account-management and register resource coordination, including their refresh fan-out.
+- Pages own route registration and individual-account route orchestration; `store` owns snapshot storage and invalidation primitives.
+- `api` owns generated operations and backend validation; this package does not own accounting rules or transaction-entry workflows. Account presentation follows the [Accounts specification](../../../../docs/webui-design.md#5-accounts-chart-of-accounts--phase-2).

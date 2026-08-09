@@ -2,17 +2,14 @@
 
 ## Purpose
 
-- Owns process health use cases and repository/clock contracts.
+- Reports process availability with migrated accounting-database metadata.
 
 ## Implicit Contracts
 
-- Health reports the migrated schema version and encryption-at-rest state of the accounting database selected at runtime.
+- `Check` reads the schema version before encryption state; it reports `ok` only when both reads succeed.
+- Repository errors propagate unchanged and return no partial health report.
 
 ## Boundaries
 
-- Owns: health use-case shape, database-status repository contract, and current server time reporting.
-- Does not own: HTTP DTOs, SQL queries, database row types, or process configuration.
-
-## Testing Notes
-
-- Health behavior is covered through runtime-constructed boundary tests.
+- Owns: health result shape, read ordering, and the database-status repository contract.
+- Does not own: process configuration, SQL, database row types, or HTTP mapping.

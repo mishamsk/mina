@@ -2,31 +2,22 @@
 
 ## Purpose
 
-- Owns account domain types, validation, use cases, and repository contracts.
+- Owns account domain validation, use cases, and repository contracts.
 
 ## Implicit Contracts
 
-- Service instances own process-local, write-through account reference caches for active-reference validation.
-- User-writable accounts are `owned`, `party`, or `flow`; `system` accounts are installed fixed references.
-- The reserved `system` namespace and all fixed system accounts reject create, update, delete, restructure, and path-hidden mutation while remaining readable and referenceable.
-- Account type changes are allowed only when the injected transaction validator confirms every affected active transaction remains semantically valid; unconfigured validation rejects type changes.
-- `NULL` currency means multi-currency; non-`NULL` constrains active journal and recurring-definition record references as specified by the owning [account-currency semantics](../../../docs/accounting-semantics.md#account-currency).
-- Every actual currency change is rejected while active credit-limit history exists; otherwise setting or changing a single currency requires the account repository to confirm every active journal and recurring-definition record already matches.
-- Credit-limit creation, recurring occurrence materialization, and account updates share the account-reference serialization boundary.
-- Hidden active accounts are valid references only when callers explicitly allow hidden references.
-- Account group hidden state is derived from active account leaves, including hidden leaves.
-- Account path hide/unhide targets active leaves at or under the path and invalidates the account reference cache.
-- Featured account state is presentation metadata and does not affect accounting semantics or reference validation.
-- Optional custom display labels are validated by the service; account reads expose an effective label using the custom value or the final one or two FQN segments, while references retain authoritative FQNs.
-- FQNs remain authoritative identity and hierarchy; restructuring changes only FQN-derived display labels and preserves custom labels.
-- Balance reads return active `owned` and `party` accounts only; current includes posted and pending records, posted-only excludes pending, and cancelled and expected records are excluded.
-- Explicit account filters on balance reads must reference active accounts.
+- Each service instance keeps a process-local reference snapshot for FQN hierarchy checks and dependent-reference validation. Direct persistence changes must invalidate it before later service use.
+- Account mutations and dependent writes share `ReferenceSerializer`, so a dependent write cannot race an account tombstone or reference-state mutation.
+- Only `owned`, `party`, and `flow` accounts are user-writable. The `system` namespace and fixed system accounts remain readable and referenceable but reject creation and every mutation.
+- An account-type change requires the injected transaction validator to reclassify every affected active transaction; without that validator, type changes are rejected.
+- Account-currency transitions follow [account-currency semantics](../../../docs/accounting-semantics.md#account-currency): active credit-limit history blocks any real change, and a new single currency must match all active journal and recurring-definition records.
+- Hidden active accounts are valid references only when the caller explicitly allows them.
+- Deletion is refused while active journal, template, recurring, or credit-limit references exist; list deleteability is derived from that same usage.
+- FQNs are the hierarchy identity: prefix conflicts are rejected, and restructuring rewrites an active subtree while preserving custom display labels. References always expose the FQN.
+- Balance reads return only active `owned` and `party` accounts. Current balances include active posted and pending records; posted balances exclude pending records, and expected and cancelled transactions are excluded.
+- Balance account filters must reference active accounts; hidden references are permitted regardless of `IncludeHidden`.
 
 ## Boundaries
 
-- Owns: account hierarchy and display-label validation and derivation, account-type and account-currency transition validation, currency validation, external identifier validation, hidden/featured/tombstoned use-case rules, active record-reference validation, and active-FQN conflict mapping.
-- Does not own: HTTP DTOs, SQL queries, database row types, or process configuration.
-
-## Testing Notes
-
-- Account behavior is covered through runtime-constructed boundary tests.
+- Owns: account hierarchy, reference validity, lifecycle rules, and account-specific transition validation.
+- Does not own: transaction classification, credit-limit history, or persistence and transport details.

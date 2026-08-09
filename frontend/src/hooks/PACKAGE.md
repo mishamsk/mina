@@ -2,17 +2,14 @@
 
 ## Purpose
 
-- Owns generic reusable React hooks.
+- Owns generic reusable React hooks for layout observation and input boundaries.
 
 ## Implicit Contracts
 
-- No implicit contracts.
+- `useElementOverflow` tracks the attached element through layout, child, and content changes; a detached ref is not overflowing.
+- `useOutsidePointerClose` closes on capture-phase outside `pointerdown` but treats the referenced panel and standard portaled overlays as inside. Callers add selectors for their own portaled controls.
 
 ## Boundaries
 
-- Owns: hooks that could be reused outside a Mina-specific feature.
-- Does not own: Zustand store modules, page code, or browser side-effect adapters.
-
-## Testing Notes
-
-- No package-specific testing notes.
+- Owns generic hooks reusable outside a Mina-specific feature.
+- Does not own feature dismissal policy, focus recovery, route state, stores, API access, or persistence.

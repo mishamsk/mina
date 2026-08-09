@@ -2,20 +2,15 @@
 
 ## Purpose
 
-- Owns embedded browser UI assets and root browser routing.
+- Serves the frontend build embedded in the Mina binary and provides the root browser routing fallback.
 
 ## Implicit Contracts
 
-- UI assets are served from `/`.
-- Unknown browser navigation paths fall back to `/index.html`.
-- Missing static asset paths return 404.
-- The package does not own REST handlers or domain behavior.
+- Accepts only `GET` and `HEAD`; other methods return `405`.
+- Missing static-looking paths return `404`, while other unknown paths serve `index.html` for client-side routing.
 
 ## Boundaries
 
-- Owns: embedded Vite asset serving and UI route fallback behavior.
-- Does not own: REST route registration, JSON error envelopes, database access, or service use cases.
-
-## Testing Notes
-
-- Process-boundary tests verify assets are served by `mina serve`.
+- Owns embedding and serving the frontend build output; the `frontend` workspace owns producing `dist`.
+- Runtime reserves `/api` and `/mcp` before dispatching remaining requests here, and owns the legacy `/ui` redirect.
+- Does not own REST, authentication, database access, or domain behavior.

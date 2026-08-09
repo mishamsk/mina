@@ -2,7 +2,7 @@
 
 ## Purpose
 
-- Owns exchange-rate provider package grouping.
+- Groups concrete exchange-rate provider packages.
 
 ## Implicit Contracts
 
@@ -10,9 +10,4 @@
 
 ## Boundaries
 
-- Owns: exchange-rate provider subpackage grouping.
-- Does not own: app config source loading, runtime scheduling, SQL persistence, REST DTOs, or loader window planning.
-
-## Testing Notes
-
-- Concrete-provider behavior is covered through REST-bound app tests with apptest-owned HTTP fakes.
+- Does not own: provider-facing contracts, load-window planning, rate persistence, or runtime composition; these belong to `internal/services/exchangerateloading`, the rate service, and `internal/runtime`.

@@ -2,17 +2,14 @@
 
 ## Purpose
 
-- Owns pure, app-agnostic email canonicalization and minimal shape checks.
+- Provides pure, app-agnostic email identity canonicalization and minimal shape validation.
 
 ## Implicit Contracts
 
-- No implicit contracts.
+- Email identities must be normalized before storage or comparison: normalization trims surrounding whitespace and lowercases the value. Validation does not normalize.
+- Validation deliberately checks only for a non-empty value containing `@` and no control characters; callers needing RFC, domain, or deliverability checks must own them.
 
 ## Boundaries
 
-- Owns: normalization and minimal shape validation for email identity values.
+- Owns: email identity normalization and minimal shape validation.
 - Does not own: authentication, account existence, deliverability, or transport behavior.
-
-## Testing Notes
-
-- Covered through app and process scenarios of package consumers; no package-specific unit tests.

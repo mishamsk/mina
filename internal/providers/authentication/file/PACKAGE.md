@@ -6,19 +6,15 @@
 
 ## Implicit Contracts
 
-- Owns authentication-file representation and credential-material validation, filesystem locking, private directory and file modes, atomic replacement, and credential-material cryptography; decoded domain state delegates to administration validation.
-- Exposes separate immutable online and mutable administration implementations for the contracts owned by their respective services.
-- Immutable online state never writes or live-reloads; administration mutations serialize across processes and changes apply online after restart.
-- Passwords use Argon2id hashes; API keys use generated high-entropy secrets stored only as SHA-256 digests; browser sessions use generated signing material.
-- Immutable snapshots serialize memory-hard password verification so public login attempts cannot multiply Argon2 memory use.
-- The file stores active API keys only; revocation removes a record so its label is immediately reusable and the removed token stops authenticating after restart.
-- Signing material, password hashes, API-key digests, and API-key plaintext are never returned by list operations.
+- The file accepts only its current version and no unknown TOML keys. It validates provider-owned signing-secret, Argon2id, and API-key-digest encodings before delegating decoded state invariants to `authentication/administration`.
+- Create and update hold an interprocess lock. Creation cannot overwrite an existing file; updates write and sync a private temporary file, atomically replace the target, then sync its directory, so callers never observe a partial mutation.
+- Newly created parent directories use `0700` and installed/replaced files use `0600`; existing paths are not permission-repaired.
+- `Load` returns a startup-only immutable online snapshot. Administration writes and key or session revocations affect online authentication only after runtime loads a new snapshot on restart.
+- Password hashes use this provider's fixed Argon2id parameters. Each snapshot permits one concurrent password derivation, including the dummy derivation for a missing or malformed stored hash, to bound login-driven memory use.
+- API-key plaintext is generated from cryptographic randomness and is persisted only as a SHA-256 digest; verification compares digests in constant time.
+- Browser sessions are HS256 JWTs bound to Mina's issuer and browser audience and require issued-at and expiration claims; malformed or invalid sessions become the online service's invalid-credential error.
 
 ## Boundaries
 
-- Owns: file representation and side effects, password hashing and verification, API-key generation and verification, and session signing and verification.
-- Does not own: app config discovery, transport policy, HTTP cookies/routes/errors, CLI prompting/rendering, listeners, database state, or runtime composition.
-
-## Testing Notes
-
-- Exercise behavior through runtime app-tests and CLI process smokes using test-owned temporary files.
+- Owns: file representation and filesystem side effects, credential material, and session signing/parsing.
+- Does not own: authentication-state lifecycle or domain validation, online authentication decisions, app-config discovery, transport behavior, CLI interaction, or runtime composition.

@@ -2,26 +2,16 @@
 
 ## Purpose
 
-- Documents the app-owned service package pattern for domain use cases.
-- Implemented service packages include authentication, accounting use cases, operations, settings, health, demo, and shared values.
+- Provides shared service-layer errors, list values, and fully qualified name (FQN) hierarchy helpers.
 
 ## Implicit Contracts
 
-- Service packages own domain types, validation, use cases, and repository interfaces.
-- Consuming services own provider-facing contracts; service packages never import concrete providers.
-- Dictionary services own blocked-delete decisions for active dependent references and do not expose cascade tombstone APIs.
-- Accounts, categories, and tags derive implicit hierarchy group state from active leaves; group hidden state is true only when every active leaf at or under the group is hidden.
-- Accounts, categories, and tags implement path-addressed bulk hide/unhide by selecting active leaves from the reference cache, issuing one repository update, and invalidating the cache after success.
-- Runtime-wired reference-integrity guards serialize dictionary deletes with dependent writes that rely on service reference validation.
-- Service packages must not import HTTP, OpenAPI, web UI, TUI, scheduler, SQL, generated DB, Cobra, process I/O, store, or runtime packages.
-- Public service structs and repository contracts carry app-owned value types for civil dates, audit timestamps, and decimals.
-- Callers must provide service-declared types; transport string parsing belongs to the owning adapter.
+- Expected invalid-request, missing-resource, and conflict outcomes must be returned as `*services.Error`; `internal/httpapi` maps only that type to stable API errors, so services translate repository sentinel errors before returning them to adapters.
+- FQN containment and conflicts respect colon-segment boundaries, not arbitrary string prefixes; changing that matching would merge unrelated paths.
+- FQN group state is derived from the supplied active leaves: groups are hidden only when all leaves below them are hidden, hidden groups are omitted unless requested, and results are lexically ordered.
+- `PaginatedList.TotalCount` is populated only when `ListOptions.IncludeTotalCount` is true; a zero value otherwise does not indicate an empty result.
 
 ## Boundaries
 
-- Owns: domain rules, use cases, repository contracts, and provider-facing contracts for app behavior.
-- Does not own: HTTP DTOs, transport string parsing, database row types, SQL queries, process configuration, or generated adapter code.
-
-## Testing Notes
-
-- Prefer boundary scenario tests through runtime and HTTP adapters; add focused service tests only when boundary coverage cannot isolate a domain rule clearly.
+- Owns: shared service-layer error vocabulary, list values, and pure FQN helpers.
+- Does not own: domain-specific use cases, provider contracts, persistence, transport mapping, or cache lifecycle.

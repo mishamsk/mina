@@ -2,17 +2,15 @@
 
 ## Purpose
 
-- Owns top-level route screens.
+- Owns top-level route screens and route-local coordination.
 
 ## Implicit Contracts
 
-- Pages stay thin and compose lower-level UI, feature, store, service, and API modules.
+- Route-local query updates preserve parameters owned by other layers.
+- Transaction-filter changes keep an open transaction or entry overlay visible: synchronously replace its background URL before writing the overlay URL, so the browser never renders an overlay-less intermediate state.
+- A page that coordinates a local panel or restructure dialog retains its opener and restores focus on close; use the page's primary action as the fallback when that opener no longer exists.
 
 ## Boundaries
 
-- Owns: route screens and route-local state.
-- Does not own: generated API setup, shared store modules, or reusable side-effect adapters.
-
-## Testing Notes
-
-- No package-specific testing notes.
+- Owns: route registration, route-local URL and overlay coordination, route parameter validation, and screen composition.
+- Does not own: app-shell startup or route-independent transaction entry, feature resource/cache lifecycles, generated API setup, shared stores, or reusable browser-side-effect adapters.

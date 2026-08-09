@@ -2,19 +2,14 @@
 
 ## Purpose
 
-- Groups peer online and administration authentication services.
+- Separates online authentication from CLI-only authentication administration.
 
 ## Implicit Contracts
 
-- `online` owns immutable startup authentication; `administration` owns mutable CLI-only operations.
-- Neither peer imports the other; each owns the provider contract its use cases require.
-- Runtime composes both peers with the file provider at their distinct execution boundaries.
+- `online` authenticates against an immutable long-running startup snapshot; `administration` mutates authentication state, which takes effect online only after restart.
+- The peers do not import one another and own distinct provider contracts.
 
 ## Boundaries
 
-- Owns: the namespace and separation of authentication service capabilities.
-- Does not own: files, app config, HTTP transport policy, CLI rendering, or runtime composition.
-
-## Testing Notes
-
-- Exercise behavior through runtime app-tests and launched-process smokes.
+- Owns: authentication use cases and the split between online and administrative lifecycles.
+- Does not own: concrete authentication-state storage, config, transport authentication policy, CLI rendering, or runtime composition.

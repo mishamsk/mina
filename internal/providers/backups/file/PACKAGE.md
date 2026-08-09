@@ -2,19 +2,17 @@
 
 ## Purpose
 
-- Owns local filesystem backup destination behavior for DuckDB database backup files.
+- Implements the local-filesystem destination for database backups.
 
 ## Implicit Contracts
 
-- Backup files created by this provider use the `mina-backup-` prefix and `.duckdb` extension.
-- Temp files are created in the destination directory and removed after failed copies.
-- Retention pruning only considers provider-created successful backup files.
+- Copies write to a unique temp file in the destination directory, then rename it to a UTC timestamped `mina-backup-…Z.duckdb` name; final-named backups are never partial copies.
+- A failed copy or finalization removes the temp file it created.
+- Zero retention disables pruning. Positive retention removes the oldest matching backup names while preserving the backup just finalized, even if its requested timestamp sorts older.
+- Pruning identifies candidates only by the provider filename pattern, so matching files in the destination directory are eligible for removal regardless of provenance.
+- Source-copy errors pass through; configuration and destination failures use the backup service's provider error taxonomy.
 
 ## Boundaries
 
-- Owns: backup directory creation, temp/final filenames, atomic rename, failed-temp cleanup, and retention pruning.
-- Does not own: Mina store access, SQL copying, app config loading, runtime scheduling, HTTP DTOs, or domain operation status.
-
-## Testing Notes
-
-- Provider behavior is covered through runtime-bound app tests that observe filesystem artifacts.
+- Owns filesystem destination lifecycle, filename policy, and retention pruning.
+- Delegates database copying to the service-owned `backups.Source`; it does not access the store or choose whether backups run.

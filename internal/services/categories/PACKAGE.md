@@ -2,23 +2,17 @@
 
 ## Purpose
 
-- Owns category domain types, validation, use cases, and repository contracts.
+- Owns category lifecycle, hierarchy behavior, and category-reference validation.
 
 ## Implicit Contracts
 
-- Service instances own process-local, write-through category reference caches for active-reference validation.
-- Economic intent is exactly `expense` or `income`; transaction semantics own the rule that categories attach only to `flow` records.
-- Hidden active categories are valid references only when callers explicitly allow hidden references.
-- Category group hidden state is derived from active category leaves, including hidden leaves.
-- Featured state is leaf-only portable metadata; groups have no featured state or derivation.
-- Category path hide/unhide targets active leaves at or under the path and invalidates the category reference cache.
-- List responses populate `deletable` from batched active-resource usage; tombstoned categories are never deletable, and DELETE uses the same dependency predicate.
+- Each service instance keeps a process-local reference snapshot for hierarchy and reference checks. Category mutations and dependent writes must share `ReferenceSerializer`; direct persistence changes must invalidate the snapshot before later service use.
+- References must be active; hidden categories require an explicit allowance.
+- Groups derive state from active leaves. Path hide/unhide changes only existing active leaves and invalidates the reference snapshot.
+- Restructure rewrites active category leaves and active budget paths in one transaction; a budget-path collision rejects both changes.
+- List deleteability and delete use the same active journal-record, template-record, and recurring-definition dependency check; tombstoned categories are never deletable.
 
 ## Boundaries
 
-- Owns: category hierarchy validation and derivation, economic-intent validation, hidden/tombstoned use-case rules, active-reference validation, and active-FQN conflict mapping.
-- Does not own: HTTP DTOs, SQL queries, database row types, or process configuration.
-
-## Testing Notes
-
-- Category behavior is covered through runtime-constructed boundary tests.
+- Owns: category lifecycle rules, hierarchy validation and derivation, economic-intent validation, reference validity, and category error mapping.
+- Does not own: transaction classification, budget persistence, transport DTOs, SQL queries, database row types, or process configuration.

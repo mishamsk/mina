@@ -2,22 +2,16 @@
 
 ## Purpose
 
-- Owns mutable authentication administration as a CLI-only operational capability.
+- Owns CLI-only mutations of persisted authentication state and the provider contract they require.
 
 ## Implicit Contracts
 
-- Initializes authentication state and owns user enablement, password, session-version, and API-key lifecycle mutations.
-- Owns administration types, errors, use cases, and the mutable provider contract.
-- Runtime composes this service with the file provider for each `mina auth` invocation; the CLI delegates administration through runtime.
-- Administration is absent from REST, OpenAPI, generated clients, MCP, the online service, and the long-running handler dependency graph.
-- Changes become visible to online authentication only after restart loads a new immutable snapshot.
-- API-key revocation removes the active key record and immediately frees its label for reuse.
+- A provider must apply each `Create` or `Update` callback atomically to current state and persist it only on success; user and API-key uniqueness checks rely on that contract.
+- User emails are normalized before comparison. API-key labels are trimmed and case-insensitively unique; revocation removes the key record, so its label is immediately reusable.
+- Administration views never expose credential material. API-key plaintext is returned only when the key is created.
+- Online authentication uses an immutable startup snapshot, so administration changes, including revocations, take effect only after restart.
 
 ## Boundaries
 
-- Owns: authentication administration decisions and secret-free administration views.
-- Does not own: files, credential-material side effects, app config discovery, HTTP behavior, CLI prompting/rendering, or runtime composition.
-
-## Testing Notes
-
-- Exercise behavior through launched CLI process smokes and runtime restart scenarios.
+- Owns: authentication-state mutation decisions, validation, secret-free views, and the mutable provider contract.
+- Does not own: state persistence, credential-material creation, online authentication, app-config discovery, transport or CLI interaction, or runtime composition.

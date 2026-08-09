@@ -2,27 +2,19 @@
 
 ## Purpose
 
-- Owns Frankfurter v2 exchange-rate provider clients.
+- Implements `exchangerateloading` rate providers backed by Frankfurter v2 and its local USD-rate cache.
 
 ## Implicit Contracts
 
-- Targeted API requests use `base=USD`, `quotes=<currency>`, and date ranges.
-- Cache population requests use `base=USD`, all available quotes, and NDJSON streaming.
-- File-provider rows must be Frankfurter v2 NDJSON objects with `date`, `base`, `quote`, and `rate`.
-- Cache row quotes are provider-owned three-letter uppercase ASCII codes and may be outside Mina's accepted domain currency set.
-- Cache rows are ordered ascending by `date`; malformed existing caches are replaced by a full refetch during population.
-- Cache population performs one bounded attempt; runtime retry policy owns subsequent attempts.
-- Existing caches are extended by refetching the latest cached date through the requested end date.
-- Interrupted cache streams may install validated partial rows, then still return the read error.
-- Partial cache installs drop the newest streamed date because that date may be incomplete.
-- HTTP status failures and malformed streamed rows leave the cache untouched; malformed existing caches are the full-refetch exception.
-- Weekend and holiday gaps are accepted by using only returned rows.
+- Rates always use USD as the base; targeted requests reject `C::` currencies as unsupported pairs.
+- Cache rows are validated Frankfurter NDJSON (`date`, USD `base`, three-letter uppercase `quote`, positive `rate`) in ascending date order. Quotes may be outside Mina's currency set and must be retained.
+- A malformed or empty existing cache is replaced only by a successful full refetch; an HTTP failure or malformed downloaded row leaves the existing cache untouched.
+- Cache extension refetches and replaces the latest cached date so its complete quote set is retained.
+- On an interrupted cache stream, install only fully received dates and still return the read error; the pending newest date is discarded because it may be incomplete.
+- Population makes one attempt. Cache installation never replaces a concurrently installed cache that is equally or more current; runtime owns retries.
+- HTTP and cache failures translate to the `exchangerateloading` provider error taxonomy so runtime can classify retryable failures.
 
 ## Boundaries
 
-- Owns: Frankfurter HTTP requests, fixed cache file name under Mina's app cache directory, cache file writes, cache file reads, response parsing, and provider-specific row mapping.
-- Does not own: app config source loading, cache directory discovery, SQL persistence, REST DTOs, or loader window planning.
-
-## Testing Notes
-
-- Concrete behavior is covered through runtime-bound app tests, integration smoke tests, and fixture-backed cache tests.
+- Owns Frankfurter HTTP/cache I/O, response parsing, and provider-specific error translation.
+- Does not own cache-directory discovery, retry policy, loading-window planning, or rate persistence.

@@ -2,18 +2,14 @@
 
 ## Purpose
 
-- Owns browser side-effect adapters.
+- Owns browser persistence adapters.
 
 ## Implicit Contracts
 
-- Browser persistence must not store accounting data copied from REST responses.
-- IndexedDB persistence is limited to UI preferences, UI-only caches, and draft UI state.
+- Persist only UI-owned preferences, caches, and drafts; never persist REST-derived accounting data or authentication material.
+- Storage operations deliberately propagate failures. Stores and features own hydration, user-visible error handling, and recovery when persistence is unavailable.
 
 ## Boundaries
 
-- Owns: adapters for browser APIs such as IndexedDB.
-- Does not own: generated REST calls, Zustand stores, or domain validation.
-
-## Testing Notes
-
-- No package-specific testing notes.
+- Owns: IndexedDB access and storage-schema versioning.
+- Does not own: API calls, Zustand state shape or lifecycle, or domain validation.

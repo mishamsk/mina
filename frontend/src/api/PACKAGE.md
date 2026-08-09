@@ -2,20 +2,16 @@
 
 ## Purpose
 
-- Owns generated REST client configuration and REST error normalization.
+- Configures the browser REST client and exposes generated operations with thin ledger request helpers.
 
 ## Implicit Contracts
 
-- Generated endpoint paths and DTOs must not be handwritten here.
-- Network failure and REST error normalization belong only at this boundary.
-- Request interceptors retain transport correlation only; authentication lifecycle state is supplied by the store during bootstrap.
-- Handwritten wrappers may adapt generated pagination and query DTOs for UI resources but do not reclassify accounting data.
+- Configure the generated client from the current browser origin; do not introduce a separate frontend API origin or handwritten endpoint/DTO contract.
+- A request captures the authentication generation at dispatch. Only a `401` for that same generation may signal authentication loss, so a stale response cannot log out a newer session.
+- Normalize failures with no HTTP response as `NetworkFailure`; preserve HTTP error payloads for the shared error-message helpers.
+- Helpers that return a complete lookup or management set must follow backend pagination; paged record browsers stay backend-paginated.
 
 ## Boundaries
 
-- Owns: generated client setup for browser calls, network failure normalization, and API error extraction.
-- Does not own: generated REST output, page behavior, or domain validation.
-
-## Testing Notes
-
-- No package-specific testing notes.
+- Owns: generated-client configuration, transport interception and normalization, and request shaping/composition needed by ledger consumers.
+- Does not own: generated client output, authentication state, URL or resource-cache lifecycle, page behavior, or domain validation.

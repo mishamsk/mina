@@ -2,19 +2,15 @@
 
 ## Purpose
 
-- Owns database backup source/provider contracts and the backup run use case.
+- Owns database-backup source and destination contracts plus one-run orchestration.
 
 ## Implicit Contracts
 
-- A source copies the selected Mina accounting database into a provider-selected DuckDB file path.
-- Providers own destination lifecycle and must not inspect Mina store internals.
-- In-memory accounting state is not a valid backup source.
+- `Run` passes the provider the source and a UTC request timestamp; the provider chooses the target and invokes the copy.
+- Source implementations reject in-memory accounting state with `ErrInMemorySource`.
+- Source-copy and provider configuration or destination failures remain discoverable through this package's error sentinels.
 
 ## Boundaries
 
-- Owns: backup provider/source interfaces, backup error taxonomy, and run orchestration.
-- Does not own: SQL copy implementation, destination filesystem lifecycle, runtime scheduling, HTTP DTOs, app config, or concrete providers.
-
-## Testing Notes
-
-- Backup behavior is covered through REST-bound app tests and integration config tests.
+- Owns source/provider interfaces, required-dependency errors, timestamp handoff, and a single backup invocation.
+- Store owns database-copy mechanics; providers own destination lifecycle; runtime owns composition, scheduling, retries, and operation outcome classification.

@@ -438,6 +438,20 @@ pre-commit:
 evidence-serve:
     go run ./internal/tools/evidencegallery
 
+# Garden eligible documentation with parallel Codex agents.
+[group('agents')]
+garden-docs limit="" codex="5.6-terra/high":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    limit={{ quote(limit) }}
+    args=(--codex {{ quote(codex) }})
+    if [ -n "$limit" ]; then
+        args+=(--limit "$limit")
+    fi
+
+    go run ./internal/tools/gardendocs "${args[@]}"
+
 # Run the repository-local review loop through local Codex and Claude CLI sessions.
 [group('agents')]
 review-loop mode context branch_or_commit="" base_ref="" max_iterations="" claude_review_percent="" claude_model="opus" codex_reviewer="5.6-sol/xhigh" codex_aggregator="5.6-sol/medium" codex_validator="5.6-sol/high" codex_fixer="5.6-sol/high":

@@ -2,26 +2,16 @@
 
 ## Purpose
 
-- Seeds deterministic demo accounting data through app service use cases.
+- Seeds a date-anchored deterministic demo accounting fixture through service use cases.
 
 ## Implicit Contracts
 
-- Demo seeding does not call store repositories or SQL directly.
-- Demo data accepts any positive requested calendar-month history limit ending at an explicit civil-date anchor; the effective history defaults to and is capped at the full six-month fixture, and the anchor defaults to the runtime clock's current local date.
-- Seeded transactions stay within the selected window; shorter windows select an exact suffix of the default deterministic sequence and retain fixture values.
-- Recurring anchors and materialized occurrences stay within the selected history window; definitions remain open-ended, and their next due dates may fall after it.
-- Demo account FQNs group products and roles under real-world entity prefixes; unnamed merchants share `merchant:unspecified`, and physical cash stores accept multiple currencies.
-- Amazon flow and owned gift-card sibling accounts exercise explicit and FQN-derived display labels through balanced transfer and spend activity.
-- Demo transactions use derived semantics: categories only on flow records, fixed-system exchanges, split flow records for multi-merchant and mortgage spending, and uncategorized party-balance movements.
-- Demo transaction templates include complete shorthand-compatible defaults and one intentionally incomplete Advanced-journal default.
-- Demo seeding assumes callers provide a new empty accounting schema.
-- Demo seeding expects runtime to provide one atomic persistence boundary around the full seed.
+- The anchor defaults to the runtime clock's local civil date. A positive requested history window defaults to, and is capped at, the six-month fixture; shorter windows retain only its suffix.
+- Recurring definitions and their materialized history begin within the selected window, but definitions remain open-ended and can next fall after it.
+- Seeding is an empty-schema initializer: it neither clears nor merges existing fixture data, so conflicting pre-existing records fail the seed.
+- The injected atomic boundary must run the entire seed with transaction-scoped services; runtime invalidates reference caches only after that boundary succeeds.
 
 ## Boundaries
 
-- Owns: demo fixture shape, deterministic transaction generation, and service-call ordering.
-- Does not own: persistence, runtime composition, HTTP mapping, or CLI output.
-
-## Testing Notes
-
-- Verify through runtime/API flows once exposed by CLI or REST.
+- Owns: demo fixture shape, date anchoring, and service-call ordering.
+- Does not own: persistence, transaction lifecycle ownership, runtime composition, or transport mapping.

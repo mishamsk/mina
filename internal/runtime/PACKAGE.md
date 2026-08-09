@@ -2,54 +2,19 @@
 
 ## Purpose
 
-- Owns process-local runtime options and manual app composition.
-- Applies database open/create/migrate policy before the app is served.
+- Composes Mina's concrete application dependencies and owns its process-local lifecycle policy.
 
 ## Implicit Contracts
 
-- Runtime composition is the only place that wires concrete service, store, and adapter implementations.
-- Every app selects an explicit long-running, one-shot, or migration execution profile.
-- One-shot apps open and migrate normally, skip startup database validation, and never start automatic operations.
-- Migration apps open and migrate normally, run startup database validation, skip authentication loading, and never start automatic operations.
-- One-shot apps register the same manual-operation REST handlers as long-running apps.
-- App instances own one initialized `AppDB`, its isolated disposable runtime state, app service bundle, REST handler, and web UI handler.
-- Startup demo seeding runs after app composition and before HTTP listen, using an explicit civil-date anchor when supplied and delegating history-window validation to the demo service.
-- File-backed startup demo seeding refuses when the selected accounting schema already exists.
-- Runtime decides DuckDB open policy and database lifecycle, then delegates DuckDB mechanics to store `AppDB` open helpers.
-- Runtime reads the optional database encryption key only through appconfig's dedicated environment accessor and carries it directly to every writable and read-only file attach.
-- Runtime keeps DuckDB connection parallelism fixed and CPU-bounded; it is not app config.
-- Long-running startup runs configured database validation after migration for file-backed accounting state only; error findings abort startup.
-- `ValidateDatabase` opens the selected file-backed accounting state read-only with the active key when present and never writes to the target.
-- Runtime derives accounting database and schema defaults from `appconfig.Config`.
-- Runtime consumes source-loaded app settings from `internal/appconfig`.
-- Long-running runtime resolves `auth_file`, loads the file provider's immutable state, composes the online authentication service, and supplies only that service to HTTP and MCP protection; one-shot local client sessions remain trusted and do not load it.
-- `NewAuthenticationAdministration` separately composes the CLI-only administration service and mutable file provider for `mina auth`; administration never enters the running app or handler dependency graph.
-- Runtime resolves mode-ready config values once, adapts appconfig's immutable settings snapshot, and composes the settings service; see `docs/settings-architecture.md`.
-- Runtime consumes the cache directory resolved by `internal/appconfig`.
-- Automatic operation execution requires both the long-running profile and enabled runtime operations.
-- Runtime dependencies carry only true side-effect seams such as clocks, network provider factories, and cache HTTP clients.
-- Composition creates each app's dense-rate cache and starts a best-effort initial rebuild as an unrecorded runner task; stale or empty snapshots do not block readiness in any execution profile, and runner close cancels and joins the rebuild.
-- Runtime operations start after app composition, publish operation status, and do not block app creation.
-- Runtime registers exchange-rate loading as startup, recurring, and manual-started work against one operation status surface.
-- Exchange-rate loading runs request a dense-rate cache rebuild after every non-canceled attempt, then invoke cache-backed transaction `amount_usd` backfill against the currently committed snapshot even when rebuild is dropped or fails.
-- Runtime registers database backup as manual-started work when configured and recurring work only when a backup schedule is configured.
-- Runtime wires the concrete store backup source and file backup provider together.
-- Startup exchange-rate loading ensures and uses the configured Frankfurter file cache by default.
-- Recurring and manual exchange-rate loading use the targeted Frankfurter API provider.
-- Runtime operation status reads app-local operation-run rows from the app's ephemeral runtime schema.
-- Runtime operation failures are recorded and logged without failing app creation or normal HTTP readiness.
-- Runtime cancels background work and waits for its functions to stop before closing `AppDB`; shutdown may discard incomplete operation status when `AppDB` removes the runtime schema.
-- Runtime composes REST, embedded Streamable HTTP MCP, and embedded UI handlers without changing protocol ownership.
-- Embedded MCP exists only in the long-running profile at `/mcp` and targets the isolated REST handler, never the composed root handler.
-- External REST accepts configured cookie or API-key authentication, external MCP accepts API keys only, and embedded MCP's isolated REST dispatch stays behind that one outer decision.
-- Runtime applies configured HTTP access logging around the composed REST, MCP, and embedded UI handler.
-- Runtime may import every app layer, but app service packages must not import runtime.
+- An `App` owns its `AppDB` and background runner; `Close` cancels and joins runner work before closing the database.
+- One app-local reference serializer is shared by dictionary and dependent-write services, so dictionary deletes cannot race writes that create dependent references.
+- Demo seeding runs through transaction-scoped service instances in one `AppDB` transaction; only a committed seed invalidates the main reference and needed-currency caches.
+- Long-running apps alone load online authentication, expose embedded MCP at `/mcp`, and can start automatic operations. One-shot apps skip startup validation and automatic operations; migration apps validate after migration without authentication or operations.
+- Embedded MCP dispatches to the trusted REST handler, then receives MCP-specific API-key protection; it must not be built from the root composed handler.
+- Every app submits the initial dense exchange-rate cache rebuild as unrecorded, best-effort runner work. Exchange-rate loads rebuild that cache and backfill missing transaction `amount_usd` after every non-canceled attempt.
+- Runtime resolves the accounting location, encryption key, and connection limit before delegating database open, migration, and read-only inspection mechanics to `store`.
 
 ## Boundaries
 
-- Owns: runtime options, database lifecycle policy, HTTP adapter configuration, app composition, REST/MCP/UI handler composition, background operation lifecycle, and mode-ready runtime values.
-- Does not own: source-loaded app config, CLI flags, SQL statements, domain validation, REST DTO mapping, UI asset serving behavior, or CLI command help.
-
-## Testing Notes
-
-- `app-tests` construct app instances through runtime.
+- Owns: concrete dependency wiring, execution profiles, database lifecycle policy, handler composition, and background-operation lifecycle.
+- Does not own: app-config source loading, CLI parsing, SQL, domain decisions, REST DTO mapping, MCP protocol behavior, or web UI serving.

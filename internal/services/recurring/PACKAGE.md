@@ -2,29 +2,20 @@
 
 ## Purpose
 
-- Owns recurring definition validation, occurrence materialization, and lifecycle use cases.
-- Converts complete recurring definition record shapes into generated transaction records.
+- Owns recurring definition validation, occurrence materialization and lifecycle, and generated transaction construction.
 
 ## Implicit Contracts
 
-- Occurrence-listing and lifecycle operations run catch-up materialization before decisions that need current schedule state.
-- Materialization is idempotent by definition/date slot and creates only EXPECTED review-queue transactions.
-- Occurrence rows are permanent; terminal statuses are not reopened.
-- Confirm changes the generated transaction to active and applies explicit owned/party settlement; dismiss tombstones it and keeps the occurrence row.
-- Confirmation and dismissal pass service-clock timestamps into one atomic repository operation; SQL does not choose lifecycle timestamps.
-- Defer rewrites interval anchors only after writing a DEFERRED audit occurrence.
-- Pause suppresses materialization; resume prevents backlog across the paused window.
-- Definition edits affect only future materialization; existing occurrences keep copied generated transactions.
-- Definition save and every materialization revalidate record currencies through account-reference validation, so later account mode changes cannot create invalid records.
-- Definition display enrichment resolves active account metadata without revalidating persisted record currencies.
-- Active definitions protect referenced accounts, categories, members, and tags from tombstone deletes.
-- Generated-record writes notify the runtime currency-usage signal after success.
+- Definition writes, cancellation, catch-up materialization, and `ConfirmNext` share the reference-operation serializer with dictionary mutations; an active reference cannot be tombstoned between validation and its dependent write.
+- There is no scheduler: occurrence listing, `ConfirmNext`, and `Defer` catch up slots through their caller-supplied civil date before choosing a slot. Catch-up is idempotent by definition/date slot and creates only expected transactions.
+- Occurrence slots are permanent audit state. Only an expected occurrence can be confirmed or dismissed; confirmation atomically activates its transaction and applies settlement only to owned/party records, while dismissal tombstones the transaction without freeing the slot.
+- Confirmation and dismissal pass service-clock lifecycle timestamps into their atomic repository operation; SQL does not select those timestamps.
+- Deferring an interval definition atomically records a deferred slot and shifts its anchor. Pause suppresses materialization; resume skips the paused interval instead of creating a backlog.
+- Definition records are a copied, complete per-currency-balanced shape, including when seeded from a transaction template. Existing occurrences retain that snapshot when a definition changes or is cancelled.
+- Account-reference validation rechecks saved definition currencies during every materialization, so an account mode change cannot authorize incompatible generated records. Display enrichment intentionally resolves active account metadata without that currency revalidation.
+- Generated transactions derive signed USD amounts for the scheduled date during catch-up and for the initiated date during early confirmation. Successful materialization and confirmation signal runtime currency-usage cache invalidation.
 
 ## Boundaries
 
-- Owns: schedule validation, FQN rules, recurring lifecycle semantics, and transaction-shape validation.
-- Does not own: SQL persistence, HTTP DTO mapping, exchange-rate storage, or transaction classification.
-
-## Testing Notes
-
-- Behavior is covered by REST app-tests; tests must not inspect store state directly.
+- Owns: recurring definition and occurrence use cases, schedule calculation and validation, template-copy completion, and generated transaction construction.
+- Does not own: SQL persistence, transport mapping, dictionary lifecycle, exchange-rate storage, or transaction classification and settlement normalization.

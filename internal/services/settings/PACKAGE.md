@@ -2,19 +2,15 @@
 
 ## Purpose
 
-- Owns the operational-settings read use case and service-shaped domain contract.
+- Exposes the running process's operational-settings snapshot through a service-shaped contract.
 
 ## Implicit Contracts
 
-- Receives and retains one immutable startup snapshot.
-- Returns groups, active values, effective sources, and the resolved config-file location without reloading configuration.
-- See `docs/settings-architecture.md` for the cross-cutting settings flow.
+- Construction and reads copy group and field slices, so callers cannot mutate the retained startup snapshot or a later result.
+- Reads observe the resolved startup values, sources, and config-file location; configuration is never reloaded.
+- Runtime composes the appconfig-validated, ordered snapshot; this package preserves its supplied data. See [Settings Architecture](../../../docs/settings-architecture.md).
 
 ## Boundaries
 
-- Owns: service-shaped types and the settings read use case.
-- Does not own: source loading, TOML or filesystem I/O, SQL, runtime composition, mutation, persistence, or HTTP DTOs.
-
-## Testing Notes
-
-- Settings service behavior is covered through app tests at the REST boundary.
+- Owns: service-shaped snapshot types and the settings read use case.
+- Does not own: configuration loading or validation, filesystem or database I/O, runtime composition, configuration mutation, or HTTP DTOs.

@@ -2,101 +2,49 @@
 
 ## Owned Artifacts
 
-- `Dockerfile`: multi-stage frontend, Go, and Debian slim runtime image.
-- `Dockerfile.dockerignore`: repository-root build context exclusions.
-- `compose.yaml`: supported deployment baseline.
-- `install.sh`: noninteractive fresh-deployment installer for the supported Compose baseline.
-- `config-template.toml`: immutable operational-config template shipped in the image.
-- `entrypoint.sh`: dispatches Docker-only initialization, bootstraps config for `serve`, then directly executes Mina.
-- `volume-init.sh`: root-only named-volume ownership preparation.
-- `container-init.sh`: explicit non-root database/cache seed import.
-- `scripts/docker-service-test.sh`: real image and Compose lifecycle coverage.
+- `Dockerfile` builds Mina's frontend and binary into the supported runtime image.
+- `compose.yaml` is the supported baseline; use overlays for reverse proxies, labels, or external networks.
+- `install.sh` creates a fresh authenticated, encrypted Compose deployment.
+- `entrypoint.sh`, `volume-init.sh`, and `container-init.sh` own Docker-only startup, volume preparation, and explicit state import.
 
-## State Boundaries
+## State and Secrets
 
-- Config and backups are independent host binds, defaulting to `./config` and `./backups` relative to the deployment file.
-- Database and cache use distinct project-scoped named volumes mounted at `/data` and `/cache`.
-- Ordinary `docker compose down` preserves named volumes; `down --volumes` and explicit volume deletion are destructive.
-- `/config/mina` is writable; first `serve` stages the image template and initializes `auth.toml` through `mina auth` only when `config.toml` is absent.
-- `/data/mina.duckdb` is the fixed Compose database path; `/cache/mina` remains the app's normal XDG cache layout.
-- `.env.example` documents numeric Compose identity, an omitted-by-default database-encryption assignment, and required fresh-initialization administrator inputs without containing usable credentials.
-- The installer-generated `.env` also owns a path-derived Compose project name, loopback port settings, generated bootstrap and encryption secrets, and the CLI-created automation API key.
-- Compose forwards `MINA_DATABASE_ENCRYPTION_KEY` from the operator environment or deployment `.env`; the secret is absent from the Compose file, config template, and image, and `.env` must remain private and outside version control.
-- Backups bind independently to `/backups` and never derive from database storage.
-- Utility commands such as `version` and `db validate` do not bootstrap or require writable config.
-- The entrypoint applies umask `077`; newly created config, database, backup, and cache files must have no group or other permissions.
-- Cache is persistent but rebuildable; config, database, and backups are durable user state.
+- Config and backups are independent host binds, defaulting to `./config` and `./backups`; they must already exist and be writable by `MINA_UID:MINA_GID`.
+- `/data/mina.duckdb` and `/cache` are separate project-scoped named volumes. Cache is rebuildable; config, database, and backups are durable user state.
+- `docker compose down` preserves named volumes. `down --volumes` or explicit volume removal destroys database and cache state.
+- Compose passes `MINA_DATABASE_ENCRYPTION_KEY` from the environment or `.env`; the image, Compose file, and config template do not contain it. Keep `.env` private and store the encryption key separately from database files and backups.
+- The entrypoint uses `umask 077`; newly created config, database, backup, and cache files must not grant group or other access.
 
-## Initialization Contract
+## Initialization and Restore
 
-- `volume-init` is the only root Compose service; it has no network or host binds, drops all capabilities, adds only `CHOWN`, `DAC_OVERRIDE`, and `FOWNER`, and prepares `/data` and `/cache` ownership for `MINA_UID:MINA_GID`.
-- Named-volume mounts disable image copy-up so the initializer's numeric ownership remains authoritative even while `/data` is empty.
-- Mounted-root numeric ownership is the change detector; recursive chown runs only for first use or a changed identity.
-- `container-init` is intercepted by the image entrypoint and is not part of Mina's product CLI.
-- Import accepts `--database`, `--cache`, or both; at least one is required and neither destination may contain existing state.
-- Database import copies to a private same-volume stage, validates that exact artifact, then atomically installs it.
-- Cache import accepts only directories and regular files, rejects symlinks and special entries, normalizes private modes, and atomically swaps the staged tree.
-- Combined import prepares both artifacts before installation and rolls back an installed cache if the database commit does not complete.
-- `serve` never imports implicitly and there is no overwrite path.
-- Fresh-serve bootstrap installs config last, preserves any existing auth file, and is retryable after interruption.
-- Fresh auth creation requires non-placeholder `MINA_INITIAL_ADMIN_EMAIL` and `MINA_INITIAL_ADMIN_PASSWORD`, initializes only through `mina auth`, and clears both inputs before the long-running Mina process starts.
-- Existing config is never replaced or opted into authentication; a configured missing auth file fails closed.
+- `volume-init` is the only root service. It has no network or host binds and prepares the named volumes for the configured non-root numeric identity; `nocopy` preserves that ownership on empty volumes.
+- `mina` waits for successful volume initialization and refuses effective UID or primary GID 0. Its writable state is limited to the config bind, named volumes, backup bind, and ephemeral `/tmp`.
+- On first `serve`, the entrypoint creates `config.toml` from the image template and creates `auth.toml` through `mina auth` only when both are absent. Bootstrap credentials must be non-placeholder values; they are cleared before Mina starts.
+- Existing config and auth state are never replaced. A configured missing or invalid auth path fails closed; interrupted first initialization preserves auth state for retry.
+- `container-init` is a Docker-only command, never runs implicitly, and refuses to overwrite database or cache state. It stages database imports on the destination volume, validates them before installation, and accepts only regular database files plus cache trees containing regular files and directories.
 
 ## Installer Contract
 
-- `install.sh` defaults to the current directory, administrator `admin@local`, localhost port `8080`, and the supported `main` image; flags may override the directory, email, port, or image without prompting.
-- The installer resolves the supported source ref once and downloads `compose.yaml` and `.env.example` from that full commit.
-- The target must be absent or empty, and its deterministic Compose project must have no containers, network, database volume, or cache volume. There is no update or overwrite mode.
-- Installer-created config and backup directories are mode `0700`; `.env`, generated configuration, and CLI-owned authentication state are private files.
-- OpenSSL generates independent 256-bit database-encryption and administrator-password secrets with tracing disabled before secret handling.
-- Fresh startup creates `auth.toml` through the image entrypoint's auth CLI flow. The installer creates the automation key through `mina auth`, stores only its returned secret as `MINA_API_KEY`, restarts Mina, and verifies authenticated API access.
-- Success requires the public health endpoint and generated API key to work. Failure removes only installer-created Compose resources and files so the same fresh-state command can be retried.
+- `install.sh` is noninteractive and defaults to the current directory, `admin@local`, localhost port `8080`, and `ghcr.io/mishamsk/mina:main`; its flags may change those values.
+- It resolves one source commit, downloads that commit's Compose artifacts, creates private config and backup directories, and generates independent administrator-password and database-encryption secrets.
+- The target must be absent or empty and have no Compose containers, network, or named volumes for its deterministic project name. There is no update or overwrite mode.
+- After health succeeds, the installer creates an automation API key through Mina, stores it privately in `.env`, restarts Mina, and verifies authenticated API access. On failure it removes only resources and files it created, so the same fresh install can be retried.
 
-## Image Contract
+## Image and Compose Contract
 
-- Standalone image execution defaults to the non-root `10001:10001` user.
-- The entrypoint ends with `exec mina` so Mina directly receives stop signals.
-- Builder Go and Node defaults match `mise.toml`; pnpm comes from `frontend/package.json#packageManager`.
-- The runtime uses Debian slim, retains package inventory, and removes apt indexes only.
-- The runtime image carries the signed DuckDB-version-matched `httpfs` artifact for its target architecture and loads it directly without runtime download.
-- Build from the repository root with `docker/Dockerfile` and its Dockerfile-specific ignore file.
+- The image defaults to non-root `10001:10001`, contains Mina, Docker initialization commands, a health check, and a target-architecture DuckDB `httpfs` extension used without a runtime download for encrypted writes. Build from the repository root with `docker/Dockerfile`.
+- The entrypoint ends with `exec mina`, so Mina receives stop signals directly.
+- The base Compose deployment defaults to `ghcr.io/mishamsk/mina:main`, publishes only to `127.0.0.1` by default, and fixes the database path to `/data/mina.duckdb`; schema and database-path overrides are deliberately absent.
+- The main service is read-only, drops all capabilities, forbids privilege escalation, and uses a bounded `/tmp` tmpfs. Do not add privileged mode, Docker socket access, or broad host mounts to the base deployment.
+- Initial-admin variables affect only fresh initialization; they never alter existing config or authentication state.
 
-## Compose Contract
+## Architecture and Publication
 
-- The template defaults to `ghcr.io/mishamsk/mina:main`; `MINA_IMAGE` is the image-test and advanced-operator override.
-- Compose runs as numeric `MINA_UID:MINA_GID`, defaulting to `1000:1000`; effective UID and primary GID must both be nonzero.
-- The main `mina` service always runs directly as that non-root identity and waits for successful volume initialization.
-- The main service root filesystem is read-only, all capabilities are dropped, privilege escalation is disabled, and `/tmp` is a bounded tmpfs.
-- Main-service state is writable only through `/config/mina`, `/data`, `/cache`, and `/backups`; app cache state lives under `/cache/mina` and `/tmp` is ephemeral.
-- Port publishing remains on `127.0.0.1` by default.
-- Database and schema overrides are intentionally absent from the base environment surface.
-- Initial-admin environment values are first-initialization inputs only; they are not app config and never modify existing config or auth files.
-- Only config and backup bind paths are overrideable, through `MINA_CONFIG_DIR` and `MINA_BACKUP_DIR`; Compose must not silently create them.
-- Config initialization must fail early with an actionable ownership message when its bind is not writable.
-
-## Overlay Invariants
-
-- Keep the base file proxy-agnostic.
-- Add reverse-proxy labels and external networks through Compose overlays.
-- Preserve named volumes, independent binds, initializer dependency, hardening, health check, direct process execution, and graceful stop behavior.
-- Do not require privileged mode, Docker socket access, or broad host mounts.
-
-## Architecture Support
-
-- Local images support `linux/amd64` and `linux/arm64`, including compatible Synology models.
-- The Docker publication workflow builds GHCR commit-SHA image indexes for `linux/amd64` and `linux/arm64`.
-- The mutable `ghcr.io/mishamsk/mina:main` tag advances only after the published SHA image passes the Compose lifecycle test and still matches the current `main` tip.
-- Manual branch runs publish and test only the full commit-SHA tag; they do not move `main`.
-- Do not claim ARMv7 support.
-- No `latest`, branch-name, semantic-version, or release tags are published by the basic CI path.
+- Supported image platforms are `linux/amd64` and `linux/arm64`; ARMv7 is unsupported.
+- CI publishes a multi-architecture full-commit-SHA image, verifies it through the Compose lifecycle test, and promotes it to `:main` only when that commit is still the `main` tip. It does not publish `latest`, branch-name, semantic-version, or release tags.
 
 ## Verification
 
-- `just docker-version-check` detects tool-version drift.
-- `just docker-manifest-check IMAGE` verifies that a remote image index contains `linux/amd64` and `linux/arm64`.
-- `just test-docker` builds real images unless `MINA_IMAGE` is supplied.
-- The publication workflow runs `MINA_IMAGE=ghcr.io/mishamsk/mina:<full-commit-sha> just test-docker` against the published registry image before promotion.
-- The lifecycle test first covers a fresh noninteractive installer run, generated private state, authenticated and encrypted boot, API-key use, health, and refusal of the resulting deployment without modification.
-- It then covers required non-default authentication bootstrap, private bind permissions, config/auth preservation, named-volume ownership and `down` persistence, encrypted creation, explicit encrypted import/restore, hardening, authenticated reachability, recreation, restart, image replacement, encrypted backups, correct/wrong/missing-key validation, and destructive test cleanup.
-- It also builds and runs the non-native supported architecture when local emulation is available and reports an explicit limitation otherwise.
-- Docker tests must leave no test containers, networks, tagged test images, or temporary state.
+- `just docker-version-check` keeps image tool and DuckDB-extension versions aligned with project declarations.
+- `just docker-manifest-check IMAGE` requires both supported platforms in a published image index.
+- `just test-docker` exercises the image and Compose lifecycle, building local images unless `MINA_IMAGE` is supplied.

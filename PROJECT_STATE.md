@@ -1,90 +1,52 @@
 # Project State
 
-- Phase 1 REST API foundation is closed.
-- Active scope: Phase 2 minimal local web UI infrastructure, transaction templates, and recurring transactions.
-- Default operator workflow: start the REST API and local web UI with `mina serve --db PATH`
-- Implemented API capability groups:
-  - Health checks and stable JSON error envelopes.
-  - App administration for seeding demo data.
-  - Account, category, tag, and household member CRUD/list flows, including writable account-type and single-/multi-currency changes, fixed system-account protection, account/category/tag/member delete eligibility, member hidden-state updates and include-hidden listing, account/category/tag featured metadata, and category-intent filtering.
-  - Explicit `owned`, `party`, `flow`, and fixed `system` account types plus `expense` and `income` category intents.
-  - Exchange-rate flows, including a read-only dense daily USD-rate snapshot, and account-denominated credit-limit-history flows, with credit limits restricted to single-currency accounts.
-  - Transaction creation, read, paginated/date-anchored/filtered list, free-text transaction search across reference metadata, full replacement, and tombstone deletion with nested journal records.
-  - Non-USD `amount_usd` inference on transaction writes using stored `USD -> currency` rates when resolvable.
-  - Server-computed transaction month spend/income totals and account balances with USD-equivalent aggregation, unconverted counts, and current credit limits.
-  - Shorthand transaction creation endpoints for spend, income, refund, transfer, and two-currency exchange, including explicit exchange-side currencies for multi-currency accounts.
-  - Transaction-template creation, read, paginated list, full replacement, and tombstone deletion with nested partial record defaults.
-  - Recurring definition creation, read, paginated list, full replacement, cancel, pause/resume, defer, confirm-next, occurrence review queue, confirm, and dismiss flows.
-  - Per-entity hierarchy restructure endpoints for accounts, categories, tags, and transaction templates, with atomic subtree FQN rewrite; category restructure rewrites active budget category paths in lockstep; template replacement preserves `fqn`.
-  - Derived group listings and path-addressed bulk hide/unhide for accounts, categories, and tags; group hidden state is computed from active leaves.
-  - Record-local roles and independent transaction shapes derived from account type, sign, and optional category intent; responses include the reduced class, display amounts, and exchange effective rate.
-  - Dry-run transaction classification for unbalanced drafts, with category-rule and exchange-exclusivity validation.
-  - Paginated journal-record search with account-FQN prefix register filtering, plus account-record search by account ID.
-  - Transaction lifecycle cancel/restore plus separate journal-record category, tag, member, account, settlement, and reconciliation bulk updates.
-  - Background operation status, concrete typed run lookup, manual exchange-rate loading trigger, and manual database backup trigger flows; one newest-first paged envelope listing spans all operations with an optional operation filter, while operation discovery returns links to each concrete API.
-  - Read-only runtime Settings reporting resolved startup values, effective sources, and the resolved config-file location.
-  - Public authentication status/login/logout contracts and protected REST behavior accepting browser sessions or revocable API keys.
-  - OpenAPI discovery through `GET /api/openapi.json`.
-- Implemented runtime/demo behavior:
-  - A noninteractive fresh-state installer provisions the supported Docker Compose deployment with private generated credentials, authenticated encrypted storage, a CLI-created automation API key, health verification, and safe refusal of existing deployment state.
-  - The supported Docker image and Compose deployment run Mina as a configured host UID/GID with a read-only root, independent config/backup binds, named database/cache volumes, localhost-only publishing by default, fresh-deployment authentication bootstrap, env-only database-key forwarding, and baked signed `httpfs` artifacts for both supported architectures.
-  - Docker publication workflows build multi-architecture GHCR SHA images and guard `main` promotion behind registry-image Compose lifecycle verification.
-  - `just test-docker` runs a real installer and encrypted Docker lifecycle check covering fresh provisioning/refusal, API-key access, authentication persistence, Compose health, demo-data retention across recreation/restart/image replacement, encrypted backups/restores, database validation, and cleanup.
-  - Runtime opens one app for the process lifetime and composes REST, embedded Streamable HTTP MCP at `/mcp`, and embedded web UI handlers.
-  - Optional config-backed authentication loads one immutable startup snapshot; CLI-only atomic mutations manage users, long-lived browser sessions, and revocable API keys outside the accounting database.
-  - Runtime runs non-blocking startup and recurring operations in `serve`, with operation status and manual trigger APIs protected when authentication is enabled.
-  - Exchange-rate startup loading uses a Frankfurter USD NDJSON cache file by default; scheduled and manual REST-triggered loading use targeted Frankfurter API requests.
-  - File-backed accounting databases remain plaintext when `MINA_DATABASE_ENCRYPTION_KEY` is absent and use DuckDB AES-256-GCM when it is present; the key is environment-only and excluded from ordinary config and settings snapshots, while Status reports whether encryption is active.
-  - Database backups copy the selected file-backed DuckDB accounting database to configured local backup files, preserving primary-database encryption; empty backup config creates no automatic runs.
-  - `mina serve --demo` seeds realistic demo transactions, transaction templates, recurring definitions, and expected occurrences for new in-memory state or new file-backed schemas; dated fixtures are anchored to the current date by default or an exact caller-supplied date, with a default six-month history limit; callers may request any positive month limit, and requests above six use the full six-month fixture.
-  - File-backed startup demo seeding refuses when the selected accounting schema already exists.
-  - File-backed startup runs configurable database validation (`none`, `shallow`, or `full`; default `shallow`) after migrations.
-  - CLI-only `mina db validate` runs offline integrity checks with schema, referential, SQL invariant, and transaction-classification layers.
-- Implemented client surfaces:
-  - `mina client --server URL` exposes every configured CLI operation through a generated REST-backed command tree with typed inputs, raw JSON output, and optional `MINA_API_KEY` bearer authentication.
-  - `mina client --db PATH` runs the same REST-backed command tree against a one-shot in-process app with no listener or automatic operations, waiting for manual exchange-rate loading and database backup runs to finish.
-  - `mina mcp stdio --server URL` exposes the configured MCP surface through the official SDK against a running Mina REST server, using `MINA_API_KEY` when authentication is enabled.
-  - `mina serve` exposes the same MCP registry over optionally API-key-protected Streamable HTTP at `/mcp`, backed by a trusted in-process generated REST client against the isolated REST handler.
-  - Both MCP transports declare shared agent instructions for Mina's accounting model, preferred workflows, and mutation safety.
-- Implemented web UI behavior:
-  - Minimal embedded web UI infrastructure is built from `frontend/`; root routes are canonical, with `/ui/` legacy redirects.
-  - Public authentication status bootstraps before the shell; enabled deployments show login, retain cookie sessions across reloads, expose global logout, and return to login when a protected request loses authorization.
-  - Frontend styling is wired through Tailwind CSS v4 and shadcn/ui generated primitives.
-  - The app shell shows a featured-account balance strip on every route when featured accounts exist, backed by account metadata and server balances.
-  - Accounts expose effective display labels for contextual transaction and balance presentation with full-FQN disambiguation; the Accounts side panel edits or clears the optional override, while hierarchy, search, selection, and navigation remain FQN-based.
-  - Overview is the landing page, with active `owned` and `party` accounts grouped by FQN root, server-derived remaining credit as current-limit account standing, signed approximate USD subtotals, current-month spend/income pulse, and recent activity links.
-  - Transactions and Category/Tag/Member drill-downs use server-derived titles and native/USD display amounts, lifecycle/settlement indicators and filters, date-jump navigation, detail-first rows, and a shared Edit mode with page-local selection, an internally scrolling right-side panel for reference/status changes, and selection-independent eligible native amount inputs; browse tables toggle native/USD without refetching, full detail pairs non-USD native amounts with USD/`N/A`, table pagination stays viewport-bound, detail is URL-addressable and read-only with stored owned/party settlement timestamps in expanded record disclosures, and settlement controls apply only to owned/party records.
-  - Expected recurring occurrences use confirm/dismiss review actions; cancelled transactions remain history-preserving and restorable, while delete is a separate tombstone action.
-  - `/recurring` manages recurring definitions with schedules, status and next-date display, lifecycle actions, and balanced-record creation/editing.
-  - `/templates` manages searchable hierarchical transaction templates with record-default summaries, Use, create/edit, move/rename, and delete; one route-independent modal edits date-free partial defaults and captures reusable record fields from active or cancelled transaction rows/details.
-  - Accounts page shows the chart as a searchable/filterable `owned`/`party`/`flow`/`system` FQN tree, with server-derived remaining credit as current-limit account standing, explicit single-/multi-currency modes, and fixed system accounts readable but immutable; user accounts retain hide/unhide, featured, move/rename, delete, create/edit, single-currency credit-limit, and register workflows with raw full/posted balance detail.
-  - Accounts tree supports prefix-addressed account rename/move for leaves and groups, with subtree FQN rewrites through the restructure API.
-  - Account group pages show descendant `owned`/`party` subtotals and combined prefix registers across tracked and flow accounts, with transaction peeks and links from account trees and overview balance groups.
-  - Status lists registered background operations with URL-backed paged run histories, manual operation triggers, current operation status, and per-operation run details; it keeps backend health and local UI-state controls.
-  - Global command palette opens with `Cmd/Ctrl+K`, supports routed-page and account/group navigation by typed name, launches transaction entry tabs, and starts database backup or exchange-rate loading runs.
-  - Global command palette supports Alfred-style transaction search with leading-apostrophe mode and URL-addressable transaction detail navigation.
-  - Categories and Tags pages show searchable FQN trees with featured and hidden row toggles, move/rename, and create/edit/delete side-panel workflows; Categories show `expense` or `income` intent badges.
-  - Category and Tag leaf rows carry deleteability-driven delete actions with named confirmation; group rows do not offer delete.
-  - Members page shows a searchable flat member list with create/rename/delete side-panel workflows and hover/focus-revealed Edit/Delete row actions; ineligible deletes are proactively disabled from the API deleteability signal.
-  - Categories, Tags, and Members have URL-addressable drill-down pages with one route identity header and pre-filtered transaction browsers directly beneath it.
-  - Accounts, Categories, Tags, and Members retain full-height Arcade Cabinet table frames with internally scrolling data bodies.
-  - Transaction entry is one app-shell-owned, route-independent stage modal opened in place from the Transactions header and empty state, the global shortcut, command palette, templates, rows, and detail panels; its six tabs cover multi-merchant Spend, Income, money-back Refund, Transfer with an optional charge, two-currency Exchange with effective-rate feedback, and Advanced journal entry, while every shorthand create tab can record its balance records as pending. Its hierarchical template picker filters by server-derived compatible shorthand types and copies only supplied defaults, and one generic Clear draft action resets and deletes the persisted create draft without affecting saved session entries.
-  - Advanced entry offers categories only on `flow` records and shows the server's live derived roles, shapes, class, and display amounts before save.
-  - Saved transactions support row and detail-panel Edit and Duplicate; wholly pending active transactions offer adjacent Post and Cancel actions, with Post confirming an editable timestamp without losing pending history; Advanced can reveal and edit stored pending/posted dates; and active spend/income transactions support Split allocation with a pre-added flow row. Edit reopens fitting shorthand, Edit/Split use full journal replacement and discard protection, and every successful modal edit refreshes the open detail panel beneath it.
-  - Transaction entry category pickers fetch API-filtered `expense` or `income` categories for the shorthand flows that carry economic meaning.
-  - Shared hierarchical entity pickers support breadcrumbed segment browsing, guarded keyboard segment completion and back-out, scoped full-path fallback, exact-FQN selection, account-intent pruning, and multi-select sibling batching across entry, Edit-mode dock, filter, reference, and recurring surfaces; eligible entry pickers additionally support valid-leaf creation.
-  - The status page calls backend health as an infrastructure proof and stores UI-only preference state in IndexedDB.
-- Implemented storage behavior:
-  - Runtime owns accounting location defaults, opens an in-memory DuckDB process database, and selects either an attached accounting database file or the in-memory accounting database with configurable schema fallback.
-  - Store-owned accounting locations qualify migration and repository SQL against the selected database and schema.
-  - Upgrade-only DuckDB migrations with schema-version tracking in the selected accounting location.
-  - Atomic double-entry transaction persistence and replacement.
-  - Each app isolates ephemeral operation runs and dense exchange rates in an opaque in-memory runtime schema outside portable accounting state.
-  - Store-owned database backup sources use DuckDB database copy into provider-owned target files and reject in-memory accounting sources.
-  - Exchange-rate loading infers non-USD journal-record needs, upserts active `USD -> currency` rates, rebuilds the dense daily snapshot, and backfills resolvable null `amount_usd` values.
-  - Transaction templates are stored as normalized active/tombstoned template and record-default rows with write-time reference checks.
-  - Imported journal-record metadata rows store provider-neutral fields, raw provider payload JSON, and external provenance.
-  - Pairwise record links are stored for refund and reimbursement settlement as metadata-only associations between journal records.
-  - Recurring definitions, definition records, and permanent occurrence rows are stored; review-queue occurrences start with generated EXPECTED transactions linked through transaction occurrence back-pointers.
-  - Tombstone-aware reads and list defaults for applicable resources.
-  - Store-owned allowlists for dynamic filtering and sorting.
+## Accounting and reference data
+
+- REST implements the household chart: hierarchical accounts, categories, tags, transaction templates, and flat household members; each supports the applicable create, read, update, list, delete, visibility, featured, and FQN restructure flows. Group visibility derives from active leaves, restructures rewrite whole subtrees atomically, and category moves also rewrite active budget category paths.
+- Accounts have `owned`, `party`, `flow`, or fixed `system` types; categories have `expense` or `income` intent. System accounts are readable but immutable. Accounts may be single- or multi-currency, and only single-currency accounts carry credit-limit history.
+- Applicable reads and list defaults are tombstone-aware and exclude hidden resources unless requested. Delete eligibility is surfaced rather than assumed, and all write-time reference and accounting-semantic checks remain service-owned.
+- REST provides account balances, prefix registers, journal-record search, and server-derived month spend/income totals. Balances include native amounts, approximate USD aggregation, unconverted counts, and current credit-limit standing; month totals cover categorized flow records only.
+
+## Ledger, rates, and lifecycle
+
+- REST supports balanced journal transactions as full entries and as spend, income, refund, transfer, and two-currency exchange shortcuts. Writes can infer non-USD `amount_usd` from stored USD-pair rates; unresolved amounts remain unconverted.
+- Transactions support filtered, paginated, date-anchored, free-text search; full replacement; independent derived class, shape, role, and display metadata; dry-run classification; and record-level bulk category, tag, member, account, settlement, and reconciliation updates.
+- Active transactions can be cancelled and restored; deletion is a separate tombstone action. Owned and party records carry pending/posted settlement dates. Expected recurring transactions are excluded from ordinary lists unless explicitly selected.
+- Source exchange rates have CRUD and a read-only dense daily USD-rate snapshot. Loading identifies needed currencies, refreshes the snapshot, and backfills resolvable missing USD values.
+- Refund and reimbursement record links are metadata-only pairwise associations. Imported-record storage retains provider-neutral metadata, raw provider payload, and external provenance; it does not imply a delivered import workflow.
+
+## Reusable and scheduled transactions
+
+- Transaction templates are hierarchical, versioned through full replacement, and stored as active/tombstoned templates with partial journal-record defaults. Template moves preserve the template FQN.
+- Recurring definitions support schedule creation/replacement, pause/resume, defer, confirmation, cancellation, and occurrence review. Materialized occurrences are permanent, create linked EXPECTED transactions, and can be confirmed or dismissed.
+
+## REST and client surfaces
+
+- The REST API is OpenAPI-defined, exposes the implemented accounting, reference, template, recurring, rates, operation, settings, demo, health, and authentication contracts, and serves its generated spec at `/api/openapi.json`. Transport validation and stable machine-readable JSON errors are in place.
+- Generated REST-backed CLI and MCP catalogs independently select exposure for every OpenAPI operation. Both expose the delivered accounting/reference, rate, template, recurring, journal-record, settings, and background-operation flows; browser authentication is REST/UI-only, demo seeding and health are CLI-only, and MCP deliberately omits per-rate-ID reads.
+- `mina client --server URL` is a remote JSON CLI with optional `MINA_API_KEY`. `mina client --db PATH` runs the same selected REST operations against a one-shot in-process app: it has no listener, authentication, startup validation, or automatic operations, but waits for its manually-triggered exchange-rate or backup run to finish.
+- `mina mcp stdio --server URL` is remote-only and uses an API key when authentication is enabled. `mina serve` also hosts the same registry as API-key-only Streamable HTTP MCP at `/mcp`; its origin policy permits no `Origin` but rejects non-loopback origins. Both transports publish shared accounting and mutation-safety instructions. No hand-written client-surface extensions ship.
+
+## Web UI
+
+- `mina serve` embeds the React UI at `/`; canonical root routes replace the legacy `/ui/` prefix. The shell resolves authentication status before rendering, uses server `HttpOnly` cookie sessions, and returns to login after a protected-request `401`.
+- The browser provides an overview of active owned/party balances and monthly activity; a persistent featured-account strip; searchable account, category, tag, and member management; account/group registers; category/tag/member transaction drill-downs; and a Status screen for health, settings, and background operations. Account display-label overrides affect presentation only; hierarchy, navigation, and disambiguation remain FQN-based.
+- Transaction browsing offers URL-addressable detail, native/USD display, lifecycle and settlement indicators, filters, date navigation, selection-based reference/status edits, and a read-only detail route. Transaction entry is a route-independent modal for spend, income, refund, transfer, exchange, and advanced balanced entries, including pending creation, compatible template defaults, draft clearing, edit/duplicate, split, post, and cancel flows.
+- The UI manages hierarchical templates and recurring definitions/occurrence review, including template use and reusable partial defaults. Hierarchical pickers support FQN navigation, intent-aware account/category selection, exact-path fallback, batching, and eligible leaf creation.
+- UI data remains REST-backed. IndexedDB holds only UI preferences, UI caches, and draft state; it never stores credentials or accounting data. The browser exposes substantial human workflows, not a claim of full REST parity.
+
+## Runtime, operations, and deployment
+
+- One long-running app instance composes REST, embedded UI, and embedded MCP. It opens/migrates accounting state before serving, starts configured background and startup work without blocking readiness, records app-local operation status, and cancels and joins work during shutdown.
+- Exchange-rate loading starts from the configured Frankfurter cache and supports scheduled and manual targeted refreshes. Database backup runs manually, and on a schedule when configured; they copy only file-backed accounting databases to configured local targets and preserve database encryption.
+- Startup demo seeding can provision realistic, date-anchored transactions, templates, recurring definitions, and expected occurrences in new state only. File-backed startup refuses demo seeding when the selected accounting schema already exists.
+- Long-running file-backed startup runs configured `none`, `shallow`, or `full` validation after migration (`shallow` by default). `mina db validate` is a separate offline, read-only CLI diagnostic; neither is a REST capability. Runtime settings report the immutable resolved startup values, sources, and config-file location.
+- Optional file-backed authentication is loaded once at startup from a separate, CLI-administered file. REST accepts browser sessions or revocable API keys; external MCP accepts API keys only. Authentication administration, auth state, API-key secrets, and database encryption keys are outside the accounting database and absent from ordinary settings output.
+- The Docker image and Compose deployment support a noninteractive fresh installer, private generated bootstrap credentials and automation API key, authenticated encrypted storage, host UID/GID operation, read-only root filesystem, separate config/backup binds, named database/cache volumes, and localhost-only publishing by default. Mina serves plain HTTP, so non-loopback exposure requires a trusted network or TLS-terminating reverse proxy.
+
+## Storage and process boundaries
+
+- Accounting state is DuckDB in a selected schema, either attached from one portable database file or held in the process in-memory database. Upgrade-only migrations and schema-version tracking apply to that accounting location; multi-row ledger changes persist atomically.
+- File-backed databases are plaintext unless `MINA_DATABASE_ENCRYPTION_KEY` is supplied, when DuckDB AES-256-GCM is used. The key is environment-only; Status reports encryption state without revealing it.
+- Each app also owns an opaque in-memory runtime schema for disposable operation runs and dense exchange-rate data. It is outside portable accounting state, migrations, backups, and database validation.
+- Store code owns DuckDB lifecycle mechanics, qualified SQL, migrations, transactions, repository conversion, dynamic query allowlists, and database-error mapping. Accounting semantics, validation, and transport mappings remain outside the store.

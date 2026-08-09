@@ -2,24 +2,16 @@
 
 ## Purpose
 
-- Owns the TypeScript React app served by `mina serve`.
-- Produces browser assets for the Go embed boundary.
+- Boots the TypeScript React browser app served at `/` by `mina serve`.
+- Builds its assets into `internal/webui/dist` for the Go embed boundary.
 
 ## Implicit Contracts
 
-- Frontend accounting state is read and written only through generated REST client operations.
-- Browser storage is limited to UI preferences, UI-only caches, and draft UI state.
-- Browser authentication state is transient; the server-owned `HttpOnly` cookie never enters frontend storage or state.
-- Initial page-heading focus yields when loading completes after the user has already focused another element.
+- The shell stays behind the bootstrap splash until the authentication-status request and persisted UI-state hydration complete; bootstrap failures remain outside the shell.
+- Authentication state is in memory only. A `401` from the current authentication generation returns the browser to login, while stale request results cannot overwrite a newer login or logout.
+- Global initial heading focus waits for bootstrap and yields to a user or feature focus target.
 
 ## Boundaries
 
-- Owns: browser UI source, frontend toolchain configuration, shadcn/Tailwind configuration, and Vite build configuration.
-- Does not own: REST handlers, backend domain behavior, database access, or local app config loading.
-
-## Testing Notes
-
-- Use Justfile frontend recipes for formatting, linting, typechecking, build checks, and browser e2e checks.
-- Frontend e2e runs default to two workers; `MINA_FRONTEND_E2E_WORKERS` controls Playwright concurrency.
-- One invocation-owned, immutable two-month demo template is seeded in the OS temporary directory; every test and retry gets a writable database copy, backup directory, listener, and Mina process.
-- Playwright owns all template and test lifecycle cleanup; no template database is committed to the repository.
+- Owns the application entrypoint and frontend build/toolchain configuration.
+- Does not own Go asset serving, REST or backend domain behavior, generated API setup, browser-persistence adapters, or route and feature workflows. See [frontend architecture](../docs/frontend-architecture.md).

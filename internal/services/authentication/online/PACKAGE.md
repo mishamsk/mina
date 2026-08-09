@@ -2,21 +2,16 @@
 
 ## Purpose
 
-- Owns state-read-only online authentication over immutable startup state.
+- Owns state-read-only online authentication over immutable provider state.
 
 ## Implicit Contracts
 
-- Authenticates passwords, verifies API keys, and owns the validity and verification of stateless browser sessions.
-- Reads only an immutable provider snapshot loaded during long-running startup; it never writes or live-reloads authentication state.
-- Owns online authentication types, errors, use cases, and the immutable provider contract.
-- HTTP calls this service for external REST protection, login, and authentication status behavior; HTTP owns logout cookie clearing.
-- Runtime supplies this service to HTTP and keeps trusted in-process REST dispatch behind MCP's single outer authorization decision.
+- Password authentication normalizes the email and calls the password verifier even without an enabled matching user. Providers must safely verify an empty stored hash so failed credentials remain indistinguishable.
+- Session issuance accepts only an identity that still matches an enabled user. Session verification also requires the signed user ID, subject, and session version to match an enabled user, so disabling a user or changing its version revokes its sessions in a newly supplied provider view.
+- The service reads its provider on each operation but neither writes nor reloads it. With a startup snapshot, authentication-state changes take effect only when composition supplies a new snapshot.
+- Failed API-key and session checks, including malformed session records, return `ErrInvalidCredential`; password-verifier operational errors propagate.
 
 ## Boundaries
 
-- Owns: online credential decisions and stateless session behavior.
-- Does not own: administration, files, app config, HTTP bearer/cookie parsing, public-route selection, cookie attributes, same-origin enforcement, transport errors, CLI prompting, or runtime composition.
-
-## Testing Notes
-
-- Exercise behavior through runtime app-tests and launched-process smokes.
+- Owns: online credential decisions, session record validity, and the provider contract for credential material and session cryptography.
+- Does not own: authentication administration or persistence, credential and session cryptography, HTTP credential parsing or cookie policy, transport error mapping, or runtime composition.

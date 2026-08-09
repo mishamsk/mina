@@ -2,22 +2,19 @@
 
 ## Purpose
 
-- Owns tag domain types, validation, use cases, and repository contracts.
+- Owns tag lifecycle, hierarchy behavior, and reference validation.
 
 ## Implicit Contracts
 
-- Service instances own process-local, write-through tag reference caches for active-reference validation.
-- Hidden active tags are valid references only when callers explicitly allow hidden references.
-- Tag group hidden state is derived from active tag leaves, including hidden leaves.
-- Featured state is leaf-only portable metadata; groups have no featured state or derivation.
-- Tag path hide/unhide targets active leaves at or under the path and invalidates the tag reference cache.
-- List responses populate `deletable` from batched active-resource usage; tombstoned tags are never deletable, and DELETE uses the same dependency predicate.
+- Each service instance keeps a process-local reference snapshot for FQN hierarchy and reference checks. Tag mutations and dependent writes must share `ReferenceSerializer`; direct persistence changes must invalidate the snapshot before later service use.
+- Active tag FQNs cannot prefix one another. Restructure atomically rewrites an active subtree, rejecting destination conflicts and moves into a group’s own subtree.
+- Hidden active tags are valid references only when callers explicitly allow them.
+- Groups derive from every active leaf, including hidden leaves; a group is hidden only when all its leaves are hidden.
+- Featured state belongs only to leaves; groups neither store nor derive it.
+- Path hide/unhide changes active leaves at or below the path and invalidates the reference snapshot.
+- Active journal, template, and recurring records block tombstoning. List deleteability uses the same predicate, and tombstoned tags are never deletable.
 
 ## Boundaries
 
-- Owns: tag hierarchy validation and derivation, hidden/tombstoned use-case rules, active-reference validation, and active-FQN conflict mapping.
-- Does not own: HTTP DTOs, SQL queries, database row types, or process configuration.
-
-## Testing Notes
-
-- Tag behavior is covered through runtime-constructed boundary tests.
+- Owns: tag lifecycle rules, FQN hierarchy validation and derivation, active-reference validation, and tag error mapping.
+- Does not own: persistence or transport details.

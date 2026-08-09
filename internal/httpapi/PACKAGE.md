@@ -2,39 +2,21 @@
 
 ## Purpose
 
-- Owns generated OpenAPI route registration, generated request binding, OpenAPI request validation, response encoding, and OpenAPI DTO mapping.
-- Contains the adapter-owned generated OpenAPI server contract subpackage.
-  Server DTO structs are generated from `api/openapi.yaml` in `internal/httpapi/openapi`.
+- Adapts service use cases to the REST contract: generated OpenAPI routing and binding, transport validation, DTO mapping, and HTTP status/error mapping.
+- Owns the generated OpenAPI server contract in `openapi`, derived from `api/openapi.yaml`.
 
 ## Implicit Contracts
 
-- Error responses use the stable JSON error envelope defined by the REST contract.
-- Request middleware supplies request IDs, real IP handling, panic recovery, local API timeout enforcement, and optional access logs.
-- Generated strict-server operation methods are the HTTP adapter implementation surface.
-- Generated OpenAPI route registration is the only source of application REST route path/method declarations; the adapter-owned OpenAPI discovery endpoint is the sole exception.
-- External REST protection accepts a valid browser session or API key, keeps documented bootstrap routes public, and applies same-origin checks to unsafe cookie-authenticated requests.
-- HTTP receives only the state-read-only online authentication service through `Dependencies`; administration is absent from the adapter dependency graph.
-- The unprotected handler supplied to embedded MCP is a trusted internal dispatch path behind MCP's outer API-key decision.
-- `/api/openapi.json` is the adapter-owned OpenAPI discovery endpoint serving the embedded generated spec; no interactive documentation endpoint is served.
-- Generated request binding owns transport parsing for OpenAPI-declared path parameters, query parameter types/cardinality, and JSON body decoding.
-- OpenAPI request validation owns transport-schema validation, including declared query values, JSON schema validation, unknown JSON fields, and required non-null JSON fields.
-- Unknown query parameter names are rejected by an adapter guard derived from the matched OpenAPI operation because the upstream validator ignores undeclared query names.
-- Parameter validation errors preserve Mina's JSON error envelope, normalize generic transport failure categories such as duplicate values, empty values, out-of-range schema values, and missing required parameters, and keep generated parse details for malformed values without endpoint-specific field-name message tables.
-- Strict-server handlers consume generated request objects and generated `request.Params`; they map DTOs to service inputs, call services, and map service outputs, errors, and statuses to generated responses.
-- Full background-operation envelope listing maps optional enum-validated operation filtering and page parameters to the operation-run service; concrete per-operation endpoints own typed run-detail mapping and the service owns newest-first semantics.
-- Strict-server mappers parse OpenAPI string decimal fields into service value types; generated OpenAPI date values are mapped directly without string round-trips.
-- Account-balance responses derive remaining credit from each current balance and the existing current-limit batch; account-register responses perform one service-current limit lookup only when running balances are requested and apply that limit to every returned row.
-- Direct raw query parsing in `internal/httpapi` is disallowed unless a specific transport rule cannot be expressed through OpenAPI validation or generated params; document any exception near the code.
-- Generated binding errors, OpenAPI validation errors, and strict handler errors all map to Mina's stable JSON error envelope before responses leave the adapter.
-- HTTP handlers call service use cases; they do not own domain validation or SQL.
-- HTTP handlers use runtime-provided app service dependencies.
-- Demo seeding endpoints call the app's demo service and return service summary counts.
+- Generated route registration owns REST path and method declarations. `/api/openapi.json` is the only hand-registered route and serves the embedded generated specification.
+- Generated binding and OpenAPI validation own declared transport shape. A matched-route guard additionally rejects unknown query names because the validator intentionally ignores them.
+- Raw query parsing is limited to validation-error formatting, preserving submitted empty or duplicate values when OpenAPI defaults would otherwise obscure them.
+- Generated binding, validation, and strict-handler errors all use the REST contract's stable JSON error envelope.
+- `ProtectREST` derives public routes from OpenAPI security, accepts an API key or browser session, and requires a same-origin `Origin` for unsafe cookie-authenticated requests.
+- `New` returns trusted, unprotected dispatch. Runtime applies REST protection before external exposure and applies MCP API-key protection around its trusted in-process handler; do not expose `New` directly.
+- The adapter receives only the state-read-only online authentication service; credential administration is not in its dependency graph.
+- Account balances, and account-register records when running balances are requested, load current credit limits separately to derive `remaining_credit` from the reported balance. This presentation mapping must not change service balance semantics.
 
 ## Boundaries
 
-- Owns: HTTP status mapping, transport DTO conversion, REST query validation/mapping, adapter-owned value parsing, router middleware, and generated OpenAPI server code.
-- Does not own: database opening, CLI parsing, SQL execution, appconfig access, or service-layer decisions.
-
-## Testing Notes
-
-- REST behavior should be verified through runtime-constructed boundary tests.
+- Owns: HTTP status mapping, transport DTO conversion, REST validation/mapping, router middleware, and generated OpenAPI server code.
+- Does not own: authentication administration, database lifecycle, CLI parsing, SQL, app configuration, or service-layer validation and decisions.

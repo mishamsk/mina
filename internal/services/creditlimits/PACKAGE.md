@@ -2,20 +2,17 @@
 
 ## Purpose
 
-- Owns credit-limit history domain types, validation, use cases, and repository contracts.
+- Owns credit-limit history rules and current-limit derivation.
 
 ## Implicit Contracts
 
-- Account references are validated through the account service API before credit-limit history writes, account-scoped lists, and current-limit batch lookups.
-- Credit-limit history can be created only for a single-currency account and inherits that account's currency without storing a separate currency.
-- Current credit-limit lookups use the service clock's local civil date, exclude tombstones, choose the latest row effective on or before that date with highest-history-ID tie-breaking, and omit accounts with no applicable limit.
-- Remaining credit is derived once here as the current credit limit plus Mina's signed balance; decimal calculation errors propagate and over-limit results remain negative.
+- Creation is serialized with account deletion; a successful active row becomes an active account dependency, preventing a dangling history row or account-tombstone race.
+- An active entry requires a single-currency account and has no stored currency. It prevents that account's currency changing; tombstoned values must not be reinterpreted after a later currency change.
+- Current-limit lookups use the service clock's local civil date, exclude tombstones, select the latest effective row (highest ID breaks ties), and omit accounts without an applicable limit.
+- Remaining credit is defined here as current credit limit plus Mina's signed balance. Do not clamp it or convert it to an absolute value; it may be negative.
 
 ## Boundaries
 
-- Owns: typed credit-limit validation, account-reference error mapping, tombstoned use-case rules, and active-history conflict mapping.
-- Does not own: HTTP DTOs, transport string parsing, SQL queries, database row types, or process configuration.
-
-## Testing Notes
-
-- Credit-limit history behavior is covered through runtime-constructed boundary tests.
+- Owns: credit-limit validation, account-reference error mapping, and active-history conflict mapping.
+- Relies on: accounts for reference and currency state, and the repository for persistence and current-row selection.
+- Does not own: transport or SQL.

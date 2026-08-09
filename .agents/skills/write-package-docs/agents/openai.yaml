@@ -1,0 +1,3 @@
+interface:
+  display_name: "Writing Package Docs"
+  short_description: "Create concise, durable Mina package docs"

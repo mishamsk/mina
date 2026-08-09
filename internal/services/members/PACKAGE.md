@@ -2,20 +2,17 @@
 
 ## Purpose
 
-- Owns household member domain types, validation, use cases, and repository contracts.
+- Owns household-member use cases, reference validation, and repository contracts.
 
 ## Implicit Contracts
 
-- Service instances own process-local, write-through member reference caches for active-reference validation.
-- Hidden members are excluded from default lists but remain retrievable by ID for historical references.
-- Hidden active members are valid write references only when callers explicitly allow hidden references.
-- List results own the optional deleteability capability; active-resource usage is the eligibility rule.
+- Reference validation uses a process-local snapshot cache; writes keep a loaded snapshot current, and out-of-band changes must invalidate it before later validation.
+- Hiding or tombstoning a member is serialized with dependent writes that validate member references, preventing a validation/write race.
+- Only active members are valid references; hidden active members require explicit opt-in.
+- Default lists omit hidden and tombstoned members, while `Get` can return tombstoned members when requested.
+- List results set `Deletable`: tombstoned members and members with active journal-record, template-record, or recurring-definition references are not deletable; Delete rejects the latter and otherwise tombstones.
 
 ## Boundaries
 
-- Owns: member name validation, tombstoned use-case rules, active-reference validation, and active-name conflict mapping.
-- Does not own: HTTP DTOs, SQL queries, database row types, or process configuration.
-
-## Testing Notes
-
-- Member behavior is covered through runtime-constructed boundary tests.
+- Owns: member lifecycle and name rules, active-reference validation, and deleteability policy.
+- Does not own: persistence or dependency-usage queries, the reference-operation serializer implementation, or transport mapping.

@@ -1,24 +1,18 @@
-# internal/services/dbvalidation
+# github.com/mishamsk/mina/internal/services/dbvalidation
 
 ## Purpose
 
-- Orchestrates offline and startup accounting database validation.
-- Owns validation findings, severities, layer gating, and report formatting.
+- Orchestrates offline accounting-database integrity validation and its diagnostic reports.
 
 ## Implicit Contracts
 
-- Embedded migration SQL hash mismatch is a validator-internal exit-2 failure.
-- Validation layers run schema, referential, SQL invariants, classification; only error findings stop later layers.
-- SQL invariants include lifecycle/settlement applicability, required dates, cancellation, date ordering, record currency alignment, and credit-limit eligibility.
-- Missing table `UNIQUE` constraints are warnings because active-row uniqueness is guarded by partial unique indexes; primary-key presence is reported by table diff.
-- Startup validation supports `none`, `shallow`, and `full`; the default is owned by `internal/appconfig`.
-- Non-checks: exchange-rate self-pairs; parent FQN existence; budget month/sign rules; amount_usd derivation correctness.
+- Shallow validation compares only the schema catalog. Full validation then runs referential, SQL-invariant, and transaction-classification checks, stopping after each layer that produces error findings.
+- Full validation reuses `transactions.ValidateTransactionClassification` for every persisted lifecycle state; it requires a transaction reader, rather than duplicating transaction semantics.
+- Schema unique-index drift is a warning, but its index names are passed to invariant checks so missing active-row uniqueness can still expose duplicate data.
+- Findings are sorted by severity, layer, and message before return, making `Report.Write` deterministic for command consumers.
+- Validator self-consistency failures—including a stale embedded-migration hash, incomplete reference registry, or missing transaction reader—are `InternalError`s. Callers must preserve that distinction from invalid-database findings for their exit handling.
 
 ## Boundaries
 
-- Owns: validation orchestration and user-facing diagnostic reports.
-- Does not own: DuckDB catalog queries, migration embeds, or raw database SQL.
-
-## Testing Notes
-
-- Covered through `cmd/mina/testdata/script/mina_db_validate.txt`.
+- Owns: validation layer orchestration, finding severity, and report rendering.
+- Does not own: database opening, DuckDB catalog queries or SQL checks, migration embeds, transaction persistence or classification semantics, startup policy, or CLI exit mapping.

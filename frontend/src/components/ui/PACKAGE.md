@@ -2,18 +2,16 @@
 
 ## Purpose
 
-- Owns shadcn/ui generated presentational primitives.
+- Owns source-managed shadcn/Radix primitives and Mina-wide visual variants.
 
 ## Implicit Contracts
 
-- Components in this directory are repo-owned source generated from shadcn/ui.
-- `select.tsx` owns Mina's shared Radix Select primitive, including the Arcade Cabinet trigger and listbox treatments.
+- Treat shadcn-generated files as app source, not replaceable dependencies.
+- Preserve overlay portals, stack order, `data-slot` names, and Radix state attributes: feature close logic and global shortcut blocking coordinate through them.
+- `SelectItem` keeps `data-testid="select-option-{value}"` for browser automation.
 
 ## Boundaries
 
-- Owns: low-level reusable UI primitives and variants.
-- Does not own: route behavior, feature controllers, API calls, or browser persistence.
-
-## Testing Notes
-
-- No package-specific testing notes.
+- Owns low-level visual and accessible primitive composition.
+- App-specific shared components and features own workflow behavior, including overlay state, Escape handling, and focus recovery.
+- Does not own routes, REST state, browser persistence, or product behavior.

@@ -2,21 +2,17 @@
 
 ## Purpose
 
-- Owns operation-run observability use cases, status transitions, and repository contracts.
+- Owns background-operation run observability and lifecycle recording.
 
 ## Implicit Contracts
 
-- Operation IDs are stable public API identifiers.
-- Operation run IDs are numeric invocation IDs assigned by the repository at run start.
-- Operation runs are app-local, ephemeral runtime state; IDs need only be unique within one app.
-- Manual REST starts are delegated to the background runner.
-- Runtime startup and scheduled jobs record observable run attempts through this service.
+- The closed operation registry controls discovery and accepted run-list filters; registering work with a runner alone does not make it observable here.
+- Runs are app-local disposable runtime state. The repository assigns numeric IDs at creation, so they are not portable accounting identifiers.
+- Manual starts require runtime to connect the service to the background runner; without that connection, the service rejects the request rather than executing work itself.
+- Status summaries exclude active runs from the latest-result fields, run count, and completed-run revision; an active run affects only the `running`/`idle` state.
+- A concrete operation's run lookup returns not found for a run belonging to another operation.
 
 ## Boundaries
 
-- Owns: operation status use-case shape, status transitions, repository contracts, and stable operation identifiers.
-- Does not own: HTTP DTOs, process scheduling, no-overlap guards, retry/backoff, SQL queries, database row types, or runtime composition.
-
-## Testing Notes
-
-- Background operation behavior is covered through runtime-constructed boundary tests.
+- Owns: operation IDs, run lifecycle projections and transitions, validation, and repository/runner-trigger contracts.
+- Does not own: operation execution, scheduling, overlap guards, retries, persistence implementation, HTTP mapping, or runtime composition.

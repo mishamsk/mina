@@ -2,21 +2,20 @@
 
 ## Purpose
 
-- Owns shared Mina reference-data toolbar, tree-table building blocks, and drill-down shell behavior.
+- Owns reusable reference search, tree presentation, and entity drill-down browser composition.
 
 ## Implicit Contracts
 
-- Reference trees derive group rows from visible leaf FQNs and use API group rows only for group state.
-- Toolbar search state is URL-backed with `q` and `hidden`.
-- Flat reference lists are page-owned and may reuse the toolbar with hidden controls disabled.
-- Drill-down pages own client-side descendant filter expansion because transaction filters are flat ID lists.
-- Category, Tag, and Member drill-down shells begin with the scoped transaction toolbar/browser; the owning route's `PageHeader` is the sole identity header.
+- The toolbar owns only URL parameters `q` and `hidden`: trim and omit an empty search, encode enabled hidden items as `hidden=true`, and preserve unrelated parameters.
+- Tree rows come from visible matching leaves; group API data supplies group state only. Do not render orphan groups or use a group's hidden state to hide visible descendants.
+- A tree activates leaf rows only. Embedded controls must not activate the row, and the supplied opener is returned to the owner for focus recovery.
+- Drill-down callers supply the resolved scoped IDs. The shell strips that dimension from browser-controlled URL filters and reapplies it, so its entity filter cannot be cleared or broadened by the transaction toolbar.
+- When a drill-down search changes with a transaction or entry overlay open, update the background and overlay URL states synchronously; do not briefly render the overlay-less background.
+- Selecting a same-kind entity from a transaction routes to that entity's drill-down and replaces the scoped filter; selecting another kind adds an ordinary transaction filter.
+- Category/Tag scope changes that close a transaction detail restore focus to the scope control; other detail closures use the ledger browser's focus recovery.
+- Drill-down routes own the identity header and descendant-scope calculation; this shell starts with the scoped transaction toolbar/browser.
 
 ## Boundaries
 
-- Owns: reference-data toolbar, FQN tree derivation, tree table shell, and shared drill-down page shell.
-- Does not own: entity-specific API calls, mutation refresh rules, or route registration.
-
-## Testing Notes
-
-- Entity pages provide frontend e2e coverage for instantiated behavior.
+- Owns: reference search URL helpers, FQN tree derivation and presentation, and the shared drill-down browser shell.
+- Does not own: entity resource loading, descendant-scope calculation, mutation refresh fan-out, route registration, or ledger resource lifecycle.

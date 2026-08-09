@@ -2,21 +2,16 @@
 
 ## Purpose
 
-- Owns IndexedDB opening, versioning, migrations, reads, and writes.
+- Owns browser-local UI-state persistence through IndexedDB.
 
 ## Implicit Contracts
 
-- IndexedDB stores UI preferences, UI-only caches, and draft UI state only.
-- Transaction-entry writes store an envelope with the draft, its initialization baseline, and whether that baseline must persist so default and sticky values do not count as user input.
-- Transaction-entry reads return either an envelope or a legacy bare draft; callers handle both representations.
-- Generic create-draft clearing deletes the transaction-entry envelope; saved accounting transactions and session UI history are outside this store.
-- Accounting data copied from REST responses must never be stored here.
+- Persist only UI state; never REST-derived accounting data or credentials/session material. See [frontend architecture](../../../../docs/frontend-architecture.md#browser-storage).
+- Transaction-entry draft writes preserve the `baseline` and `persistBaseline` envelope fields so defaults and sticky values are not mistaken for user input.
+- Transaction-entry draft reads may return either an envelope or a bare draft; consumers must handle both.
+- Deleting a transaction-entry draft clears only that browser-persisted draft.
 
 ## Boundaries
 
-- Owns: browser IndexedDB side effects and object-store versioning.
-- Does not own: Zustand state shape decisions, REST responses, or accounting persistence.
-
-## Testing Notes
-
-- Frontend e2e tests cover persistence through browser reloads.
+- Owns: IndexedDB connection lifecycle, object-store versioning, and reads/writes.
+- Does not own: UI-state shape and hydration policy, REST data, or accounting persistence.

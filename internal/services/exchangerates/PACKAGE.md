@@ -2,20 +2,17 @@
 
 ## Purpose
 
-- Owns exchange-rate domain types, validation, use cases, and repository contracts.
+- Owns source exchange-rate use cases and repository contract.
+- Derives prospective signed USD amounts from source rates.
 
 ## Implicit Contracts
 
-- The exchange-rate service is the only service-level writer for `exchange_rate` rows.
-- Signed amount-USD derivation copies signed USD amounts.
-- Non-USD derivation uses active `USD -> currency` rates: exact lookup date first, linearly interpolated interior gaps second, else `NULL`.
-- `NULL` amount-USD is the only unresolved signal; inferred persisted values are not recomputed by this service.
+- USD derivation copies the signed amount; non-USD derivation divides by an active `USD -> currency` rate.
+- Non-USD conversion uses an exact rate or linear interpolation strictly inside two brackets. Missing brackets, a rounded-zero result, and decimal overflow return `nil`.
+- Derivation does not persist or backfill values; callers decide whether to use its result, while `transactions` owns backfill of unresolved journal records.
+- A create conflicts only with an active rate for the same currency pair and effective timestamp; tombstoned rates do not block a new active rate.
 
 ## Boundaries
 
-- Owns: currency validation, typed rate validation, typed filter validation, signed amount-USD derivation, tombstoned use-case rules, and active-rate conflict mapping.
-- Does not own: HTTP DTOs, transport string parsing, SQL queries, database row types, or process configuration.
-
-## Testing Notes
-
-- Exchange-rate behavior is covered through runtime-constructed boundary tests.
+- Owns: source-rate validation, lifecycle use cases, and signed USD derivation.
+- Does not own: provider loading, dense-rate cache construction, journal-record backfill, persistence, or transport mapping.

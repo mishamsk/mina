@@ -14,7 +14,7 @@ This repository is Mina, a local-first personal finance system implemented in Go
 - `docs/webui-theme-arcade-cabinet.md`: ground truth for the Arcade Cabinet web UI theme. Mandatory read before web UI theme or styling changes.
 - Domain semantics docs in `docs/`: ground truth for cross-cutting product behavior named by each document; read the owning semantic doc before planning or changing that behavior.
 - `api/openapi.yaml`: REST transport contract. Read before planning or changing REST behavior.
-- Package/module docs for backend and frontend: local technical contracts, side effects, ownership boundaries, and invariants. Read the relevant package docs before changing a package. Exported Go APIs that cross package boundaries must be documented in code. Add a short package markdown doc only for implicit contracts not obvious from API docs. If there are no implicit contracts, say `No implicit contracts.` Use `docs/package_doc_template.md`.
+- Package/module docs for backend and frontend: local technical contracts, side effects, ownership boundaries, and invariants. Read the relevant package docs before changing a package. Use the `write-package-docs` skill for every package touched by the work. Exported Go APIs that cross package boundaries must be documented in code.
 - All docs must stay short. Prefer bullets, with one liners. Prefer replacing old statements to adding net new. Link to owning docs instead of repeating details.
 - Documentation is evergreen. Never keep history, migration notes, or references to previous doc/code states.
 

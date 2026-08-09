@@ -2,20 +2,17 @@
 
 ## Purpose
 
-- Owns recurring-definition management, definition lifecycle actions, and the balanced recurring-definition editor.
+- Owns the `/recurring` definition-management UI, editor, and definition snapshot.
 
 ## Implicit Contracts
 
-- The page lists active definitions in FQN order and refreshes its snapshot after every definition mutation.
-- Confirm-next additionally invalidates transaction, account, overview, and featured-balance snapshots because it posts a generated transaction.
-- The editor submits complete balanced record shapes only; category controls exist only after a `flow` account is selected, while recurring schedule and pause-state controls remain locally owned.
+- Load every definition page in ascending FQN order; stale or unmounted loads must not replace the current snapshot.
+- Every definition mutation refreshes definitions and invalidates transaction/register views; confirm-next also refreshes account headers, featured balances, and Overview because it posts a transaction.
+- Confirm and defer stay unavailable while a definition is paused; defer is available only for interval schedules.
+- The editor writes a complete balanced record set and exposes categories only for `flow` records. If its follow-up pause/resume request fails after the write, keep the editor open and report the partial result.
+- Definition actions and editor closure restore focus to their opener, falling back to the feature restore target; the editor lets an open confirmation dialog handle Escape first.
 
 ## Boundaries
 
-- Owns: definition table/editor UI, definition action state, and definition snapshot refresh coordination.
-- Does not own: REST endpoint generation, recurring schedule semantics, transaction classification, or ledger lookup persistence.
-
-## Testing Notes
-
-- Frontend e2e tests cover seeded definition rendering, create/replace, lifecycle actions, balanced-save gating, row-mapped API errors, cancellation, and confirm-next.
-- Transaction-page e2e coverage verifies EXPECTED recurring lines remain available inline.
+- Owns definition table/editor behavior, action state, and refresh coordination.
+- Does not own recurring-occurrence review or actions, which belong to Transactions; REST endpoint generation, schedule semantics, accounting validation, and lookup persistence belong elsewhere.
