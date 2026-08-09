@@ -394,8 +394,13 @@ test-frontend-e2e *playwright_args: frontend-install build
     if [[ $# -eq 1 && $1 == "" ]]; then
         set --
     fi
+    while IFS= read -r mina_environment_name; do
+        if [[ $mina_environment_name == MINA_* ]]; then
+            unset "$mina_environment_name"
+        fi
+    done < <(compgen -e)
     # Bypass `pnpm exec`: its SIGINT forwarding can exit Playwright before web-server cleanup finishes.
-    exec mise exec -- node node_modules/@playwright/test/cli.js test "$@"
+    exec env MISE_NO_ENV=1 mise exec -- node node_modules/@playwright/test/cli.js test "$@"
 
 # Run a manual local REST responsiveness benchmark with default script settings.
 [group('dev-tooling')]
