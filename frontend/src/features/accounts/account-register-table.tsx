@@ -1,7 +1,7 @@
 import { Reload } from "pixelarticons/react";
 import { type KeyboardEvent, useRef } from "react";
 
-import type { DisplayAmount, JournalRecord, Transaction } from "@/api";
+import type { JournalRecord, Transaction } from "@/api";
 import { Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import {
@@ -69,10 +69,7 @@ const isInteractiveTarget = (
 const pageCount = (totalCount: number | undefined, pageSize: number): number =>
   totalCount === undefined ? 1 : Math.max(1, Math.ceil(totalCount / pageSize));
 
-const displayAmount = (
-  amount: string | null | undefined,
-  currency: string,
-): DisplayAmount | undefined =>
+const displayAmount = (amount: string | null | undefined, currency: string) =>
   amount === null || amount === undefined ? undefined : { amount, currency };
 
 const skeletonTemplate = (

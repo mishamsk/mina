@@ -1806,8 +1806,11 @@ type DemoSeedResponse struct {
 // DisplayAmount defines model for DisplayAmount.
 type DisplayAmount struct {
 	// Amount JSON string, not a JSON number. Signed DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
-	Amount   string `json:"amount"`
-	Currency string `json:"currency"`
+	Amount string `json:"amount"`
+
+	// AmountUsd JSON string or null, not a JSON number. Signed DECIMAL(18,8) derived from the same stored journal-record values and sign transformation as amount; null when any contributing record has no stored amount_usd or the aggregate exceeds the supported decimal range. Dry-run and date-free recurring-definition amounts are always null.
+	AmountUsd *string `json:"amount_usd"`
+	Currency  string  `json:"currency"`
 }
 
 // ErrorResponse defines model for ErrorResponse.

@@ -69,6 +69,8 @@ interface Notice {
   readonly message: string;
 }
 
+export type TransactionAmountDisplayMode = "native" | "usd";
+
 interface UseTransactionBrowserPageOptions {
   readonly filters: TransactionFilters;
   readonly readFiltersFromSearchParams?: (
@@ -91,6 +93,8 @@ export const useTransactionBrowserPage = ({
   const historyNavigationRef = useRef(false);
   const editModeDetailClosePendingRef = useRef(false);
   const [notice, setNotice] = useState<Notice | undefined>();
+  const [amountDisplayMode, setAmountDisplayMode] =
+    useState<TransactionAmountDisplayMode>("native");
   const [selectedTransactionsById, setSelectedTransactionsById] = useState<
     ReadonlyMap<number, Transaction>
   >(() => new Map());
@@ -194,6 +198,12 @@ export const useTransactionBrowserPage = ({
   const dismissNotice = useCallback(() => {
     setNotice(undefined);
   }, []);
+
+  const toggleAmountDisplayMode = () => {
+    setAmountDisplayMode((current) =>
+      current === "native" ? "usd" : "native",
+    );
+  };
 
   useEffect(() => {
     if (dateJumpLoading || !dateJumpFocusRestoreRef.current) {
@@ -739,6 +749,7 @@ export const useTransactionBrowserPage = ({
   );
 
   return {
+    amountDisplayMode,
     editMode,
     cancelDateJump,
     changeDateJumpValue,
@@ -775,6 +786,7 @@ export const useTransactionBrowserPage = ({
     setEditMode: setTransactionEditModeEnabled,
     showNotice,
     totalCount,
+    toggleAmountDisplayMode,
     togglePageTransactionSelection,
     toggleTransactionSelection,
     updateSelectedTransactionSnapshot,

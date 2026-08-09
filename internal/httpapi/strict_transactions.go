@@ -707,8 +707,9 @@ func bulkRecordOperationAPIResponse(response transactions.BulkRecordOperationRes
 
 func displayAmountAPIResponse(amount transactions.DisplayAmount) openapi.DisplayAmount {
 	return openapi.DisplayAmount{
-		Currency: amount.Currency,
-		Amount:   amount.Amount.String(),
+		Currency:  amount.Currency,
+		Amount:    amount.Amount.String(),
+		AmountUsd: nullableDecimalString(amount.AmountUSD),
 	}
 }
 

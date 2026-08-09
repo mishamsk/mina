@@ -62,6 +62,7 @@ func classifyTransaction(transaction Transaction) (Transaction, error) {
 		records = append(records, SemanticRecord{
 			Currency:       record.Currency,
 			Amount:         record.Amount,
+			AmountUSD:      record.AmountUSD,
 			AccountFQN:     record.AccountFQN,
 			AccountType:    record.AccountType,
 			CategoryID:     record.CategoryID,
@@ -479,7 +480,11 @@ func sumRecords(records []SemanticRecord, include func(int, SemanticRecord) bool
 		if !include(index, record) {
 			continue
 		}
-		next, err := addDisplayAmount(amounts, DisplayAmount{Currency: record.Currency, Amount: record.Amount})
+		next, err := addDisplayAmount(amounts, DisplayAmount{
+			Currency:  record.Currency,
+			Amount:    record.Amount,
+			AmountUSD: record.AmountUSD,
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -498,6 +503,16 @@ func addDisplayAmount(amounts []DisplayAmount, next DisplayAmount) ([]DisplayAmo
 			return nil, services.InvalidRequest("transaction display amount exceeds supported decimal range")
 		}
 		amounts[index].Amount = sum
+		if amounts[index].AmountUSD == nil || next.AmountUSD == nil {
+			amounts[index].AmountUSD = nil
+			return amounts, nil
+		}
+		amountUSD, err := amounts[index].AmountUSD.Add(*next.AmountUSD)
+		if err != nil {
+			amounts[index].AmountUSD = nil
+			return amounts, nil
+		}
+		amounts[index].AmountUSD = &amountUSD
 		return amounts, nil
 	}
 	amounts = append(amounts, next)
@@ -508,6 +523,10 @@ func negateAmounts(amounts []DisplayAmount) []DisplayAmount {
 	cloned := cloneDisplayAmounts(amounts)
 	for index := range cloned {
 		cloned[index].Amount = cloned[index].Amount.Neg()
+		if cloned[index].AmountUSD != nil {
+			amountUSD := cloned[index].AmountUSD.Neg()
+			cloned[index].AmountUSD = &amountUSD
+		}
 	}
 	return cloned
 }
@@ -516,6 +535,10 @@ func absAmounts(amounts []DisplayAmount) []DisplayAmount {
 	cloned := cloneDisplayAmounts(amounts)
 	for index := range cloned {
 		cloned[index].Amount = cloned[index].Amount.Abs()
+		if cloned[index].AmountUSD != nil {
+			amountUSD := cloned[index].AmountUSD.Abs()
+			cloned[index].AmountUSD = &amountUSD
+		}
 	}
 	return cloned
 }
@@ -675,5 +698,12 @@ func dominantRecordTitle(records []JournalRecord, include func(JournalRecord) bo
 }
 
 func cloneDisplayAmounts(amounts []DisplayAmount) []DisplayAmount {
-	return append([]DisplayAmount{}, amounts...)
+	cloned := append([]DisplayAmount{}, amounts...)
+	for index := range cloned {
+		if cloned[index].AmountUSD != nil {
+			amountUSD := *cloned[index].AmountUSD
+			cloned[index].AmountUSD = &amountUSD
+		}
+	}
+	return cloned
 }

@@ -8,7 +8,7 @@ import { currencyDisplayMarker } from "@/utils/currency";
 import { formatDecimalAmount } from "./format";
 
 interface AmountTextProps {
-  readonly amount: DisplayAmount;
+  readonly amount: Pick<DisplayAmount, "amount" | "currency">;
   readonly className?: string;
   readonly chip?: boolean;
   readonly positiveSign?: boolean;
@@ -88,6 +88,16 @@ export const AmountText = ({
     content
   );
 };
+
+export const UnavailableUsdAmountChip = () => (
+  <span
+    className="bg-card text-muted-foreground inline-flex h-7 max-w-full items-center justify-end overflow-visible border border-[var(--border-ink)] px-2 font-mono font-medium whitespace-nowrap tabular-nums shadow-[var(--shadow-chip)]"
+    data-testid="usd-amount-unavailable-chip"
+  >
+    <span aria-hidden="true">N/A</span>
+    <span className="sr-only">USD amount unavailable</span>
+  </span>
+);
 
 const AmountSeparator = () => <span className="whitespace-pre">{" / "}</span>;
 

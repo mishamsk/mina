@@ -344,6 +344,15 @@ charge is `spend` of the charge; cash back at a supermarket is `spend`.
 | `transfer` | Neutral primary amount. Moved amount shown separately. |
 | `mixed` | Shape amounts, with no synthetic total. |
 
+Every persisted display amount also carries a nullable USD equivalent derived
+from exactly the records contributing to its native amount and with the same
+sign transformation. Mina sums stored journal-record `amount_usd` values only;
+if any contributor is missing that stored value or the final aggregate is
+outside the supported decimal range, the display amount's `amount_usd` is null
+rather than partial or out of range. Dry-run classification and date-free
+recurring-definition amounts have no stored valuation and therefore expose no
+USD equivalent.
+
 Transaction titles use effective account display labels for directional,
 adjustment, and dominant-counterparty summaries. This presentation choice does
 not participate in record roles, shapes, classes, or amounts.

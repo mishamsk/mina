@@ -1,11 +1,6 @@
 import { EyeOff } from "pixelarticons/react";
 
-import type {
-  Account,
-  AccountBalance,
-  CreditLimitHistory,
-  DisplayAmount,
-} from "@/api";
+import type { Account, AccountBalance, CreditLimitHistory } from "@/api";
 import { FavoriteStarIcon } from "@/components/favorite-star-icon";
 import { Tooltip } from "@/components/tooltip";
 import { Badge } from "@/components/ui/badge";
@@ -31,7 +26,7 @@ const BalanceAmount = ({
   readonly amount: string;
   readonly currency: string;
 }) => {
-  const displayAmount: DisplayAmount = { amount, currency };
+  const displayAmount = { amount, currency };
   return (
     <AmountText
       amount={displayAmount}

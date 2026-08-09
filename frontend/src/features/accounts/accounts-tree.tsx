@@ -10,13 +10,7 @@ import {
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 
-import type {
-  Account,
-  AccountBalance,
-  AccountType,
-  DisplayAmount,
-  GroupState,
-} from "@/api";
+import type { Account, AccountBalance, AccountType, GroupState } from "@/api";
 import {
   apiErrorMessage,
   deleteLedgerAccountById,
@@ -184,7 +178,7 @@ const BalanceAmounts = ({
 }) => (
   <div className="flex min-w-0 flex-col items-end gap-1">
     {balances.map((balance) => {
-      const amount: DisplayAmount = {
+      const amount = {
         amount: balance.remaining_credit ?? balance.current_balance,
         currency: balance.currency,
       };

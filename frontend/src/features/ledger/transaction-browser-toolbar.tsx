@@ -1,9 +1,11 @@
+import { DollarSign } from "lucide-react";
 import {
   Calendar,
   Check,
   ChevronLeft,
   ChevronRight,
   Close,
+  Coins,
   Filter,
 } from "pixelarticons/react";
 import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
@@ -24,8 +26,10 @@ import {
 
 import { transactionClassLabel } from "./format";
 import { TransactionSearchInput } from "./transaction-search-input";
+import type { TransactionAmountDisplayMode } from "./use-transaction-browser-page";
 
 interface TransactionBrowserToolbarProps {
+  readonly amountDisplayMode: TransactionAmountDisplayMode;
   readonly amountSavePending: boolean;
   readonly editMode: boolean;
   readonly dateJumpLoading: boolean;
@@ -44,12 +48,14 @@ interface TransactionBrowserToolbarProps {
   readonly onSelectPage: () => void;
   readonly onSearchChange: (value: string) => void;
   readonly onSetEditMode: (enabled: boolean) => void;
+  readonly onToggleAmountDisplayMode: () => void;
   readonly onTransactionClassChange: (value: string) => void;
   readonly selectableCount: number;
   readonly selectedCount: number;
 }
 
 export const TransactionBrowserToolbar = ({
+  amountDisplayMode,
   amountSavePending,
   editMode,
   dateJumpLoading,
@@ -68,6 +74,7 @@ export const TransactionBrowserToolbar = ({
   onSelectPage,
   onSearchChange,
   onSetEditMode,
+  onToggleAmountDisplayMode,
   onTransactionClassChange,
   selectableCount,
   selectedCount,
@@ -178,7 +185,7 @@ export const TransactionBrowserToolbar = ({
           data-testid="transaction-browser-toolbar-row"
           className="flex animate-[toolbar-mode-swap_120ms_steps(2)] flex-wrap items-end gap-3 motion-reduce:animate-none"
         >
-          <div className="flex min-w-[16rem] flex-col gap-1">
+          <div className="flex min-w-[13rem] flex-col gap-1">
             <label
               htmlFor={`${idPrefix}-search`}
               className="font-heading text-xs font-semibold text-[var(--frame-muted)] uppercase"
@@ -288,6 +295,31 @@ export const TransactionBrowserToolbar = ({
           </div>
           {extraControls}
           <div className="flex h-9 items-end gap-3">
+            <AppTooltip
+              asChild
+              label={
+                amountDisplayMode === "usd"
+                  ? "Show native values"
+                  : "Show values in USD"
+              }
+            >
+              <Button
+                type="button"
+                variant="outline"
+                size="icon-lg"
+                aria-label="USD display mode"
+                aria-pressed={amountDisplayMode === "usd"}
+                className="aria-pressed:bg-[var(--table-header)]"
+                data-testid="transaction-amount-display-toggle"
+                onClick={onToggleAmountDisplayMode}
+              >
+                {amountDisplayMode === "usd" ? (
+                  <DollarSign aria-hidden="true" />
+                ) : (
+                  <Coins aria-hidden="true" />
+                )}
+              </Button>
+            </AppTooltip>
             <Button
               ref={editModeButtonRef}
               type="button"

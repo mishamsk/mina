@@ -103,8 +103,18 @@ test("transaction layouts balance localized date fit and description width", asy
   await page.mouse.move(0, 0);
   const toolbar = page.getByTestId("transaction-browser-toolbar-row");
   const toolbarBeforeDetail = await requiredBoundingBox(toolbar);
+  const amountDisplayToggle = page.getByTestId(
+    "transaction-amount-display-toggle",
+  );
+  const dateJumpInput = page.getByLabel("Go to day");
+  const amountDisplayToggleBeforeDetail =
+    await requiredBoundingBox(amountDisplayToggle);
+  const dateJumpInputBeforeDetail = await requiredBoundingBox(dateJumpInput);
+  expect(toolbarBeforeDetail.height).toBeLessThanOrEqual(56);
+  expect(amountDisplayToggleBeforeDetail.y).toBe(dateJumpInputBeforeDetail.y);
   const editModeButton = page.getByRole("button", { name: "Edit mode" });
   const editModeButtonBeforeDetail = await requiredBoundingBox(editModeButton);
+  const filterButton = page.getByRole("button", { name: "Open filters" });
   const firstRow = page.locator("[data-transaction-row='true']").first();
   await firstRow.focus();
   await firstRow.press("Enter");
@@ -118,7 +128,7 @@ test("transaction layouts balance localized date fit and description width", asy
   expect(
     boundingBoxesOverlap(
       await requiredBoundingBox(detailPanel),
-      editModeButtonAfterDetail,
+      await requiredBoundingBox(filterButton),
     ),
   ).toBe(true);
   await page.getByRole("button", { name: "Close transaction detail" }).click();

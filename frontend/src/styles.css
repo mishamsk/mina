@@ -501,7 +501,10 @@
 
     .transactions-table
       .transactions-amount-column
-      [data-testid="amount-chip"] {
+      :is(
+        [data-testid="amount-chip"],
+        [data-testid="usd-amount-unavailable-chip"]
+      ) {
       padding-right: 0 !important;
       padding-left: 0 !important;
       font-size: 0.75rem;

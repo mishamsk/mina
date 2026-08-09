@@ -208,6 +208,7 @@ export const TransactionsPage = () => {
         }
         toolbar={
           <TransactionBrowserToolbar
+            amountDisplayMode={browser.amountDisplayMode}
             amountSavePending={browser.pendingAmountSave}
             editMode={browser.editMode}
             dateJumpLoading={browser.dateJumpLoading}
@@ -231,6 +232,7 @@ export const TransactionsPage = () => {
             onSelectPage={browser.selectPageTransactions}
             onSearchChange={setSearchFilter}
             onSetEditMode={browser.setEditMode}
+            onToggleAmountDisplayMode={browser.toggleAmountDisplayMode}
             onTransactionClassChange={setTransactionClassFilter}
             selectableCount={browser.selectableTransactionCount}
             selectedCount={browser.selectedTransactionIds.size}
@@ -240,6 +242,7 @@ export const TransactionsPage = () => {
       <div className="grid min-h-0 min-w-0 flex-1 gap-6">
         <div className="flex min-h-0 min-w-0 flex-col gap-3">
           <TransactionBrowser
+            amountDisplayMode={browser.amountDisplayMode}
             editMode={browser.editMode}
             dateJumpAnchor={browser.dateJumpAnchor}
             errorMessage={browser.errorMessage}

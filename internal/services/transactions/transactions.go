@@ -311,10 +311,11 @@ const (
 	TransactionShapeTransfer   TransactionShapeType = "transfer"
 )
 
-// DisplayAmount is a signed display amount in one currency.
+// DisplayAmount is a signed native display amount with its stored-value USD equivalent when complete.
 type DisplayAmount struct {
-	Currency string
-	Amount   values.Decimal
+	Currency  string
+	Amount    values.Decimal
+	AmountUSD *values.Decimal
 }
 
 // ExchangeEffectiveRate is the derived rate encoded by the sold and bought exchange legs.
@@ -343,6 +344,7 @@ type Classification struct {
 type SemanticRecord struct {
 	Currency       string
 	Amount         values.Decimal
+	AmountUSD      *values.Decimal
 	AccountFQN     string
 	AccountType    accounts.AccountType
 	CategoryID     *int64

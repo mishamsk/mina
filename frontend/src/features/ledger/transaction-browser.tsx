@@ -12,6 +12,7 @@ import {
 } from "pixelarticons/react";
 import {
   type FocusEvent,
+  Fragment,
   type KeyboardEvent,
   useCallback,
   useEffect,
@@ -47,7 +48,7 @@ import {
 } from "@/store";
 import { localTodayISODate } from "@/utils/date";
 
-import { AmountText } from "./amount-text";
+import { AmountText, UnavailableUsdAmountChip } from "./amount-text";
 import {
   type EditModeSkipSummary,
   summarizeEditModeSkips,
@@ -93,8 +94,10 @@ import {
   focusTransactionRowFallback,
   transactionRowSelector,
 } from "./transaction-row-focus";
+import type { TransactionAmountDisplayMode } from "./use-transaction-browser-page";
 
 interface TransactionBrowserProps {
+  readonly amountDisplayMode: TransactionAmountDisplayMode;
   readonly editMode: boolean;
   readonly dateJumpAnchor?: {
     readonly date: string;
@@ -469,6 +472,7 @@ const isInteractiveTarget = (
 };
 
 export const TransactionBrowser = ({
+  amountDisplayMode,
   editMode,
   dateJumpAnchor,
   errorMessage,
@@ -1646,26 +1650,60 @@ export const TransactionBrowser = ({
                                 <MorePartsIndicator transaction={transaction} />
                               ) : null}
                               {amounts.map((amount, index) => (
-                                <AmountText
+                                <Fragment
                                   key={`${displayAmountKey(amount)}:${index}`}
-                                  amount={amount}
-                                  chip
-                                  overflowTooltip={hasMoreParts || !editMode}
-                                  className={cn(
-                                    "max-w-full",
-                                    hasMoreParts && "min-w-0",
-                                    amountDeemphasized &&
-                                      "text-muted-foreground bg-card",
+                                >
+                                  {!editMode && amountDisplayMode === "usd" ? (
+                                    amount.amount_usd === null ? (
+                                      <UnavailableUsdAmountChip />
+                                    ) : (
+                                      <AmountText
+                                        amount={{
+                                          amount: amount.amount_usd,
+                                          currency: "USD",
+                                        }}
+                                        chip
+                                        overflowTooltip
+                                        className={cn(
+                                          "max-w-full",
+                                          hasMoreParts && "min-w-0",
+                                          amountDeemphasized &&
+                                            "text-muted-foreground bg-card",
+                                        )}
+                                        positiveSign={
+                                          transaction.transaction_class !==
+                                            "transfer" &&
+                                          transaction.transaction_class !==
+                                            "currency_exchange"
+                                        }
+                                        tone="neutral"
+                                        truncate
+                                      />
+                                    )
+                                  ) : (
+                                    <AmountText
+                                      amount={amount}
+                                      chip
+                                      overflowTooltip={
+                                        hasMoreParts || !editMode
+                                      }
+                                      className={cn(
+                                        "max-w-full",
+                                        hasMoreParts && "min-w-0",
+                                        amountDeemphasized &&
+                                          "text-muted-foreground bg-card",
+                                      )}
+                                      positiveSign={
+                                        transaction.transaction_class !==
+                                          "transfer" &&
+                                        transaction.transaction_class !==
+                                          "currency_exchange"
+                                      }
+                                      tone="neutral"
+                                      truncate={hasMoreParts}
+                                    />
                                   )}
-                                  positiveSign={
-                                    transaction.transaction_class !==
-                                      "transfer" &&
-                                    transaction.transaction_class !==
-                                      "currency_exchange"
-                                  }
-                                  tone="neutral"
-                                  truncate={hasMoreParts}
-                                />
+                                </Fragment>
                               ))}
                             </>
                           )}

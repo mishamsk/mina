@@ -692,6 +692,10 @@ export type DisplayAmount = {
      * JSON string, not a JSON number. Signed DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
      */
     amount: string;
+    /**
+     * JSON string or null, not a JSON number. Signed DECIMAL(18,8) derived from the same stored journal-record values and sign transformation as amount; null when any contributing record has no stored amount_usd or the aggregate exceeds the supported decimal range. Dry-run and date-free recurring-definition amounts are always null.
+     */
+    amount_usd: string | null;
 };
 
 export type TransactionClass = 'spend' | 'income' | 'refund' | 'clawback' | 'transfer' | 'currency_exchange' | 'adjustment' | 'mixed';

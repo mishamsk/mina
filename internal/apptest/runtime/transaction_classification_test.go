@@ -211,7 +211,7 @@ func TestDerivedAccountingSemanticsWorkedExamples(t *testing.T) {
 			shapes: []expectedShape{{
 				shape: httpclient.TransactionShapeTypeExchange,
 				amounts: []httpclient.DisplayAmount{
-					{Currency: "USD", Amount: "-330.00000000"},
+					{Currency: "USD", Amount: "-330.00000000", AmountUsd: apptest.StringPtr("-330.00000000")},
 					{Currency: "EUR", Amount: "300.00000000"},
 				},
 				effectiveRate: &httpclient.ExchangeEffectiveRate{
@@ -236,8 +236,8 @@ func TestDerivedAccountingSemanticsWorkedExamples(t *testing.T) {
 				}
 			},
 			class:          httpclient.TransactionClassSpend,
-			primaryAmounts: displayAmounts("EUR", "-60.00000000"),
-			shapes:         []expectedShape{{shape: httpclient.TransactionShapeTypeSpend, amounts: displayAmounts("EUR", "-60.00000000")}},
+			primaryAmounts: displayAmountsWithoutUSD("EUR", "-60.00000000"),
+			shapes:         []expectedShape{{shape: httpclient.TransactionShapeTypeSpend, amounts: displayAmountsWithoutUSD("EUR", "-60.00000000")}},
 			roles:          []httpclient.RecordRole{httpclient.RecordRoleBalance, httpclient.RecordRoleExpense},
 		},
 		{
@@ -366,13 +366,13 @@ func TestCurrencyCountDoesNotClassifyExchange(t *testing.T) {
 	assertDerivedTransaction(t, *response.JSON201, workedExample{
 		class: httpclient.TransactionClassSpend,
 		primaryAmounts: []httpclient.DisplayAmount{
-			{Currency: "USD", Amount: "-10.00000000"},
+			{Currency: "USD", Amount: "-10.00000000", AmountUsd: apptest.StringPtr("-10.00000000")},
 			{Currency: "EUR", Amount: "-9.00000000"},
 		},
 		shapes: []expectedShape{{
 			shape: httpclient.TransactionShapeTypeSpend,
 			amounts: []httpclient.DisplayAmount{
-				{Currency: "USD", Amount: "-10.00000000"},
+				{Currency: "USD", Amount: "-10.00000000", AmountUsd: apptest.StringPtr("-10.00000000")},
 				{Currency: "EUR", Amount: "-9.00000000"},
 			},
 		}},
@@ -383,6 +383,109 @@ func TestCurrencyCountDoesNotClassifyExchange(t *testing.T) {
 			httpclient.RecordRoleExpense,
 		},
 	})
+}
+
+func TestPersistedDisplayAmountUSDAggregationAndNullPropagation(t *testing.T) {
+	client := newSharedClient(t)
+	fixture := newSemanticFixture(t, client)
+
+	completeRecords := []httpclient.CreateJournalRecordRequest{
+		semanticRecord(fixture.cashEUR.AccountId, "-72.00", "EUR", nil),
+		semanticRecord(fixture.lisbon.AccountId, "20.00", "EUR", &fixture.travel.CategoryId),
+		semanticRecord(fixture.lisbon.AccountId, "34.00", "EUR", &fixture.travel.CategoryId),
+		semanticRecord(fixture.jordan.AccountId, "18.00", "EUR", nil),
+	}
+	completeRecords[0].AmountUsd = apptest.StringPtr("-79.20")
+	completeRecords[1].AmountUsd = apptest.StringPtr("22.00")
+	completeRecords[2].AmountUsd = apptest.StringPtr("37.40")
+	completeRecords[3].AmountUsd = apptest.StringPtr("19.80")
+	complete, err := client.REST().CreateTransactionWithResponse(context.Background(), httpclient.CreateTransactionRequest{
+		InitiatedDate: apptest.Date("2024-07-10"),
+		Records:       completeRecords,
+	})
+	requireClientResponse(t, "create valued complex transaction", err, complete.StatusCode(), http.StatusCreated, complete.Body)
+	assertDerivedTransaction(t, *complete.JSON201, workedExample{
+		class:          httpclient.TransactionClassSpend,
+		primaryAmounts: displayAmountsWithUSD("EUR", "-54.00000000", "-59.40000000"),
+		shapes: []expectedShape{
+			{shape: httpclient.TransactionShapeTypeSpend, amounts: displayAmountsWithUSD("EUR", "-54.00000000", "-59.40000000")},
+			{shape: httpclient.TransactionShapeTypeTransfer, amounts: displayAmountsWithUSD("EUR", "-18.00000000", "-19.80000000")},
+		},
+		roles: []httpclient.RecordRole{
+			httpclient.RecordRoleBalance,
+			httpclient.RecordRoleExpense,
+			httpclient.RecordRoleExpense,
+			httpclient.RecordRoleBalance,
+		},
+	})
+
+	partialRecords := []httpclient.CreateJournalRecordRequest{
+		semanticRecord(fixture.cashEUR.AccountId, "-60.00", "EUR", nil),
+		semanticRecord(fixture.lisbon.AccountId, "40.00", "EUR", &fixture.travel.CategoryId),
+		semanticRecord(fixture.lisbon.AccountId, "20.00", "EUR", &fixture.travel.CategoryId),
+	}
+	partialRecords[0].AmountUsd = apptest.StringPtr("-66.00")
+	partialRecords[1].AmountUsd = apptest.StringPtr("44.00")
+	partial, err := client.REST().CreateTransactionWithResponse(context.Background(), httpclient.CreateTransactionRequest{
+		InitiatedDate: apptest.Date("2024-07-11"),
+		Records:       partialRecords,
+	})
+	requireClientResponse(t, "create partially valued transaction", err, partial.StatusCode(), http.StatusCreated, partial.Body)
+	assertDerivedTransaction(t, *partial.JSON201, workedExample{
+		class:          httpclient.TransactionClassSpend,
+		primaryAmounts: displayAmountsWithoutUSD("EUR", "-60.00000000"),
+		shapes:         []expectedShape{{shape: httpclient.TransactionShapeTypeSpend, amounts: displayAmountsWithoutUSD("EUR", "-60.00000000")}},
+		roles: []httpclient.RecordRole{
+			httpclient.RecordRoleBalance,
+			httpclient.RecordRoleExpense,
+			httpclient.RecordRoleExpense,
+		},
+	})
+}
+
+func TestPersistedDisplayAmountUSDOverflowIsUnavailable(t *testing.T) {
+	client := newSharedClient(t)
+	fixture := newSemanticFixture(t, client)
+	memo := "USD display aggregation overflow"
+	records := []httpclient.CreateJournalRecordRequest{
+		semanticRecord(fixture.cashEUR.AccountId, "-8000000000.00", "EUR", nil),
+		semanticRecord(fixture.lisbon.AccountId, "4000000000.00", "EUR", &fixture.travel.CategoryId),
+		semanticRecord(fixture.lisbon.AccountId, "4000000000.00", "EUR", &fixture.travel.CategoryId),
+	}
+	for index := range records {
+		records[index].Memo = &memo
+	}
+	records[1].AmountUsd = apptest.StringPtr("5080000000.00")
+	records[2].AmountUsd = apptest.StringPtr("5080000000.00")
+
+	created, err := client.REST().CreateTransactionWithResponse(context.Background(), httpclient.CreateTransactionRequest{
+		InitiatedDate: apptest.Date("2024-07-12"),
+		Records:       records,
+	})
+	requireClientResponse(t, "create transaction with overflowing USD display aggregation", err, created.StatusCode(), http.StatusCreated, created.Body)
+
+	want := workedExample{
+		class:          httpclient.TransactionClassSpend,
+		primaryAmounts: displayAmountsWithoutUSD("EUR", "-8000000000.00000000"),
+		shapes:         []expectedShape{{shape: httpclient.TransactionShapeTypeSpend, amounts: displayAmountsWithoutUSD("EUR", "-8000000000.00000000")}},
+		roles: []httpclient.RecordRole{
+			httpclient.RecordRoleBalance,
+			httpclient.RecordRoleExpense,
+			httpclient.RecordRoleExpense,
+		},
+	}
+	assertDerivedTransaction(t, *created.JSON201, want)
+
+	read, err := client.REST().GetTransactionWithResponse(context.Background(), created.JSON201.TransactionId)
+	requireClientResponse(t, "read transaction with overflowing USD display aggregation", err, read.StatusCode(), http.StatusOK, read.Body)
+	assertDerivedTransaction(t, *read.JSON200, want)
+
+	listed, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{Search: &memo})
+	requireClientResponse(t, "list transaction with overflowing USD display aggregation", err, listed.StatusCode(), http.StatusOK, listed.Body)
+	if len(listed.JSON200.Transactions) != 1 {
+		t.Fatalf("listed transactions = %d, want 1", len(listed.JSON200.Transactions))
+	}
+	assertDerivedTransaction(t, listed.JSON200.Transactions[0], want)
 }
 
 func TestCategoryRuleNamesOffendingRecords(t *testing.T) {
@@ -538,7 +641,7 @@ func TestClassifyTransactionDraft(t *testing.T) {
 		t,
 		"unbalanced draft primary amounts",
 		unbalanced.JSON200.PrimaryAmounts,
-		displayAmounts("USD", "-10.00000000"),
+		displayAmountsWithoutUSD("USD", "-10.00000000"),
 	)
 	if got := unbalanced.JSON200.Shapes; len(got) != 1 ||
 		got[0].Shape != httpclient.TransactionShapeTypeSpend {
@@ -548,7 +651,7 @@ func TestClassifyTransactionDraft(t *testing.T) {
 			t,
 			"unbalanced draft shape amounts",
 			got[0].Amounts,
-			displayAmounts("USD", "-10.00000000"),
+			displayAmountsWithoutUSD("USD", "-10.00000000"),
 		)
 	}
 
@@ -613,6 +716,25 @@ func TestClassifyTransactionDraft(t *testing.T) {
 	}
 }
 
+func TestRecurringDefinitionDisplayAmountsHaveNoUSDValuation(t *testing.T) {
+	client := newSharedClient(t)
+	refs := createRecurringDefinitionRefs(t, client, "RecurringDisplayAmountUSD")
+	created := createRecurringDefinition(t, client, recurringDefinitionRequest(
+		"RecurringDisplayAmountUSD:Monthly",
+		refs,
+		"-12.00",
+		"12.00",
+		intervalRule(1, "MONTH"),
+		"2024-07-01",
+	))
+	assertDisplayAmountsEqual(
+		t,
+		"date-free recurring display amounts",
+		created.JSON201.DisplayAmounts,
+		displayAmountsWithoutUSD("USD", "-12.00000000"),
+	)
+}
+
 func TestExchangeShorthand(t *testing.T) {
 	client := newSharedClient(t)
 	fixture := newSemanticFixture(t, client)
@@ -667,7 +789,7 @@ func TestExchangeShorthand(t *testing.T) {
 		shapes: []expectedShape{{
 			shape: httpclient.TransactionShapeTypeExchange,
 			amounts: []httpclient.DisplayAmount{
-				{Currency: "USD", Amount: "-110.00000000"},
+				{Currency: "USD", Amount: "-110.00000000", AmountUsd: apptest.StringPtr("-110.00000000")},
 				{Currency: "EUR", Amount: "100.00000000"},
 			},
 			effectiveRate: &httpclient.ExchangeEffectiveRate{
@@ -947,6 +1069,14 @@ func classificationRecord(accountID int64, amount string, currency string, categ
 }
 
 func displayAmounts(currency string, amount string) []httpclient.DisplayAmount {
+	return displayAmountsWithUSD(currency, amount, amount)
+}
+
+func displayAmountsWithUSD(currency string, amount string, amountUSD string) []httpclient.DisplayAmount {
+	return []httpclient.DisplayAmount{{Currency: currency, Amount: amount, AmountUsd: apptest.StringPtr(amountUSD)}}
+}
+
+func displayAmountsWithoutUSD(currency string, amount string) []httpclient.DisplayAmount {
 	return []httpclient.DisplayAmount{{Currency: currency, Amount: amount}}
 }
 
@@ -1009,10 +1139,19 @@ func assertDisplayAmountsEqual(t *testing.T, label string, got, want []httpclien
 		t.Fatalf("%s = %+v, want %+v", label, got, want)
 	}
 	for index := range want {
-		if got[index] != want[index] {
+		if got[index].Currency != want[index].Currency ||
+			got[index].Amount != want[index].Amount ||
+			!stringPointersEqual(got[index].AmountUsd, want[index].AmountUsd) {
 			t.Fatalf("%s[%d] = %+v, want %+v", label, index, got[index], want[index])
 		}
 	}
+}
+
+func stringPointersEqual(got, want *string) bool {
+	if got == nil || want == nil {
+		return got == nil && want == nil
+	}
+	return *got == *want
 }
 
 func effectiveRatesEqual(got, want *httpclient.ExchangeEffectiveRate) bool {

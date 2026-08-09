@@ -1529,6 +1529,9 @@ test("transactions filter toolbar suppresses open-control tooltips and supports 
   const nextDayButton = page.getByRole("button", { name: "Next day" });
   const todayButton = page.getByRole("button", { name: "Today" });
   const classFilter = page.getByLabel("Class");
+  const amountDisplayToggle = page.getByTestId(
+    "transaction-amount-display-toggle",
+  );
   const editModeButton = page.getByRole("button", { name: "Edit mode" });
   const filterToggle = page.getByRole("button", { name: "Open filters" });
   const filterTooltip = page
@@ -1571,6 +1574,7 @@ test("transactions filter toolbar suppresses open-control tooltips and supports 
   await expect(nextDayButton).toBeFocused();
   await tabTo(todayButton);
   await tabTo(classFilter);
+  await tabTo(amountDisplayToggle);
   await tabTo(editModeButton);
   await tabTo(filterToggle);
   await expect(filterTooltip).toBeVisible();

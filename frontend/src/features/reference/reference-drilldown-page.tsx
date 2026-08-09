@@ -365,6 +365,7 @@ export const ReferenceDrilldownPage = ({
   return (
     <div className="flex h-full min-h-0 flex-col gap-6">
       <TransactionBrowserToolbar
+        amountDisplayMode={browser.amountDisplayMode}
         amountSavePending={browser.pendingAmountSave}
         editMode={browser.editMode}
         dateJumpLoading={browser.dateJumpLoading}
@@ -406,6 +407,7 @@ export const ReferenceDrilldownPage = ({
         onSelectPage={browser.selectPageTransactions}
         onSearchChange={setSearchFilter}
         onSetEditMode={browser.setEditMode}
+        onToggleAmountDisplayMode={browser.toggleAmountDisplayMode}
         onTransactionClassChange={setTransactionClassFilter}
         selectableCount={browser.selectableTransactionCount}
         selectedCount={browser.selectedTransactionIds.size}
@@ -416,6 +418,7 @@ export const ReferenceDrilldownPage = ({
         tabIndex={-1}
       >
         <TransactionBrowser
+          amountDisplayMode={browser.amountDisplayMode}
           editMode={browser.editMode}
           dateJumpAnchor={browser.dateJumpAnchor}
           errorMessage={browser.errorMessage}

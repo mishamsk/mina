@@ -19,7 +19,7 @@ import {
   useState,
 } from "react";
 
-import type { DisplayAmount, JournalRecord, Transaction } from "@/api";
+import type { JournalRecord, Transaction } from "@/api";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
@@ -31,7 +31,7 @@ import { type LedgerLookupsSnapshot, openNewTemplateEditor } from "@/store";
 import { formatInstantTimestamp, localCivilDate } from "@/utils/date";
 
 import { AccountDisplayLabel } from "./account-display-label";
-import { AmountText } from "./amount-text";
+import { AmountText, UnavailableUsdAmountChip } from "./amount-text";
 import { ClassBadge } from "./class-badge";
 import {
   buildLookupMaps,
@@ -99,7 +99,7 @@ const formatFullCivilDate = (value: string): string =>
     dateStyle: "long",
   }).format(localCivilDate(value));
 
-const recordDisplayAmount = (record: JournalRecord): DisplayAmount => ({
+const recordDisplayAmount = (record: JournalRecord) => ({
   amount: record.amount,
   currency: record.currency,
 });
@@ -149,26 +149,50 @@ export const TransactionLifecycleStrip = ({
 };
 
 const DetailAmountList = ({
+  showUSDDisplayAmounts,
   transaction,
 }: {
+  readonly showUSDDisplayAmounts: boolean;
   readonly transaction: Transaction;
 }) => {
   const amounts = detailDisplayAmounts(transaction);
 
   return amounts.length > 0 ? (
-    <div className="flex flex-wrap justify-end gap-2">
-      {amounts.map((amount, index) => (
-        <AmountText
-          key={`${displayAmountKey(amount)}:${index}`}
-          amount={amount}
-          chip
-          positiveSign={
-            transaction.transaction_class !== "transfer" &&
-            transaction.transaction_class !== "currency_exchange"
-          }
-          transactionClass={transaction.transaction_class}
-        />
-      ))}
+    <div className="flex flex-wrap items-start justify-end gap-2">
+      {amounts.map((amount, index) => {
+        const positiveSign =
+          transaction.transaction_class !== "transfer" &&
+          transaction.transaction_class !== "currency_exchange";
+        return (
+          <div
+            key={`${displayAmountKey(amount)}:${index}`}
+            className="flex flex-col items-end gap-1"
+            data-testid="transaction-detail-amount-pair"
+          >
+            <AmountText
+              amount={amount}
+              chip
+              positiveSign={positiveSign}
+              transactionClass={transaction.transaction_class}
+            />
+            {showUSDDisplayAmounts && amount.currency !== "USD" ? (
+              amount.amount_usd === null ? (
+                <UnavailableUsdAmountChip />
+              ) : (
+                <AmountText
+                  amount={{
+                    amount: amount.amount_usd,
+                    currency: "USD",
+                  }}
+                  chip
+                  positiveSign={positiveSign}
+                  transactionClass={transaction.transaction_class}
+                />
+              )
+            ) : null}
+          </div>
+        );
+      })}
     </div>
   ) : (
     <span className="text-muted-foreground">No display amount</span>
@@ -606,6 +630,7 @@ export const TransactionDetailContent = ({
   onFilterMember,
   onFilterTag,
   recordTableVariant = "full",
+  showUSDDisplayAmounts = false,
   transaction,
 }: {
   readonly maps: LookupMaps;
@@ -613,6 +638,7 @@ export const TransactionDetailContent = ({
   readonly onFilterMember?: (memberId: number) => void;
   readonly onFilterTag?: (tagId: number) => void;
   readonly recordTableVariant?: "decluttered" | "full";
+  readonly showUSDDisplayAmounts?: boolean;
   readonly transaction: Transaction;
 }) => {
   const summaryMemo = lineMemo(transaction);
@@ -632,7 +658,10 @@ export const TransactionDetailContent = ({
             </p>
           ) : null}
         </div>
-        <DetailAmountList transaction={transaction} />
+        <DetailAmountList
+          showUSDDisplayAmounts={showUSDDisplayAmounts}
+          transaction={transaction}
+        />
       </header>
       {effectiveRate ? (
         <p
@@ -1179,6 +1208,7 @@ export const TransactionDetailPanel = ({
             maps={maps}
             onFilterCategory={onFilterCategory}
             recordTableVariant="decluttered"
+            showUSDDisplayAmounts
             transaction={transaction}
           />
         ) : null}

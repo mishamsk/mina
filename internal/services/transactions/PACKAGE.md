@@ -11,6 +11,7 @@
 - Account-scoped record search treats the path account ID as a target account and returns not found for missing or inactive accounts.
 - Create/replace infers missing `amount_usd` from the transaction initiated date and preserves explicit values.
 - Derived classification, category validity, and exchange exclusivity follow `docs/accounting-semantics.md`; this package owns enforcing those rules.
+- Persisted display amounts derive nullable USD values from the same contributing records and sign transformations as native amounts; one missing stored `amount_usd` or an out-of-range USD aggregation makes only that derived USD amount unavailable, while dry-run and recurring-definition display amounts remain null.
 - Transaction classification derives effective account display labels in memory from repository-joined FQNs and nullable overrides for directional, adjustment, and dominant-counterparty titles without changing semantic classification.
 - The transactions service owns hypothetical account-type-change validation by reclassifying every active transaction that references the account with the proposed type.
 - Spend, refund, income, and transfer shorthand use cases build ordinary same-currency transactions; Exchange resolves each single-currency side from its account, requires an explicit currency for each multi-currency side, and builds the four-record two-currency `system:exchange` form.

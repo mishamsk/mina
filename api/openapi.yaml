@@ -4849,6 +4849,7 @@ components:
       required:
         - currency
         - amount
+        - amount_usd
       properties:
         currency:
           type: string
@@ -4856,6 +4857,12 @@ components:
         amount:
           type: string
           description: JSON string, not a JSON number. Signed DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
+          pattern: ^-?[0-9]{1,10}(\.[0-9]{1,8})?$
+          maxLength: 20
+        amount_usd:
+          type: string
+          nullable: true
+          description: JSON string or null, not a JSON number. Signed DECIMAL(18,8) derived from the same stored journal-record values and sign transformation as amount; null when any contributing record has no stored amount_usd or the aggregate exceeds the supported decimal range. Dry-run and date-free recurring-definition amounts are always null.
           pattern: ^-?[0-9]{1,10}(\.[0-9]{1,8})?$
           maxLength: 20
     TransactionClass:
