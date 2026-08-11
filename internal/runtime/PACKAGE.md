@@ -12,6 +12,7 @@
 - Long-running apps alone load online authentication, expose embedded MCP at `/mcp`, and can start automatic operations. One-shot apps skip startup validation and automatic operations; migration apps validate after migration without authentication or operations.
 - Embedded MCP dispatches to the trusted REST handler, then receives MCP-specific API-key protection; it must not be built from the root composed handler.
 - Every app submits the initial dense exchange-rate cache rebuild as unrecorded, best-effort runner work. Exchange-rate loads rebuild that cache and backfill missing transaction `amount_usd` after every non-canceled attempt.
+- Built-in Frankfurter-file startup gives the initial cache read 15 minutes and retains the ordinary two-minute allowance to load safe progress afterward; API-only, injected, manual, and scheduled loads keep the ordinary short deadline.
 - Runtime resolves the accounting location, encryption key, and connection limit before delegating database open, migration, and read-only inspection mechanics to `store`.
 
 ## Boundaries

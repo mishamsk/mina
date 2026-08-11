@@ -73,6 +73,12 @@ func AlreadyDone(err error) error {
 // OperationFunc is one operation invocation body.
 type OperationFunc func(context.Context) error
 
+// Invocation describes one operation body and its total timeout across retries.
+type Invocation struct {
+	Run     OperationFunc
+	Timeout time.Duration
+}
+
 // Clock returns the current process time.
 type Clock interface {
 	Now() time.Time
@@ -80,14 +86,13 @@ type Clock interface {
 
 // Operation describes one registered background workflow.
 type Operation struct {
-	ID         operationruns.OperationID
-	Key        string
-	Run        OperationFunc
-	StartupRun OperationFunc
-	Startup    bool
-	Schedule   string
-	Timeout    time.Duration
-	MaxRetries uint
+	ID                operationruns.OperationID
+	Key               string
+	Invocation        Invocation
+	StartupInvocation *Invocation
+	Startup           bool
+	Schedule          string
+	MaxRetries        uint
 }
 
 // Runner executes registered background operations and owns unrecorded tasks.
@@ -110,11 +115,10 @@ type registeredOperation struct {
 	schedule cron.Schedule
 }
 
-func (op registeredOperation) withStartupRun() registeredOperation {
-	if op.StartupRun == nil {
-		return op
+func (op registeredOperation) withStartupInvocation() registeredOperation {
+	if op.StartupInvocation != nil {
+		op.Invocation = *op.StartupInvocation
 	}
-	op.Run = op.StartupRun
 
 	return op
 }
@@ -141,11 +145,21 @@ func (r *Runner) Register(op Operation) error {
 	if op.Key == "" {
 		op.Key = string(op.ID)
 	}
-	if op.Run == nil {
+	if op.Invocation.Run == nil {
 		return fmt.Errorf("operation %s run function is required", op.ID)
 	}
-	if op.Timeout <= 0 {
-		op.Timeout = defaultOperationTimeout
+	if op.Invocation.Timeout <= 0 {
+		op.Invocation.Timeout = defaultOperationTimeout
+	}
+	if op.StartupInvocation != nil {
+		if op.StartupInvocation.Run == nil {
+			return fmt.Errorf("operation %s startup run function is required", op.ID)
+		}
+		startup := *op.StartupInvocation
+		if startup.Timeout <= 0 {
+			startup.Timeout = op.Invocation.Timeout
+		}
+		op.StartupInvocation = &startup
 	}
 	var parsed cron.Schedule
 	var err error
@@ -184,7 +198,7 @@ func (r *Runner) Start() {
 	for _, op := range r.operations {
 		if op.Startup {
 			r.Submit(string(op.ID), func(ctx context.Context) error {
-				_, err := r.run(ctx, op.withStartupRun(), operationruns.RunTriggerStartup)
+				_, err := r.run(ctx, op.withStartupInvocation(), operationruns.RunTriggerStartup)
 				return err
 			})
 		}
@@ -355,7 +369,7 @@ func (r *Runner) finish(
 ) (operationruns.RunEnvelope, error) {
 	defer r.release(op.Key)
 
-	runCtx, cancel := context.WithTimeout(ctx, op.Timeout)
+	runCtx, cancel := context.WithTimeout(ctx, op.Invocation.Timeout)
 	defer cancel()
 	err := r.invokeWithRetry(runCtx, op)
 	if ctxErr := ctx.Err(); ctxErr != nil {
@@ -382,7 +396,7 @@ func (r *Runner) finish(
 func (r *Runner) invokeWithRetry(ctx context.Context, op registeredOperation) error {
 	maxTries := op.MaxRetries + 1
 	for attempt := uint(0); ; attempt++ {
-		err := runSafely(ctx, op.Run)
+		err := runSafely(ctx, op.Invocation.Run)
 		if err == nil || operationErrorKind(err) != ErrorKindTransient || attempt+1 >= maxTries {
 			return err
 		}

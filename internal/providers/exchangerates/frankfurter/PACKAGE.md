@@ -7,10 +7,11 @@
 ## Implicit Contracts
 
 - Rates always use USD as the base; targeted requests reject `C::` currencies as unsupported pairs.
-- Cache rows are validated Frankfurter NDJSON (`date`, USD `base`, three-letter uppercase `quote`, positive `rate`) in ascending date order. Quotes may be outside Mina's currency set and must be retained.
+- Cache population accepts Frankfurter NDJSON or `application/json` arrays, requires rows to arrive in ascending date order and every row to have a valid date, USD base, uppercase three-letter quote, and positive rate, then stores them as NDJSON. Quotes may be outside Mina's currency set and must be retained.
 - A malformed or empty existing cache is replaced only by a successful full refetch; an HTTP failure or malformed downloaded row leaves the existing cache untouched.
 - Cache extension refetches and replaces the latest cached date so its complete quote set is retained.
-- On an interrupted cache stream, install only fully received dates and still return the read error; the pending newest date is discarded because it may be incomplete.
+- On a mid-body interruption, install only dates before the pending newest date and return non-deadline read errors. A fully framed JSON array retains its final date if trailing-data validation is interrupted.
+- Cache downloads use the caller's context rather than a whole-response HTTP-client timeout. If its deadline expires after a complete date was received, population succeeds only when that safe prefix was installed.
 - Population makes one attempt. Cache installation never replaces a concurrently installed cache that is equally or more current; runtime owns retries.
 - HTTP and cache failures translate to the `exchangerateloading` provider error taxonomy so runtime can classify retryable failures.
 

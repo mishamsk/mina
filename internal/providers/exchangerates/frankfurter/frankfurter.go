@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"net/url"
 	"os"
@@ -25,8 +26,8 @@ const (
 	DefaultHistoryYears   = 10
 	DefaultCacheFileName  = "frankfurter-usd-rates.ndjson"
 	defaultRequestTimeout = 10 * time.Second
-	defaultCacheTimeout   = 90 * time.Second
 	ndjsonContentType     = "application/x-ndjson"
+	jsonContentType       = "application/json"
 	cacheIOBufferSize     = 64 * 1024
 	maxCacheLineBytes     = 4 * 1024 * 1024
 )
@@ -252,8 +253,12 @@ func PopulateCache(ctx context.Context, opts CacheOptions) error {
 		if !result.hasRows {
 			return err
 		}
-		if installErr := installFetchedCache(opts.Path, plan, result); installErr != nil {
+		installed, installErr := installFetchedCache(opts.Path, plan, result)
+		if installErr != nil {
 			return fmt.Errorf("%w; install partial Frankfurter cache: %v", err, installErr)
+		}
+		if installed && readErr.windowExpired {
+			return nil
 		}
 
 		return err
@@ -261,7 +266,7 @@ func PopulateCache(ctx context.Context, opts CacheOptions) error {
 	if plan.replaceExisting && !result.hasRows {
 		return nil
 	}
-	if err := installFetchedCache(opts.Path, plan, result); err != nil {
+	if _, err := installFetchedCache(opts.Path, plan, result); err != nil {
 		return err
 	}
 
@@ -403,6 +408,10 @@ func fetchCacheRowsToTemp(ctx context.Context, opts CacheOptions, from values.Ci
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
 		return cacheFetchResult{}, mapStatusError(response.StatusCode)
 	}
+	contentType := ndjsonContentType
+	if mediaType, _, parseErr := mime.ParseMediaType(response.Header.Get("Content-Type")); parseErr == nil && mediaType == jsonContentType {
+		contentType = jsonContentType
+	}
 
 	tmp, err := os.OpenFile(tempPath, os.O_WRONLY|os.O_APPEND, 0)
 	if err != nil {
@@ -450,65 +459,155 @@ func fetchCacheRowsToTemp(ctx context.Context, opts CacheOptions, from values.Ci
 		return nil
 	}
 
-	reader := bufio.NewReaderSize(response.Body, cacheIOBufferSize)
+	consume := func(row rateRow) error {
+		date, err := values.ParseCivilDate(row.Date)
+		if err != nil {
+			return fmt.Errorf("%w: parse Frankfurter cache date: %v", loading.ErrMalformedProviderResponse, err)
+		}
+		if pendingDate.Time().IsZero() {
+			pendingDate = date
+		}
+		if date.Time().After(pendingDate.Time()) {
+			if err := flushPending(); err != nil {
+				return err
+			}
+			pendingDate = date
+		} else if date.Time().Before(pendingDate.Time()) {
+			return fmt.Errorf("%w: Frankfurter cache rows are not ordered by date", loading.ErrMalformedProviderResponse)
+		}
+		pending = append(pending, row)
+
+		return nil
+	}
+	if err := readCacheResponse(ctx, contentType, response.Body, consume); err != nil {
+		var readErr cacheReadError
+		if !errors.As(err, &readErr) {
+			return cacheFetchResult{}, err
+		}
+		if readErr.rowsComplete {
+			if flushErr := flushPending(); flushErr != nil {
+				return cacheFetchResult{}, flushErr
+			}
+		}
+		if closeErr := closeTemp(true); closeErr != nil {
+			return result, fmt.Errorf("%w; finalize partial Frankfurter cache: %v", err, closeErr)
+		}
+
+		return result, err
+	}
+	if err := flushPending(); err != nil {
+		return cacheFetchResult{}, err
+	}
+	if err := closeTemp(true); err != nil {
+		return cacheFetchResult{}, err
+	}
+
+	return result, nil
+}
+
+func readCacheResponse(ctx context.Context, contentType string, reader io.Reader, consume func(rateRow) error) error {
+	if contentType == jsonContentType {
+		return readJSONCacheResponse(ctx, reader, consume)
+	}
+
+	buffered := bufio.NewReaderSize(reader, cacheIOBufferSize)
 	for {
 		if err := ctx.Err(); err != nil {
-			if closeErr := closeTemp(true); closeErr != nil {
-				return result, fmt.Errorf("%w; finalize partial Frankfurter cache: %v",
-					cacheReadError{err: mapProviderIOError("read Frankfurter cache response", err)}, closeErr)
-			}
-
-			return result, cacheReadError{err: mapProviderIOError("read Frankfurter cache response", err)}
+			return newCacheReadError(ctx, "read Frankfurter cache response", err)
 		}
-		line, err := reader.ReadBytes('\n')
+		line, err := buffered.ReadBytes('\n')
 		if err != nil && !errors.Is(err, io.EOF) {
-			if closeErr := closeTemp(true); closeErr != nil {
-				return result, fmt.Errorf("%w; finalize partial Frankfurter cache: %v",
-					cacheReadError{err: mapProviderIOError("read Frankfurter cache response", err)}, closeErr)
-			}
-
-			return result, cacheReadError{err: mapProviderIOError("read Frankfurter cache response", err)}
+			return newCacheReadError(ctx, "read Frankfurter cache response", err)
 		}
 		if len(line) > 0 {
 			row, rowErr := decodeRateRowLine(line)
 			if rowErr != nil {
-				return cacheFetchResult{}, rowErr
+				return rowErr
 			}
 			if row.Date != "" {
-				date, dateErr := values.ParseCivilDate(row.Date)
-				if dateErr != nil {
-					return cacheFetchResult{}, fmt.Errorf("%w: parse Frankfurter cache date: %v", loading.ErrMalformedProviderResponse, dateErr)
+				if err := consume(row); err != nil {
+					return err
 				}
-				if pendingDate.Time().IsZero() {
-					pendingDate = date
-				}
-				if date.Time().After(pendingDate.Time()) {
-					if err := flushPending(); err != nil {
-						return cacheFetchResult{}, err
-					}
-					pendingDate = date
-				} else if date.Time().Before(pendingDate.Time()) {
-					return cacheFetchResult{}, fmt.Errorf("%w: Frankfurter cache rows are not ordered by date", loading.ErrMalformedProviderResponse)
-				}
-				pending = append(pending, row)
 			}
 		}
-		if err == nil {
-			continue
+		if errors.Is(err, io.EOF) {
+			return nil
 		}
-		if err := flushPending(); err != nil {
-			return cacheFetchResult{}, err
-		}
-		if err := closeTemp(true); err != nil {
-			return cacheFetchResult{}, err
-		}
-
-		return result, nil
 	}
 }
 
+func readJSONCacheResponse(ctx context.Context, reader io.Reader, consume func(rateRow) error) error {
+	decoder := json.NewDecoder(reader)
+	decoder.UseNumber()
+	start, err := decoder.Token()
+	if err != nil {
+		return mapCacheJSONError(ctx, "decode Frankfurter cache response", err)
+	}
+	if delimiter, ok := start.(json.Delim); !ok || delimiter != '[' {
+		return fmt.Errorf("%w: Frankfurter JSON cache response is not an array", loading.ErrMalformedProviderResponse)
+	}
+	for decoder.More() {
+		if err := ctx.Err(); err != nil {
+			return newCacheReadError(ctx, "read Frankfurter cache response", err)
+		}
+		var row rateRow
+		if err := decoder.Decode(&row); err != nil {
+			return mapCacheJSONError(ctx, "decode Frankfurter cache row", err)
+		}
+		if err := validateRateRow(row); err != nil {
+			return err
+		}
+		if err := consume(row); err != nil {
+			return err
+		}
+	}
+	end, err := decoder.Token()
+	if err != nil {
+		return mapCacheJSONError(ctx, "decode Frankfurter cache response", err)
+	}
+	if delimiter, ok := end.(json.Delim); !ok || delimiter != ']' {
+		return fmt.Errorf("%w: Frankfurter JSON cache response has invalid framing", loading.ErrMalformedProviderResponse)
+	}
+	if err := decoder.Decode(&struct{}{}); err != nil && !errors.Is(err, io.EOF) {
+		mappedErr := mapCacheJSONError(ctx, "decode Frankfurter cache response", err)
+		var readErr cacheReadError
+		if errors.As(mappedErr, &readErr) {
+			readErr.rowsComplete = true
+			return readErr
+		}
+
+		return mappedErr
+	} else if err == nil {
+		return fmt.Errorf("%w: Frankfurter JSON cache response has trailing data", loading.ErrMalformedProviderResponse)
+	}
+
+	return nil
+}
+
+func mapCacheJSONError(ctx context.Context, label string, err error) error {
+	if ctx.Err() != nil || errors.Is(err, io.ErrUnexpectedEOF) || os.IsTimeout(err) {
+		return newCacheReadError(ctx, label, err)
+	}
+	var syntaxErr *json.SyntaxError
+	var typeErr *json.UnmarshalTypeError
+	if !errors.Is(err, io.EOF) && !errors.As(err, &syntaxErr) && !errors.As(err, &typeErr) {
+		return newCacheReadError(ctx, label, err)
+	}
+
+	return fmt.Errorf("%w: %s: %v", loading.ErrMalformedProviderResponse, label, err)
+}
+
 type cacheReadError struct {
-	err error
+	err           error
+	rowsComplete  bool
+	windowExpired bool
+}
+
+func newCacheReadError(ctx context.Context, label string, err error) cacheReadError {
+	return cacheReadError{
+		err:           mapProviderIOError(label, err),
+		windowExpired: errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded),
+	}
 }
 
 func (e cacheReadError) Error() string {
@@ -570,26 +669,27 @@ func validFrankfurterQuoteCode(code string) bool {
 	return true
 }
 
-func installFetchedCache(path string, plan cachePopulationPlan, result cacheFetchResult) error {
+func installFetchedCache(path string, plan cachePopulationPlan, result cacheFetchResult) (bool, error) {
 	if plan.replaceExisting {
 		ok, err := shouldReplaceCacheFile(path, result.latest)
 		if err != nil {
-			return fmt.Errorf("%w: inspect Frankfurter cache before install: %v", loading.ErrProviderUnavailable, err)
+			return false, fmt.Errorf("%w: inspect Frankfurter cache before install: %v", loading.ErrProviderUnavailable, err)
 		}
 		if !ok {
-			return nil
+			return false, nil
 		}
 		if err := os.Rename(plan.tempPath, path); err != nil {
-			return fmt.Errorf("%w: install Frankfurter cache: %v", loading.ErrProviderUnavailable, err)
+			return false, fmt.Errorf("%w: install Frankfurter cache: %v", loading.ErrProviderUnavailable, err)
 		}
 
-		return nil
+		return true, nil
 	}
-	if err := installCacheFile(plan.tempPath, path); err != nil {
-		return fmt.Errorf("%w: install Frankfurter cache: %v", loading.ErrProviderUnavailable, err)
+	installed, err := installCacheFile(plan.tempPath, path)
+	if err != nil {
+		return false, fmt.Errorf("%w: install Frankfurter cache: %v", loading.ErrProviderUnavailable, err)
 	}
 
-	return nil
+	return installed, nil
 }
 
 func shouldReplaceCacheFile(path string, incomingLatest values.CivilDate) (bool, error) {
@@ -737,15 +837,15 @@ func skipCacheLineBreaks(file *os.File, before int64) (int64, error) {
 	return 0, nil
 }
 
-func installCacheFile(tmpPath string, path string) error {
+func installCacheFile(tmpPath string, path string) (bool, error) {
 	// Link installs only when the destination is still missing; unlike Rename it
 	// cannot replace a cache another process installed while this one streamed.
 	if err := os.Link(tmpPath, path); err == nil {
-		return nil
+		return true, nil
 	} else if errors.Is(err, os.ErrExist) {
-		return nil
+		return false, nil
 	} else {
-		return err
+		return false, err
 	}
 }
 
@@ -842,7 +942,7 @@ func cacheHTTPClient(client *http.Client) *http.Client {
 		return client
 	}
 
-	return &http.Client{Timeout: defaultCacheTimeout}
+	return &http.Client{}
 }
 
 func mapRequestError(label string, err error) error {

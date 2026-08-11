@@ -636,14 +636,25 @@ func (a *App) Close() error {
 }
 
 func newAppBackgroundRunner(cfg appconfig.Config, opts Options, services appServices) (*background.Runner, error) {
+	const startupExchangeRateOperationTimeout = frankfurterInitialCacheLoadTimeout + exchangeRateLoadTimeout
+
 	runner := background.NewRunner(services.Operations, opts.clock(), opts.Operations.ErrorLog)
+	startupInvocation := background.Invocation{
+		Run:     startupExchangeRateLoad(cfg, opts, services.StartupExchangeRateLoading, services.ExchangeRateCache.Rebuild, services.Transactions.BackfillMissingAmountUSD),
+		Timeout: exchangeRateLoadTimeout,
+	}
+	if populatesFrankfurterCacheAtStartup(cfg, opts) {
+		startupInvocation.Timeout = startupExchangeRateOperationTimeout
+	}
 	op := background.Operation{
-		ID:         operationruns.ExchangeRateLoadingOperationID,
-		Key:        string(operationruns.ExchangeRateLoadingOperationID),
-		Run:        exchangeRateOperationRun(services.ExchangeRateLoading.Load, services.ExchangeRateCache.Rebuild, services.Transactions.BackfillMissingAmountUSD),
-		StartupRun: startupExchangeRateLoad(cfg, opts, services.StartupExchangeRateLoading, services.ExchangeRateCache.Rebuild, services.Transactions.BackfillMissingAmountUSD),
-		Timeout:    2 * time.Minute,
-		MaxRetries: 2,
+		ID:  operationruns.ExchangeRateLoadingOperationID,
+		Key: string(operationruns.ExchangeRateLoadingOperationID),
+		Invocation: background.Invocation{
+			Run:     exchangeRateOperationRun(services.ExchangeRateLoading.Load, services.ExchangeRateCache.Rebuild, services.Transactions.BackfillMissingAmountUSD),
+			Timeout: exchangeRateLoadTimeout,
+		},
+		StartupInvocation: &startupInvocation,
+		MaxRetries:        2,
 	}
 	if opts.automaticOperationsEnabled() && cfg.ExchangeRates.AutomaticLoadingEnabled {
 		op.Startup = true
@@ -654,10 +665,12 @@ func newAppBackgroundRunner(cfg appconfig.Config, opts Options, services appServ
 	}
 
 	backupOp := background.Operation{
-		ID:         operationruns.DatabaseBackupOperationID,
-		Key:        string(operationruns.DatabaseBackupOperationID),
-		Run:        databaseBackupOperationRun(services.Backup.Run),
-		Timeout:    2 * time.Minute,
+		ID:  operationruns.DatabaseBackupOperationID,
+		Key: string(operationruns.DatabaseBackupOperationID),
+		Invocation: background.Invocation{
+			Run:     databaseBackupOperationRun(services.Backup.Run),
+			Timeout: 2 * time.Minute,
+		},
 		MaxRetries: 0,
 	}
 	if opts.automaticOperationsEnabled() && cfg.Backups.File.ScheduleUTC != "" {
@@ -680,15 +693,30 @@ func startupExchangeRateLoad(
 	backfill func(context.Context) error,
 ) background.OperationFunc {
 	return func(ctx context.Context) error {
-		if opts.Dependencies.StartupExchangeRateProviderFactory == nil &&
-			exchangeRateStartupProvider(cfg) == "frankfurter_file" {
-			if err := ensureFrankfurterCache(ctx, cfg, opts); err != nil {
+		if populatesFrankfurterCacheAtStartup(cfg, opts) {
+			cacheCtx, cancelCache := context.WithTimeout(ctx, frankfurterInitialCacheLoadTimeout)
+			err := ensureFrankfurterCache(cacheCtx, cfg, opts)
+			cancelCache()
+			if err != nil {
 				return classifyExchangeRateOperationError(err)
 			}
 		}
 
-		return runExchangeRateLoadWithBackfill(ctx, loader.Load, rebuild, backfill)
+		loadCtx, cancelLoad := context.WithTimeout(ctx, exchangeRateLoadTimeout)
+		defer cancelLoad()
+
+		return runExchangeRateLoadWithBackfill(loadCtx, loader.Load, rebuild, backfill)
 	}
+}
+
+const (
+	exchangeRateLoadTimeout            = 2 * time.Minute
+	frankfurterInitialCacheLoadTimeout = 15 * time.Minute
+)
+
+func populatesFrankfurterCacheAtStartup(cfg appconfig.Config, opts Options) bool {
+	return opts.Dependencies.StartupExchangeRateProviderFactory == nil &&
+		exchangeRateStartupProvider(cfg) == "frankfurter_file"
 }
 
 func exchangeRateOperationRun(

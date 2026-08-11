@@ -9,6 +9,7 @@
 - `Close` rejects new work, cancels the runner context, and joins accepted work; callers must close the runner before resources used by its work.
 - Manual triggers record their initial run with the request context; when accepted, the body runs on the runner context, so request cancellation does not stop it.
 - Startup, scheduled, and manual invocations share a key-based no-overlap guard; a contender records a skipped run, and the guard remains held through its terminal status write.
+- Default and optional startup invocations pair their run function with one timeout budget shared by all retry attempts.
 - A run records one invocation despite retries. Only `Transient` errors retry (`MaxRetries + 1` attempts); cancellation or deadline errors record cancellation, `AlreadyDone` records success, and other errors record failure.
 - Runner shutdown can leave a started operation without a terminal status because canceled work does not write one.
 - Schedules use the runner clock in UTC and accept only five-field cron expressions.

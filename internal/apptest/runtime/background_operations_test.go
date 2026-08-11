@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	goruntime "runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -325,6 +326,8 @@ func TestBackgroundOperationExpectedBehavior(t *testing.T) {
 		)
 		refetched := frankfurterCacheRow("2024-04-02", "EUR", "0.93000000") +
 			frankfurterCacheRow("2026-04-01", "EUR", "1.09000000")
+		jsonRefetched := "[" + strings.TrimSpace(frankfurterCacheRow("2024-04-02", "EUR", "0.93000000")) + "," +
+			strings.TrimSpace(frankfurterCacheRow("2026-04-01", "EUR", "1.09000000")) + "]"
 
 		client := newSharedClient(
 			t,
@@ -333,8 +336,8 @@ func TestBackgroundOperationExpectedBehavior(t *testing.T) {
 			apptest.WithClock(clock),
 			apptest.WithOperationsEnabled(true),
 			apptest.WithExchangeRateLoading(true),
-			apptest.WithFrankfurterCacheHTTPClient(cacheHTTPClient(func(_ *http.Request) io.ReadCloser {
-				return io.NopCloser(bytes.NewBufferString(refetched))
+			apptest.WithFrankfurterCacheHTTPClient(cacheHTTPClientWithContentType("application/json", func(_ *http.Request) io.ReadCloser {
+				return io.NopCloser(bytes.NewBufferString(jsonRefetched))
 			})),
 		)
 		status := client.PollExchangeRateLoadingStatusRevision(1)
@@ -439,12 +442,47 @@ func TestBackgroundOperationExpectedBehavior(t *testing.T) {
 		assertNoFrankfurterCacheTemps(t, cacheDir)
 	})
 
+	t.Run("startup accepts CDN JSON and keeps it when the cache read expires", func(t *testing.T) {
+		schema := fmt.Sprintf("startup_exchange_rate_loading_timed_out_cache_%d", time.Now().UnixNano())
+		cacheDir := filepath.Join(t.TempDir(), "mina")
+		clock := apptest.NewFakeClock(apptest.Timestamp("2026-04-01T12:00:00Z"))
+		seedExchangeRateLoadingTransaction(t, schema, clock)
+		cacheClient := cacheHTTPClientWithContentType("application/json", func(request *http.Request) io.ReadCloser {
+			return pipeCacheBody(func(w *io.PipeWriter) {
+				writePipeString(w, "["+frankfurterCacheRow("2024-04-02", "EUR", "0.93000000")+",")
+				writePipeString(w, frankfurterCacheRow("2025-04-01", "EUR", "1.01000000")+",")
+				writePipeString(w, `{"date":"2026-04-01","base":"USD"`)
+				<-request.Context().Done()
+				_ = w.CloseWithError(request.Context().Err())
+			})
+		})
+		cacheClient.Timeout = 50 * time.Millisecond
+
+		client := newSharedClient(
+			t,
+			apptest.WithAccountingSchema(schema),
+			apptest.WithCacheDir(cacheDir),
+			apptest.WithClock(clock),
+			apptest.WithOperationsEnabled(true),
+			apptest.WithExchangeRateLoading(true),
+			apptest.WithFrankfurterCacheHTTPClient(cacheClient),
+		)
+		status := client.PollExchangeRateLoadingStatusRevision(1)
+		if status.LastSuccess == nil || !*status.LastSuccess {
+			t.Fatalf("timed-out cache startup status = %+v, want successful startup run", status)
+		}
+		assertFrankfurterCache(t, cacheDir, frankfurterCacheRow("2024-04-02", "EUR", "0.93000000"))
+		assertExchangeRateRateOnDate(t, client, "USD", "EUR", "2024-04-02", "0.93000000")
+		assertNoFrankfurterCacheTemps(t, cacheDir)
+	})
+
 	t.Run("slow cache stream installs a final cache", func(t *testing.T) {
 		schema := fmt.Sprintf("startup_exchange_rate_loading_slow_cache_%d", time.Now().UnixNano())
 		cacheDir := filepath.Join(t.TempDir(), "mina")
 		clock := apptest.NewFakeClock(apptest.Timestamp("2026-04-01T12:00:00Z"))
 		seedExchangeRateLoadingTransaction(t, schema, clock)
 		blocked := make(chan struct{})
+		requestDeadlineRemaining := make(chan time.Duration, 1)
 		release := make(chan struct{})
 
 		client := newSharedClient(
@@ -455,6 +493,12 @@ func TestBackgroundOperationExpectedBehavior(t *testing.T) {
 			apptest.WithOperationsEnabled(true),
 			apptest.WithExchangeRateLoading(true),
 			apptest.WithFrankfurterCacheHTTPClient(cacheHTTPClient(func(request *http.Request) io.ReadCloser {
+				deadline, ok := request.Context().Deadline()
+				if ok {
+					requestDeadlineRemaining <- time.Until(deadline)
+				} else {
+					requestDeadlineRemaining <- 0
+				}
 				return pipeCacheBody(func(w *io.PipeWriter) {
 					writePipeString(w, frankfurterCacheRow("2024-04-02", "EUR", "0.93000000"))
 					close(blocked)
@@ -469,6 +513,9 @@ func TestBackgroundOperationExpectedBehavior(t *testing.T) {
 			})),
 		)
 		waitForChannel(t, blocked, "cache stream to pause")
+		if remaining := <-requestDeadlineRemaining; remaining < 14*time.Minute || remaining > 15*time.Minute {
+			t.Fatalf("startup cache request deadline remaining = %s, want approximately 15m", remaining)
+		}
 		close(release)
 		status := client.PollExchangeRateLoadingStatusRevision(1)
 		if status.LastSuccess == nil || !*status.LastSuccess {
@@ -816,12 +863,20 @@ func (f cacheRoundTripFunc) RoundTrip(request *http.Request) (*http.Response, er
 }
 
 func cacheHTTPClient(body func(*http.Request) io.ReadCloser) *http.Client {
+	return cacheHTTPClientWithContentType("", body)
+}
+
+func cacheHTTPClientWithContentType(contentType string, body func(*http.Request) io.ReadCloser) *http.Client {
 	return &http.Client{
 		Transport: cacheRoundTripFunc(func(request *http.Request) (*http.Response, error) {
+			header := make(http.Header)
+			if contentType != "" {
+				header.Set("Content-Type", contentType)
+			}
 			return &http.Response{
 				StatusCode: http.StatusOK,
 				Body:       body(request),
-				Header:     make(http.Header),
+				Header:     header,
 				Request:    request,
 			}, nil
 		}),
