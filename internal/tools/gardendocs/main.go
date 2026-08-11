@@ -35,6 +35,8 @@ const (
 	kindGoPackage       targetKind = "Go package"
 	kindGoPackageFolder targetKind = "Go package folder"
 	kindProjectState    targetKind = "project state"
+	kindWebUIDesign     targetKind = "web UI design"
+	kindWebUITheme      targetKind = "web UI theme"
 )
 
 type options struct {
@@ -341,6 +343,8 @@ func loadPromptTemplates(root string) (promptTemplates, error) {
 		kindGoPackage:       "docs/agents/garden/go-package.md",
 		kindGoPackageFolder: "docs/agents/garden/go-package-folder.md",
 		kindProjectState:    "docs/agents/garden/project-state.md",
+		kindWebUIDesign:     "docs/agents/garden/webui-design.md",
+		kindWebUITheme:      "docs/agents/garden/webui-theme.md",
 	}
 	templates := make(promptTemplates, len(paths))
 	for kind, path := range paths {
@@ -460,15 +464,22 @@ func selectTargets(root string, graph projectGraph, limit *int) ([]gardenTarget,
 		eligible = eligible[:*limit]
 	}
 
-	targets := make([]gardenTarget, 0, len(eligible)+1)
-	stateGardened, err := lastCommitWasGardening(root, "PROJECT_STATE.md")
-	if err != nil {
-		return nil, selectionSummary{}, err
+	dedicated := []gardenTarget{
+		{path: "PROJECT_STATE.md", kind: kindProjectState},
+		{path: "docs/webui-design.md", kind: kindWebUIDesign},
+		{path: "docs/webui-theme-arcade-cabinet.md", kind: kindWebUITheme},
 	}
-	if stateGardened {
-		summary.sentinelSkipped++
-	} else {
-		targets = append(targets, gardenTarget{path: "PROJECT_STATE.md", kind: kindProjectState})
+	targets := make([]gardenTarget, 0, len(eligible)+len(dedicated))
+	for _, target := range dedicated {
+		gardened, err := lastCommitWasGardening(root, target.path)
+		if err != nil {
+			return nil, selectionSummary{}, err
+		}
+		if gardened {
+			summary.sentinelSkipped++
+			continue
+		}
+		targets = append(targets, target)
 	}
 	targets = append(targets, eligible...)
 	summary.selected = len(targets)

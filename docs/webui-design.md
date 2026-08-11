@@ -9,7 +9,7 @@ Ownership boundaries:
 - `docs/hierarchy-semantics.md` owns group/leaf hierarchy semantics, invariants, and restructuring rules.
 - `SCOPE.md` owns durable product boundaries; Kata owns planned work and sequencing.
 - `api/openapi.yaml` owns API contracts.
-- Visual styling — themes, color palettes, typography, spacing values, radii, motion aesthetics, iconography — is out of scope and owned by theme specifications; the base theme is `docs/webui-theme-arcade-cabinet.md`. This document stays theme-agnostic; multiple themes are planned, so structure and behavior must not depend on any one visual style.
+- Visual styling — themes, color palettes, typography, spacing values, radii, motion aesthetics, iconography — is out of scope and owned by theme specifications; the base theme is `docs/webui-theme-arcade-cabinet.md`. This document stays theme-agnostic, so structure and behavior must not depend on any one visual style.
 
 ## Product Stance
 
@@ -28,7 +28,7 @@ Primary usage patterns, most to least frequent; every design decision favors the
 
 ### Progressive disclosure
 
-Every transaction surface presents exactly two layers. This doctrine applies to all current and future screens.
+Every transaction surface presents exactly two layers.
 
 - Transaction line: one row per transaction showing the server-derived transaction class and display amount per `docs/accounting-semantics.md`. This is the default everywhere. Multi-part transactions stay single-height (transfer: the moved amount; exchange: the sold-side amount only; more than one shape: one identifiable primary amount or none plus a bare `+` more-parts indicator, with complete amounts in detail and never a synthetic total) — there is no separate shape-summary view between the line and the records.
 - Transaction detail: the read-only full balanced record table with accounts, signed amounts, categories, tags, members, statuses, and dates. Row activation opens this URL-addressable side panel; structural editing is an explicit detail or row action through the full transaction editor.
@@ -76,7 +76,7 @@ Structure and navigation only; how any of it looks is owned by the theme specifi
 
 ## Command Palette
 
-A launcher-style command palette (VS Code / Spotlight pattern) is a core Phase 2 surface, available everywhere via a global shortcut. It serves:
+A launcher-style command palette (VS Code / Spotlight pattern) is available everywhere via a global shortcut. It serves:
 
 - Navigation: jump to any page and any entity page by typed name — accounts, groups, categories, tags, members, templates.
 - Entry: "new spend / income / refund / transfer / exchange" commands; typing a template name starts a prefilled entry. Both open the transaction editor modal in place — no navigation.
@@ -151,7 +151,6 @@ Canonical rendering rules; every screen uses these so the product reads as one s
 - Lists show `initiated_date` as absolute dates: `Jun 30` in the current year, `Jun 30, 2025` otherwise. No relative dates in tables.
 - All dates and times display in the browser's local timezone. Civil-date logic — entry default "today", current-year formatting, date grouping and comparisons — uses local time, never UTC calendar dates. Civil dates stay date-only in storage; timestamp fields stay UTC.
 - Expected transactions and active pending balance records carry visible indicators and de-emphasized amounts; posted needs no marker; cancelled transactions render struck-through and de-emphasized. Mixed settlement is a transaction-level indicator, and active transactions without balance records carry no settlement marker.
-- Unreconciled records show a small status indicator (reserved for Phase 5 import workflows; hidden until relevant data exists).
 
 ### Hidden entities and members
 
@@ -220,20 +219,19 @@ Canonical rendering rules; every screen uses these so the product reads as one s
 - Destructive actions (tombstone deletes) require a confirmation dialog naming the object and the consequence. Successful mutations show a confirmation toast; mutations refresh affected snapshots per the frontend-architecture refresh rules.
 - Empty states explain what the screen will show and offer the primary action when the screen owns one; account registers and reference drill-downs do not repeat generic transaction entry. Error states show a plain-language message with the machine-readable API error expandable underneath.
 
-## Screen Inventory
+## Screen Specifications
 
-Each screen below lists purpose, layout, behavior, primary data sources, and phase.
+Each screen below defines its purpose, layout, behavior, and primary data sources.
 
-### 1. Overview (dashboard) — Phase 2
+### Overview
 
 - Purpose: recent household flow and current balances at a glance, plus a pulse of recent activity. The landing page. Report semantics are owned by [household flow reporting](household-flow-reporting.md).
 - Flow report: the first content row is the shared configurable household-flow report. Its controls are embedded in the visualization: a small trend selector sits inside the graph's upper-right; the contributor checklist footer places named-series minus/plus controls at left and an arcade-style Accounts/Categories toggle at right; below the x-axis, a Month/Year toggle sits under the y-axis labels and precedes one sliding window whose handles resize the range and move its final-period anchor into the past. Its available bounds come from the separate accounting-history range read. The visualization places the checklist at roughly one quarter width before the graph on wide screens; on narrow screens the graph comes first and the checklist follows beneath it. The browser loads no accounting rows or transaction preview for this report.
 - Balances: `owned` and `party` accounts grouped by FQN root prefix (`banks`, `cash`, `people`, …), each group listing account display labels with full-FQN tooltips, currency, and primary standing; group subtotal as `≈ USD`. `party` groups read as amounts owed to or by the household, never as household funds. Prominent accounts surface on top. Accounts with a current credit limit lead with server-derived remaining credit; all others lead with current balance.
 - Month pulse: current-month spend and income totals as plain numbers beneath balances.
 - Recent activity: the latest classified transaction lines, linking into Transactions.
-- Later phases add richer summaries (Phase 3) and budget status (Phase 4) — as additions, not a redesign.
 
-### 2. Transactions — Phase 2 (core screen)
+### Transactions
 
 - Purpose: scan, search, slice, and edit all activity.
 - One list: classified transaction lines from the shared browser — no separate records mode. Row activation opens URL-addressable read-only detail.
@@ -242,7 +240,7 @@ Each screen below lists purpose, layout, behavior, primary data sources, and pha
 - Edit mode provides selection-based quick changes through its in-layout dock plus selection-independent eligible amount inputs.
 - Transaction detail (URL-addressable, side panel over the list): class badge, counterparty title, display amounts, lifecycle strip, record table, metadata (source, created). Record rows show only role glyph, Account, Amount, and the full-path Category chip; account display labels link to registers and expose their FQNs in tooltips, while Category keeps its filter behavior. The panel is read-only; values change only through explicit footer actions. Row actions and detail footers share one applicability matrix: active transactions offer Edit, Duplicate, and Delete, with Split additionally available for server-classified spend/income; wholly pending active transactions additionally offer adjacent Post and Cancel; cancelled transactions offer Duplicate, Restore, and Delete; expected occurrences offer only Confirm and Dismiss. Active and cancelled transactions additionally offer Create template. Post opens a confirmation with the current local date and time prefilled and editable, then atomically settles every pending balance record at that instant, retains pending timestamps, and refreshes the row, open detail, balances, and references. Transaction rows themselves are the only detail-opening affordance. Edit, Duplicate, and Split open the transaction editor modal over the panel; the panel stays open beneath it and refreshes after save. The detail view shows everything the summary line truncates or hides. The lifecycle strip directly under the panel header shows `Initiated` plus the civil `initiated_date`, followed by `expected` or `cancelled` lifecycle when applicable; otherwise it shows `pending` for pending or mixed active transactions. Posted and no-balance active transactions show no status word. Detail-record activation (click, Enter, or Space; `aria-expanded`) toggles a read-only plain-text disclosure listing the full initiated date, derived Pending/Posted settlement and each stored pending and/or posted timestamp for owned/party records only, role, source, tag FQNs, member name, and the untruncated memo. Flow/system records show no settlement or lifecycle-date affordance, and Created stays in metadata.
 
-### 3. Transaction entry — Phase 2
+### Transaction entry
 
 - Surface: one centered modal editor, app-shell-owned and route-independent — the single surface for create, edit, split, and duplicate, opened in place from every entry point with no navigation. Stable stage frame, wide enough for the full journal grid at near-full viewport height; header and submit footer always pinned; the body is the single scroll region; content growth and validation errors never resize or move the frame. The underlying page stays visible behind the scrim and live-updates as entries save.
 - Entry points (all open the same modal): the Transactions page-header and empty-state "New transaction" actions; the global `n` shortcut; command-palette entry commands and template-name prefills; template Use actions; and detail-panel and row Edit / Duplicate / Split. Opening exits transaction Edit mode.
@@ -265,7 +263,7 @@ Each screen below lists purpose, layout, behavior, primary data sources, and pha
 - Validation: inline on blur; API errors map onto the offending fields/rows; the pinned footer shows the general error strip and, when errors sit off-screen, a compact attention strip that scrolls to and focuses the first offending field. Advanced save stays disabled until every currency balances. Errors never close the modal or lose entered data.
 - Responsive: wide screens — centered stage with gutters and the rail; medium — stage without the rail (footer recap); narrow — full-screen takeover with header/footer pinned and the Advanced grid scrolling horizontally inside the body only.
 
-### 4. Account and group pages — Phase 2
+### Account and group pages
 
 - Purpose: one account's (or account group's) activity and standing; the drill-down target from Overview, the balance strip, and Accounts.
 - Account page header: effective display label with a full-FQN tooltip, account type badge, currency mode, labeled flat favorite toggle, account standing, credit limit with history (when present), external link metadata, hidden marker. With a current effective limit, standing leads with `Remaining credit` and retains `Full balance`, `Posted balance`, and `Credit limit`; otherwise it retains `Current` and `Posted`. Fixed system accounts replace mutation controls with a read-only indicator.
@@ -274,7 +272,7 @@ Each screen below lists purpose, layout, behavior, primary data sources, and pha
 - Running balance: a per-record `Balance` column, shown in date-ordered views in either direction and hidden whenever filters, search, or non-chronological sort would make it misleading. Individual account registers add a separate `Remaining credit` column only when the API supplies both values; group registers remain unchanged. Both numeric columns are right-aligned and single-line; at phone width, credit-register rows stack identity/date above labeled Amount, Balance, and Remaining values without horizontal panning.
 - Group pages: every non-leaf FQN node is a page — subtotal balances of child `owned` and `party` accounts plus a combined register across the whole prefix (e.g. `banks:Chase:*`), which naturally includes the group's `flow` accounts (fees, interest) per the prefix-grouping semantics.
 
-### 5. Accounts (chart of accounts) — Phase 2
+### Accounts
 
 - Purpose: manage the unified chart of accounts and enter registers.
 - Layout: tree table grouped by FQN hierarchy; account leaves show their full FQN followed by a custom display-label override in parentheses when set, while implicit groups show their FQN path. Columns: name (path-indented), type badge, currency (ISO/crypto code for single-currency, a clear `Multi-currency` chip for `NULL`), balance (`owned` and `party` accounts), and the trailing actions column. Hidden state renders as the standard eye-off indicator on the row, not as its own wide column. Rows link to account/group pages.
@@ -284,7 +282,7 @@ Each screen below lists purpose, layout, behavior, primary data sources, and pha
 - Credit-limit history for eligible card accounts is managed from the account's edit panel or page header. It is available only for single-currency accounts, and every history value displays in the owning account's currency without a limit-currency field. Until an account has its first credit-limit entry, the section renders as a single "Add credit limit" button; activating it reveals the full credit-limit editor. Any account with existing history exposes its rows and Delete controls even when it is not eligible to add entries. Account currency controls are unavailable with an explanation while active credit-limit history exists and return after the final active row is deleted.
 - Accounts with credit-limit history show a small credit-card icon immediately right of the account name — in the name area, never the actions column — in the chart of accounts and on the account page header. The icon is a pure indicator (no press or hover affordance).
 
-### 6. Reference data: Categories, Tags, Members, Templates — Phase 2
+### Reference data
 
 - Categories, Tags, and Members share a searchable tree list (flat list for Members) + side-panel editor. Templates uses the same list conventions with its route-independent modal. All support tombstone delete with confirmation and rename/move with subtree rewrite; include-hidden applies where relevant.
 - Members and Tags render as compact left-aligned lists with a bounded maximum width instead of stretching a near-single-column table across the viewport; the trailing actions column stays narrow. Categories keeps the wider two-column layout (name + intent badge).
@@ -299,7 +297,7 @@ Each screen below lists purpose, layout, behavior, primary data sources, and pha
 - Categories: economic-intent badge per row (`expense` or `income`); the editor requires intent and explains its classification effect in one line.
 - Templates: `/templates` presents a searchable template tree with record-default summaries, Use, create/edit, move/rename, and delete. Use opens transaction entry in place with the template applied. Its route-independent modal manages date-free partial record defaults (all optional: account, category, member, currency, amount, tags, memo), protects dirty work, and refreshes every template consumer after mutation. Responses carry server-derived compatible shorthand types per the [transaction-template service contract](../internal/services/transactiontemplates/PACKAGE.md). Active and cancelled transaction rows/details can create a blank-named template from their reusable records.
 
-### 7. Status & Settings — Phase 2
+### Status and Settings
 
 - Status: backend health, database location/schema, background operations (exchange-rate loading, backups) with recent runs and manual trigger buttons.
 - Operation navigation: an operation selector drills into a shared runs table showing the common run envelope — paged, newest first; columns: started, finished/duration, outcome, trigger. Selecting a run opens its detail.
@@ -310,7 +308,7 @@ Each screen below lists purpose, layout, behavior, primary data sources, and pha
 - Configuration is loaded once at startup; this screen does not mutate runtime state, write the config file, or predict values for a later process.
 - Browser-local UI preferences remain persisted per `docs/frontend-architecture.md` and do not appear in the server settings manifest; they include table density, default landing screen, and theme selection.
 
-### 8. Recurring occurrences — Phase 2
+### Recurring occurrences and definitions
 
 - Recurring occurrences — confirmed, overdue, and upcoming EXPECTED — render inline in the Transactions page by default. The browser explicitly includes every lifecycle even though API listings omit expected by default; per `docs/recurring-transactions-semantics.md`, showing them never changes their exclusion from balances, aggregates, account registers, and reports.
 - Loading a transactions view runs the occurrence API's lazy catch-up materialization so the list always reflects occurrences through today.
@@ -328,15 +326,15 @@ Definitions management screen:
 - Editor (side panel, create + edit): FQN, schedule class and fields (interval every-N + unit, or date rule day-of-month/last-day), anchor date, paused state, and the definition's complete balanced record grid reusing the transaction editor modal's journal editor pieces — per-currency balance meter, intent-valid account pickers, no partial shapes. Save creates or fully replaces the definition (version increments; records replaced atomically); API shape errors map onto the offending rows.
 - Empty state: a quiet "no recurring definitions" presentation with the New definition action.
 
-### 9. Future screens — guidance only
+## Future
 
-- Reports (Phase 3): saved searches become named views on the Transactions screen; summary reports follow this document's structural language.
-- Budgets (Phase 4): category-tree budget editor plus month status; reuses category path rendering and amount rules.
-- Import & reconciliation (Phase 5): an inbox pattern — imported records pending match/confirm; reconciliation indicators specified above become active.
+- Reports may add named transaction views and richer summaries that follow this document's structural language.
+- Budgets may add a category-tree editor and monthly status that reuse category path rendering and amount rules.
+- Import and reconciliation may add an inbox for matching and confirming imported records, with an unreconciled-record status indicator.
 
-## Shared Component Inventory
+## Shared Design Primitives
 
-Mina-specific building blocks every screen composes (names indicative; placement per frontend package boundaries):
+Mina-specific building blocks used across screens (names indicative; placement per frontend package boundaries):
 
 - `TransactionBrowser` — the shared browsing system: transaction lines with URL-addressable detail and Edit-mode dock/amount controls, plus register rows with peek panels; filtering, pagination, selection, and keyboard behavior stay shared.
 - `PeekPanel` — side panel previewing the full containing transaction from a record row.
@@ -362,10 +360,10 @@ Mina-specific building blocks every screen composes (names indicative; placement
 - Icon-only controls carry accessible labels and tooltips.
 - Semantic markup for tables and forms; modal overlays (dialogs) trap focus and restore it on close; non-modal side peek/detail panels follow the Overlays rule instead of trapping focus.
 
-## How to Use This Document
+## Document Use
 
-- Plan one screen at a time: this document's screen spec + `docs/frontend-architecture.md` constraints + the OpenAPI contract define the work.
-- The design leads and the API follows: when a screen needs a capability the API lacks, extending the API is part of that screen's implementation plan — the UX is never trimmed to fit existing endpoints, and the UI never computes accounting truths client-side as a workaround.
-- Track concrete backend/API requirements in Kata issues, `api/openapi.yaml`, or active implementation plans; do not use this UX document as an API backlog.
-- Reuse the shared component inventory before inventing new patterns; extend this document first when a new pattern is genuinely needed.
+- Read each screen specification with `docs/frontend-architecture.md` and the OpenAPI contract.
+- The design leads and the API follows: when a screen needs a capability the API lacks, extend the API instead of trimming the UX or computing accounting truths client-side.
+- Track concrete backend/API requirements in Kata issues or `api/openapi.yaml`; do not use this UX document as an API backlog.
+- Reuse the shared design primitives before inventing new patterns; extend this document first when a new pattern is genuinely needed.
 - Anything ambiguous here is decided in favor of: truth-first, progressive disclosure, keyboard speed, and simplicity.
