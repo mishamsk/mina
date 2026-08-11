@@ -37,6 +37,20 @@ operations:
       name: get
       description: Use to inspect the configuration selected for this running Mina process, including backend-owned groups, active values, effective sources, and the resolved config-file location. This operation is read-only and does not predict or apply future configuration.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
+  getAccountingHistoryRange:
+    cli: {state: exposed, name: accounting-history-range}
+    mcp:
+      state: exposed
+      name: accounting_history_range
+      description: Returns the earliest active accounting date through today for selecting bounded report windows. An empty ledger returns today for both bounds.
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
+  getHouseholdFlowReport:
+    cli: {state: exposed, name: flow}
+    mcp:
+      state: exposed
+      name: flow
+      description: Returns the backend-computed configurable Household flow dataset with selected grain, range, breakdown, contributor filters, period totals, and trend; transfer movement is excluded.
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   listBackgroundOperations:
     cli: {state: exposed, name: list}
     mcp:
@@ -140,6 +154,13 @@ operations:
       name: list_groups
       description: Lists every implicit active category group; groups are derived FQN prefixes rather than stored entities. There is no limit parameter, so use include_hidden=false (the default) unless hidden groups are required.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
+  getCategoryGroupOverview:
+    cli: {state: exposed, name: group-overview}
+    mcp:
+      state: exposed
+      name: group_overview
+      description: Returns the configurable backend-computed flow report for one exact implicit Category group FQN, including hidden descendants, period totals, selected trend, whole-scope comparisons, and newest transactions.
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   setCategoryHiddenByPath:
     cli: {state: exposed, name: set-hidden}
     mcp:
@@ -153,6 +174,13 @@ operations:
       state: exposed
       name: get
       description: Use when you already have an exact category ID and need one leaf, optionally tombstoned. Use categories_list to discover IDs or filter by economic intent.
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
+  getCategoryOverview:
+    cli: {state: exposed, name: overview}
+    mcp:
+      state: exposed
+      name: overview
+      description: Returns the configurable backend-computed flow report for one exact Category leaf ID, including Account periods, filtered totals, comparisons, conversion disclosure, and newest transactions. Category breakdown is invalid for leaves.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   updateCategory:
     cli: {state: exposed, name: update}
@@ -197,6 +225,13 @@ operations:
       name: list_groups
       description: Lists every implicit active tag group; groups are derived FQN prefixes rather than stored entities. There is no limit parameter, so use include_hidden=false (the default) unless hidden groups are required.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
+  getTagGroupOverview:
+    cli: {state: exposed, name: group-overview}
+    mcp:
+      state: exposed
+      name: group_overview
+      description: Returns the configurable backend-computed flow report for one exact implicit Tag group FQN, including hidden descendants, filtered period totals, selected trend, and deduplicated whole-transaction attribution.
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   setTagHiddenByPath:
     cli: {state: exposed, name: set-hidden}
     mcp:
@@ -210,6 +245,13 @@ operations:
       state: exposed
       name: get
       description: Use when you already have an exact tag ID and need one leaf, optionally tombstoned. Use tags_list to discover IDs.
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
+  getTagOverview:
+    cli: {state: exposed, name: overview}
+    mcp:
+      state: exposed
+      name: overview
+      description: Returns the configurable backend-computed flow report for one exact Tag leaf ID with deduplicated whole-transaction attribution, filtered period totals, selected trend, comparisons, and newest transactions.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   updateTag:
     cli: {state: exposed, name: update}

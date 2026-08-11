@@ -192,6 +192,7 @@ test("a protected request after session loss returns to login", async ({
   await page.getByLabel("Password").fill(authenticatedBackend.password);
   await page.getByRole("button", { name: "Enter Mina" }).click();
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
+  await expect(page.getByTestId("entity-overview-chart")).toBeVisible();
 
   await context.clearCookies();
   await page.getByRole("link", { name: "Settings" }).click();
@@ -307,6 +308,7 @@ test("a delayed response from an earlier session does not undo login", async ({
   await page.getByLabel("Password").fill(authenticatedBackend.password);
   await page.getByRole("button", { name: "Enter Mina" }).click();
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
+  await expect(page.getByTestId("entity-overview-chart")).toBeVisible();
 
   let releaseOldResponse = (): void => {};
   const oldResponseReleased = new Promise<void>((resolve) => {
@@ -501,6 +503,15 @@ test("a login tab recovers when authentication becomes disabled", async ({
     await route.fulfill(
       fulfillJSON({ offset: 0, total_count: 0, transactions: [] }),
     );
+  });
+  await page.route("**/api/overview/flow", async (route) => {
+    await route.fulfill({
+      body: JSON.stringify({
+        error: { code: "unavailable", message: "Flow report unavailable." },
+      }),
+      contentType: "application/json",
+      status: 503,
+    });
   });
   let authenticationDisabled = false;
   await page.route("**/api/auth/status", async (route) => {

@@ -13,6 +13,7 @@
 - Account-type changes and bulk category or account reassignment revalidate every affected transaction's semantics, so a locally valid record edit cannot invalidate its siblings.
 - Settlement dates are normalized only for owned and party records: omitted create defaults use the initiated-date timestamp, while later mutation defaults use one operation-clock instant; supplied timestamps are preserved. Expected recurring transactions are changed only through recurring-occurrence flows.
 - Transaction lists and record searches reject missing or inactive dictionary filters rather than treating them as empty results. Account-scoped record search maps an invalid target account to not found, and only it may request running balances.
+- Transaction lists accept exact Category and Tag FQN-prefix scopes for group deep links; prefixes include hidden active descendants and preserve leaf ID-filter behavior.
 - Successful create and replace call the injected currency-usage callback, which composition uses to invalidate dependent exchange-rate-loading caches.
 
 ## Boundaries

@@ -727,6 +727,132 @@ export type TransactionMonthTotalsResponse = {
     income: TransactionMonthTotal;
 };
 
+export type HouseholdFlowEntityKind = 'category' | 'tag';
+
+export type HouseholdFlowScopeKind = 'leaf' | 'group';
+
+export type HouseholdFlowCoreMetric = 'net_spend' | 'net_income' | 'net_flow';
+
+export type HouseholdFlowBreakdownDimension = 'accounts' | 'categories';
+
+export type HouseholdFlowGrain = 'month' | 'year';
+
+export type HouseholdFlowTrend = 'rolling_average' | 'rolling_sum';
+
+export type HouseholdFlowBarGroup = 'net' | 'inflow' | 'outflow';
+
+export type HouseholdFlowMetricValue = {
+    /**
+     * JSON string, not a JSON number. USD-equivalent DECIMAL(18,8) aggregate over converted contributions; fixed-scale with eight fractional digits.
+     */
+    amount_usd: string;
+    /**
+     * Count of contributing economic records without USD conversion; transfer movement is excluded.
+     */
+    unconverted_count: number;
+};
+
+export type HouseholdFlowComparison = {
+    current_month: string;
+    baseline_month: string;
+    current: HouseholdFlowMetricValue;
+    baseline: HouseholdFlowMetricValue;
+    /**
+     * JSON string, not a JSON number. Signed DECIMAL(18,8) percentage, or null when the comparison baseline is zero.
+     */
+    change_percent: string | null;
+};
+
+export type HouseholdFlowTopLine = {
+    current_month: string;
+    current_month_total: HouseholdFlowMetricValue;
+    trailing_three_month_start: string;
+    trailing_three_month_end: string;
+    trailing_three_month_average: HouseholdFlowMetricValue;
+    month_over_month: HouseholdFlowComparison;
+    year_over_year: HouseholdFlowComparison;
+};
+
+export type HouseholdFlowScope = {
+    entity_kind: HouseholdFlowEntityKind;
+    scope_kind: HouseholdFlowScopeKind;
+    entity_id: number | null;
+    fqn: string;
+};
+
+export type AccountingHistoryRange = {
+    start_date: string;
+    end_date: string;
+};
+
+export type HouseholdFlowConfiguration = {
+    core_metric: HouseholdFlowCoreMetric;
+    breakdown_dimension: HouseholdFlowBreakdownDimension;
+    bar_groups: Array<HouseholdFlowBarGroup>;
+    grain: HouseholdFlowGrain;
+    period_count: number;
+    anchor_period: string;
+    named_series_count: number;
+    excluded_contributor_ids: Array<string>;
+    trend: HouseholdFlowTrend;
+};
+
+export type HouseholdFlowBreakdownSeries = {
+    series_id: string;
+    label: string;
+    fqn: string | null;
+    category_id: number | null;
+    rank: number;
+    is_other: boolean;
+    unconverted_count: number;
+};
+
+export type HouseholdFlowStackValue = {
+    series_id: string;
+    bar_group: HouseholdFlowBarGroup;
+    /**
+     * JSON string, not a JSON number. Signed DECIMAL(18,8); fixed-scale with eight fractional digits.
+     */
+    amount_usd: string;
+    unconverted_count: number;
+};
+
+export type HouseholdFlowBarGroupTotal = {
+    bar_group: HouseholdFlowBarGroup;
+    /**
+     * JSON string, not a JSON number. Signed DECIMAL(18,8); fixed-scale with eight fractional digits.
+     */
+    amount_usd: string;
+    unconverted_count: number;
+};
+
+export type HouseholdFlowPeriod = {
+    label: string;
+    is_current: boolean;
+    trend: HouseholdFlowMetricValue;
+    bar_group_totals: Array<HouseholdFlowBarGroupTotal>;
+    stacks: Array<HouseholdFlowStackValue>;
+};
+
+export type HouseholdFlowExcludedActivity = {
+    adjustment_transaction_count: number;
+    exchange_transaction_count: number;
+};
+
+export type HouseholdFlowDataset = {
+    configuration: HouseholdFlowConfiguration;
+    top_line: HouseholdFlowTopLine;
+    breakdown: Array<HouseholdFlowBreakdownSeries>;
+    periods: Array<HouseholdFlowPeriod>;
+    excluded_activity: HouseholdFlowExcludedActivity;
+};
+
+export type HouseholdFlowEntityResponse = {
+    scope: HouseholdFlowScope;
+    dataset: HouseholdFlowDataset;
+    transactions: Array<Transaction>;
+};
+
 export type ExchangeEffectiveRate = {
     sold_currency: string;
     bought_currency: string;
@@ -1445,6 +1571,41 @@ export type LoginRequestWritable = {
     password: string;
 };
 
+/**
+ * Contributor dimension; defaults by scope. Categories is invalid for Category leaves.
+ */
+export type HouseholdFlowBreakdown = HouseholdFlowBreakdownDimension;
+
+/**
+ * Calendar period grain; defaults to month.
+ */
+export type HouseholdFlowGrain2 = HouseholdFlowGrain;
+
+/**
+ * Visible period count. Month accepts 6–24 and defaults to 12; year accepts 3 or more and defaults to 6.
+ */
+export type HouseholdFlowPeriodCount = number;
+
+/**
+ * Date whose calendar month or year is the final visible period; defaults to today and cannot be in the future.
+ */
+export type HouseholdFlowAnchorDate = string;
+
+/**
+ * Number of individually named contributors before Other; defaults to 5 with no product maximum.
+ */
+export type HouseholdFlowNamedSeriesCount = number;
+
+/**
+ * Stable named or Other contributor identities excluded from chart values after ranking.
+ */
+export type HouseholdFlowExcludedContributorIds = Array<string>;
+
+/**
+ * Selected backend-computed trend; defaults to rolling average for month and rolling sum for year.
+ */
+export type HouseholdFlowTrend2 = HouseholdFlowTrend;
+
 export type SeedDemoData = {
     body?: never;
     path?: never;
@@ -1639,6 +1800,97 @@ export type GetSettingsResponses = {
 };
 
 export type GetSettingsResponse = GetSettingsResponses[keyof GetSettingsResponses];
+
+export type GetAccountingHistoryRangeData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/accounting-history/range';
+};
+
+export type GetAccountingHistoryRangeErrors = {
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The route does not support the requested method.
+     */
+    405: ErrorResponse;
+};
+
+export type GetAccountingHistoryRangeError = GetAccountingHistoryRangeErrors[keyof GetAccountingHistoryRangeErrors];
+
+export type GetAccountingHistoryRangeResponses = {
+    /**
+     * Available inclusive accounting-history bounds.
+     */
+    200: AccountingHistoryRange;
+};
+
+export type GetAccountingHistoryRangeResponse = GetAccountingHistoryRangeResponses[keyof GetAccountingHistoryRangeResponses];
+
+export type GetHouseholdFlowReportData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Contributor dimension; defaults by scope. Categories is invalid for Category leaves.
+         */
+        breakdown?: HouseholdFlowBreakdownDimension;
+        /**
+         * Calendar period grain; defaults to month.
+         */
+        grain?: HouseholdFlowGrain;
+        /**
+         * Visible period count. Month accepts 6–24 and defaults to 12; year accepts 3 or more and defaults to 6.
+         */
+        period_count?: number;
+        /**
+         * Date whose calendar month or year is the final visible period; defaults to today and cannot be in the future.
+         */
+        anchor_date?: string;
+        /**
+         * Number of individually named contributors before Other; defaults to 5 with no product maximum.
+         */
+        named_series_count?: number;
+        /**
+         * Stable named or Other contributor identities excluded from chart values after ranking.
+         */
+        excluded_contributor_id?: Array<string>;
+        /**
+         * Selected backend-computed trend; defaults to rolling average for month and rolling sum for year.
+         */
+        trend?: HouseholdFlowTrend;
+    };
+    url: '/api/overview/flow';
+};
+
+export type GetHouseholdFlowReportErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The route does not support the requested method.
+     */
+    405: ErrorResponse;
+};
+
+export type GetHouseholdFlowReportError = GetHouseholdFlowReportErrors[keyof GetHouseholdFlowReportErrors];
+
+export type GetHouseholdFlowReportResponses = {
+    /**
+     * Presentation-ready household flow dataset.
+     */
+    200: HouseholdFlowDataset;
+};
+
+export type GetHouseholdFlowReportResponse = GetHouseholdFlowReportResponses[keyof GetHouseholdFlowReportResponses];
 
 export type ListBackgroundOperationsData = {
     body?: never;
@@ -2101,6 +2353,72 @@ export type ListCategoryGroupsResponses = {
 
 export type ListCategoryGroupsResponse = ListCategoryGroupsResponses[keyof ListCategoryGroupsResponses];
 
+export type GetCategoryGroupOverviewData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Exact active implicit-group FQN prefix; hidden descendants remain included.
+         */
+        fqn: string;
+        /**
+         * Contributor dimension; defaults by scope. Categories is invalid for Category leaves.
+         */
+        breakdown?: HouseholdFlowBreakdownDimension;
+        /**
+         * Calendar period grain; defaults to month.
+         */
+        grain?: HouseholdFlowGrain;
+        /**
+         * Visible period count. Month accepts 6–24 and defaults to 12; year accepts 3 or more and defaults to 6.
+         */
+        period_count?: number;
+        /**
+         * Date whose calendar month or year is the final visible period; defaults to today and cannot be in the future.
+         */
+        anchor_date?: string;
+        /**
+         * Number of individually named contributors before Other; defaults to 5 with no product maximum.
+         */
+        named_series_count?: number;
+        /**
+         * Stable named or Other contributor identities excluded from chart values after ranking.
+         */
+        excluded_contributor_id?: Array<string>;
+        /**
+         * Selected backend-computed trend; defaults to rolling average for month and rolling sum for year.
+         */
+        trend?: HouseholdFlowTrend;
+    };
+    url: '/api/categories/groups/overview';
+};
+
+export type GetCategoryGroupOverviewErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The requested resource was not found.
+     */
+    404: ErrorResponse;
+};
+
+export type GetCategoryGroupOverviewError = GetCategoryGroupOverviewErrors[keyof GetCategoryGroupOverviewErrors];
+
+export type GetCategoryGroupOverviewResponses = {
+    /**
+     * Presentation-ready category group report.
+     */
+    200: HouseholdFlowEntityResponse;
+};
+
+export type GetCategoryGroupOverviewResponse = GetCategoryGroupOverviewResponses[keyof GetCategoryGroupOverviewResponses];
+
 export type SetCategoryHiddenByPathData = {
     body: SetHiddenByPathRequest;
     path?: never;
@@ -2268,6 +2586,73 @@ export type UpdateCategoryResponses = {
 };
 
 export type UpdateCategoryResponse = UpdateCategoryResponses[keyof UpdateCategoryResponses];
+
+export type GetCategoryOverviewData = {
+    body?: never;
+    path: {
+        /**
+         * Category leaf identifier to report.
+         */
+        category_id: number;
+    };
+    query?: {
+        /**
+         * Contributor dimension; defaults by scope. Categories is invalid for Category leaves.
+         */
+        breakdown?: HouseholdFlowBreakdownDimension;
+        /**
+         * Calendar period grain; defaults to month.
+         */
+        grain?: HouseholdFlowGrain;
+        /**
+         * Visible period count. Month accepts 6–24 and defaults to 12; year accepts 3 or more and defaults to 6.
+         */
+        period_count?: number;
+        /**
+         * Date whose calendar month or year is the final visible period; defaults to today and cannot be in the future.
+         */
+        anchor_date?: string;
+        /**
+         * Number of individually named contributors before Other; defaults to 5 with no product maximum.
+         */
+        named_series_count?: number;
+        /**
+         * Stable named or Other contributor identities excluded from chart values after ranking.
+         */
+        excluded_contributor_id?: Array<string>;
+        /**
+         * Selected backend-computed trend; defaults to rolling average for month and rolling sum for year.
+         */
+        trend?: HouseholdFlowTrend;
+    };
+    url: '/api/categories/{category_id}/overview';
+};
+
+export type GetCategoryOverviewErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The requested resource was not found.
+     */
+    404: ErrorResponse;
+};
+
+export type GetCategoryOverviewError = GetCategoryOverviewErrors[keyof GetCategoryOverviewErrors];
+
+export type GetCategoryOverviewResponses = {
+    /**
+     * Presentation-ready category leaf report.
+     */
+    200: HouseholdFlowEntityResponse;
+};
+
+export type GetCategoryOverviewResponse = GetCategoryOverviewResponses[keyof GetCategoryOverviewResponses];
 
 export type ListTagsData = {
     body?: never;
@@ -2439,6 +2824,72 @@ export type ListTagGroupsResponses = {
 
 export type ListTagGroupsResponse = ListTagGroupsResponses[keyof ListTagGroupsResponses];
 
+export type GetTagGroupOverviewData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Exact active implicit-group FQN prefix; hidden descendants remain included.
+         */
+        fqn: string;
+        /**
+         * Contributor dimension; defaults by scope. Categories is invalid for Category leaves.
+         */
+        breakdown?: HouseholdFlowBreakdownDimension;
+        /**
+         * Calendar period grain; defaults to month.
+         */
+        grain?: HouseholdFlowGrain;
+        /**
+         * Visible period count. Month accepts 6–24 and defaults to 12; year accepts 3 or more and defaults to 6.
+         */
+        period_count?: number;
+        /**
+         * Date whose calendar month or year is the final visible period; defaults to today and cannot be in the future.
+         */
+        anchor_date?: string;
+        /**
+         * Number of individually named contributors before Other; defaults to 5 with no product maximum.
+         */
+        named_series_count?: number;
+        /**
+         * Stable named or Other contributor identities excluded from chart values after ranking.
+         */
+        excluded_contributor_id?: Array<string>;
+        /**
+         * Selected backend-computed trend; defaults to rolling average for month and rolling sum for year.
+         */
+        trend?: HouseholdFlowTrend;
+    };
+    url: '/api/tags/groups/overview';
+};
+
+export type GetTagGroupOverviewErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The requested resource was not found.
+     */
+    404: ErrorResponse;
+};
+
+export type GetTagGroupOverviewError = GetTagGroupOverviewErrors[keyof GetTagGroupOverviewErrors];
+
+export type GetTagGroupOverviewResponses = {
+    /**
+     * Presentation-ready tag group report.
+     */
+    200: HouseholdFlowEntityResponse;
+};
+
+export type GetTagGroupOverviewResponse = GetTagGroupOverviewResponses[keyof GetTagGroupOverviewResponses];
+
 export type SetTagHiddenByPathData = {
     body: SetHiddenByPathRequest;
     path?: never;
@@ -2606,6 +3057,73 @@ export type UpdateTagResponses = {
 };
 
 export type UpdateTagResponse = UpdateTagResponses[keyof UpdateTagResponses];
+
+export type GetTagOverviewData = {
+    body?: never;
+    path: {
+        /**
+         * Tag leaf identifier to report.
+         */
+        tag_id: number;
+    };
+    query?: {
+        /**
+         * Contributor dimension; defaults by scope. Categories is invalid for Category leaves.
+         */
+        breakdown?: HouseholdFlowBreakdownDimension;
+        /**
+         * Calendar period grain; defaults to month.
+         */
+        grain?: HouseholdFlowGrain;
+        /**
+         * Visible period count. Month accepts 6–24 and defaults to 12; year accepts 3 or more and defaults to 6.
+         */
+        period_count?: number;
+        /**
+         * Date whose calendar month or year is the final visible period; defaults to today and cannot be in the future.
+         */
+        anchor_date?: string;
+        /**
+         * Number of individually named contributors before Other; defaults to 5 with no product maximum.
+         */
+        named_series_count?: number;
+        /**
+         * Stable named or Other contributor identities excluded from chart values after ranking.
+         */
+        excluded_contributor_id?: Array<string>;
+        /**
+         * Selected backend-computed trend; defaults to rolling average for month and rolling sum for year.
+         */
+        trend?: HouseholdFlowTrend;
+    };
+    url: '/api/tags/{tag_id}/overview';
+};
+
+export type GetTagOverviewErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The requested resource was not found.
+     */
+    404: ErrorResponse;
+};
+
+export type GetTagOverviewError = GetTagOverviewErrors[keyof GetTagOverviewErrors];
+
+export type GetTagOverviewResponses = {
+    /**
+     * Presentation-ready tag leaf report.
+     */
+    200: HouseholdFlowEntityResponse;
+};
+
+export type GetTagOverviewResponse = GetTagOverviewResponses[keyof GetTagOverviewResponses];
 
 export type ListMembersData = {
     body?: never;
@@ -4527,9 +5045,17 @@ export type ListTransactionsData = {
          */
         category_id?: Array<number>;
         /**
+         * Exact Category FQN descendant scope. Includes hidden active descendants and is independent of category_id filters.
+         */
+        category_fqn_prefix?: string;
+        /**
          * Tag identifier to target or filter by.
          */
         tag_id?: Array<number>;
+        /**
+         * Exact Tag FQN descendant scope. Includes hidden active descendants and is independent of tag_id filters.
+         */
+        tag_fqn_prefix?: string;
         /**
          * Household-member identifier to target or filter by.
          */

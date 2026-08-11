@@ -24,6 +24,7 @@ import (
 	"github.com/mishamsk/mina/internal/services/backups"
 	"github.com/mishamsk/mina/internal/services/categories"
 	"github.com/mishamsk/mina/internal/services/creditlimits"
+	"github.com/mishamsk/mina/internal/services/dataaggregates"
 	"github.com/mishamsk/mina/internal/services/dbvalidation"
 	"github.com/mishamsk/mina/internal/services/demo"
 	"github.com/mishamsk/mina/internal/services/exchangeratecache"
@@ -435,6 +436,13 @@ func newAccountingServices(
 		opts.clock(),
 		currencyUsageChanged,
 	)
+	dataAggregateService := dataaggregates.NewService(
+		store.NewDataAggregateStore(appDB),
+		categoryService,
+		tagService,
+		transactionService,
+		opts.clock(),
+	)
 	templateService := transactiontemplates.NewService(
 		store.NewTransactionTemplateStore(appDB),
 		accountService,
@@ -446,16 +454,17 @@ func newAccountingServices(
 	accountService.SetTypeChangeValidator(transactionService)
 	return appServices{
 		Dependencies: httpapi.Dependencies{
-			Health:        health.NewService(store.NewHealthStore(appDB)),
-			Operations:    operationRuns,
-			Categories:    categoryService,
-			Tags:          tagService,
-			Members:       memberService,
-			Accounts:      accountService,
-			CreditLimits:  creditlimits.NewService(store.NewCreditLimitHistoryStore(appDB), accountService, referenceSerializer, opts.clock()),
-			ExchangeRates: exchangeRates,
-			Transactions:  transactionService,
-			Templates:     templateService,
+			Health:         health.NewService(store.NewHealthStore(appDB)),
+			Operations:     operationRuns,
+			Categories:     categoryService,
+			Tags:           tagService,
+			Members:        memberService,
+			Accounts:       accountService,
+			CreditLimits:   creditlimits.NewService(store.NewCreditLimitHistoryStore(appDB), accountService, referenceSerializer, opts.clock()),
+			ExchangeRates:  exchangeRates,
+			Transactions:   transactionService,
+			DataAggregates: dataAggregateService,
+			Templates:      templateService,
 			Recurring: recurring.NewService(
 				store.NewRecurringStore(appDB),
 				accountService,

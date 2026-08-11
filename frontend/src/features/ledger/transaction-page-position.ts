@@ -28,6 +28,7 @@ const filterParamNames = [
   "amountUsdMax",
   "amountUsdMin",
   "category",
+  "categoryPrefix",
   "class",
   "lifecycle",
   "initiatedFrom",
@@ -38,6 +39,7 @@ const filterParamNames = [
   "shape",
   "settlement",
   "tag",
+  "tagPrefix",
 ] as const;
 
 const isoDatePattern = /^\d{4}-\d{2}-\d{2}$/;
@@ -146,6 +148,7 @@ export const readTransactionFiltersFromSearchParams = (
       transactionFilterDecimalPattern,
     ),
     categoryIds: readPositiveIntegerParams(searchParams, "category"),
+    categoryFqnPrefix: readTextParam(searchParams, "categoryPrefix"),
     classes: readAllowedParams<TransactionClass>(
       searchParams,
       "class",
@@ -180,6 +183,7 @@ export const readTransactionFiltersFromSearchParams = (
       transactionSettlements,
     ),
     tagIds: readPositiveIntegerParams(searchParams, "tag"),
+    tagFqnPrefix: readTextParam(searchParams, "tagPrefix"),
   });
 
 export const readLiveSearchParams = (): URLSearchParams =>
@@ -233,9 +237,11 @@ export const writeTransactionFiltersToSearchParams = (
   setIfPresent("amountMax", normalized.amountMax);
   setIfPresent("amountUsdMin", normalized.amountUsdMin);
   setIfPresent("amountUsdMax", normalized.amountUsdMax);
+  setIfPresent("categoryPrefix", normalized.categoryFqnPrefix);
   setIfPresent("initiatedFrom", normalized.initiatedFrom);
   setIfPresent("initiatedTo", normalized.initiatedTo);
   setIfPresent("q", normalized.search);
+  setIfPresent("tagPrefix", normalized.tagFqnPrefix);
 
   if (options.resetPage ?? true) {
     next.set("page", String(defaultTransactionPage));

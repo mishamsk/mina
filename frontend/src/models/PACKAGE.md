@@ -8,6 +8,7 @@
 
 - Normalize transaction filters before REST mapping, URL serialization, or cache-key generation: IDs are positive, unique, and sorted; enum selections are allowed values in their declared order; blank optional text is absent. Derive signatures from that normalized form so equivalent selections share a snapshot.
 - Transaction-filter enum lists are constrained by generated REST types; update them when the supported REST enum set changes.
+- Transaction filters carry exact Category and Tag FQN-prefix scopes for group drill-downs alongside leaf ID filters.
 
 ## Boundaries
 

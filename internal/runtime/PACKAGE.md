@@ -14,6 +14,7 @@
 - Every app submits the initial dense exchange-rate cache rebuild as unrecorded, best-effort runner work. Exchange-rate loads rebuild that cache and backfill missing transaction `amount_usd` after every non-canceled attempt.
 - Built-in Frankfurter-file startup gives the initial cache read 15 minutes and retains the ordinary two-minute allowance to load safe progress afterward; API-only, injected, manual, and scheduled loads keep the ordinary short deadline.
 - Runtime resolves the accounting location, encryption key, and connection limit before delegating database open, migration, and read-only inspection mechanics to `store`.
+- Runtime composes the data-aggregate service's Household, Category, and Tag flow reports from the DuckDB repository, Category/Tag readers, transaction classifier, and runtime clock.
 
 ## Boundaries
 

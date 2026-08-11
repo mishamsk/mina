@@ -383,6 +383,18 @@ WHERE tx.tombstoned_at IS NULL`
 		query += " AND " + s.transactionListRecordExists("jr.category_id IN ("+placeholders(len(opts.CategoryIDs))+")")
 		args = append(args, int64Args(opts.CategoryIDs)...)
 	}
+	if opts.CategoryFQNPrefix != nil {
+		query += ` AND EXISTS (
+	SELECT 1
+	FROM ` + s.db.accountingName("journal_record") + ` jr
+	JOIN ` + s.db.accountingName("category") + ` c ON c.category_id = jr.category_id
+	WHERE jr.transaction_id = tx.transaction_id
+	  AND jr.tombstoned_at IS NULL
+	  AND c.tombstoned_at IS NULL
+	  AND (c.fqn = ? OR starts_with(c.fqn, ? || ':'))
+)`
+		args = append(args, *opts.CategoryFQNPrefix, *opts.CategoryFQNPrefix)
+	}
 	if len(opts.MemberIDs) > 0 {
 		query += " AND " + s.transactionListRecordExists("jr.member_id IN ("+placeholders(len(opts.MemberIDs))+")")
 		args = append(args, int64Args(opts.MemberIDs)...)
@@ -394,6 +406,19 @@ WHERE tx.tombstoned_at IS NULL`
 		}
 		query += " AND " + s.transactionListRecordExists("("+strings.Join(tagConditions, " OR ")+")")
 		args = append(args, int64Args(opts.TagIDs)...)
+	}
+	if opts.TagFQNPrefix != nil {
+		query += ` AND EXISTS (
+	SELECT 1
+	FROM ` + s.db.accountingName("journal_record") + ` jr
+	CROSS JOIN unnest(jr.tag_ids) AS matched_tag(tag_id)
+	JOIN ` + s.db.accountingName("tag") + ` tg ON tg.tag_id = matched_tag.tag_id
+	WHERE jr.transaction_id = tx.transaction_id
+	  AND jr.tombstoned_at IS NULL
+	  AND tg.tombstoned_at IS NULL
+	  AND (tg.fqn = ? OR starts_with(tg.fqn, ? || ':'))
+)`
+		args = append(args, *opts.TagFQNPrefix, *opts.TagFQNPrefix)
 	}
 	if len(opts.LifecycleStatuses) > 0 {
 		query += " AND tx.lifecycle_status IN (" + placeholders(len(opts.LifecycleStatuses)) + ")"

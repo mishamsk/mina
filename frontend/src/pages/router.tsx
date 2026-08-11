@@ -6,6 +6,7 @@ import { AccountGroupPage } from "./account-group-page";
 import { AccountPage } from "./account-page";
 import { AccountsPage } from "./accounts-page";
 import { CategoriesPage } from "./categories-page";
+import { CategoryGroupPage } from "./category-group-page";
 import { CategoryPage } from "./category-page";
 import { MemberPage } from "./member-page";
 import { MembersPage } from "./members-page";
@@ -13,6 +14,7 @@ import { OverviewPage } from "./overview-page";
 import { RecurringPage } from "./recurring-page";
 import { SettingsPage } from "./settings-page";
 import { StatusPage } from "./status-page";
+import { TagGroupPage } from "./tag-group-page";
 import { TagPage } from "./tag-page";
 import { TagsPage } from "./tags-page";
 import { TemplatesPage } from "./templates-page";
@@ -29,8 +31,10 @@ export const AppRoutes = () => (
       <Route path="/accounts/group" element={<AccountGroupPage />} />
       <Route path="/accounts/:accountId" element={<AccountPage />} />
       <Route path="/categories" element={<CategoriesPage />} />
+      <Route path="/categories/group" element={<CategoryGroupPage />} />
       <Route path="/categories/:categoryId" element={<CategoryPage />} />
       <Route path="/tags" element={<TagsPage />} />
+      <Route path="/tags/group" element={<TagGroupPage />} />
       <Route path="/tags/:tagId" element={<TagPage />} />
       <Route path="/members" element={<MembersPage />} />
       <Route path="/members/:memberId" element={<MemberPage />} />

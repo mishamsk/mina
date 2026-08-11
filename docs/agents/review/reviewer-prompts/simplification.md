@@ -35,6 +35,12 @@ Detect over-engineered and overcomplicated code - code that works but is more co
 - Dual implementations - old + new logic when old has no callers
 - Silent fallbacks hiding problems - catching errors and falling back instead of failing fast
 
+## Decimal Widening
+
+- Internal string-backed decimal - decimal text used outside an explicit parsing or rendering boundary
+- Wider aggregate precision - application or SQL arithmetic exceeding the `values.Decimal` / DuckDB `DECIMAL(18,8)` system limit
+- Lossy overflow handling - rounding, clamping, or fallback values instead of returning an error
+
 ## Premature Optimization
 
 - Caching rarely-accessed data - cache for data read once at startup

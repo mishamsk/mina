@@ -329,6 +329,7 @@ export const TagsPageContent = ({
           emptyTitle="No tags"
           errorMessage={tagsPage.snapshot ? undefined : tagsPage.errorMessage}
           groups={tagsPage.snapshot?.groups}
+          groupRowsClickable
           includeHidden={includeHidden}
           leaves={tagsPage.snapshot?.tags}
           loading={tagsPage.loading}
@@ -339,6 +340,10 @@ export const TagsPageContent = ({
           onRowClick={(row) => {
             if (row.leaf) {
               void navigate(`/tags/${row.leaf.tag_id}`);
+            } else {
+              void navigate(
+                `/tags/group?prefix=${encodeURIComponent(row.fqn)}`,
+              );
             }
           }}
           indicatorSlots={["featured", "hidden"]}

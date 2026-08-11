@@ -5,6 +5,7 @@ import {
 } from "@/models/transaction-filters";
 
 import type {
+  AccountingHistoryRange,
   CategoryEconomicIntent,
   ClassifyTransactionRequest,
   CreateAccountRequest,
@@ -18,6 +19,11 @@ import type {
   CreateTagRequest,
   CreateTransactionRequest,
   CreateTransferTransactionRequest,
+  HouseholdFlowBreakdownDimension,
+  HouseholdFlowDataset,
+  HouseholdFlowEntityResponse,
+  HouseholdFlowGrain,
+  HouseholdFlowTrend,
   ReconciliationStatus,
   RecurringOccurrence,
   RestructureRequest,
@@ -62,6 +68,12 @@ import {
   deleteTransactionTemplate as deleteGeneratedTransactionTemplate,
   dismissRecurringOccurrence as dismissGeneratedRecurringOccurrence,
   getAccount,
+  getAccountingHistoryRange,
+  getCategoryGroupOverview,
+  getCategoryOverview,
+  getHouseholdFlowReport,
+  getTagGroupOverview,
+  getTagOverview,
   getTransaction,
   getTransactionMonthTotals,
   listAccountBalances,
@@ -220,6 +232,9 @@ const transactionFilterQuery = (
     ...(normalized.categoryIds.length > 0
       ? { category_id: [...normalized.categoryIds] }
       : {}),
+    ...(normalized.categoryFqnPrefix
+      ? { category_fqn_prefix: normalized.categoryFqnPrefix }
+      : {}),
     ...(normalized.classes.length > 0
       ? { transaction_class: [...normalized.classes] }
       : {}),
@@ -251,8 +266,113 @@ const transactionFilterQuery = (
       ? { settlement: [...normalized.settlements] }
       : {}),
     ...(normalized.tagIds.length > 0 ? { tag_id: [...normalized.tagIds] } : {}),
+    ...(normalized.tagFqnPrefix
+      ? { tag_fqn_prefix: normalized.tagFqnPrefix }
+      : {}),
   };
 };
+
+export type EntityOverviewRequest =
+  | {
+      readonly entityKind: "category";
+      readonly scopeKind: "leaf";
+      readonly entityId: number;
+    }
+  | {
+      readonly entityKind: "category";
+      readonly scopeKind: "group";
+      readonly fqn: string;
+    }
+  | {
+      readonly entityKind: "tag";
+      readonly scopeKind: "leaf";
+      readonly entityId: number;
+    }
+  | {
+      readonly entityKind: "tag";
+      readonly scopeKind: "group";
+      readonly fqn: string;
+    };
+
+export interface HouseholdFlowSelection {
+  readonly breakdown: HouseholdFlowBreakdownDimension;
+  readonly excludedContributorIds: readonly string[];
+  readonly grain: HouseholdFlowGrain;
+  readonly namedSeriesCount: number;
+  readonly periodCount: number;
+  readonly anchorDate: string;
+  readonly trend: HouseholdFlowTrend;
+}
+
+export const householdFlowSelectionFromDataset = (
+  dataset: HouseholdFlowDataset,
+): HouseholdFlowSelection => ({
+  breakdown: dataset.configuration.breakdown_dimension,
+  excludedContributorIds: dataset.configuration.excluded_contributor_ids,
+  grain: dataset.configuration.grain,
+  namedSeriesCount: dataset.configuration.named_series_count,
+  periodCount: dataset.configuration.period_count,
+  anchorDate:
+    dataset.configuration.anchor_period.length === 4
+      ? `${dataset.configuration.anchor_period}-01-01`
+      : `${dataset.configuration.anchor_period}-01`,
+  trend: dataset.configuration.trend,
+});
+
+const householdFlowQuery = (selection?: HouseholdFlowSelection) =>
+  selection
+    ? {
+        breakdown: selection.breakdown,
+        excluded_contributor_id: [...selection.excludedContributorIds],
+        grain: selection.grain,
+        named_series_count: selection.namedSeriesCount,
+        anchor_date: selection.anchorDate,
+        period_count: selection.periodCount,
+        trend: selection.trend,
+      }
+    : undefined;
+
+export const fetchEntityOverview = (
+  request: EntityOverviewRequest,
+  selection?: HouseholdFlowSelection,
+): Promise<{
+  data?: HouseholdFlowEntityResponse;
+  error?: unknown;
+  response?: Response;
+}> => {
+  if (request.entityKind === "category" && request.scopeKind === "leaf") {
+    return getCategoryOverview({
+      path: { category_id: request.entityId },
+      query: householdFlowQuery(selection),
+    });
+  }
+  if (request.entityKind === "category") {
+    return getCategoryGroupOverview({
+      query: { fqn: request.fqn, ...householdFlowQuery(selection) },
+    });
+  }
+  if (request.scopeKind === "leaf") {
+    return getTagOverview({
+      path: { tag_id: request.entityId },
+      query: householdFlowQuery(selection),
+    });
+  }
+  return getTagGroupOverview({
+    query: { fqn: request.fqn, ...householdFlowQuery(selection) },
+  });
+};
+
+export const fetchHouseholdFlowReport = (
+  selection?: HouseholdFlowSelection,
+): Promise<{
+  data?: HouseholdFlowDataset;
+  error?: unknown;
+}> => getHouseholdFlowReport({ query: householdFlowQuery(selection) });
+
+export const fetchAccountingHistoryRange = (): Promise<{
+  data?: AccountingHistoryRange;
+  error?: unknown;
+}> => getAccountingHistoryRange();
 
 export const fetchTransactionPage = (params: TransactionPageParams) =>
   listTransactions({

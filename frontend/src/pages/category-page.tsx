@@ -1,19 +1,6 @@
-import { useMemo } from "react";
-import { useParams, useSearchParams } from "react-router";
+import { useParams } from "react-router";
 
-import { PageHelp } from "@/components/page-help";
-import { PageHeader } from "@/features/app-shell";
-import {
-  refreshCategoriesPage,
-  useCategoriesResource,
-} from "@/features/categories";
-import { FqnPath } from "@/features/ledger";
-import {
-  ReferenceDrilldownError,
-  ReferenceDrilldownNotFound,
-  ReferenceDrilldownPage,
-  ReferenceDrilldownSkeleton,
-} from "@/features/reference";
+import { EntityOverviewPage } from "@/features/entity-overviews";
 
 const parsePositiveInteger = (
   value: string | undefined,
@@ -22,112 +9,18 @@ const parsePositiveInteger = (
   return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
 };
 
-const exactOnlyParam = "scope";
-
-const categoryDescendantIds = (
-  categories: readonly {
-    category_id: number;
-    fqn: string;
-    is_hidden: boolean;
-  }[],
-  fqn: string,
-): readonly number[] =>
-  categories
-    .filter(
-      (category) =>
-        category.fqn === fqn ||
-        (!category.is_hidden && category.fqn.startsWith(`${fqn}:`)),
-    )
-    .map((category) => category.category_id);
-
 export const CategoryPage = () => {
   const { categoryId: categoryIdParam } = useParams();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const categoriesPage = useCategoriesResource();
   const categoryId = parsePositiveInteger(categoryIdParam);
-  const exactOnly = searchParams.get(exactOnlyParam) === "exact";
-  const category = categoriesPage.snapshot?.categories.find(
-    (candidate) => candidate.category_id === categoryId,
-  );
-  const filterIds = useMemo(() => {
-    if (!category || !categoriesPage.snapshot) {
-      return [];
-    }
-    return exactOnly
-      ? [category.category_id]
-      : categoryDescendantIds(categoriesPage.snapshot.categories, category.fqn);
-  }, [category, categoriesPage.snapshot, exactOnly]);
-  const setExactOnly = (nextExactOnly: boolean) => {
-    setSearchParams((current) => {
-      const next = new URLSearchParams(current);
-      if (nextExactOnly) {
-        next.set(exactOnlyParam, "exact");
-      } else {
-        next.delete(exactOnlyParam);
-      }
-      next.set("page", "1");
-      next.delete("transaction");
-      return next;
-    });
-  };
-
   return (
-    <section
-      className="flex h-[calc(100svh-2.5rem)] min-h-0 flex-col gap-6"
-      aria-labelledby="category-title"
-    >
-      <PageHeader
-        title={
-          category ? (
-            <FqnPath
-              value={category.fqn}
-              ancestorClassName="text-[var(--frame-muted)]"
-              className="text-2xl"
-              leafClassName="text-[var(--frame-foreground)]"
-            />
-          ) : (
-            "Category"
-          )
-        }
-        titleId="category-title"
-        titleClassName="normal-case"
-        eyebrow="Reference drill-down"
-        help={
-          <PageHelp label="Category help">
-            Category pages show matching transactions and include descendant
-            category paths unless limited to this level.
-          </PageHelp>
-        }
-      />
-
-      {categoriesPage.loading && !categoriesPage.snapshot ? (
-        <ReferenceDrilldownSkeleton />
-      ) : null}
-      {categoriesPage.errorMessage && !categoriesPage.snapshot ? (
-        <ReferenceDrilldownError
-          message={categoriesPage.errorMessage}
-          title="Category could not be loaded."
-          onRetry={() => {
-            void refreshCategoriesPage();
-          }}
-        />
-      ) : null}
-      {categoriesPage.snapshot && !category ? (
-        <ReferenceDrilldownNotFound
-          backHref="/categories"
-          backLabel="Back to categories"
-          entityKindLabel="Category"
-        />
-      ) : null}
-      {category ? (
-        <ReferenceDrilldownPage
-          exactOnly={exactOnly}
-          filterIds={filterIds}
-          filterKind="category"
-          onExactOnlyChange={setExactOnly}
-          showExactOnlyToggle
-        />
-      ) : null}
-    </section>
+    <EntityOverviewPage
+      backHref="/categories"
+      entityKindLabel="Category"
+      request={
+        categoryId
+          ? { entityId: categoryId, entityKind: "category", scopeKind: "leaf" }
+          : undefined
+      }
+    />
   );
 };

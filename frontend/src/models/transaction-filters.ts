@@ -59,6 +59,7 @@ export interface TransactionFilters {
   readonly amountUsdMax?: string;
   readonly amountUsdMin?: string;
   readonly categoryIds: readonly number[];
+  readonly categoryFqnPrefix?: string;
   readonly classes: readonly TransactionClass[];
   readonly lifecycleStatuses: readonly TransactionLifecycleStatus[];
   readonly initiatedFrom?: string;
@@ -69,6 +70,7 @@ export interface TransactionFilters {
   readonly shapes: readonly TransactionShapeType[];
   readonly settlements: readonly TransactionSettlement[];
   readonly tagIds: readonly number[];
+  readonly tagFqnPrefix?: string;
 }
 
 export const emptyTransactionFilters: TransactionFilters = {
@@ -112,6 +114,7 @@ export const normalizeTransactionFilters = (
   amountUsdMax: trimmedValue(filters.amountUsdMax),
   amountUsdMin: trimmedValue(filters.amountUsdMin),
   categoryIds: uniqueSortedNumbers(filters.categoryIds ?? []),
+  categoryFqnPrefix: trimmedValue(filters.categoryFqnPrefix),
   classes: uniqueAllowedValues(filters.classes ?? [], transactionClasses),
   lifecycleStatuses: uniqueAllowedValues(
     filters.lifecycleStatuses ?? [],
@@ -128,6 +131,7 @@ export const normalizeTransactionFilters = (
     transactionSettlements,
   ),
   tagIds: uniqueSortedNumbers(filters.tagIds ?? []),
+  tagFqnPrefix: trimmedValue(filters.tagFqnPrefix),
 });
 
 export const transactionFilterSignature = (
@@ -137,7 +141,9 @@ export const transactionFilterSignature = (
   return [
     `account=${normalized.accountIds.join(",")}`,
     `category=${normalized.categoryIds.join(",")}`,
+    `categoryPrefix=${normalized.categoryFqnPrefix ?? ""}`,
     `tag=${normalized.tagIds.join(",")}`,
+    `tagPrefix=${normalized.tagFqnPrefix ?? ""}`,
     `member=${normalized.memberIds.join(",")}`,
     `lifecycle=${normalized.lifecycleStatuses.join(",")}`,
     `settlement=${normalized.settlements.join(",")}`,

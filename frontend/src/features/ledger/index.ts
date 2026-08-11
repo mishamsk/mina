@@ -17,6 +17,7 @@ export {
   canSplitTransaction,
   displayAmountKey,
   displayStatusLabel,
+  formatDecimalAmount,
   formatInitiatedDate,
   formatInitiatedDateParts,
   lifecycleStatusLabel,

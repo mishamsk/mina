@@ -260,6 +260,23 @@ func (s *Service) GroupStates(ctx context.Context, includeHidden bool) ([]GroupS
 	return services.DeriveFQNGroupStates(leaves, includeHidden), nil
 }
 
+// DescendantEconomicIntents returns the declared intents of every active leaf
+// below an implicit category group, including hidden leaves.
+func (s *Service) DescendantEconomicIntents(ctx context.Context, groupFQN string) ([]CategoryEconomicIntent, error) {
+	states, err := s.cache.Snapshot(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	intents := make([]CategoryEconomicIntent, 0)
+	for _, state := range states {
+		if state.active && services.FQNAtOrUnder(state.fqn, groupFQN) {
+			intents = append(intents, state.reference.EconomicIntent)
+		}
+	}
+	return intents, nil
+}
+
 // UpdateMutable validates and updates mutable category fields.
 func (s *Service) UpdateMutable(ctx context.Context, id int64, input UpdateInput) (Category, error) {
 	if id <= 0 {

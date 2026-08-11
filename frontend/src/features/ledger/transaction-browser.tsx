@@ -98,6 +98,7 @@ import type { TransactionAmountDisplayMode } from "./use-transaction-browser-pag
 
 interface TransactionBrowserProps {
   readonly amountDisplayMode: TransactionAmountDisplayMode;
+  readonly preview?: boolean;
   readonly editMode: boolean;
   readonly dateJumpAnchor?: {
     readonly date: string;
@@ -138,6 +139,7 @@ interface TransactionBrowserProps {
   ) => void;
   readonly onPageSizeChange: (pageSize: number) => void;
   readonly onPreviousPage: () => void;
+  readonly onRetryRefresh?: () => void;
   readonly onPostTransaction: (
     transaction: Transaction,
     postedDate?: string,
@@ -222,10 +224,12 @@ const LoadingRows = () => (
 const TransactionErrorCard = ({
   heading,
   message,
+  onRetry,
   summary,
 }: {
   readonly heading: string;
   readonly message: string;
+  readonly onRetry?: () => void;
   readonly summary: string;
 }) => (
   <div className="border-destructive bg-card border-2 p-4" role="alert">
@@ -236,6 +240,11 @@ const TransactionErrorCard = ({
         {message}
       </pre>
     </details>
+    {onRetry ? (
+      <Button className="mt-3" type="button" onClick={onRetry}>
+        Retry
+      </Button>
+    ) : null}
   </div>
 );
 
@@ -473,6 +482,7 @@ const isInteractiveTarget = (
 
 export const TransactionBrowser = ({
   amountDisplayMode,
+  preview = false,
   editMode,
   dateJumpAnchor,
   errorMessage,
@@ -494,6 +504,7 @@ export const TransactionBrowser = ({
   onOpenTransaction,
   onPageSizeChange,
   onPreviousPage,
+  onRetryRefresh,
   onPostTransaction,
   onSetEditMode,
   onSplitTransaction,
@@ -1145,6 +1156,7 @@ export const TransactionBrowser = ({
             <TransactionErrorCard
               heading="Transactions may be stale."
               message={refreshErrorMessage}
+              onRetry={onRetryRefresh}
               summary="Refresh error"
             />
           ) : null}
@@ -1176,13 +1188,15 @@ export const TransactionBrowser = ({
   return (
     <div
       ref={rootRef}
-      className="flex h-full min-h-0 flex-col gap-3"
+      className={cn("flex min-h-0 flex-col gap-3", !preview && "h-full")}
       aria-busy={loading ? "true" : undefined}
       data-transaction-browser="true"
     >
       <div
         className={cn(
-          "grid min-h-0 min-w-0 flex-1 gap-3 overflow-x-auto",
+          "grid min-h-0 min-w-0 gap-3",
+          preview ? "overflow-visible" : "overflow-x-auto",
+          !preview && "flex-1",
           editMode && "grid-cols-[minmax(23rem,1fr)_minmax(16rem,20rem)]",
         )}
         data-testid="transaction-browser-layout"
@@ -1192,11 +1206,15 @@ export const TransactionBrowser = ({
             <TransactionErrorCard
               heading="Transactions may be stale."
               message={refreshErrorMessage}
+              onRetry={onRetryRefresh}
               summary="Refresh error"
             />
           ) : null}
           <div
-            className="transactions-table-scroll bg-card min-h-0 flex-1 overflow-auto border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]"
+            className={cn(
+              "transactions-table-scroll bg-card min-h-0 flex-1 border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]",
+              preview ? "overflow-visible" : "overflow-auto",
+            )}
             data-testid="transactions-table-scroll"
           >
             <table
@@ -1204,6 +1222,7 @@ export const TransactionBrowser = ({
               className={cn(
                 "transactions-table w-full table-fixed border-collapse text-sm",
                 editMode && "transactions-table--edit-mode min-w-[23rem]",
+                preview && "[&_.transactions-actions-column]:hidden",
               )}
             >
               <colgroup>
@@ -1219,7 +1238,12 @@ export const TransactionBrowser = ({
                 <col className="transactions-amount-column" />
                 <col className="transactions-actions-column" />
               </colgroup>
-              <thead className="sticky top-0 z-10 bg-[var(--table-header)]">
+              <thead
+                className={cn(
+                  "bg-[var(--table-header)]",
+                  !preview && "sticky top-0 z-10",
+                )}
+              >
                 <tr className="font-heading text-foreground border-b-2 border-[var(--border-ink)] text-left text-xs font-semibold uppercase">
                   {editMode ? (
                     <th className="transactions-selection-column px-3 py-2">
@@ -1965,69 +1989,71 @@ export const TransactionBrowser = ({
             </div>
           ) : null}
 
-          <div
-            className="bg-card flex shrink-0 flex-col gap-3 border-2 border-[var(--border-ink)] p-3 shadow-[var(--shadow-pixel)] sm:flex-row sm:items-center sm:justify-between"
-            data-testid="transactions-pagination-footer"
-            tabIndex={-1}
-          >
-            <div className="flex items-center gap-2 text-sm">
-              <label htmlFor="transactions-page-size" className="font-medium">
-                Rows
-              </label>
-              <Select
-                value={String(pageSize)}
-                onValueChange={(value) => {
-                  onPageSizeChange(Number(value));
-                }}
-              >
-                <SelectTrigger id="transactions-page-size" size="compact">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {transactionPageSizeOptions.map((option) => (
-                    <SelectItem key={option} value={String(option)}>
-                      {option}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-center gap-3">
-              {loading ? (
-                <span
-                  className="text-muted-foreground font-mono text-xs"
-                  data-testid="transactions-page-busy"
-                  role="status"
+          {!preview ? (
+            <div
+              className="bg-card flex shrink-0 flex-col gap-3 border-2 border-[var(--border-ink)] p-3 shadow-[var(--shadow-pixel)] sm:flex-row sm:items-center sm:justify-between"
+              data-testid="transactions-pagination-footer"
+              tabIndex={-1}
+            >
+              <div className="flex items-center gap-2 text-sm">
+                <label htmlFor="transactions-page-size" className="font-medium">
+                  Rows
+                </label>
+                <Select
+                  value={String(pageSize)}
+                  onValueChange={(value) => {
+                    onPageSizeChange(Number(value));
+                  }}
                 >
-                  Loading
+                  <SelectTrigger id="transactions-page-size" size="compact">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {transactionPageSizeOptions.map((option) => (
+                      <SelectItem key={option} value={String(option)}>
+                        {option}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-3">
+                {loading ? (
+                  <span
+                    className="text-muted-foreground font-mono text-xs"
+                    data-testid="transactions-page-busy"
+                    role="status"
+                  >
+                    Loading
+                  </span>
+                ) : null}
+                <span className="text-muted-foreground font-mono text-sm">
+                  Page {page}
+                  {totalCount === undefined
+                    ? ""
+                    : ` of ${Math.max(1, Math.ceil(totalCount / pageSize))}`}
                 </span>
-              ) : null}
-              <span className="text-muted-foreground font-mono text-sm">
-                Page {page}
-                {totalCount === undefined
-                  ? ""
-                  : ` of ${Math.max(1, Math.ceil(totalCount / pageSize))}`}
-              </span>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={onPreviousPage}
-                disabled={page <= 1}
-              >
-                Previous
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={onNextPage}
-                disabled={!hasNextPage}
-              >
-                Next
-              </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={onPreviousPage}
+                  disabled={page <= 1}
+                >
+                  Previous
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={onNextPage}
+                  disabled={!hasNextPage}
+                >
+                  Next
+                </Button>
+              </div>
             </div>
-          </div>
+          ) : null}
         </div>
         {editDockSurface}
       </div>

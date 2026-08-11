@@ -11,6 +11,7 @@
 - Preference writes update memory first; an IndexedDB failure leaves that value active and records the persistence error.
 - A background transaction-page refresh replaces its snapshot only when it still matches the snapshot captured at refresh start; other loaded pages remain stale until their owner refetches them.
 - Transaction-entry route results apply only to their exact requested entry. An entry launch waits for Edit-mode amount saves to succeed, and cancellation or any failed save discards the deferred launch.
+- Overview snapshots keep the backend household flow dataset and its recoverable section error beside balance, pulse, and recent-activity data.
 
 ## Boundaries
 

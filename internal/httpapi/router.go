@@ -13,6 +13,7 @@ import (
 	authentication "github.com/mishamsk/mina/internal/services/authentication/online"
 	"github.com/mishamsk/mina/internal/services/categories"
 	"github.com/mishamsk/mina/internal/services/creditlimits"
+	"github.com/mishamsk/mina/internal/services/dataaggregates"
 	"github.com/mishamsk/mina/internal/services/demo"
 	"github.com/mishamsk/mina/internal/services/exchangeratecache"
 	"github.com/mishamsk/mina/internal/services/exchangerates"
@@ -41,6 +42,7 @@ type Dependencies struct {
 	ExchangeRates     *exchangerates.Service
 	ExchangeRateCache *exchangeratecache.Service
 	Transactions      *transactions.Service
+	DataAggregates    *dataaggregates.Service
 	Templates         *transactiontemplates.Service
 	Recurring         *recurring.Service
 	Demo              *demo.Service

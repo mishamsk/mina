@@ -10,6 +10,7 @@
 - A request captures the authentication generation at dispatch. Only a `401` for that same generation may signal authentication loss, so a stale response cannot log out a newer session.
 - Normalize failures with no HTTP response as `NetworkFailure`; preserve HTTP error payloads for the shared error-message helpers.
 - Helpers that return a complete lookup or management set must follow backend pagination; paged record browsers stay backend-paginated.
+- Flow-report helpers pass the shared typed anchor/window configuration without transforming report values; the accounting-history-range helper remains a separate generated read.
 
 ## Boundaries
 

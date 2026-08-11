@@ -219,6 +219,7 @@ interface ReferenceTreeProps<TLeaf extends ReferenceLeaf, TGroup> {
   readonly emptyTitle: string;
   readonly errorMessage?: string;
   readonly groups: readonly TGroup[] | undefined;
+  readonly groupRowsClickable?: boolean;
   readonly includeHidden: boolean;
   readonly indicatorSlots?: readonly RowActionIndicatorSlot[];
   readonly leaves: readonly TLeaf[] | undefined;
@@ -271,6 +272,7 @@ export const ReferenceTree = <
   emptyTitle,
   errorMessage,
   groups,
+  groupRowsClickable = false,
   includeHidden,
   indicatorSlots,
   leaves,
@@ -407,7 +409,9 @@ export const ReferenceTree = <
               const rowHidden =
                 row.leaf?.is_hidden ?? row.group?.is_hidden ?? false;
               const actions = renderActions?.(row) ?? [];
-              const clickable = Boolean(onRowClick && row.kind === "leaf");
+              const clickable = Boolean(
+                onRowClick && (row.kind === "leaf" || groupRowsClickable),
+              );
               return (
                 <tr
                   key={row.fqn}

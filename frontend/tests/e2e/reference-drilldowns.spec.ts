@@ -1,8 +1,4 @@
-import { expect, type Locator, type Page, type Route } from "@playwright/test";
-import {
-  captureSearchDebounce,
-  runCapturedSearchDebounce,
-} from "@tests/e2e/search-debounce";
+import { expect, type Locator, type Page } from "@playwright/test";
 import { test } from "@tests/e2e/test";
 
 interface AccountFixture {
@@ -61,10 +57,7 @@ const createCategory = async (
   fqn: string,
 ): Promise<CategoryFixture> => {
   const response = await page.request.post("/api/categories", {
-    data: {
-      economic_intent: "expense",
-      fqn,
-    },
+    data: { economic_intent: "expense", fqn },
   });
   expect(response.ok()).toBe(true);
   return (await response.json()) as CategoryFixture;
@@ -87,9 +80,7 @@ const createAccount = async (
 };
 
 const createTag = async (page: Page, fqn: string): Promise<TagFixture> => {
-  const response = await page.request.post("/api/tags", {
-    data: { fqn },
-  });
+  const response = await page.request.post("/api/tags", { data: { fqn } });
   expect(response.ok()).toBe(true);
   return (await response.json()) as TagFixture;
 };
@@ -98,11 +89,61 @@ const createMember = async (
   page: Page,
   name: string,
 ): Promise<MemberFixture> => {
-  const response = await page.request.post("/api/members", {
-    data: { name },
-  });
+  const response = await page.request.post("/api/members", { data: { name } });
   expect(response.ok()).toBe(true);
   return (await response.json()) as MemberFixture;
+};
+
+const localToday = (): string => {
+  const today = new Date();
+  return [
+    today.getFullYear(),
+    String(today.getMonth() + 1).padStart(2, "0"),
+    String(today.getDate()).padStart(2, "0"),
+  ].join("-");
+};
+
+const createSpend = async (
+  page: Page,
+  {
+    category,
+    initiatedDate = localToday(),
+    member,
+    memo,
+    tag,
+    tags,
+  }: {
+    readonly category: CategoryFixture;
+    readonly initiatedDate?: string;
+    readonly member?: MemberFixture;
+    readonly memo: string;
+    readonly tag?: TagFixture;
+    readonly tags?: readonly TagFixture[];
+  },
+): Promise<TransactionFixture> => {
+  const accounts = await listFixtures<AccountFixture>(
+    page,
+    "/api/accounts",
+    "accounts",
+  );
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
+  const response = await page.request.post("/api/transactions/spend", {
+    data: {
+      amount: "12.34",
+      category_id: category.category_id,
+      counterparty_account_id: merchantAccount.account_id,
+      currency: "USD",
+      funding_account_id: fundingAccount.account_id,
+      initiated_date: initiatedDate,
+      member_id: member?.member_id,
+      memo,
+      tag_ids:
+        tags?.map((item) => item.tag_id) ?? (tag ? [tag.tag_id] : undefined),
+    },
+  });
+  expect(response.ok()).toBe(true);
+  return (await response.json()) as TransactionFixture;
 };
 
 const expectReferenceRowActivation = async (
@@ -152,44 +193,70 @@ const expectReferenceRowActivation = async (
   await expectDestinationReady();
 };
 
-test("reference rows activate their detail and register routes", async ({
+const expectMutedCurrencyMarker = async (marker: Locator): Promise<void> => {
+  await expect(marker).toBeVisible();
+  const colors = await marker.evaluate((element) => {
+    const probe = document.createElement("span");
+    probe.style.color = "var(--muted-foreground)";
+    document.body.append(probe);
+    const result = {
+      actual: getComputedStyle(element).color,
+      expected: getComputedStyle(probe).color,
+    };
+    probe.remove();
+    return result;
+  });
+  expect(colors.actual).toBe(colors.expected);
+};
+
+test("reference rows activate leaf and group destinations", async ({
   page,
 }, testInfo) => {
   const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
-  const accountPrefix = `E2ERowRoute:${unique}`;
+  const accountPrefix = `E2ERowAccount:${unique}`;
+  const categoryPrefix = `E2ERowCategory:${unique}`;
+  const tagPrefix = `E2ERowTag:${unique}`;
   const account = await createAccount(page, `${accountPrefix}:Leaf`);
-  const category = await createCategory(page, `E2ERowRoute:${unique}`);
-  const tag = await createTag(page, `E2ERowRoute:${unique}`);
+  const category = await createCategory(page, `${categoryPrefix}:Leaf`);
+  const tag = await createTag(page, `${tagPrefix}:Leaf`);
   const member = await createMember(page, `E2E Row Route ${unique}`);
 
   await expectReferenceRowActivation(page, {
     destination: new RegExp(`/accounts/${account.account_id}$`),
     destinationReady: page.getByText("No records", { exact: true }),
-    row: page.getByLabel(`Open account ${account.fqn}`),
+    row: page.getByLabel(`Open account ${account.fqn}`, { exact: true }),
     sourcePath: `/accounts?q=${encodeURIComponent(account.fqn)}`,
   });
   await expectReferenceRowActivation(page, {
     destination: `/accounts/group?prefix=${encodeURIComponent(accountPrefix)}`,
     destinationReady: page.getByText("No records", { exact: true }),
-    row: page.getByLabel(`Open account group ${accountPrefix}`),
+    row: page.getByLabel(`Open account group ${accountPrefix}`, {
+      exact: true,
+    }),
     sourcePath: `/accounts?q=${encodeURIComponent(account.fqn)}`,
   });
   await expectReferenceRowActivation(page, {
     destination: new RegExp(`/categories/${category.category_id}$`),
-    destinationReady: page.getByRole("heading", {
-      level: 2,
-      name: "No transactions",
-    }),
-    row: page.getByLabel(`Open category ${category.fqn}`),
+    destinationReady: page.getByTestId("entity-overview-top-line"),
+    row: page.getByLabel(`Open category ${category.fqn}`, { exact: true }),
+    sourcePath: `/categories?q=${encodeURIComponent(category.fqn)}`,
+  });
+  await expectReferenceRowActivation(page, {
+    destination: `/categories/group?prefix=${encodeURIComponent(categoryPrefix)}`,
+    destinationReady: page.getByTestId("entity-overview-top-line"),
+    row: page.getByLabel(`Open category ${categoryPrefix}`, { exact: true }),
     sourcePath: `/categories?q=${encodeURIComponent(category.fqn)}`,
   });
   await expectReferenceRowActivation(page, {
     destination: new RegExp(`/tags/${tag.tag_id}$`),
-    destinationReady: page.getByRole("heading", {
-      level: 2,
-      name: "No transactions",
-    }),
-    row: page.getByLabel(`Open tag ${tag.fqn}`),
+    destinationReady: page.getByTestId("entity-overview-top-line"),
+    row: page.getByLabel(`Open tag ${tag.fqn}`, { exact: true }),
+    sourcePath: `/tags?q=${encodeURIComponent(tag.fqn)}`,
+  });
+  await expectReferenceRowActivation(page, {
+    destination: `/tags/group?prefix=${encodeURIComponent(tagPrefix)}`,
+    destinationReady: page.getByTestId("entity-overview-top-line"),
+    row: page.getByLabel(`Open tag ${tagPrefix}`, { exact: true }),
     sourcePath: `/tags?q=${encodeURIComponent(tag.fqn)}`,
   });
   await expectReferenceRowActivation(page, {
@@ -198,715 +265,443 @@ test("reference rows activate their detail and register routes", async ({
       level: 2,
       name: "No transactions",
     }),
-    row: page.getByLabel(`Open member ${member.name}`),
+    row: page.getByLabel(`Open member ${member.name}`, { exact: true }),
     sourcePath: `/members?q=${encodeURIComponent(member.name)}`,
   });
 });
 
-const createSpend = async (
-  page: Page,
-  {
-    category,
-    initiatedDate = "2025-01-02",
-    member,
-    memo,
-    tag,
-  }: {
-    readonly category: CategoryFixture;
-    readonly initiatedDate?: string;
-    readonly member?: MemberFixture;
-    readonly memo: string;
-    readonly tag?: TagFixture;
-  },
-): Promise<TransactionFixture> => {
-  const accounts = await listFixtures<AccountFixture>(
-    page,
-    "/api/accounts",
-    "accounts",
-  );
-  const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
-  const response = await page.request.post("/api/transactions/spend", {
-    data: {
-      amount: "12.34",
-      category_id: category.category_id,
-      counterparty_account_id: merchantAccount.account_id,
-      currency: "USD",
-      funding_account_id: fundingAccount.account_id,
-      initiated_date: initiatedDate,
-      member_id: member?.member_id,
-      memo,
-      tag_ids: tag ? [tag.tag_id] : undefined,
+test("unknown category and tag overview links retain not-found guidance", async ({
+  page,
+}) => {
+  for (const route of [
+    {
+      backLabel: "Back to categories",
+      heading: "Category not found",
+      path: "/categories/999999999",
     },
-  });
-  expect(response.ok()).toBe(true);
-  return (await response.json()) as TransactionFixture;
-};
+    {
+      backLabel: "Back to categories",
+      heading: "Category not found",
+      path: "/categories/group?prefix=E2EUnknownCategory",
+    },
+    {
+      backLabel: "Back to tags",
+      heading: "Tag not found",
+      path: "/tags/999999999",
+    },
+    {
+      backLabel: "Back to tags",
+      heading: "Tag not found",
+      path: "/tags/group?prefix=E2EUnknownTag",
+    },
+  ]) {
+    await page.goto(route.path);
+    await expect(
+      page.getByRole("heading", { name: route.heading }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: route.backLabel }),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Retry" })).toHaveCount(0);
+  }
+});
 
-test("category drill-down keeps one header, scoped toolbar, refresh, not-found, and detail", async ({
+test("category leaf overview renders net bars and a fixed line while preview detail remains interactive", async ({
   page,
 }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
   const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
-  const category = await createCategory(page, `E2EDrill:${unique}`);
-  const memo = `E2E category drilldown ${unique}`;
+  const category = await createCategory(page, `E2EOverview:${unique}`);
+  const memo = `E2E overview preview ${unique}`;
   const transaction = await createSpend(page, { category, memo });
 
-  const filteredRequest = page.waitForRequest((request) => {
-    const url = new URL(request.url());
-    return (
-      url.pathname === "/api/transactions" &&
-      url.searchParams
-        .getAll("category_id")
-        .includes(String(category.category_id))
-    );
-  });
+  const response = page.waitForResponse(
+    (candidate) =>
+      candidate
+        .url()
+        .includes(`/api/categories/${category.category_id}/overview`) &&
+      candidate.ok(),
+  );
   await page.goto(`/categories/${category.category_id}`);
-  await filteredRequest;
+  await response;
 
-  const categoryHeading = page
-    .getByRole("heading", { level: 1 })
-    .filter({ hasText: category.name });
-  await expect(categoryHeading).toBeVisible();
-  await expect(categoryHeading).toHaveCount(1);
-  await expect(categoryHeading.getByText("E2EDrill:")).toBeVisible();
+  await expect(page.getByTestId("entity-overview-top-line")).toBeVisible();
+  const chart = page.getByTestId("entity-overview-chart");
+  await expect(chart).toBeVisible();
+  await expect(chart).toContainText("bars show net spend");
+  await expect(chart.locator(".recharts-line-curve")).toHaveCount(1);
+  await expect(page.getByTestId("entity-overview-overlay-select")).toHaveCount(
+    0,
+  );
+  const breakdown = page.getByTestId("entity-overview-breakdown");
   await expect(
-    page.getByRole("heading", { level: 2 }).filter({ hasText: category.name }),
-  ).toHaveCount(0);
+    page.getByText(
+      "Categories is unavailable because this page already fixes one category.",
+    ),
+  ).toBeVisible();
   await expect(
-    page.getByRole("link", { name: "View all transactions" }),
-  ).toHaveCount(0);
-  await expect(page.getByRole("row").filter({ hasText: memo })).toBeVisible();
-
-  const dateJumpResponse = page.waitForResponse((response) => {
-    const url = new URL(response.url());
+    page
+      .getByTestId("flow-breakdown-select")
+      .getByRole("button", { name: "Categories" }),
+  ).toBeDisabled();
+  await expect(
+    page.getByTestId("entity-overview-top-line").locator("dd").first(),
+  ).toHaveText("≈ 12.34 USD");
+  await expectMutedCurrencyMarker(
+    page
+      .getByTestId("entity-overview-top-line")
+      .locator("dd")
+      .first()
+      .getByText("USD", { exact: true }),
+  );
+  const seriesToggle = breakdown.getByRole("checkbox").first();
+  await expect(seriesToggle).toBeChecked();
+  const filteredResponse = page.waitForResponse((candidate) => {
+    const url = new URL(candidate.url());
     return (
-      url.pathname === "/api/transactions" &&
-      url.searchParams.get("anchor_date") === "2025-01-02"
+      url.pathname === `/api/categories/${category.category_id}/overview` &&
+      url.searchParams.has("excluded_contributor_id") &&
+      candidate.ok()
     );
   });
-  await page.getByLabel("Go to day").fill("2025-01-02");
-  await dateJumpResponse;
+  await seriesToggle.click();
+  const filteredDataset = (await filteredResponse).json() as Promise<{
+    readonly dataset: {
+      readonly configuration: {
+        readonly excluded_contributor_ids: readonly string[];
+      };
+      readonly periods: readonly {
+        readonly bar_group_totals: readonly {
+          readonly amount_usd: string;
+        }[];
+        readonly trend: { readonly amount_usd: string };
+      }[];
+    };
+  }>;
+  const filteredReport = (await filteredDataset).dataset;
+  expect(filteredReport.configuration.excluded_contributor_ids).toHaveLength(1);
+  expect(filteredReport.periods.at(-1)?.bar_group_totals[0]?.amount_usd).toBe(
+    "0.00000000",
+  );
+  expect(filteredReport.periods.at(-1)?.trend.amount_usd).toBe("0.00000000");
+  await expect(seriesToggle).not.toBeChecked();
   await expect(
-    page.locator('[data-date-jump-anchor="2025-01-02"]'),
-  ).toBeVisible();
-
-  await page.getByRole("button", { name: "Open filters" }).click();
+    page.getByTestId("entity-overview-top-line").locator("dd").first(),
+  ).toHaveText("≈ 12.34 USD");
+  await chart.locator(".recharts-line-dot").last().hover();
+  const chartTooltip = page.getByTestId("flow-chart-tooltip");
+  await expect(chartTooltip).toBeVisible();
+  await expect(chartTooltip).toHaveAttribute("aria-live", "polite");
+  await expect(chartTooltip).toHaveAttribute("role", "status");
+  await expect(chartTooltip.getByText("Net total")).toBeVisible();
   await expect(
-    page.getByTestId("transaction-browser-filter-bar"),
+    chartTooltip
+      .getByTestId("flow-chart-totals")
+      .getByText("≈ 0.00 USD", { exact: true }),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Add filter" })).toBeVisible();
-  await page.getByRole("button", { name: "Close filters" }).click();
-  await expect(page.getByTestId("transaction-browser-filter-bar")).toBeHidden();
+  await expect(
+    chartTooltip.getByText("Rolling 3-period average", { exact: true }),
+  ).toBeVisible();
+  const tooltipTreatment = await chartTooltip.evaluate((element) => {
+    const probe = document.createElement("span");
+    probe.style.backgroundColor = "var(--border-ink)";
+    probe.style.color = "var(--frame-foreground)";
+    probe.style.fontFamily = "var(--font-mono)";
+    document.body.append(probe);
+    const expected = getComputedStyle(probe);
+    const actual = getComputedStyle(element);
+    const currencyMarker = element.querySelector(".text-muted-foreground");
+    const result = {
+      background: actual.backgroundColor,
+      borderWidth: actual.borderWidth,
+      borderRadius: actual.borderRadius,
+      color: actual.color,
+      expectedBackground: expected.backgroundColor,
+      expectedColor: expected.color,
+      expectedFontFamily: expected.fontFamily,
+      fontFamily: actual.fontFamily,
+      hasVisibleShadow: [...actual.boxShadow.matchAll(/rgba?\([^)]+\)/g)].some(
+        ([color]) => color !== "rgba(0, 0, 0, 0)",
+      ),
+      nestedColor: currencyMarker
+        ? getComputedStyle(currencyMarker).color
+        : undefined,
+    };
+    probe.remove();
+    return result;
+  });
+  expect(tooltipTreatment.background).toBe(tooltipTreatment.expectedBackground);
+  expect(tooltipTreatment.color).toBe(tooltipTreatment.expectedColor);
+  expect(tooltipTreatment.nestedColor).toBe(tooltipTreatment.expectedColor);
+  expect(tooltipTreatment.fontFamily).toBe(tooltipTreatment.expectedFontFamily);
+  expect(tooltipTreatment.borderWidth).toBe("0px");
+  expect(tooltipTreatment.borderRadius).toBe("0px");
+  expect(tooltipTreatment.hasVisibleShadow).toBe(false);
+  await seriesToggle.click();
+  await expect(seriesToggle).toBeChecked();
 
-  const toggle = page.getByLabel("This level only");
-  await toggle.click();
-  await expect(page).toHaveURL(/scope=exact/);
-  await expect(toggle).toBeChecked();
-  await page.reload();
-  await expect(toggle).toBeChecked();
-  await expect(page.getByRole("row").filter({ hasText: memo })).toBeVisible();
+  const preview = page.getByTestId("entity-overview-transactions");
+  const previewHeading = preview.getByRole("heading", {
+    name: "Recent transactions",
+  });
+  await expect(previewHeading).toBeVisible();
+  expect(
+    await previewHeading.evaluate((element) => getComputedStyle(element).color),
+  ).toBe(
+    await previewHeading.evaluate(() => {
+      const probe = document.createElement("span");
+      probe.style.color = "var(--frame-foreground)";
+      document.body.append(probe);
+      const color = getComputedStyle(probe).color;
+      probe.remove();
+      return color;
+    }),
+  );
+  await expect(
+    preview.getByTestId("transactions-pagination-footer"),
+  ).toHaveCount(0);
+  await expect(
+    preview.locator("[data-transaction-row='true']").filter({ hasText: memo }),
+  ).toBeVisible();
+  await expect
+    .poll(() =>
+      preview
+        .getByTestId("transactions-table-scroll")
+        .evaluate((element) => getComputedStyle(element).overflowY),
+    )
+    .toBe("visible");
 
-  const row = page.getByRole("row").filter({ hasText: memo }).first();
+  const row = preview
+    .locator("[data-transaction-row='true']")
+    .filter({ hasText: memo });
   await row.focus();
-  await page.keyboard.press("Enter");
+  await row.press("Enter");
   await expect(page).toHaveURL(
     new RegExp(`transaction=${transaction.transaction_id}`),
   );
-  const panel = page.getByTestId("transaction-detail-panel");
-  await expect(panel).toBeVisible();
-  await expect(panel.getByText("Journal records")).toBeVisible();
-  await page.reload();
-  const reloadedPanel = page.getByTestId("transaction-detail-panel");
-  await expect(reloadedPanel).toBeVisible();
+  const detail = page.getByTestId("transaction-detail-panel");
+  await expect(detail).toBeVisible();
+  await expect(detail.getByText("Journal records")).toBeVisible();
   await expect(
-    reloadedPanel.getByTestId("transaction-detail-summary-memo"),
-  ).toHaveText(memo);
-  await page.getByRole("button", { name: "Close transaction detail" }).click();
-  await expect(page.getByTestId("transaction-detail-panel")).toBeHidden();
-
-  await page.goto("/categories/999999999");
+    detail.getByRole("button", { name: "Delete", exact: true }),
+  ).toHaveCount(0);
   await expect(
-    page.getByRole("heading", { name: "Category not found" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: "Back to categories" }),
-  ).toHaveAttribute("href", "/categories");
-});
-
-test("debounced drill-down search preserves unsaved split editor input", async ({
-  page,
-}, testInfo) => {
-  const clockStart = Date.now();
-  await page.clock.install({ time: clockStart });
-  await page.setViewportSize({ width: 1440, height: 900 });
-  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
-  const category = await createCategory(page, `E2ESearchRace:${unique}`);
-  const memo = `E2E drill-down search race ${unique}`;
-  const modifiedMemo = `E2E unsaved drill-down split ${unique}`;
-  const transaction = await createSpend(page, { category, memo });
-
-  await page.goto(`/categories/${category.category_id}?page=1&pageSize=50`);
-  const row = page.getByRole("row").filter({ hasText: memo }).first();
-  await expect(row).toBeVisible();
-  await page.clock.pauseAt(clockStart + 60_000);
-  await captureSearchDebounce(
-    page,
-    page.getByRole("searchbox", { name: "Search" }),
-    unique,
-  );
-  await row.getByRole("button", { name: "Split transaction" }).click();
-
-  const entryPanel = page.getByRole("dialog", {
-    name: "Transaction editor",
-  });
-  const memoInput = page
-    .locator('[aria-label="Journal record 1"]')
-    .getByLabel("Memo");
-  await expect(entryPanel).toBeVisible();
-  await expect(memoInput).toBeVisible();
-  await memoInput.fill(modifiedMemo);
-  await runCapturedSearchDebounce(page, unique);
-  await page.clock.runFor(350);
-
-  await expect
-    .poll(() => {
-      const params = new URL(page.url()).searchParams;
-      return {
-        entry: params.get("entry"),
-        page: params.get("page"),
-        q: params.get("q"),
-      };
-    })
-    .toEqual({
-      entry: `split:${transaction.transaction_id}`,
-      page: "1",
-      q: unique,
-    });
-  await expect(entryPanel).toBeVisible();
-  await expect(memoInput).toHaveValue(modifiedMemo);
-
-  await memoInput.fill(memo);
-  await page.goBack();
-  await expect(entryPanel).toHaveCount(0);
-  await expect(page.getByRole("searchbox", { name: "Search" })).toHaveValue(
-    unique,
-  );
-  expect(new URL(page.url()).searchParams.get("q")).toBe(unique);
-});
-
-test("reference transaction drill-downs share the edit-mode lifecycle", async ({
-  page,
-}, testInfo) => {
-  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
-  const category = await createCategory(page, `E2EEditModeDrill:${unique}`);
-  const memo = `E2E bulk drilldown ${unique}`;
-  await createSpend(page, { category, memo });
-
-  await page.goto(`/categories/${category.category_id}`);
-  const row = page.getByRole("row").filter({ hasText: memo });
-  await expect(row).toBeVisible();
-  await expect(row.getByRole("checkbox")).toHaveCount(0);
-
-  await page.getByRole("button", { name: "Edit mode" }).click();
-  const modeBar = page.getByTestId("transaction-browser-edit-mode-header");
-  await expect(modeBar).toContainText("0 selected");
-  await expect(page.getByRole("searchbox", { name: "Search" })).toHaveCount(0);
-  await expect(
-    modeBar.getByRole("button", { name: "Select page" }),
-  ).toBeFocused();
-  await row.focus();
-  await expect(row).toBeFocused();
-  await page.keyboard.press("Enter");
-  await expect(modeBar).toContainText("1 selected");
-  await expect(page.getByTestId("transaction-edit-dock")).toBeVisible();
-
-  await modeBar.getByRole("button", { name: "Done" }).click();
-  await expect(modeBar).toHaveCount(0);
-  await expect(page.getByTestId("transaction-edit-dock")).toHaveCount(0);
-  await expect(page.getByRole("searchbox", { name: "Search" })).toBeVisible();
-  await expect(page).toHaveURL(
-    new RegExp(`/categories/${category.category_id}(?:\\?|$)`),
-  );
-  await expect(row).toBeVisible();
-});
-
-test("a dock edit that empties a drill-down restores usable focus", async ({
-  page,
-}, testInfo) => {
-  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
-  const [sourceCategory, replacementCategory] = await Promise.all([
-    createCategory(page, `E2EFocusSource${unique}`),
-    createCategory(page, `E2EFocusReplacement${unique}`),
-  ]);
-  const memo = `E2E drill-down focus ${unique}`;
-  await createSpend(page, { category: sourceCategory, memo });
-
-  await page.goto(`/categories/${sourceCategory.category_id}`);
-  const row = page.getByRole("row").filter({ hasText: memo });
-  await expect(row).toBeVisible();
-  await page.getByRole("button", { name: "Edit mode" }).click();
-  await row.click();
-
-  const dock = page.getByTestId("transaction-edit-dock");
-  await dock.getByRole("button", { name: "Choose category" }).click();
-  const editor = page.getByTestId("edit-dock-editor");
-  const categoryPicker = editor.getByRole("combobox", { name: "Category" });
-  await categoryPicker.fill(replacementCategory.fqn);
-  await categoryPicker.press("Enter");
-  await editor.getByRole("button", { name: "Apply" }).click();
-
-  await expect(row).toHaveCount(0);
-  await expect(editor).toHaveCount(0);
-  await expect(
-    page.locator("[data-transaction-detail-restore-target]"),
-  ).toBeFocused();
-});
-
-test("a dock edit focuses the removed row's nearest drill-down neighbor", async ({
-  page,
-}, testInfo) => {
-  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
-  const [sourceCategory, replacementCategory] = await Promise.all([
-    createCategory(page, `E2ENeighborSource${unique}`),
-    createCategory(page, `E2ENeighborReplacement${unique}`),
-  ]);
-  const newestMemo = `E2E neighbor newest ${unique}`;
-  const middleMemo = `E2E neighbor middle ${unique}`;
-  const oldestMemo = `E2E neighbor oldest ${unique}`;
-  await Promise.all([
-    createSpend(page, {
-      category: sourceCategory,
-      initiatedDate: "2025-01-03",
-      memo: newestMemo,
-    }),
-    createSpend(page, {
-      category: sourceCategory,
-      initiatedDate: "2025-01-02",
-      memo: middleMemo,
-    }),
-    createSpend(page, {
-      category: sourceCategory,
-      initiatedDate: "2025-01-01",
-      memo: oldestMemo,
-    }),
-  ]);
-
-  await page.goto(`/categories/${sourceCategory.category_id}`);
-  const middleRow = page.getByRole("row").filter({ hasText: middleMemo });
-  const oldestRow = page.getByRole("row").filter({ hasText: oldestMemo });
-  await page.getByRole("button", { name: "Edit mode" }).click();
-  await middleRow.click();
-
-  const dock = page.getByTestId("transaction-edit-dock");
-  await dock.getByRole("button", { name: "Choose category" }).click();
-  const editor = page.getByTestId("edit-dock-editor");
-  const categoryPicker = editor.getByRole("combobox", { name: "Category" });
-  await categoryPicker.fill(replacementCategory.fqn);
-  await categoryPicker.press("Enter");
-  await editor.getByRole("button", { name: "Apply" }).click();
-
-  await expect(middleRow).toHaveCount(0);
-  await expect(editor).toHaveCount(0);
-  await expect(oldestRow).toBeFocused();
-  await expect(
-    page.getByRole("row").filter({ hasText: newestMemo }),
-  ).not.toBeFocused();
-});
-
-test("drill-down transaction row quick-delete confirms, tombstones, and refreshes", async ({
-  page,
-}, testInfo) => {
-  await page.setViewportSize({ width: 1440, height: 760 });
-  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
-  const category = await createCategory(page, `E2EQuickDelete:${unique}`);
-  const memo = `E2E drill-down quick delete ${unique}`;
-  const transaction = await createSpend(page, { category, memo });
-
-  await page.goto(`/categories/${category.category_id}`);
-  const row = page.locator("[data-transaction-row='true']").filter({
-    hasText: memo,
-  });
-  await expect(row).toBeVisible();
-
-  const directDelete = row
-    .locator(".row-actions-buttons")
-    .getByRole("button", { name: "Delete transaction" });
-  if (await directDelete.isVisible()) {
-    await directDelete.click();
-  } else {
-    await row.getByRole("button", { name: "More row actions" }).click();
-    const menu = page.locator(".row-actions-menu:visible");
-    await expect(menu).toBeVisible();
-    await menu.getByRole("button", { name: "Delete transaction" }).click();
-  }
-  const confirmDialog = page.getByRole("alertdialog", {
-    name: "Delete transaction",
-  });
-  await expect(confirmDialog).toBeVisible();
-  await expect(
-    confirmDialog.getByText(transaction.display_title),
-  ).toBeVisible();
-
-  const deleteRequest = page.waitForRequest(
-    (request) =>
-      request.method() === "DELETE" &&
-      request.url().includes(`/api/transactions/${transaction.transaction_id}`),
-  );
-  await confirmDialog
-    .getByRole("button", { name: "Delete transaction" })
+    detail.getByRole("button", { name: "Edit", exact: true }),
+  ).toHaveCount(0);
+  await expect(detail.getByRole("button", { name: "Post" })).toHaveCount(0);
+  await detail
+    .getByRole("button", { name: "Close transaction detail" })
     .click();
-  await deleteRequest;
 
-  await expect(
-    page.getByRole("status").filter({ hasText: "Transaction deleted." }),
-  ).toBeVisible();
-  await expect(confirmDialog).toBeHidden();
-  await expect(page.getByRole("row").filter({ hasText: memo })).toBeHidden();
+  const transactionsLink = preview.getByRole("link", { name: "Transactions" });
+  const href = await transactionsLink.getAttribute("href");
+  expect(
+    new URL(href ?? "", "http://mina.test").searchParams.getAll("category"),
+  ).toEqual([String(category.category_id)]);
 });
 
-test("drill-down renders the transaction empty state for a matching entity with no activity", async ({
+test("tag group overview uses exact prefix links and stacks chart before breakdown on small screens", async ({
   page,
 }, testInfo) => {
   const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
-  const category = await createCategory(page, `E2EEmptyPreview:${unique}`);
-
-  await page.goto(`/categories/${category.category_id}`);
-  await expect(
-    page.getByRole("heading", { name: "No transactions" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "New transaction" }),
-  ).toHaveCount(0);
-});
-
-test("category drill-down rolls visible descendants, excludes hidden descendants, and exact scope narrows them", async ({
-  page,
-}) => {
-  const now = "2026-07-11T12:00:00Z";
-  const parentCategory = {
-    category_id: 900001,
-    created_at: now,
-    deletable: false,
-    economic_intent: "expense",
-    fqn: "E2EMocked:Parent",
-    is_hidden: false,
-    level: 2,
-    name: "Parent",
-    parent_fqn: "E2EMocked",
-    updated_at: now,
-  };
-  const childCategory = {
-    ...parentCategory,
-    category_id: 900002,
-    fqn: "E2EMocked:Parent:Child",
-    level: 3,
-    name: "Child",
-    parent_fqn: "E2EMocked:Parent",
-  };
-  const hiddenChildCategory = {
-    ...childCategory,
-    category_id: 900003,
-    fqn: "E2EMocked:Parent:HiddenChild",
-    is_hidden: true,
-    name: "HiddenChild",
-  };
-  const transactionFor = (
-    transactionId: number,
-    categoryId: number,
-    title: string,
-  ) => ({
-    components: [],
-    created_at: now,
-    display_title: title,
-    initiated_date: "2026-05-31",
-    primary_amounts: [{ amount: "-12.34000000", currency: "USD" }],
-    recurring_occurrence_id: null,
-    records: [
-      {
-        account_id: 1,
-        amount: "-12.34000000",
-        amount_usd: "-12.34000000",
-        category_id: categoryId,
-        created_at: now,
-        currency: "USD",
-        initiated_date: "2026-05-31",
-        memo: title,
-        settlement: null,
-        reconciliation_status: "unreconciled",
-        record_id: transactionId * 10,
-        source: "manual",
-        tag_ids: [],
-        transaction_id: transactionId,
-        updated_at: now,
-      },
-    ],
-    shapes: [
-      {
-        amounts: [{ amount: "12.34000000", currency: "USD" }],
-        shape: "spend",
-      },
-    ],
-    transaction_class: "spend",
-    transaction_id: transactionId,
-  });
-
-  await page.route("**/api/categories?**", async (route: Route) => {
-    await route.fulfill({
-      contentType: "application/json",
-      json: {
-        categories: [parentCategory, childCategory, hiddenChildCategory],
-        total_count: 3,
-      },
-    });
-  });
-  await page.route("**/api/categories/groups?**", async (route: Route) => {
-    await route.fulfill({
-      contentType: "application/json",
-      json: {
-        groups: [],
-      },
-    });
-  });
-  await page.route("**/api/transactions?**", async (route: Route) => {
-    const url = new URL(route.request().url());
-    const categoryIds = url.searchParams.getAll("category_id");
-    const transactions = [
-      ...(categoryIds.includes("900001")
-        ? [transactionFor(910001, 900001, "Parent scoped transaction")]
-        : []),
-      ...(categoryIds.includes("900002")
-        ? [transactionFor(910002, 900002, "Child scoped transaction")]
-        : []),
-      ...(categoryIds.includes("900003")
-        ? [transactionFor(910003, 900003, "Hidden child transaction")]
-        : []),
-    ];
-    await route.fulfill({
-      contentType: "application/json",
-      json: {
-        offset: 0,
-        total_count: transactions.length,
-        transactions,
-      },
-    });
-  });
-
-  await page.goto("/categories/900001");
-  await expect(
-    page.getByRole("row").filter({ hasText: "Parent scoped transaction" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("row").filter({ hasText: "Child scoped transaction" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("row").filter({ hasText: "Hidden child transaction" }),
-  ).toHaveCount(0);
-  await expect(
-    page.getByRole("link", { name: "View all transactions" }),
-  ).toHaveCount(0);
-
-  const toggle = page.getByLabel("This level only");
-  await toggle.click();
-  await expect(page).toHaveURL(/scope=exact/);
-  await expect(toggle).toBeChecked();
-  await expect(
-    page.getByRole("row").filter({ hasText: "Parent scoped transaction" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("row").filter({ hasText: "Child scoped transaction" }),
-  ).toHaveCount(0);
-});
-
-test("tag drill-down keeps one header, scoped filters, not-found, and exact scope", async ({
-  page,
-}, testInfo) => {
-  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
-  const tag = await createTag(page, `E2ETagDrill:${unique}`);
+  const tagPrefix = `E2EGroupTag:${unique}`;
+  const tag = await createTag(page, `${tagPrefix}:Child`);
   const categories = await listFixtures<CategoryFixture>(
     page,
     "/api/categories",
     "categories",
   );
   const category = findByFqn(categories, "Entertainment:Books");
-  const memo = `E2E tag drilldown ${unique}`;
-  await createSpend(page, { category, memo, tag });
-
-  const filteredRequest = page.waitForRequest((request) => {
-    const url = new URL(request.url());
-    return (
-      url.pathname === "/api/transactions" &&
-      url.searchParams.getAll("tag_id").includes(String(tag.tag_id))
-    );
+  await createSpend(page, {
+    category,
+    memo: `E2E tag group ${unique}`,
+    tag,
   });
-  await page.goto(`/tags/${tag.tag_id}`);
-  await filteredRequest;
 
-  const tagHeading = page
-    .getByRole("heading", { level: 1 })
-    .filter({ hasText: tag.name });
-  await expect(tagHeading).toBeVisible();
-  await expect(tagHeading).toHaveCount(1);
-  await expect(tagHeading.getByText("E2ETagDrill:")).toBeVisible();
+  await page.setViewportSize({ width: 640, height: 900 });
+  await page.goto(`/tags/group?prefix=${encodeURIComponent(tagPrefix)}`);
+  const chart = page.getByTestId("entity-overview-chart");
+  const breakdown = page.getByTestId("entity-overview-breakdown");
+  await expect(chart).toBeVisible();
+  await expect(chart).toContainText("bars show net flow");
+  await expect(chart.locator(".recharts-line-curve")).toHaveCount(1);
+  await expect(page.getByTestId("entity-overview-overlay-select")).toHaveCount(
+    0,
+  );
+  await expect(breakdown).toBeVisible();
   await expect(
-    page.getByRole("heading", { level: 2 }).filter({ hasText: tag.name }),
-  ).toHaveCount(0);
-  await expect(
-    page.getByRole("link", { name: "View all transactions" }),
-  ).toHaveCount(0);
-  await expect(page.getByRole("row").filter({ hasText: memo })).toBeVisible();
+    breakdown.getByRole("link", { name: category.name }),
+  ).toHaveAttribute("href", `/categories/${category.category_id}`);
+  const chartBox = await chart.boundingBox();
+  const breakdownBox = await breakdown.boundingBox();
+  expect(chartBox?.y).toBeLessThan(breakdownBox?.y ?? 0);
 
-  const toggle = page.getByLabel("This level only");
-  await toggle.click();
-  await expect(page).toHaveURL(/scope=exact/);
-  await expect(toggle).toBeChecked();
-  await page.reload();
-  await expect(toggle).toBeChecked();
-  await expect(page.getByRole("row").filter({ hasText: memo })).toBeVisible();
+  const transactionsLink = page
+    .getByTestId("entity-overview-transactions")
+    .getByRole("link", { name: "Transactions" });
+  const href = await transactionsLink.getAttribute("href");
+  expect(
+    new URL(href ?? "", "http://mina.test").searchParams.get("tagPrefix"),
+  ).toBe(tagPrefix);
 
-  await page.goto("/tags/999999999");
-  await expect(
-    page.getByRole("heading", { name: "Tag not found" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: "Back to tags" }),
-  ).toHaveAttribute("href", "/tags");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const wideChartBox = await chart.boundingBox();
+  const wideBreakdownBox = await breakdown.boundingBox();
+  expect(wideBreakdownBox?.x).toBeLessThan(wideChartBox?.x ?? 0);
 });
 
-test("tag drill-down rolls visible descendants, excludes hidden descendants, and exact scope narrows them", async ({
+test("tag leaf preview chips retain the fixed tag scope", async ({
   page,
-}) => {
-  const now = "2026-07-11T12:00:00Z";
-  const parentTag = {
-    created_at: now,
-    deletable: false,
-    fqn: "E2EMockedTag:Parent",
-    is_hidden: false,
-    level: 2,
-    name: "Parent",
-    parent_fqn: "E2EMockedTag",
-    tag_id: 900101,
-    updated_at: now,
-  };
-  const childTag = {
-    ...parentTag,
-    fqn: "E2EMockedTag:Parent:Child",
-    level: 3,
-    name: "Child",
-    parent_fqn: "E2EMockedTag:Parent",
-    tag_id: 900102,
-  };
-  const hiddenChildTag = {
-    ...childTag,
-    fqn: "E2EMockedTag:Parent:HiddenChild",
-    is_hidden: true,
-    name: "HiddenChild",
-    tag_id: 900103,
-  };
-  const transactionFor = (
-    transactionId: number,
-    tagId: number,
-    title: string,
-  ) => ({
-    components: [],
-    created_at: now,
-    display_title: title,
-    initiated_date: "2026-05-31",
-    primary_amounts: [{ amount: "-12.34000000", currency: "USD" }],
-    recurring_occurrence_id: null,
-    records: [
-      {
-        account_id: 1,
-        amount: "-12.34000000",
-        amount_usd: "-12.34000000",
-        category_id: 1,
-        created_at: now,
-        currency: "USD",
-        initiated_date: "2026-05-31",
-        memo: title,
-        settlement: null,
-        reconciliation_status: "unreconciled",
-        record_id: transactionId * 10,
-        source: "manual",
-        tag_ids: [tagId],
-        transaction_id: transactionId,
-        updated_at: now,
-      },
-    ],
-    shapes: [
-      {
-        amounts: [{ amount: "12.34000000", currency: "USD" }],
-        shape: "spend",
-      },
-    ],
-    transaction_class: "spend",
-    transaction_id: transactionId,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const scopedTag = await createTag(page, `E2EPreviewScope:${unique}`);
+  const activatedTag = await createTag(page, `E2EPreviewFilter:${unique}`);
+  const categories = await listFixtures<CategoryFixture>(
+    page,
+    "/api/categories",
+    "categories",
+  );
+  const category = findByFqn(categories, "Entertainment:Books");
+  await createSpend(page, {
+    category,
+    memo: `E2E tag preview filter ${unique}`,
+    tags: [scopedTag, activatedTag],
   });
 
-  await page.route("**/api/tags?**", async (route: Route) => {
+  await page.goto(`/tags/${scopedTag.tag_id}`);
+  const preview = page.getByTestId("entity-overview-transactions");
+  await preview
+    .getByRole("button", { name: `Filter by ${activatedTag.name}` })
+    .first()
+    .click();
+
+  await expect(page).toHaveURL(/\/transactions\?/);
+  const activeTagIds = new URL(page.url()).searchParams.getAll("tag");
+  expect(activeTagIds).toEqual(
+    [scopedTag.tag_id, activatedTag.tag_id]
+      .sort((left, right) => left - right)
+      .map(String),
+  );
+});
+
+test("entity overview preserves loaded data after refresh failure", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const category = await createCategory(page, `E2EOverviewRefresh:${unique}`);
+  await createSpend(page, {
+    category,
+    memo: `E2E overview refresh ${unique}`,
+  });
+  const overviewPattern = `**/api/categories/${category.category_id}/overview*`;
+
+  await page.goto(`/categories/${category.category_id}`);
+  const topLine = page.getByTestId("entity-overview-top-line");
+  await expect(topLine).toBeVisible();
+  const configuredResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === `/api/categories/${category.category_id}/overview` &&
+      url.searchParams.get("grain") === "year" &&
+      response.ok()
+    );
+  });
+  await page
+    .getByTestId("flow-grain-select")
+    .getByRole("button", { name: "Year" })
+    .click();
+  await configuredResponse;
+
+  await createSpend(page, {
+    category,
+    memo: `E2E overview refreshed data ${unique}`,
+  });
+  const refreshRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return (
+      url.pathname === `/api/categories/${category.category_id}/overview` &&
+      url.searchParams.get("grain") === "year" &&
+      url.searchParams.get("period_count") === "6" &&
+      url.searchParams.get("trend") === "rolling_sum"
+    );
+  });
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event("mina:transaction-entry-saved"));
+  });
+  await refreshRequest;
+  await expect(topLine.locator("dd").first()).toHaveText("≈ 24.68 USD");
+  const chart = page.getByTestId("entity-overview-chart");
+  await chart.locator(".recharts-bar-rectangle").last().hover();
+  await expect(
+    page.getByTestId("flow-chart-totals").getByText("≈ 24.68 USD"),
+  ).toBeVisible();
+
+  await page.route(overviewPattern, async (route) => {
     await route.fulfill({
+      body: JSON.stringify({
+        error: { code: "unavailable", message: "Report unavailable." },
+      }),
       contentType: "application/json",
-      json: {
-        tags: [parentTag, childTag, hiddenChildTag],
-        total_count: 3,
-      },
+      status: 503,
     });
   });
-  await page.route("**/api/tags/groups?**", async (route: Route) => {
-    await route.fulfill({
-      contentType: "application/json",
-      json: {
-        groups: [],
-      },
-    });
-  });
-  await page.route("**/api/transactions?**", async (route: Route) => {
-    const url = new URL(route.request().url());
-    const tagIds = url.searchParams.getAll("tag_id");
-    const transactions = [
-      ...(tagIds.includes("900101")
-        ? [transactionFor(910101, 900101, "Parent tag transaction")]
-        : []),
-      ...(tagIds.includes("900102")
-        ? [transactionFor(910102, 900102, "Child tag transaction")]
-        : []),
-      ...(tagIds.includes("900103")
-        ? [transactionFor(910103, 900103, "Hidden child tag transaction")]
-        : []),
-    ];
-    await route.fulfill({
-      contentType: "application/json",
-      json: {
-        offset: 0,
-        total_count: transactions.length,
-        transactions,
-      },
-    });
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event("mina:transaction-entry-saved"));
   });
 
-  await page.goto("/tags/900101");
   await expect(
-    page.getByRole("row").filter({ hasText: "Parent tag transaction" }),
+    page.getByText("Category overview could not be refreshed."),
   ).toBeVisible();
-  await expect(
-    page.getByRole("row").filter({ hasText: "Child tag transaction" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("row").filter({ hasText: "Hidden child tag transaction" }),
-  ).toHaveCount(0);
-  await expect(
-    page.getByRole("link", { name: "View all transactions" }),
-  ).toHaveCount(0);
+  await expect(topLine).toBeVisible();
 
-  const toggle = page.getByLabel("This level only");
-  await toggle.click();
-  await expect(page).toHaveURL(/scope=exact/);
-  await expect(toggle).toBeChecked();
+  await page.unroute(overviewPattern);
+  await page.getByRole("button", { name: "Retry" }).click();
   await expect(
-    page.getByRole("row").filter({ hasText: "Parent tag transaction" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("row").filter({ hasText: "Child tag transaction" }),
+    page.getByText("Category overview could not be refreshed."),
   ).toHaveCount(0);
+  await expect(topLine).toBeVisible();
+});
+
+test("entity preview details remain usable when lookups fail and can retry", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const category = await createCategory(page, `E2ELookupFailure:${unique}`);
+  const memo = `E2E lookup failure ${unique}`;
+  await createSpend(page, { category, memo });
+
+  await page.route("**/api/accounts?**", async (route) => {
+    await route.fulfill({
+      body: JSON.stringify({
+        error: { code: "unavailable", message: "Lookups unavailable." },
+      }),
+      contentType: "application/json",
+      status: 503,
+    });
+  });
+  await page.goto(`/categories/${category.category_id}`);
+
+  const preview = page.getByTestId("entity-overview-transactions");
+  await expect(preview.getByRole("button", { name: "Retry" })).toBeVisible();
+  const row = preview
+    .locator("[data-transaction-row='true']")
+    .filter({ hasText: memo });
+  await row.focus();
+  await row.press("Enter");
+  const detail = page.getByTestId("transaction-detail-panel");
+  await expect(detail.getByText("Journal records")).toBeVisible();
+  await expect(detail.getByText("Loading transaction")).toHaveCount(0);
+  await detail
+    .getByRole("button", { name: "Close transaction detail" })
+    .click();
+  await expect(detail).toHaveCount(0);
+
+  await page.unroute("**/api/accounts?**");
+  await preview.getByRole("button", { name: "Retry" }).click();
+  await expect(preview.getByRole("button", { name: "Retry" })).toHaveCount(0);
+  await row.focus();
+  await row.press("Enter");
+  await expect(detail.getByText("Journal records")).toBeVisible();
 });
 
 test("member drill-down direct navigation filters attributed transactions", async ({
@@ -926,11 +721,7 @@ test("member drill-down direct navigation filters attributed transactions", asyn
   const category = findByFqn(categories, "Entertainment:Books");
   const targetMemo = `E2E member target ${unique}`;
   const alternateMemo = `E2E member alternate ${unique}`;
-  await createSpend(page, {
-    category,
-    member: targetMember,
-    memo: targetMemo,
-  });
+  await createSpend(page, { category, member: targetMember, memo: targetMemo });
   await createSpend(page, {
     category,
     member: alternateMember,
@@ -957,31 +748,9 @@ test("member drill-down direct navigation filters attributed transactions", asyn
     }),
   ).toBeVisible();
   await expect(
-    page.getByRole("heading", {
-      exact: true,
-      name: targetMember.name,
-    }),
-  ).toHaveCount(1);
-  await expect(
-    page.getByRole("link", { name: "View all transactions" }),
-  ).toHaveCount(0);
-  await expect(
     page.getByRole("row").filter({ hasText: targetMemo }),
   ).toBeVisible();
   await expect(
     page.getByRole("row").filter({ hasText: alternateMemo }),
   ).toHaveCount(0);
-
-  await page.reload();
-  await expect(
-    page.getByRole("row").filter({ hasText: targetMemo }),
-  ).toBeVisible();
-
-  await page.goto("/members/999999999");
-  await expect(
-    page.getByRole("heading", { name: "Member not found" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: "Back to members" }),
-  ).toHaveAttribute("href", "/members");
 });

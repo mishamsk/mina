@@ -61,9 +61,7 @@ export const MemberPage = () => {
           entityKindLabel="Member"
         />
       ) : null}
-      {member ? (
-        <ReferenceDrilldownPage filterIds={filterIds} filterKind="member" />
-      ) : null}
+      {member ? <ReferenceDrilldownPage filterIds={filterIds} /> : null}
     </section>
   );
 };

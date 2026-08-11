@@ -1,10 +1,9 @@
 import { Reload } from "pixelarticons/react";
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useMemo } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 
 import { Toast, toastDurationMs } from "@/components/toast";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   captureTransactionEntryLaunchContext,
@@ -27,11 +26,7 @@ import {
 import { openTransactionEntryLaunch } from "@/store";
 
 export interface ReferenceDrilldownPageProps {
-  readonly exactOnly?: boolean;
   readonly filterIds: readonly number[];
-  readonly filterKind: "category" | "member" | "tag";
-  readonly onExactOnlyChange?: (exactOnly: boolean) => void;
-  readonly showExactOnlyToggle?: boolean;
 }
 
 export const ReferenceDrilldownSkeleton = () => (
@@ -118,104 +113,37 @@ export const ReferenceDrilldownNotFound = ({
   </div>
 );
 
-const filtersFor = (
-  kind: ReferenceDrilldownPageProps["filterKind"],
+const withMemberScope = (
   ids: readonly number[],
   filters: TransactionFilters,
-): TransactionFilters => {
-  if (kind === "category") {
-    return {
-      ...filters,
-      categoryIds: ids,
-    };
-  }
+): TransactionFilters => ({ ...filters, memberIds: ids });
 
-  if (kind === "tag") {
-    return {
-      ...filters,
-      tagIds: ids,
-    };
-  }
-
-  return {
-    ...filters,
-    memberIds: ids,
-  };
-};
-
-const stripScopedFilterKind = (
-  kind: ReferenceDrilldownPageProps["filterKind"],
-  filters: TransactionFilters,
-): TransactionFilters => {
-  if (kind === "category") {
-    return {
-      ...filters,
-      categoryIds: [],
-    };
-  }
-
-  if (kind === "tag") {
-    return {
-      ...filters,
-      tagIds: [],
-    };
-  }
-
-  return {
-    ...filters,
-    memberIds: [],
-  };
-};
-
-const referenceEntityPath = (
-  kind: ReferenceDrilldownPageProps["filterKind"],
-  id: number,
-): string => {
-  if (kind === "category") {
-    return `/categories/${id}`;
-  }
-
-  if (kind === "tag") {
-    return `/tags/${id}`;
-  }
-
-  return `/members/${id}`;
-};
+const stripMemberScope = (filters: TransactionFilters): TransactionFilters => ({
+  ...filters,
+  memberIds: [],
+});
 
 export const ReferenceDrilldownPage = ({
-  exactOnly,
   filterIds,
-  filterKind,
-  onExactOnlyChange,
-  showExactOnlyToggle = false,
 }: ReferenceDrilldownPageProps) => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const restoreScopeToggleFocusRef = useRef(false);
-  const scopeToggleRef = useRef<HTMLButtonElement | null>(null);
   const urlFilters = useMemo(
     () => readTransactionFiltersFromSearchParams(searchParams),
     [searchParams],
   );
   const readScopedFiltersFromSearchParams = useCallback(
     (current: URLSearchParams) =>
-      filtersFor(
-        filterKind,
+      withMemberScope(
         filterIds,
-        stripScopedFilterKind(
-          filterKind,
-          readTransactionFiltersFromSearchParams(current),
-        ),
+        stripMemberScope(readTransactionFiltersFromSearchParams(current)),
       ),
-    [filterIds, filterKind],
+    [filterIds],
   );
-  const pageFilters = useMemo(
-    () => stripScopedFilterKind(filterKind, urlFilters),
-    [filterKind, urlFilters],
-  );
+  const pageFilters = useMemo(() => stripMemberScope(urlFilters), [urlFilters]);
   const filters = useMemo(
-    () => filtersFor(filterKind, filterIds, pageFilters),
-    [filterIds, filterKind, pageFilters],
+    () => withMemberScope(filterIds, pageFilters),
+    [filterIds, pageFilters],
   );
   const browser = useTransactionBrowserPage({
     filters,
@@ -224,26 +152,13 @@ export const ReferenceDrilldownPage = ({
     setSearchParams,
   });
 
-  const restoreTransactionDetailFocus = useCallback(() => {
-    if (restoreScopeToggleFocusRef.current) {
-      restoreScopeToggleFocusRef.current = false;
-      if (scopeToggleRef.current?.isConnected) {
-        scopeToggleRef.current.focus({ preventScroll: true });
-        return;
-      }
-    }
-
-    browser.detail.restoreDetailFocus();
-  }, [browser.detail]);
-
   const addEntityFilter = useCallback(
     (kind: "category" | "member" | "tag", id: number) => {
       browser.cancelDateJump();
       const current = readLiveSearchParams();
-      if (kind === filterKind) {
+      if (kind === "member") {
         browser.detail.closeTransactionDetail();
-        const nextFilters = stripScopedFilterKind(
-          filterKind,
+        const nextFilters = stripMemberScope(
           readTransactionFiltersFromSearchParams(current),
         );
         const next = writeTransactionFiltersToSearchParams(
@@ -253,14 +168,13 @@ export const ReferenceDrilldownPage = ({
         next.delete("transaction");
         next.set("pageSize", String(browser.pageSize));
         void navigate({
-          pathname: referenceEntityPath(kind, id),
+          pathname: `/members/${id}`,
           search: next.toString() ? `?${next.toString()}` : "",
         });
         return;
       }
 
-      const currentFilters = stripScopedFilterKind(
-        filterKind,
+      const currentFilters = stripMemberScope(
         readTransactionFiltersFromSearchParams(current),
       );
       const nextFilters =
@@ -269,28 +183,22 @@ export const ReferenceDrilldownPage = ({
               ...currentFilters,
               categoryIds: [...currentFilters.categoryIds, id],
             }
-          : kind === "tag"
-            ? {
-                ...currentFilters,
-                tagIds: [...currentFilters.tagIds, id],
-              }
-            : {
-                ...currentFilters,
-                memberIds: [...currentFilters.memberIds, id],
-              };
+          : {
+              ...currentFilters,
+              tagIds: [...currentFilters.tagIds, id],
+            };
       const next = writeTransactionFiltersToSearchParams(current, nextFilters);
       next.set("pageSize", String(browser.pageSize));
       setSearchParams(next);
     },
-    [browser, filterKind, navigate, setSearchParams],
+    [browser, navigate, setSearchParams],
   );
 
   const setSearchFilter = useCallback(
     (normalizedSearch: string) => {
       browser.cancelDateJump();
       const current = readLiveSearchParams();
-      const nextFilters = stripScopedFilterKind(
-        filterKind,
+      const nextFilters = stripMemberScope(
         readTransactionFiltersFromSearchParams(current),
       );
       const next = writeTransactionFiltersToSearchParams(current, {
@@ -312,7 +220,7 @@ export const ReferenceDrilldownPage = ({
       }
       setSearchParams(next);
     },
-    [browser, filterKind, setSearchParams],
+    [browser, setSearchParams],
   );
 
   const setTransactionFilters = useCallback(
@@ -321,12 +229,12 @@ export const ReferenceDrilldownPage = ({
       const current = readLiveSearchParams();
       const next = writeTransactionFiltersToSearchParams(
         current,
-        stripScopedFilterKind(filterKind, nextFilters),
+        stripMemberScope(nextFilters),
       );
       next.set("pageSize", String(browser.pageSize));
       setSearchParams(next);
     },
-    [browser, filterKind, setSearchParams],
+    [browser, setSearchParams],
   );
 
   const setTransactionClassFilter = useCallback(
@@ -334,8 +242,7 @@ export const ReferenceDrilldownPage = ({
       const transactionClass = transactionClasses.find(
         (candidate) => candidate === value,
       );
-      const currentFilters = stripScopedFilterKind(
-        filterKind,
+      const currentFilters = stripMemberScope(
         readTransactionFiltersFromSearchParams(readLiveSearchParams()),
       );
       setTransactionFilters({
@@ -343,11 +250,10 @@ export const ReferenceDrilldownPage = ({
         classes: transactionClass ? [transactionClass] : [],
       });
     },
-    [filterKind, setTransactionFilters],
+    [setTransactionFilters],
   );
   const clearFilterChips = useCallback(() => {
-    const currentFilters = stripScopedFilterKind(
-      filterKind,
+    const currentFilters = stripMemberScope(
       readTransactionFiltersFromSearchParams(readLiveSearchParams()),
     );
     setTransactionFilters({
@@ -355,12 +261,7 @@ export const ReferenceDrilldownPage = ({
       classes: currentFilters.classes,
       search: currentFilters.search,
     });
-  }, [filterKind, setTransactionFilters]);
-
-  const hiddenFilterDimensions = useMemo(
-    () => [filterKind] as const,
-    [filterKind],
-  );
+  }, [setTransactionFilters]);
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-6">
@@ -371,27 +272,10 @@ export const ReferenceDrilldownPage = ({
         dateJumpLoading={browser.dateJumpLoading}
         dateJumpValue={browser.dateJumpValue}
         onDateJumpToday={browser.jumpToCurrentDate}
-        extraControls={
-          showExactOnlyToggle ? (
-            <label className="font-heading mt-5 inline-flex min-h-9 items-center gap-2 text-xs font-semibold text-[var(--frame-foreground)] uppercase">
-              <Checkbox
-                ref={scopeToggleRef}
-                checked={exactOnly === true}
-                onCheckedChange={(checked) => {
-                  restoreScopeToggleFocusRef.current = Boolean(
-                    browser.detail.selectedTransactionId,
-                  );
-                  onExactOnlyChange?.(checked === true);
-                }}
-              />
-              This level only
-            </label>
-          ) : null
-        }
         filterControls={
           <TransactionFilterControls
             filters={pageFilters}
-            hiddenDimensions={hiddenFilterDimensions}
+            hiddenDimensions={["member"]}
             lookups={browser.lookups.snapshot}
             onChange={setTransactionFilters}
           />
@@ -533,7 +417,7 @@ export const ReferenceDrilldownPage = ({
           onFilterCategory={(categoryId) => {
             addEntityFilter("category", categoryId);
           }}
-          onRestoreFocus={restoreTransactionDetailFocus}
+          onRestoreFocus={browser.detail.restoreDetailFocus}
           onSplit={(transaction) => {
             openTransactionEntryLaunch(
               { transaction, type: "split" },

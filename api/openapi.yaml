@@ -144,6 +144,52 @@ paths:
                 $ref: "#/components/schemas/SettingsResponse"
         "405":
           $ref: "#/components/responses/MethodNotAllowed"
+  /api/accounting-history/range:
+    get:
+      operationId: getAccountingHistoryRange
+      tags:
+        - overview
+      summary: Get the available accounting-history date range.
+      description: Returns the earliest active accounting date through today. An empty ledger returns today for both bounds.
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "200":
+          description: Available inclusive accounting-history bounds.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountingHistoryRange"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+  /api/overview/flow:
+    get:
+      operationId: getHouseholdFlowReport
+      tags:
+        - overview
+      summary: Get the household flow report dataset.
+      description: Returns the configured Household net-flow dataset. Net flow is the checkbook-accounting change in Mina's tracked household position, not exact household net worth; transfer movement is excluded.
+      parameters:
+        - $ref: "#/components/parameters/HouseholdFlowBreakdown"
+        - $ref: "#/components/parameters/HouseholdFlowGrain"
+        - $ref: "#/components/parameters/HouseholdFlowPeriodCount"
+        - $ref: "#/components/parameters/HouseholdFlowAnchorDate"
+        - $ref: "#/components/parameters/HouseholdFlowNamedSeriesCount"
+        - $ref: "#/components/parameters/HouseholdFlowExcludedContributorIDs"
+        - $ref: "#/components/parameters/HouseholdFlowTrend"
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "200":
+          description: Presentation-ready household flow dataset.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HouseholdFlowDataset"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
   /api/background-operations:
     get:
       operationId: listBackgroundOperations
@@ -502,6 +548,40 @@ paths:
                 $ref: "#/components/schemas/GroupStateListResponse"
         "400":
           $ref: "#/components/responses/InvalidRequest"
+  /api/categories/groups/overview:
+    get:
+      operationId: getCategoryGroupOverview
+      tags:
+        - categories
+      summary: Get an implicit category group drill-down overview.
+      parameters:
+        - name: fqn
+          in: query
+          required: true
+          description: Exact active implicit-group FQN prefix; hidden descendants remain included.
+          schema:
+            type: string
+            minLength: 1
+        - $ref: "#/components/parameters/HouseholdFlowBreakdown"
+        - $ref: "#/components/parameters/HouseholdFlowGrain"
+        - $ref: "#/components/parameters/HouseholdFlowPeriodCount"
+        - $ref: "#/components/parameters/HouseholdFlowAnchorDate"
+        - $ref: "#/components/parameters/HouseholdFlowNamedSeriesCount"
+        - $ref: "#/components/parameters/HouseholdFlowExcludedContributorIDs"
+        - $ref: "#/components/parameters/HouseholdFlowTrend"
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "200":
+          description: Presentation-ready category group report.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HouseholdFlowEntityResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/categories/set-hidden:
     post:
       operationId: setCategoryHiddenByPath
@@ -610,6 +690,42 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+  /api/categories/{category_id}/overview:
+    parameters:
+      - name: category_id
+        description: Category leaf identifier to report.
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+    get:
+      operationId: getCategoryOverview
+      tags:
+        - categories
+      summary: Get a category leaf drill-down overview.
+      parameters:
+        - $ref: "#/components/parameters/HouseholdFlowBreakdown"
+        - $ref: "#/components/parameters/HouseholdFlowGrain"
+        - $ref: "#/components/parameters/HouseholdFlowPeriodCount"
+        - $ref: "#/components/parameters/HouseholdFlowAnchorDate"
+        - $ref: "#/components/parameters/HouseholdFlowNamedSeriesCount"
+        - $ref: "#/components/parameters/HouseholdFlowExcludedContributorIDs"
+        - $ref: "#/components/parameters/HouseholdFlowTrend"
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "200":
+          description: Presentation-ready category leaf report.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HouseholdFlowEntityResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/tags:
     get:
       operationId: listTags
@@ -766,6 +882,40 @@ paths:
                 $ref: "#/components/schemas/GroupStateListResponse"
         "400":
           $ref: "#/components/responses/InvalidRequest"
+  /api/tags/groups/overview:
+    get:
+      operationId: getTagGroupOverview
+      tags:
+        - tags
+      summary: Get an implicit tag group drill-down overview.
+      parameters:
+        - name: fqn
+          in: query
+          required: true
+          description: Exact active implicit-group FQN prefix; hidden descendants remain included.
+          schema:
+            type: string
+            minLength: 1
+        - $ref: "#/components/parameters/HouseholdFlowBreakdown"
+        - $ref: "#/components/parameters/HouseholdFlowGrain"
+        - $ref: "#/components/parameters/HouseholdFlowPeriodCount"
+        - $ref: "#/components/parameters/HouseholdFlowAnchorDate"
+        - $ref: "#/components/parameters/HouseholdFlowNamedSeriesCount"
+        - $ref: "#/components/parameters/HouseholdFlowExcludedContributorIDs"
+        - $ref: "#/components/parameters/HouseholdFlowTrend"
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "200":
+          description: Presentation-ready tag group report.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HouseholdFlowEntityResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/tags/set-hidden:
     post:
       operationId: setTagHiddenByPath
@@ -874,6 +1024,42 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+  /api/tags/{tag_id}/overview:
+    parameters:
+      - name: tag_id
+        description: Tag leaf identifier to report.
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+    get:
+      operationId: getTagOverview
+      tags:
+        - tags
+      summary: Get a tag leaf drill-down overview.
+      parameters:
+        - $ref: "#/components/parameters/HouseholdFlowBreakdown"
+        - $ref: "#/components/parameters/HouseholdFlowGrain"
+        - $ref: "#/components/parameters/HouseholdFlowPeriodCount"
+        - $ref: "#/components/parameters/HouseholdFlowAnchorDate"
+        - $ref: "#/components/parameters/HouseholdFlowNamedSeriesCount"
+        - $ref: "#/components/parameters/HouseholdFlowExcludedContributorIDs"
+        - $ref: "#/components/parameters/HouseholdFlowTrend"
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "200":
+          description: Presentation-ready tag leaf report.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HouseholdFlowEntityResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/members:
     get:
       operationId: listMembers
@@ -2499,6 +2685,13 @@ paths:
               type: integer
               format: int64
               minimum: 1
+        - name: category_fqn_prefix
+          description: Exact Category FQN descendant scope. Includes hidden active descendants and is independent of category_id filters.
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 1
         - name: tag_id
           description: "Tag identifier to target or filter by."
           in: query
@@ -2511,6 +2704,13 @@ paths:
               type: integer
               format: int64
               minimum: 1
+        - name: tag_fqn_prefix
+          description: Exact Tag FQN descendant scope. Includes hidden active descendants and is independent of tag_id filters.
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 1
         - name: member_id
           description: "Household-member identifier to target or filter by."
           in: query
@@ -3552,6 +3752,66 @@ components:
       in: cookie
       name: mina_session
       description: Long-lived signed browser session created by the login endpoint.
+  parameters:
+    HouseholdFlowBreakdown:
+      name: breakdown
+      in: query
+      required: false
+      description: Contributor dimension; defaults by scope. Categories is invalid for Category leaves.
+      schema:
+        $ref: "#/components/schemas/HouseholdFlowBreakdownDimension"
+    HouseholdFlowGrain:
+      name: grain
+      in: query
+      required: false
+      description: Calendar period grain; defaults to month.
+      schema:
+        $ref: "#/components/schemas/HouseholdFlowGrain"
+    HouseholdFlowPeriodCount:
+      name: period_count
+      in: query
+      required: false
+      description: Visible period count. Month accepts 6–24 and defaults to 12; year accepts 3 or more and defaults to 6.
+      schema:
+        type: integer
+        minimum: 3
+    HouseholdFlowAnchorDate:
+      name: anchor_date
+      in: query
+      required: false
+      description: Date whose calendar month or year is the final visible period; defaults to today and cannot be in the future.
+      schema:
+        type: string
+        format: date
+    HouseholdFlowNamedSeriesCount:
+      name: named_series_count
+      in: query
+      required: false
+      description: Number of individually named contributors before Other; defaults to 5 with no product maximum.
+      schema:
+        type: integer
+        minimum: 5
+        default: 5
+    HouseholdFlowExcludedContributorIDs:
+      name: excluded_contributor_id
+      in: query
+      required: false
+      description: Stable named or Other contributor identities excluded from chart values after ranking.
+      style: form
+      explode: true
+      schema:
+        type: array
+        uniqueItems: true
+        items:
+          type: string
+          minLength: 1
+    HouseholdFlowTrend:
+      name: trend
+      in: query
+      required: false
+      description: Selected backend-computed trend; defaults to rolling average for month and rolling sum for year.
+      schema:
+        $ref: "#/components/schemas/HouseholdFlowTrend"
   responses:
     Unauthenticated:
       description: Authentication is required or the supplied credential is invalid.
@@ -3885,28 +4145,28 @@ components:
         current_balance:
           type: string
           description: JSON string, not a JSON number. Posted plus pending aggregate DECIMAL(18,8) balance in this currency; cancelled and expected records excluded. Responses use fixed-scale formatting with exactly 8 fractional digits.
-          pattern: ^-?[0-9]{1,30}(\.[0-9]{1,8})?$
-          maxLength: 40
+          pattern: ^-?[0-9]{1,10}(\.[0-9]{1,8})?$
+          maxLength: 20
         credit_limit:
           type: string
           description: JSON string, not a JSON number. Current credit limit in the account's single currency, when known, from the latest active credit-limit-history row with effective_date on or before the API runtime clock's local civil date. Responses use fixed-scale formatting with exactly 8 fractional digits.
-          pattern: ^-?[0-9]{1,30}(\.[0-9]{1,8})?$
-          maxLength: 40
+          pattern: ^-?[0-9]{1,10}(\.[0-9]{1,8})?$
+          maxLength: 20
         remaining_credit:
           type: string
           description: JSON string, not a JSON number. Present only when `credit_limit` is present; bank-facing remaining credit derived as the current credit limit plus the signed `current_balance`, without clamping or absolute-value conversion. May be negative when the account is over limit. Responses use fixed-scale formatting with exactly 8 fractional digits.
-          pattern: ^-?[0-9]{1,30}(\.[0-9]{1,8})?$
-          maxLength: 40
+          pattern: ^-?[0-9]{1,10}(\.[0-9]{1,8})?$
+          maxLength: 20
         current_balance_usd:
           type: string
           description: JSON string, not a JSON number. Approximate USD-equivalent DECIMAL(18,8) aggregate using stored journal-record amount_usd values only; no query-time exchange-rate conversion is performed. Partial when unconverted_count is greater than zero. Responses use fixed-scale formatting with exactly 8 fractional digits.
-          pattern: ^-?[0-9]{1,30}(\.[0-9]{1,8})?$
-          maxLength: 40
+          pattern: ^-?[0-9]{1,10}(\.[0-9]{1,8})?$
+          maxLength: 20
         posted_balance:
           type: string
           description: JSON string, not a JSON number. Posted-only aggregate DECIMAL(18,8) balance in this currency; cancelled and expected records excluded. Responses use fixed-scale formatting with exactly 8 fractional digits.
-          pattern: ^-?[0-9]{1,30}(\.[0-9]{1,8})?$
-          maxLength: 40
+          pattern: ^-?[0-9]{1,10}(\.[0-9]{1,8})?$
+          maxLength: 20
         unconverted_count:
           type: integer
           format: int64
@@ -4908,8 +5168,8 @@ components:
         amount_usd:
           type: string
           description: JSON string, not a JSON number. USD-equivalent DECIMAL(18,8) aggregate for records with amount_usd available; responses use fixed-scale formatting with exactly 8 fractional digits.
-          pattern: ^-?[0-9]{1,30}(\.[0-9]{1,8})?$
-          maxLength: 40
+          pattern: ^-?[0-9]{1,10}(\.[0-9]{1,8})?$
+          maxLength: 20
         unconverted_count:
           type: integer
           format: int64
@@ -4930,6 +5190,294 @@ components:
           $ref: "#/components/schemas/TransactionMonthTotal"
         income:
           $ref: "#/components/schemas/TransactionMonthTotal"
+    HouseholdFlowEntityKind:
+      type: string
+      enum: [category, tag]
+      x-enum-varnames: [HouseholdFlowEntityKindCategory, HouseholdFlowEntityKindTag]
+    HouseholdFlowScopeKind:
+      type: string
+      enum: [leaf, group]
+      x-enum-varnames: [HouseholdFlowScopeKindLeaf, HouseholdFlowScopeKindGroup]
+    HouseholdFlowCoreMetric:
+      type: string
+      enum: [net_spend, net_income, net_flow]
+      x-enum-varnames: [HouseholdFlowCoreMetricNetSpend, HouseholdFlowCoreMetricNetIncome, HouseholdFlowCoreMetricNetFlow]
+    HouseholdFlowBreakdownDimension:
+      type: string
+      enum: [accounts, categories]
+      x-enum-varnames: [HouseholdFlowBreakdownDimensionAccounts, HouseholdFlowBreakdownDimensionCategories]
+    HouseholdFlowGrain:
+      type: string
+      enum: [month, year]
+      x-enum-varnames: [HouseholdFlowGrainMonth, HouseholdFlowGrainYear]
+    HouseholdFlowTrend:
+      type: string
+      enum: [rolling_average, rolling_sum]
+      x-enum-varnames: [HouseholdFlowTrendRollingAverage, HouseholdFlowTrendRollingSum]
+    HouseholdFlowBarGroup:
+      type: string
+      enum: [net, inflow, outflow]
+      x-enum-varnames: [HouseholdFlowBarGroupNet, HouseholdFlowBarGroupInflow, HouseholdFlowBarGroupOutflow]
+    HouseholdFlowMetricValue:
+      type: object
+      additionalProperties: false
+      required: [amount_usd, unconverted_count]
+      properties:
+        amount_usd:
+          type: string
+          description: JSON string, not a JSON number. USD-equivalent DECIMAL(18,8) aggregate over converted contributions; fixed-scale with eight fractional digits.
+          pattern: ^-?[0-9]{1,10}(\.[0-9]{1,8})?$
+          maxLength: 20
+        unconverted_count:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Count of contributing economic records without USD conversion; transfer movement is excluded.
+    HouseholdFlowComparison:
+      type: object
+      additionalProperties: false
+      required: [current_month, baseline_month, current, baseline, change_percent]
+      properties:
+        current_month:
+          type: string
+          pattern: ^[0-9]{4}-[0-9]{2}$
+        baseline_month:
+          type: string
+          pattern: ^[0-9]{4}-[0-9]{2}$
+        current:
+          $ref: "#/components/schemas/HouseholdFlowMetricValue"
+        baseline:
+          $ref: "#/components/schemas/HouseholdFlowMetricValue"
+        change_percent:
+          type: string
+          nullable: true
+          description: JSON string, not a JSON number. Signed DECIMAL(18,8) percentage, or null when the comparison baseline is zero.
+          pattern: ^-?[0-9]{1,10}(\.[0-9]{1,8})?$
+          maxLength: 20
+    HouseholdFlowTopLine:
+      type: object
+      additionalProperties: false
+      required:
+        - current_month
+        - current_month_total
+        - trailing_three_month_start
+        - trailing_three_month_end
+        - trailing_three_month_average
+        - month_over_month
+        - year_over_year
+      properties:
+        current_month:
+          type: string
+          pattern: ^[0-9]{4}-[0-9]{2}$
+        current_month_total:
+          $ref: "#/components/schemas/HouseholdFlowMetricValue"
+        trailing_three_month_start:
+          type: string
+          pattern: ^[0-9]{4}-[0-9]{2}$
+        trailing_three_month_end:
+          type: string
+          pattern: ^[0-9]{4}-[0-9]{2}$
+        trailing_three_month_average:
+          $ref: "#/components/schemas/HouseholdFlowMetricValue"
+        month_over_month:
+          $ref: "#/components/schemas/HouseholdFlowComparison"
+        year_over_year:
+          $ref: "#/components/schemas/HouseholdFlowComparison"
+    HouseholdFlowScope:
+      type: object
+      additionalProperties: false
+      required: [entity_kind, scope_kind, entity_id, fqn]
+      properties:
+        entity_kind:
+          $ref: "#/components/schemas/HouseholdFlowEntityKind"
+        scope_kind:
+          $ref: "#/components/schemas/HouseholdFlowScopeKind"
+        entity_id:
+          type: integer
+          format: int64
+          minimum: 1
+          nullable: true
+        fqn:
+          type: string
+          minLength: 1
+    AccountingHistoryRange:
+      type: object
+      additionalProperties: false
+      required: [start_date, end_date]
+      properties:
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+    HouseholdFlowConfiguration:
+      type: object
+      additionalProperties: false
+      required: [core_metric, breakdown_dimension, bar_groups, grain, period_count, anchor_period, named_series_count, excluded_contributor_ids, trend]
+      properties:
+        core_metric:
+          $ref: "#/components/schemas/HouseholdFlowCoreMetric"
+        breakdown_dimension:
+          $ref: "#/components/schemas/HouseholdFlowBreakdownDimension"
+        bar_groups:
+          type: array
+          minItems: 1
+          maxItems: 2
+          items:
+            $ref: "#/components/schemas/HouseholdFlowBarGroup"
+        grain:
+          $ref: "#/components/schemas/HouseholdFlowGrain"
+        period_count:
+          type: integer
+          minimum: 1
+        anchor_period:
+          type: string
+          pattern: ^[0-9]{4}(-[0-9]{2})?$
+        named_series_count:
+          type: integer
+          minimum: 5
+        excluded_contributor_ids:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+        trend:
+          $ref: "#/components/schemas/HouseholdFlowTrend"
+    HouseholdFlowBreakdownSeries:
+      type: object
+      additionalProperties: false
+      required: [series_id, label, fqn, category_id, rank, is_other, unconverted_count]
+      properties:
+        series_id:
+          type: string
+          minLength: 1
+        label:
+          type: string
+          minLength: 1
+        fqn:
+          type: string
+          minLength: 1
+          nullable: true
+        category_id:
+          type: integer
+          format: int64
+          minimum: 1
+          nullable: true
+        rank:
+          type: integer
+          minimum: 1
+        is_other:
+          type: boolean
+        unconverted_count:
+          type: integer
+          format: int64
+          minimum: 0
+    HouseholdFlowStackValue:
+      type: object
+      additionalProperties: false
+      required: [series_id, bar_group, amount_usd, unconverted_count]
+      properties:
+        series_id:
+          type: string
+          minLength: 1
+        bar_group:
+          $ref: "#/components/schemas/HouseholdFlowBarGroup"
+        amount_usd:
+          type: string
+          description: JSON string, not a JSON number. Signed DECIMAL(18,8); fixed-scale with eight fractional digits.
+          pattern: ^-?[0-9]{1,10}(\.[0-9]{1,8})?$
+          maxLength: 20
+        unconverted_count:
+          type: integer
+          format: int64
+          minimum: 0
+    HouseholdFlowBarGroupTotal:
+      type: object
+      additionalProperties: false
+      required: [bar_group, amount_usd, unconverted_count]
+      properties:
+        bar_group:
+          $ref: "#/components/schemas/HouseholdFlowBarGroup"
+        amount_usd:
+          type: string
+          description: JSON string, not a JSON number. Signed DECIMAL(18,8); fixed-scale with eight fractional digits.
+          pattern: ^-?[0-9]{1,10}(\.[0-9]{1,8})?$
+          maxLength: 20
+        unconverted_count:
+          type: integer
+          format: int64
+          minimum: 0
+    HouseholdFlowPeriod:
+      type: object
+      additionalProperties: false
+      required: [label, is_current, trend, bar_group_totals, stacks]
+      properties:
+        label:
+          type: string
+          pattern: ^[0-9]{4}(-[0-9]{2})?$
+        is_current:
+          type: boolean
+        trend:
+          $ref: "#/components/schemas/HouseholdFlowMetricValue"
+        bar_group_totals:
+          type: array
+          minItems: 1
+          maxItems: 2
+          items:
+            $ref: "#/components/schemas/HouseholdFlowBarGroupTotal"
+        stacks:
+          type: array
+          items:
+            $ref: "#/components/schemas/HouseholdFlowStackValue"
+    HouseholdFlowExcludedActivity:
+      type: object
+      additionalProperties: false
+      required: [adjustment_transaction_count, exchange_transaction_count]
+      properties:
+        adjustment_transaction_count:
+          type: integer
+          format: int64
+          minimum: 0
+        exchange_transaction_count:
+          type: integer
+          format: int64
+          minimum: 0
+    HouseholdFlowDataset:
+      type: object
+      additionalProperties: false
+      required: [configuration, top_line, breakdown, periods, excluded_activity]
+      properties:
+        configuration:
+          $ref: "#/components/schemas/HouseholdFlowConfiguration"
+        top_line:
+          $ref: "#/components/schemas/HouseholdFlowTopLine"
+        breakdown:
+          type: array
+          items:
+            $ref: "#/components/schemas/HouseholdFlowBreakdownSeries"
+        periods:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/HouseholdFlowPeriod"
+        excluded_activity:
+          $ref: "#/components/schemas/HouseholdFlowExcludedActivity"
+    HouseholdFlowEntityResponse:
+      type: object
+      additionalProperties: false
+      required: [scope, dataset, transactions]
+      properties:
+        scope:
+          $ref: "#/components/schemas/HouseholdFlowScope"
+        dataset:
+          $ref: "#/components/schemas/HouseholdFlowDataset"
+        transactions:
+          type: array
+          maxItems: 8
+          items:
+            $ref: "#/components/schemas/Transaction"
     ExchangeEffectiveRate:
       type: object
       additionalProperties: false
@@ -5720,13 +6268,13 @@ components:
           type: string
           nullable: true
           description: JSON string or null, not a JSON number. Present on account-record listings when requested; aggregate DECIMAL(18,8) balance after this record in the record currency, with pending and posted records included and cancelled and expected records excluded. Responses use fixed-scale formatting with exactly 8 fractional digits.
-          pattern: ^-?[0-9]{1,30}(\.[0-9]{1,8})?$
-          maxLength: 40
+          pattern: ^-?[0-9]{1,10}(\.[0-9]{1,8})?$
+          maxLength: 20
         remaining_credit:
           type: string
           description: JSON string, not a JSON number. Present only on `GET /api/accounts/{account_id}/records` when `include_running_balance=true` supplies `running_balance` and the account has a credit limit effective on the API runtime clock's local civil date. Derived for every returned row as that current limit plus the signed running balance, without clamping or absolute-value conversion; historical limits are not reconstructed. May be negative when the account is over limit. Responses use fixed-scale formatting with exactly 8 fractional digits.
-          pattern: ^-?[0-9]{1,30}(\.[0-9]{1,8})?$
-          maxLength: 40
+          pattern: ^-?[0-9]{1,10}(\.[0-9]{1,8})?$
+          maxLength: 20
         category_id:
           type: integer
           format: int64

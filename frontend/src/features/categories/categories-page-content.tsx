@@ -331,6 +331,7 @@ export const CategoriesPageContent = ({
             categoriesPage.snapshot ? undefined : categoriesPage.errorMessage
           }
           groups={categoriesPage.snapshot?.groups}
+          groupRowsClickable
           includeHidden={includeHidden}
           leaves={categoriesPage.snapshot?.categories}
           loading={categoriesPage.loading}
@@ -341,6 +342,10 @@ export const CategoriesPageContent = ({
           onRowClick={(row) => {
             if (row.leaf) {
               void navigate(`/categories/${row.leaf.category_id}`);
+            } else {
+              void navigate(
+                `/categories/group?prefix=${encodeURIComponent(row.fqn)}`,
+              );
             }
           }}
           indicatorSlots={["featured", "hidden"]}

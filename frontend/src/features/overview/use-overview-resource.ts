@@ -1,21 +1,28 @@
 import { useEffect } from "react";
 
+import type {
+  Account,
+  AccountBalance,
+  HouseholdFlowSelection,
+  Transaction,
+} from "@/api";
 import {
-  type Account,
-  type AccountBalance,
   apiErrorMessage,
   fetchAccountsByIds,
+  fetchHouseholdFlowReport,
   fetchOverviewAccountBalances,
   fetchOverviewAccounts,
   fetchTransactionMonthTotalsByMonth,
   fetchTransactionPage,
-  type Transaction,
+  householdFlowSelectionFromDataset,
 } from "@/api";
 import type { OverviewBalanceRow } from "@/store";
 import {
   getTransactionsSnapshot,
   setOverview,
   setOverviewError,
+  setOverviewFlowReport,
+  setOverviewFlowReportError,
   setOverviewLoading,
   useOverviewView,
 } from "@/store";
@@ -93,6 +100,12 @@ const loadOverview = async (
   month: string,
   shouldCommit: () => boolean = () => true,
 ): Promise<void> => {
+  const previousOverview = getTransactionsSnapshot().overview;
+  const flowReportPromise = fetchHouseholdFlowReport(
+    previousOverview?.flowReport
+      ? householdFlowSelectionFromDataset(previousOverview.flowReport)
+      : undefined,
+  );
   const [accountsResult, balancesResult, totalsResult, transactionsResult] =
     await Promise.all([
       fetchOverviewAccounts(),
@@ -151,11 +164,33 @@ const loadOverview = async (
   setOverview({
     accounts,
     balanceRows: overviewBalanceRows(accounts, balancesResult.data.balances),
+    flowReport: previousOverview?.flowReport,
+    flowReportErrorMessage: undefined,
     month,
     monthTotals: totalsResult.data,
     recentTransactions: transactionsResult.data.transactions,
   });
+
+  const flowReportResult = await flowReportPromise;
+  // Once the core snapshot is cached, let the flow section finish even if the
+  // route unmounts. A newer overview load still supersedes this response.
+  if (!isCurrentOverviewLoad(generation)) {
+    return;
+  }
+  if (flowReportResult.data) {
+    setOverviewFlowReport(flowReportResult.data);
+  } else {
+    setOverviewFlowReportError(apiErrorMessage(flowReportResult.error));
+  }
 };
+
+export const loadOverviewFlowReport = async (
+  selection: HouseholdFlowSelection,
+) => {
+  return fetchHouseholdFlowReport(selection);
+};
+
+export const commitOverviewFlowReport = setOverviewFlowReport;
 
 export const refreshOverview = async (
   month = localYearMonth(),
@@ -185,8 +220,7 @@ export const useOverviewResource = (month = localYearMonth()) => {
     return () => {
       active = false;
     };
-    // Snapshot commits re-run this effect so the fresh store state can hit the early return above.
-  }, [month, overview.snapshot]);
+  }, [month]);
 
   return overview;
 };

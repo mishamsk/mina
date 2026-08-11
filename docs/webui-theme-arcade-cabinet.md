@@ -126,7 +126,7 @@ Theme treatments for the shared component inventory in `docs/webui-design.md`:
 - Toolbar state toggles such as Include hidden are standard outline buttons that latch the sky table-header tint while pressed (`aria-pressed`) and swap to an off/struck glyph variant.
 - `ClassBadge` / marker chips: square, ink outline, `--shadow-chip`, bright-form fill with ink text, 11–12px mono uppercase micro-label.
 - `DataTable`: white body on the dark ground, framed as a card (ink outline + pixel shadow); banded rows; sky-bright header band; stable fixed column widths per webui-design table rules; instant hover.
-- Category, Tag, and Member drill-downs keep the dark route `PageHeader` as their only identity landmark; the scoped toolbar and framed transaction table begin directly beneath it, with no raised white identity card between them.
+- Category, Tag, and Member drill-downs keep the dark route `PageHeader` as their only identity landmark, with no raised white identity card duplicating it; their content surfaces follow the owning design documents and standard data-surface treatments.
 - `AmountText`: IBM Plex Mono, tabular; color per domain color rules; in transaction lines wrapped as an amount chip (white fill, ink text for all classes).
 - `FqnPath`: de-emphasized ancestors + emphasized leaf in mono; dense-cell leaf-chip variant per webui-design display rules.
 - `AccountDisplayLabel`: effective label in mono with a flat full-FQN tooltip. Link mode (detail/peek record account cells): rest state matches the non-interactive label; hover underlines with no fill (fill stays filter vocabulary); no press-in; standard focus ring.

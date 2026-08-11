@@ -161,7 +161,7 @@ const createCurrencyDisplayFixture = async (
       "-1.00",
       "EUR",
       largeUsdMemo,
-      "-9999999999.99999999",
+      "-8999999999.99999999",
     ),
     flowRecord(
       merchant.account_id,
@@ -169,7 +169,7 @@ const createCurrencyDisplayFixture = async (
       "1.00",
       "EUR",
       largeUsdMemo,
-      "9999999999.99999999",
+      "8999999999.99999999",
     ),
   ]);
 
@@ -246,7 +246,7 @@ const createCurrencyDisplayFixture = async (
 const transactionRow = (page: Page, memo: string) =>
   page.locator("[data-transaction-row='true']").filter({ hasText: memo });
 
-test("shared transaction tables switch native and USD amounts without changing transaction meaning", async ({
+test("transaction tables switch native and USD while report previews stay native", async ({
   page,
 }, testInfo) => {
   const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
@@ -304,7 +304,7 @@ test("shared transaction tables switch native and USD amounts without changing t
     "-33.00 $",
   );
   await expect(largeUsdAmountCell.getByTestId("amount-chip")).toContainText(
-    "-10,000,000,000.00 $",
+    "-9,000,000,000.00 $",
   );
   await expect(cryptoAmountCell.getByTestId("amount-chip")).toHaveCount(0);
   expect(
@@ -425,20 +425,15 @@ test("shared transaction tables switch native and USD amounts without changing t
   );
 
   await page.goto(`/categories/${fixture.categoryId}?page=1&pageSize=50`);
+  await expect(page.getByTestId("entity-overview-top-line")).toBeVisible();
   const drilldownToggle = page.getByTestId("transaction-amount-display-toggle");
   const drilldownRow = transactionRow(page, fixture.complexMemo);
-  await expect(drilldownToggle).toHaveAttribute("aria-pressed", "false");
+  await expect(drilldownToggle).toHaveCount(0);
   await expect(
     drilldownRow
       .locator(".transactions-amount-column")
       .getByTestId("amount-chip"),
   ).toContainText("-30.00 €");
-  await drilldownToggle.click();
-  await expect(
-    drilldownRow
-      .locator(".transactions-amount-column")
-      .getByTestId("amount-chip"),
-  ).toContainText("-33.00 $");
 
   const peek = await openAccountTransactionPeek(
     page,

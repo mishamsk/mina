@@ -1480,6 +1480,16 @@ func Operations() []Operation {
 			Invoke: invokeGetAccount,
 		},
 		{
+			ID:          "getAccountingHistoryRange",
+			Method:      "GET",
+			Path:        "/api/accounting-history/range",
+			Summary:     "Get the available accounting-history date range.",
+			Description: "Returns the earliest active accounting date through today. An empty ledger returns today for both bounds.",
+			CLI:         CLIOperation{Area: "overview", Name: "accounting-history-range"},
+			Input:       InputDescriptor{},
+			Invoke:      invokeGetAccountingHistoryRange,
+		},
+		{
 			ID:          "getCategory",
 			Method:      "GET",
 			Path:        "/api/categories/{category_id}",
@@ -1505,6 +1515,140 @@ func Operations() []Operation {
 				},
 			},
 			Invoke: invokeGetCategory,
+		},
+		{
+			ID:          "getCategoryGroupOverview",
+			Method:      "GET",
+			Path:        "/api/categories/groups/overview",
+			Summary:     "Get an implicit category group drill-down overview.",
+			Description: "",
+			CLI:         CLIOperation{Area: "categories", Name: "group-overview"},
+			Input: InputDescriptor{
+				Query: []ParameterDescriptor{
+					{
+						Name:        "fqn",
+						Type:        "string",
+						Description: "Exact active implicit-group FQN prefix; hidden descendants remain included.",
+						Required:    true,
+					},
+					{
+						Name:        "breakdown",
+						Type:        "string",
+						Description: "Contributor dimension; defaults by scope. Categories is invalid for Category leaves.",
+						Required:    false,
+						Enum:        []string{"accounts", "categories"},
+					},
+					{
+						Name:        "grain",
+						Type:        "string",
+						Description: "Calendar period grain; defaults to month.",
+						Required:    false,
+						Enum:        []string{"month", "year"},
+					},
+					{
+						Name:        "period_count",
+						Type:        "integer",
+						Description: "Visible period count. Month accepts 6–24 and defaults to 12; year accepts 3 or more and defaults to 6.",
+						Required:    false,
+					},
+					{
+						Name:        "anchor_date",
+						Type:        "string",
+						Description: "Date whose calendar month or year is the final visible period; defaults to today and cannot be in the future.",
+						Required:    false,
+					},
+					{
+						Name:        "named_series_count",
+						Type:        "integer",
+						Description: "Number of individually named contributors before Other; defaults to 5 with no product maximum.",
+						Required:    false,
+					},
+					{
+						Name:        "excluded_contributor_id",
+						Type:        "array",
+						Description: "Stable named or Other contributor identities excluded from chart values after ranking.",
+						Required:    false,
+						Array:       true,
+						ItemType:    "string",
+					},
+					{
+						Name:        "trend",
+						Type:        "string",
+						Description: "Selected backend-computed trend; defaults to rolling average for month and rolling sum for year.",
+						Required:    false,
+						Enum:        []string{"rolling_average", "rolling_sum"},
+					},
+				},
+			},
+			Invoke: invokeGetCategoryGroupOverview,
+		},
+		{
+			ID:          "getCategoryOverview",
+			Method:      "GET",
+			Path:        "/api/categories/{category_id}/overview",
+			Summary:     "Get a category leaf drill-down overview.",
+			Description: "",
+			CLI:         CLIOperation{Area: "categories", Name: "overview"},
+			Input: InputDescriptor{
+				Path: []ParameterDescriptor{
+					{
+						Name:        "category_id",
+						Type:        "integer",
+						Description: "Category leaf identifier to report.",
+						Required:    true,
+					},
+				},
+				Query: []ParameterDescriptor{
+					{
+						Name:        "breakdown",
+						Type:        "string",
+						Description: "Contributor dimension; defaults by scope. Categories is invalid for Category leaves.",
+						Required:    false,
+						Enum:        []string{"accounts", "categories"},
+					},
+					{
+						Name:        "grain",
+						Type:        "string",
+						Description: "Calendar period grain; defaults to month.",
+						Required:    false,
+						Enum:        []string{"month", "year"},
+					},
+					{
+						Name:        "period_count",
+						Type:        "integer",
+						Description: "Visible period count. Month accepts 6–24 and defaults to 12; year accepts 3 or more and defaults to 6.",
+						Required:    false,
+					},
+					{
+						Name:        "anchor_date",
+						Type:        "string",
+						Description: "Date whose calendar month or year is the final visible period; defaults to today and cannot be in the future.",
+						Required:    false,
+					},
+					{
+						Name:        "named_series_count",
+						Type:        "integer",
+						Description: "Number of individually named contributors before Other; defaults to 5 with no product maximum.",
+						Required:    false,
+					},
+					{
+						Name:        "excluded_contributor_id",
+						Type:        "array",
+						Description: "Stable named or Other contributor identities excluded from chart values after ranking.",
+						Required:    false,
+						Array:       true,
+						ItemType:    "string",
+					},
+					{
+						Name:        "trend",
+						Type:        "string",
+						Description: "Selected backend-computed trend; defaults to rolling average for month and rolling sum for year.",
+						Required:    false,
+						Enum:        []string{"rolling_average", "rolling_sum"},
+					},
+				},
+			},
+			Invoke: invokeGetCategoryOverview,
 		},
 		{
 			ID:          "getCreditLimitHistory",
@@ -1629,6 +1773,66 @@ func Operations() []Operation {
 			Invoke:      invokeGetHealth,
 		},
 		{
+			ID:          "getHouseholdFlowReport",
+			Method:      "GET",
+			Path:        "/api/overview/flow",
+			Summary:     "Get the household flow report dataset.",
+			Description: "Returns the configured Household net-flow dataset. Net flow is the checkbook-accounting change in Mina's tracked household position, not exact household net worth; transfer movement is excluded.",
+			CLI:         CLIOperation{Area: "overview", Name: "flow"},
+			Input: InputDescriptor{
+				Query: []ParameterDescriptor{
+					{
+						Name:        "breakdown",
+						Type:        "string",
+						Description: "Contributor dimension; defaults by scope. Categories is invalid for Category leaves.",
+						Required:    false,
+						Enum:        []string{"accounts", "categories"},
+					},
+					{
+						Name:        "grain",
+						Type:        "string",
+						Description: "Calendar period grain; defaults to month.",
+						Required:    false,
+						Enum:        []string{"month", "year"},
+					},
+					{
+						Name:        "period_count",
+						Type:        "integer",
+						Description: "Visible period count. Month accepts 6–24 and defaults to 12; year accepts 3 or more and defaults to 6.",
+						Required:    false,
+					},
+					{
+						Name:        "anchor_date",
+						Type:        "string",
+						Description: "Date whose calendar month or year is the final visible period; defaults to today and cannot be in the future.",
+						Required:    false,
+					},
+					{
+						Name:        "named_series_count",
+						Type:        "integer",
+						Description: "Number of individually named contributors before Other; defaults to 5 with no product maximum.",
+						Required:    false,
+					},
+					{
+						Name:        "excluded_contributor_id",
+						Type:        "array",
+						Description: "Stable named or Other contributor identities excluded from chart values after ranking.",
+						Required:    false,
+						Array:       true,
+						ItemType:    "string",
+					},
+					{
+						Name:        "trend",
+						Type:        "string",
+						Description: "Selected backend-computed trend; defaults to rolling average for month and rolling sum for year.",
+						Required:    false,
+						Enum:        []string{"rolling_average", "rolling_sum"},
+					},
+				},
+			},
+			Invoke: invokeGetHouseholdFlowReport,
+		},
+		{
 			ID:          "getMember",
 			Method:      "GET",
 			Path:        "/api/members/{member_id}",
@@ -1710,6 +1914,140 @@ func Operations() []Operation {
 				},
 			},
 			Invoke: invokeGetTag,
+		},
+		{
+			ID:          "getTagGroupOverview",
+			Method:      "GET",
+			Path:        "/api/tags/groups/overview",
+			Summary:     "Get an implicit tag group drill-down overview.",
+			Description: "",
+			CLI:         CLIOperation{Area: "tags", Name: "group-overview"},
+			Input: InputDescriptor{
+				Query: []ParameterDescriptor{
+					{
+						Name:        "fqn",
+						Type:        "string",
+						Description: "Exact active implicit-group FQN prefix; hidden descendants remain included.",
+						Required:    true,
+					},
+					{
+						Name:        "breakdown",
+						Type:        "string",
+						Description: "Contributor dimension; defaults by scope. Categories is invalid for Category leaves.",
+						Required:    false,
+						Enum:        []string{"accounts", "categories"},
+					},
+					{
+						Name:        "grain",
+						Type:        "string",
+						Description: "Calendar period grain; defaults to month.",
+						Required:    false,
+						Enum:        []string{"month", "year"},
+					},
+					{
+						Name:        "period_count",
+						Type:        "integer",
+						Description: "Visible period count. Month accepts 6–24 and defaults to 12; year accepts 3 or more and defaults to 6.",
+						Required:    false,
+					},
+					{
+						Name:        "anchor_date",
+						Type:        "string",
+						Description: "Date whose calendar month or year is the final visible period; defaults to today and cannot be in the future.",
+						Required:    false,
+					},
+					{
+						Name:        "named_series_count",
+						Type:        "integer",
+						Description: "Number of individually named contributors before Other; defaults to 5 with no product maximum.",
+						Required:    false,
+					},
+					{
+						Name:        "excluded_contributor_id",
+						Type:        "array",
+						Description: "Stable named or Other contributor identities excluded from chart values after ranking.",
+						Required:    false,
+						Array:       true,
+						ItemType:    "string",
+					},
+					{
+						Name:        "trend",
+						Type:        "string",
+						Description: "Selected backend-computed trend; defaults to rolling average for month and rolling sum for year.",
+						Required:    false,
+						Enum:        []string{"rolling_average", "rolling_sum"},
+					},
+				},
+			},
+			Invoke: invokeGetTagGroupOverview,
+		},
+		{
+			ID:          "getTagOverview",
+			Method:      "GET",
+			Path:        "/api/tags/{tag_id}/overview",
+			Summary:     "Get a tag leaf drill-down overview.",
+			Description: "",
+			CLI:         CLIOperation{Area: "tags", Name: "overview"},
+			Input: InputDescriptor{
+				Path: []ParameterDescriptor{
+					{
+						Name:        "tag_id",
+						Type:        "integer",
+						Description: "Tag leaf identifier to report.",
+						Required:    true,
+					},
+				},
+				Query: []ParameterDescriptor{
+					{
+						Name:        "breakdown",
+						Type:        "string",
+						Description: "Contributor dimension; defaults by scope. Categories is invalid for Category leaves.",
+						Required:    false,
+						Enum:        []string{"accounts", "categories"},
+					},
+					{
+						Name:        "grain",
+						Type:        "string",
+						Description: "Calendar period grain; defaults to month.",
+						Required:    false,
+						Enum:        []string{"month", "year"},
+					},
+					{
+						Name:        "period_count",
+						Type:        "integer",
+						Description: "Visible period count. Month accepts 6–24 and defaults to 12; year accepts 3 or more and defaults to 6.",
+						Required:    false,
+					},
+					{
+						Name:        "anchor_date",
+						Type:        "string",
+						Description: "Date whose calendar month or year is the final visible period; defaults to today and cannot be in the future.",
+						Required:    false,
+					},
+					{
+						Name:        "named_series_count",
+						Type:        "integer",
+						Description: "Number of individually named contributors before Other; defaults to 5 with no product maximum.",
+						Required:    false,
+					},
+					{
+						Name:        "excluded_contributor_id",
+						Type:        "array",
+						Description: "Stable named or Other contributor identities excluded from chart values after ranking.",
+						Required:    false,
+						Array:       true,
+						ItemType:    "string",
+					},
+					{
+						Name:        "trend",
+						Type:        "string",
+						Description: "Selected backend-computed trend; defaults to rolling average for month and rolling sum for year.",
+						Required:    false,
+						Enum:        []string{"rolling_average", "rolling_sum"},
+					},
+				},
+			},
+			Invoke: invokeGetTagOverview,
 		},
 		{
 			ID:          "getTransaction",
@@ -2481,12 +2819,24 @@ func Operations() []Operation {
 						ItemType:    "integer",
 					},
 					{
+						Name:        "category_fqn_prefix",
+						Type:        "string",
+						Description: "Exact Category FQN descendant scope. Includes hidden active descendants and is independent of category_id filters.",
+						Required:    false,
+					},
+					{
 						Name:        "tag_id",
 						Type:        "array",
 						Description: "Tag identifier to target or filter by.",
 						Required:    false,
 						Array:       true,
 						ItemType:    "integer",
+					},
+					{
+						Name:        "tag_fqn_prefix",
+						Type:        "string",
+						Description: "Exact Tag FQN descendant scope. Includes hidden active descendants and is independent of tag_id filters.",
+						Required:    false,
 					},
 					{
 						Name:        "member_id",
@@ -4409,6 +4759,20 @@ func invokeGetAccount(ctx context.Context, client httpclient.ClientWithResponses
 	return normalizeInvocationResult(response.Body, response.HTTPResponse)
 }
 
+func invokeGetAccountingHistoryRange(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
+	if err := validateInvocationInput(input, nil, nil, false, false); err != nil {
+		return InvocationResult{}, err
+	}
+	response, err := client.GetAccountingHistoryRangeWithResponse(ctx)
+	if err != nil {
+		return InvocationResult{}, err
+	}
+	if response == nil {
+		return InvocationResult{}, errors.New("generated client returned no operation response")
+	}
+	return normalizeInvocationResult(response.Body, response.HTTPResponse)
+}
+
 func invokeGetCategory(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
 	if err := validateInvocationInput(input, []string{"category_id"}, []string{"include_tombstoned"}, false, false); err != nil {
 		return InvocationResult{}, err
@@ -4444,6 +4808,356 @@ func invokeGetCategory(ctx context.Context, client httpclient.ClientWithResponse
 		params.IncludeTombstoned = &queryValue0
 	}
 	response, err := client.GetCategoryWithResponse(ctx, pathValue0, params)
+	if err != nil {
+		return InvocationResult{}, err
+	}
+	if response == nil {
+		return InvocationResult{}, errors.New("generated client returned no operation response")
+	}
+	return normalizeInvocationResult(response.Body, response.HTTPResponse)
+}
+
+func invokeGetCategoryGroupOverview(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
+	if err := validateInvocationInput(input, nil, []string{"anchor_date", "breakdown", "excluded_contributor_id", "fqn", "grain", "named_series_count", "period_count", "trend"}, false, false); err != nil {
+		return InvocationResult{}, err
+	}
+	params := &httpclient.GetCategoryGroupOverviewParams{}
+	queryValues0, querySupplied0 := input.Query["fqn"]
+	if !querySupplied0 {
+		return InvocationResult{}, &InvocationInputError{
+			Location: "query",
+			Name:     "fqn",
+			Err:      errors.New("value is required"),
+		}
+	}
+	if querySupplied0 {
+		if len(queryValues0) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "fqn",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues0)),
+			}
+		}
+		var queryValue0 string
+		if err := parseInvocationValue(queryValues0[0], true, &queryValue0); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "fqn",
+				Value:    queryValues0[0],
+				Err:      err,
+			}
+		}
+		params.Fqn = queryValue0
+	}
+	queryValues1, querySupplied1 := input.Query["breakdown"]
+	if querySupplied1 {
+		if len(queryValues1) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "breakdown",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues1)),
+			}
+		}
+		var queryValue1 httpclient.HouseholdFlowBreakdown
+		if err := parseInvocationValue(queryValues1[0], true, &queryValue1); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "breakdown",
+				Value:    queryValues1[0],
+				Err:      err,
+			}
+		}
+		params.Breakdown = &queryValue1
+	}
+	queryValues2, querySupplied2 := input.Query["grain"]
+	if querySupplied2 {
+		if len(queryValues2) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "grain",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues2)),
+			}
+		}
+		var queryValue2 httpclient.HouseholdFlowGrain
+		if err := parseInvocationValue(queryValues2[0], true, &queryValue2); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "grain",
+				Value:    queryValues2[0],
+				Err:      err,
+			}
+		}
+		params.Grain = &queryValue2
+	}
+	queryValues3, querySupplied3 := input.Query["period_count"]
+	if querySupplied3 {
+		if len(queryValues3) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "period_count",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues3)),
+			}
+		}
+		var queryValue3 httpclient.HouseholdFlowPeriodCount
+		if err := parseInvocationValue(queryValues3[0], false, &queryValue3); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "period_count",
+				Value:    queryValues3[0],
+				Err:      err,
+			}
+		}
+		params.PeriodCount = &queryValue3
+	}
+	queryValues4, querySupplied4 := input.Query["anchor_date"]
+	if querySupplied4 {
+		if len(queryValues4) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "anchor_date",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues4)),
+			}
+		}
+		var queryValue4 httpclient.HouseholdFlowAnchorDate
+		if err := parseInvocationValue(queryValues4[0], true, &queryValue4); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "anchor_date",
+				Value:    queryValues4[0],
+				Err:      err,
+			}
+		}
+		params.AnchorDate = &queryValue4
+	}
+	queryValues5, querySupplied5 := input.Query["named_series_count"]
+	if querySupplied5 {
+		if len(queryValues5) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "named_series_count",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues5)),
+			}
+		}
+		var queryValue5 httpclient.HouseholdFlowNamedSeriesCount
+		if err := parseInvocationValue(queryValues5[0], false, &queryValue5); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "named_series_count",
+				Value:    queryValues5[0],
+				Err:      err,
+			}
+		}
+		params.NamedSeriesCount = &queryValue5
+	}
+	queryValues6, querySupplied6 := input.Query["excluded_contributor_id"]
+	if querySupplied6 {
+		if len(queryValues6) == 0 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "excluded_contributor_id",
+				Err:      errors.New("value is required"),
+			}
+		}
+		queryValue6 := make([]string, len(queryValues6))
+		for valueIndex, raw := range queryValues6 {
+			if err := parseInvocationValue(raw, true, &queryValue6[valueIndex]); err != nil {
+				return InvocationResult{}, &InvocationInputError{
+					Location: "query",
+					Name:     "excluded_contributor_id",
+					Value:    raw,
+					Err:      err,
+				}
+			}
+		}
+		params.ExcludedContributorId = &queryValue6
+	}
+	queryValues7, querySupplied7 := input.Query["trend"]
+	if querySupplied7 {
+		if len(queryValues7) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "trend",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues7)),
+			}
+		}
+		var queryValue7 httpclient.HouseholdFlowTrend
+		if err := parseInvocationValue(queryValues7[0], true, &queryValue7); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "trend",
+				Value:    queryValues7[0],
+				Err:      err,
+			}
+		}
+		params.Trend = &queryValue7
+	}
+	response, err := client.GetCategoryGroupOverviewWithResponse(ctx, params)
+	if err != nil {
+		return InvocationResult{}, err
+	}
+	if response == nil {
+		return InvocationResult{}, errors.New("generated client returned no operation response")
+	}
+	return normalizeInvocationResult(response.Body, response.HTTPResponse)
+}
+
+func invokeGetCategoryOverview(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
+	if err := validateInvocationInput(input, []string{"category_id"}, []string{"anchor_date", "breakdown", "excluded_contributor_id", "grain", "named_series_count", "period_count", "trend"}, false, false); err != nil {
+		return InvocationResult{}, err
+	}
+	var pathValue0 int64
+	if err := parseInvocationValue(input.Path[0], false, &pathValue0); err != nil {
+		return InvocationResult{}, &InvocationInputError{
+			Location: "path",
+			Name:     "category_id",
+			Value:    input.Path[0],
+			Err:      err,
+		}
+	}
+	params := &httpclient.GetCategoryOverviewParams{}
+	queryValues0, querySupplied0 := input.Query["breakdown"]
+	if querySupplied0 {
+		if len(queryValues0) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "breakdown",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues0)),
+			}
+		}
+		var queryValue0 httpclient.HouseholdFlowBreakdown
+		if err := parseInvocationValue(queryValues0[0], true, &queryValue0); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "breakdown",
+				Value:    queryValues0[0],
+				Err:      err,
+			}
+		}
+		params.Breakdown = &queryValue0
+	}
+	queryValues1, querySupplied1 := input.Query["grain"]
+	if querySupplied1 {
+		if len(queryValues1) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "grain",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues1)),
+			}
+		}
+		var queryValue1 httpclient.HouseholdFlowGrain
+		if err := parseInvocationValue(queryValues1[0], true, &queryValue1); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "grain",
+				Value:    queryValues1[0],
+				Err:      err,
+			}
+		}
+		params.Grain = &queryValue1
+	}
+	queryValues2, querySupplied2 := input.Query["period_count"]
+	if querySupplied2 {
+		if len(queryValues2) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "period_count",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues2)),
+			}
+		}
+		var queryValue2 httpclient.HouseholdFlowPeriodCount
+		if err := parseInvocationValue(queryValues2[0], false, &queryValue2); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "period_count",
+				Value:    queryValues2[0],
+				Err:      err,
+			}
+		}
+		params.PeriodCount = &queryValue2
+	}
+	queryValues3, querySupplied3 := input.Query["anchor_date"]
+	if querySupplied3 {
+		if len(queryValues3) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "anchor_date",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues3)),
+			}
+		}
+		var queryValue3 httpclient.HouseholdFlowAnchorDate
+		if err := parseInvocationValue(queryValues3[0], true, &queryValue3); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "anchor_date",
+				Value:    queryValues3[0],
+				Err:      err,
+			}
+		}
+		params.AnchorDate = &queryValue3
+	}
+	queryValues4, querySupplied4 := input.Query["named_series_count"]
+	if querySupplied4 {
+		if len(queryValues4) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "named_series_count",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues4)),
+			}
+		}
+		var queryValue4 httpclient.HouseholdFlowNamedSeriesCount
+		if err := parseInvocationValue(queryValues4[0], false, &queryValue4); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "named_series_count",
+				Value:    queryValues4[0],
+				Err:      err,
+			}
+		}
+		params.NamedSeriesCount = &queryValue4
+	}
+	queryValues5, querySupplied5 := input.Query["excluded_contributor_id"]
+	if querySupplied5 {
+		if len(queryValues5) == 0 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "excluded_contributor_id",
+				Err:      errors.New("value is required"),
+			}
+		}
+		queryValue5 := make([]string, len(queryValues5))
+		for valueIndex, raw := range queryValues5 {
+			if err := parseInvocationValue(raw, true, &queryValue5[valueIndex]); err != nil {
+				return InvocationResult{}, &InvocationInputError{
+					Location: "query",
+					Name:     "excluded_contributor_id",
+					Value:    raw,
+					Err:      err,
+				}
+			}
+		}
+		params.ExcludedContributorId = &queryValue5
+	}
+	queryValues6, querySupplied6 := input.Query["trend"]
+	if querySupplied6 {
+		if len(queryValues6) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "trend",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues6)),
+			}
+		}
+		var queryValue6 httpclient.HouseholdFlowTrend
+		if err := parseInvocationValue(queryValues6[0], true, &queryValue6); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "trend",
+				Value:    queryValues6[0],
+				Err:      err,
+			}
+		}
+		params.Trend = &queryValue6
+	}
+	response, err := client.GetCategoryOverviewWithResponse(ctx, pathValue0, params)
 	if err != nil {
 		return InvocationResult{}, err
 	}
@@ -4629,6 +5343,163 @@ func invokeGetHealth(ctx context.Context, client httpclient.ClientWithResponsesI
 	return normalizeInvocationResult(response.Body, response.HTTPResponse)
 }
 
+func invokeGetHouseholdFlowReport(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
+	if err := validateInvocationInput(input, nil, []string{"anchor_date", "breakdown", "excluded_contributor_id", "grain", "named_series_count", "period_count", "trend"}, false, false); err != nil {
+		return InvocationResult{}, err
+	}
+	params := &httpclient.GetHouseholdFlowReportParams{}
+	queryValues0, querySupplied0 := input.Query["breakdown"]
+	if querySupplied0 {
+		if len(queryValues0) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "breakdown",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues0)),
+			}
+		}
+		var queryValue0 httpclient.HouseholdFlowBreakdown
+		if err := parseInvocationValue(queryValues0[0], true, &queryValue0); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "breakdown",
+				Value:    queryValues0[0],
+				Err:      err,
+			}
+		}
+		params.Breakdown = &queryValue0
+	}
+	queryValues1, querySupplied1 := input.Query["grain"]
+	if querySupplied1 {
+		if len(queryValues1) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "grain",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues1)),
+			}
+		}
+		var queryValue1 httpclient.HouseholdFlowGrain
+		if err := parseInvocationValue(queryValues1[0], true, &queryValue1); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "grain",
+				Value:    queryValues1[0],
+				Err:      err,
+			}
+		}
+		params.Grain = &queryValue1
+	}
+	queryValues2, querySupplied2 := input.Query["period_count"]
+	if querySupplied2 {
+		if len(queryValues2) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "period_count",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues2)),
+			}
+		}
+		var queryValue2 httpclient.HouseholdFlowPeriodCount
+		if err := parseInvocationValue(queryValues2[0], false, &queryValue2); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "period_count",
+				Value:    queryValues2[0],
+				Err:      err,
+			}
+		}
+		params.PeriodCount = &queryValue2
+	}
+	queryValues3, querySupplied3 := input.Query["anchor_date"]
+	if querySupplied3 {
+		if len(queryValues3) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "anchor_date",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues3)),
+			}
+		}
+		var queryValue3 httpclient.HouseholdFlowAnchorDate
+		if err := parseInvocationValue(queryValues3[0], true, &queryValue3); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "anchor_date",
+				Value:    queryValues3[0],
+				Err:      err,
+			}
+		}
+		params.AnchorDate = &queryValue3
+	}
+	queryValues4, querySupplied4 := input.Query["named_series_count"]
+	if querySupplied4 {
+		if len(queryValues4) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "named_series_count",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues4)),
+			}
+		}
+		var queryValue4 httpclient.HouseholdFlowNamedSeriesCount
+		if err := parseInvocationValue(queryValues4[0], false, &queryValue4); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "named_series_count",
+				Value:    queryValues4[0],
+				Err:      err,
+			}
+		}
+		params.NamedSeriesCount = &queryValue4
+	}
+	queryValues5, querySupplied5 := input.Query["excluded_contributor_id"]
+	if querySupplied5 {
+		if len(queryValues5) == 0 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "excluded_contributor_id",
+				Err:      errors.New("value is required"),
+			}
+		}
+		queryValue5 := make([]string, len(queryValues5))
+		for valueIndex, raw := range queryValues5 {
+			if err := parseInvocationValue(raw, true, &queryValue5[valueIndex]); err != nil {
+				return InvocationResult{}, &InvocationInputError{
+					Location: "query",
+					Name:     "excluded_contributor_id",
+					Value:    raw,
+					Err:      err,
+				}
+			}
+		}
+		params.ExcludedContributorId = &queryValue5
+	}
+	queryValues6, querySupplied6 := input.Query["trend"]
+	if querySupplied6 {
+		if len(queryValues6) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "trend",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues6)),
+			}
+		}
+		var queryValue6 httpclient.HouseholdFlowTrend
+		if err := parseInvocationValue(queryValues6[0], true, &queryValue6); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "trend",
+				Value:    queryValues6[0],
+				Err:      err,
+			}
+		}
+		params.Trend = &queryValue6
+	}
+	response, err := client.GetHouseholdFlowReportWithResponse(ctx, params)
+	if err != nil {
+		return InvocationResult{}, err
+	}
+	if response == nil {
+		return InvocationResult{}, errors.New("generated client returned no operation response")
+	}
+	return normalizeInvocationResult(response.Body, response.HTTPResponse)
+}
+
 func invokeGetMember(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
 	if err := validateInvocationInput(input, []string{"member_id"}, []string{"include_tombstoned"}, false, false); err != nil {
 		return InvocationResult{}, err
@@ -4745,6 +5616,356 @@ func invokeGetTag(ctx context.Context, client httpclient.ClientWithResponsesInte
 		params.IncludeTombstoned = &queryValue0
 	}
 	response, err := client.GetTagWithResponse(ctx, pathValue0, params)
+	if err != nil {
+		return InvocationResult{}, err
+	}
+	if response == nil {
+		return InvocationResult{}, errors.New("generated client returned no operation response")
+	}
+	return normalizeInvocationResult(response.Body, response.HTTPResponse)
+}
+
+func invokeGetTagGroupOverview(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
+	if err := validateInvocationInput(input, nil, []string{"anchor_date", "breakdown", "excluded_contributor_id", "fqn", "grain", "named_series_count", "period_count", "trend"}, false, false); err != nil {
+		return InvocationResult{}, err
+	}
+	params := &httpclient.GetTagGroupOverviewParams{}
+	queryValues0, querySupplied0 := input.Query["fqn"]
+	if !querySupplied0 {
+		return InvocationResult{}, &InvocationInputError{
+			Location: "query",
+			Name:     "fqn",
+			Err:      errors.New("value is required"),
+		}
+	}
+	if querySupplied0 {
+		if len(queryValues0) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "fqn",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues0)),
+			}
+		}
+		var queryValue0 string
+		if err := parseInvocationValue(queryValues0[0], true, &queryValue0); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "fqn",
+				Value:    queryValues0[0],
+				Err:      err,
+			}
+		}
+		params.Fqn = queryValue0
+	}
+	queryValues1, querySupplied1 := input.Query["breakdown"]
+	if querySupplied1 {
+		if len(queryValues1) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "breakdown",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues1)),
+			}
+		}
+		var queryValue1 httpclient.HouseholdFlowBreakdown
+		if err := parseInvocationValue(queryValues1[0], true, &queryValue1); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "breakdown",
+				Value:    queryValues1[0],
+				Err:      err,
+			}
+		}
+		params.Breakdown = &queryValue1
+	}
+	queryValues2, querySupplied2 := input.Query["grain"]
+	if querySupplied2 {
+		if len(queryValues2) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "grain",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues2)),
+			}
+		}
+		var queryValue2 httpclient.HouseholdFlowGrain
+		if err := parseInvocationValue(queryValues2[0], true, &queryValue2); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "grain",
+				Value:    queryValues2[0],
+				Err:      err,
+			}
+		}
+		params.Grain = &queryValue2
+	}
+	queryValues3, querySupplied3 := input.Query["period_count"]
+	if querySupplied3 {
+		if len(queryValues3) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "period_count",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues3)),
+			}
+		}
+		var queryValue3 httpclient.HouseholdFlowPeriodCount
+		if err := parseInvocationValue(queryValues3[0], false, &queryValue3); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "period_count",
+				Value:    queryValues3[0],
+				Err:      err,
+			}
+		}
+		params.PeriodCount = &queryValue3
+	}
+	queryValues4, querySupplied4 := input.Query["anchor_date"]
+	if querySupplied4 {
+		if len(queryValues4) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "anchor_date",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues4)),
+			}
+		}
+		var queryValue4 httpclient.HouseholdFlowAnchorDate
+		if err := parseInvocationValue(queryValues4[0], true, &queryValue4); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "anchor_date",
+				Value:    queryValues4[0],
+				Err:      err,
+			}
+		}
+		params.AnchorDate = &queryValue4
+	}
+	queryValues5, querySupplied5 := input.Query["named_series_count"]
+	if querySupplied5 {
+		if len(queryValues5) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "named_series_count",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues5)),
+			}
+		}
+		var queryValue5 httpclient.HouseholdFlowNamedSeriesCount
+		if err := parseInvocationValue(queryValues5[0], false, &queryValue5); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "named_series_count",
+				Value:    queryValues5[0],
+				Err:      err,
+			}
+		}
+		params.NamedSeriesCount = &queryValue5
+	}
+	queryValues6, querySupplied6 := input.Query["excluded_contributor_id"]
+	if querySupplied6 {
+		if len(queryValues6) == 0 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "excluded_contributor_id",
+				Err:      errors.New("value is required"),
+			}
+		}
+		queryValue6 := make([]string, len(queryValues6))
+		for valueIndex, raw := range queryValues6 {
+			if err := parseInvocationValue(raw, true, &queryValue6[valueIndex]); err != nil {
+				return InvocationResult{}, &InvocationInputError{
+					Location: "query",
+					Name:     "excluded_contributor_id",
+					Value:    raw,
+					Err:      err,
+				}
+			}
+		}
+		params.ExcludedContributorId = &queryValue6
+	}
+	queryValues7, querySupplied7 := input.Query["trend"]
+	if querySupplied7 {
+		if len(queryValues7) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "trend",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues7)),
+			}
+		}
+		var queryValue7 httpclient.HouseholdFlowTrend
+		if err := parseInvocationValue(queryValues7[0], true, &queryValue7); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "trend",
+				Value:    queryValues7[0],
+				Err:      err,
+			}
+		}
+		params.Trend = &queryValue7
+	}
+	response, err := client.GetTagGroupOverviewWithResponse(ctx, params)
+	if err != nil {
+		return InvocationResult{}, err
+	}
+	if response == nil {
+		return InvocationResult{}, errors.New("generated client returned no operation response")
+	}
+	return normalizeInvocationResult(response.Body, response.HTTPResponse)
+}
+
+func invokeGetTagOverview(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
+	if err := validateInvocationInput(input, []string{"tag_id"}, []string{"anchor_date", "breakdown", "excluded_contributor_id", "grain", "named_series_count", "period_count", "trend"}, false, false); err != nil {
+		return InvocationResult{}, err
+	}
+	var pathValue0 int64
+	if err := parseInvocationValue(input.Path[0], false, &pathValue0); err != nil {
+		return InvocationResult{}, &InvocationInputError{
+			Location: "path",
+			Name:     "tag_id",
+			Value:    input.Path[0],
+			Err:      err,
+		}
+	}
+	params := &httpclient.GetTagOverviewParams{}
+	queryValues0, querySupplied0 := input.Query["breakdown"]
+	if querySupplied0 {
+		if len(queryValues0) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "breakdown",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues0)),
+			}
+		}
+		var queryValue0 httpclient.HouseholdFlowBreakdown
+		if err := parseInvocationValue(queryValues0[0], true, &queryValue0); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "breakdown",
+				Value:    queryValues0[0],
+				Err:      err,
+			}
+		}
+		params.Breakdown = &queryValue0
+	}
+	queryValues1, querySupplied1 := input.Query["grain"]
+	if querySupplied1 {
+		if len(queryValues1) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "grain",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues1)),
+			}
+		}
+		var queryValue1 httpclient.HouseholdFlowGrain
+		if err := parseInvocationValue(queryValues1[0], true, &queryValue1); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "grain",
+				Value:    queryValues1[0],
+				Err:      err,
+			}
+		}
+		params.Grain = &queryValue1
+	}
+	queryValues2, querySupplied2 := input.Query["period_count"]
+	if querySupplied2 {
+		if len(queryValues2) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "period_count",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues2)),
+			}
+		}
+		var queryValue2 httpclient.HouseholdFlowPeriodCount
+		if err := parseInvocationValue(queryValues2[0], false, &queryValue2); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "period_count",
+				Value:    queryValues2[0],
+				Err:      err,
+			}
+		}
+		params.PeriodCount = &queryValue2
+	}
+	queryValues3, querySupplied3 := input.Query["anchor_date"]
+	if querySupplied3 {
+		if len(queryValues3) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "anchor_date",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues3)),
+			}
+		}
+		var queryValue3 httpclient.HouseholdFlowAnchorDate
+		if err := parseInvocationValue(queryValues3[0], true, &queryValue3); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "anchor_date",
+				Value:    queryValues3[0],
+				Err:      err,
+			}
+		}
+		params.AnchorDate = &queryValue3
+	}
+	queryValues4, querySupplied4 := input.Query["named_series_count"]
+	if querySupplied4 {
+		if len(queryValues4) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "named_series_count",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues4)),
+			}
+		}
+		var queryValue4 httpclient.HouseholdFlowNamedSeriesCount
+		if err := parseInvocationValue(queryValues4[0], false, &queryValue4); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "named_series_count",
+				Value:    queryValues4[0],
+				Err:      err,
+			}
+		}
+		params.NamedSeriesCount = &queryValue4
+	}
+	queryValues5, querySupplied5 := input.Query["excluded_contributor_id"]
+	if querySupplied5 {
+		if len(queryValues5) == 0 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "excluded_contributor_id",
+				Err:      errors.New("value is required"),
+			}
+		}
+		queryValue5 := make([]string, len(queryValues5))
+		for valueIndex, raw := range queryValues5 {
+			if err := parseInvocationValue(raw, true, &queryValue5[valueIndex]); err != nil {
+				return InvocationResult{}, &InvocationInputError{
+					Location: "query",
+					Name:     "excluded_contributor_id",
+					Value:    raw,
+					Err:      err,
+				}
+			}
+		}
+		params.ExcludedContributorId = &queryValue5
+	}
+	queryValues6, querySupplied6 := input.Query["trend"]
+	if querySupplied6 {
+		if len(queryValues6) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "trend",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues6)),
+			}
+		}
+		var queryValue6 httpclient.HouseholdFlowTrend
+		if err := parseInvocationValue(queryValues6[0], true, &queryValue6); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "trend",
+				Value:    queryValues6[0],
+				Err:      err,
+			}
+		}
+		params.Trend = &queryValue6
+	}
+	response, err := client.GetTagOverviewWithResponse(ctx, pathValue0, params)
 	if err != nil {
 		return InvocationResult{}, err
 	}
@@ -6477,7 +7698,7 @@ func invokeListTransactionTemplates(ctx context.Context, client httpclient.Clien
 }
 
 func invokeListTransactions(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, []string{"account_id", "amount_max", "amount_min", "amount_usd_max", "amount_usd_min", "anchor_date", "category_id", "initiated_date_from", "initiated_date_to", "lifecycle_status", "limit", "member_id", "offset", "pending_date_from", "pending_date_to", "posted_date_from", "posted_date_to", "record_role", "search", "settlement", "sort", "sort_dir", "tag_id", "transaction_class", "transaction_shape"}, false, false); err != nil {
+	if err := validateInvocationInput(input, nil, []string{"account_id", "amount_max", "amount_min", "amount_usd_max", "amount_usd_min", "anchor_date", "category_fqn_prefix", "category_id", "initiated_date_from", "initiated_date_to", "lifecycle_status", "limit", "member_id", "offset", "pending_date_from", "pending_date_to", "posted_date_from", "posted_date_to", "record_role", "search", "settlement", "sort", "sort_dir", "tag_fqn_prefix", "tag_id", "transaction_class", "transaction_shape"}, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	params := &httpclient.ListTransactionsParams{}
@@ -6625,34 +7846,32 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 		}
 		params.CategoryId = &queryValue6
 	}
-	queryValues7, querySupplied7 := input.Query["tag_id"]
+	queryValues7, querySupplied7 := input.Query["category_fqn_prefix"]
 	if querySupplied7 {
-		if len(queryValues7) == 0 {
+		if len(queryValues7) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "tag_id",
-				Err:      errors.New("value is required"),
+				Name:     "category_fqn_prefix",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues7)),
 			}
 		}
-		queryValue7 := make([]int64, len(queryValues7))
-		for valueIndex, raw := range queryValues7 {
-			if err := parseInvocationValue(raw, false, &queryValue7[valueIndex]); err != nil {
-				return InvocationResult{}, &InvocationInputError{
-					Location: "query",
-					Name:     "tag_id",
-					Value:    raw,
-					Err:      err,
-				}
+		var queryValue7 string
+		if err := parseInvocationValue(queryValues7[0], true, &queryValue7); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "category_fqn_prefix",
+				Value:    queryValues7[0],
+				Err:      err,
 			}
 		}
-		params.TagId = &queryValue7
+		params.CategoryFqnPrefix = &queryValue7
 	}
-	queryValues8, querySupplied8 := input.Query["member_id"]
+	queryValues8, querySupplied8 := input.Query["tag_id"]
 	if querySupplied8 {
 		if len(queryValues8) == 0 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "member_id",
+				Name:     "tag_id",
 				Err:      errors.New("value is required"),
 			}
 		}
@@ -6661,26 +7880,68 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 			if err := parseInvocationValue(raw, false, &queryValue8[valueIndex]); err != nil {
 				return InvocationResult{}, &InvocationInputError{
 					Location: "query",
+					Name:     "tag_id",
+					Value:    raw,
+					Err:      err,
+				}
+			}
+		}
+		params.TagId = &queryValue8
+	}
+	queryValues9, querySupplied9 := input.Query["tag_fqn_prefix"]
+	if querySupplied9 {
+		if len(queryValues9) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "tag_fqn_prefix",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues9)),
+			}
+		}
+		var queryValue9 string
+		if err := parseInvocationValue(queryValues9[0], true, &queryValue9); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "tag_fqn_prefix",
+				Value:    queryValues9[0],
+				Err:      err,
+			}
+		}
+		params.TagFqnPrefix = &queryValue9
+	}
+	queryValues10, querySupplied10 := input.Query["member_id"]
+	if querySupplied10 {
+		if len(queryValues10) == 0 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "member_id",
+				Err:      errors.New("value is required"),
+			}
+		}
+		queryValue10 := make([]int64, len(queryValues10))
+		for valueIndex, raw := range queryValues10 {
+			if err := parseInvocationValue(raw, false, &queryValue10[valueIndex]); err != nil {
+				return InvocationResult{}, &InvocationInputError{
+					Location: "query",
 					Name:     "member_id",
 					Value:    raw,
 					Err:      err,
 				}
 			}
 		}
-		params.MemberId = &queryValue8
+		params.MemberId = &queryValue10
 	}
-	queryValues9, querySupplied9 := input.Query["lifecycle_status"]
-	if querySupplied9 {
-		if len(queryValues9) == 0 {
+	queryValues11, querySupplied11 := input.Query["lifecycle_status"]
+	if querySupplied11 {
+		if len(queryValues11) == 0 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
 				Name:     "lifecycle_status",
 				Err:      errors.New("value is required"),
 			}
 		}
-		queryValue9 := make([]httpclient.TransactionLifecycleStatus, len(queryValues9))
-		for valueIndex, raw := range queryValues9 {
-			if err := parseInvocationValue(raw, true, &queryValue9[valueIndex]); err != nil {
+		queryValue11 := make([]httpclient.TransactionLifecycleStatus, len(queryValues11))
+		for valueIndex, raw := range queryValues11 {
+			if err := parseInvocationValue(raw, true, &queryValue11[valueIndex]); err != nil {
 				return InvocationResult{}, &InvocationInputError{
 					Location: "query",
 					Name:     "lifecycle_status",
@@ -6689,20 +7950,20 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 				}
 			}
 		}
-		params.LifecycleStatus = &queryValue9
+		params.LifecycleStatus = &queryValue11
 	}
-	queryValues10, querySupplied10 := input.Query["settlement"]
-	if querySupplied10 {
-		if len(queryValues10) == 0 {
+	queryValues12, querySupplied12 := input.Query["settlement"]
+	if querySupplied12 {
+		if len(queryValues12) == 0 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
 				Name:     "settlement",
 				Err:      errors.New("value is required"),
 			}
 		}
-		queryValue10 := make([]httpclient.TransactionSettlement, len(queryValues10))
-		for valueIndex, raw := range queryValues10 {
-			if err := parseInvocationValue(raw, true, &queryValue10[valueIndex]); err != nil {
+		queryValue12 := make([]httpclient.TransactionSettlement, len(queryValues12))
+		for valueIndex, raw := range queryValues12 {
+			if err := parseInvocationValue(raw, true, &queryValue12[valueIndex]); err != nil {
 				return InvocationResult{}, &InvocationInputError{
 					Location: "query",
 					Name:     "settlement",
@@ -6711,20 +7972,20 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 				}
 			}
 		}
-		params.Settlement = &queryValue10
+		params.Settlement = &queryValue12
 	}
-	queryValues11, querySupplied11 := input.Query["transaction_class"]
-	if querySupplied11 {
-		if len(queryValues11) == 0 {
+	queryValues13, querySupplied13 := input.Query["transaction_class"]
+	if querySupplied13 {
+		if len(queryValues13) == 0 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
 				Name:     "transaction_class",
 				Err:      errors.New("value is required"),
 			}
 		}
-		queryValue11 := make([]httpclient.TransactionClass, len(queryValues11))
-		for valueIndex, raw := range queryValues11 {
-			if err := parseInvocationValue(raw, true, &queryValue11[valueIndex]); err != nil {
+		queryValue13 := make([]httpclient.TransactionClass, len(queryValues13))
+		for valueIndex, raw := range queryValues13 {
+			if err := parseInvocationValue(raw, true, &queryValue13[valueIndex]); err != nil {
 				return InvocationResult{}, &InvocationInputError{
 					Location: "query",
 					Name:     "transaction_class",
@@ -6733,20 +7994,20 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 				}
 			}
 		}
-		params.TransactionClass = &queryValue11
+		params.TransactionClass = &queryValue13
 	}
-	queryValues12, querySupplied12 := input.Query["transaction_shape"]
-	if querySupplied12 {
-		if len(queryValues12) == 0 {
+	queryValues14, querySupplied14 := input.Query["transaction_shape"]
+	if querySupplied14 {
+		if len(queryValues14) == 0 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
 				Name:     "transaction_shape",
 				Err:      errors.New("value is required"),
 			}
 		}
-		queryValue12 := make([]httpclient.TransactionShapeType, len(queryValues12))
-		for valueIndex, raw := range queryValues12 {
-			if err := parseInvocationValue(raw, true, &queryValue12[valueIndex]); err != nil {
+		queryValue14 := make([]httpclient.TransactionShapeType, len(queryValues14))
+		for valueIndex, raw := range queryValues14 {
+			if err := parseInvocationValue(raw, true, &queryValue14[valueIndex]); err != nil {
 				return InvocationResult{}, &InvocationInputError{
 					Location: "query",
 					Name:     "transaction_shape",
@@ -6755,20 +8016,20 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 				}
 			}
 		}
-		params.TransactionShape = &queryValue12
+		params.TransactionShape = &queryValue14
 	}
-	queryValues13, querySupplied13 := input.Query["record_role"]
-	if querySupplied13 {
-		if len(queryValues13) == 0 {
+	queryValues15, querySupplied15 := input.Query["record_role"]
+	if querySupplied15 {
+		if len(queryValues15) == 0 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
 				Name:     "record_role",
 				Err:      errors.New("value is required"),
 			}
 		}
-		queryValue13 := make([]httpclient.RecordRole, len(queryValues13))
-		for valueIndex, raw := range queryValues13 {
-			if err := parseInvocationValue(raw, true, &queryValue13[valueIndex]); err != nil {
+		queryValue15 := make([]httpclient.RecordRole, len(queryValues15))
+		for valueIndex, raw := range queryValues15 {
+			if err := parseInvocationValue(raw, true, &queryValue15[valueIndex]); err != nil {
 				return InvocationResult{}, &InvocationInputError{
 					Location: "query",
 					Name:     "record_role",
@@ -6777,54 +8038,14 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 				}
 			}
 		}
-		params.RecordRole = &queryValue13
+		params.RecordRole = &queryValue15
 	}
-	queryValues14, querySupplied14 := input.Query["amount_min"]
-	if querySupplied14 {
-		if len(queryValues14) != 1 {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "amount_min",
-				Err:      fmt.Errorf("got %d values, want 1", len(queryValues14)),
-			}
-		}
-		var queryValue14 string
-		if err := parseInvocationValue(queryValues14[0], true, &queryValue14); err != nil {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "amount_min",
-				Value:    queryValues14[0],
-				Err:      err,
-			}
-		}
-		params.AmountMin = &queryValue14
-	}
-	queryValues15, querySupplied15 := input.Query["amount_max"]
-	if querySupplied15 {
-		if len(queryValues15) != 1 {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "amount_max",
-				Err:      fmt.Errorf("got %d values, want 1", len(queryValues15)),
-			}
-		}
-		var queryValue15 string
-		if err := parseInvocationValue(queryValues15[0], true, &queryValue15); err != nil {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "amount_max",
-				Value:    queryValues15[0],
-				Err:      err,
-			}
-		}
-		params.AmountMax = &queryValue15
-	}
-	queryValues16, querySupplied16 := input.Query["amount_usd_min"]
+	queryValues16, querySupplied16 := input.Query["amount_min"]
 	if querySupplied16 {
 		if len(queryValues16) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "amount_usd_min",
+				Name:     "amount_min",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues16)),
 			}
 		}
@@ -6832,19 +8053,19 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 		if err := parseInvocationValue(queryValues16[0], true, &queryValue16); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "amount_usd_min",
+				Name:     "amount_min",
 				Value:    queryValues16[0],
 				Err:      err,
 			}
 		}
-		params.AmountUsdMin = &queryValue16
+		params.AmountMin = &queryValue16
 	}
-	queryValues17, querySupplied17 := input.Query["amount_usd_max"]
+	queryValues17, querySupplied17 := input.Query["amount_max"]
 	if querySupplied17 {
 		if len(queryValues17) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "amount_usd_max",
+				Name:     "amount_max",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues17)),
 			}
 		}
@@ -6852,99 +8073,99 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 		if err := parseInvocationValue(queryValues17[0], true, &queryValue17); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "amount_usd_max",
+				Name:     "amount_max",
 				Value:    queryValues17[0],
 				Err:      err,
 			}
 		}
-		params.AmountUsdMax = &queryValue17
+		params.AmountMax = &queryValue17
 	}
-	queryValues18, querySupplied18 := input.Query["initiated_date_from"]
+	queryValues18, querySupplied18 := input.Query["amount_usd_min"]
 	if querySupplied18 {
 		if len(queryValues18) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "initiated_date_from",
+				Name:     "amount_usd_min",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues18)),
 			}
 		}
-		var queryValue18 openapi_types.Date
+		var queryValue18 string
 		if err := parseInvocationValue(queryValues18[0], true, &queryValue18); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "initiated_date_from",
+				Name:     "amount_usd_min",
 				Value:    queryValues18[0],
 				Err:      err,
 			}
 		}
-		params.InitiatedDateFrom = &queryValue18
+		params.AmountUsdMin = &queryValue18
 	}
-	queryValues19, querySupplied19 := input.Query["initiated_date_to"]
+	queryValues19, querySupplied19 := input.Query["amount_usd_max"]
 	if querySupplied19 {
 		if len(queryValues19) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "initiated_date_to",
+				Name:     "amount_usd_max",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues19)),
 			}
 		}
-		var queryValue19 openapi_types.Date
+		var queryValue19 string
 		if err := parseInvocationValue(queryValues19[0], true, &queryValue19); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "initiated_date_to",
+				Name:     "amount_usd_max",
 				Value:    queryValues19[0],
 				Err:      err,
 			}
 		}
-		params.InitiatedDateTo = &queryValue19
+		params.AmountUsdMax = &queryValue19
 	}
-	queryValues20, querySupplied20 := input.Query["pending_date_from"]
+	queryValues20, querySupplied20 := input.Query["initiated_date_from"]
 	if querySupplied20 {
 		if len(queryValues20) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "pending_date_from",
+				Name:     "initiated_date_from",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues20)),
 			}
 		}
-		var queryValue20 time.Time
+		var queryValue20 openapi_types.Date
 		if err := parseInvocationValue(queryValues20[0], true, &queryValue20); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "pending_date_from",
+				Name:     "initiated_date_from",
 				Value:    queryValues20[0],
 				Err:      err,
 			}
 		}
-		params.PendingDateFrom = &queryValue20
+		params.InitiatedDateFrom = &queryValue20
 	}
-	queryValues21, querySupplied21 := input.Query["pending_date_to"]
+	queryValues21, querySupplied21 := input.Query["initiated_date_to"]
 	if querySupplied21 {
 		if len(queryValues21) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "pending_date_to",
+				Name:     "initiated_date_to",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues21)),
 			}
 		}
-		var queryValue21 time.Time
+		var queryValue21 openapi_types.Date
 		if err := parseInvocationValue(queryValues21[0], true, &queryValue21); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "pending_date_to",
+				Name:     "initiated_date_to",
 				Value:    queryValues21[0],
 				Err:      err,
 			}
 		}
-		params.PendingDateTo = &queryValue21
+		params.InitiatedDateTo = &queryValue21
 	}
-	queryValues22, querySupplied22 := input.Query["posted_date_from"]
+	queryValues22, querySupplied22 := input.Query["pending_date_from"]
 	if querySupplied22 {
 		if len(queryValues22) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "posted_date_from",
+				Name:     "pending_date_from",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues22)),
 			}
 		}
@@ -6952,19 +8173,19 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 		if err := parseInvocationValue(queryValues22[0], true, &queryValue22); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "posted_date_from",
+				Name:     "pending_date_from",
 				Value:    queryValues22[0],
 				Err:      err,
 			}
 		}
-		params.PostedDateFrom = &queryValue22
+		params.PendingDateFrom = &queryValue22
 	}
-	queryValues23, querySupplied23 := input.Query["posted_date_to"]
+	queryValues23, querySupplied23 := input.Query["pending_date_to"]
 	if querySupplied23 {
 		if len(queryValues23) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "posted_date_to",
+				Name:     "pending_date_to",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues23)),
 			}
 		}
@@ -6972,32 +8193,72 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 		if err := parseInvocationValue(queryValues23[0], true, &queryValue23); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "posted_date_to",
+				Name:     "pending_date_to",
 				Value:    queryValues23[0],
 				Err:      err,
 			}
 		}
-		params.PostedDateTo = &queryValue23
+		params.PendingDateTo = &queryValue23
 	}
-	queryValues24, querySupplied24 := input.Query["search"]
+	queryValues24, querySupplied24 := input.Query["posted_date_from"]
 	if querySupplied24 {
 		if len(queryValues24) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "search",
+				Name:     "posted_date_from",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues24)),
 			}
 		}
-		var queryValue24 string
+		var queryValue24 time.Time
 		if err := parseInvocationValue(queryValues24[0], true, &queryValue24); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "search",
+				Name:     "posted_date_from",
 				Value:    queryValues24[0],
 				Err:      err,
 			}
 		}
-		params.Search = &queryValue24
+		params.PostedDateFrom = &queryValue24
+	}
+	queryValues25, querySupplied25 := input.Query["posted_date_to"]
+	if querySupplied25 {
+		if len(queryValues25) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "posted_date_to",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues25)),
+			}
+		}
+		var queryValue25 time.Time
+		if err := parseInvocationValue(queryValues25[0], true, &queryValue25); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "posted_date_to",
+				Value:    queryValues25[0],
+				Err:      err,
+			}
+		}
+		params.PostedDateTo = &queryValue25
+	}
+	queryValues26, querySupplied26 := input.Query["search"]
+	if querySupplied26 {
+		if len(queryValues26) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "search",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues26)),
+			}
+		}
+		var queryValue26 string
+		if err := parseInvocationValue(queryValues26[0], true, &queryValue26); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "search",
+				Value:    queryValues26[0],
+				Err:      err,
+			}
+		}
+		params.Search = &queryValue26
 	}
 	response, err := client.ListTransactionsWithResponse(ctx, params)
 	if err != nil {

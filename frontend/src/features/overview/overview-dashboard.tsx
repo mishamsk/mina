@@ -1,11 +1,17 @@
+import { Reload } from "pixelarticons/react";
 import { useMemo } from "react";
 import { Link } from "react-router";
 
 import type { Transaction } from "@/api";
 import { Tooltip } from "@/components/tooltip";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  FlowReportTopLine,
+  FlowReportVisualization,
+} from "@/features/entity-overviews";
 import {
   AccountDisplayLabel,
   AmountText,
@@ -28,7 +34,12 @@ import { cn } from "@/lib/utils";
 import type { OverviewBalanceRow } from "@/store";
 import { localYearMonth } from "@/utils/date";
 
-import { useOverviewResource } from "./use-overview-resource";
+import {
+  commitOverviewFlowReport,
+  loadOverviewFlowReport,
+  refreshOverview,
+  useOverviewResource,
+} from "./use-overview-resource";
 
 interface BalanceGroup {
   readonly accountType: "owned" | "party";
@@ -171,6 +182,28 @@ const RecentSkeleton = () => (
       ))}
     </CardContent>
   </Card>
+);
+
+const FlowReportSkeleton = () => (
+  <div className="space-y-3" aria-label="Loading household flow report">
+    <div className="bg-card grid border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)] sm:grid-cols-2 xl:grid-cols-4">
+      {Array.from({ length: 4 }).map((_, index) => (
+        <div
+          key={index}
+          className="min-h-28 min-w-0 border-t border-[var(--hairline)] px-4 py-3 first:border-t-0 xl:border-t-0 xl:border-l xl:first:border-l-0 sm:[&:nth-child(2)]:border-t-0 sm:[&:nth-child(even)]:border-l"
+        >
+          <Skeleton className="h-3 w-28" />
+          <Skeleton className="mt-1 h-7 w-44 max-w-full" />
+          <Skeleton className="mt-1 h-3 w-32 max-w-full" />
+        </div>
+      ))}
+    </div>
+    <div className="grid gap-5 lg:grid-cols-[minmax(13rem,24%)_minmax(0,1fr)]">
+      <Skeleton className="order-2 h-64 lg:order-1 lg:h-[calc(32rem+19px)]" />
+      <Skeleton className="order-1 h-[calc(32rem+19px)] lg:order-2" />
+    </div>
+    <Skeleton className="h-4 w-80 max-w-full" />
+  </div>
 );
 
 const BalanceRow = ({ row }: { readonly row: OverviewBalanceRow }) => {
@@ -458,6 +491,55 @@ export const OverviewDashboard = () => {
       {overview.errorMessage ? (
         <OverviewError message={overview.errorMessage} />
       ) : null}
+
+      <section
+        className="flex flex-col gap-3"
+        aria-labelledby="household-flow-title"
+        data-testid="overview-flow-report"
+      >
+        <h2
+          id="household-flow-title"
+          className="font-heading text-base font-bold text-[var(--frame-foreground)] uppercase"
+        >
+          Household net flow
+        </h2>
+        {snapshot?.flowReportErrorMessage ? (
+          <div
+            className="border-destructive bg-card flex flex-wrap items-center justify-between gap-3 border-2 p-3"
+            role="alert"
+          >
+            <div>
+              <p className="text-destructive font-semibold">
+                Household flow could not be refreshed.
+              </p>
+              <p className="text-muted-foreground mt-1 text-xs">
+                {snapshot.flowReportErrorMessage}
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void refreshOverview(month)}
+            >
+              <Reload aria-hidden="true" />
+              Retry
+            </Button>
+          </div>
+        ) : null}
+        {snapshot?.flowReport ? (
+          <>
+            <FlowReportTopLine dataset={snapshot.flowReport} />
+            <FlowReportVisualization
+              dataset={snapshot.flowReport}
+              load={loadOverviewFlowReport}
+              onDatasetChange={commitOverviewFlowReport}
+            />
+          </>
+        ) : !snapshot?.flowReportErrorMessage &&
+          (snapshot || overview.loading) ? (
+          <FlowReportSkeleton />
+        ) : null}
+      </section>
 
       <section className="flex flex-col gap-3" aria-labelledby="balances-title">
         <h2

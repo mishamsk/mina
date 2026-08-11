@@ -169,7 +169,9 @@ const filterCount = (
 ): number =>
   (hiddenDimensions.has("account") ? 0 : filters.accountIds.length) +
   (hiddenDimensions.has("category") ? 0 : filters.categoryIds.length) +
+  (hiddenDimensions.has("category") || !filters.categoryFqnPrefix ? 0 : 1) +
   (hiddenDimensions.has("tag") ? 0 : filters.tagIds.length) +
+  (hiddenDimensions.has("tag") || !filters.tagFqnPrefix ? 0 : 1) +
   (hiddenDimensions.has("member") ? 0 : filters.memberIds.length) +
   (hiddenDimensions.has("lifecycle") ? 0 : filters.lifecycleStatuses.length) +
   (hiddenDimensions.has("settlement") ? 0 : filters.settlements.length) +
@@ -540,7 +542,11 @@ export const TransactionFilterControls = ({
         label: "Categories",
         options: categoryOptions,
         setValue: (ids: readonly number[]) => {
-          updateFilters({ ...filters, categoryIds: ids });
+          updateFilters({
+            ...filters,
+            categoryFqnPrefix: undefined,
+            categoryIds: ids,
+          });
         },
         value: filters.categoryIds,
       },
@@ -558,7 +564,7 @@ export const TransactionFilterControls = ({
         label: "Tags",
         options: tagOptions,
         setValue: (ids: readonly number[]) => {
-          updateFilters({ ...filters, tagIds: ids });
+          updateFilters({ ...filters, tagFqnPrefix: undefined, tagIds: ids });
         },
         value: filters.tagIds,
       },
@@ -889,6 +895,14 @@ export const TransactionFilterControls = ({
                 );
               })
             : null}
+          {!hiddenDimensionSet.has("category") && filters.categoryFqnPrefix ? (
+            <FilterChip
+              label={`Category group ${filters.categoryFqnPrefix}`}
+              onRemove={() => {
+                updateFilters({ ...filters, categoryFqnPrefix: undefined });
+              }}
+            />
+          ) : null}
           {!hiddenDimensionSet.has("tag")
             ? filters.tagIds.map((tagId) => {
                 const tag = tagsById.get(tagId);
@@ -910,6 +924,14 @@ export const TransactionFilterControls = ({
                 );
               })
             : null}
+          {!hiddenDimensionSet.has("tag") && filters.tagFqnPrefix ? (
+            <FilterChip
+              label={`Tag group ${filters.tagFqnPrefix}`}
+              onRemove={() => {
+                updateFilters({ ...filters, tagFqnPrefix: undefined });
+              }}
+            />
+          ) : null}
           {!hiddenDimensionSet.has("member")
             ? filters.memberIds.map((memberId) => {
                 const member = membersById.get(memberId);

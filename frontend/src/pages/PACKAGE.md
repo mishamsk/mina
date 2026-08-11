@@ -9,6 +9,7 @@
 - Route-local query updates preserve parameters owned by other layers.
 - Transaction-filter changes keep an open transaction or entry overlay visible: synchronously replace its background URL before writing the overlay URL, so the browser never renders an overlay-less intermediate state.
 - A page that coordinates a local panel or restructure dialog retains its opener and restores focus on close; use the page's primary action as the fallback when that opener no longer exists.
+- Category and Tag group routes use canonical `/categories/group?prefix=FQN` and `/tags/group?prefix=FQN` forms; leaf routes retain numeric IDs.
 
 ## Boundaries
 

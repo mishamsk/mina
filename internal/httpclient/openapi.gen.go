@@ -276,6 +276,138 @@ func (e HealthResponseStatus) Valid() bool {
 	}
 }
 
+// Defines values for HouseholdFlowBarGroup.
+const (
+	HouseholdFlowBarGroupInflow  HouseholdFlowBarGroup = "inflow"
+	HouseholdFlowBarGroupNet     HouseholdFlowBarGroup = "net"
+	HouseholdFlowBarGroupOutflow HouseholdFlowBarGroup = "outflow"
+)
+
+// Valid indicates whether the value is a known member of the HouseholdFlowBarGroup enum.
+func (e HouseholdFlowBarGroup) Valid() bool {
+	switch e {
+	case HouseholdFlowBarGroupInflow:
+		return true
+	case HouseholdFlowBarGroupNet:
+		return true
+	case HouseholdFlowBarGroupOutflow:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for HouseholdFlowBreakdownDimension.
+const (
+	HouseholdFlowBreakdownDimensionAccounts   HouseholdFlowBreakdownDimension = "accounts"
+	HouseholdFlowBreakdownDimensionCategories HouseholdFlowBreakdownDimension = "categories"
+)
+
+// Valid indicates whether the value is a known member of the HouseholdFlowBreakdownDimension enum.
+func (e HouseholdFlowBreakdownDimension) Valid() bool {
+	switch e {
+	case HouseholdFlowBreakdownDimensionAccounts:
+		return true
+	case HouseholdFlowBreakdownDimensionCategories:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for HouseholdFlowCoreMetric.
+const (
+	HouseholdFlowCoreMetricNetFlow   HouseholdFlowCoreMetric = "net_flow"
+	HouseholdFlowCoreMetricNetIncome HouseholdFlowCoreMetric = "net_income"
+	HouseholdFlowCoreMetricNetSpend  HouseholdFlowCoreMetric = "net_spend"
+)
+
+// Valid indicates whether the value is a known member of the HouseholdFlowCoreMetric enum.
+func (e HouseholdFlowCoreMetric) Valid() bool {
+	switch e {
+	case HouseholdFlowCoreMetricNetFlow:
+		return true
+	case HouseholdFlowCoreMetricNetIncome:
+		return true
+	case HouseholdFlowCoreMetricNetSpend:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for HouseholdFlowEntityKind.
+const (
+	HouseholdFlowEntityKindCategory HouseholdFlowEntityKind = "category"
+	HouseholdFlowEntityKindTag      HouseholdFlowEntityKind = "tag"
+)
+
+// Valid indicates whether the value is a known member of the HouseholdFlowEntityKind enum.
+func (e HouseholdFlowEntityKind) Valid() bool {
+	switch e {
+	case HouseholdFlowEntityKindCategory:
+		return true
+	case HouseholdFlowEntityKindTag:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for HouseholdFlowGrain.
+const (
+	HouseholdFlowGrainMonth HouseholdFlowGrain = "month"
+	HouseholdFlowGrainYear  HouseholdFlowGrain = "year"
+)
+
+// Valid indicates whether the value is a known member of the HouseholdFlowGrain enum.
+func (e HouseholdFlowGrain) Valid() bool {
+	switch e {
+	case HouseholdFlowGrainMonth:
+		return true
+	case HouseholdFlowGrainYear:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for HouseholdFlowScopeKind.
+const (
+	HouseholdFlowScopeKindGroup HouseholdFlowScopeKind = "group"
+	HouseholdFlowScopeKindLeaf  HouseholdFlowScopeKind = "leaf"
+)
+
+// Valid indicates whether the value is a known member of the HouseholdFlowScopeKind enum.
+func (e HouseholdFlowScopeKind) Valid() bool {
+	switch e {
+	case HouseholdFlowScopeKindGroup:
+		return true
+	case HouseholdFlowScopeKindLeaf:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for HouseholdFlowTrend.
+const (
+	HouseholdFlowTrendRollingAverage HouseholdFlowTrend = "rolling_average"
+	HouseholdFlowTrendRollingSum     HouseholdFlowTrend = "rolling_sum"
+)
+
+// Valid indicates whether the value is a known member of the HouseholdFlowTrend enum.
+func (e HouseholdFlowTrend) Valid() bool {
+	switch e {
+	case HouseholdFlowTrendRollingAverage:
+		return true
+	case HouseholdFlowTrendRollingSum:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OperationRunReferenceResponseOperationId.
 const (
 	DatabaseBackup      OperationRunReferenceResponseOperationId = "database-backup"
@@ -1214,6 +1346,12 @@ type AccountListResponse struct {
 // AccountType Account semantic type. Owned and party accounts hold tracked household state; flow records carry categorized economic activity; system accounts are fixed Mina mechanics.
 type AccountType string
 
+// AccountingHistoryRange defines model for AccountingHistoryRange.
+type AccountingHistoryRange struct {
+	EndDate   openapi_types.Date `json:"end_date"`
+	StartDate openapi_types.Date `json:"start_date"`
+}
+
 // AuthenticationStatusResponse defines model for AuthenticationStatusResponse.
 type AuthenticationStatusResponse struct {
 	Authenticated bool                `json:"authenticated"`
@@ -1908,6 +2046,138 @@ type HealthResponse struct {
 // HealthResponseStatus defines model for HealthResponse.Status.
 type HealthResponseStatus string
 
+// HouseholdFlowBarGroup defines model for HouseholdFlowBarGroup.
+type HouseholdFlowBarGroup string
+
+// HouseholdFlowBarGroupTotal defines model for HouseholdFlowBarGroupTotal.
+type HouseholdFlowBarGroupTotal struct {
+	// AmountUsd JSON string, not a JSON number. Signed DECIMAL(18,8); fixed-scale with eight fractional digits.
+	AmountUsd        string                `json:"amount_usd"`
+	BarGroup         HouseholdFlowBarGroup `json:"bar_group"`
+	UnconvertedCount int64                 `json:"unconverted_count"`
+}
+
+// HouseholdFlowBreakdownDimension defines model for HouseholdFlowBreakdownDimension.
+type HouseholdFlowBreakdownDimension string
+
+// HouseholdFlowBreakdownSeries defines model for HouseholdFlowBreakdownSeries.
+type HouseholdFlowBreakdownSeries struct {
+	CategoryId       *int64  `json:"category_id"`
+	Fqn              *string `json:"fqn"`
+	IsOther          bool    `json:"is_other"`
+	Label            string  `json:"label"`
+	Rank             int     `json:"rank"`
+	SeriesId         string  `json:"series_id"`
+	UnconvertedCount int64   `json:"unconverted_count"`
+}
+
+// HouseholdFlowComparison defines model for HouseholdFlowComparison.
+type HouseholdFlowComparison struct {
+	Baseline      HouseholdFlowMetricValue `json:"baseline"`
+	BaselineMonth string                   `json:"baseline_month"`
+
+	// ChangePercent JSON string, not a JSON number. Signed DECIMAL(18,8) percentage, or null when the comparison baseline is zero.
+	ChangePercent *string                  `json:"change_percent"`
+	Current       HouseholdFlowMetricValue `json:"current"`
+	CurrentMonth  string                   `json:"current_month"`
+}
+
+// HouseholdFlowConfiguration defines model for HouseholdFlowConfiguration.
+type HouseholdFlowConfiguration struct {
+	AnchorPeriod           string                          `json:"anchor_period"`
+	BarGroups              []HouseholdFlowBarGroup         `json:"bar_groups"`
+	BreakdownDimension     HouseholdFlowBreakdownDimension `json:"breakdown_dimension"`
+	CoreMetric             HouseholdFlowCoreMetric         `json:"core_metric"`
+	ExcludedContributorIds []string                        `json:"excluded_contributor_ids"`
+	Grain                  HouseholdFlowGrain              `json:"grain"`
+	NamedSeriesCount       int                             `json:"named_series_count"`
+	PeriodCount            int                             `json:"period_count"`
+	Trend                  HouseholdFlowTrend              `json:"trend"`
+}
+
+// HouseholdFlowCoreMetric defines model for HouseholdFlowCoreMetric.
+type HouseholdFlowCoreMetric string
+
+// HouseholdFlowDataset defines model for HouseholdFlowDataset.
+type HouseholdFlowDataset struct {
+	Breakdown        []HouseholdFlowBreakdownSeries `json:"breakdown"`
+	Configuration    HouseholdFlowConfiguration     `json:"configuration"`
+	ExcludedActivity HouseholdFlowExcludedActivity  `json:"excluded_activity"`
+	Periods          []HouseholdFlowPeriod          `json:"periods"`
+	TopLine          HouseholdFlowTopLine           `json:"top_line"`
+}
+
+// HouseholdFlowEntityKind defines model for HouseholdFlowEntityKind.
+type HouseholdFlowEntityKind string
+
+// HouseholdFlowEntityResponse defines model for HouseholdFlowEntityResponse.
+type HouseholdFlowEntityResponse struct {
+	Dataset      HouseholdFlowDataset `json:"dataset"`
+	Scope        HouseholdFlowScope   `json:"scope"`
+	Transactions []Transaction        `json:"transactions"`
+}
+
+// HouseholdFlowExcludedActivity defines model for HouseholdFlowExcludedActivity.
+type HouseholdFlowExcludedActivity struct {
+	AdjustmentTransactionCount int64 `json:"adjustment_transaction_count"`
+	ExchangeTransactionCount   int64 `json:"exchange_transaction_count"`
+}
+
+// HouseholdFlowGrain defines model for HouseholdFlowGrain.
+type HouseholdFlowGrain string
+
+// HouseholdFlowMetricValue defines model for HouseholdFlowMetricValue.
+type HouseholdFlowMetricValue struct {
+	// AmountUsd JSON string, not a JSON number. USD-equivalent DECIMAL(18,8) aggregate over converted contributions; fixed-scale with eight fractional digits.
+	AmountUsd string `json:"amount_usd"`
+
+	// UnconvertedCount Count of contributing economic records without USD conversion; transfer movement is excluded.
+	UnconvertedCount int64 `json:"unconverted_count"`
+}
+
+// HouseholdFlowPeriod defines model for HouseholdFlowPeriod.
+type HouseholdFlowPeriod struct {
+	BarGroupTotals []HouseholdFlowBarGroupTotal `json:"bar_group_totals"`
+	IsCurrent      bool                         `json:"is_current"`
+	Label          string                       `json:"label"`
+	Stacks         []HouseholdFlowStackValue    `json:"stacks"`
+	Trend          HouseholdFlowMetricValue     `json:"trend"`
+}
+
+// HouseholdFlowScope defines model for HouseholdFlowScope.
+type HouseholdFlowScope struct {
+	EntityId   *int64                  `json:"entity_id"`
+	EntityKind HouseholdFlowEntityKind `json:"entity_kind"`
+	Fqn        string                  `json:"fqn"`
+	ScopeKind  HouseholdFlowScopeKind  `json:"scope_kind"`
+}
+
+// HouseholdFlowScopeKind defines model for HouseholdFlowScopeKind.
+type HouseholdFlowScopeKind string
+
+// HouseholdFlowStackValue defines model for HouseholdFlowStackValue.
+type HouseholdFlowStackValue struct {
+	// AmountUsd JSON string, not a JSON number. Signed DECIMAL(18,8); fixed-scale with eight fractional digits.
+	AmountUsd        string                `json:"amount_usd"`
+	BarGroup         HouseholdFlowBarGroup `json:"bar_group"`
+	SeriesId         string                `json:"series_id"`
+	UnconvertedCount int64                 `json:"unconverted_count"`
+}
+
+// HouseholdFlowTopLine defines model for HouseholdFlowTopLine.
+type HouseholdFlowTopLine struct {
+	CurrentMonth              string                   `json:"current_month"`
+	CurrentMonthTotal         HouseholdFlowMetricValue `json:"current_month_total"`
+	MonthOverMonth            HouseholdFlowComparison  `json:"month_over_month"`
+	TrailingThreeMonthAverage HouseholdFlowMetricValue `json:"trailing_three_month_average"`
+	TrailingThreeMonthEnd     string                   `json:"trailing_three_month_end"`
+	TrailingThreeMonthStart   string                   `json:"trailing_three_month_start"`
+	YearOverYear              HouseholdFlowComparison  `json:"year_over_year"`
+}
+
+// HouseholdFlowTrend defines model for HouseholdFlowTrend.
+type HouseholdFlowTrend string
+
 // JournalRecord defines model for JournalRecord.
 type JournalRecord struct {
 	AccountId int64 `json:"account_id"`
@@ -2493,6 +2763,21 @@ type WritableAccountType string
 // WritableSource User-writable journal-record origin. Recurring-template records are created only by Mina.
 type WritableSource string
 
+// HouseholdFlowAnchorDate defines model for HouseholdFlowAnchorDate.
+type HouseholdFlowAnchorDate = openapi_types.Date
+
+// HouseholdFlowBreakdown defines model for HouseholdFlowBreakdown.
+type HouseholdFlowBreakdown = HouseholdFlowBreakdownDimension
+
+// HouseholdFlowExcludedContributorIDs defines model for HouseholdFlowExcludedContributorIDs.
+type HouseholdFlowExcludedContributorIDs = []string
+
+// HouseholdFlowNamedSeriesCount defines model for HouseholdFlowNamedSeriesCount.
+type HouseholdFlowNamedSeriesCount = int
+
+// HouseholdFlowPeriodCount defines model for HouseholdFlowPeriodCount.
+type HouseholdFlowPeriodCount = int
+
 // AccountFQNConflict defines model for AccountFQNConflict.
 type AccountFQNConflict = ErrorResponse
 
@@ -2745,10 +3030,61 @@ type ListCategoryGroupsParams struct {
 	IncludeHidden *bool `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
 }
 
+// GetCategoryGroupOverviewParams defines parameters for GetCategoryGroupOverview.
+type GetCategoryGroupOverviewParams struct {
+	// Fqn Exact active implicit-group FQN prefix; hidden descendants remain included.
+	Fqn string `form:"fqn" json:"fqn"`
+
+	// Breakdown Contributor dimension; defaults by scope. Categories is invalid for Category leaves.
+	Breakdown *HouseholdFlowBreakdown `form:"breakdown,omitempty" json:"breakdown,omitempty"`
+
+	// Grain Calendar period grain; defaults to month.
+	Grain *HouseholdFlowGrain `form:"grain,omitempty" json:"grain,omitempty"`
+
+	// PeriodCount Visible period count. Month accepts 6–24 and defaults to 12; year accepts 3 or more and defaults to 6.
+	PeriodCount *HouseholdFlowPeriodCount `form:"period_count,omitempty" json:"period_count,omitempty"`
+
+	// AnchorDate Date whose calendar month or year is the final visible period; defaults to today and cannot be in the future.
+	AnchorDate *HouseholdFlowAnchorDate `form:"anchor_date,omitempty" json:"anchor_date,omitempty"`
+
+	// NamedSeriesCount Number of individually named contributors before Other; defaults to 5 with no product maximum.
+	NamedSeriesCount *HouseholdFlowNamedSeriesCount `form:"named_series_count,omitempty" json:"named_series_count,omitempty"`
+
+	// ExcludedContributorId Stable named or Other contributor identities excluded from chart values after ranking.
+	ExcludedContributorId *HouseholdFlowExcludedContributorIDs `form:"excluded_contributor_id,omitempty" json:"excluded_contributor_id,omitempty"`
+
+	// Trend Selected backend-computed trend; defaults to rolling average for month and rolling sum for year.
+	Trend *HouseholdFlowTrend `form:"trend,omitempty" json:"trend,omitempty"`
+}
+
 // GetCategoryParams defines parameters for GetCategory.
 type GetCategoryParams struct {
 	// IncludeTombstoned Include tombstoned entities; defaults to false.
 	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
+}
+
+// GetCategoryOverviewParams defines parameters for GetCategoryOverview.
+type GetCategoryOverviewParams struct {
+	// Breakdown Contributor dimension; defaults by scope. Categories is invalid for Category leaves.
+	Breakdown *HouseholdFlowBreakdown `form:"breakdown,omitempty" json:"breakdown,omitempty"`
+
+	// Grain Calendar period grain; defaults to month.
+	Grain *HouseholdFlowGrain `form:"grain,omitempty" json:"grain,omitempty"`
+
+	// PeriodCount Visible period count. Month accepts 6–24 and defaults to 12; year accepts 3 or more and defaults to 6.
+	PeriodCount *HouseholdFlowPeriodCount `form:"period_count,omitempty" json:"period_count,omitempty"`
+
+	// AnchorDate Date whose calendar month or year is the final visible period; defaults to today and cannot be in the future.
+	AnchorDate *HouseholdFlowAnchorDate `form:"anchor_date,omitempty" json:"anchor_date,omitempty"`
+
+	// NamedSeriesCount Number of individually named contributors before Other; defaults to 5 with no product maximum.
+	NamedSeriesCount *HouseholdFlowNamedSeriesCount `form:"named_series_count,omitempty" json:"named_series_count,omitempty"`
+
+	// ExcludedContributorId Stable named or Other contributor identities excluded from chart values after ranking.
+	ExcludedContributorId *HouseholdFlowExcludedContributorIDs `form:"excluded_contributor_id,omitempty" json:"excluded_contributor_id,omitempty"`
+
+	// Trend Selected backend-computed trend; defaults to rolling average for month and rolling sum for year.
+	Trend *HouseholdFlowTrend `form:"trend,omitempty" json:"trend,omitempty"`
 }
 
 // GetCreditLimitHistoryParams defines parameters for GetCreditLimitHistory.
@@ -2845,6 +3181,30 @@ type ListMembersParamsSortDir string
 type GetMemberParams struct {
 	// IncludeTombstoned Include tombstoned entities; defaults to false.
 	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
+}
+
+// GetHouseholdFlowReportParams defines parameters for GetHouseholdFlowReport.
+type GetHouseholdFlowReportParams struct {
+	// Breakdown Contributor dimension; defaults by scope. Categories is invalid for Category leaves.
+	Breakdown *HouseholdFlowBreakdown `form:"breakdown,omitempty" json:"breakdown,omitempty"`
+
+	// Grain Calendar period grain; defaults to month.
+	Grain *HouseholdFlowGrain `form:"grain,omitempty" json:"grain,omitempty"`
+
+	// PeriodCount Visible period count. Month accepts 6–24 and defaults to 12; year accepts 3 or more and defaults to 6.
+	PeriodCount *HouseholdFlowPeriodCount `form:"period_count,omitempty" json:"period_count,omitempty"`
+
+	// AnchorDate Date whose calendar month or year is the final visible period; defaults to today and cannot be in the future.
+	AnchorDate *HouseholdFlowAnchorDate `form:"anchor_date,omitempty" json:"anchor_date,omitempty"`
+
+	// NamedSeriesCount Number of individually named contributors before Other; defaults to 5 with no product maximum.
+	NamedSeriesCount *HouseholdFlowNamedSeriesCount `form:"named_series_count,omitempty" json:"named_series_count,omitempty"`
+
+	// ExcludedContributorId Stable named or Other contributor identities excluded from chart values after ranking.
+	ExcludedContributorId *HouseholdFlowExcludedContributorIDs `form:"excluded_contributor_id,omitempty" json:"excluded_contributor_id,omitempty"`
+
+	// Trend Selected backend-computed trend; defaults to rolling average for month and rolling sum for year.
+	Trend *HouseholdFlowTrend `form:"trend,omitempty" json:"trend,omitempty"`
 }
 
 // SearchJournalRecordsParams defines parameters for SearchJournalRecords.
@@ -3012,10 +3372,61 @@ type ListTagGroupsParams struct {
 	IncludeHidden *bool `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
 }
 
+// GetTagGroupOverviewParams defines parameters for GetTagGroupOverview.
+type GetTagGroupOverviewParams struct {
+	// Fqn Exact active implicit-group FQN prefix; hidden descendants remain included.
+	Fqn string `form:"fqn" json:"fqn"`
+
+	// Breakdown Contributor dimension; defaults by scope. Categories is invalid for Category leaves.
+	Breakdown *HouseholdFlowBreakdown `form:"breakdown,omitempty" json:"breakdown,omitempty"`
+
+	// Grain Calendar period grain; defaults to month.
+	Grain *HouseholdFlowGrain `form:"grain,omitempty" json:"grain,omitempty"`
+
+	// PeriodCount Visible period count. Month accepts 6–24 and defaults to 12; year accepts 3 or more and defaults to 6.
+	PeriodCount *HouseholdFlowPeriodCount `form:"period_count,omitempty" json:"period_count,omitempty"`
+
+	// AnchorDate Date whose calendar month or year is the final visible period; defaults to today and cannot be in the future.
+	AnchorDate *HouseholdFlowAnchorDate `form:"anchor_date,omitempty" json:"anchor_date,omitempty"`
+
+	// NamedSeriesCount Number of individually named contributors before Other; defaults to 5 with no product maximum.
+	NamedSeriesCount *HouseholdFlowNamedSeriesCount `form:"named_series_count,omitempty" json:"named_series_count,omitempty"`
+
+	// ExcludedContributorId Stable named or Other contributor identities excluded from chart values after ranking.
+	ExcludedContributorId *HouseholdFlowExcludedContributorIDs `form:"excluded_contributor_id,omitempty" json:"excluded_contributor_id,omitempty"`
+
+	// Trend Selected backend-computed trend; defaults to rolling average for month and rolling sum for year.
+	Trend *HouseholdFlowTrend `form:"trend,omitempty" json:"trend,omitempty"`
+}
+
 // GetTagParams defines parameters for GetTag.
 type GetTagParams struct {
 	// IncludeTombstoned Include tombstoned entities; defaults to false.
 	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
+}
+
+// GetTagOverviewParams defines parameters for GetTagOverview.
+type GetTagOverviewParams struct {
+	// Breakdown Contributor dimension; defaults by scope. Categories is invalid for Category leaves.
+	Breakdown *HouseholdFlowBreakdown `form:"breakdown,omitempty" json:"breakdown,omitempty"`
+
+	// Grain Calendar period grain; defaults to month.
+	Grain *HouseholdFlowGrain `form:"grain,omitempty" json:"grain,omitempty"`
+
+	// PeriodCount Visible period count. Month accepts 6–24 and defaults to 12; year accepts 3 or more and defaults to 6.
+	PeriodCount *HouseholdFlowPeriodCount `form:"period_count,omitempty" json:"period_count,omitempty"`
+
+	// AnchorDate Date whose calendar month or year is the final visible period; defaults to today and cannot be in the future.
+	AnchorDate *HouseholdFlowAnchorDate `form:"anchor_date,omitempty" json:"anchor_date,omitempty"`
+
+	// NamedSeriesCount Number of individually named contributors before Other; defaults to 5 with no product maximum.
+	NamedSeriesCount *HouseholdFlowNamedSeriesCount `form:"named_series_count,omitempty" json:"named_series_count,omitempty"`
+
+	// ExcludedContributorId Stable named or Other contributor identities excluded from chart values after ranking.
+	ExcludedContributorId *HouseholdFlowExcludedContributorIDs `form:"excluded_contributor_id,omitempty" json:"excluded_contributor_id,omitempty"`
+
+	// Trend Selected backend-computed trend; defaults to rolling average for month and rolling sum for year.
+	Trend *HouseholdFlowTrend `form:"trend,omitempty" json:"trend,omitempty"`
 }
 
 // ListTransactionTemplatesParams defines parameters for ListTransactionTemplates.
@@ -3062,8 +3473,14 @@ type ListTransactionsParams struct {
 	// CategoryId Category identifier to target or filter by.
 	CategoryId *[]int64 `form:"category_id,omitempty" json:"category_id,omitempty"`
 
+	// CategoryFqnPrefix Exact Category FQN descendant scope. Includes hidden active descendants and is independent of category_id filters.
+	CategoryFqnPrefix *string `form:"category_fqn_prefix,omitempty" json:"category_fqn_prefix,omitempty"`
+
 	// TagId Tag identifier to target or filter by.
 	TagId *[]int64 `form:"tag_id,omitempty" json:"tag_id,omitempty"`
+
+	// TagFqnPrefix Exact Tag FQN descendant scope. Includes hidden active descendants and is independent of tag_id filters.
+	TagFqnPrefix *string `form:"tag_fqn_prefix,omitempty" json:"tag_fqn_prefix,omitempty"`
 
 	// MemberId Household-member identifier to target or filter by.
 	MemberId *[]int64 `form:"member_id,omitempty" json:"member_id,omitempty"`
@@ -3325,6 +3742,9 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 
 // The interface specification for the client above.
 type ClientInterface interface {
+	// GetAccountingHistoryRange request
+	GetAccountingHistoryRange(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListAccounts request
 	ListAccounts(ctx context.Context, params *ListAccountsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -3420,6 +3840,9 @@ type ClientInterface interface {
 	// ListCategoryGroups request
 	ListCategoryGroups(ctx context.Context, params *ListCategoryGroupsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetCategoryGroupOverview request
+	GetCategoryGroupOverview(ctx context.Context, params *GetCategoryGroupOverviewParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// RestructureCategoriesWithBody request with any body
 	RestructureCategoriesWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -3440,6 +3863,9 @@ type ClientInterface interface {
 	UpdateCategoryWithBody(ctx context.Context, categoryId int64, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	UpdateCategory(ctx context.Context, categoryId int64, body UpdateCategoryJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetCategoryOverview request
+	GetCategoryOverview(ctx context.Context, categoryId int64, params *GetCategoryOverviewParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteCreditLimitHistory request
 	DeleteCreditLimitHistory(ctx context.Context, creditLimitHistoryId int64, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -3495,6 +3921,9 @@ type ClientInterface interface {
 	UpdateMemberHiddenWithBody(ctx context.Context, memberId int64, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	UpdateMemberHidden(ctx context.Context, memberId int64, body UpdateMemberHiddenJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetHouseholdFlowReport request
+	GetHouseholdFlowReport(ctx context.Context, params *GetHouseholdFlowReportParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// SearchJournalRecords request
 	SearchJournalRecords(ctx context.Context, params *SearchJournalRecordsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -3589,6 +4018,9 @@ type ClientInterface interface {
 	// ListTagGroups request
 	ListTagGroups(ctx context.Context, params *ListTagGroupsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetTagGroupOverview request
+	GetTagGroupOverview(ctx context.Context, params *GetTagGroupOverviewParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// RestructureTagsWithBody request with any body
 	RestructureTagsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -3609,6 +4041,9 @@ type ClientInterface interface {
 	UpdateTagWithBody(ctx context.Context, tagId int64, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	UpdateTag(ctx context.Context, tagId int64, body UpdateTagJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetTagOverview request
+	GetTagOverview(ctx context.Context, tagId int64, params *GetTagOverviewParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListTransactionTemplates request
 	ListTransactionTemplates(ctx context.Context, params *ListTransactionTemplatesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -3691,6 +4126,18 @@ type ClientInterface interface {
 
 	// RestoreTransaction request
 	RestoreTransaction(ctx context.Context, transactionId int64, reqEditors ...RequestEditorFn) (*http.Response, error)
+}
+
+func (c *Client) GetAccountingHistoryRange(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAccountingHistoryRangeRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
 }
 
 func (c *Client) ListAccounts(ctx context.Context, params *ListAccountsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -4101,6 +4548,18 @@ func (c *Client) ListCategoryGroups(ctx context.Context, params *ListCategoryGro
 	return c.Client.Do(req)
 }
 
+func (c *Client) GetCategoryGroupOverview(ctx context.Context, params *GetCategoryGroupOverviewParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetCategoryGroupOverviewRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) RestructureCategoriesWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewRestructureCategoriesRequestWithBody(c.Server, contentType, body)
 	if err != nil {
@@ -4187,6 +4646,18 @@ func (c *Client) UpdateCategoryWithBody(ctx context.Context, categoryId int64, c
 
 func (c *Client) UpdateCategory(ctx context.Context, categoryId int64, body UpdateCategoryJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateCategoryRequest(c.Server, categoryId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetCategoryOverview(ctx context.Context, categoryId int64, params *GetCategoryOverviewParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetCategoryOverviewRequest(c.Server, categoryId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -4427,6 +4898,18 @@ func (c *Client) UpdateMemberHiddenWithBody(ctx context.Context, memberId int64,
 
 func (c *Client) UpdateMemberHidden(ctx context.Context, memberId int64, body UpdateMemberHiddenJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateMemberHiddenRequest(c.Server, memberId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetHouseholdFlowReport(ctx context.Context, params *GetHouseholdFlowReportParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetHouseholdFlowReportRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -4857,6 +5340,18 @@ func (c *Client) ListTagGroups(ctx context.Context, params *ListTagGroupsParams,
 	return c.Client.Do(req)
 }
 
+func (c *Client) GetTagGroupOverview(ctx context.Context, params *GetTagGroupOverviewParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetTagGroupOverviewRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) RestructureTagsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewRestructureTagsRequestWithBody(c.Server, contentType, body)
 	if err != nil {
@@ -4943,6 +5438,18 @@ func (c *Client) UpdateTagWithBody(ctx context.Context, tagId int64, contentType
 
 func (c *Client) UpdateTag(ctx context.Context, tagId int64, body UpdateTagJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateTagRequest(c.Server, tagId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetTagOverview(ctx context.Context, tagId int64, params *GetTagOverviewParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetTagOverviewRequest(c.Server, tagId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -5323,6 +5830,33 @@ func (c *Client) RestoreTransaction(ctx context.Context, transactionId int64, re
 		return nil, err
 	}
 	return c.Client.Do(req)
+}
+
+// NewGetAccountingHistoryRangeRequest generates requests for GetAccountingHistoryRange
+func NewGetAccountingHistoryRangeRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/accounting-history/range")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
 }
 
 // NewListAccountsRequest generates requests for ListAccounts
@@ -6987,6 +7521,140 @@ func NewListCategoryGroupsRequest(server string, params *ListCategoryGroupsParam
 	return req, nil
 }
 
+// NewGetCategoryGroupOverviewRequest generates requests for GetCategoryGroupOverview
+func NewGetCategoryGroupOverviewRequest(server string, params *GetCategoryGroupOverviewParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/categories/groups/overview")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "fqn", params.Fqn, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if params.Breakdown != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "breakdown", *params.Breakdown, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Grain != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "grain", *params.Grain, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PeriodCount != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "period_count", *params.PeriodCount, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.AnchorDate != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "anchor_date", *params.AnchorDate, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.NamedSeriesCount != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "named_series_count", *params.NamedSeriesCount, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.ExcludedContributorId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "excluded_contributor_id", *params.ExcludedContributorId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Trend != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "trend", *params.Trend, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewRestructureCategoriesRequest calls the generic RestructureCategories builder with application/json body
 func NewRestructureCategoriesRequest(server string, body RestructureCategoriesJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -7205,6 +7873,139 @@ func NewUpdateCategoryRequestWithBody(server string, categoryId int64, contentTy
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetCategoryOverviewRequest generates requests for GetCategoryOverview
+func NewGetCategoryOverviewRequest(server string, categoryId int64, params *GetCategoryOverviewParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "category_id", categoryId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "integer", Format: "int64"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/categories/%s/overview", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Breakdown != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "breakdown", *params.Breakdown, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Grain != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "grain", *params.Grain, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PeriodCount != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "period_count", *params.PeriodCount, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.AnchorDate != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "anchor_date", *params.AnchorDate, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.NamedSeriesCount != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "named_series_count", *params.NamedSeriesCount, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.ExcludedContributorId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "excluded_contributor_id", *params.ExcludedContributorId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Trend != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "trend", *params.Trend, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -8092,6 +8893,132 @@ func NewUpdateMemberHiddenRequestWithBody(server string, memberId int64, content
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetHouseholdFlowReportRequest generates requests for GetHouseholdFlowReport
+func NewGetHouseholdFlowReportRequest(server string, params *GetHouseholdFlowReportParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/overview/flow")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Breakdown != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "breakdown", *params.Breakdown, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Grain != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "grain", *params.Grain, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PeriodCount != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "period_count", *params.PeriodCount, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.AnchorDate != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "anchor_date", *params.AnchorDate, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.NamedSeriesCount != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "named_series_count", *params.NamedSeriesCount, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.ExcludedContributorId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "excluded_contributor_id", *params.ExcludedContributorId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Trend != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "trend", *params.Trend, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -9515,6 +10442,140 @@ func NewListTagGroupsRequest(server string, params *ListTagGroupsParams) (*http.
 	return req, nil
 }
 
+// NewGetTagGroupOverviewRequest generates requests for GetTagGroupOverview
+func NewGetTagGroupOverviewRequest(server string, params *GetTagGroupOverviewParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/tags/groups/overview")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "fqn", params.Fqn, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if params.Breakdown != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "breakdown", *params.Breakdown, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Grain != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "grain", *params.Grain, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PeriodCount != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "period_count", *params.PeriodCount, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.AnchorDate != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "anchor_date", *params.AnchorDate, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.NamedSeriesCount != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "named_series_count", *params.NamedSeriesCount, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.ExcludedContributorId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "excluded_contributor_id", *params.ExcludedContributorId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Trend != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "trend", *params.Trend, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewRestructureTagsRequest calls the generic RestructureTags builder with application/json body
 func NewRestructureTagsRequest(server string, body RestructureTagsJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -9733,6 +10794,139 @@ func NewUpdateTagRequestWithBody(server string, tagId int64, contentType string,
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetTagOverviewRequest generates requests for GetTagOverview
+func NewGetTagOverviewRequest(server string, tagId int64, params *GetTagOverviewParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "tag_id", tagId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "integer", Format: "int64"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/tags/%s/overview", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Breakdown != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "breakdown", *params.Breakdown, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Grain != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "grain", *params.Grain, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PeriodCount != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "period_count", *params.PeriodCount, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.AnchorDate != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "anchor_date", *params.AnchorDate, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.NamedSeriesCount != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "named_series_count", *params.NamedSeriesCount, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.ExcludedContributorId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "excluded_contributor_id", *params.ExcludedContributorId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Trend != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "trend", *params.Trend, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -10134,9 +11328,33 @@ func NewListTransactionsRequest(server string, params *ListTransactionsParams) (
 
 		}
 
+		if params.CategoryFqnPrefix != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "category_fqn_prefix", *params.CategoryFqnPrefix, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if params.TagId != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "tag_id", *params.TagId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.TagFqnPrefix != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "tag_fqn_prefix", *params.TagFqnPrefix, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -10920,6 +12138,9 @@ func WithBaseURL(baseURL string) ClientOption {
 
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
+	// GetAccountingHistoryRangeWithResponse request
+	GetAccountingHistoryRangeWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetAccountingHistoryRangeResponse, error)
+
 	// ListAccountsWithResponse request
 	ListAccountsWithResponse(ctx context.Context, params *ListAccountsParams, reqEditors ...RequestEditorFn) (*ListAccountsResponse, error)
 
@@ -11015,6 +12236,9 @@ type ClientWithResponsesInterface interface {
 	// ListCategoryGroupsWithResponse request
 	ListCategoryGroupsWithResponse(ctx context.Context, params *ListCategoryGroupsParams, reqEditors ...RequestEditorFn) (*ListCategoryGroupsResponse, error)
 
+	// GetCategoryGroupOverviewWithResponse request
+	GetCategoryGroupOverviewWithResponse(ctx context.Context, params *GetCategoryGroupOverviewParams, reqEditors ...RequestEditorFn) (*GetCategoryGroupOverviewResponse, error)
+
 	// RestructureCategoriesWithBodyWithResponse request with any body
 	RestructureCategoriesWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RestructureCategoriesResponse, error)
 
@@ -11035,6 +12259,9 @@ type ClientWithResponsesInterface interface {
 	UpdateCategoryWithBodyWithResponse(ctx context.Context, categoryId int64, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateCategoryResponse, error)
 
 	UpdateCategoryWithResponse(ctx context.Context, categoryId int64, body UpdateCategoryJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateCategoryResponse, error)
+
+	// GetCategoryOverviewWithResponse request
+	GetCategoryOverviewWithResponse(ctx context.Context, categoryId int64, params *GetCategoryOverviewParams, reqEditors ...RequestEditorFn) (*GetCategoryOverviewResponse, error)
 
 	// DeleteCreditLimitHistoryWithResponse request
 	DeleteCreditLimitHistoryWithResponse(ctx context.Context, creditLimitHistoryId int64, reqEditors ...RequestEditorFn) (*DeleteCreditLimitHistoryResponse, error)
@@ -11090,6 +12317,9 @@ type ClientWithResponsesInterface interface {
 	UpdateMemberHiddenWithBodyWithResponse(ctx context.Context, memberId int64, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateMemberHiddenResponse, error)
 
 	UpdateMemberHiddenWithResponse(ctx context.Context, memberId int64, body UpdateMemberHiddenJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateMemberHiddenResponse, error)
+
+	// GetHouseholdFlowReportWithResponse request
+	GetHouseholdFlowReportWithResponse(ctx context.Context, params *GetHouseholdFlowReportParams, reqEditors ...RequestEditorFn) (*GetHouseholdFlowReportResponse, error)
 
 	// SearchJournalRecordsWithResponse request
 	SearchJournalRecordsWithResponse(ctx context.Context, params *SearchJournalRecordsParams, reqEditors ...RequestEditorFn) (*SearchJournalRecordsResponse, error)
@@ -11184,6 +12414,9 @@ type ClientWithResponsesInterface interface {
 	// ListTagGroupsWithResponse request
 	ListTagGroupsWithResponse(ctx context.Context, params *ListTagGroupsParams, reqEditors ...RequestEditorFn) (*ListTagGroupsResponse, error)
 
+	// GetTagGroupOverviewWithResponse request
+	GetTagGroupOverviewWithResponse(ctx context.Context, params *GetTagGroupOverviewParams, reqEditors ...RequestEditorFn) (*GetTagGroupOverviewResponse, error)
+
 	// RestructureTagsWithBodyWithResponse request with any body
 	RestructureTagsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RestructureTagsResponse, error)
 
@@ -11204,6 +12437,9 @@ type ClientWithResponsesInterface interface {
 	UpdateTagWithBodyWithResponse(ctx context.Context, tagId int64, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateTagResponse, error)
 
 	UpdateTagWithResponse(ctx context.Context, tagId int64, body UpdateTagJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateTagResponse, error)
+
+	// GetTagOverviewWithResponse request
+	GetTagOverviewWithResponse(ctx context.Context, tagId int64, params *GetTagOverviewParams, reqEditors ...RequestEditorFn) (*GetTagOverviewResponse, error)
 
 	// ListTransactionTemplatesWithResponse request
 	ListTransactionTemplatesWithResponse(ctx context.Context, params *ListTransactionTemplatesParams, reqEditors ...RequestEditorFn) (*ListTransactionTemplatesResponse, error)
@@ -11286,6 +12522,38 @@ type ClientWithResponsesInterface interface {
 
 	// RestoreTransactionWithResponse request
 	RestoreTransactionWithResponse(ctx context.Context, transactionId int64, reqEditors ...RequestEditorFn) (*RestoreTransactionResponse, error)
+}
+
+type GetAccountingHistoryRangeResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *AccountingHistoryRange
+	JSON401      *Unauthenticated
+	JSON405      *MethodNotAllowed
+}
+
+// Status returns HTTPResponse.Status
+func (r GetAccountingHistoryRangeResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetAccountingHistoryRangeResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetAccountingHistoryRangeResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
 }
 
 type ListAccountsResponse struct {
@@ -12183,6 +13451,39 @@ func (r ListCategoryGroupsResponse) ContentType() string {
 	return ""
 }
 
+type GetCategoryGroupOverviewResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *HouseholdFlowEntityResponse
+	JSON400      *InvalidRequest
+	JSON401      *Unauthenticated
+	JSON404      *NotFound
+}
+
+// Status returns HTTPResponse.Status
+func (r GetCategoryGroupOverviewResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetCategoryGroupOverviewResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetCategoryGroupOverviewResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type RestructureCategoriesResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -12347,6 +13648,39 @@ func (r UpdateCategoryResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r UpdateCategoryResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetCategoryOverviewResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *HouseholdFlowEntityResponse
+	JSON400      *InvalidRequest
+	JSON401      *Unauthenticated
+	JSON404      *NotFound
+}
+
+// Status returns HTTPResponse.Status
+func (r GetCategoryOverviewResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetCategoryOverviewResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetCategoryOverviewResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -12844,6 +14178,39 @@ func (r UpdateMemberHiddenResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r UpdateMemberHiddenResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetHouseholdFlowReportResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *HouseholdFlowDataset
+	JSON400      *InvalidRequest
+	JSON401      *Unauthenticated
+	JSON405      *MethodNotAllowed
+}
+
+// Status returns HTTPResponse.Status
+func (r GetHouseholdFlowReportResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetHouseholdFlowReportResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetHouseholdFlowReportResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -13615,6 +14982,39 @@ func (r ListTagGroupsResponse) ContentType() string {
 	return ""
 }
 
+type GetTagGroupOverviewResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *HouseholdFlowEntityResponse
+	JSON400      *InvalidRequest
+	JSON401      *Unauthenticated
+	JSON404      *NotFound
+}
+
+// Status returns HTTPResponse.Status
+func (r GetTagGroupOverviewResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetTagGroupOverviewResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetTagGroupOverviewResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type RestructureTagsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -13779,6 +15179,39 @@ func (r UpdateTagResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r UpdateTagResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetTagOverviewResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *HouseholdFlowEntityResponse
+	JSON400      *InvalidRequest
+	JSON401      *Unauthenticated
+	JSON404      *NotFound
+}
+
+// Status returns HTTPResponse.Status
+func (r GetTagOverviewResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetTagOverviewResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetTagOverviewResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -14449,6 +15882,15 @@ func (r RestoreTransactionResponse) ContentType() string {
 	return ""
 }
 
+// GetAccountingHistoryRangeWithResponse request returning *GetAccountingHistoryRangeResponse
+func (c *ClientWithResponses) GetAccountingHistoryRangeWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetAccountingHistoryRangeResponse, error) {
+	rsp, err := c.GetAccountingHistoryRange(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetAccountingHistoryRangeResponse(rsp)
+}
+
 // ListAccountsWithResponse request returning *ListAccountsResponse
 func (c *ClientWithResponses) ListAccountsWithResponse(ctx context.Context, params *ListAccountsParams, reqEditors ...RequestEditorFn) (*ListAccountsResponse, error) {
 	rsp, err := c.ListAccounts(ctx, params, reqEditors...)
@@ -14748,6 +16190,15 @@ func (c *ClientWithResponses) ListCategoryGroupsWithResponse(ctx context.Context
 	return ParseListCategoryGroupsResponse(rsp)
 }
 
+// GetCategoryGroupOverviewWithResponse request returning *GetCategoryGroupOverviewResponse
+func (c *ClientWithResponses) GetCategoryGroupOverviewWithResponse(ctx context.Context, params *GetCategoryGroupOverviewParams, reqEditors ...RequestEditorFn) (*GetCategoryGroupOverviewResponse, error) {
+	rsp, err := c.GetCategoryGroupOverview(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetCategoryGroupOverviewResponse(rsp)
+}
+
 // RestructureCategoriesWithBodyWithResponse request with arbitrary body returning *RestructureCategoriesResponse
 func (c *ClientWithResponses) RestructureCategoriesWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RestructureCategoriesResponse, error) {
 	rsp, err := c.RestructureCategoriesWithBody(ctx, contentType, body, reqEditors...)
@@ -14815,6 +16266,15 @@ func (c *ClientWithResponses) UpdateCategoryWithResponse(ctx context.Context, ca
 		return nil, err
 	}
 	return ParseUpdateCategoryResponse(rsp)
+}
+
+// GetCategoryOverviewWithResponse request returning *GetCategoryOverviewResponse
+func (c *ClientWithResponses) GetCategoryOverviewWithResponse(ctx context.Context, categoryId int64, params *GetCategoryOverviewParams, reqEditors ...RequestEditorFn) (*GetCategoryOverviewResponse, error) {
+	rsp, err := c.GetCategoryOverview(ctx, categoryId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetCategoryOverviewResponse(rsp)
 }
 
 // DeleteCreditLimitHistoryWithResponse request returning *DeleteCreditLimitHistoryResponse
@@ -14990,6 +16450,15 @@ func (c *ClientWithResponses) UpdateMemberHiddenWithResponse(ctx context.Context
 		return nil, err
 	}
 	return ParseUpdateMemberHiddenResponse(rsp)
+}
+
+// GetHouseholdFlowReportWithResponse request returning *GetHouseholdFlowReportResponse
+func (c *ClientWithResponses) GetHouseholdFlowReportWithResponse(ctx context.Context, params *GetHouseholdFlowReportParams, reqEditors ...RequestEditorFn) (*GetHouseholdFlowReportResponse, error) {
+	rsp, err := c.GetHouseholdFlowReport(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetHouseholdFlowReportResponse(rsp)
 }
 
 // SearchJournalRecordsWithResponse request returning *SearchJournalRecordsResponse
@@ -15295,6 +16764,15 @@ func (c *ClientWithResponses) ListTagGroupsWithResponse(ctx context.Context, par
 	return ParseListTagGroupsResponse(rsp)
 }
 
+// GetTagGroupOverviewWithResponse request returning *GetTagGroupOverviewResponse
+func (c *ClientWithResponses) GetTagGroupOverviewWithResponse(ctx context.Context, params *GetTagGroupOverviewParams, reqEditors ...RequestEditorFn) (*GetTagGroupOverviewResponse, error) {
+	rsp, err := c.GetTagGroupOverview(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetTagGroupOverviewResponse(rsp)
+}
+
 // RestructureTagsWithBodyWithResponse request with arbitrary body returning *RestructureTagsResponse
 func (c *ClientWithResponses) RestructureTagsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RestructureTagsResponse, error) {
 	rsp, err := c.RestructureTagsWithBody(ctx, contentType, body, reqEditors...)
@@ -15362,6 +16840,15 @@ func (c *ClientWithResponses) UpdateTagWithResponse(ctx context.Context, tagId i
 		return nil, err
 	}
 	return ParseUpdateTagResponse(rsp)
+}
+
+// GetTagOverviewWithResponse request returning *GetTagOverviewResponse
+func (c *ClientWithResponses) GetTagOverviewWithResponse(ctx context.Context, tagId int64, params *GetTagOverviewParams, reqEditors ...RequestEditorFn) (*GetTagOverviewResponse, error) {
+	rsp, err := c.GetTagOverview(ctx, tagId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetTagOverviewResponse(rsp)
 }
 
 // ListTransactionTemplatesWithResponse request returning *ListTransactionTemplatesResponse
@@ -15630,6 +17117,46 @@ func (c *ClientWithResponses) RestoreTransactionWithResponse(ctx context.Context
 		return nil, err
 	}
 	return ParseRestoreTransactionResponse(rsp)
+}
+
+// ParseGetAccountingHistoryRangeResponse parses an HTTP response from a GetAccountingHistoryRangeWithResponse call
+func ParseGetAccountingHistoryRangeResponse(rsp *http.Response) (*GetAccountingHistoryRangeResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetAccountingHistoryRangeResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AccountingHistoryRange
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
+	}
+
+	return response, nil
 }
 
 // ParseListAccountsResponse parses an HTTP response from a ListAccountsWithResponse call
@@ -16929,6 +18456,53 @@ func ParseListCategoryGroupsResponse(rsp *http.Response) (*ListCategoryGroupsRes
 	return response, nil
 }
 
+// ParseGetCategoryGroupOverviewResponse parses an HTTP response from a GetCategoryGroupOverviewWithResponse call
+func ParseGetCategoryGroupOverviewResponse(rsp *http.Response) (*GetCategoryGroupOverviewResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetCategoryGroupOverviewResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest HouseholdFlowEntityResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseRestructureCategoriesResponse parses an HTTP response from a RestructureCategoriesWithResponse call
 func ParseRestructureCategoriesResponse(rsp *http.Response) (*RestructureCategoriesResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -17186,6 +18760,53 @@ func ParseUpdateCategoryResponse(rsp *http.Response) (*UpdateCategoryResponse, e
 			return nil, err
 		}
 		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetCategoryOverviewResponse parses an HTTP response from a GetCategoryOverviewWithResponse call
+func ParseGetCategoryOverviewResponse(rsp *http.Response) (*GetCategoryOverviewResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetCategoryOverviewResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest HouseholdFlowEntityResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
 		var dest NotFound
@@ -17912,6 +19533,53 @@ func ParseUpdateMemberHiddenResponse(rsp *http.Response) (*UpdateMemberHiddenRes
 			return nil, err
 		}
 		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetHouseholdFlowReportResponse parses an HTTP response from a GetHouseholdFlowReportWithResponse call
+func ParseGetHouseholdFlowReportResponse(rsp *http.Response) (*GetHouseholdFlowReportResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetHouseholdFlowReportResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest HouseholdFlowDataset
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
 
 	}
 
@@ -19041,6 +20709,53 @@ func ParseListTagGroupsResponse(rsp *http.Response) (*ListTagGroupsResponse, err
 	return response, nil
 }
 
+// ParseGetTagGroupOverviewResponse parses an HTTP response from a GetTagGroupOverviewWithResponse call
+func ParseGetTagGroupOverviewResponse(rsp *http.Response) (*GetTagGroupOverviewResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetTagGroupOverviewResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest HouseholdFlowEntityResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseRestructureTagsResponse parses an HTTP response from a RestructureTagsWithResponse call
 func ParseRestructureTagsResponse(rsp *http.Response) (*RestructureTagsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -19298,6 +21013,53 @@ func ParseUpdateTagResponse(rsp *http.Response) (*UpdateTagResponse, error) {
 			return nil, err
 		}
 		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetTagOverviewResponse parses an HTTP response from a GetTagOverviewWithResponse call
+func ParseGetTagOverviewResponse(rsp *http.Response) (*GetTagOverviewResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetTagOverviewResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest HouseholdFlowEntityResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
 		var dest NotFound

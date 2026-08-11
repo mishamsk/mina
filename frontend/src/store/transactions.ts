@@ -7,6 +7,7 @@ import type {
   AccountBalance,
   Category,
   CategoryEconomicIntent,
+  HouseholdFlowDataset,
   Member,
   Tag,
   Transaction,
@@ -61,6 +62,8 @@ export interface OverviewSnapshot {
   readonly accounts: readonly Account[];
   readonly balanceRows: readonly OverviewBalanceRow[];
   readonly loadedAt: string;
+  readonly flowReport: HouseholdFlowDataset | undefined;
+  readonly flowReportErrorMessage: string | undefined;
   readonly month: string;
   readonly monthTotals: TransactionMonthTotalsResponse;
   readonly recentTransactions: readonly Transaction[];
@@ -598,6 +601,36 @@ export const setOverview = (
     },
     false,
     "TransactionsStore/setOverview",
+  );
+};
+
+export const setOverviewFlowReport = (
+  flowReport: HouseholdFlowDataset,
+): void => {
+  useTransactionsStore.setState(
+    (state) => ({
+      overview: state.overview
+        ? {
+            ...state.overview,
+            flowReport,
+            flowReportErrorMessage: undefined,
+          }
+        : undefined,
+    }),
+    false,
+    "TransactionsStore/setOverviewFlowReport",
+  );
+};
+
+export const setOverviewFlowReportError = (errorMessage: string): void => {
+  useTransactionsStore.setState(
+    (state) => ({
+      overview: state.overview
+        ? { ...state.overview, flowReportErrorMessage: errorMessage }
+        : undefined,
+    }),
+    false,
+    "TransactionsStore/setOverviewFlowReportError",
   );
 };
 

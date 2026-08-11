@@ -41,14 +41,21 @@ Entry mirrors display:
 
 Hard rule: the UI never re-derives accounting truths client-side. Transaction class, transaction shapes, record roles, display amounts, and balances are server-derived values; the UI renders them.
 
-### One shared browser
+### One shared transaction presentation
 
-There is exactly one transactions/records browsing system, built once and embedded everywhere:
+There is exactly one transaction-line and table vocabulary, built once and
+reused everywhere:
 
 - On the Transactions page it lists classified transaction lines that open read-only transaction detail.
-- On account, group, category, tag, and member pages it appears pre-filtered to that entity. Account and group registers are the one-sided records view — the only true records-only presentation.
+- On account and group pages it appears pre-filtered to that entity. Account and group registers are the one-sided records view — the only true records-only presentation.
+- Category and tag overviews use its fixed, read-only transaction-table variant,
+  then link to the full Transactions browser with the same scope;
+  `docs/household-flow-reporting.md` owns report semantics. Member drill-downs
+  retain the full filtered browser.
 - Record rows in registers use a side peek panel to preview the full containing transaction without leaving the list.
-- Filtering, sorting, transaction Edit mode, keyboard driving, and detail/peek behavior are shared across every applicable embedding.
+- Full browser embeddings share filtering, sorting, transaction Edit mode,
+  keyboard driving, and detail/peek behavior. Fixed report previews reuse row
+  and detail behavior without browser controls.
 
 There are no separate "transaction mode" and "record mode" screens; context determines which shape the shared browser renders.
 
@@ -170,12 +177,14 @@ Canonical rendering rules; every screen uses these so the product reads as one s
 - Server-driven pagination/sort/filter, sticky header, right-aligned numeric columns, and whole-row affordances for detail/peek — no per-row disclosure control or reserved indicator column; the row itself is the affordance. Transaction lines gain a leading checkbox column only in Edit mode.
 - Per-row actions live in one narrow trailing actions column — always the rightmost column, in every table — never mid-row. Button-class actions render as compact icon buttons with tooltips and are always visible: no hover- or focus-reveal semantics anywhere. State toggles stay persistently visible because they carry state. Fit decides presentation, never count: when the actions cell fits the full action cluster it shows all buttons; when it cannot, the cluster collapses into a single overflow (⋯) button that opens a floating panel with all actions — by the column-collapse priority in the transactions browser, and per row in reference tables.
 - Tables render no Actions column header; the actions column is right-padded so its trailing margin matches the table's leading padding.
-- Reference/dictionary row activation (click, Enter, or Space on a leaf row) opens the entity's read-only detail/register page: accounts open their register, account groups the group register, categories/tags/members their drill-down pages. Edit is a compact trailing row action with a tooltip; all action buttons stop row-activation propagation. In Transactions and Category/Tag/Member drill-down browsers, transaction row activation opens its read-only detail in browse mode, closes it when that row is already active, and switches it directly when another row is active; Edit mode instead toggles selection and makes trailing actions unavailable.
+- Reference/dictionary row activation (click, Enter, or Space) opens the row's read-only destination: Account leaves and groups open their register, Category and Tag leaves and groups open their drill-down report, and Members open their drill-down page. Rows without a destination do not activate. Edit is a compact trailing row action with a tooltip; all action buttons stop row-activation propagation. In transaction browsers, transaction row activation opens its read-only detail in browse mode, closes it when that row is already active, and switches it directly when another row is active; Edit mode instead toggles selection and makes trailing actions unavailable.
 - Stable column layout: fixed percentage-based column widths so columns never shift when paging or when row content changes.
 - When horizontal space runs out, columns collapse by priority instead of showing a horizontal scrollbar: member first, then row actions fold into a single overflow (⋯) menu, then tags, then category.
 - Pagination shows "Page X of Y" from server-provided total counts.
 - Moving between pages keeps the current rows visible until the next page arrives — no skeleton flash or flicker for uncached pages (skeletons are for first load only).
 - The browser fills the available viewport height: the table body flexes and the pagination footer sits at a small, consistent inset from the viewport bottom, matching the sidebar's bottom-control inset so the two bottom edges align.
+- Report pages are the exception: they scroll at the route level, and their fixed
+  transaction previews grow with the page without internal scrolling.
 - Shareable state: filters, search text, sort, and list position live in the URL (per `docs/frontend-architecture.md`). Detail pages are URL-addressable. Sidebar navigation returns to a page's last-used state.
 - Shareable-state URL writes that fire while an overlay is open (`?entry=` or the detail panel's `transaction=`) preserve the overlay params — a delayed write (e.g. debounced search) never closes an open surface — and rewrite the overlay's one history entry so Back still closes the overlay onto the updated list state.
 - Filter bar pattern: a Filter toggle in the toolbar row opens a dedicated full-width filter bar directly beneath it; the "Add filter" menu and the accumulated removable typed filter chips live in that bar and never inflate the toolbar row. Filter dimensions: account, category, tag, member, amount range, initiated-date range, transaction lifecycle, derived settlement, reconciliation status, transaction class, transaction shape, and record role — all lifecycle, settlement, class, shape, and role values come from the server, including `refund` and `clawback` as their own filterable classes.
@@ -192,7 +201,7 @@ Canonical rendering rules; every screen uses these so the product reads as one s
 - The control panel is visible from zero selected and provides Category Replace, Tags Add/Remove, Member Set/Clear, and grouped settlement/reconciliation actions. It expands at most one labeled editor at a time, scrolls internally within the browser's fixed viewport height, and keeps mutation errors with that editor without losing its draft or selection; it never moves below the table or displaces pagination.
 - Quick changes target only selected transactions whose active records can accept the requested mechanical edit. Non-qualifying rows are skipped with reasoned result feedback that states the transaction count it describes with singular/plural wording; only transactions with records in the applied mutation count as updated. Selection remains after success so changes can chain.
 - Category targets categorizable records; Tags use explicit Add or Remove; Member uses atomic Set or Clear; settlement sets eligible owned/party records Pending or Posted; reconciliation independently Reconciles or Unreconciles. Cancellation, restoration, and structural changes stay explicit per-transaction actions outside Edit mode.
-- Filters, search, class, date jump, sorting, drill-down scope, detail, row actions, entity-chip activation, and occurrence actions are unavailable while Edit mode is active. Pagination stays live; changing page keeps the mode active but clears selection and dock drafts.
+- Filters, search, class, date jump, sorting, detail, row actions, entity-chip activation, and occurrence actions are unavailable while Edit mode is active. Pagination stays live; changing page keeps the mode active but clears selection and dock drafts.
 - Selection mechanics: click, Space, or Enter toggles a row; Shift+Click / Shift+Space / Shift+Up/Down range-select from the anchor; the header checkbox and Cmd/Ctrl+A select the page. Expected occurrences are never selectable.
 - With a selected row focused, `c`, `t`, and `m` open the Category, Tags, and Member dock editors.
 - Every mechanically editable active amount becomes a stable styled input in Edit mode regardless of selection. Eligibility is limited to minimal two-record, single-currency spend, income, refund, or transfer shapes whose balanced replacement is mechanical; other amounts remain read-only chips.
@@ -224,11 +233,22 @@ Each screen below lists purpose, layout, behavior, primary data sources, and pha
 
 ### 1. Overview (dashboard) — Phase 2
 
-- Purpose: current balances on main accounts at a glance, plus a pulse of recent activity. The landing page.
+- Purpose: recent household flow and current balances at a glance, plus a pulse of recent activity. The landing page. Report semantics are owned by [household flow reporting](household-flow-reporting.md).
+- Flow report: the first content row is the shared configurable household-flow
+  report. Its controls are embedded in the visualization: a small trend selector
+  sits inside the graph's upper-right; the contributor checklist footer places
+  named-series minus/plus controls at left and an arcade-style Accounts/Categories
+  toggle at right; below the x-axis, a Month/Year toggle sits under the y-axis
+  labels and precedes one sliding window whose handles resize the range and move
+  its final-period anchor into the past. Its available bounds come from the
+  separate accounting-history range read. The visualization places the checklist at
+  roughly one quarter width before the graph on wide screens; on narrow screens
+  the graph comes first and the checklist follows beneath it. The browser loads
+  no accounting rows or transaction preview for this report.
 - Balances: `owned` and `party` accounts grouped by FQN root prefix (`banks`, `cash`, `people`, …), each group listing account display labels with full-FQN tooltips, currency, and primary standing; group subtotal as `≈ USD`. `party` groups read as amounts owed to or by the household, never as household funds. Prominent accounts surface on top. Accounts with a current credit limit lead with server-derived remaining credit; all others lead with current balance.
-- Month pulse: current-month spend and income totals as plain numbers (no charts; charts arrive with Phase 3 reporting).
+- Month pulse: current-month spend and income totals as plain numbers beneath balances.
 - Recent activity: the latest classified transaction lines, linking into Transactions.
-- Later phases add net-worth trend, richer summaries (Phase 3), and budget status (Phase 4) — as additions, not a redesign.
+- Later phases add richer summaries (Phase 3) and budget status (Phase 4) — as additions, not a redesign.
 
 ### 2. Transactions — Phase 2 (core screen)
 
@@ -287,9 +307,25 @@ Each screen below lists purpose, layout, behavior, primary data sources, and pha
 - Members and Tags render as compact left-aligned lists with a bounded maximum width instead of stretching a near-single-column table across the viewport; the trailing actions column stays narrow. Categories keeps the wider two-column layout (name + intent badge).
 - Row actions follow the accounts affordance philosophy: rows that can be deleted carry a delete quick action in the trailing actions column (always visible per the row-actions rule), disabled with an explanatory tooltip when the listing reports the entity as not deletable; activation opens the standard confirm dialog naming the entity and calls the existing delete endpoint, with API errors surfaced as the fallback. Group-only rows carry no delete while no group delete operation exists. Category, Tag, and Member side-panel editors keep their delete actions.
 - Category and Tag leaf rows expose featured and hidden flat toggles in the shared fixed trailing slots.
-- Every dictionary entity is a drill-down target with its own page embedding the shared browser pre-filtered to it, with the same peek panel. Category, tag, and member drill-downs use the route-level page header as their sole identity header and start directly with the scoped toolbar/browser; they have no duplicate identity card or cross-link to Transactions.
-  - Category and tag pages roll up descendants by default (`Food` includes `Food:Restaurants`), with a "this level only" toggle; hidden descendants stay excluded from the rollup, consistent with hidden entities being excluded from default lists everywhere.
-  - Member pages show the transactions attributed to that member through the same shared-browser embedding.
+- Every dictionary entity is a drill-down target with its own page. Category, tag, and member drill-downs use the route-level page header as their sole identity header and have no duplicate identity card.
+  - Category and Tag leaf and implicit-group pages place whole-scope top-line
+    cards directly below the header, then the same inline-controlled report
+    visualization used by Overview, followed by a full-width fixed newest
+    transaction preview. The route scrolls normally; cards, graph,
+    checklist, and preview have no internal scroll regions.
+  - The graph has no duplicate legend. Its tooltip leads with the selected metric
+    and returned totals, then inflows descending and outflows ascending with
+    `Other` last in each group; Category contributors retain drill-down links.
+    The contributor checklist provides labeled items plus all/none actions.
+  - At narrow widths the graph precedes the checklist without changing control
+    or keyboard order. Sparse, empty, filtered, and expanded reports preserve
+    readable labels, tooltip access, and the theme's high-contrast trend line.
+  - The fixed preview reuses transaction line/detail behavior without paging,
+    filtering, sorting, Edit mode, row actions, or internal scrolling. Its
+    Transactions action preserves the exact leaf or descendant-group scope.
+  - Category and Tag report semantics follow
+    `docs/household-flow-reporting.md`; Member drill-downs retain the full
+    filtered transaction browser.
 - Categories: economic-intent badge per row (`expense` or `income`); the editor requires intent and explains its classification effect in one line.
 - Templates: `/templates` presents a searchable template tree with record-default summaries, Use, create/edit, move/rename, and delete. Use opens transaction entry in place with the template applied. Its route-independent modal manages date-free partial record defaults (all optional: account, category, member, currency, amount, tags, memo), protects dirty work, and refreshes every template consumer after mutation. Responses carry server-derived compatible shorthand types per the [transaction-template service contract](../internal/services/transactiontemplates/PACKAGE.md). Active and cancelled transaction rows/details can create a blank-named template from their reusable records.
 

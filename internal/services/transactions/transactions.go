@@ -214,7 +214,9 @@ type ListOptions struct {
 	AnchorDate         *values.CivilDate
 	AccountIDs         []int64
 	CategoryIDs        []int64
+	CategoryFQNPrefix  *string
 	TagIDs             []int64
+	TagFQNPrefix       *string
 	MemberIDs          []int64
 	LifecycleStatuses  []LifecycleStatus
 	Settlements        []SettlementSummary
@@ -810,6 +812,16 @@ func validateTransactionListOptions(opts ListOptions) (ListOptions, error) {
 	}
 	if err := validatePositiveIDs("tag_id", opts.TagIDs); err != nil {
 		return ListOptions{}, err
+	}
+	if opts.CategoryFQNPrefix != nil {
+		if err := services.ValidateFQN(*opts.CategoryFQNPrefix); err != nil {
+			return ListOptions{}, services.InvalidRequest("category_fqn_prefix must be a valid FQN")
+		}
+	}
+	if opts.TagFQNPrefix != nil {
+		if err := services.ValidateFQN(*opts.TagFQNPrefix); err != nil {
+			return ListOptions{}, services.InvalidRequest("tag_fqn_prefix must be a valid FQN")
+		}
 	}
 	if err := validatePositiveIDs("member_id", opts.MemberIDs); err != nil {
 		return ListOptions{}, err

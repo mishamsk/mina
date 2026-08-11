@@ -61,6 +61,7 @@ import { TransactionDeleteDescription } from "./transaction-delete-description";
 import { TransactionPostDialog } from "./transaction-post-dialog";
 
 interface TransactionDetailPanelProps {
+  readonly readOnly?: boolean;
   readonly errorMessage: string | undefined;
   readonly loading: boolean;
   readonly lookups: LedgerLookupsSnapshot | undefined;
@@ -83,6 +84,8 @@ interface TransactionDetailPanelProps {
   ) => Promise<void>;
   readonly onSplit?: (transaction: Transaction, opener?: HTMLElement) => void;
   readonly onFilterCategory?: (categoryId: number) => void;
+  readonly onFilterMember?: (memberId: number) => void;
+  readonly onFilterTag?: (tagId: number) => void;
   readonly onRestoreFocus: () => void;
   readonly transaction: Transaction | undefined;
   readonly transactionId: number;
@@ -717,6 +720,7 @@ export const TransactionDetailContent = ({
 };
 
 export const TransactionDetailPanel = ({
+  readOnly = false,
   errorMessage,
   loading,
   lookups,
@@ -730,6 +734,8 @@ export const TransactionDetailPanel = ({
   onPost,
   onSplit,
   onFilterCategory,
+  onFilterMember,
+  onFilterTag,
   onRestoreFocus,
   transaction,
   transactionId,
@@ -1207,13 +1213,15 @@ export const TransactionDetailPanel = ({
           <TransactionDetailContent
             maps={maps}
             onFilterCategory={onFilterCategory}
+            onFilterMember={onFilterMember}
+            onFilterTag={onFilterTag}
             recordTableVariant="decluttered"
             showUSDDisplayAmounts
             transaction={transaction}
           />
         ) : null}
       </div>
-      {transaction && !loading && !errorMessage ? (
+      {!readOnly && transaction && !loading && !errorMessage ? (
         <div className="bg-card flex flex-wrap justify-end gap-2 border-t-2 border-[var(--border-ink)] p-4">
           {expectedOccurrence ? (
             expectedOccurrenceActionsAvailable ? (

@@ -8,7 +8,10 @@
 
 - `refreshOverview` is mutation refresh fan-out: it does nothing until Overview has loaded or is loading, so background mutations do not bootstrap dashboard data.
 - Keep the last snapshot visible while a replacement request is pending or fails; only the latest request may replace it.
+- Load the default household flow dataset with the initial snapshot; only the latest configured reload updates the cached dataset so mutation refreshes retain the server-echoed selection, preserve prior chart data, and surface recoverable chart-only errors.
+- The initial household-flow skeleton reserves the complete top-line, inline-controlled visualization, and contributor-status footprint so later Overview sections do not shift.
 - Group balance rows by account type and FQN root. Featured status changes row order only; group subtotals remain signed current-balance USD aggregates even when a leaf leads with remaining credit.
+- Render the shared household top-line summaries and flow visualization before balances and the pulse/recent-activity row.
 - Use the shared ledger display semantics and navigate recent rows to Transactions with its `transaction` URL state; Overview does not own transaction detail state. See [web UI design](../../../../../docs/webui-design.md).
 
 ## Boundaries
