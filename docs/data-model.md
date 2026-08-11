@@ -630,19 +630,12 @@ Accounts, categories, tags, transaction templates, and recurring definitions use
 - `Utilities:Electric`
 - `Subscriptions:Netflix`
 
-Hierarchy is encoded directly in the name string. Tree structure is derived at query time when needed.
-Account type and category economic intent are explicit metadata; they are not inferred from FQN prefixes.
-Group/leaf semantics, hierarchy invariants, and restructuring rules are owned by `docs/hierarchy-semantics.md`.
+Hierarchy is encoded directly in the name string. Tree structure is derived at query time when needed. Account type and category economic intent are explicit metadata; they are not inferred from FQN prefixes. Group/leaf semantics, hierarchy invariants, and restructuring rules are owned by `docs/hierarchy-semantics.md`.
 
 ## Seeded Rows
 
-The four `system` accounts (`system:suspense`, `system:correction`,
-`system:opening_balance`, `system:exchange`) are installed by migration and are
-not user configurable. `docs/accounting-semantics.md` owns their meaning.
+The four `system` accounts (`system:suspense`, `system:correction`, `system:opening_balance`, `system:exchange`) are installed by migration and are not user configurable. `docs/accounting-semantics.md` owns their meaning.
 
 ## Nullable Category
 
-`category_id` is nullable on journal, template, and recurring definition
-records. A journal record carries a category if and only if it is a `flow`
-record; `docs/accounting-semantics.md` owns that rule. Referential integrity is
-checked only when the value is present.
+`category_id` is nullable on journal, template, and recurring definition records. A journal record carries a category if and only if it is a `flow` record; `docs/accounting-semantics.md` owns that rule. Referential integrity is checked only when the value is present.

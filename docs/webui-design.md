@@ -43,19 +43,13 @@ Hard rule: the UI never re-derives accounting truths client-side. Transaction cl
 
 ### One shared transaction presentation
 
-There is exactly one transaction-line and table vocabulary, built once and
-reused everywhere:
+There is exactly one transaction-line and table vocabulary, built once and reused everywhere:
 
 - On the Transactions page it lists classified transaction lines that open read-only transaction detail.
 - On account and group pages it appears pre-filtered to that entity. Account and group registers are the one-sided records view — the only true records-only presentation.
-- Category and tag overviews use its fixed, read-only transaction-table variant,
-  then link to the full Transactions browser with the same scope;
-  `docs/household-flow-reporting.md` owns report semantics. Member drill-downs
-  retain the full filtered browser.
+- Category and tag overviews use its fixed, read-only transaction-table variant, then link to the full Transactions browser with the same scope; `docs/household-flow-reporting.md` owns report semantics. Member drill-downs retain the full filtered browser.
 - Record rows in registers use a side peek panel to preview the full containing transaction without leaving the list.
-- Full browser embeddings share filtering, sorting, transaction Edit mode,
-  keyboard driving, and detail/peek behavior. Fixed report previews reuse row
-  and detail behavior without browser controls.
+- Full browser embeddings share filtering, sorting, transaction Edit mode, keyboard driving, and detail/peek behavior. Fixed report previews reuse row and detail behavior without browser controls.
 
 There are no separate "transaction mode" and "record mode" screens; context determines which shape the shared browser renders.
 
@@ -183,8 +177,7 @@ Canonical rendering rules; every screen uses these so the product reads as one s
 - Pagination shows "Page X of Y" from server-provided total counts.
 - Moving between pages keeps the current rows visible until the next page arrives — no skeleton flash or flicker for uncached pages (skeletons are for first load only).
 - The browser fills the available viewport height: the table body flexes and the pagination footer sits at a small, consistent inset from the viewport bottom, matching the sidebar's bottom-control inset so the two bottom edges align.
-- Report pages are the exception: they scroll at the route level, and their fixed
-  transaction previews grow with the page without internal scrolling.
+- Report pages are the exception: they scroll at the route level, and their fixed transaction previews grow with the page without internal scrolling.
 - Shareable state: filters, search text, sort, and list position live in the URL (per `docs/frontend-architecture.md`). Detail pages are URL-addressable. Sidebar navigation returns to a page's last-used state.
 - Shareable-state URL writes that fire while an overlay is open (`?entry=` or the detail panel's `transaction=`) preserve the overlay params — a delayed write (e.g. debounced search) never closes an open surface — and rewrite the overlay's one history entry so Back still closes the overlay onto the updated list state.
 - Filter bar pattern: a Filter toggle in the toolbar row opens a dedicated full-width filter bar directly beneath it; the "Add filter" menu and the accumulated removable typed filter chips live in that bar and never inflate the toolbar row. Filter dimensions: account, category, tag, member, amount range, initiated-date range, transaction lifecycle, derived settlement, reconciliation status, transaction class, transaction shape, and record role — all lifecycle, settlement, class, shape, and role values come from the server, including `refund` and `clawback` as their own filterable classes.
@@ -234,17 +227,7 @@ Each screen below lists purpose, layout, behavior, primary data sources, and pha
 ### 1. Overview (dashboard) — Phase 2
 
 - Purpose: recent household flow and current balances at a glance, plus a pulse of recent activity. The landing page. Report semantics are owned by [household flow reporting](household-flow-reporting.md).
-- Flow report: the first content row is the shared configurable household-flow
-  report. Its controls are embedded in the visualization: a small trend selector
-  sits inside the graph's upper-right; the contributor checklist footer places
-  named-series minus/plus controls at left and an arcade-style Accounts/Categories
-  toggle at right; below the x-axis, a Month/Year toggle sits under the y-axis
-  labels and precedes one sliding window whose handles resize the range and move
-  its final-period anchor into the past. Its available bounds come from the
-  separate accounting-history range read. The visualization places the checklist at
-  roughly one quarter width before the graph on wide screens; on narrow screens
-  the graph comes first and the checklist follows beneath it. The browser loads
-  no accounting rows or transaction preview for this report.
+- Flow report: the first content row is the shared configurable household-flow report. Its controls are embedded in the visualization: a small trend selector sits inside the graph's upper-right; the contributor checklist footer places named-series minus/plus controls at left and an arcade-style Accounts/Categories toggle at right; below the x-axis, a Month/Year toggle sits under the y-axis labels and precedes one sliding window whose handles resize the range and move its final-period anchor into the past. Its available bounds come from the separate accounting-history range read. The visualization places the checklist at roughly one quarter width before the graph on wide screens; on narrow screens the graph comes first and the checklist follows beneath it. The browser loads no accounting rows or transaction preview for this report.
 - Balances: `owned` and `party` accounts grouped by FQN root prefix (`banks`, `cash`, `people`, …), each group listing account display labels with full-FQN tooltips, currency, and primary standing; group subtotal as `≈ USD`. `party` groups read as amounts owed to or by the household, never as household funds. Prominent accounts surface on top. Accounts with a current credit limit lead with server-derived remaining credit; all others lead with current balance.
 - Month pulse: current-month spend and income totals as plain numbers beneath balances.
 - Recent activity: the latest classified transaction lines, linking into Transactions.
@@ -308,24 +291,11 @@ Each screen below lists purpose, layout, behavior, primary data sources, and pha
 - Row actions follow the accounts affordance philosophy: rows that can be deleted carry a delete quick action in the trailing actions column (always visible per the row-actions rule), disabled with an explanatory tooltip when the listing reports the entity as not deletable; activation opens the standard confirm dialog naming the entity and calls the existing delete endpoint, with API errors surfaced as the fallback. Group-only rows carry no delete while no group delete operation exists. Category, Tag, and Member side-panel editors keep their delete actions.
 - Category and Tag leaf rows expose featured and hidden flat toggles in the shared fixed trailing slots.
 - Every dictionary entity is a drill-down target with its own page. Category, tag, and member drill-downs use the route-level page header as their sole identity header and have no duplicate identity card.
-  - Category and Tag leaf and implicit-group pages place whole-scope top-line
-    cards directly below the header, then the same inline-controlled report
-    visualization used by Overview, followed by a full-width fixed newest
-    transaction preview. The route scrolls normally; cards, graph,
-    checklist, and preview have no internal scroll regions.
-  - The graph has no duplicate legend. Its tooltip leads with the selected metric
-    and returned totals, then inflows descending and outflows ascending with
-    `Other` last in each group; Category contributors retain drill-down links.
-    The contributor checklist provides labeled items plus all/none actions.
-  - At narrow widths the graph precedes the checklist without changing control
-    or keyboard order. Sparse, empty, filtered, and expanded reports preserve
-    readable labels, tooltip access, and the theme's high-contrast trend line.
-  - The fixed preview reuses transaction line/detail behavior without paging,
-    filtering, sorting, Edit mode, row actions, or internal scrolling. Its
-    Transactions action preserves the exact leaf or descendant-group scope.
-  - Category and Tag report semantics follow
-    `docs/household-flow-reporting.md`; Member drill-downs retain the full
-    filtered transaction browser.
+  - Category and Tag leaf and implicit-group pages place whole-scope top-line cards directly below the header, then the same inline-controlled report visualization used by Overview, followed by a full-width fixed newest transaction preview. The route scrolls normally; cards, graph, checklist, and preview have no internal scroll regions.
+  - The graph has no duplicate legend. Its tooltip leads with the selected metric and returned totals, then inflows descending and outflows ascending with `Other` last in each group; Category contributors retain drill-down links. The contributor checklist provides labeled items plus all/none actions.
+  - At narrow widths the graph precedes the checklist without changing control or keyboard order. Sparse, empty, filtered, and expanded reports preserve readable labels, tooltip access, and the theme's high-contrast trend line.
+  - The fixed preview reuses transaction line/detail behavior without paging, filtering, sorting, Edit mode, row actions, or internal scrolling. Its Transactions action preserves the exact leaf or descendant-group scope.
+  - Category and Tag report semantics follow `docs/household-flow-reporting.md`; Member drill-downs retain the full filtered transaction browser.
 - Categories: economic-intent badge per row (`expense` or `income`); the editor requires intent and explains its classification effect in one line.
 - Templates: `/templates` presents a searchable template tree with record-default summaries, Use, create/edit, move/rename, and delete. Use opens transaction entry in place with the template applied. Its route-independent modal manages date-free partial record defaults (all optional: account, category, member, currency, amount, tags, memo), protects dirty work, and refreshes every template consumer after mutation. Responses carry server-derived compatible shorthand types per the [transaction-template service contract](../internal/services/transactiontemplates/PACKAGE.md). Active and cancelled transaction rows/details can create a blank-named template from their reusable records.
 

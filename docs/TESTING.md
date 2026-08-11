@@ -1,7 +1,6 @@
 # Testing
 
-Mina has exactly four app test classes. All exercise Mina at a high-level app
-boundary:
+Mina has exactly four app test classes. All exercise Mina at a high-level app boundary:
 
 - `app-tests`: normal in-process app tests in `internal/apptest/runtime`.
 - `e2e-tests`: testscript-driven launched-process tests in `cmd/mina/testdata/script`, driven by `cmd/mina/cli_smoke_test.go`.
@@ -12,8 +11,7 @@ boundary:
 
 ## App-Tests
 
-`app-tests` are the default for app behavior and user-visible REST scenarios.
-They should be the vast majority of the test suite.
+`app-tests` are the default for app behavior and user-visible REST scenarios. They should be the vast majority of the test suite.
 
 - Bypass CLI parsing and network listeners.
 - Exercise app behavior through the apptest in-process generated REST client, in-memory DuckDB, and per-test schemas.
@@ -29,9 +27,7 @@ They should be the vast majority of the test suite.
 - Do not run SQL or inspect database tables from `app-test` functions.
 - Do not mock controllers, services, or stores.
 
-Top-level concurrent app tests use the `TestConcurrent*` naming convention.
-They stay in the normal `just test` suite; `just test-race-concurrency` reruns
-only that focused slice with the Go race detector and disabled result reuse.
+Top-level concurrent app tests use the `TestConcurrent*` naming convention. They stay in the normal `just test` suite; `just test-race-concurrency` reruns only that focused slice with the Go race detector and disabled result reuse.
 
 ## Coupling Rule
 
@@ -43,13 +39,11 @@ An `app-test` must not need changes when any of these change:
 - Router internals.
 - Internal business logic ordering.
 
-If a test would change for one of those reasons, it is testing below the app boundary.
-Worst case, only an `internal/apptest` client helper should change.
+If a test would change for one of those reasons, it is testing below the app boundary. Worst case, only an `internal/apptest` client helper should change.
 
 ## Test Client APIs
 
-Add a test-client-only API when at least two tests need the same setup or assertion
-and the raw client calls would hide the scenario intent.
+Add a test-client-only API when at least two tests need the same setup or assertion and the raw client calls would hide the scenario intent.
 
 - Put it in `internal/apptest`.
 - Name it in user/domain terms.
@@ -57,10 +51,7 @@ and the raw client calls would hide the scenario intent.
 - Do not run SQL, call services, or call stores from `app-test` helpers.
 - Do not add one-off helpers for a single test.
 
-If the missing operation is useful to a user or external tool, prefer adding a small
-user-visible REST API instead of reaching through internals. This can be valid even
-when tests are the first consumer. Own it as a production API and OpenAPI contract.
-Do not add fake production APIs that expose raw test hooks or storage details.
+If the missing operation is useful to a user or external tool, prefer adding a small user-visible REST API instead of reaching through internals. This can be valid even when tests are the first consumer. Own it as a production API and OpenAPI contract. Do not add fake production APIs that expose raw test hooks or storage details.
 
 ## Bad Examples
 
@@ -160,12 +151,10 @@ Do not use `e2e-tests` for:
 
 - Every flag spelling or CLI argument combination.
 - Config precedence matrices beyond a representative wiring smoke.
-- REST endpoint, domain validation, provider edge-case, or app scenario coverage
-  that can be tested as `app-tests`.
+- REST endpoint, domain validation, provider edge-case, or app scenario coverage that can be tested as `app-tests`.
 - Exhaustive coverage.
 
-Do not duplicate `app-test` scenario coverage in `e2e-tests`. `e2e-tests`
-prove wiring and external boundaries; `app-tests` prove app behavior.
+Do not duplicate `app-test` scenario coverage in `e2e-tests`. `e2e-tests` prove wiring and external boundaries; `app-tests` prove app behavior.
 
 ## Frontend-E2E-Tests
 
@@ -185,8 +174,8 @@ Do not use `frontend-e2e-tests` for:
 - Exhaustive frontend state combinations.
 - Direct database, service, store, or handler assertions.
 
-Frontend e2e tests prove browser, binary, embedded assets, and listener wiring.
-They must not duplicate REST scenario coverage.
+Frontend e2e tests prove browser, binary, embedded assets, and listener wiring. They must not duplicate REST scenario coverage.
+
 - Keep each frontend e2e spec file under 25 tests; split growing suites by user workflow.
 
 ## Docker-Lifecycle-Tests
@@ -203,9 +192,7 @@ Use them as a small smoke suite for Docker deployment behavior only:
 
 Do not use `docker-lifecycle-tests` for:
 
-- REST endpoint, domain validation, provider edge-case, or app scenario coverage
-  that can be tested as `app-tests`.
+- REST endpoint, domain validation, provider edge-case, or app scenario coverage that can be tested as `app-tests`.
 - Exhaustive migration, downgrade, or deployment-platform matrices.
 
-Docker lifecycle tests prove image and Compose deployment wiring. App behavior
-coverage belongs in `app-tests`.
+Docker lifecycle tests prove image and Compose deployment wiring. App behavior coverage belongs in `app-tests`.

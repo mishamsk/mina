@@ -32,6 +32,7 @@
    ```
 
    Do not touch the worktree while the session runs. Completion signal: plan moved to `docs/plans/completed/` and process exit. Review-loop can take ~10 minutes; use long poll timeouts and do not kill it while heartbeat/progress lines continue.
+
 4. Operator review (each iteration):
    - Sanity: all checkboxes ticked, plan archived, sub-worktree clean, suites reported green.
    - Docs governance: `git diff <main-working-branch>...<branch> -- docs/` — implementors and review fixers may make targeted ground-truth doc updates when the implementation genuinely diverged from the documented rule (e.g. a new interaction precedence the doc did not anticipate); broad scope, phasing, or architecture rewrites remain off-limits. The operator judges every doc diff at review: warranted updates stay, unwarranted ones are reverted via a fix plan (or an operator-owned commit for trivial reverts), and the intervention is noted.

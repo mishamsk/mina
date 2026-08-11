@@ -35,6 +35,24 @@ fmt:
 fmt-check:
     files="$(git ls-files '*.go' | while IFS= read -r file; do [ -f "$file" ] && gofmt -l "$file"; done)"; if [ -n "$files" ]; then printf 'Go files need formatting:\n%s\n' "$files" >&2; exit 1; fi
 
+# Normalize prose in eligible tracked Markdown documents.
+[group('dev-tooling')]
+[working-directory: 'frontend']
+prose-fmt:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    paths=()
+    while IFS= read -r -d '' path; do
+        case "$path" in
+            LICENSE.md|README.md|SCOPE.md|docs/plans/*) continue ;;
+        esac
+        [[ -L "../$path" ]] && continue
+        paths+=("../$path")
+    done < <(git -C .. ls-files -z '*.md')
+    ((${#paths[@]})) || exit 0
+    mise exec -- pnpm exec prettier --write --prose-wrap never "${paths[@]}"
+
 # Apply Go source fixes.
 [group('dev-tooling')]
 fix:

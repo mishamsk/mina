@@ -6,7 +6,7 @@ This document is the specification of Mina's base web UI theme. It owns visual s
 
 **Arcade Cabinet**: a dark arcade cabinet with a bright, readable screen — near-black indigo chrome around white data surfaces, candy-colored accents used as information, everything chunky: ink outlines, hard offset shadows, chip-shaped markers, banded tables, and a bold monospace voice. No bitmap fonts anywhere.
 
-- Differentiator: unapologetically playful chrome around a ledger that is *more* readable than a conventional one — banded rows, chip markers, and bold mono labels do legibility work, not decoration.
+- Differentiator: unapologetically playful chrome around a ledger that is _more_ readable than a conventional one — banded rows, chip markers, and bold mono labels do legibility work, not decoration.
 - Doctrine: **dark cabinet, bright screen**. App chrome (sidebar, page header, grounds) is dark and saturated; every data surface is white/near-white with ink text. Long reading always happens ink-on-light.
 - Color is information, never decoration: accents appear only with semantic meaning (money direction, transaction class, status, interaction, danger). Banding and chips are structure, not color-coding.
 

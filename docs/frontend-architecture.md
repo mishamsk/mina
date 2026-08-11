@@ -13,9 +13,7 @@ Mina frontend is the local web UI served by `mina serve`.
 
 - REST API paths stay under `/api`; browser UI is served from `/`.
 - Accounting state comes from the backend through generated REST client code.
-- Report views are presentational: the backend supplies every metric, period,
-  series, rank, total, and trend after applying report filters; the browser
-  only selects configuration, formats, and renders the returned dataset.
+- Report views are presentational: the backend supplies every metric, period, series, rank, total, and trend after applying report filters; the browser only selects configuration, formats, and renders the returned dataset.
 - Phase 2 does not use a general server-state query library by default.
 - Browser IndexedDB stores UI preferences, UI-only caches, and draft UI state only.
 - Authentication status is transient; frontend code never writes credentials or session material to IndexedDB, `localStorage`, or `sessionStorage`; the server-owned `HttpOnly` session cookie remains in the browser cookie jar.
@@ -55,10 +53,7 @@ Rules:
 - Features may own Mina-specific UI behavior, feature hooks, and feature helpers, but not generated API setup.
 - Components must stay presentational unless feature-owned.
 - shadcn/ui components stay in `components/ui`; app-specific wrappers stay in `components`.
-- Charts use Recharts through the shadcn/ui Chart wrapper in
-  `components/ui/chart.tsx`; feature charts compose Recharts primitives inside
-  that wrapper and do not introduce another chart library without an
-  architecture update.
+- Charts use Recharts through the shadcn/ui Chart wrapper in `components/ui/chart.tsx`; feature charts compose Recharts primitives inside that wrapper and do not introduce another chart library without an architecture update.
 - Models stay data-focused; product behavior belongs in features or backend services.
 - Services own browser side effects such as IndexedDB.
 - Utils must stay pure.
@@ -98,8 +93,7 @@ Rules:
 - Shareable table query state belongs in the URL: filters, search text, sort, page, and page size.
 - Table screens must use backend-supported pagination, filtering, and sorting for unbounded accounting data.
 - Do not fetch all accounting rows and paginate client-side except for deliberately bounded lookup lists.
-- Report endpoints return complete, bounded presentation datasets. Frontend
-  code must not reconstruct reports from transaction or journal-record lists.
+- Report endpoints return complete, bounded presentation datasets. Frontend code must not reconstruct reports from transaction or journal-record lists.
 - Page snapshots should be keyed by normalized request params. Re-visiting a loaded page may render from memory immediately.
 - Mutations use explicit refresh rules: after create, update, delete, or bulk operations, refresh or invalidate affected resource snapshots.
 - Prefer refetch-after-mutation over optimistic cache surgery unless the user experience clearly requires optimism.

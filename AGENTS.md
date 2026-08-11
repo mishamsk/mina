@@ -16,6 +16,7 @@ This repository is Mina, a local-first personal finance system implemented in Go
 - `api/openapi.yaml`: REST transport contract. Read before planning or changing REST behavior.
 - Package/module docs for backend and frontend: local technical contracts, side effects, ownership boundaries, and invariants. Read the relevant package docs before changing a package. Use the `write-package-docs` skill for every package touched by the work. Exported Go APIs that cross package boundaries must be documented in code.
 - All docs must stay short. Prefer bullets, with one liners. Prefer replacing old statements to adding net new. Link to owning docs instead of repeating details.
+- Do not manually wrap prose: keep each paragraph and bullet item on one physical line, and run `just prose-fmt` before finishing your work.
 - Documentation is evergreen. Never keep history, migration notes, or references to previous doc/code states.
 
 ## Infra & Dev Practices
