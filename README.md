@@ -33,6 +33,12 @@ The OCD-ish part of me wants every bill and coin sitting in wallets or around th
 
 Mina is still moving quickly. See [VISION.md](VISION.md) for the full destination, [SCOPE.md](SCOPE.md) for what belongs in Mina, and [PROJECT_STATE.md](PROJECT_STATE.md) for what exists today.
 
+## Compatibility
+
+- Each newer `main` version preserves accounting data by migrating it forward.
+- Migrations already on `main` are immutable; persisted accounting changes add a new migration when needed.
+- APIs, CLI and MCP commands, configuration, and other contracts may change between `main` versions; downgrades are unsupported. See the full [compatibility policy](docs/compatibility.md).
+
 ## Quick Start
 
 Give this to a coding agent:

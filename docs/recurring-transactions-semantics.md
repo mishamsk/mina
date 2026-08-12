@@ -1,6 +1,6 @@
 # Recurring Transaction Semantics
 
-This document defines the business semantics of recurring transactions: the recurring definition, its schedule, the occurrence lifecycle, and the definition lifecycle. It does not define SQL migrations, REST DTO shapes, or UI screens. Table shapes are owned by `docs/data-model.md`; the storage representation of occurrences is deliberately unspecified here and is derived from these semantics.
+This document defines the business semantics of recurring transactions: the recurring definition, its schedule, the occurrence lifecycle, and the definition lifecycle. It does not define SQL migrations, REST DTO shapes, or UI screens. See the [generated SQL DDL artifact](../internal/services/accountingschema/schema.sql) for current storage shapes; the storage representation of occurrences is deliberately unspecified here and is derived from these semantics.
 
 ## Recurring Definition
 

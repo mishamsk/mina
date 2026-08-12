@@ -15,6 +15,7 @@
 - Built-in Frankfurter-file startup gives the initial cache read 15 minutes and retains the ordinary two-minute allowance to load safe progress afterward; API-only, injected, manual, and scheduled loads keep the ordinary short deadline.
 - Runtime resolves the accounting location, encryption key, and connection limit before delegating database open, migration, and read-only inspection mechanics to `store`.
 - Runtime composes the data-aggregate service's Household, Category, and Tag flow reports from the DuckDB repository, Category/Tag readers, transaction classifier, and runtime clock.
+- The offline schema command reads the embedded target DDL through a static accessor; constructing an app still follows the normal database lifecycle.
 
 ## Boundaries
 

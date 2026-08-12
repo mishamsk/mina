@@ -63,6 +63,24 @@ paths:
                 $ref: "#/components/schemas/HealthResponse"
         "405":
           $ref: "#/components/responses/MethodNotAllowed"
+  /api/accounting-schema:
+    get:
+      operationId: getAccountingSchema
+      tags:
+        - schema
+      summary: Get the current target accounting schema DDL.
+      description: Returns the static DDL artifact embedded at build time from a pristine migrated database. It does not describe the opened database's live schema and must not be used to initialize, migrate, validate, or repair a database.
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "200":
+          description: The current target accounting schema inspection artifact.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountingSchemaResponse"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
   /api/auth/status:
     get:
       operationId: getAuthenticationStatus
@@ -6094,6 +6112,16 @@ components:
           type: integer
           format: int64
           minimum: 0
+    AccountingSchemaResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - ddl
+      properties:
+        ddl:
+          type: string
+          minLength: 1
+          description: Static current target accounting DDL generated from a pristine migrated database; not the opened database's live schema or a database initialization path.
     SettingKey:
       type: string
       minLength: 1

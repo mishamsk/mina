@@ -1,5 +1,13 @@
 # Database validation is a process-boundary diagnostic for file-backed databases.
 env MINA_FX_AUTO_LOAD_ENABLED=false
+
+# Target-schema export is an offline embedded artifact and does not load config or open a database.
+env MINA_DB=$WORK/should-not-exist.db
+exec mina --config-file invalid-schema-config.toml db schema
+stdout '^CREATE SCHEMA mina;;$'
+! stderr .
+! exists $WORK/should-not-exist.db
+
 freeport
 exec mina serve --demo --db $WORK/demo.db --schema demo --yes --host 127.0.0.1 --port $PORT --quiet &server&
 httpget http://127.0.0.1:$PORT/api/health
@@ -313,3 +321,6 @@ duckdbsnapshot $WORK/demo.db $WORK/demo.snapshot
 
 -- startup-validation-none.toml --
 startup_validation = "none"
+
+-- invalid-schema-config.toml --
+unsupported = true

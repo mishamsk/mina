@@ -47,6 +47,7 @@ prose-fmt:
         case "$path" in
             LICENSE.md|README.md|SCOPE.md|docs/plans/*) continue ;;
         esac
+        [[ -e "../$path" ]] || continue
         [[ -L "../$path" ]] && continue
         paths+=("../$path")
     done < <(git -C .. ls-files -z '*.md')
@@ -81,6 +82,16 @@ surface-check:
 openapi-check: surface-check
     go run github.com/getkin/kin-openapi/cmd/validate api/openapi.yaml
     tmpdir="$(mktemp -d)"; trap 'rm -rf "$tmpdir"' EXIT; awk -v output="$tmpdir/server/openapi.gen.go" '/^output:/ { print "output: " output; next } { print }' api/oapi-codegen.yaml > "$tmpdir/oapi-codegen.yaml"; mkdir -p "$tmpdir/server"; go tool oapi-codegen -config "$tmpdir/oapi-codegen.yaml" api/openapi.yaml; cmp -s "$tmpdir/server/openapi.gen.go" internal/httpapi/openapi/openapi.gen.go || { echo 'generated OpenAPI server output is stale; run `just openapi`' >&2; diff -u internal/httpapi/openapi/openapi.gen.go "$tmpdir/server/openapi.gen.go" >&2; exit 1; }; awk -v output="$tmpdir/client/openapi.gen.go" '/^output:/ { print "output: " output; next } { print }' api/oapi-codegen-httpclient.yaml > "$tmpdir/oapi-codegen-httpclient.yaml"; mkdir -p "$tmpdir/client"; go tool oapi-codegen -config "$tmpdir/oapi-codegen-httpclient.yaml" api/openapi.yaml; cmp -s "$tmpdir/client/openapi.gen.go" internal/httpclient/openapi.gen.go || { echo 'generated OpenAPI client output is stale; run `just openapi`' >&2; diff -u internal/httpclient/openapi.gen.go "$tmpdir/client/openapi.gen.go" >&2; exit 1; }
+
+# Regenerate the pristine current accounting-schema DDL artifact.
+[group('codegen')]
+accounting-schema:
+    go run ./internal/tools/accountingschema
+
+# Verify the checked-in accounting-schema DDL artifact is current.
+[group('codegen')]
+accounting-schema-check:
+    main_ref="$(git rev-parse --verify 'main^{commit}' 2>/dev/null || git rev-parse --verify 'origin/main^{commit}' 2>/dev/null)" || { echo 'cannot verify migration immutability: main ref is missing' >&2; exit 1; }; changed_migrations="$(git diff --no-renames --diff-filter=MD --name-only "$main_ref" -- internal/store/migrations/)"; [[ -z "$changed_migrations" ]] || { echo 'migrations already on main are immutable; add a new migration instead:' >&2; echo "$changed_migrations" >&2; exit 1; }; tmpdir="$(mktemp -d)"; trap 'rm -rf "$tmpdir"' EXIT; go run ./internal/tools/accountingschema -output "$tmpdir/schema.sql"; cmp -s internal/services/accountingschema/schema.sql "$tmpdir/schema.sql" || { echo 'generated accounting schema is stale; run `just accounting-schema`' >&2; diff -u internal/services/accountingschema/schema.sql "$tmpdir/schema.sql" >&2; exit 1; }
 
 # Tidy Go module files.
 [group('dev-tooling')]

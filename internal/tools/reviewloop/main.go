@@ -48,16 +48,14 @@ var progressOutputMu sync.Mutex
 
 var (
 	appCodeReviewers = []string{
-		// TODO(a9m9): Re-enable compatibility review when Mina has a released or persisted compatibility boundary.
-		// "compatibility",
+		"compatibility",
 		"implementation",
 		"quality",
 		"simplification",
 		"testing",
 	}
 	stableReviewerOrder = []string{
-		// TODO(a9m9): Restore compatibility to the stable reviewer order when its prompt is re-enabled.
-		// "compatibility",
+		"compatibility",
 		"implementation",
 		"quality",
 		"simplification",
@@ -1025,7 +1023,7 @@ func isCIPath(path string) bool {
 }
 
 func isReviewExcludedPath(path string) bool {
-	return isGeneratedOpenAPIOutput(path) ||
+	return isGeneratedAppOutput(path) ||
 		isPublicProjectDocPath(path) ||
 		isDocsAgentPath(path) ||
 		isPlanPath(path) ||
@@ -1090,9 +1088,13 @@ func isDevToolingPath(path string) bool {
 	return strings.HasPrefix(path, "internal/tools/")
 }
 
-func isGeneratedOpenAPIOutput(path string) bool {
+func isGeneratedAppOutput(path string) bool {
 	switch path {
-	case "internal/httpapi/openapi/openapi.gen.go", "internal/httpclient/openapi.gen.go":
+	case "internal/clientcli/surface.gen.go",
+		"internal/httpapi/openapi/openapi.gen.go",
+		"internal/httpclient/openapi.gen.go",
+		"internal/mcpserver/surface.gen.go",
+		"internal/services/accountingschema/schema.sql":
 		return true
 	default:
 		return false
@@ -1101,17 +1103,23 @@ func isGeneratedOpenAPIOutput(path string) bool {
 
 func isAppCodePath(path string) bool {
 	switch path {
-	case "api/openapi.yaml", "api/oapi-codegen.yaml", "api/oapi-codegen-httpclient.yaml", "go.mod", "go.sum":
+	case "api/client-surfaces.yaml", "api/openapi.yaml", "api/oapi-codegen.yaml", "api/oapi-codegen-httpclient.yaml", "go.mod", "go.sum":
 		return true
 	}
 	appPrefixes := []string{
 		"cmd/",
+		"internal/appconfig/",
 		"internal/apptest/",
+		"internal/background/",
+		"internal/clientcli/",
 		"internal/httpapi/",
 		"internal/httpclient/",
+		"internal/mcpserver/",
+		"internal/providers/",
 		"internal/runtime/",
 		"internal/services/",
 		"internal/store/",
+		"internal/x/",
 	}
 	for _, prefix := range appPrefixes {
 		if strings.HasPrefix(path, prefix) {

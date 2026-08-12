@@ -1352,6 +1352,12 @@ type AccountingHistoryRange struct {
 	StartDate openapi_types.Date `json:"start_date"`
 }
 
+// AccountingSchemaResponse defines model for AccountingSchemaResponse.
+type AccountingSchemaResponse struct {
+	// Ddl Static current target accounting DDL generated from a pristine migrated database; not the opened database's live schema or a database initialization path.
+	Ddl string `json:"ddl"`
+}
+
 // AuthenticationStatusResponse defines model for AuthenticationStatusResponse.
 type AuthenticationStatusResponse struct {
 	Authenticated bool                `json:"authenticated"`
@@ -3748,6 +3754,9 @@ type ClientInterface interface {
 	// GetAccountingHistoryRange request
 	GetAccountingHistoryRange(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetAccountingSchema request
+	GetAccountingSchema(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListAccounts request
 	ListAccounts(ctx context.Context, params *ListAccountsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -4133,6 +4142,18 @@ type ClientInterface interface {
 
 func (c *Client) GetAccountingHistoryRange(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetAccountingHistoryRangeRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetAccountingSchema(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAccountingSchemaRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -5845,6 +5866,33 @@ func NewGetAccountingHistoryRangeRequest(server string) (*http.Request, error) {
 	}
 
 	operationPath := fmt.Sprintf("/api/accounting-history/range")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetAccountingSchemaRequest generates requests for GetAccountingSchema
+func NewGetAccountingSchemaRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/accounting-schema")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -12156,6 +12204,9 @@ type ClientWithResponsesInterface interface {
 	// GetAccountingHistoryRangeWithResponse request
 	GetAccountingHistoryRangeWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetAccountingHistoryRangeResponse, error)
 
+	// GetAccountingSchemaWithResponse request
+	GetAccountingSchemaWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetAccountingSchemaResponse, error)
+
 	// ListAccountsWithResponse request
 	ListAccountsWithResponse(ctx context.Context, params *ListAccountsParams, reqEditors ...RequestEditorFn) (*ListAccountsResponse, error)
 
@@ -12565,6 +12616,38 @@ func (r GetAccountingHistoryRangeResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetAccountingHistoryRangeResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetAccountingSchemaResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *AccountingSchemaResponse
+	JSON401      *Unauthenticated
+	JSON405      *MethodNotAllowed
+}
+
+// Status returns HTTPResponse.Status
+func (r GetAccountingSchemaResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetAccountingSchemaResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetAccountingSchemaResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -15906,6 +15989,15 @@ func (c *ClientWithResponses) GetAccountingHistoryRangeWithResponse(ctx context.
 	return ParseGetAccountingHistoryRangeResponse(rsp)
 }
 
+// GetAccountingSchemaWithResponse request returning *GetAccountingSchemaResponse
+func (c *ClientWithResponses) GetAccountingSchemaWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetAccountingSchemaResponse, error) {
+	rsp, err := c.GetAccountingSchema(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetAccountingSchemaResponse(rsp)
+}
+
 // ListAccountsWithResponse request returning *ListAccountsResponse
 func (c *ClientWithResponses) ListAccountsWithResponse(ctx context.Context, params *ListAccountsParams, reqEditors ...RequestEditorFn) (*ListAccountsResponse, error) {
 	rsp, err := c.ListAccounts(ctx, params, reqEditors...)
@@ -17150,6 +17242,46 @@ func ParseGetAccountingHistoryRangeResponse(rsp *http.Response) (*GetAccountingH
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest AccountingHistoryRange
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetAccountingSchemaResponse parses an HTTP response from a GetAccountingSchemaWithResponse call
+func ParseGetAccountingSchemaResponse(rsp *http.Response) (*GetAccountingSchemaResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetAccountingSchemaResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AccountingSchemaResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

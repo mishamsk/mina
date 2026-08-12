@@ -9,6 +9,7 @@ boundaries, not planned work, sequencing, or implementation status.
 - Fully editable historical accounting data; Mina does not lock accounting periods.
 - A local browser UI plus REST, MCP, and CLI interfaces.
 - Portable household accounting state in one database file. `docs/architecture.md` owns the boundary between accounting and operational state.
+- Forward upgrades between `main` versions preserve household accounting data through migrations. `docs/compatibility.md` owns the upgrade policy.
 
 ## Out of Scope
 

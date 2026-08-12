@@ -47,6 +47,12 @@ repos:
         pass_filenames: false
         always_run: true
         files: ^(Justfile|api/openapi\.yaml|api/client-surfaces\.yaml|api/oapi-codegen(-httpclient)?\.yaml|internal/httpapi/openapi/openapi\.gen\.go|internal/httpclient/openapi\.gen\.go|internal/(clientcli|mcpserver)/surface\.gen\.go|internal/tools/surfacegen/.*\.go|go\.mod|go\.sum)$
+      - id: mina-accounting-schema-check
+        name: mina accounting schema check
+        entry: just accounting-schema-check
+        language: system
+        pass_filenames: false
+        always_run: true
       - id: mina-frontend-openapi-check
         name: mina frontend openapi check
         entry: just frontend-openapi-check

@@ -1638,6 +1638,20 @@ func Operations() []Operation {
 			Invoke: invokeGetAccountingHistoryRange,
 		},
 		{
+			ID:          "getAccountingSchema",
+			Method:      "GET",
+			Path:        "/api/accounting-schema",
+			Summary:     "Get the current target accounting schema DDL.",
+			Description: "Returns Mina's static current target accounting DDL embedded at build time. Use it to inspect the target model, not the opened database's live schema and not to initialize, migrate, validate, or repair a database.",
+			MCP: MCPOperation{
+				Group: "schema", Name: "get",
+				ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{},\"type\":\"object\"}"),
+			},
+			Input:  InputDescriptor{},
+			Invoke: invokeGetAccountingSchema,
+		},
+		{
 			ID:          "getCategory",
 			Method:      "GET",
 			Path:        "/api/categories/{category_id}",
@@ -5070,6 +5084,20 @@ func invokeGetAccountingHistoryRange(ctx context.Context, client httpclient.Clie
 		return InvocationResult{}, err
 	}
 	response, err := client.GetAccountingHistoryRangeWithResponse(ctx)
+	if err != nil {
+		return InvocationResult{}, err
+	}
+	if response == nil {
+		return InvocationResult{}, errors.New("generated client returned no operation response")
+	}
+	return normalizeInvocationResult(response.Body, response.HTTPResponse)
+}
+
+func invokeGetAccountingSchema(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
+	if err := validateInvocationInput(input, nil, nil, false, false); err != nil {
+		return InvocationResult{}, err
+	}
+	response, err := client.GetAccountingSchemaWithResponse(ctx)
 	if err != nil {
 		return InvocationResult{}, err
 	}

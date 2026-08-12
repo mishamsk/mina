@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/mishamsk/mina/internal/httpapi/openapi"
+	"github.com/mishamsk/mina/internal/services/accountingschema"
 	"github.com/mishamsk/mina/internal/services/accounts"
 	authentication "github.com/mishamsk/mina/internal/services/authentication/online"
 	"github.com/mishamsk/mina/internal/services/categories"
@@ -31,6 +32,7 @@ const defaultLocalAPITimeout = 30 * time.Second
 
 // Dependencies are router inputs owned by higher-level composition.
 type Dependencies struct {
+	AccountingSchema  *accountingschema.Service
 	Settings          *settingservice.Service
 	Health            *health.Service
 	Operations        *operationruns.Service

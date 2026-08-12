@@ -30,6 +30,15 @@ operations:
     mcp:
       state: excluded
       reason: Transport liveness is a deployment diagnostic and provides no household accounting value to an agent.
+  getAccountingSchema:
+    cli:
+      state: excluded
+      reason: Offline schema export is the dedicated `mina db schema` command; remote callers can use REST directly.
+    mcp:
+      state: exposed
+      name: get
+      description: Returns Mina's static current target accounting DDL embedded at build time. Use it to inspect the target model, not the opened database's live schema and not to initialize, migrate, validate, or repair a database.
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   getSettings:
     cli: {state: exposed, name: get}
     mcp:

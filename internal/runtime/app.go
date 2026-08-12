@@ -19,6 +19,7 @@ import (
 	"github.com/mishamsk/mina/internal/mcpserver"
 	backupfile "github.com/mishamsk/mina/internal/providers/backups/file"
 	"github.com/mishamsk/mina/internal/providers/exchangerates/frankfurter"
+	"github.com/mishamsk/mina/internal/services/accountingschema"
 	"github.com/mishamsk/mina/internal/services/accounts"
 	authentication "github.com/mishamsk/mina/internal/services/authentication/online"
 	"github.com/mishamsk/mina/internal/services/backups"
@@ -52,6 +53,11 @@ type App struct {
 	executionProfile  ExecutionProfile
 	operationsMu      sync.Mutex
 	operationsStarted bool
+}
+
+// AccountingSchemaDDL returns the embedded current target accounting DDL for offline process commands.
+func AccountingSchemaDDL() string {
+	return accountingschema.NewService().DDL()
 }
 
 type appServices struct {
@@ -454,17 +460,18 @@ func newAccountingServices(
 	accountService.SetTypeChangeValidator(transactionService)
 	return appServices{
 		Dependencies: httpapi.Dependencies{
-			Health:         health.NewService(store.NewHealthStore(appDB)),
-			Operations:     operationRuns,
-			Categories:     categoryService,
-			Tags:           tagService,
-			Members:        memberService,
-			Accounts:       accountService,
-			CreditLimits:   creditlimits.NewService(store.NewCreditLimitHistoryStore(appDB), accountService, referenceSerializer, opts.clock()),
-			ExchangeRates:  exchangeRates,
-			Transactions:   transactionService,
-			DataAggregates: dataAggregateService,
-			Templates:      templateService,
+			AccountingSchema: accountingschema.NewService(),
+			Health:           health.NewService(store.NewHealthStore(appDB)),
+			Operations:       operationRuns,
+			Categories:       categoryService,
+			Tags:             tagService,
+			Members:          memberService,
+			Accounts:         accountService,
+			CreditLimits:     creditlimits.NewService(store.NewCreditLimitHistoryStore(appDB), accountService, referenceSerializer, opts.clock()),
+			ExchangeRates:    exchangeRates,
+			Transactions:     transactionService,
+			DataAggregates:   dataAggregateService,
+			Templates:        templateService,
 			Recurring: recurring.NewService(
 				store.NewRecurringStore(appDB),
 				accountService,

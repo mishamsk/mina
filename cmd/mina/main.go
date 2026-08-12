@@ -304,9 +304,23 @@ func newDBCommand(stdout io.Writer, stderr io.Writer, configFilePath *string) *c
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 	}
+	cmd.AddCommand(newDBSchemaCommand(stdout))
 	cmd.AddCommand(newDBValidateCommand(stdout, stderr, configFilePath))
 
 	return cmd
+}
+
+func newDBSchemaCommand(stdout io.Writer) *cobra.Command {
+	return &cobra.Command{
+		Use:          "schema",
+		Short:        "Print the current target accounting schema DDL",
+		Args:         noPositionalArgs("db schema"),
+		SilenceUsage: true,
+		RunE: func(_ *cobra.Command, _ []string) error {
+			_, err := io.WriteString(stdout, runtime.AccountingSchemaDDL())
+			return err
+		},
+	}
 }
 
 func newDBValidateCommand(stdout io.Writer, stderr io.Writer, configFilePath *string) *cobra.Command {

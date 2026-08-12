@@ -33,6 +33,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
 
+      - name: Fetch main for migration immutability check
+        if: matrix.name == 'pre-commit'
+        run: git fetch --no-tags --depth=1 origin main:refs/remotes/origin/main
+
       - name: Install mise
         uses: jdx/mise-action@dad1bfd3df957f44999b559dd69dc1671cb4e9ea
 

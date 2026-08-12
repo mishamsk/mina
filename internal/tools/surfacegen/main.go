@@ -333,8 +333,7 @@ func validateCLIDecision(path string, operationID string, decision *cliDecision)
 			message:   "missing CLI decision",
 		}}
 	}
-	findings := validateDecision(path, operationID, "CLI", decision.State, decision.Name, decision.Reason)
-	return append(findings, validateDescriptionOverride(
+	return append(validateDecision(path, operationID, "CLI", decision.State, decision.Name, decision.Reason), validateDescriptionOverride(
 		path, operationID, "CLI", decision.State, decision.Description,
 	)...)
 }

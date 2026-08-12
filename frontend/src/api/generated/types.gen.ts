@@ -1155,6 +1155,13 @@ export type HealthResponse = {
     schema_version: number;
 };
 
+export type AccountingSchemaResponse = {
+    /**
+     * Static current target accounting DDL generated from a pristine migrated database; not the opened database's live schema or a database initialization path.
+     */
+    ddl: string;
+};
+
 /**
  * Opaque setting identifier supplied by the settings snapshot.
  */
@@ -1684,6 +1691,35 @@ export type GetHealthResponses = {
 };
 
 export type GetHealthResponse = GetHealthResponses[keyof GetHealthResponses];
+
+export type GetAccountingSchemaData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/accounting-schema';
+};
+
+export type GetAccountingSchemaErrors = {
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The route does not support the requested method.
+     */
+    405: ErrorResponse;
+};
+
+export type GetAccountingSchemaError = GetAccountingSchemaErrors[keyof GetAccountingSchemaErrors];
+
+export type GetAccountingSchemaResponses = {
+    /**
+     * The current target accounting schema inspection artifact.
+     */
+    200: AccountingSchemaResponse;
+};
+
+export type GetAccountingSchemaResponse = GetAccountingSchemaResponses[keyof GetAccountingSchemaResponses];
 
 export type GetAuthenticationStatusData = {
     body?: never;

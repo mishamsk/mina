@@ -75,8 +75,10 @@ Rules:
 - Every app owns an opaque schema in the in-memory database for disposable runtime state; runtime schemas are outside portable accounting state, migrations, backups, and validation.
 - Store state owns the fully qualified accounting schema name, whether attached or in-memory.
 - `internal/store` owns runtime-schema creation, safe qualification, propagation across transaction-scoped repositories, and whole-schema cleanup.
-- `docs/data-model.md` is the source of truth for accounting-state tables, column types, generated columns, enum values, sequence use, arrays, timestamps, dates, and decimal precision.
+- Versioned migrations are the source of truth for accounting DDL; `internal/services/accountingschema/schema.sql` is the generated current target artifact, with ownership and workflow in `docs/generated-files.md`.
 - Migrations are versioned and upgrade-only.
+- Migrations merged to `main` are immutable; every later persisted-state change uses a new migration when an upgrade is required.
+- `docs/compatibility.md` owns supported accounting-data forward-upgrade guarantees.
 - The database stores its schema version.
 - Database open/create/migrate policy belongs to `internal/runtime`.
 - DuckDB open, migration, query, and transaction code belongs to `internal/store`.

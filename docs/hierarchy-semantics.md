@@ -1,6 +1,6 @@
 # Hierarchy Semantics
 
-This document defines how hierarchical naming works for accounts, categories, tags, transaction templates, and recurring definitions: what groups and leaves are, which invariants hold, and how every hierarchy-affecting operation behaves. It does not define SQL migrations, REST DTO shapes, or UI screens. Table shapes are owned by `docs/data-model.md`. Members are a flat list and are out of scope.
+This document defines how hierarchical naming works for accounts, categories, tags, transaction templates, and recurring definitions: what groups and leaves are, which invariants hold, and how every hierarchy-affecting operation behaves. It does not define SQL migrations, REST DTO shapes, or UI screens. See the [generated SQL DDL artifact](../internal/services/accountingschema/schema.sql) for current storage shapes. Members are a flat list and are out of scope.
 
 ## Model
 
