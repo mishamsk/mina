@@ -22,12 +22,6 @@ interface CategoryFixture {
   readonly fqn: string;
 }
 
-interface TagFixture {
-  readonly fqn: string;
-  readonly name: string;
-  readonly tag_id: number;
-}
-
 interface BalanceFixture {
   readonly account_id: number;
   readonly credit_limit?: string;
@@ -123,14 +117,6 @@ const createHiddenAccount = async (
   fqn: string,
 ): Promise<AccountFixture> => {
   return createAccount(page, { fqn, hidden: true });
-};
-
-const createTag = async (page: Page, fqn: string): Promise<TagFixture> => {
-  const response = await page.request.post("/api/tags", {
-    data: { fqn, is_hidden: false },
-  });
-  expect(response.ok()).toBe(true);
-  return (await response.json()) as TagFixture;
 };
 
 const createCategory = async (
@@ -1046,6 +1032,350 @@ test("register skeleton renders while its credit shape resolves", async ({
   }
 });
 
+test("register and transaction detail recover after lookup failures", async ({
+  browserName,
+  page,
+}) => {
+  const unique = `${browserName.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const account = await createAccount(page, {
+    fqn: `e2e:register-lookup-failure:${unique}`,
+  });
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const merchant = findByFqn(accounts, "merchant:PowellsBooks");
+  const category = findByFqn(categories, "Entertainment:Books");
+  const memo = `E2E register lookup failure ${unique}`;
+  const transactionResponse = await page.request.post(
+    "/api/transactions/spend",
+    {
+      data: {
+        amount: "18.00",
+        category_id: category.category_id,
+        counterparty_account_id: merchant.account_id,
+        currency: "USD",
+        funding_account_id: account.account_id,
+        initiated_date: "2026-08-01",
+        memo,
+      },
+    },
+  );
+  expect(transactionResponse.ok()).toBe(true);
+  const transaction = (await transactionResponse.json()) as TransactionFixture;
+
+  let transactionFetchCount = 0;
+  await page.route(
+    `**/api/transactions/${transaction.transaction_id}`,
+    async (route) => {
+      if (route.request().method() !== "GET") {
+        await route.continue();
+        return;
+      }
+      transactionFetchCount += 1;
+      if (transactionFetchCount === 1) {
+        await route.fulfill({
+          body: JSON.stringify({
+            code: "internal_error",
+            message: "Transaction unavailable",
+          }),
+          contentType: "application/json",
+          status: 500,
+        });
+        return;
+      }
+      await route.continue();
+    },
+  );
+
+  await page.route("**/api/categories?**", async (route) => {
+    await route.fulfill({
+      body: JSON.stringify({
+        code: "internal_error",
+        message: "Lookup unavailable",
+      }),
+      contentType: "application/json",
+      status: 500,
+    });
+  });
+
+  await page.goto(`/accounts/${account.account_id}`);
+  await expect(
+    page.getByText("Reference data could not be loaded."),
+  ).toBeVisible();
+  await page
+    .getByTestId("account-register-row")
+    .filter({ hasText: memo })
+    .click();
+
+  const detailPanel = page.getByTestId("transaction-detail-panel");
+  await expect(
+    detailPanel.getByRole("heading", { name: transaction.display_title }),
+  ).toBeVisible();
+  await expect(
+    detailPanel.getByRole("heading", { name: "Loading transaction" }),
+  ).toHaveCount(0);
+  await expect(
+    detailPanel.getByTestId("transaction-detail-summary-memo"),
+  ).toHaveText(memo);
+  await expect(
+    page
+      .getByTestId("account-register-row")
+      .filter({ hasText: transaction.display_title }),
+  ).toBeVisible();
+  await detailPanel
+    .getByRole("button", { name: "Close transaction detail" })
+    .click();
+  await page
+    .getByTestId("account-register-row")
+    .filter({ hasText: memo })
+    .click();
+  await expect(
+    detailPanel.getByRole("heading", { name: transaction.display_title }),
+  ).toBeVisible();
+  expect(transactionFetchCount).toBe(2);
+
+  await page.goto(`/transactions?transaction=${transaction.transaction_id}`);
+  const transactionDetailPanel = page.getByTestId("transaction-detail-panel");
+  await expect(
+    transactionDetailPanel.getByRole("heading", {
+      name: transaction.display_title,
+    }),
+  ).toBeVisible();
+  await expect(
+    transactionDetailPanel.getByTestId("transaction-detail-summary-memo"),
+  ).toHaveText(memo);
+  await expect(
+    transactionDetailPanel.getByRole("heading", {
+      name: "Loading transaction",
+    }),
+  ).toHaveCount(0);
+
+  await page.goto(`/accounts/${account.account_id}?transaction=2147483647`);
+
+  const unavailableDetailPanel = page.getByTestId("transaction-detail-panel");
+  await expect(
+    unavailableDetailPanel.getByRole("heading", {
+      name: "Transaction unavailable",
+    }),
+  ).toBeVisible();
+  await expect(
+    unavailableDetailPanel.getByText("Transaction could not be loaded."),
+  ).toBeVisible();
+  await expect(
+    unavailableDetailPanel.getByRole("heading", {
+      name: "Loading transaction",
+    }),
+  ).toHaveCount(0);
+});
+
+test("register lifecycle refresh keeps cached transaction detail visible", async ({
+  browserName,
+  page,
+}) => {
+  const unique = `${browserName.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const account = await createAccount(page, {
+    fqn: `e2e:register-lifecycle:${unique}`,
+  });
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const merchant = findByFqn(accounts, "merchant:PowellsBooks");
+  const category = findByFqn(categories, "Entertainment:Books");
+  const memo = `E2E register lifecycle ${unique}`;
+  const transactionResponse = await page.request.post(
+    "/api/transactions/spend",
+    {
+      data: {
+        amount: "18.00",
+        category_id: category.category_id,
+        counterparty_account_id: merchant.account_id,
+        currency: "USD",
+        funding_account_id: account.account_id,
+        initiated_date: "2026-08-01",
+        memo,
+        settlement: { status: "pending" },
+      },
+    },
+  );
+  expect(transactionResponse.ok()).toBe(true);
+  const transaction = (await transactionResponse.json()) as TransactionFixture;
+
+  let releaseStaleFetch: (() => void) | undefined;
+  const staleFetchReleased = new Promise<void>((resolve) => {
+    releaseStaleFetch = resolve;
+  });
+  let markStaleFetchStarted: (() => void) | undefined;
+  const staleFetchStarted = new Promise<void>((resolve) => {
+    markStaleFetchStarted = resolve;
+  });
+  let markStaleFetchSettled: (() => void) | undefined;
+  const staleFetchSettled = new Promise<void>((resolve) => {
+    markStaleFetchSettled = resolve;
+  });
+  let transactionFetchCount = 0;
+  await page.route(
+    `**/api/transactions/${transaction.transaction_id}`,
+    async (route) => {
+      if (route.request().method() !== "GET") {
+        await route.continue();
+        return;
+      }
+      transactionFetchCount += 1;
+      if (transactionFetchCount !== 1) {
+        await route.continue();
+        return;
+      }
+
+      const staleResponse = await route.fetch();
+      markStaleFetchStarted?.();
+      await staleFetchReleased;
+      await route.fulfill({ response: staleResponse });
+      markStaleFetchSettled?.();
+    },
+  );
+
+  await page.goto(`/accounts/${account.account_id}`);
+  await staleFetchStarted;
+  const row = page
+    .getByTestId("account-register-row")
+    .filter({ hasText: memo });
+  await expect(row).toContainText("Resolving transaction");
+  await row.click();
+  const detailPanel = page.getByTestId("transaction-detail-panel");
+  await expect(
+    detailPanel.getByRole("heading", { name: transaction.display_title }),
+  ).toBeVisible();
+
+  let releaseRefresh: (() => void) | undefined;
+  const refreshReleased = new Promise<void>((resolve) => {
+    releaseRefresh = resolve;
+  });
+  let markRefreshStarted: (() => void) | undefined;
+  const refreshStarted = new Promise<void>((resolve) => {
+    markRefreshStarted = resolve;
+  });
+  let nextRefreshGate:
+    | {
+        readonly markStarted: () => void;
+        readonly released: Promise<void>;
+      }
+    | undefined = {
+    markStarted: () => {
+      markRefreshStarted?.();
+    },
+    released: refreshReleased,
+  };
+  await page.route("**/api/accounts?**", async (route) => {
+    const url = new URL(route.request().url());
+    const refreshGate = nextRefreshGate;
+    if (
+      refreshGate &&
+      route.request().method() === "GET" &&
+      url.searchParams.get("is_featured") === "true"
+    ) {
+      nextRefreshGate = undefined;
+      refreshGate.markStarted();
+      await refreshGate.released;
+    }
+    await route.continue();
+  });
+
+  await detailPanel.getByRole("button", { name: "Cancel" }).click();
+  await refreshStarted;
+  await expect(
+    detailPanel.getByRole("heading", { name: transaction.display_title }),
+  ).toBeVisible();
+  await expect(
+    detailPanel.getByRole("button", { name: "Restore" }),
+  ).toBeVisible();
+  await expect(
+    detailPanel.getByRole("heading", { name: "Loading transaction" }),
+  ).toHaveCount(0);
+  expect(transactionFetchCount).toBe(2);
+
+  releaseRefresh?.();
+  await expect(page.getByText("Transaction cancelled.")).toBeVisible();
+
+  releaseStaleFetch?.();
+  await staleFetchSettled;
+  await detailPanel
+    .getByRole("button", { name: "Close transaction detail" })
+    .click();
+  await expect(detailPanel).toBeHidden();
+  await row.click();
+  await expect(
+    detailPanel.getByRole("button", { name: "Restore" }),
+  ).toBeVisible();
+  expect(transactionFetchCount).toBe(2);
+
+  await detailPanel.getByRole("button", { name: "Restore" }).click();
+  await expect(page.getByText("Transaction restored.")).toBeVisible();
+  await expect(
+    detailPanel.getByRole("button", { exact: true, name: "Post" }),
+  ).toBeVisible();
+
+  let releasePostRefresh: (() => void) | undefined;
+  const postRefreshReleased = new Promise<void>((resolve) => {
+    releasePostRefresh = resolve;
+  });
+  let markPostRefreshStarted: (() => void) | undefined;
+  const postRefreshStarted = new Promise<void>((resolve) => {
+    markPostRefreshStarted = resolve;
+  });
+  nextRefreshGate = {
+    markStarted: () => {
+      markPostRefreshStarted?.();
+    },
+    released: postRefreshReleased,
+  };
+
+  await detailPanel.getByRole("button", { exact: true, name: "Post" }).click();
+  await page
+    .getByRole("alertdialog")
+    .getByRole("button", { exact: true, name: "Post transaction" })
+    .click();
+  await postRefreshStarted;
+  await expect(
+    detailPanel.getByRole("heading", { name: transaction.display_title }),
+  ).toBeVisible();
+  await expect(
+    detailPanel.getByRole("heading", { name: "Loading transaction" }),
+  ).toHaveCount(0);
+
+  releasePostRefresh?.();
+  await expect(page.getByText("Transaction posted.")).toBeVisible();
+  await detailPanel
+    .getByRole("button", { name: "Close transaction detail" })
+    .click();
+  await row.click();
+  await expect(
+    detailPanel.getByRole("button", { exact: true, name: "Post" }),
+  ).toHaveCount(0);
+  await expect(
+    detailPanel.getByRole("button", { exact: true, name: "Cancel" }),
+  ).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Feature account" }).click();
+  await expect(page.getByText("Account featured.")).toBeVisible();
+  const registerNotice = page.getByRole("button", {
+    name: "Dismiss notice: Transaction posted.",
+  });
+  const featuredNotice = page.getByRole("button", {
+    name: "Dismiss notice: Account featured.",
+  });
+  const [registerNoticeBox, featuredNoticeBox] = await Promise.all([
+    registerNotice.boundingBox(),
+    featuredNotice.boundingBox(),
+  ]);
+  expect(registerNoticeBox).not.toBeNull();
+  expect(featuredNoticeBox).not.toBeNull();
+  expect(
+    (registerNoticeBox?.y ?? 0) + (registerNoticeBox?.height ?? 0),
+  ).toBeLessThanOrEqual(featuredNoticeBox?.y ?? 0);
+});
+
 test("account page renders header and paginated running-balance register", async ({
   browserName,
   page,
@@ -1145,12 +1475,27 @@ test("account page renders header and paginated running-balance register", async
   };
   const firstRecord = requireDefined(recordsBody.records[0], "first record");
   const secondRecord = requireDefined(recordsBody.records[1], "second record");
+  const thirdRecord = requireDefined(recordsBody.records[2], "third record");
   const firstTransaction = requireDefined(
     transactions.find(
       (transaction) =>
         transaction.transaction_id === firstRecord.transaction_id,
     ),
     "first transaction",
+  );
+  const secondTransaction = requireDefined(
+    transactions.find(
+      (transaction) =>
+        transaction.transaction_id === secondRecord.transaction_id,
+    ),
+    "second transaction",
+  );
+  const thirdTransaction = requireDefined(
+    transactions.find(
+      (transaction) =>
+        transaction.transaction_id === thirdRecord.transaction_id,
+    ),
+    "third transaction",
   );
   expect(firstRecord.posted_date).toBeUndefined();
   expect(firstRecord.pending_date).toBeTruthy();
@@ -1238,49 +1583,69 @@ test("account page renders header and paginated running-balance register", async
 
   await firstRow.click();
   await expect(page).toHaveURL(
-    new RegExp(`[?&]record=${firstRecord.record_id}(?:&|$)`),
+    new RegExp(`[?&]transaction=${firstTransaction.transaction_id}(?:&|$)`),
   );
-  const peekPanel = page.getByTestId("account-peek-panel");
-  await expect(peekPanel).toBeVisible();
+  const detailPanel = page.getByTestId("transaction-detail-panel");
+  await expect(detailPanel).toBeVisible();
+  await detailPanel
+    .getByRole("button", { name: "Close transaction detail" })
+    .hover();
   await expect(
-    peekPanel.getByRole("heading", { name: firstTransaction.display_title }),
+    page.getByRole("tooltip").filter({ hasText: "Close transaction detail" }),
   ).toBeVisible();
-  await expect(peekPanel.getByText("Journal records")).toBeVisible();
   await expect(
-    peekPanel.getByTestId("transaction-detail-summary-memo"),
+    detailPanel.getByRole("heading", {
+      name: firstTransaction.display_title,
+    }),
+  ).toBeVisible();
+  await expect(detailPanel.getByText("Journal records")).toBeVisible();
+  await expect(
+    detailPanel.getByTestId("transaction-detail-summary-memo"),
   ).toHaveText(firstRecord.memo ?? "");
+  await expect(detailPanel.getByRole("button", { name: "Edit" })).toBeVisible();
   await expect(
-    peekPanel.getByTestId("transaction-detail-records-table"),
-  ).toContainText(firstRecord.memo ?? "");
-  await expect(
-    peekPanel.getByText(account.display_label, { exact: true }).first(),
+    detailPanel.getByRole("button", { name: "Create template" }),
   ).toBeVisible();
   await expect(
-    peekPanel.getByText("merchant:PowellsBooks").first(),
+    detailPanel.getByRole("button", { name: "Duplicate" }),
   ).toBeVisible();
-  const peekRecordsTable = peekPanel.getByTestId(
+  await expect(
+    detailPanel.getByRole("button", { name: "Split" }),
+  ).toBeVisible();
+  await expect(detailPanel.getByRole("button", { name: "Post" })).toBeVisible();
+  await expect(
+    detailPanel.getByRole("button", { name: "Cancel" }),
+  ).toBeVisible();
+  await expect(
+    detailPanel.getByText(account.display_label, { exact: true }).first(),
+  ).toBeVisible();
+  await expect(
+    detailPanel.getByText("merchant:PowellsBooks").first(),
+  ).toBeVisible();
+  const detailRecordsTable = detailPanel.getByTestId(
     "transaction-detail-records-table",
   );
-  const peekAmountText = peekRecordsTable
+  const detailAmountText = detailRecordsTable
     .locator("[data-label='Amount'] [data-testid='amount-text']")
     .filter({ hasText: formatUsdMarkerAmount(firstRecord.amount) })
     .first();
-  const peekAccountPath = peekRecordsTable
+  const detailAccountPath = detailRecordsTable
     .locator("[data-label='Account']")
     .filter({ hasText: "merchant:PowellsBooks" })
     .locator("[data-slot='tooltip-trigger']")
     .first();
-  await expect(peekAmountText).toBeVisible();
-  await expect(peekAccountPath).toBeVisible();
+  await expect(detailAmountText).toBeVisible();
+  await expect(detailAccountPath).toBeVisible();
   await expect
     .poll(async () => {
-      const { height, lineHeight } = await renderedLineHeight(peekAmountText);
+      const { height, lineHeight } = await renderedLineHeight(detailAmountText);
       return height <= lineHeight * 1.35;
     })
     .toBe(true);
   await expect
     .poll(async () => {
-      const { height, lineHeight } = await renderedLineHeight(peekAccountPath);
+      const { height, lineHeight } =
+        await renderedLineHeight(detailAccountPath);
       return height <= lineHeight * 1.35;
     })
     .toBe(true);
@@ -1292,59 +1657,69 @@ test("account page renders header and paginated running-balance register", async
   await page
     .getByRole("heading", { exact: true, name: account.display_label })
     .click();
-  await expect(peekPanel).toBeHidden();
-  await expect(page).not.toHaveURL(/[?&]record=/);
+  await expect(detailPanel).toBeHidden();
+  await expect(page).not.toHaveURL(/[?&]transaction=/);
 
   await firstRow.click();
-  await expect(peekPanel).toBeVisible();
+  await expect(detailPanel).toBeVisible();
   await secondRow.click({ position: { x: 16, y: 16 } });
   await expect(page).toHaveURL(
-    new RegExp(`[?&]record=${secondRecord.record_id}(?:&|$)`),
+    new RegExp(`[?&]transaction=${secondTransaction.transaction_id}(?:&|$)`),
   );
   await expect(
-    peekPanel.getByTestId("transaction-detail-summary-memo"),
+    detailPanel.getByTestId("transaction-detail-summary-memo"),
   ).toHaveText(secondRecord.memo ?? "");
 
-  await firstRow.evaluate((element) => {
-    if (element instanceof HTMLElement) {
-      element.focus();
-    }
-  });
+  await page.goBack();
+  await expect(detailPanel).toBeHidden();
+  await expect(page).not.toHaveURL(/[?&]transaction=/);
+  await page.goForward();
+  await expect(detailPanel).toBeVisible();
+  await expect(detailPanel).toBeFocused();
+
+  await page.keyboard.press("Escape");
+  await expect(detailPanel).toBeHidden();
+  await firstRow.focus();
+  await expect(firstRow).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(detailPanel).toBeVisible();
   await expect(firstRow).toBeFocused();
   await page.keyboard.press("ArrowDown");
   await expect(secondRow).toBeFocused();
   await expect(page).toHaveURL(
-    new RegExp(`[?&]record=${secondRecord.record_id}(?:&|$)`),
+    new RegExp(`[?&]transaction=${secondTransaction.transaction_id}(?:&|$)`),
   );
   await expect(
-    peekPanel.getByTestId("transaction-detail-summary-memo"),
+    detailPanel.getByTestId("transaction-detail-summary-memo"),
   ).toHaveText(secondRecord.memo ?? "");
 
-  await page.keyboard.press("Escape");
-  await expect(peekPanel).toBeHidden();
-  await expect(page).not.toHaveURL(/[?&]record=/);
-  await expect(secondRow).toBeFocused();
-
-  await firstRow.click();
-  await expect(peekPanel).toBeVisible();
-  await peekPanel.getByRole("link", { name: "Open transaction" }).click();
+  await page.keyboard.press("ArrowDown");
+  const thirdRow = page
+    .getByTestId("account-register-row")
+    .filter({ hasText: thirdRecord.memo ?? "" })
+    .first();
+  await expect(thirdRow).toBeFocused();
   await expect(page).toHaveURL(
-    new RegExp(
-      `/transactions\\?transaction=${firstTransaction.transaction_id}$`,
-    ),
+    new RegExp(`[?&]transaction=${thirdTransaction.transaction_id}(?:&|$)`),
   );
   await expect(
-    page.getByRole("dialog", { name: firstTransaction.display_title }),
-  ).toBeVisible();
+    detailPanel.getByTestId("transaction-detail-summary-memo"),
+  ).toHaveText(thirdRecord.memo ?? "");
+
+  await page.keyboard.press("Escape");
+  await expect(detailPanel).toBeHidden();
+  await expect(page).not.toHaveURL(/[?&]transaction=/);
+  await expect(thirdRow).toBeFocused();
 
   await page.goto(
-    `/accounts/${account.account_id}?page=1&pageSize=25&record=${firstRecord.record_id}`,
+    `/accounts/${account.account_id}?page=1&pageSize=25&transaction=${firstTransaction.transaction_id}`,
   );
-  const deepLinkedPeekPanel = page.getByTestId("account-peek-panel");
-  await expect(deepLinkedPeekPanel).toBeVisible();
+  const deepLinkedDetailPanel = page.getByTestId("transaction-detail-panel");
+  await expect(deepLinkedDetailPanel).toBeVisible();
   await expect(
-    deepLinkedPeekPanel.getByTestId("transaction-detail-summary-memo"),
+    deepLinkedDetailPanel.getByTestId("transaction-detail-summary-memo"),
   ).toHaveText(firstRecord.memo ?? "");
+  await expect(deepLinkedDetailPanel).toBeFocused();
   const pageSizeResponse = page.waitForResponse((response) => {
     const url = new URL(response.url());
     return (
@@ -1358,17 +1733,18 @@ test("account page renders header and paginated running-balance register", async
   await page.getByRole("option", { exact: true, name: "50" }).click();
   await pageSizeResponse;
   await expectAccountRegisterUrl(page, 1, 50);
-  await expect(page).not.toHaveURL(/[?&]record=/);
-  await expect(deepLinkedPeekPanel).toBeHidden();
+  await expect(page).not.toHaveURL(/[?&]transaction=/);
+  await expect(deepLinkedDetailPanel).toBeHidden();
 
   await page.goto(
-    `/accounts/${account.account_id}?page=1&pageSize=25&record=${firstRecord.record_id}`,
+    `/accounts/${account.account_id}?page=1&pageSize=25&transaction=${firstTransaction.transaction_id}`,
   );
-  await expect(deepLinkedPeekPanel).toBeVisible();
-  await deepLinkedPeekPanel
-    .getByRole("button", { name: "Close transaction peek" })
+  await expect(deepLinkedDetailPanel).toBeVisible();
+  await deepLinkedDetailPanel
+    .getByRole("button", { name: "Close transaction detail" })
     .click();
-  await expect(deepLinkedPeekPanel).toBeHidden();
+  await expect(deepLinkedDetailPanel).toBeHidden();
+  await expect(page).not.toHaveURL(/[?&]transaction=/);
 
   const secondPageResponse = page.waitForResponse((response) => {
     const url = new URL(response.url());
@@ -1380,9 +1756,9 @@ test("account page renders header and paginated running-balance register", async
     );
   });
   await page.goto(
-    `/accounts/${account.account_id}?page=1&pageSize=25&record=${firstRecord.record_id}`,
+    `/accounts/${account.account_id}?page=1&pageSize=25&transaction=${firstTransaction.transaction_id}`,
   );
-  await expect(deepLinkedPeekPanel).toBeVisible();
+  await expect(deepLinkedDetailPanel).toBeVisible();
   await page.getByRole("button", { name: "Next" }).evaluate((element) => {
     if (element instanceof HTMLButtonElement) {
       element.click();
@@ -1390,7 +1766,10 @@ test("account page renders header and paginated running-balance register", async
   });
   await secondPageResponse;
   await expectAccountRegisterUrl(page, 2, 25);
-  await expect(page).not.toHaveURL(/[?&]record=/);
+  await expect(page).toHaveURL(
+    new RegExp(`[?&]transaction=${firstTransaction.transaction_id}(?:&|$)`),
+  );
+  await expect(deepLinkedDetailPanel).toBeVisible();
   await expect(
     page.getByTestId("account-register-pagination-footer"),
   ).toContainText("Page 2 of 2");
@@ -1399,65 +1778,17 @@ test("account page renders header and paginated running-balance register", async
       .getByTestId("account-register-row")
       .filter({ hasText: `E2E account register ${unique} 02` }),
   ).toBeVisible();
+  await deepLinkedDetailPanel
+    .getByRole("button", { name: "Close transaction detail" })
+    .click();
   await page.getByRole("button", { name: "Previous" }).click();
   await expectAccountRegisterUrl(page, 1, 25);
+  await expect(page).not.toHaveURL(/[?&]transaction=/);
+  await expect(deepLinkedDetailPanel).toBeHidden();
 
   await page.goto(`/accounts/${hiddenAccount.account_id}`);
   await expect(page.getByRole("heading", { name: "Hidden" })).toBeVisible();
   await expect(page.getByLabel("Hidden account")).toBeVisible();
-});
-
-test("account register peek tag chips open transactions with tag filter", async ({
-  browserName,
-  page,
-}) => {
-  const unique = `${browserName.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
-  const [accounts, categories] = await Promise.all([
-    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
-    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
-  ]);
-  const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
-  const category = findByFqn(categories, "Entertainment:Books");
-  const tag = await createTag(page, `E2E:PeekFilter:${unique}:RegisterTag`);
-  const memo = `E2E register peek tag filter ${unique}`;
-
-  const transactionResponse = await page.request.post(
-    "/api/transactions/spend",
-    {
-      data: {
-        amount: "13.57",
-        category_id: category.category_id,
-        counterparty_account_id: merchantAccount.account_id,
-        currency: "USD",
-        funding_account_id: fundingAccount.account_id,
-        initiated_date: "2026-04-01",
-        memo,
-        tag_ids: [tag.tag_id],
-      },
-    },
-  );
-  expect(transactionResponse.ok()).toBe(true);
-
-  await page.goto(`/accounts/${fundingAccount.account_id}?page=1&pageSize=50`);
-  await expect(page.getByText("Register", { exact: true })).toBeVisible();
-  const recordRow = page
-    .getByTestId("account-register-row")
-    .filter({ hasText: memo })
-    .first();
-  await expect(recordRow).toBeVisible();
-  await recordRow.click();
-  const peekPanel = page.getByTestId("account-peek-panel");
-  await expect(peekPanel).toBeVisible();
-  await peekPanel
-    .getByRole("button", { name: `Filter by ${tag.name}` })
-    .first()
-    .click();
-
-  await expect(page).toHaveURL(
-    new RegExp(`/transactions\\?tag=${tag.tag_id}$`),
-  );
-  await expect(page.getByText(`Tag ${tag.name}`)).toBeVisible();
 });
 
 test("account group page renders subtotals and combined prefix register", async ({
@@ -1618,40 +1949,73 @@ test("account group page renders subtotals and combined prefix register", async 
   ).toContainText("Page 1 of 2");
 
   const firstRow = page.locator(`[data-record-id="${firstRecord.record_id}"]`);
-  await firstRow.click();
-  await expect(page).toHaveURL(
-    new RegExp(`[?&]record=${firstRecord.record_id}(?:&|$)`),
-  );
-  const peekPanel = page.getByTestId("account-peek-panel");
-  await expect(peekPanel).toBeVisible();
-  await expect(
-    peekPanel.getByRole("heading", { name: groupTransaction.display_title }),
-  ).toBeVisible();
-
-  await firstRow.focus();
-  await page.keyboard.press("ArrowDown");
   const secondRow = page.locator(
     `[data-record-id="${secondRecord.record_id}"]`,
   );
-  await expect(secondRow).toBeFocused();
+  await firstRow.click();
   await expect(page).toHaveURL(
-    new RegExp(`[?&]record=${secondRecord.record_id}(?:&|$)`),
+    new RegExp(`[?&]transaction=${firstRecord.transaction_id}(?:&|$)`),
+  );
+  const detailPanel = page.getByTestId("transaction-detail-panel");
+  await expect(detailPanel).toBeVisible();
+  await expect(
+    detailPanel.getByRole("heading", {
+      name: groupTransaction.display_title,
+    }),
+  ).toBeVisible();
+  const visibleTransactionRows = page.locator(
+    `[data-transaction-id="${groupTransaction.transaction_id}"]`,
+  );
+  expect(
+    await visibleTransactionRows.evaluateAll((rows) =>
+      rows.every((row) => getComputedStyle(row).outlineStyle === "none"),
+    ),
+  ).toBe(true);
+
+  await secondRow.click({ position: { x: 16, y: 16 } });
+  await expect(detailPanel).toBeVisible();
+  await expect(page).toHaveURL(
+    new RegExp(`[?&]transaction=${secondRecord.transaction_id}(?:&|$)`),
+  );
+
+  await firstRow.focus();
+  await page.keyboard.press("ArrowDown");
+  await expect(secondRow).toBeFocused();
+  await expect
+    .poll(() => secondRow.evaluate((row) => getComputedStyle(row).outlineStyle))
+    .toBe("solid");
+  expect(
+    await visibleTransactionRows.evaluateAll(
+      (rows, focusedRecordId) =>
+        rows
+          .filter(
+            (row) => row.getAttribute("data-record-id") !== focusedRecordId,
+          )
+          .every((row) => getComputedStyle(row).outlineStyle === "none"),
+      String(secondRecord.record_id),
+    ),
+  ).toBe(true);
+  await expect(page).toHaveURL(
+    new RegExp(`[?&]transaction=${secondRecord.transaction_id}(?:&|$)`),
   );
 
   await page.keyboard.press("Escape");
-  await expect(peekPanel).toBeHidden();
-  await expect(page).not.toHaveURL(/[?&]record=/);
+  await expect(detailPanel).toBeHidden();
+  await expect(page).not.toHaveURL(/[?&]transaction=/);
   await expect(secondRow).toBeFocused();
 
   await page.goto(
-    `/accounts/group?prefix=${encodeURIComponent(prefix)}&page=1&pageSize=25&record=${firstRecord.record_id}`,
+    `/accounts/group?prefix=${encodeURIComponent(prefix)}&page=1&pageSize=25&transaction=${firstRecord.transaction_id}`,
   );
-  await expect(peekPanel).toBeVisible();
+  await expect(detailPanel).toBeVisible();
   await expect(
-    peekPanel.getByRole("heading", { name: groupTransaction.display_title }),
+    detailPanel.getByRole("heading", {
+      name: groupTransaction.display_title,
+    }),
   ).toBeVisible();
+  await expect(detailPanel).toBeFocused();
   await page.keyboard.press("Escape");
-  await expect(peekPanel).toBeHidden();
+  await expect(detailPanel).toBeHidden();
 
   const secondPageResponse = page.waitForResponse((response) => {
     const url = new URL(response.url());
@@ -1665,7 +2029,7 @@ test("account group page renders subtotals and combined prefix register", async 
   await page.getByRole("button", { name: "Next" }).click();
   await secondPageResponse;
   await expectAccountRegisterUrl(page, 2, 25);
-  await expect(page).not.toHaveURL(/[?&]record=/);
+  await expect(page).not.toHaveURL(/[?&]transaction=/);
   await expect(
     page.getByTestId("account-register-pagination-footer"),
   ).toContainText("Page 2 of 2");

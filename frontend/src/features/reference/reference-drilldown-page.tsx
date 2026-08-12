@@ -399,7 +399,7 @@ export const ReferenceDrilldownPage = ({
           onChangeLifecycle={browser.changeTransactionLifecycle}
           onClose={browser.detail.closeTransactionDetail}
           onConfirmOccurrence={browser.confirmRecurringOccurrenceFromRow}
-          onDelete={browser.detail.deleteSelectedTransaction}
+          onDelete={browser.deleteSelectedTransaction}
           onDismissOccurrence={browser.dismissRecurringOccurrenceFromRow}
           onDuplicate={(transaction) => {
             openTransactionEntryLaunch(

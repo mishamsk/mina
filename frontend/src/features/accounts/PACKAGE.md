@@ -7,12 +7,13 @@
 ## Implicit Contracts
 
 - The chart snapshot includes hidden accounts but only its server-sorted first 500 rows; `q`, `type`, and `hidden` filter that snapshot locally and preserve unrelated URL parameters.
-- Register snapshots are keyed by their account or group request. An exact cache miss may keep the last snapshot for that target visible while fetching; header, register, and peek writes must reject results from an invalidated generation.
+- Register snapshots are keyed by their account or group request. An exact cache miss may keep the last snapshot for that target visible while fetching; request-backed header, register, and transaction cache writes must reject results from an invalidated generation, while authoritative mutation responses may seed the transaction cache after invalidation.
 - A cache-missing account or group register runs one occurrence catch-up per mounted resource before loading records; its record query keeps the API default that excludes expected occurrences.
-- `record`, `page`, and `pageSize` are register URL state. Changing page or page size clears `record`, preventing a peek from referring to a row outside the displayed page.
-- Account mutations use `refreshAccountsAfterMutation`: refresh the chart, featured balances, Overview, and ledger lookups before success feedback. Bulk mutations also discard account/group registers and cached peek transactions; type or currency changes additionally discard template compatibility.
+- `page` and `pageSize` are register URL state; ledger owns the composable `transaction` detail parameter. Pointer interaction with register pagination closes detail before changing page state.
+- Account mutations use `refreshAccountsAfterMutation`: refresh the chart, featured balances, Overview, and ledger lookups before success feedback. Bulk mutations also discard account/group registers and cached transactions; type or currency changes additionally discard template compatibility.
+- Register-detail lifecycle mutations seed the returned transaction before invalidating register caches so the open panel remains complete during refresh; successful fallback detail fetches also repair an errored register transaction cache entry.
 - Use API `deletable` and `has_credit_limit_history` signals as supplied; this package does not infer either rule. System accounts expose no mutation controls.
-- Management-panel callers restore focus to the opener (or New account fallback) on close. Peek callers restore focus to its opener or selected row, except outside-pointer close deliberately leaves focus unchanged.
+- Management-panel callers restore focus to the opener (or New account fallback) on close. Register detail delegates panel rendering, loading, URL state, and focus restoration to ledger; accounts owns register-specific mutation calls, refresh sequencing, notices, and close or reload outcomes. URL-first detail focuses the panel; walking between records keeps row focus, and moving within one transaction updates the restore row without closing detail.
 
 ## Boundaries
 

@@ -29,6 +29,7 @@ import {
   markOtherTransactionPagesStale,
   markTransactionPageStale,
   normalizedCategoryPickerIntents,
+  seedAccountTransactionCache,
   setCategoryPickerCategories,
   setCategoryPickerCategoriesError,
   setCategoryPickerCategoriesLoading,
@@ -468,23 +469,33 @@ export const refreshTransactionPageAfterSave = async (
 export const refreshViewsAfterEntrySave = async (
   transaction: Transaction,
   previousTransaction?: Transaction,
+  options: { readonly retainAccountTransactionSnapshot?: boolean } = {},
 ): Promise<boolean> => {
+  const retainAccountTransactionSnapshot = () => {
+    if (!options.retainAccountTransactionSnapshot) {
+      return;
+    }
+    seedAccountTransactionCache(transaction);
+  };
   const snapshot = getTransactionsSnapshot();
   const currentPage = snapshot.lastLoadedPageKey
     ? snapshot.pages[snapshot.lastLoadedPageKey]
     : undefined;
   if (currentPage) {
-    return refreshTransactionPageAfterSave(
+    const refresh = refreshTransactionPageAfterSave(
       currentPage.params,
       transaction.transaction_id,
       transaction,
       previousTransaction,
       { pageRefreshMode: "blocking" },
     );
+    retainAccountTransactionSnapshot();
+    return refresh;
   }
 
   invalidateReferencePagesAfterTransactionMutation();
   invalidateAccountRegistersForTransaction(transaction, previousTransaction);
+  retainAccountTransactionSnapshot();
   cancelAllPageRefreshCallbacks();
   invalidateTransactionPages();
   await Promise.all([refreshFeaturedBalances(), refreshOverview()]);

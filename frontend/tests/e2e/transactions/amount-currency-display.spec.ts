@@ -6,7 +6,7 @@ import {
   createCategory,
   expect,
   expectCollapsedRowActionsKeepAmountVisible,
-  openAccountTransactionPeek,
+  openAccountTransactionDetail,
   type Page,
 } from "@tests/e2e/transactions/support";
 
@@ -435,15 +435,19 @@ test("transaction tables switch native and USD while report previews stay native
       .getByTestId("amount-chip"),
   ).toContainText("-30.00 €");
 
-  const peek = await openAccountTransactionPeek(
+  const registerDetail = await openAccountTransactionDetail(
     page,
     fixture.complexFunding,
     fixture.complexMemo,
   );
-  const peekPair = peek.getByTestId("transaction-detail-amount-pair").first();
-  await expect(peekPair.getByTestId("amount-chip")).toHaveCount(1);
-  await expect(peekPair.getByTestId("amount-chip")).toContainText("-30.00 €");
-  await expect(peekPair.getByTestId("usd-amount-unavailable-chip")).toHaveCount(
-    0,
-  );
+  const registerDetailPair = registerDetail
+    .getByTestId("transaction-detail-amount-pair")
+    .first();
+  await expect(registerDetailPair.getByTestId("amount-chip")).toHaveCount(2);
+  await expect(
+    registerDetailPair.getByTestId("amount-chip").nth(0),
+  ).toContainText("-30.00 €");
+  await expect(
+    registerDetailPair.getByTestId("amount-chip").nth(1),
+  ).toContainText("-33.00 $");
 });

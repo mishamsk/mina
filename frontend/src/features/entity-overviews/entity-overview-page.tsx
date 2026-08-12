@@ -1206,8 +1206,6 @@ const TransactionPreview = ({
   }, []);
   const detail = useTransactionDetail({
     lookupsLoaded: Boolean(lookups.snapshot || lookups.errorMessage),
-    onNotice: noop,
-    params: { filters, limit: 8, offset: 0 },
     searchParams,
     setSearchParams,
     transactions: report.transactions,

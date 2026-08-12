@@ -1,21 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { SetURLSearchParams } from "react-router";
 
-import type { Transaction, TransactionPageParams } from "@/api";
-import {
-  apiErrorMessage,
-  deleteTransactionById,
-  fetchTransactionById,
-} from "@/api";
+import type { Transaction } from "@/api";
+import { apiErrorMessage, fetchTransactionById } from "@/api";
 import { focusWithoutTooltip } from "@/components/tooltip";
-import { refreshFeaturedBalances } from "@/features/featured-balances";
-import { refreshOverview } from "@/features/overview";
 
-import {
-  invalidateAccountRegistersForTransaction,
-  invalidateReferencePagesAfterTransactionMutation,
-  refreshTransactionPage,
-} from "./use-transactions-resource";
+import { readLiveSearchParams } from "./transaction-page-position";
 
 const parseOptionalPositiveInteger = (
   value: string | null,
@@ -38,8 +28,7 @@ interface FetchedTransactionDetail {
 
 interface UseTransactionDetailOptions {
   readonly lookupsLoaded: boolean;
-  readonly onNotice: (message: string) => void;
-  readonly params: TransactionPageParams;
+  readonly onFetchedTransaction?: (transaction: Transaction) => void;
   readonly searchParams: URLSearchParams;
   readonly setSearchParams: SetURLSearchParams;
   readonly transactions: readonly Transaction[] | undefined;
@@ -47,18 +36,24 @@ interface UseTransactionDetailOptions {
 
 export const useTransactionDetail = ({
   lookupsLoaded,
-  onNotice,
-  params,
+  onFetchedTransaction,
   searchParams,
   setSearchParams,
   transactions,
 }: UseTransactionDetailOptions) => {
+  const [autoFocusOnTransactionChange, setAutoFocusOnTransactionChange] =
+    useState(
+      () =>
+        parseOptionalPositiveInteger(searchParams.get("transaction")) !==
+        undefined,
+    );
   const [fetchedDetail, setFetchedDetail] =
     useState<FetchedTransactionDetail>();
   const [suppressedDetailFetchId, setSuppressedDetailFetchId] = useState<
     number | undefined
   >();
   const detailRestoreFocusRef = useRef<HTMLElement | null>(null);
+  const rowOpenedTransactionIdRef = useRef<number | undefined>(undefined);
   const selectedTransactionId = parseOptionalPositiveInteger(
     searchParams.get("transaction"),
   );
@@ -70,8 +65,8 @@ export const useTransactionDetail = ({
       ? fetchedDetail
       : undefined;
   const transaction =
-    selectedTransactionFromSnapshot ?? selectedFetchedDetail?.transaction;
-  const errorMessage = selectedTransactionFromSnapshot
+    selectedFetchedDetail?.transaction ?? selectedTransactionFromSnapshot;
+  const errorMessage = transaction
     ? undefined
     : selectedFetchedDetail?.errorMessage;
   const detailNeedsFetch = Boolean(
@@ -82,21 +77,38 @@ export const useTransactionDetail = ({
   );
   const loading = detailNeedsFetch || Boolean(transaction && !lookupsLoaded);
 
-  const closeTransactionDetail = useCallback(() => {
-    setFetchedDetail(undefined);
-    setSearchParams(
-      (current) => {
-        const next = new URLSearchParams(current);
-        next.delete("transaction");
-        return next;
-      },
-      { replace: true },
-    );
-  }, [setSearchParams]);
+  const closeTransactionDetail = useCallback(
+    (options: { readonly suppressFetch?: boolean } = {}) => {
+      setSuppressedDetailFetchId(
+        options.suppressFetch ? selectedTransactionId : undefined,
+      );
+      setFetchedDetail(undefined);
+      setSearchParams(
+        (current) => {
+          const next = new URLSearchParams(current);
+          next.delete("transaction");
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [selectedTransactionId, setSearchParams],
+  );
 
   const openTransactionDetail = useCallback(
-    (nextTransaction: Transaction, opener?: HTMLElement) => {
-      if (selectedTransactionId === nextTransaction.transaction_id) {
+    (
+      nextTransaction: Transaction | number,
+      opener?: HTMLElement,
+      options: { readonly toggle?: boolean } = {},
+    ) => {
+      const nextTransactionId =
+        typeof nextTransaction === "number"
+          ? nextTransaction
+          : nextTransaction.transaction_id;
+      if (
+        selectedTransactionId === nextTransactionId &&
+        options.toggle !== false
+      ) {
         closeTransactionDetail();
         const restoreTarget = opener ?? detailRestoreFocusRef.current;
         window.requestAnimationFrame(() => {
@@ -108,26 +120,37 @@ export const useTransactionDetail = ({
         return;
       }
 
+      setAutoFocusOnTransactionChange(false);
+      rowOpenedTransactionIdRef.current = nextTransactionId;
+      detailRestoreFocusRef.current = opener ?? null;
+      if (selectedTransactionId === nextTransactionId) {
+        const liveSearchParams = readLiveSearchParams();
+        if (
+          parseOptionalPositiveInteger(liveSearchParams.get("transaction")) ===
+          nextTransactionId
+        ) {
+          return;
+        }
+      }
+
       setSuppressedDetailFetchId(undefined);
       const activeElement = document.activeElement;
       detailRestoreFocusRef.current =
         opener ?? (activeElement instanceof HTMLElement ? activeElement : null);
-      setSearchParams(
-        (current) => {
-          const next = new URLSearchParams(current);
-          next.set("transaction", String(nextTransaction.transaction_id));
-          return next;
-        },
-        { replace: selectedTransactionId !== undefined },
-      );
+      const next = readLiveSearchParams();
+      next.set("transaction", String(nextTransactionId));
+      setSearchParams(next, { replace: selectedTransactionId !== undefined });
     },
     [closeTransactionDetail, selectedTransactionId, setSearchParams],
   );
 
   const refreshSelectedTransactionDetail = useCallback(
-    async (transactionId: number, nextTransaction?: Transaction) => {
+    async (
+      transactionId: number,
+      nextTransaction?: Transaction,
+    ): Promise<Transaction | undefined> => {
       if (selectedTransactionId !== transactionId) {
-        return;
+        return undefined;
       }
 
       if (nextTransaction) {
@@ -136,17 +159,18 @@ export const useTransactionDetail = ({
           transaction: nextTransaction,
           transactionId,
         });
-        return;
+        return nextTransaction;
       }
 
       const result = await fetchTransactionById(transactionId);
       if (result.data) {
+        onFetchedTransaction?.(result.data);
         setFetchedDetail({
           errorMessage: undefined,
           transaction: result.data,
           transactionId,
         });
-        return;
+        return result.data;
       }
 
       setFetchedDetail({
@@ -154,8 +178,9 @@ export const useTransactionDetail = ({
         transaction: undefined,
         transactionId,
       });
+      return undefined;
     },
-    [selectedTransactionId],
+    [onFetchedTransaction, selectedTransactionId],
   );
 
   const restoreDetailFocus = useCallback(() => {
@@ -169,29 +194,6 @@ export const useTransactionDetail = ({
       preventScroll: true,
     });
   }, []);
-
-  const deleteSelectedTransaction = useCallback(
-    async (nextTransaction: Transaction) => {
-      const result = await deleteTransactionById(
-        nextTransaction.transaction_id,
-      );
-      if (result.error) {
-        throw new Error(apiErrorMessage(result.error));
-      }
-
-      setSuppressedDetailFetchId(nextTransaction.transaction_id);
-      invalidateReferencePagesAfterTransactionMutation();
-      invalidateAccountRegistersForTransaction(nextTransaction);
-      closeTransactionDetail();
-      onNotice("Transaction deleted.");
-      await Promise.all([
-        refreshTransactionPage(params),
-        refreshFeaturedBalances(),
-        refreshOverview(),
-      ]);
-    },
-    [closeTransactionDetail, onNotice, params],
-  );
 
   useEffect(() => {
     if (
@@ -211,6 +213,7 @@ export const useTransactionDetail = ({
       }
 
       if (result.data) {
+        onFetchedTransaction?.(result.data);
         setFetchedDetail({
           errorMessage: undefined,
           transaction: result.data,
@@ -234,7 +237,20 @@ export const useTransactionDetail = ({
     selectedTransactionFromSnapshot,
     selectedTransactionId,
     suppressedDetailFetchId,
+    onFetchedTransaction,
   ]);
+
+  useEffect(() => {
+    if (!selectedTransactionId) {
+      rowOpenedTransactionIdRef.current = undefined;
+      return;
+    }
+    if (rowOpenedTransactionIdRef.current === selectedTransactionId) {
+      rowOpenedTransactionIdRef.current = undefined;
+      return;
+    }
+    setAutoFocusOnTransactionChange(true);
+  }, [selectedTransactionId]);
 
   useEffect(() => {
     const onEntrySaved = (event: Event) => {
@@ -255,8 +271,8 @@ export const useTransactionDetail = ({
   }, [selectedTransactionId]);
 
   return {
+    autoFocusOnTransactionChange,
     closeTransactionDetail,
-    deleteSelectedTransaction,
     errorMessage,
     loading,
     openTransactionDetail,

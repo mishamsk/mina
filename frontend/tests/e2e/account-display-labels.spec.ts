@@ -120,20 +120,22 @@ test("contextual account labels disambiguate while account controls keep FQNs", 
     .filter({ hasText: "Amazon gift card purchase" });
   await expect(registerRow).toContainText("Amazon:gift_card → Amazon");
   await registerRow.click();
-  const peek = page.getByTestId("account-peek-panel");
-  await expect(peek).toBeVisible();
-  const peekTitle = peek.getByRole("heading", {
+  const registerDetail = page.getByTestId("transaction-detail-panel");
+  await expect(registerDetail).toBeVisible();
+  const registerDetailTitle = registerDetail.getByRole("heading", {
     name: "Amazon:gift_card → Amazon",
   });
-  await peekTitle.hover();
+  await registerDetailTitle.hover();
   await expect(page.getByRole("tooltip")).toContainText(
     `Accounts: ${giftCard.fqn}; ${flow.fqn}`,
   );
   await page.mouse.move(0, 0);
-  await expect(peek.getByText("Amazon", { exact: true })).toBeVisible();
+  await expect(
+    registerDetail.getByText("Amazon", { exact: true }),
+  ).toBeVisible();
   await expectFqnTooltip(
     page,
-    peek.getByText("Amazon", { exact: true }),
+    registerDetail.getByText("Amazon", { exact: true }),
     flow.fqn,
   );
 

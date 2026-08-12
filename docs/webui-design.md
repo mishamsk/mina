@@ -48,8 +48,8 @@ There is exactly one transaction-line and table vocabulary, built once and reuse
 - On the Transactions page it lists classified transaction lines that open read-only transaction detail.
 - On account and group pages it appears pre-filtered to that entity. Account and group registers are the one-sided records view — the only true records-only presentation.
 - Category and tag overviews use its fixed, read-only transaction-table variant, then link to the full Transactions browser with the same scope; `docs/household-flow-reporting.md` owns report semantics. Member drill-downs retain the full filtered browser.
-- Record rows in registers use a side peek panel to preview the full containing transaction without leaving the list.
-- Full browser embeddings share filtering, sorting, transaction Edit mode, keyboard driving, and detail/peek behavior. Fixed report previews reuse row and detail behavior without browser controls.
+- Record rows in registers open the same full transaction detail panel without leaving the list.
+- Full browser embeddings share filtering, sorting, transaction Edit mode, keyboard driving, and detail behavior. Fixed report previews reuse row and detail behavior without browser controls.
 
 There are no separate "transaction mode" and "record mode" screens; context determines which shape the shared browser renders.
 
@@ -63,8 +63,8 @@ Structure and navigation only; how any of it looks is owned by the theme specifi
 - Content area is fluid; data tables may use the full content width.
 - Every page uses one header pattern: title (with optional breadcrumb for detail pages) on the left, primary actions on the right, filter/toolbar row beneath when applicable.
 - Pages carry no standing description text. Each page header includes a small help icon button that reveals a short explanatory paragraph on demand (popover or collapsible); the explanation is hidden by default.
-- Overlays: side peek panels for previews, the transaction editor modal for all transaction create/edit/split/duplicate, the template editor modal for template create/edit/capture, and centered dialogs only for confirmations.
-- Side peek/detail panels are non-modal: no backdrop, no focus trap, no modal semantics; the underlying list stays interactive so row navigation can drive the panel. `Esc` closes the panel and returns focus to the originating row. Clicking outside the panel also closes it — the click still performs its normal action on the underlying content (a click that opens another record simply moves the panel). Transaction and template editor modals are true modals: focus traps, focus restoration to invokers, and no outside-interaction close; backdrop clicks are absorbed with a one-step outline flash and never activate underlying content. Centered dialogs remain modal and trap focus.
+- Overlays: side transaction detail panels, the transaction editor modal for all transaction create/edit/split/duplicate, the template editor modal for template create/edit/capture, and centered dialogs only for confirmations.
+- Side detail panels are non-modal: no backdrop, no focus trap, no modal semantics; the underlying list stays interactive so row navigation can drive the panel. `Esc` closes the panel and returns focus to the originating row. Clicking outside the panel also closes it — the click still performs its normal action on the underlying content (a click that opens another record simply moves the panel). Transaction and template editor modals are true modals: focus traps, focus restoration to invokers, and no outside-interaction close; backdrop clicks are absorbed with a one-step outline flash and never activate underlying content. Centered dialogs remain modal and trap focus.
 - Table density (comfortable/compact) is a persisted UI preference.
 
 ## Authentication
@@ -109,8 +109,8 @@ Canonical rendering rules; every screen uses these so the product reads as one s
 - Fiat renders with 2 decimals; crypto (`C::` prefix) renders up to 8 decimals with trailing zeros trimmed.
 - Never sum mixed currencies natively. Aggregations across currencies display the USD equivalent, visibly marked as approximate: `≈ 1,234.56 USD`. Records with no `amount_usd` are surfaced as "unconverted" in any aggregate that needs them.
 - Shared transaction tables default to their native display amount and offer a page-local native/USD toolbar toggle; USD mode replaces each native chip with its server-derived USD chip or an accessible `N/A`, while more-parts rows keep their existing `+` fallback. Edit mode always shows authoritative native amount inputs and restores the selected browse mode on exit.
-- Display amounts per transaction class follow the class table in `docs/accounting-semantics.md`: spend/clawback negative, income/refund positive, transfer/exchange neutral with movement amounts shown separately. A compact transaction line with more than one shape shows one identifiable primary amount or none plus a bare, non-focusable `+` more-parts indicator; complete amounts stay in detail and delete confirmation, and no synthetic total is shown. Exchanges also show the server-derived effective rate wherever both sides are visible — transaction detail, the account register peek, and the entry form — formatted as a rate with its currency pair and never recomputed in the browser.
-- Full transaction detail always stacks a USD chip or `N/A` beneath each non-USD display amount; USD-native amounts remain single-chip. Account-register peeks remain native-only.
+- Display amounts per transaction class follow the class table in `docs/accounting-semantics.md`: spend/clawback negative, income/refund positive, transfer/exchange neutral with movement amounts shown separately. A compact transaction line with more than one shape shows one identifiable primary amount or none plus a bare, non-focusable `+` more-parts indicator; complete amounts stay in detail and delete confirmation, and no synthetic total is shown. Exchanges also show the server-derived effective rate wherever both sides are visible — transaction detail and the entry form — formatted as a rate with its currency pair and never recomputed in the browser.
+- Full transaction detail always stacks a USD chip or `N/A` beneath each non-USD display amount; USD-native amounts remain single-chip on every embedding.
 
 ### Balances
 
@@ -125,7 +125,7 @@ Canonical rendering rules; every screen uses these so the product reads as one s
 - Account trees remain grouped, searched, and sorted by FQN; group rows and account pickers, filters, editors, restructure controls, and navigation autocomplete render and match FQNs.
 - On overflow, truncate middle segments (`banks:…:Joint`); the full path is always available in a tooltip.
 - Pickers and trees indent by level and group by parent; typing searches across the full FQN, not the display label.
-- In the transaction detail panel and account-register peek, each record's account display label is a single link opening that account's register page. Account-name links navigate: they never filter and never start editing (the mirror of "chips never navigate"); activation never toggles the row's record disclosure. Records reference concrete accounts, so the destination is always an account page, never a group page. An unresolvable account renders as plain text.
+- In the transaction detail panel, each record's account display label is a single link opening that account's register page. Account-name links navigate: they never filter and never start editing (the mirror of "chips never navigate"); activation never toggles the row's record disclosure. Records reference concrete accounts, so the destination is always an account page, never a group page. An unresolvable account renders as plain text.
 
 ### Transaction summary line
 
@@ -142,7 +142,7 @@ Canonical rendering rules; every screen uses these so the product reads as one s
 ### Entity chips
 
 - Category, tag, and member values render as entity chips wherever they appear in transaction lines and detail views, except in the transaction detail's per-record disclosure, where values render as plain undecorated text.
-- In browse and read-only surfaces, every entity chip is a filter affordance: activating it adds that entity to the embedding browser's active filters, appearing as a removable typed filter chip in the filter bar — slicing continues in place, preserving list context. In the detail/peek panel, chip activation filters the underlying list. In embeddings without a filter bar (e.g. Overview recent activity), chip activation opens Transactions with that filter applied.
+- In browse and read-only surfaces, every entity chip is a filter affordance: activating it adds that entity to the embedding browser's active filters, appearing as a removable typed filter chip in the filter bar — slicing continues in place, preserving list context. In the detail panel, chip activation filters the underlying list. In embeddings without a filter bar (e.g. Overview recent activity), chip activation opens Transactions with that filter applied.
 - Chips never navigate to entity pages (those stay reachable by name via the command palette and entity lists) and never start editing. Browse-mode chips filter; Edit-mode transaction chips are inert because the dock owns quick changes.
 - Entity chips read as one family and stay visually distinct from indicators and actions per the affordance-class rule; non-entity chip-shaped rendering (e.g. amounts) must not read as interactive.
 
@@ -161,13 +161,13 @@ Canonical rendering rules; every screen uses these so the product reads as one s
 
 ### Keyboard
 
-- Keyboard-complete tables: up/down moves row focus; in the transactions browser click, Enter, and Space open detail in browse mode and toggle selection in Edit mode; open detail/peek, Edit-mode selection, dock editing, and eligible amount editing stay keyboard-driven — batch review sessions never need the mouse.
+- Keyboard-complete tables: up/down moves row focus; in the transactions browser click, Enter, and Space open detail in browse mode and toggle selection in Edit mode; open detail, Edit-mode selection, dock editing, and eligible amount editing stay keyboard-driven — batch review sessions never need the mouse.
 - Global shortcuts: open command palette, new transaction (opens the transaction editor modal in place on any screen), focus list search, `Esc` closes overlays, `Cmd+Enter` submits forms, `Cmd+Shift+Enter` saves and closes in the entry modal, arrows + `Enter` drive pickers; hierarchical pickers add segment completion per Pickers — Tab/ArrowRight commit a segment, ArrowLeft/Backspace back out.
 - Toggling Edit mode is available from the toolbar and the command palette; in-mode selection keys follow Edit mode.
 
 ### Tables and filtering
 
-- Server-driven pagination/sort/filter, sticky header, right-aligned numeric columns, and whole-row affordances for detail/peek — no per-row disclosure control or reserved indicator column; the row itself is the affordance. Transaction lines gain a leading checkbox column only in Edit mode.
+- Server-driven pagination/sort/filter, sticky header, right-aligned numeric columns, and whole-row affordances for detail — no per-row disclosure control or reserved indicator column; the row itself is the affordance. Transaction lines gain a leading checkbox column only in Edit mode.
 - Per-row actions live in one narrow trailing actions column — always the rightmost column, in every table — never mid-row. Button-class actions render as compact icon buttons with tooltips and are always visible: no hover- or focus-reveal semantics anywhere. State toggles stay persistently visible because they carry state. Fit decides presentation, never count: when the actions cell fits the full action cluster it shows all buttons; when it cannot, the cluster collapses into a single overflow (⋯) button that opens a floating panel with all actions — by the column-collapse priority in the transactions browser, and per row in reference tables.
 - Tables render no Actions column header; the actions column is right-padded so its trailing margin matches the table's leading padding.
 - Reference/dictionary row activation (click, Enter, or Space) opens the row's read-only destination: Account leaves and groups open their register, Category and Tag leaves and groups open their drill-down report, and Members open their drill-down page. Rows without a destination do not activate. Edit is a compact trailing row action with a tooltip; all action buttons stop row-activation propagation. In transaction browsers, transaction row activation opens its read-only detail in browse mode, closes it when that row is already active, and switches it directly when another row is active; Edit mode instead toggles selection and makes trailing actions unavailable.
@@ -269,7 +269,7 @@ Each screen below defines its purpose, layout, behavior, and primary data source
 - Purpose: one account's (or account group's) activity and standing; the drill-down target from Overview, the balance strip, and Accounts.
 - Account page header: effective display label with a full-FQN tooltip, account type badge, currency mode, labeled flat favorite toggle, account standing, credit limit with history (when present), external link metadata, hidden marker. With a current effective limit, standing leads with `Remaining credit` and retains `Full balance`, `Posted balance`, and `Credit limit`; otherwise it retains `Current` and `Posted`. Fixed system accounts replace mutation controls with a read-only indicator.
 - The currency appears in the header exactly once as a compact chip next to the type badge (sized like it): an ISO/crypto code for single-currency, or `Multi-currency` for `NULL`. Balance figures carry each amount's own currency marker; the conditional labels above stay plain, and the balances block right-aligns with the content edge on wide screens, mirroring the account name's left margin.
-- Register: the shared browser in records shape — the account's records with date, transaction counterparty, category, memo, statuses, signed amount, defaulting to newest first. Selecting a record opens the side peek panel showing the full containing transaction; arrow keys walk rows while the panel follows; "Open transaction" jumps to full detail/edit.
+- Register: the shared browser in records shape — the account's records with date, transaction counterparty, category, memo, statuses, signed amount, defaulting to newest first. Selecting a record opens the canonical URL-addressable transaction detail with the same content, actions, and loading behavior as Transactions. URL-first detail focuses the panel; record selection retains row focus so arrow keys can walk rows while the panel follows, and the account/group route plus register pagination remain intact.
 - Running balance: a per-record `Balance` column, shown in date-ordered views in either direction and hidden whenever filters, search, or non-chronological sort would make it misleading. Individual account registers add a separate `Remaining credit` column only when the API supplies both values; group registers remain unchanged. Both numeric columns are right-aligned and single-line; at phone width, credit-register rows stack identity/date above labeled Amount, Balance, and Remaining values without horizontal panning.
 - Group pages: every non-leaf FQN node is a page — subtotal balances of child `owned` and `party` accounts plus a combined register across the whole prefix (e.g. `banks:Chase:*`), which naturally includes the group's `flow` accounts (fees, interest) per the prefix-grouping semantics.
 
@@ -337,8 +337,7 @@ Definitions management screen:
 
 Mina-specific building blocks used across screens (names indicative; placement per frontend package boundaries):
 
-- `TransactionBrowser` — the shared browsing system: transaction lines with URL-addressable detail and Edit-mode dock/amount controls, plus register rows with peek panels; filtering, pagination, selection, and keyboard behavior stay shared.
-- `PeekPanel` — side panel previewing the full containing transaction from a record row.
+- `TransactionBrowser` — the shared browsing system: transaction lines with URL-addressable detail and Edit-mode dock/amount controls, plus register rows opening the same detail; filtering, pagination, selection, and keyboard behavior stay shared.
 - `EntryModal` — the centered modal transaction editor: hierarchical template picker, generic clear-draft action, shorthand tabs, journal editor, session tally, modal rail (session + recent context), create/edit/split/duplicate launches, `?entry=` deep links.
 - `TemplateEditorModal` — the app-shell-owned date-free partial-record editor for create/edit and transaction capture launches.
 - `CommandPalette` — navigation, entry launcher, transaction search, app actions.
@@ -359,7 +358,7 @@ Mina-specific building blocks used across screens (names indicative; placement p
 
 - WCAG AA contrast in every theme; visible focus rings; full keyboard operability of tables, pickers, and forms.
 - Icon-only controls carry accessible labels and tooltips.
-- Semantic markup for tables and forms; modal overlays (dialogs) trap focus and restore it on close; non-modal side peek/detail panels follow the Overlays rule instead of trapping focus.
+- Semantic markup for tables and forms; modal overlays (dialogs) trap focus and restore it on close; non-modal side detail panels follow the Overlays rule instead of trapping focus.
 
 ## Document Use
 

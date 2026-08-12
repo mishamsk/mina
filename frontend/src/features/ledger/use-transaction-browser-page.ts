@@ -58,6 +58,7 @@ import {
 import { useTransactionDateJump } from "./use-transaction-date-jump";
 import { useTransactionDetail } from "./use-transaction-detail";
 import {
+  invalidateAccountRegistersForTransaction,
   refreshTransactionPageAfterEditModeSave,
   refreshTransactionPageAfterSave,
   useTransactionsResource,
@@ -215,9 +216,7 @@ export const useTransactionBrowserPage = ({
   }, [dateJumpLoading]);
 
   const detail = useTransactionDetail({
-    lookupsLoaded: Boolean(lookups.snapshot),
-    onNotice: showNotice,
-    params,
+    lookupsLoaded: Boolean(lookups.snapshot || lookups.errorMessage),
     searchParams,
     setSearchParams,
     transactions,
@@ -349,7 +348,7 @@ export const useTransactionBrowserPage = ({
       }
 
       if (detail.selectedTransactionId === transaction.transaction_id) {
-        detail.closeTransactionDetail();
+        detail.closeTransactionDetail({ suppressFetch: true });
       }
       await refreshTransactionPageAfterSave(
         displayedPageParams,
@@ -361,6 +360,27 @@ export const useTransactionBrowserPage = ({
       showNotice("Transaction deleted.");
     },
     [detail, displayedPageParams, showNotice],
+  );
+
+  const deleteSelectedTransaction = useCallback(
+    async (transaction: Transaction) => {
+      const result = await deleteTransactionById(transaction.transaction_id);
+      if (result.error) {
+        throw new Error(apiErrorMessage(result.error));
+      }
+
+      invalidateAccountRegistersForTransaction(transaction);
+      detail.closeTransactionDetail({ suppressFetch: true });
+      showNotice("Transaction deleted.");
+      await refreshTransactionPageAfterSave(
+        params,
+        transaction.transaction_id,
+        undefined,
+        transaction,
+        { pageRefreshMode: "blocking" },
+      );
+    },
+    [detail, params, showNotice],
   );
 
   const changeTransactionLifecycle = useCallback(
@@ -759,6 +779,7 @@ export const useTransactionBrowserPage = ({
     dateJumpAnchor,
     dateJumpLoading,
     dateJumpValue,
+    deleteSelectedTransaction,
     deleteTransactionFromRow,
     dismissRecurringOccurrenceFromRow,
     detail,

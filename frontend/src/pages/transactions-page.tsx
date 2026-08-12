@@ -327,7 +327,7 @@ export const TransactionsPage = () => {
             onChangeLifecycle={browser.changeTransactionLifecycle}
             onClose={browser.detail.closeTransactionDetail}
             onConfirmOccurrence={browser.confirmRecurringOccurrenceFromRow}
-            onDelete={browser.detail.deleteSelectedTransaction}
+            onDelete={browser.deleteSelectedTransaction}
             onDismissOccurrence={browser.dismissRecurringOccurrenceFromRow}
             onDuplicate={duplicateTransaction}
             onEdit={editTransaction}

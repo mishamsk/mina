@@ -61,6 +61,7 @@ import { TransactionDeleteDescription } from "./transaction-delete-description";
 import { TransactionPostDialog } from "./transaction-post-dialog";
 
 interface TransactionDetailPanelProps {
+  readonly autoFocusOnTransactionChange?: boolean;
   readonly readOnly?: boolean;
   readonly errorMessage: string | undefined;
   readonly loading: boolean;
@@ -720,6 +721,7 @@ export const TransactionDetailContent = ({
 };
 
 export const TransactionDetailPanel = ({
+  autoFocusOnTransactionChange = true,
   readOnly = false,
   errorMessage,
   loading,
@@ -845,6 +847,9 @@ export const TransactionDetailPanel = ({
 
   useEffect(() => {
     restoreFocusOnCloseRef.current = true;
+    if (!autoFocusOnTransactionChange) {
+      return;
+    }
     const focusSource = document.activeElement;
     const frame = window.requestAnimationFrame(() => {
       if (
@@ -859,7 +864,7 @@ export const TransactionDetailPanel = ({
     return () => {
       window.cancelAnimationFrame(frame);
     };
-  }, [transaction?.transaction_id]);
+  }, [autoFocusOnTransactionChange, transaction?.transaction_id]);
 
   useEffect(() => {
     if (changingLifecycle || !restoreLifecycleFocusRef.current) {
@@ -1183,20 +1188,24 @@ export const TransactionDetailPanel = ({
               id="transaction-detail-title"
               className="font-heading text-xl font-bold [overflow-wrap:anywhere]"
             >
-              Loading transaction
+              {errorMessage && !loading
+                ? "Transaction unavailable"
+                : "Loading transaction"}
             </h2>
           )}
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="icon-sm"
-            aria-label="Close transaction detail"
-            onClick={closePanel}
-          >
-            <Close aria-hidden="true" />
-          </Button>
+          <Tooltip label="Close transaction detail" asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-sm"
+              aria-label="Close transaction detail"
+              onClick={closePanel}
+            >
+              <Close aria-hidden="true" />
+            </Button>
+          </Tooltip>
         </div>
       </div>
 

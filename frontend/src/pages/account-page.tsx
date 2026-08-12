@@ -1,28 +1,35 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 
-import { type JournalRecord, updateLedgerAccount } from "@/api";
+import {
+  type JournalRecord,
+  type Transaction,
+  updateLedgerAccount,
+} from "@/api";
 import { apiErrorMessage } from "@/api";
 import { PageHelp } from "@/components/page-help";
 import { Toast, toastDurationMs } from "@/components/toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   AccountHeader,
-  AccountPeekPanel,
   AccountRegisterTable,
   refreshAccountRegisterPage,
   refreshAccountsAfterMutation,
-  refreshAccountTransaction,
   useAccountRegisterResource,
+  useAccountRegisterTransactionDetail,
 } from "@/features/accounts";
 import { PageHeader } from "@/features/app-shell";
 import {
   AccountDisplayLabel,
   buildLookupMaps,
+  captureTransactionEntryLaunchContext,
   defaultTransactionPageSize,
+  readLiveSearchParams,
   refreshLedgerLookups,
+  TransactionDetailPanel,
   transactionPageSizeOptions,
 } from "@/features/ledger";
+import { openTransactionEntryLaunch } from "@/store";
 
 const pageSizes = transactionPageSizeOptions;
 const defaultPageSize = defaultTransactionPageSize;
@@ -46,11 +53,6 @@ const readPageSize = (searchParams: URLSearchParams): number => {
     : defaultPageSize;
 };
 
-const readSelectedRecordId = (
-  searchParams: URLSearchParams,
-): number | undefined =>
-  parsePositiveInteger(searchParams.get("record") ?? undefined);
-
 const writePageParams = (
   current: URLSearchParams,
   nextValues: { readonly page?: number; readonly pageSize?: number },
@@ -62,7 +64,6 @@ const writePageParams = (
   if (nextValues.pageSize) {
     next.set("pageSize", String(nextValues.pageSize));
   }
-  next.delete("record");
   return next;
 };
 
@@ -112,10 +113,8 @@ const AccountPageContent = ({ accountId }: { readonly accountId: number }) => {
   const [toggleNotice, setToggleNotice] = useState<ToggleNotice | undefined>();
   const [favoriteTogglePending, setFavoriteTogglePending] = useState(false);
   const favoriteTogglePendingRef = useRef(false);
-  const restoreRecordFocusRef = useRef<HTMLElement | null>(null);
   const page = readPage(searchParams);
   const pageSize = readPageSize(searchParams);
-  const selectedRecordId = readSelectedRecordId(searchParams);
   const params = useMemo(
     () => ({
       accountId,
@@ -126,6 +125,18 @@ const AccountPageContent = ({ accountId }: { readonly accountId: number }) => {
     [accountId, page, pageSize],
   );
   const resource = useAccountRegisterResource(params);
+  const transactions = useMemo(
+    () => Object.values(resource.transactions.transactions),
+    [resource.transactions.transactions],
+  );
+  const registerDetail = useAccountRegisterTransactionDetail({
+    lookupsLoaded: Boolean(
+      resource.lookups.snapshot || resource.lookups.errorMessage,
+    ),
+    searchParams,
+    setSearchParams,
+    transactions,
+  });
   const maps = useMemo(
     () => buildLookupMaps(resource.lookups.snapshot),
     [resource.lookups.snapshot],
@@ -168,65 +179,32 @@ const AccountPageContent = ({ accountId }: { readonly accountId: number }) => {
     }
   };
   const registerSnapshot = resource.register.displayedSnapshot;
-  const selectedRecord = registerSnapshot?.records.find(
-    (record) => record.record_id === selectedRecordId,
-  );
-  const selectedTransaction = selectedRecord
-    ? resource.transactions.transactions[selectedRecord.transaction_id]
-    : undefined;
-  const selectedTransactionError = selectedRecord
-    ? resource.transactions.errors[selectedRecord.transaction_id]
-    : undefined;
   const pageCount =
     registerSnapshot?.totalCount === undefined
       ? 1
       : Math.max(1, Math.ceil(registerSnapshot.totalCount / pageSize));
-  const openRecordPeek = useCallback(
-    (record: JournalRecord, opener: HTMLElement) => {
-      restoreRecordFocusRef.current = opener;
-      setSearchParams((current) => {
-        const next = new URLSearchParams(current);
-        next.set("record", String(record.record_id));
-        return next;
-      });
-    },
-    [setSearchParams],
-  );
+  const openRecordDetail = (record: JournalRecord, opener: HTMLElement) => {
+    registerDetail.detail.openTransactionDetail(record.transaction_id, opener, {
+      toggle: false,
+    });
+  };
   const openTransactionsEntityFilter = useCallback(
-    (kind: "category" | "member" | "tag", id: number) => {
+    (categoryId: number) => {
       const next = new URLSearchParams();
-      next.append(kind, String(id));
+      next.append("category", String(categoryId));
       void navigate(`/transactions?${next.toString()}`);
     },
     [navigate],
   );
-  const closeRecordPeek = useCallback(
-    (options?: { readonly restoreFocus?: boolean }) => {
-      const recordId = selectedRecordId;
-      setSearchParams((current) => {
-        const next = new URLSearchParams(current);
-        next.delete("record");
-        return next;
-      });
-      if (options?.restoreFocus === false) {
-        restoreRecordFocusRef.current = null;
-        return;
-      }
-      window.requestAnimationFrame(() => {
-        const fallback = recordId
-          ? document.querySelector<HTMLElement>(
-              `[data-record-id="${recordId}"]`,
-            )
-          : null;
-        const target = restoreRecordFocusRef.current?.isConnected
-          ? restoreRecordFocusRef.current
-          : fallback;
-        target?.focus({ preventScroll: true });
-        restoreRecordFocusRef.current = null;
-      });
-    },
-    [selectedRecordId, setSearchParams],
-  );
+  const openEntry = (
+    transaction: Transaction,
+    type: "duplicate" | "edit" | "split",
+  ) => {
+    openTransactionEntryLaunch(
+      { transaction, type },
+      captureTransactionEntryLaunchContext(),
+    );
+  };
   return (
     <section
       className="flex h-[calc(100svh-2.5rem)] min-h-0 flex-col gap-6"
@@ -276,7 +254,11 @@ const AccountPageContent = ({ accountId }: { readonly accountId: number }) => {
         />
       ) : null}
 
-      <div className="min-h-0 flex-1">
+      <div
+        className="min-h-0 flex-1"
+        data-transaction-detail-restore-target
+        tabIndex={-1}
+      >
         <AccountRegisterTable
           errorMessage={resource.register.errorMessage}
           loading={resource.register.loading}
@@ -284,21 +266,26 @@ const AccountPageContent = ({ accountId }: { readonly accountId: number }) => {
           lookupsLoaded={Boolean(resource.lookups.snapshot)}
           maps={maps}
           onNextPage={() => {
-            setSearchParams((current) =>
-              writePageParams(current, {
+            setSearchParams(
+              writePageParams(readLiveSearchParams(), {
                 page: Math.min(page + 1, pageCount),
               }),
             );
           }}
-          onOpenRecord={openRecordPeek}
+          onOpenRecord={openRecordDetail}
           onPageSizeChange={(nextPageSize) => {
-            setSearchParams((current) =>
-              writePageParams(current, { page: 1, pageSize: nextPageSize }),
+            setSearchParams(
+              writePageParams(readLiveSearchParams(), {
+                page: 1,
+                pageSize: nextPageSize,
+              }),
             );
           }}
           onPreviousPage={() => {
-            setSearchParams((current) =>
-              writePageParams(current, { page: Math.max(1, page - 1) }),
+            setSearchParams(
+              writePageParams(readLiveSearchParams(), {
+                page: Math.max(1, page - 1),
+              }),
             );
           }}
           onRetry={() => {
@@ -311,7 +298,7 @@ const AccountPageContent = ({ accountId }: { readonly accountId: number }) => {
           pageSize={pageSize}
           pageSizeOptions={pageSizes}
           records={registerSnapshot?.records}
-          selectedRecordId={selectedRecordId}
+          selectedTransactionId={registerDetail.detail.selectedTransactionId}
           totalCount={registerSnapshot?.totalCount}
           transactionErrorsById={resource.transactions.errors}
           transactionsById={resource.transactions.transactions}
@@ -334,25 +321,43 @@ const AccountPageContent = ({ accountId }: { readonly accountId: number }) => {
           setToggleNotice(undefined);
         }}
       />
-      {selectedRecord ? (
-        <AccountPeekPanel
-          errorMessage={selectedTransactionError}
-          loading={!selectedTransaction && !selectedTransactionError}
-          maps={maps}
-          onClose={closeRecordPeek}
+      <Toast
+        key={registerDetail.notice?.id ?? "empty"}
+        className="text-[var(--color-money-in)]"
+        containerClassName={toggleNotice ? "bottom-16" : undefined}
+        durationMs={toastDurationMs}
+        message={registerDetail.notice?.message}
+        onDismiss={registerDetail.dismissNotice}
+      />
+      {registerDetail.detail.selectedTransactionId ? (
+        <TransactionDetailPanel
+          autoFocusOnTransactionChange={
+            registerDetail.detail.autoFocusOnTransactionChange
+          }
+          errorMessage={registerDetail.detail.errorMessage}
+          loading={registerDetail.detail.loading}
+          lookups={resource.lookups.snapshot}
+          onChangeLifecycle={registerDetail.changeTransactionLifecycle}
+          onClose={registerDetail.detail.closeTransactionDetail}
+          onConfirmOccurrence={registerDetail.confirmRecurringOccurrence}
+          onDelete={registerDetail.deleteTransaction}
+          onDismissOccurrence={registerDetail.dismissRecurringOccurrence}
+          onDuplicate={(transaction) => {
+            openEntry(transaction, "duplicate");
+          }}
+          onEdit={(transaction) => {
+            openEntry(transaction, "edit");
+          }}
           onFilterCategory={(categoryId) => {
-            openTransactionsEntityFilter("category", categoryId);
+            openTransactionsEntityFilter(categoryId);
           }}
-          onFilterMember={(memberId) => {
-            openTransactionsEntityFilter("member", memberId);
+          onPost={registerDetail.postTransaction}
+          onRestoreFocus={registerDetail.detail.restoreDetailFocus}
+          onSplit={(transaction) => {
+            openEntry(transaction, "split");
           }}
-          onFilterTag={(tagId) => {
-            openTransactionsEntityFilter("tag", tagId);
-          }}
-          onRetry={() => {
-            void refreshAccountTransaction(selectedRecord.transaction_id);
-          }}
-          transaction={selectedTransaction}
+          transaction={registerDetail.detail.transaction}
+          transactionId={registerDetail.detail.selectedTransactionId}
         />
       ) : null}
     </section>

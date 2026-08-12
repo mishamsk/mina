@@ -514,7 +514,7 @@ const openUrlTransactionDetail = async (
   return panel;
 };
 
-const openAccountTransactionPeek = async (
+const openAccountTransactionDetail = async (
   page: Page,
   account: AccountFixture,
   memo: string,
@@ -537,7 +537,7 @@ const openAccountTransactionPeek = async (
     }
     await nextPage.click();
   }
-  const panel = page.getByTestId("account-peek-panel");
+  const panel = page.getByTestId("transaction-detail-panel");
   await expect(panel).toBeVisible();
   return panel;
 };
@@ -1575,7 +1575,7 @@ export {
   journalRecord,
   listFixtures,
   mixedPartsIndicatorGeometry,
-  openAccountTransactionPeek,
+  openAccountTransactionDetail,
   openRowActionsMenu,
   openUrlTransactionDetail,
   readStoredTransactionEntryDraft,

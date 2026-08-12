@@ -25,7 +25,7 @@ import {
   journalRecord,
   listFixtures,
   type Locator,
-  openAccountTransactionPeek,
+  openAccountTransactionDetail,
   openUrlTransactionDetail,
   readStoredTransactionEntryDraft,
   type Route,
@@ -774,7 +774,7 @@ test("transaction detail panel shows full records and supports deep links", asyn
   await expect(page).toHaveURL(/\/transactions\?page=2&pageSize=25$/);
 });
 
-test("detail and peek account paths navigate without record-row side effects", async ({
+test("transaction detail account paths navigate without record-row side effects", async ({
   page,
 }, testInfo) => {
   const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
@@ -837,7 +837,7 @@ test("detail and peek account paths navigate without record-row side effects", a
   await accountLink.press("Enter");
   await expectAccountLinkNavigation(page, account);
 
-  panel = await openAccountTransactionPeek(page, merchant, memo);
+  panel = await openAccountTransactionDetail(page, merchant, memo);
   accountLink = panel.getByRole("link", {
     exact: true,
     name: account.display_label,
@@ -849,7 +849,7 @@ test("detail and peek account paths navigate without record-row side effects", a
   await accountLink.click();
   await expectAccountLinkNavigation(page, account);
 
-  panel = await openAccountTransactionPeek(page, merchant, memo);
+  panel = await openAccountTransactionDetail(page, merchant, memo);
   accountLink = panel.getByRole("link", {
     exact: true,
     name: account.display_label,
@@ -1051,7 +1051,7 @@ test("transaction detail panel is read-only while category chips keep filtering"
   await deleteTransaction(page, transaction);
 });
 
-test("detail lifecycle and dateless records cover variants in detail and peek", async ({
+test("detail lifecycle and dateless records match across transaction surfaces", async ({
   page,
 }, testInfo) => {
   test.slow();
@@ -1400,27 +1400,27 @@ test("detail lifecycle and dateless records cover variants in detail and peek", 
   ).toBeFocused();
 
   await page.setViewportSize({ width: 720, height: 900 });
-  const simplePeek = await openAccountTransactionPeek(
+  const simpleRegisterDetail = await openAccountTransactionDetail(
     page,
     fundingAccount,
     simpleMemo,
   );
-  await expectSimpleSurface(simplePeek, "full");
+  await expectSimpleSurface(simpleRegisterDetail, "decluttered");
   await expect(
-    simplePeek.getByRole("button", { name: "Create template" }),
-  ).toHaveCount(0);
-  await expectMouseDisclosure(simplePeek, simpleMemo);
+    simpleRegisterDetail.getByRole("button", { name: "Create template" }),
+  ).toBeVisible();
+  await expectMouseDisclosure(simpleRegisterDetail, simpleMemo);
 
-  const mixedPeek = await openAccountTransactionPeek(
+  const mixedRegisterDetail = await openAccountTransactionDetail(
     page,
     fundingAccount,
     mixedMemo,
   );
-  await expectMixedSurface(mixedPeek, "full");
+  await expectMixedSurface(mixedRegisterDetail, "decluttered");
   await expect(
-    mixedPeek.getByRole("button", { name: "Create template" }),
-  ).toHaveCount(0);
-  await expectKeyboardDisclosure(mixedPeek);
+    mixedRegisterDetail.getByRole("button", { name: "Create template" }),
+  ).toBeVisible();
+  await expectKeyboardDisclosure(mixedRegisterDetail);
 });
 
 test("toolbar filter trigger opens after transaction detail closes", async ({

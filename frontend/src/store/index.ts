@@ -22,6 +22,7 @@ export {
   mergeAccountHeaderAccount,
   mergeAccountsPageAccount,
   removeAccountsPageAccount,
+  seedAccountTransactionCache,
   setAccountHeader,
   setAccountHeaderError,
   setAccountHeaderLoading,

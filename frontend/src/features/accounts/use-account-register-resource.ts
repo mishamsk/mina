@@ -180,7 +180,7 @@ const ensureTransactions = async (
       !snapshot.transactionCacheErrors[transactionId],
   );
 
-  // Same-generation duplicate fetches can still settle into the shared cache slot.
+  // A cache slot accepts only its currently registered request.
   await Promise.all(
     missingIds.map(async (transactionId) => {
       const generation = setAccountTransactionCacheLoading(transactionId);
@@ -195,24 +195,6 @@ const ensureTransactions = async (
         generation,
       );
     }),
-  );
-};
-
-export const refreshAccountTransaction = async (
-  transactionId: number,
-): Promise<void> => {
-  const generation = setAccountTransactionCacheLoading(transactionId);
-
-  const result = await fetchTransactionById(transactionId);
-  if (result.data) {
-    setAccountTransactionCache(result.data, generation);
-    return;
-  }
-
-  setAccountTransactionCacheError(
-    transactionId,
-    apiErrorMessage(result.error),
-    generation,
   );
 };
 

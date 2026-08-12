@@ -41,7 +41,7 @@ interface AccountRegisterTableProps {
   readonly pageSize: number;
   readonly pageSizeOptions: readonly number[];
   readonly records: readonly JournalRecord[] | undefined;
-  readonly selectedRecordId: number | undefined;
+  readonly selectedTransactionId: number | undefined;
   readonly showAccount?: boolean;
   readonly showRunningBalance?: boolean;
   readonly totalCount: number | undefined;
@@ -166,7 +166,7 @@ export const AccountRegisterTable = ({
   pageSize,
   pageSizeOptions,
   records,
-  selectedRecordId,
+  selectedTransactionId,
   showAccount = false,
   showRunningBalance = true,
   totalCount,
@@ -375,7 +375,6 @@ export const AccountRegisterTable = ({
               const pending = displayStatus === "pending";
               const expected = displayStatus === "expected";
               const showStatus = displayStatus !== undefined;
-              const selected = selectedRecordId === record.record_id;
               const walkRowFocus = (
                 event: KeyboardEvent<HTMLTableRowElement>,
                 direction: -1 | 1,
@@ -395,7 +394,7 @@ export const AccountRegisterTable = ({
                 const nextRow = rows[index + direction];
                 nextRow?.scrollIntoView({ block: "nearest" });
                 nextRow?.focus({ preventScroll: true });
-                if (selectedRecordId !== undefined && nextRow) {
+                if (selectedTransactionId !== undefined && nextRow) {
                   onOpenRecord(nextRecord, nextRow);
                 }
               };
@@ -410,8 +409,6 @@ export const AccountRegisterTable = ({
                     "border-b border-[var(--hairline)] align-middle focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--ring)]",
                     index % 2 === 0 ? "bg-card" : "bg-[var(--band)]",
                     "cursor-pointer hover:bg-[color-mix(in_srgb,var(--band),var(--table-header)_28%)]",
-                    selected &&
-                      "outline-2 outline-offset-[-2px] outline-[var(--ring)]",
                     inactive && "text-muted-foreground line-through",
                   )}
                   tabIndex={0}
