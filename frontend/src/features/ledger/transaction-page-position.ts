@@ -30,6 +30,7 @@ const filterParamNames = [
   "category",
   "categoryPrefix",
   "class",
+  "currency",
   "lifecycle",
   "initiatedFrom",
   "initiatedTo",
@@ -154,6 +155,7 @@ export const readTransactionFiltersFromSearchParams = (
       "class",
       transactionClasses,
     ),
+    currencies: searchParams.getAll("currency"),
     lifecycleStatuses: readAllowedParams<TransactionLifecycleStatus>(
       searchParams,
       "lifecycle",
@@ -221,6 +223,9 @@ export const writeTransactionFiltersToSearchParams = (
   }
   for (const transactionClass of normalized.classes) {
     next.append("class", transactionClass);
+  }
+  for (const currency of normalized.currencies) {
+    next.append("currency", currency);
   }
   for (const transactionShape of normalized.shapes) {
     next.append("shape", transactionShape);

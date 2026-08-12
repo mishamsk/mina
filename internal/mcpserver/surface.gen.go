@@ -3013,11 +3013,11 @@ func Operations() []Operation {
 			Method:      "GET",
 			Path:        "/api/transactions",
 			Summary:     "List transactions with journal records.",
-			Description: "Use for transaction-level results with nested balanced journal records, including free-text, class, entity, status, and date filters. Supply limit (1-500); defaults sort by initiated date descending. Use records_search for individual record matches or register queries.",
+			Description: "Use for transaction-level results with nested balanced journal records, including free-text, currency, class, entity, status, and date filters. Supply limit (1-500); defaults sort by initiated date descending. Use records_search for individual record matches or register queries.",
 			MCP: MCPOperation{
 				Group: "transactions", Name: "list",
 				ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false,
-				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"account_id\":{\"description\":\"Account identifier to target or filter by.\",\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\"},\"amount_max\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) maximum filter; use at most 10 integer digits and 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_min\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) minimum filter; use at most 10 integer digits and 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_usd_max\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) USD maximum filter; use at most 10 integer digits and 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_usd_min\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) USD minimum filter; use at most 10 integer digits and 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"anchor_date\":{\"description\":\"Date-only anchor that returns the page containing the first transaction at or before this initiated date. If the anchor is older than every transaction, the page clamps to the oldest transaction page. Valid only with initiated_date descending ordering and overrides offset when present.\",\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"category_fqn_prefix\":{\"description\":\"Exact Category FQN descendant scope. Includes hidden active descendants and is independent of category_id filters.\",\"minLength\":1,\"type\":\"string\"},\"category_id\":{\"description\":\"Category identifier to target or filter by.\",\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\"},\"initiated_date_from\":{\"description\":\"Minimum transaction initiated date in YYYY-MM-DD format.\",\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"initiated_date_to\":{\"description\":\"Maximum transaction initiated date in YYYY-MM-DD format.\",\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"lifecycle_status\":{\"description\":\"Filters transactions by lifecycle. Expected transactions are excluded by default and returned only when this filter explicitly includes `expected`.\",\"items\":{\"description\":\"Transaction lifecycle, independent from balance-record settlement and tombstoning.\",\"enum\":[\"active\",\"expected\",\"cancelled\"],\"type\":\"string\"},\"type\":\"array\"},\"limit\":{\"description\":\"Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.\",\"maximum\":500,\"minimum\":1,\"type\":\"integer\"},\"member_id\":{\"description\":\"Household-member identifier to target or filter by.\",\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\"},\"offset\":{\"description\":\"Zero-based number of matching results to skip.\",\"minimum\":0,\"type\":\"integer\"},\"pending_date_from\":{\"description\":\"Minimum pending timestamp in ISO 8601 format; records without a pending timestamp do not match.\",\"format\":\"date-time\",\"type\":\"string\"},\"pending_date_to\":{\"description\":\"Maximum pending timestamp in ISO 8601 format; records without a pending timestamp do not match.\",\"format\":\"date-time\",\"type\":\"string\"},\"posted_date_from\":{\"description\":\"Minimum posted timestamp in ISO 8601 format.\",\"format\":\"date-time\",\"type\":\"string\"},\"posted_date_to\":{\"description\":\"Maximum posted timestamp in ISO 8601 format.\",\"format\":\"date-time\",\"type\":\"string\"},\"record_role\":{\"description\":\"Filter by one or more server-derived record roles present in a transaction.\",\"items\":{\"description\":\"Accounting role derived independently from one record's account, sign, and category intent.\",\"enum\":[\"expense\",\"refund\",\"income\",\"clawback\",\"exchange\",\"adjustment\",\"balance\"],\"type\":\"string\"},\"type\":\"array\"},\"search\":{\"description\":\"Case-insensitive search over active journal records. Contains-match fields are record memo, counterparty account name, account FQN, category FQN, tag FQN, member name, and account external_id. Record currency matches by exact case-insensitive code equality. Account external_system is intentionally excluded to avoid broad system-label matches.\",\"type\":\"string\"},\"settlement\":{\"description\":\"Filters transactions by server-derived settlement summary.\",\"items\":{\"description\":\"Server-derived settlement summary across a transaction's balance records.\",\"enum\":[\"pending\",\"posted\",\"mixed\",\"not_applicable\"],\"type\":\"string\"},\"type\":\"array\"},\"sort\":{\"default\":\"initiated_date\",\"description\":\"Field used to sort matching results; defaults to `initiated_date`.\",\"enum\":[\"initiated_date\",\"created_at\"],\"type\":\"string\"},\"sort_dir\":{\"default\":\"desc\",\"description\":\"Sort direction for matching results; defaults to `desc`.\",\"enum\":[\"asc\",\"desc\"],\"type\":\"string\"},\"tag_fqn_prefix\":{\"description\":\"Exact Tag FQN descendant scope. Includes hidden active descendants and is independent of tag_id filters.\",\"minLength\":1,\"type\":\"string\"},\"tag_id\":{\"description\":\"Tag identifier to target or filter by.\",\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\"},\"transaction_class\":{\"description\":\"Filter by one or more server-derived transaction classes.\",\"items\":{\"enum\":[\"spend\",\"income\",\"refund\",\"clawback\",\"transfer\",\"currency_exchange\",\"adjustment\",\"mixed\"],\"type\":\"string\"},\"type\":\"array\"},\"transaction_shape\":{\"description\":\"Filter by one or more server-derived transaction shapes.\",\"items\":{\"description\":\"One independently present kind of transaction activity.\",\"enum\":[\"spend\",\"refund\",\"income\",\"clawback\",\"adjustment\",\"exchange\",\"transfer\"],\"type\":\"string\"},\"type\":\"array\"}},\"type\":\"object\"}"),
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"account_id\":{\"description\":\"Account identifier to target or filter by.\",\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\"},\"amount_max\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) maximum filter; use at most 10 integer digits and 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_min\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) minimum filter; use at most 10 integer digits and 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_usd_max\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) USD maximum filter; use at most 10 integer digits and 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_usd_min\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) USD minimum filter; use at most 10 integer digits and 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"anchor_date\":{\"description\":\"Date-only anchor that returns the page containing the first transaction at or before this initiated date. If the anchor is older than every transaction, the page clamps to the oldest transaction page. Valid only with initiated_date descending ordering and overrides offset when present.\",\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"category_fqn_prefix\":{\"description\":\"Exact Category FQN descendant scope. Includes hidden active descendants and is independent of category_id filters.\",\"minLength\":1,\"type\":\"string\"},\"category_id\":{\"description\":\"Category identifier to target or filter by.\",\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\"},\"currency\":{\"description\":\"Filter by active journal-record currency codes, using ISO 4217 or the `C::` crypto prefix. Repeated values use any-of matching. This filter composes independently with other record-derived filters, so different active records in one transaction may satisfy different filters.\",\"items\":{\"pattern\":\"^([A-Z]{3}|C::.+)$\",\"type\":\"string\"},\"minItems\":1,\"type\":\"array\"},\"initiated_date_from\":{\"description\":\"Minimum transaction initiated date in YYYY-MM-DD format.\",\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"initiated_date_to\":{\"description\":\"Maximum transaction initiated date in YYYY-MM-DD format.\",\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"lifecycle_status\":{\"description\":\"Filters transactions by lifecycle. Expected transactions are excluded by default and returned only when this filter explicitly includes `expected`.\",\"items\":{\"description\":\"Transaction lifecycle, independent from balance-record settlement and tombstoning.\",\"enum\":[\"active\",\"expected\",\"cancelled\"],\"type\":\"string\"},\"type\":\"array\"},\"limit\":{\"description\":\"Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.\",\"maximum\":500,\"minimum\":1,\"type\":\"integer\"},\"member_id\":{\"description\":\"Household-member identifier to target or filter by.\",\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\"},\"offset\":{\"description\":\"Zero-based number of matching results to skip.\",\"minimum\":0,\"type\":\"integer\"},\"pending_date_from\":{\"description\":\"Minimum pending timestamp in ISO 8601 format; records without a pending timestamp do not match.\",\"format\":\"date-time\",\"type\":\"string\"},\"pending_date_to\":{\"description\":\"Maximum pending timestamp in ISO 8601 format; records without a pending timestamp do not match.\",\"format\":\"date-time\",\"type\":\"string\"},\"posted_date_from\":{\"description\":\"Minimum posted timestamp in ISO 8601 format.\",\"format\":\"date-time\",\"type\":\"string\"},\"posted_date_to\":{\"description\":\"Maximum posted timestamp in ISO 8601 format.\",\"format\":\"date-time\",\"type\":\"string\"},\"record_role\":{\"description\":\"Filter by one or more server-derived record roles present in a transaction.\",\"items\":{\"description\":\"Accounting role derived independently from one record's account, sign, and category intent.\",\"enum\":[\"expense\",\"refund\",\"income\",\"clawback\",\"exchange\",\"adjustment\",\"balance\"],\"type\":\"string\"},\"type\":\"array\"},\"search\":{\"description\":\"Case-insensitive search over active journal records. Contains-match fields are record memo, counterparty account name, account FQN, category FQN, tag FQN, member name, and account external_id. Record currency matches by exact case-insensitive code equality. Account external_system is intentionally excluded to avoid broad system-label matches.\",\"type\":\"string\"},\"settlement\":{\"description\":\"Filters transactions by server-derived settlement summary.\",\"items\":{\"description\":\"Server-derived settlement summary across a transaction's balance records.\",\"enum\":[\"pending\",\"posted\",\"mixed\",\"not_applicable\"],\"type\":\"string\"},\"type\":\"array\"},\"sort\":{\"default\":\"initiated_date\",\"description\":\"Field used to sort matching results; defaults to `initiated_date`.\",\"enum\":[\"initiated_date\",\"created_at\"],\"type\":\"string\"},\"sort_dir\":{\"default\":\"desc\",\"description\":\"Sort direction for matching results; defaults to `desc`.\",\"enum\":[\"asc\",\"desc\"],\"type\":\"string\"},\"tag_fqn_prefix\":{\"description\":\"Exact Tag FQN descendant scope. Includes hidden active descendants and is independent of tag_id filters.\",\"minLength\":1,\"type\":\"string\"},\"tag_id\":{\"description\":\"Tag identifier to target or filter by.\",\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\"},\"transaction_class\":{\"description\":\"Filter by one or more server-derived transaction classes.\",\"items\":{\"enum\":[\"spend\",\"income\",\"refund\",\"clawback\",\"transfer\",\"currency_exchange\",\"adjustment\",\"mixed\"],\"type\":\"string\"},\"type\":\"array\"},\"transaction_shape\":{\"description\":\"Filter by one or more server-derived transaction shapes.\",\"items\":{\"description\":\"One independently present kind of transaction activity.\",\"enum\":[\"spend\",\"refund\",\"income\",\"clawback\",\"adjustment\",\"exchange\",\"transfer\"],\"type\":\"string\"},\"type\":\"array\"}},\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Query: []ParameterDescriptor{
@@ -3096,6 +3096,14 @@ func Operations() []Operation {
 						Required:    false,
 						Array:       true,
 						ItemType:    "integer",
+					},
+					{
+						Name:        "currency",
+						Type:        "array",
+						Description: "Filter by active journal-record currency codes, using ISO 4217 or the `C::` crypto prefix. Repeated values use any-of matching. This filter composes independently with other record-derived filters, so different active records in one transaction may satisfy different filters.",
+						Required:    false,
+						Array:       true,
+						ItemType:    "string",
 					},
 					{
 						Name:        "lifecycle_status",
@@ -7938,7 +7946,7 @@ func invokeListTransactionTemplates(ctx context.Context, client httpclient.Clien
 }
 
 func invokeListTransactions(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, []string{"account_id", "amount_max", "amount_min", "amount_usd_max", "amount_usd_min", "anchor_date", "category_fqn_prefix", "category_id", "initiated_date_from", "initiated_date_to", "lifecycle_status", "limit", "member_id", "offset", "pending_date_from", "pending_date_to", "posted_date_from", "posted_date_to", "record_role", "search", "settlement", "sort", "sort_dir", "tag_fqn_prefix", "tag_id", "transaction_class", "transaction_shape"}, false, false); err != nil {
+	if err := validateInvocationInput(input, nil, []string{"account_id", "amount_max", "amount_min", "amount_usd_max", "amount_usd_min", "anchor_date", "category_fqn_prefix", "category_id", "currency", "initiated_date_from", "initiated_date_to", "lifecycle_status", "limit", "member_id", "offset", "pending_date_from", "pending_date_to", "posted_date_from", "posted_date_to", "record_role", "search", "settlement", "sort", "sort_dir", "tag_fqn_prefix", "tag_id", "transaction_class", "transaction_shape"}, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	params := &httpclient.ListTransactionsParams{}
@@ -8170,18 +8178,40 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 		}
 		params.MemberId = &queryValue10
 	}
-	queryValues11, querySupplied11 := input.Query["lifecycle_status"]
+	queryValues11, querySupplied11 := input.Query["currency"]
 	if querySupplied11 {
 		if len(queryValues11) == 0 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "currency",
+				Err:      errors.New("value is required"),
+			}
+		}
+		queryValue11 := make([]string, len(queryValues11))
+		for valueIndex, raw := range queryValues11 {
+			if err := parseInvocationValue(raw, true, &queryValue11[valueIndex]); err != nil {
+				return InvocationResult{}, &InvocationInputError{
+					Location: "query",
+					Name:     "currency",
+					Value:    raw,
+					Err:      err,
+				}
+			}
+		}
+		params.Currency = &queryValue11
+	}
+	queryValues12, querySupplied12 := input.Query["lifecycle_status"]
+	if querySupplied12 {
+		if len(queryValues12) == 0 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
 				Name:     "lifecycle_status",
 				Err:      errors.New("value is required"),
 			}
 		}
-		queryValue11 := make([]httpclient.TransactionLifecycleStatus, len(queryValues11))
-		for valueIndex, raw := range queryValues11 {
-			if err := parseInvocationValue(raw, true, &queryValue11[valueIndex]); err != nil {
+		queryValue12 := make([]httpclient.TransactionLifecycleStatus, len(queryValues12))
+		for valueIndex, raw := range queryValues12 {
+			if err := parseInvocationValue(raw, true, &queryValue12[valueIndex]); err != nil {
 				return InvocationResult{}, &InvocationInputError{
 					Location: "query",
 					Name:     "lifecycle_status",
@@ -8190,20 +8220,20 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 				}
 			}
 		}
-		params.LifecycleStatus = &queryValue11
+		params.LifecycleStatus = &queryValue12
 	}
-	queryValues12, querySupplied12 := input.Query["settlement"]
-	if querySupplied12 {
-		if len(queryValues12) == 0 {
+	queryValues13, querySupplied13 := input.Query["settlement"]
+	if querySupplied13 {
+		if len(queryValues13) == 0 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
 				Name:     "settlement",
 				Err:      errors.New("value is required"),
 			}
 		}
-		queryValue12 := make([]httpclient.TransactionSettlement, len(queryValues12))
-		for valueIndex, raw := range queryValues12 {
-			if err := parseInvocationValue(raw, true, &queryValue12[valueIndex]); err != nil {
+		queryValue13 := make([]httpclient.TransactionSettlement, len(queryValues13))
+		for valueIndex, raw := range queryValues13 {
+			if err := parseInvocationValue(raw, true, &queryValue13[valueIndex]); err != nil {
 				return InvocationResult{}, &InvocationInputError{
 					Location: "query",
 					Name:     "settlement",
@@ -8212,20 +8242,20 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 				}
 			}
 		}
-		params.Settlement = &queryValue12
+		params.Settlement = &queryValue13
 	}
-	queryValues13, querySupplied13 := input.Query["transaction_class"]
-	if querySupplied13 {
-		if len(queryValues13) == 0 {
+	queryValues14, querySupplied14 := input.Query["transaction_class"]
+	if querySupplied14 {
+		if len(queryValues14) == 0 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
 				Name:     "transaction_class",
 				Err:      errors.New("value is required"),
 			}
 		}
-		queryValue13 := make([]httpclient.TransactionClass, len(queryValues13))
-		for valueIndex, raw := range queryValues13 {
-			if err := parseInvocationValue(raw, true, &queryValue13[valueIndex]); err != nil {
+		queryValue14 := make([]httpclient.TransactionClass, len(queryValues14))
+		for valueIndex, raw := range queryValues14 {
+			if err := parseInvocationValue(raw, true, &queryValue14[valueIndex]); err != nil {
 				return InvocationResult{}, &InvocationInputError{
 					Location: "query",
 					Name:     "transaction_class",
@@ -8234,20 +8264,20 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 				}
 			}
 		}
-		params.TransactionClass = &queryValue13
+		params.TransactionClass = &queryValue14
 	}
-	queryValues14, querySupplied14 := input.Query["transaction_shape"]
-	if querySupplied14 {
-		if len(queryValues14) == 0 {
+	queryValues15, querySupplied15 := input.Query["transaction_shape"]
+	if querySupplied15 {
+		if len(queryValues15) == 0 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
 				Name:     "transaction_shape",
 				Err:      errors.New("value is required"),
 			}
 		}
-		queryValue14 := make([]httpclient.TransactionShapeType, len(queryValues14))
-		for valueIndex, raw := range queryValues14 {
-			if err := parseInvocationValue(raw, true, &queryValue14[valueIndex]); err != nil {
+		queryValue15 := make([]httpclient.TransactionShapeType, len(queryValues15))
+		for valueIndex, raw := range queryValues15 {
+			if err := parseInvocationValue(raw, true, &queryValue15[valueIndex]); err != nil {
 				return InvocationResult{}, &InvocationInputError{
 					Location: "query",
 					Name:     "transaction_shape",
@@ -8256,20 +8286,20 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 				}
 			}
 		}
-		params.TransactionShape = &queryValue14
+		params.TransactionShape = &queryValue15
 	}
-	queryValues15, querySupplied15 := input.Query["record_role"]
-	if querySupplied15 {
-		if len(queryValues15) == 0 {
+	queryValues16, querySupplied16 := input.Query["record_role"]
+	if querySupplied16 {
+		if len(queryValues16) == 0 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
 				Name:     "record_role",
 				Err:      errors.New("value is required"),
 			}
 		}
-		queryValue15 := make([]httpclient.RecordRole, len(queryValues15))
-		for valueIndex, raw := range queryValues15 {
-			if err := parseInvocationValue(raw, true, &queryValue15[valueIndex]); err != nil {
+		queryValue16 := make([]httpclient.RecordRole, len(queryValues16))
+		for valueIndex, raw := range queryValues16 {
+			if err := parseInvocationValue(raw, true, &queryValue16[valueIndex]); err != nil {
 				return InvocationResult{}, &InvocationInputError{
 					Location: "query",
 					Name:     "record_role",
@@ -8278,34 +8308,14 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 				}
 			}
 		}
-		params.RecordRole = &queryValue15
+		params.RecordRole = &queryValue16
 	}
-	queryValues16, querySupplied16 := input.Query["amount_min"]
-	if querySupplied16 {
-		if len(queryValues16) != 1 {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "amount_min",
-				Err:      fmt.Errorf("got %d values, want 1", len(queryValues16)),
-			}
-		}
-		var queryValue16 string
-		if err := parseInvocationValue(queryValues16[0], true, &queryValue16); err != nil {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "amount_min",
-				Value:    queryValues16[0],
-				Err:      err,
-			}
-		}
-		params.AmountMin = &queryValue16
-	}
-	queryValues17, querySupplied17 := input.Query["amount_max"]
+	queryValues17, querySupplied17 := input.Query["amount_min"]
 	if querySupplied17 {
 		if len(queryValues17) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "amount_max",
+				Name:     "amount_min",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues17)),
 			}
 		}
@@ -8313,19 +8323,19 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 		if err := parseInvocationValue(queryValues17[0], true, &queryValue17); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "amount_max",
+				Name:     "amount_min",
 				Value:    queryValues17[0],
 				Err:      err,
 			}
 		}
-		params.AmountMax = &queryValue17
+		params.AmountMin = &queryValue17
 	}
-	queryValues18, querySupplied18 := input.Query["amount_usd_min"]
+	queryValues18, querySupplied18 := input.Query["amount_max"]
 	if querySupplied18 {
 		if len(queryValues18) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "amount_usd_min",
+				Name:     "amount_max",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues18)),
 			}
 		}
@@ -8333,19 +8343,19 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 		if err := parseInvocationValue(queryValues18[0], true, &queryValue18); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "amount_usd_min",
+				Name:     "amount_max",
 				Value:    queryValues18[0],
 				Err:      err,
 			}
 		}
-		params.AmountUsdMin = &queryValue18
+		params.AmountMax = &queryValue18
 	}
-	queryValues19, querySupplied19 := input.Query["amount_usd_max"]
+	queryValues19, querySupplied19 := input.Query["amount_usd_min"]
 	if querySupplied19 {
 		if len(queryValues19) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "amount_usd_max",
+				Name:     "amount_usd_min",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues19)),
 			}
 		}
@@ -8353,39 +8363,39 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 		if err := parseInvocationValue(queryValues19[0], true, &queryValue19); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "amount_usd_max",
+				Name:     "amount_usd_min",
 				Value:    queryValues19[0],
 				Err:      err,
 			}
 		}
-		params.AmountUsdMax = &queryValue19
+		params.AmountUsdMin = &queryValue19
 	}
-	queryValues20, querySupplied20 := input.Query["initiated_date_from"]
+	queryValues20, querySupplied20 := input.Query["amount_usd_max"]
 	if querySupplied20 {
 		if len(queryValues20) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "initiated_date_from",
+				Name:     "amount_usd_max",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues20)),
 			}
 		}
-		var queryValue20 openapi_types.Date
+		var queryValue20 string
 		if err := parseInvocationValue(queryValues20[0], true, &queryValue20); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "initiated_date_from",
+				Name:     "amount_usd_max",
 				Value:    queryValues20[0],
 				Err:      err,
 			}
 		}
-		params.InitiatedDateFrom = &queryValue20
+		params.AmountUsdMax = &queryValue20
 	}
-	queryValues21, querySupplied21 := input.Query["initiated_date_to"]
+	queryValues21, querySupplied21 := input.Query["initiated_date_from"]
 	if querySupplied21 {
 		if len(queryValues21) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "initiated_date_to",
+				Name:     "initiated_date_from",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues21)),
 			}
 		}
@@ -8393,39 +8403,39 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 		if err := parseInvocationValue(queryValues21[0], true, &queryValue21); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "initiated_date_to",
+				Name:     "initiated_date_from",
 				Value:    queryValues21[0],
 				Err:      err,
 			}
 		}
-		params.InitiatedDateTo = &queryValue21
+		params.InitiatedDateFrom = &queryValue21
 	}
-	queryValues22, querySupplied22 := input.Query["pending_date_from"]
+	queryValues22, querySupplied22 := input.Query["initiated_date_to"]
 	if querySupplied22 {
 		if len(queryValues22) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "pending_date_from",
+				Name:     "initiated_date_to",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues22)),
 			}
 		}
-		var queryValue22 time.Time
+		var queryValue22 openapi_types.Date
 		if err := parseInvocationValue(queryValues22[0], true, &queryValue22); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "pending_date_from",
+				Name:     "initiated_date_to",
 				Value:    queryValues22[0],
 				Err:      err,
 			}
 		}
-		params.PendingDateFrom = &queryValue22
+		params.InitiatedDateTo = &queryValue22
 	}
-	queryValues23, querySupplied23 := input.Query["pending_date_to"]
+	queryValues23, querySupplied23 := input.Query["pending_date_from"]
 	if querySupplied23 {
 		if len(queryValues23) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "pending_date_to",
+				Name:     "pending_date_from",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues23)),
 			}
 		}
@@ -8433,19 +8443,19 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 		if err := parseInvocationValue(queryValues23[0], true, &queryValue23); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "pending_date_to",
+				Name:     "pending_date_from",
 				Value:    queryValues23[0],
 				Err:      err,
 			}
 		}
-		params.PendingDateTo = &queryValue23
+		params.PendingDateFrom = &queryValue23
 	}
-	queryValues24, querySupplied24 := input.Query["posted_date_from"]
+	queryValues24, querySupplied24 := input.Query["pending_date_to"]
 	if querySupplied24 {
 		if len(queryValues24) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "posted_date_from",
+				Name:     "pending_date_to",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues24)),
 			}
 		}
@@ -8453,19 +8463,19 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 		if err := parseInvocationValue(queryValues24[0], true, &queryValue24); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "posted_date_from",
+				Name:     "pending_date_to",
 				Value:    queryValues24[0],
 				Err:      err,
 			}
 		}
-		params.PostedDateFrom = &queryValue24
+		params.PendingDateTo = &queryValue24
 	}
-	queryValues25, querySupplied25 := input.Query["posted_date_to"]
+	queryValues25, querySupplied25 := input.Query["posted_date_from"]
 	if querySupplied25 {
 		if len(queryValues25) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "posted_date_to",
+				Name:     "posted_date_from",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues25)),
 			}
 		}
@@ -8473,32 +8483,52 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 		if err := parseInvocationValue(queryValues25[0], true, &queryValue25); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "posted_date_to",
+				Name:     "posted_date_from",
 				Value:    queryValues25[0],
 				Err:      err,
 			}
 		}
-		params.PostedDateTo = &queryValue25
+		params.PostedDateFrom = &queryValue25
 	}
-	queryValues26, querySupplied26 := input.Query["search"]
+	queryValues26, querySupplied26 := input.Query["posted_date_to"]
 	if querySupplied26 {
 		if len(queryValues26) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "search",
+				Name:     "posted_date_to",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues26)),
 			}
 		}
-		var queryValue26 string
+		var queryValue26 time.Time
 		if err := parseInvocationValue(queryValues26[0], true, &queryValue26); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "search",
+				Name:     "posted_date_to",
 				Value:    queryValues26[0],
 				Err:      err,
 			}
 		}
-		params.Search = &queryValue26
+		params.PostedDateTo = &queryValue26
+	}
+	queryValues27, querySupplied27 := input.Query["search"]
+	if querySupplied27 {
+		if len(queryValues27) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "search",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues27)),
+			}
+		}
+		var queryValue27 string
+		if err := parseInvocationValue(queryValues27[0], true, &queryValue27); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "search",
+				Value:    queryValues27[0],
+				Err:      err,
+			}
+		}
+		params.Search = &queryValue27
 	}
 	response, err := client.ListTransactionsWithResponse(ctx, params)
 	if err != nil {

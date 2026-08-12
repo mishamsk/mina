@@ -51,6 +51,7 @@ export const recordRoles = [
 ] as const satisfies readonly RecordRole[];
 
 export const transactionFilterDecimalPattern = /^-?(?:\d{1,10})(?:\.\d{1,8})?$/;
+export const transactionFilterCurrencyPattern = /^(?:[A-Z]{3}|C::.+)$/;
 
 export interface TransactionFilters {
   readonly accountIds: readonly number[];
@@ -61,6 +62,7 @@ export interface TransactionFilters {
   readonly categoryIds: readonly number[];
   readonly categoryFqnPrefix?: string;
   readonly classes: readonly TransactionClass[];
+  readonly currencies: readonly string[];
   readonly lifecycleStatuses: readonly TransactionLifecycleStatus[];
   readonly initiatedFrom?: string;
   readonly initiatedTo?: string;
@@ -77,6 +79,7 @@ export const emptyTransactionFilters: TransactionFilters = {
   accountIds: [],
   categoryIds: [],
   classes: [],
+  currencies: [],
   lifecycleStatuses: [],
   memberIds: [],
   recordRoles: [],
@@ -104,6 +107,22 @@ const trimmedValue = (value: string | undefined): string | undefined => {
   return trimmed ? trimmed : undefined;
 };
 
+export const normalizeTransactionFilterCurrency = (value: string): string => {
+  const trimmed = value.trim();
+  return trimmed.slice(0, 3).toUpperCase() === "C::"
+    ? `C::${trimmed.slice(3)}`
+    : trimmed.toUpperCase();
+};
+
+const uniqueSortedCurrencies = (values: readonly string[]): readonly string[] =>
+  [
+    ...new Set(
+      values
+        .map(normalizeTransactionFilterCurrency)
+        .filter((value) => transactionFilterCurrencyPattern.test(value)),
+    ),
+  ].sort((left, right) => left.localeCompare(right));
+
 export const normalizeTransactionFilters = (
   filters: Partial<TransactionFilters> = {},
 ): TransactionFilters => ({
@@ -116,6 +135,7 @@ export const normalizeTransactionFilters = (
   categoryIds: uniqueSortedNumbers(filters.categoryIds ?? []),
   categoryFqnPrefix: trimmedValue(filters.categoryFqnPrefix),
   classes: uniqueAllowedValues(filters.classes ?? [], transactionClasses),
+  currencies: uniqueSortedCurrencies(filters.currencies ?? []),
   lifecycleStatuses: uniqueAllowedValues(
     filters.lifecycleStatuses ?? [],
     transactionLifecycleStatuses,
@@ -148,6 +168,7 @@ export const transactionFilterSignature = (
     `lifecycle=${normalized.lifecycleStatuses.join(",")}`,
     `settlement=${normalized.settlements.join(",")}`,
     `class=${normalized.classes.join(",")}`,
+    `currency=${JSON.stringify(normalized.currencies)}`,
     `shape=${normalized.shapes.join(",")}`,
     `role=${normalized.recordRoles.join(",")}`,
     `amountMin=${normalized.amountMin ?? ""}`,

@@ -120,6 +120,109 @@ func TestTransactionListFiltersBoundary(t *testing.T) {
 	}
 }
 
+func TestTransactionListCurrencyFiltersBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	scenario := client.Scenario()
+	balanceAccount := createSearchAccount(t, client, httpclient.CreateAccountRequest{
+		Fqn:         "checking:CurrencyFilter:Multi",
+		AccountType: httpclient.WritableAccountTypeOwned,
+	})
+	flowAccount := createSearchAccount(t, client, httpclient.CreateAccountRequest{
+		Fqn:         "expense:CurrencyFilter:Multi",
+		AccountType: httpclient.WritableAccountTypeFlow,
+	})
+	firstCategory := scenario.Category("CurrencyFilter:First")
+	secondCategory := scenario.Category("CurrencyFilter:Second")
+
+	multiCurrency := createTransaction(t, client, httpclient.CreateTransactionRequest{
+		InitiatedDate: apptest.Date("2024-02-02"),
+		Records: []httpclient.CreateJournalRecordRequest{
+			{
+				AccountId: balanceAccount.AccountId, Currency: "USD", Amount: "-10.00",
+				AmountUsd: apptest.StringPtr("-10.00"), Settlement: apptest.PostedSettlement(),
+				ReconciliationStatus: httpclient.Reconciled, Source: httpclient.WritableSourceManual,
+			},
+			{
+				AccountId: flowAccount.AccountId, Currency: "USD", Amount: "10.00",
+				AmountUsd: apptest.StringPtr("10.00"), CategoryId: &secondCategory.CategoryId,
+				ReconciliationStatus: httpclient.Reconciled, Source: httpclient.WritableSourceManual,
+			},
+			{
+				AccountId: balanceAccount.AccountId, Currency: "EUR", Amount: "-20.00",
+				AmountUsd: apptest.StringPtr("-22.00"), Settlement: apptest.PostedSettlement(),
+				ReconciliationStatus: httpclient.Reconciled, Source: httpclient.WritableSourceManual,
+			},
+			{
+				AccountId: flowAccount.AccountId, Currency: "EUR", Amount: "20.00",
+				AmountUsd: apptest.StringPtr("22.00"), CategoryId: &firstCategory.CategoryId,
+				ReconciliationStatus: httpclient.Reconciled, Source: httpclient.WritableSourceManual,
+			},
+		},
+	})
+	jpy := createTransaction(t, client, httpclient.CreateTransactionRequest{
+		InitiatedDate: apptest.Date("2024-02-03"),
+		Records: []httpclient.CreateJournalRecordRequest{
+			{
+				AccountId: balanceAccount.AccountId, Currency: "JPY", Amount: "-1000.00",
+				AmountUsd: apptest.StringPtr("-7.00"), Settlement: apptest.PostedSettlement(),
+				ReconciliationStatus: httpclient.Reconciled, Source: httpclient.WritableSourceManual,
+			},
+			{
+				AccountId: flowAccount.AccountId, Currency: "JPY", Amount: "1000.00",
+				AmountUsd: apptest.StringPtr("7.00"), CategoryId: &secondCategory.CategoryId,
+				ReconciliationStatus: httpclient.Reconciled, Source: httpclient.WritableSourceManual,
+			},
+		},
+	})
+	crypto := createTransaction(t, client, httpclient.CreateTransactionRequest{
+		InitiatedDate: apptest.Date("2024-02-04"),
+		Records: []httpclient.CreateJournalRecordRequest{
+			{
+				AccountId: balanceAccount.AccountId, Currency: "C::stETH", Amount: "-2.00",
+				AmountUsd: apptest.StringPtr("-5000.00"), Settlement: apptest.PostedSettlement(),
+				ReconciliationStatus: httpclient.Reconciled, Source: httpclient.WritableSourceManual,
+			},
+			{
+				AccountId: flowAccount.AccountId, Currency: "C::stETH", Amount: "2.00",
+				AmountUsd: apptest.StringPtr("5000.00"), CategoryId: &secondCategory.CategoryId,
+				ReconciliationStatus: httpclient.Reconciled, Source: httpclient.WritableSourceManual,
+			},
+		},
+	})
+
+	for _, tc := range []struct {
+		name   string
+		params *httpclient.ListTransactionsParams
+		want   []int64
+	}{
+		{
+			name: "one currency", params: &httpclient.ListTransactionsParams{Currency: ptrTo([]string{"EUR"})},
+			want: []int64{multiCurrency.JSON201.TransactionId},
+		},
+		{
+			name: "multiple currencies", params: &httpclient.ListTransactionsParams{Currency: ptrTo([]string{"EUR", "JPY"})},
+			want: []int64{jpy.JSON201.TransactionId, multiCurrency.JSON201.TransactionId},
+		},
+		{
+			name: "crypto currency", params: &httpclient.ListTransactionsParams{Currency: ptrTo([]string{"C::stETH"})},
+			want: []int64{crypto.JSON201.TransactionId},
+		},
+		{
+			name: "composes across active records",
+			params: &httpclient.ListTransactionsParams{
+				Currency: ptrTo([]string{"USD"}), CategoryId: ptrTo([]int64{firstCategory.CategoryId}),
+			},
+			want: []int64{multiCurrency.JSON201.TransactionId},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			response, err := client.REST().ListTransactionsWithResponse(context.Background(), tc.params)
+			requireNoTransportError(t, "list transactions by currency", err)
+			assertTransactionListResponse(t, tc.name, response, tc.want, int64(len(tc.want)))
+		})
+	}
+}
+
 func TestTransactionListFiltersComposeAcrossActiveRecordsBoundary(t *testing.T) {
 	client := newSharedClient(t)
 	refs := createSearchRefs(t, client)
@@ -641,17 +744,19 @@ func TestTransactionListFiltersComposeWithAnchorBoundary(t *testing.T) {
 func TestTransactionListFiltersIgnoreReplacedRecordsBoundary(t *testing.T) {
 	client := newSharedClient(t)
 	refs := createSearchRefs(t, client)
+	oldBalanceAccount := client.Scenario().AccountWithCurrency("checking:ReplacedFilter:Old", "CHF")
 	updatedMerchant := client.Scenario().Account("expense:UpdatedMerchant")
 
 	created := createTransaction(t, client, transactionListFilterRequest(transactionListFilterInput{
 		Date:        "2024-02-01",
-		BalanceID:   refs.CheckingAccountId,
+		BalanceID:   oldBalanceAccount.AccountId,
 		FlowID:      refs.MerchantAccountId,
 		CategoryID:  refs.CategoryId,
 		TagID:       refs.TagId,
 		MemberID:    &refs.MemberId,
 		Memo:        "edited away memo",
 		Amount:      "12.34",
+		Currency:    "CHF",
 		PendingDate: "2024-02-01T00:00:00Z",
 		Settlement:  apptest.PendingSettlement(),
 	}))
@@ -685,8 +790,13 @@ func TestTransactionListFiltersIgnoreReplacedRecordsBoundary(t *testing.T) {
 	}{
 		{
 			name:   "account",
-			old:    &httpclient.ListTransactionsParams{AccountId: ptrTo([]int64{refs.CheckingAccountId})},
+			old:    &httpclient.ListTransactionsParams{AccountId: ptrTo([]int64{oldBalanceAccount.AccountId})},
 			active: &httpclient.ListTransactionsParams{AccountId: ptrTo([]int64{refs.SavingsAccountId})},
+		},
+		{
+			name:   "currency",
+			old:    &httpclient.ListTransactionsParams{Currency: ptrTo([]string{"CHF"})},
+			active: &httpclient.ListTransactionsParams{Currency: ptrTo([]string{"USD"})},
 		},
 		{
 			name:   "category",
@@ -781,6 +891,9 @@ func TestTransactionListFilterValidationBoundary(t *testing.T) {
 		"category_id=0",
 		"tag_id=0",
 		"member_id=0",
+		"currency=usd",
+		"currency=AAA",
+		"currency=USD&currency=AAA",
 		"settlement=unknown",
 		"amount_min=not-a-decimal",
 		"amount_usd_max=100000000000.00",

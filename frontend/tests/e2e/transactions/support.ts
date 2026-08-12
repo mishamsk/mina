@@ -198,6 +198,7 @@ const expectTransactionFilterUrl = async (
     readonly amountMin?: string;
     readonly categories?: readonly number[];
     readonly classes?: readonly string[];
+    readonly currencies?: readonly string[];
     readonly initiatedFrom?: string;
     readonly initiatedTo?: string;
     readonly lifecycles?: readonly string[];
@@ -226,6 +227,7 @@ const expectTransactionFilterUrl = async (
           .map((value) => Number(value))
           .sort((left, right) => left - right),
         classes: searchParams.getAll("class").sort(),
+        currencies: searchParams.getAll("currency").sort(),
         members: searchParams
           .getAll("member")
           .map((value) => Number(value))
@@ -250,6 +252,7 @@ const expectTransactionFilterUrl = async (
         (left, right) => left - right,
       ),
       classes: [...(expected.classes ?? [])].sort(),
+      currencies: [...(expected.currencies ?? [])].sort(),
       members: [...(expected.members ?? [])].sort(
         (left, right) => left - right,
       ),
@@ -265,6 +268,7 @@ const transactionRequestHasFilters = (
     readonly amountMin?: string;
     readonly anchorDate?: string;
     readonly classes?: readonly string[];
+    readonly currencies?: readonly string[];
     readonly initiatedFrom?: string;
     readonly initiatedTo?: string;
     readonly limit?: string;
@@ -287,6 +291,8 @@ const transactionRequestHasFilters = (
     (expected.limit === undefined || params.get("limit") === expected.limit) &&
     JSON.stringify(params.getAll("transaction_class").sort()) ===
       JSON.stringify([...(expected.classes ?? [])].sort()) &&
+    JSON.stringify(params.getAll("currency").sort()) ===
+      JSON.stringify([...(expected.currencies ?? [])].sort()) &&
     JSON.stringify(params.getAll("lifecycle_status").sort()) ===
       JSON.stringify(
         [

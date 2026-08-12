@@ -2723,6 +2723,18 @@ paths:
               type: integer
               format: int64
               minimum: 1
+        - name: currency
+          description: "Filter by active journal-record currency codes, using ISO 4217 or the `C::` crypto prefix. Repeated values use any-of matching. This filter composes independently with other record-derived filters, so different active records in one transaction may satisfy different filters."
+          in: query
+          required: false
+          style: form
+          explode: true
+          schema:
+            type: array
+            minItems: 1
+            items:
+              type: string
+              pattern: ^([A-Z]{3}|C::.+)$
         - name: lifecycle_status
           in: query
           required: false

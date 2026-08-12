@@ -34,7 +34,9 @@ import {
 } from "@/components/ui/tooltip";
 import type { TransactionFilters } from "@/models/transaction-filters";
 import {
+  normalizeTransactionFilterCurrency,
   recordRoles,
+  transactionFilterCurrencyPattern,
   transactionFilterDecimalPattern,
   transactionLifecycleStatuses,
   transactionSettlements,
@@ -49,6 +51,7 @@ type EntityDimension = "account" | "category" | "tag" | "member";
 type RangeDimension = "amount" | "amountUsd" | "initiated";
 export type TransactionFilterDimension =
   | EntityDimension
+  | "currency"
   | "lifecycle"
   | "role"
   | "settlement"
@@ -69,6 +72,7 @@ interface DimensionDefinition {
 
 const dimensions: readonly DimensionDefinition[] = [
   { id: "account", label: "Account" },
+  { id: "currency", label: "Currency" },
   { id: "category", label: "Category" },
   { id: "tag", label: "Tag" },
   { id: "member", label: "Member" },
@@ -97,6 +101,18 @@ const editorFocusableSelector = [
   "textarea:not(:disabled)",
   "[tabindex]:not([tabindex='-1'])",
 ].join(", ");
+
+const matchingDatalistOptions = (
+  input: HTMLInputElement,
+): readonly HTMLOptionElement[] => {
+  const query = input.value.trim().toLocaleLowerCase();
+  return Array.from(input.list?.options ?? []).filter((option) =>
+    option.value.toLocaleLowerCase().includes(query),
+  );
+};
+
+const hasMatchingDatalistOption = (input: HTMLInputElement): boolean =>
+  matchingDatalistOptions(input).length > 0;
 
 const activeRecord = <T extends { readonly tombstoned_at?: string | null }>(
   value: T,
@@ -168,6 +184,7 @@ const filterCount = (
   hiddenDimensions: ReadonlySet<TransactionFilterDimension>,
 ): number =>
   (hiddenDimensions.has("account") ? 0 : filters.accountIds.length) +
+  (hiddenDimensions.has("currency") ? 0 : filters.currencies.length) +
   (hiddenDimensions.has("category") ? 0 : filters.categoryIds.length) +
   (hiddenDimensions.has("category") || !filters.categoryFqnPrefix ? 0 : 1) +
   (hiddenDimensions.has("tag") ? 0 : filters.tagIds.length) +
@@ -264,7 +281,11 @@ const CheckboxList = <T extends string>({
       const checked = selectedValues.includes(value);
       const id = `transactions-filter-${value}`;
       return (
-        <label key={value} htmlFor={id} className="flex items-center gap-2">
+        <label
+          key={value}
+          htmlFor={id}
+          className="flex min-w-0 items-center gap-2"
+        >
           <Checkbox
             id={id}
             checked={checked}
@@ -278,7 +299,9 @@ const CheckboxList = <T extends string>({
               );
             }}
           />
-          <span className="font-mono text-sm">{labelFor(value)}</span>
+          <span className="min-w-0 font-mono text-sm break-all">
+            {labelFor(value)}
+          </span>
         </label>
       );
     })}
@@ -287,6 +310,123 @@ const CheckboxList = <T extends string>({
 
 const accountingLabel = (value: RecordRole | TransactionShapeType): string =>
   `${value.charAt(0).toUpperCase()}${value.slice(1)}`;
+
+interface CurrencyFilterEditorProps {
+  readonly onChange: (values: readonly string[]) => void;
+  readonly options: readonly string[];
+  readonly selectedValues: readonly string[];
+}
+
+const CurrencyFilterEditor = ({
+  onChange,
+  options,
+  selectedValues,
+}: CurrencyFilterEditorProps) => {
+  const datalistKeyboardSelectionRef = useRef(false);
+  const draftInputRef = useRef<HTMLInputElement>(null);
+  const removedCheckboxRef = useRef<HTMLElement | null>(null);
+  const [draft, setDraft] = useState("");
+  const [invalid, setInvalid] = useState(false);
+
+  useLayoutEffect(() => {
+    const removedCheckbox = removedCheckboxRef.current;
+    removedCheckboxRef.current = null;
+    if (removedCheckbox && !removedCheckbox.isConnected) {
+      draftInputRef.current?.focus();
+    }
+  }, [options, selectedValues]);
+
+  const addDraft = (value = draft): void => {
+    const currency = normalizeTransactionFilterCurrency(value);
+    if (!transactionFilterCurrencyPattern.test(currency)) {
+      setInvalid(true);
+      return;
+    }
+    setInvalid(false);
+    setDraft("");
+    if (selectedValues.includes(currency)) {
+      return;
+    }
+    onChange([...selectedValues, currency]);
+  };
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="max-h-[min(16rem,40svh)] overflow-y-auto pr-1">
+        <CheckboxList
+          values={options}
+          selectedValues={selectedValues}
+          labelFor={(currency) => currency}
+          onChange={(values) => {
+            if (values.length < selectedValues.length) {
+              removedCheckboxRef.current =
+                document.activeElement instanceof HTMLElement
+                  ? document.activeElement
+                  : null;
+            }
+            onChange(values);
+          }}
+        />
+      </div>
+      <div className="flex items-end gap-2">
+        <label className="flex min-w-0 flex-1 flex-col gap-1 font-mono text-xs">
+          Currency code
+          <input
+            ref={draftInputRef}
+            list="transactions-filter-currency-options"
+            aria-invalid={invalid}
+            aria-describedby={
+              invalid ? "transactions-filter-currency-error" : undefined
+            }
+            className="bg-card h-9 border-2 border-[var(--border-ink)] px-2 text-sm shadow-[var(--shadow-pixel)]"
+            value={draft}
+            onChange={(event) => {
+              setDraft(normalizeTransactionFilterCurrency(event.target.value));
+              setInvalid(false);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "ArrowDown") {
+                datalistKeyboardSelectionRef.current =
+                  hasMatchingDatalistOption(event.currentTarget);
+              } else if (event.key !== "Enter") {
+                datalistKeyboardSelectionRef.current = false;
+              }
+            }}
+            onKeyUp={(event) => {
+              if (event.key !== "Enter") {
+                return;
+              }
+              const matches = matchingDatalistOptions(event.currentTarget);
+              const value =
+                datalistKeyboardSelectionRef.current && matches.length === 1
+                  ? matches[0]!.value
+                  : event.currentTarget.value;
+              datalistKeyboardSelectionRef.current = false;
+              addDraft(value);
+            }}
+          />
+        </label>
+        <Button type="button" variant="outline" onClick={() => addDraft()}>
+          Add
+        </Button>
+      </div>
+      <datalist id="transactions-filter-currency-options">
+        {options.map((currency) => (
+          <option key={currency} value={currency} />
+        ))}
+      </datalist>
+      {invalid ? (
+        <p
+          id="transactions-filter-currency-error"
+          role="alert"
+          className="text-destructive font-body text-xs"
+        >
+          Use three uppercase letters or C:: followed by a token.
+        </p>
+      ) : null}
+    </div>
+  );
+};
 
 interface RangeEditorProps {
   readonly fromLabel: string;
@@ -391,6 +531,9 @@ export const TransactionFilterControls = ({
   onChange,
 }: TransactionFilterControlsProps) => {
   const addFilterTriggerRef = useRef<HTMLButtonElement>(null);
+  const datalistEscapePendingRef = useRef(false);
+  const datalistKeyboardCommitTargetRef = useRef<HTMLInputElement | null>(null);
+  const datalistPointerTargetRef = useRef<HTMLInputElement | null>(null);
   const restoreAddFilterTriggerFocusRef = useRef(false);
   const [open, setOpen] = useState(false);
   const [selectedDimension, setSelectedDimension] =
@@ -497,6 +640,15 @@ export const TransactionFilterControls = ({
         .map(memberOption) ?? [],
     [filters.memberIds, includeHidden.member, lookups?.members],
   );
+  const currencyOptions = useMemo(() => {
+    const currencies = new Set<string>(filters.currencies);
+    for (const account of lookups?.accounts ?? []) {
+      if (activeRecord(account) && account.currency) {
+        currencies.add(account.currency);
+      }
+    }
+    return [...currencies].sort((left, right) => left.localeCompare(right));
+  }, [filters.currencies, lookups?.accounts]);
   const accountsById = useMemo(
     () => mapById(lookups?.accounts, (account) => account.account_id),
     [lookups?.accounts],
@@ -654,6 +806,18 @@ export const TransactionFilterControls = ({
       );
     }
 
+    if (selectedDimension === "currency") {
+      return (
+        <CurrencyFilterEditor
+          options={currencyOptions}
+          selectedValues={filters.currencies}
+          onChange={(currencies) => {
+            updateFilters({ ...filters, currencies });
+          }}
+        />
+      );
+    }
+
     if (selectedDimension === "settlement") {
       return (
         <CheckboxList
@@ -801,12 +965,109 @@ export const TransactionFilterControls = ({
           }}
           onEscapeKeyDown={(event) => {
             event.preventDefault();
+            if (
+              event.target instanceof HTMLInputElement &&
+              event.target.list !== null &&
+              !event.target.disabled &&
+              !event.target.readOnly &&
+              datalistEscapePendingRef.current
+            ) {
+              datalistKeyboardCommitTargetRef.current = null;
+              datalistPointerTargetRef.current = null;
+              datalistEscapePendingRef.current = false;
+              return;
+            }
             if (entityPickerOpen) {
               return;
             }
             restoreAddFilterTriggerFocusRef.current = true;
             setOpen(false);
             selectDimension(undefined);
+          }}
+          onKeyDownCapture={(event) => {
+            if (
+              event.key === "Enter" &&
+              event.target instanceof HTMLInputElement &&
+              event.target.list !== null &&
+              datalistEscapePendingRef.current
+            ) {
+              datalistKeyboardCommitTargetRef.current = event.target;
+              datalistPointerTargetRef.current = null;
+              datalistEscapePendingRef.current = false;
+              return;
+            }
+            if (
+              (event.key === "ArrowDown" || event.key === "ArrowUp") &&
+              event.target instanceof HTMLInputElement &&
+              event.target.list !== null &&
+              !event.target.disabled &&
+              !event.target.readOnly &&
+              hasMatchingDatalistOption(event.target)
+            ) {
+              datalistEscapePendingRef.current = true;
+              return;
+            }
+            if (event.key !== "Escape") {
+              datalistKeyboardCommitTargetRef.current = null;
+              datalistPointerTargetRef.current = null;
+              datalistEscapePendingRef.current = false;
+            }
+          }}
+          onKeyUpCapture={(event) => {
+            if (
+              event.key === "Enter" &&
+              event.target === datalistKeyboardCommitTargetRef.current
+            ) {
+              datalistKeyboardCommitTargetRef.current = null;
+            }
+          }}
+          onPointerDownCapture={(event) => {
+            const target =
+              event.target instanceof HTMLInputElement &&
+              event.target.list !== null &&
+              !event.target.disabled &&
+              !event.target.readOnly &&
+              hasMatchingDatalistOption(event.target)
+                ? event.target
+                : null;
+            datalistKeyboardCommitTargetRef.current = null;
+            datalistPointerTargetRef.current = target;
+            datalistEscapePendingRef.current = target !== null;
+          }}
+          onBlurCapture={(event) => {
+            if (event.relatedTarget === datalistPointerTargetRef.current) {
+              return;
+            }
+            datalistKeyboardCommitTargetRef.current = null;
+            datalistPointerTargetRef.current = null;
+            datalistEscapePendingRef.current = false;
+          }}
+          onFocusCapture={(event) => {
+            if (event.target === datalistPointerTargetRef.current) {
+              datalistPointerTargetRef.current = null;
+              return;
+            }
+            datalistKeyboardCommitTargetRef.current = null;
+            datalistPointerTargetRef.current = null;
+            datalistEscapePendingRef.current = false;
+          }}
+          onInputCapture={(event) => {
+            if (event.target === datalistKeyboardCommitTargetRef.current) {
+              datalistKeyboardCommitTargetRef.current = null;
+              datalistEscapePendingRef.current = false;
+              return;
+            }
+            if (event.target === datalistPointerTargetRef.current) {
+              datalistPointerTargetRef.current = null;
+              datalistEscapePendingRef.current = false;
+              return;
+            }
+            datalistEscapePendingRef.current =
+              event.target instanceof HTMLInputElement &&
+              event.target.list !== null &&
+              !event.target.disabled &&
+              !event.target.readOnly &&
+              hasMatchingDatalistOption(event.target);
           }}
           onKeyDown={(event) => {
             if (event.key === "Escape") {
@@ -866,6 +1127,22 @@ export const TransactionFilterControls = ({
                   />
                 );
               })
+            : null}
+          {!hiddenDimensionSet.has("currency")
+            ? filters.currencies.map((currency) => (
+                <FilterChip
+                  key={`currency-${currency}`}
+                  label={`Currency ${currency}`}
+                  onRemove={() => {
+                    updateFilters({
+                      ...filters,
+                      currencies: filters.currencies.filter(
+                        (selectedCurrency) => selectedCurrency !== currency,
+                      ),
+                    });
+                  }}
+                />
+              ))
             : null}
           {!hiddenDimensionSet.has("category")
             ? filters.categoryIds.map((categoryId) => {

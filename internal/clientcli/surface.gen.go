@@ -2847,6 +2847,14 @@ func Operations() []Operation {
 						ItemType:    "integer",
 					},
 					{
+						Name:        "currency",
+						Type:        "array",
+						Description: "Filter by active journal-record currency codes, using ISO 4217 or the `C::` crypto prefix. Repeated values use any-of matching. This filter composes independently with other record-derived filters, so different active records in one transaction may satisfy different filters.",
+						Required:    false,
+						Array:       true,
+						ItemType:    "string",
+					},
+					{
 						Name:        "lifecycle_status",
 						Type:        "array",
 						Description: "Filters transactions by lifecycle. Expected transactions are excluded by default and returned only when this filter explicitly includes `expected`.",
@@ -7698,7 +7706,7 @@ func invokeListTransactionTemplates(ctx context.Context, client httpclient.Clien
 }
 
 func invokeListTransactions(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, []string{"account_id", "amount_max", "amount_min", "amount_usd_max", "amount_usd_min", "anchor_date", "category_fqn_prefix", "category_id", "initiated_date_from", "initiated_date_to", "lifecycle_status", "limit", "member_id", "offset", "pending_date_from", "pending_date_to", "posted_date_from", "posted_date_to", "record_role", "search", "settlement", "sort", "sort_dir", "tag_fqn_prefix", "tag_id", "transaction_class", "transaction_shape"}, false, false); err != nil {
+	if err := validateInvocationInput(input, nil, []string{"account_id", "amount_max", "amount_min", "amount_usd_max", "amount_usd_min", "anchor_date", "category_fqn_prefix", "category_id", "currency", "initiated_date_from", "initiated_date_to", "lifecycle_status", "limit", "member_id", "offset", "pending_date_from", "pending_date_to", "posted_date_from", "posted_date_to", "record_role", "search", "settlement", "sort", "sort_dir", "tag_fqn_prefix", "tag_id", "transaction_class", "transaction_shape"}, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	params := &httpclient.ListTransactionsParams{}
@@ -7930,18 +7938,40 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 		}
 		params.MemberId = &queryValue10
 	}
-	queryValues11, querySupplied11 := input.Query["lifecycle_status"]
+	queryValues11, querySupplied11 := input.Query["currency"]
 	if querySupplied11 {
 		if len(queryValues11) == 0 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "currency",
+				Err:      errors.New("value is required"),
+			}
+		}
+		queryValue11 := make([]string, len(queryValues11))
+		for valueIndex, raw := range queryValues11 {
+			if err := parseInvocationValue(raw, true, &queryValue11[valueIndex]); err != nil {
+				return InvocationResult{}, &InvocationInputError{
+					Location: "query",
+					Name:     "currency",
+					Value:    raw,
+					Err:      err,
+				}
+			}
+		}
+		params.Currency = &queryValue11
+	}
+	queryValues12, querySupplied12 := input.Query["lifecycle_status"]
+	if querySupplied12 {
+		if len(queryValues12) == 0 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
 				Name:     "lifecycle_status",
 				Err:      errors.New("value is required"),
 			}
 		}
-		queryValue11 := make([]httpclient.TransactionLifecycleStatus, len(queryValues11))
-		for valueIndex, raw := range queryValues11 {
-			if err := parseInvocationValue(raw, true, &queryValue11[valueIndex]); err != nil {
+		queryValue12 := make([]httpclient.TransactionLifecycleStatus, len(queryValues12))
+		for valueIndex, raw := range queryValues12 {
+			if err := parseInvocationValue(raw, true, &queryValue12[valueIndex]); err != nil {
 				return InvocationResult{}, &InvocationInputError{
 					Location: "query",
 					Name:     "lifecycle_status",
@@ -7950,20 +7980,20 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 				}
 			}
 		}
-		params.LifecycleStatus = &queryValue11
+		params.LifecycleStatus = &queryValue12
 	}
-	queryValues12, querySupplied12 := input.Query["settlement"]
-	if querySupplied12 {
-		if len(queryValues12) == 0 {
+	queryValues13, querySupplied13 := input.Query["settlement"]
+	if querySupplied13 {
+		if len(queryValues13) == 0 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
 				Name:     "settlement",
 				Err:      errors.New("value is required"),
 			}
 		}
-		queryValue12 := make([]httpclient.TransactionSettlement, len(queryValues12))
-		for valueIndex, raw := range queryValues12 {
-			if err := parseInvocationValue(raw, true, &queryValue12[valueIndex]); err != nil {
+		queryValue13 := make([]httpclient.TransactionSettlement, len(queryValues13))
+		for valueIndex, raw := range queryValues13 {
+			if err := parseInvocationValue(raw, true, &queryValue13[valueIndex]); err != nil {
 				return InvocationResult{}, &InvocationInputError{
 					Location: "query",
 					Name:     "settlement",
@@ -7972,20 +8002,20 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 				}
 			}
 		}
-		params.Settlement = &queryValue12
+		params.Settlement = &queryValue13
 	}
-	queryValues13, querySupplied13 := input.Query["transaction_class"]
-	if querySupplied13 {
-		if len(queryValues13) == 0 {
+	queryValues14, querySupplied14 := input.Query["transaction_class"]
+	if querySupplied14 {
+		if len(queryValues14) == 0 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
 				Name:     "transaction_class",
 				Err:      errors.New("value is required"),
 			}
 		}
-		queryValue13 := make([]httpclient.TransactionClass, len(queryValues13))
-		for valueIndex, raw := range queryValues13 {
-			if err := parseInvocationValue(raw, true, &queryValue13[valueIndex]); err != nil {
+		queryValue14 := make([]httpclient.TransactionClass, len(queryValues14))
+		for valueIndex, raw := range queryValues14 {
+			if err := parseInvocationValue(raw, true, &queryValue14[valueIndex]); err != nil {
 				return InvocationResult{}, &InvocationInputError{
 					Location: "query",
 					Name:     "transaction_class",
@@ -7994,20 +8024,20 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 				}
 			}
 		}
-		params.TransactionClass = &queryValue13
+		params.TransactionClass = &queryValue14
 	}
-	queryValues14, querySupplied14 := input.Query["transaction_shape"]
-	if querySupplied14 {
-		if len(queryValues14) == 0 {
+	queryValues15, querySupplied15 := input.Query["transaction_shape"]
+	if querySupplied15 {
+		if len(queryValues15) == 0 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
 				Name:     "transaction_shape",
 				Err:      errors.New("value is required"),
 			}
 		}
-		queryValue14 := make([]httpclient.TransactionShapeType, len(queryValues14))
-		for valueIndex, raw := range queryValues14 {
-			if err := parseInvocationValue(raw, true, &queryValue14[valueIndex]); err != nil {
+		queryValue15 := make([]httpclient.TransactionShapeType, len(queryValues15))
+		for valueIndex, raw := range queryValues15 {
+			if err := parseInvocationValue(raw, true, &queryValue15[valueIndex]); err != nil {
 				return InvocationResult{}, &InvocationInputError{
 					Location: "query",
 					Name:     "transaction_shape",
@@ -8016,20 +8046,20 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 				}
 			}
 		}
-		params.TransactionShape = &queryValue14
+		params.TransactionShape = &queryValue15
 	}
-	queryValues15, querySupplied15 := input.Query["record_role"]
-	if querySupplied15 {
-		if len(queryValues15) == 0 {
+	queryValues16, querySupplied16 := input.Query["record_role"]
+	if querySupplied16 {
+		if len(queryValues16) == 0 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
 				Name:     "record_role",
 				Err:      errors.New("value is required"),
 			}
 		}
-		queryValue15 := make([]httpclient.RecordRole, len(queryValues15))
-		for valueIndex, raw := range queryValues15 {
-			if err := parseInvocationValue(raw, true, &queryValue15[valueIndex]); err != nil {
+		queryValue16 := make([]httpclient.RecordRole, len(queryValues16))
+		for valueIndex, raw := range queryValues16 {
+			if err := parseInvocationValue(raw, true, &queryValue16[valueIndex]); err != nil {
 				return InvocationResult{}, &InvocationInputError{
 					Location: "query",
 					Name:     "record_role",
@@ -8038,34 +8068,14 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 				}
 			}
 		}
-		params.RecordRole = &queryValue15
+		params.RecordRole = &queryValue16
 	}
-	queryValues16, querySupplied16 := input.Query["amount_min"]
-	if querySupplied16 {
-		if len(queryValues16) != 1 {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "amount_min",
-				Err:      fmt.Errorf("got %d values, want 1", len(queryValues16)),
-			}
-		}
-		var queryValue16 string
-		if err := parseInvocationValue(queryValues16[0], true, &queryValue16); err != nil {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "amount_min",
-				Value:    queryValues16[0],
-				Err:      err,
-			}
-		}
-		params.AmountMin = &queryValue16
-	}
-	queryValues17, querySupplied17 := input.Query["amount_max"]
+	queryValues17, querySupplied17 := input.Query["amount_min"]
 	if querySupplied17 {
 		if len(queryValues17) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "amount_max",
+				Name:     "amount_min",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues17)),
 			}
 		}
@@ -8073,19 +8083,19 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 		if err := parseInvocationValue(queryValues17[0], true, &queryValue17); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "amount_max",
+				Name:     "amount_min",
 				Value:    queryValues17[0],
 				Err:      err,
 			}
 		}
-		params.AmountMax = &queryValue17
+		params.AmountMin = &queryValue17
 	}
-	queryValues18, querySupplied18 := input.Query["amount_usd_min"]
+	queryValues18, querySupplied18 := input.Query["amount_max"]
 	if querySupplied18 {
 		if len(queryValues18) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "amount_usd_min",
+				Name:     "amount_max",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues18)),
 			}
 		}
@@ -8093,19 +8103,19 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 		if err := parseInvocationValue(queryValues18[0], true, &queryValue18); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "amount_usd_min",
+				Name:     "amount_max",
 				Value:    queryValues18[0],
 				Err:      err,
 			}
 		}
-		params.AmountUsdMin = &queryValue18
+		params.AmountMax = &queryValue18
 	}
-	queryValues19, querySupplied19 := input.Query["amount_usd_max"]
+	queryValues19, querySupplied19 := input.Query["amount_usd_min"]
 	if querySupplied19 {
 		if len(queryValues19) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "amount_usd_max",
+				Name:     "amount_usd_min",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues19)),
 			}
 		}
@@ -8113,39 +8123,39 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 		if err := parseInvocationValue(queryValues19[0], true, &queryValue19); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "amount_usd_max",
+				Name:     "amount_usd_min",
 				Value:    queryValues19[0],
 				Err:      err,
 			}
 		}
-		params.AmountUsdMax = &queryValue19
+		params.AmountUsdMin = &queryValue19
 	}
-	queryValues20, querySupplied20 := input.Query["initiated_date_from"]
+	queryValues20, querySupplied20 := input.Query["amount_usd_max"]
 	if querySupplied20 {
 		if len(queryValues20) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "initiated_date_from",
+				Name:     "amount_usd_max",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues20)),
 			}
 		}
-		var queryValue20 openapi_types.Date
+		var queryValue20 string
 		if err := parseInvocationValue(queryValues20[0], true, &queryValue20); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "initiated_date_from",
+				Name:     "amount_usd_max",
 				Value:    queryValues20[0],
 				Err:      err,
 			}
 		}
-		params.InitiatedDateFrom = &queryValue20
+		params.AmountUsdMax = &queryValue20
 	}
-	queryValues21, querySupplied21 := input.Query["initiated_date_to"]
+	queryValues21, querySupplied21 := input.Query["initiated_date_from"]
 	if querySupplied21 {
 		if len(queryValues21) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "initiated_date_to",
+				Name:     "initiated_date_from",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues21)),
 			}
 		}
@@ -8153,39 +8163,39 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 		if err := parseInvocationValue(queryValues21[0], true, &queryValue21); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "initiated_date_to",
+				Name:     "initiated_date_from",
 				Value:    queryValues21[0],
 				Err:      err,
 			}
 		}
-		params.InitiatedDateTo = &queryValue21
+		params.InitiatedDateFrom = &queryValue21
 	}
-	queryValues22, querySupplied22 := input.Query["pending_date_from"]
+	queryValues22, querySupplied22 := input.Query["initiated_date_to"]
 	if querySupplied22 {
 		if len(queryValues22) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "pending_date_from",
+				Name:     "initiated_date_to",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues22)),
 			}
 		}
-		var queryValue22 time.Time
+		var queryValue22 openapi_types.Date
 		if err := parseInvocationValue(queryValues22[0], true, &queryValue22); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "pending_date_from",
+				Name:     "initiated_date_to",
 				Value:    queryValues22[0],
 				Err:      err,
 			}
 		}
-		params.PendingDateFrom = &queryValue22
+		params.InitiatedDateTo = &queryValue22
 	}
-	queryValues23, querySupplied23 := input.Query["pending_date_to"]
+	queryValues23, querySupplied23 := input.Query["pending_date_from"]
 	if querySupplied23 {
 		if len(queryValues23) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "pending_date_to",
+				Name:     "pending_date_from",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues23)),
 			}
 		}
@@ -8193,19 +8203,19 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 		if err := parseInvocationValue(queryValues23[0], true, &queryValue23); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "pending_date_to",
+				Name:     "pending_date_from",
 				Value:    queryValues23[0],
 				Err:      err,
 			}
 		}
-		params.PendingDateTo = &queryValue23
+		params.PendingDateFrom = &queryValue23
 	}
-	queryValues24, querySupplied24 := input.Query["posted_date_from"]
+	queryValues24, querySupplied24 := input.Query["pending_date_to"]
 	if querySupplied24 {
 		if len(queryValues24) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "posted_date_from",
+				Name:     "pending_date_to",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues24)),
 			}
 		}
@@ -8213,19 +8223,19 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 		if err := parseInvocationValue(queryValues24[0], true, &queryValue24); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "posted_date_from",
+				Name:     "pending_date_to",
 				Value:    queryValues24[0],
 				Err:      err,
 			}
 		}
-		params.PostedDateFrom = &queryValue24
+		params.PendingDateTo = &queryValue24
 	}
-	queryValues25, querySupplied25 := input.Query["posted_date_to"]
+	queryValues25, querySupplied25 := input.Query["posted_date_from"]
 	if querySupplied25 {
 		if len(queryValues25) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "posted_date_to",
+				Name:     "posted_date_from",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues25)),
 			}
 		}
@@ -8233,32 +8243,52 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 		if err := parseInvocationValue(queryValues25[0], true, &queryValue25); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "posted_date_to",
+				Name:     "posted_date_from",
 				Value:    queryValues25[0],
 				Err:      err,
 			}
 		}
-		params.PostedDateTo = &queryValue25
+		params.PostedDateFrom = &queryValue25
 	}
-	queryValues26, querySupplied26 := input.Query["search"]
+	queryValues26, querySupplied26 := input.Query["posted_date_to"]
 	if querySupplied26 {
 		if len(queryValues26) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "search",
+				Name:     "posted_date_to",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues26)),
 			}
 		}
-		var queryValue26 string
+		var queryValue26 time.Time
 		if err := parseInvocationValue(queryValues26[0], true, &queryValue26); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "search",
+				Name:     "posted_date_to",
 				Value:    queryValues26[0],
 				Err:      err,
 			}
 		}
-		params.Search = &queryValue26
+		params.PostedDateTo = &queryValue26
+	}
+	queryValues27, querySupplied27 := input.Query["search"]
+	if querySupplied27 {
+		if len(queryValues27) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "search",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues27)),
+			}
+		}
+		var queryValue27 string
+		if err := parseInvocationValue(queryValues27[0], true, &queryValue27); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "search",
+				Value:    queryValues27[0],
+				Err:      err,
+			}
+		}
+		params.Search = &queryValue27
 	}
 	response, err := client.ListTransactionsWithResponse(ctx, params)
 	if err != nil {

@@ -399,6 +399,12 @@ WHERE tx.tombstoned_at IS NULL`
 		query += " AND " + s.transactionListRecordExists("jr.member_id IN ("+placeholders(len(opts.MemberIDs))+")")
 		args = append(args, int64Args(opts.MemberIDs)...)
 	}
+	if len(opts.Currencies) > 0 {
+		query += " AND " + s.transactionListRecordExists("jr.currency IN ("+placeholders(len(opts.Currencies))+")")
+		for _, currency := range opts.Currencies {
+			args = append(args, currency)
+		}
+	}
 	if len(opts.TagIDs) > 0 {
 		tagConditions := make([]string, 0, len(opts.TagIDs))
 		for range opts.TagIDs {

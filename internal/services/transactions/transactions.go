@@ -218,6 +218,7 @@ type ListOptions struct {
 	TagIDs             []int64
 	TagFQNPrefix       *string
 	MemberIDs          []int64
+	Currencies         []string
 	LifecycleStatuses  []LifecycleStatus
 	Settlements        []SettlementSummary
 	TransactionClasses []TransactionClass
@@ -825,6 +826,11 @@ func validateTransactionListOptions(opts ListOptions) (ListOptions, error) {
 	}
 	if err := validatePositiveIDs("member_id", opts.MemberIDs); err != nil {
 		return ListOptions{}, err
+	}
+	for _, currency := range opts.Currencies {
+		if !values.ValidCurrencyCode(currency) {
+			return ListOptions{}, services.InvalidRequest("currency values must use ISO 4217 or the C:: crypto prefix")
+		}
 	}
 	for _, status := range opts.LifecycleStatuses {
 		if !validLifecycleStatus(status) {

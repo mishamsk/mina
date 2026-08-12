@@ -5061,6 +5061,10 @@ export type ListTransactionsData = {
          */
         member_id?: Array<number>;
         /**
+         * Filter by active journal-record currency codes, using ISO 4217 or the `C::` crypto prefix. Repeated values use any-of matching. This filter composes independently with other record-derived filters, so different active records in one transaction may satisfy different filters.
+         */
+        currency?: Array<string>;
+        /**
          * Filters transactions by lifecycle. Expected transactions are excluded by default and returned only when this filter explicitly includes `expected`.
          */
         lifecycle_status?: Array<TransactionLifecycleStatus>;

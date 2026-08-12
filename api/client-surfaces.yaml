@@ -577,7 +577,7 @@ operations:
     mcp:
       state: exposed
       name: list
-      description: Use for transaction-level results with nested balanced journal records, including free-text, class, entity, status, and date filters. Supply limit (1-500); defaults sort by initiated date descending. Use records_search for individual record matches or register queries.
+      description: Use for transaction-level results with nested balanced journal records, including free-text, currency, class, entity, status, and date filters. Supply limit (1-500); defaults sort by initiated date descending. Use records_search for individual record matches or register queries.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   createTransaction:
     cli: {state: exposed, name: create}

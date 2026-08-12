@@ -15,6 +15,7 @@
 - Successful transaction mutations use the shared refresh helpers: invalidate affected reference and register snapshots, refresh the current transaction view, featured balances, and overview, and keep other transaction pages stale for later reload.
 - Entry drafts persist only UI form values per tab. Initialization defaults neither create a draft nor overwrite entered values or take focus after interaction.
 - Picker-created entities remain local overlays until shared lookups refresh; client checks only shape, while REST remains the validation authority.
+- Currency filters offer active account currencies plus typed codes, retain repeated canonical URL values, and leave definitive code validation to REST.
 
 ## Boundaries
 

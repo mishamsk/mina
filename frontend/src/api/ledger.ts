@@ -238,6 +238,9 @@ const transactionFilterQuery = (
     ...(normalized.classes.length > 0
       ? { transaction_class: [...normalized.classes] }
       : {}),
+    ...(normalized.currencies.length > 0
+      ? { currency: [...normalized.currencies] }
+      : {}),
     ...(normalized.shapes.length > 0
       ? { transaction_shape: [...normalized.shapes] }
       : {}),

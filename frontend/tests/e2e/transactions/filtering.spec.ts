@@ -387,6 +387,19 @@ test("transactions page add-filter menu drives server filters and chips", async 
   const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const category = findByFqn(categories, "Entertainment:Books");
   const targetMemo = `E2E filtered target ${unique}`;
+  const eurMemo = `E2E filtered EUR ${unique}`;
+  const eurFundingAccount = await createAccount(
+    page,
+    `e2e:Filter:${unique}:EuroChecking`,
+    "owned",
+    "EUR",
+  );
+  const eurMerchantAccount = await createAccount(
+    page,
+    `e2e:Filter:${unique}:EuroMerchant`,
+    "flow",
+    "EUR",
+  );
 
   const targetSpend = await page.request.post("/api/transactions/spend", {
     data: {
@@ -415,6 +428,20 @@ test("transactions page add-filter menu drives server filters and chips", async 
     },
   });
   expect(alternateSpend.ok()).toBe(true);
+  const eurSpend = await page.request.post("/api/transactions/spend", {
+    data: {
+      amount: "12.34",
+      category_id: category.category_id,
+      counterparty_account_id: eurMerchantAccount.account_id,
+      currency: "EUR",
+      funding_account_id: eurFundingAccount.account_id,
+      initiated_date: "2026-05-31",
+      memo: eurMemo,
+      settlement: { status: "pending" },
+      tag_ids: [visibleTagOne.tag_id],
+    },
+  });
+  expect(eurSpend.ok()).toBe(true);
 
   const ledgerLookups = waitForLedgerLookups(page);
   await page.goto("/transactions?page=2&pageSize=25");
@@ -453,6 +480,39 @@ test("transactions page add-filter menu drives server filters and chips", async 
   ).toBeVisible();
 
   await page.getByRole("button", { name: "Back" }).click();
+  await page.getByRole("button", { exact: true, name: "Currency" }).click();
+  const multiCurrencyRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return (
+      url.pathname === "/api/transactions" &&
+      transactionRequestHasFilters(url, {
+        currencies: ["EUR", "USD"],
+        limit: "25",
+        tags: [visibleTagOne.tag_id, visibleTagTwo.tag_id],
+      })
+    );
+  });
+  await page.getByRole("checkbox", { name: "USD" }).click();
+  await page.getByRole("checkbox", { name: "EUR" }).click();
+  await multiCurrencyRequest;
+  await expectTransactionFilterUrl(page, {
+    currencies: ["EUR", "USD"],
+    pageSize: "25",
+    tags: [visibleTagOne.tag_id, visibleTagTwo.tag_id],
+  });
+  await expect(
+    page.getByRole("row").filter({ hasText: eurMemo }),
+  ).toBeVisible();
+
+  await page.getByRole("checkbox", { name: "EUR" }).click();
+  await expectTransactionFilterUrl(page, {
+    currencies: ["USD"],
+    pageSize: "25",
+    tags: [visibleTagOne.tag_id, visibleTagTwo.tag_id],
+  });
+  await expect(page.getByRole("row").filter({ hasText: eurMemo })).toBeHidden();
+
+  await page.getByRole("button", { name: "Back" }).click();
   await page.getByRole("button", { name: "Settlement" }).click();
   await page.getByText("Pending", { exact: true }).click();
 
@@ -479,6 +539,7 @@ test("transactions page add-filter menu drives server filters and chips", async 
       transactionRequestHasFilters(url, {
         amountMax: "20",
         amountMin: "10",
+        currencies: ["USD"],
         initiatedFrom: "2026-05-01",
         initiatedTo: "2026-05-31",
         limit: "25",
@@ -495,6 +556,7 @@ test("transactions page add-filter menu drives server filters and chips", async 
   await expectTransactionFilterUrl(page, {
     amountMax: "20",
     amountMin: "10",
+    currencies: ["USD"],
     initiatedFrom: "2026-05-01",
     initiatedTo: "2026-05-31",
     pageSize: "25",
@@ -512,6 +574,7 @@ test("transactions page add-filter menu drives server filters and chips", async 
       transactionRequestHasFilters(url, {
         amountMax: "20",
         amountMin: "10",
+        currencies: ["USD"],
         initiatedFrom: "2026-05-01",
         initiatedTo: "2026-05-31",
         limit: "25",
@@ -523,11 +586,12 @@ test("transactions page add-filter menu drives server filters and chips", async 
   await page.goto(
     `/transactions?page=1&pageSize=25&tag=${visibleTagOne.tag_id}` +
       `&tag=${visibleTagTwo.tag_id}&settlement=pending&amountMin=10` +
-      `&amountMax=20&initiatedFrom=2026-05-01&initiatedTo=2026-05-31`,
+      `&amountMax=20&currency=USD&initiatedFrom=2026-05-01&initiatedTo=2026-05-31`,
   );
   await deepLinkRequest;
   await expect(page.getByText("Tag Groceries")).toBeVisible();
   await expect(page.getByText("Settlement Pending")).toBeVisible();
+  await expect(page.getByText("Currency USD")).toBeVisible();
   await expect(page.getByText("Amount 10-20")).toBeVisible();
   await expect(page.getByText("Initiated 2026-05-01-2026-05-31")).toBeVisible();
 
@@ -538,6 +602,7 @@ test("transactions page add-filter menu drives server filters and chips", async 
       transactionRequestHasFilters(url, {
         amountMax: "20",
         amountMin: "10",
+        currencies: ["USD"],
         initiatedFrom: "2026-05-01",
         initiatedTo: "2026-05-31",
         limit: "50",
@@ -558,6 +623,7 @@ test("transactions page add-filter menu drives server filters and chips", async 
         amountMax: "20",
         amountMin: "10",
         anchorDate: "2026-05-31",
+        currencies: ["USD"],
         initiatedFrom: "2026-05-01",
         initiatedTo: "2026-05-31",
         limit: "50",
@@ -569,10 +635,28 @@ test("transactions page add-filter menu drives server filters and chips", async 
   await page.getByLabel("Go to day").fill("2026-05-31");
   await dateJumpRequest;
 
+  await page.getByRole("button", { name: "Remove Currency USD" }).click();
+  await expectTransactionFilterUrl(page, {
+    amountMax: "20",
+    amountMin: "10",
+    initiatedFrom: "2026-05-01",
+    initiatedTo: "2026-05-31",
+    pageSize: "50",
+    settlements: ["pending"],
+    tags: [visibleTagOne.tag_id, visibleTagTwo.tag_id],
+  });
+  await expect(
+    page.getByRole("row").filter({ hasText: eurMemo }),
+  ).toBeVisible();
+  await page.goBack();
+  await expect(page.getByText("Currency USD")).toBeVisible();
+  await expect(page.getByRole("row").filter({ hasText: eurMemo })).toBeHidden();
+
   await page.getByRole("button", { name: "Remove Settlement Pending" }).click();
   await expectTransactionFilterUrl(page, {
     amountMax: "20",
     amountMin: "10",
+    currencies: ["USD"],
     initiatedFrom: "2026-05-01",
     initiatedTo: "2026-05-31",
     pageSize: "50",
@@ -583,6 +667,97 @@ test("transactions page add-filter menu drives server filters and chips", async 
   await expectTransactionFilterUrl(page, { pageSize: "50" });
   await expect(page.getByText("Tag Groceries")).toBeHidden();
   await expect(page.getByText("Amount 10-20")).toBeHidden();
+});
+
+test("typed currency filters commit suggestions and layer Escape", async ({
+  page,
+}) => {
+  const ledgerLookups = waitForLedgerLookups(page);
+  await page.goto("/transactions?page=1&pageSize=50");
+  await ledgerLookups;
+  await page.getByRole("button", { name: "Open filters" }).click();
+  await page.getByRole("button", { name: "Add filter" }).click();
+  await page.getByRole("button", { exact: true, name: "Currency" }).click();
+
+  const currencyCode = page.getByRole("combobox", { name: "Currency code" });
+  await expect(
+    page.locator(
+      "datalist#transactions-filter-currency-options option[value='EUR']",
+    ),
+  ).toHaveCount(1);
+
+  const eurRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return (
+      url.pathname === "/api/transactions" &&
+      transactionRequestHasFilters(url, { currencies: ["EUR"] })
+    );
+  });
+  await currencyCode.fill("E");
+  await currencyCode.press("ArrowDown");
+  await currencyCode.press("Enter");
+  await eurRequest;
+  await expectTransactionFilterUrl(page, { currencies: ["EUR"] });
+
+  const historyLengthBeforeDuplicate = await page.evaluate(
+    () => window.history.length,
+  );
+  await currencyCode.fill("eur");
+  await currencyCode.press("Enter");
+  expect(await page.evaluate(() => window.history.length)).toBe(
+    historyLengthBeforeDuplicate,
+  );
+
+  const cryptoRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return (
+      url.pathname === "/api/transactions" &&
+      transactionRequestHasFilters(url, {
+        currencies: ["C::stETH", "EUR"],
+      })
+    );
+  });
+  await currencyCode.fill("c::stETH");
+  await currencyCode.press("Enter");
+  await cryptoRequest;
+  await expectTransactionFilterUrl(page, {
+    currencies: ["C::stETH", "EUR"],
+  });
+
+  const cryptoCheckbox = page.getByRole("checkbox", { name: "C::stETH" });
+  await cryptoCheckbox.focus();
+  await cryptoCheckbox.press("Space");
+  await expectTransactionFilterUrl(page, { currencies: ["EUR"] });
+  await expect(currencyCode).toBeFocused();
+
+  await currencyCode.fill("E");
+  await currencyCode.press("ArrowDown");
+  await currencyCode.press("ArrowUp");
+  await currencyCode.press("Escape");
+  await expect(currencyCode).toBeVisible();
+  await expect(currencyCode).toHaveValue("E");
+  await currencyCode.press("Escape");
+  await expect(currencyCode).toBeHidden();
+
+  await page.getByRole("button", { name: "Add filter" }).click();
+  await page.getByRole("button", { exact: true, name: "Currency" }).click();
+  await currencyCode.fill("E");
+  await currencyCode.dispatchEvent("pointerdown");
+  await currencyCode.evaluate((input) => {
+    const valueDescriptor = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    );
+    valueDescriptor?.set?.call(input, "EUR");
+    input.dispatchEvent(
+      new InputEvent("input", {
+        bubbles: true,
+        inputType: "insertReplacementText",
+      }),
+    );
+  });
+  await currencyCode.press("Escape");
+  await expect(currencyCode).toBeHidden();
 });
 
 test("transactions inline recurring occurrences support lifecycle filtering, confirm, and dismiss", async ({
@@ -1776,7 +1951,7 @@ test("transactions sidebar restores the last-used transactions URL state", async
   page,
 }) => {
   await page.goto(
-    "/transactions?page=2&pageSize=25&q=Target&settlement=posted",
+    "/transactions?page=2&pageSize=25&q=Target&currency=USD&settlement=posted",
   );
   await expect(
     page.getByRole("heading", { exact: true, name: "Transactions" }),
@@ -1785,6 +1960,7 @@ test("transactions sidebar restores the last-used transactions URL state", async
     "Target",
   );
   await expectTransactionFilterUrl(page, {
+    currencies: ["USD"],
     page: "2",
     pageSize: "25",
     q: "Target",
@@ -1804,6 +1980,7 @@ test("transactions sidebar restores the last-used transactions URL state", async
     "Target",
   );
   await expectTransactionFilterUrl(page, {
+    currencies: ["USD"],
     page: "2",
     pageSize: "25",
     q: "Target",

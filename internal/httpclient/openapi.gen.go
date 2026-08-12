@@ -3485,6 +3485,9 @@ type ListTransactionsParams struct {
 	// MemberId Household-member identifier to target or filter by.
 	MemberId *[]int64 `form:"member_id,omitempty" json:"member_id,omitempty"`
 
+	// Currency Filter by active journal-record currency codes, using ISO 4217 or the `C::` crypto prefix. Repeated values use any-of matching. This filter composes independently with other record-derived filters, so different active records in one transaction may satisfy different filters.
+	Currency *[]string `form:"currency,omitempty" json:"currency,omitempty"`
+
 	// LifecycleStatus Filters transactions by lifecycle. Expected transactions are excluded by default and returned only when this filter explicitly includes `expected`.
 	LifecycleStatus *[]TransactionLifecycleStatus `form:"lifecycle_status,omitempty" json:"lifecycle_status,omitempty"`
 
@@ -11367,6 +11370,18 @@ func NewListTransactionsRequest(server string, params *ListTransactionsParams) (
 		if params.MemberId != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "member_id", *params.MemberId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Currency != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "currency", *params.Currency, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {

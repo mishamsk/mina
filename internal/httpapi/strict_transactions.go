@@ -36,6 +36,7 @@ func (s *strictServer) ListTransactions(ctx context.Context, request openapi.Lis
 		TagIDs:             cloneOptionalInt64Slice(request.Params.TagId),
 		TagFQNPrefix:       request.Params.TagFqnPrefix,
 		MemberIDs:          cloneOptionalInt64Slice(request.Params.MemberId),
+		Currencies:         cloneOptionalStringSlice(request.Params.Currency),
 		LifecycleStatuses:  transactionAPILifecycleStatusSlice(request.Params.LifecycleStatus),
 		Settlements:        transactionAPISettlementSummarySlice(request.Params.Settlement),
 		TransactionClasses: transactionAPIClassSlice(request.Params.TransactionClass),
@@ -750,6 +751,14 @@ func transactionShapeAPIResponses(shapes []transactions.TransactionShape) []open
 }
 
 func cloneOptionalInt64Slice(values *[]int64) []int64 {
+	if values == nil {
+		return nil
+	}
+
+	return slices.Clone(*values)
+}
+
+func cloneOptionalStringSlice(values *[]string) []string {
 	if values == nil {
 		return nil
 	}
