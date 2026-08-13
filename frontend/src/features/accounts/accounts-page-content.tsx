@@ -1,17 +1,23 @@
-import { Eye, EyeOff, Search } from "pixelarticons/react";
+import {
+  Cancel,
+  ChevronDown,
+  Circle,
+  Eye,
+  EyeOff,
+  Search,
+} from "pixelarticons/react";
 import { useCallback } from "react";
 import type { SetURLSearchParams } from "react-router";
 
 import type { Account, AccountType } from "@/api";
 import { Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import type { AccountsPageSnapshot } from "@/store";
 
 import type { AccountTypeFilter } from "./accounts-tree";
@@ -25,24 +31,32 @@ const accountTypes: readonly AccountType[] = [
   "system",
 ];
 
+const accountTypeLabels: Readonly<Record<AccountType, string>> = {
+  flow: "Flow",
+  owned: "Owned",
+  party: "Party",
+  system: "System",
+};
+
 export const readAccountsSearchState = (
   searchParams: URLSearchParams,
 ): {
   readonly includeHidden: boolean;
+  readonly hideZeroBalances: boolean;
   readonly search: string;
   readonly typeFilter: AccountTypeFilter;
 } => {
-  const type = searchParams.get("type");
+  const selectedTypes = new Set(searchParams.getAll("type"));
   return {
+    hideZeroBalances: searchParams.get("nonzero") === "true",
     includeHidden: searchParams.get("hidden") === "true",
     search: searchParams.get("q") ?? "",
-    typeFilter: accountTypes.includes(type as AccountType)
-      ? (type as AccountType)
-      : "all",
+    typeFilter: accountTypes.filter((type) => selectedTypes.has(type)),
   };
 };
 
 interface AccountsToolbarProps {
+  readonly hideZeroBalances: boolean;
   readonly includeHidden: boolean;
   readonly search: string;
   readonly setSearchParams: SetURLSearchParams;
@@ -51,7 +65,7 @@ interface AccountsToolbarProps {
 
 const updateAccountsSearchParam = (
   current: URLSearchParams,
-  key: "hidden" | "q" | "type",
+  key: "hidden" | "nonzero" | "q",
   value: string | undefined,
 ): URLSearchParams => {
   const next = new URLSearchParams(current);
@@ -64,6 +78,7 @@ const updateAccountsSearchParam = (
 };
 
 export const AccountsToolbar = ({
+  hideZeroBalances,
   includeHidden,
   search,
   setSearchParams,
@@ -78,18 +93,42 @@ export const AccountsToolbar = ({
     [setSearchParams],
   );
 
-  const setTypeFilter = useCallback(
-    (nextType: AccountTypeFilter) => {
-      setSearchParams((current) =>
-        updateAccountsSearchParam(
-          current,
-          "type",
-          nextType === "all" ? undefined : nextType,
-        ),
-      );
+  const toggleTypeFilter = useCallback(
+    (type: AccountType) => {
+      setSearchParams((current) => {
+        const next = new URLSearchParams(current);
+        const selectedTypes = new Set(current.getAll("type"));
+        if (selectedTypes.has(type)) {
+          selectedTypes.delete(type);
+        } else {
+          selectedTypes.add(type);
+        }
+        next.delete("type");
+        for (const accountType of accountTypes) {
+          if (selectedTypes.has(accountType)) {
+            next.append("type", accountType);
+          }
+        }
+        return next;
+      });
     },
     [setSearchParams],
   );
+
+  const setHideZeroBalances = (nextHideZeroBalances: boolean) => {
+    setSearchParams((current) =>
+      updateAccountsSearchParam(
+        current,
+        "nonzero",
+        nextHideZeroBalances ? "true" : undefined,
+      ),
+    );
+  };
+
+  const typeFilterLabel =
+    typeFilter.length === 0
+      ? "All types"
+      : typeFilter.map((type) => accountTypeLabels[type]).join(", ");
 
   const setIncludeHidden = useCallback(
     (nextIncludeHidden: boolean) => {
@@ -138,24 +177,73 @@ export const AccountsToolbar = ({
         >
           Type
         </label>
-        <Select
-          value={typeFilter}
-          onValueChange={(value) => {
-            setTypeFilter(value as AccountTypeFilter);
+        <Popover modal>
+          <Tooltip label={typeFilterLabel} asChild>
+            <PopoverTrigger asChild>
+              <Button
+                id="accounts-type"
+                type="button"
+                variant="outline"
+                size="lg"
+                aria-label={`Type: ${typeFilterLabel}`}
+                className="min-w-32 justify-between"
+              >
+                <span className="max-w-48 truncate">{typeFilterLabel}</span>
+                <ChevronDown aria-hidden="true" data-icon="inline-end" />
+              </Button>
+            </PopoverTrigger>
+          </Tooltip>
+          <PopoverContent
+            aria-label="Account types"
+            className="w-48 space-y-1 p-2"
+          >
+            {accountTypes.map((type) => {
+              const selected = typeFilter.includes(type);
+              return (
+                <label
+                  key={type}
+                  className="flex min-h-8 cursor-pointer items-center gap-3 px-2 font-mono text-sm hover:bg-[var(--color-interactive-bright)]"
+                >
+                  <Checkbox
+                    checked={selected}
+                    onCheckedChange={() => {
+                      toggleTypeFilter(type);
+                    }}
+                  />
+                  {accountTypeLabels[type]}
+                </label>
+              );
+            })}
+          </PopoverContent>
+        </Popover>
+      </div>
+
+      <Tooltip
+        label={
+          hideZeroBalances
+            ? "Show zero-standing owned and party accounts"
+            : "Hide zero-standing owned and party accounts"
+        }
+        asChild
+      >
+        <Button
+          type="button"
+          variant="outline"
+          size="icon-lg"
+          aria-label="Hide zero-standing accounts"
+          aria-pressed={hideZeroBalances}
+          className="aria-pressed:bg-[var(--table-header)]"
+          onClick={() => {
+            setHideZeroBalances(!hideZeroBalances);
           }}
         >
-          <SelectTrigger id="accounts-type">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All types</SelectItem>
-            <SelectItem value="owned">Owned</SelectItem>
-            <SelectItem value="party">Party</SelectItem>
-            <SelectItem value="flow">Flow</SelectItem>
-            <SelectItem value="system">System</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+          {hideZeroBalances ? (
+            <Cancel aria-hidden="true" data-icon="zero-standing-hidden" />
+          ) : (
+            <Circle aria-hidden="true" data-icon="zero-standing-shown" />
+          )}
+        </Button>
+      </Tooltip>
 
       <Tooltip
         label={
@@ -192,6 +280,7 @@ interface AccountsPageContentProps {
     readonly loading: boolean;
     readonly snapshot: AccountsPageSnapshot | undefined;
   };
+  readonly hideZeroBalances: boolean;
   readonly includeHidden: boolean;
   readonly onCreateAccount: (opener: HTMLElement) => void;
   readonly onEditAccount: (account: Account, opener: HTMLElement) => void;
@@ -203,6 +292,7 @@ interface AccountsPageContentProps {
 
 export const AccountsPageContent = ({
   accountsPage,
+  hideZeroBalances,
   includeHidden,
   onCreateAccount,
   onEditAccount,
@@ -219,6 +309,7 @@ export const AccountsPageContent = ({
         accountsPage.snapshot ? undefined : accountsPage.errorMessage
       }
       includeHidden={includeHidden}
+      hideZeroBalances={hideZeroBalances}
       loading={accountsPage.loading}
       groups={accountsPage.snapshot?.groups}
       onCreateAccount={onCreateAccount}

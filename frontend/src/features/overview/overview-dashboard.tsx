@@ -44,10 +44,21 @@ import {
 interface BalanceGroup {
   readonly accountType: "owned" | "party";
   readonly root: string;
-  readonly rows: readonly OverviewBalanceRow[];
+  readonly rows: readonly AccountBalanceRow[];
   readonly subtotalUsd: string;
   readonly unconvertedCount: number;
 }
+
+interface AccountBalanceRow {
+  readonly account: OverviewBalanceRow["account"];
+  readonly balances: readonly OverviewBalanceRow["balance"][];
+}
+
+const displayedBalanceAmount = (
+  balance: OverviewBalanceRow["balance"],
+): string => balance.remaining_credit ?? balance.current_balance;
+
+const isZeroAmount = (amount: string): boolean => Number(amount) === 0;
 
 const groupedBalances = (
   rows: readonly OverviewBalanceRow[],
@@ -64,7 +75,18 @@ const groupedBalances = (
     .map(([key, groupRows]) => {
       const [accountType, ...rootParts] = key.split(":");
       const root = rootParts.join(":");
-      const rows = groupRows.sort(
+      const rowsByAccountId = new Map<number, AccountBalanceRow>();
+      for (const row of groupRows) {
+        if (isZeroAmount(displayedBalanceAmount(row.balance))) {
+          continue;
+        }
+        const existing = rowsByAccountId.get(row.account.account_id);
+        rowsByAccountId.set(row.account.account_id, {
+          account: row.account,
+          balances: [...(existing?.balances ?? []), row.balance],
+        });
+      }
+      const rows = [...rowsByAccountId.values()].sort(
         (left, right) =>
           Number(right.account.is_featured) -
             Number(left.account.is_featured) ||
@@ -76,14 +98,20 @@ const groupedBalances = (
         root,
         rows,
         subtotalUsd: sumDecimalStrings(
-          rows.map((row) => row.balance.current_balance_usd),
+          groupRows.map((row) => row.balance.current_balance_usd),
         ),
-        unconvertedCount: rows.reduce(
+        unconvertedCount: groupRows.reduce(
           (count, row) => count + row.balance.unconverted_count,
           0,
         ),
       };
-    });
+    })
+    .filter(
+      (group) =>
+        group.rows.length > 0 ||
+        !isZeroAmount(group.subtotalUsd) ||
+        group.unconvertedCount > 0,
+    );
 };
 
 const monthLabel = (yearMonth: string): string => {
@@ -143,9 +171,11 @@ const BalancesSkeleton = () => (
               >
                 <div className="min-w-0">
                   <Skeleton className="h-5 w-40 max-w-full" />
-                  <Skeleton className="mt-2 h-3 w-24 max-w-full" />
                 </div>
-                <Skeleton className="h-7 w-28 justify-self-end" />
+                <div className="flex min-w-0 flex-col items-end gap-1">
+                  <Skeleton className="h-4 w-20" />
+                  <Skeleton className="h-7 w-28" />
+                </div>
               </li>
             ))}
           </ul>
@@ -206,55 +236,56 @@ const FlowReportSkeleton = () => (
   </div>
 );
 
-const BalanceRow = ({ row }: { readonly row: OverviewBalanceRow }) => {
-  const primaryAmount =
-    row.balance.remaining_credit ?? row.balance.current_balance;
-
-  return (
-    <li
-      data-testid="overview-balance-row"
-      className="grid min-h-16 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-t border-[var(--hairline)] py-3 first:border-t-0"
-    >
-      <div className="min-w-0">
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <AccountDisplayLabel
-            account={row.account}
-            to={`/accounts/${row.account.account_id}`}
-          />
-          {row.account.is_featured ? (
-            <Badge variant="secondary" className="text-[10px]">
-              Featured
-            </Badge>
-          ) : null}
-        </div>
-        <p className="text-muted-foreground mt-1 font-mono text-xs">
-          {row.balance.currency}
-          {row.balance.remaining_credit !== undefined ? (
-            <>
-              <span aria-hidden="true"> · </span>
-              Remaining credit
-            </>
-          ) : row.account.account_type === "party" ? (
-            <>
-              <span aria-hidden="true"> · </span>
-              {partyBalanceLabel(row.balance.current_balance)}
-            </>
-          ) : null}
-        </p>
-      </div>
-      <AmountText
-        amount={{
-          amount: primaryAmount,
-          currency: row.balance.currency,
-        }}
-        chip
-        className="justify-self-end"
-        positiveSign={false}
-        tone="neutral"
+const BalanceRow = ({ row }: { readonly row: AccountBalanceRow }) => (
+  <li
+    data-testid="overview-balance-row"
+    className="grid min-h-16 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-t border-[var(--hairline)] py-3 first:border-t-0"
+  >
+    <div className="flex min-w-0 flex-wrap items-center gap-2">
+      <AccountDisplayLabel
+        account={row.account}
+        to={`/accounts/${row.account.account_id}`}
       />
-    </li>
-  );
-};
+      {row.account.is_featured ? (
+        <Badge variant="secondary" className="text-[10px]">
+          Featured
+        </Badge>
+      ) : null}
+    </div>
+    <div className="flex min-w-0 flex-col items-end gap-2">
+      {row.balances.map((balance) => (
+        <div
+          key={balance.currency}
+          className="flex min-w-0 flex-col items-end gap-1"
+        >
+          <p className="text-muted-foreground font-mono text-xs">
+            {balance.currency}
+            {balance.remaining_credit !== undefined ? (
+              <>
+                <span aria-hidden="true"> · </span>
+                Remaining credit
+              </>
+            ) : row.account.account_type === "party" ? (
+              <>
+                <span aria-hidden="true"> · </span>
+                {partyBalanceLabel(balance.current_balance)}
+              </>
+            ) : null}
+          </p>
+          <AmountText
+            amount={{
+              amount: displayedBalanceAmount(balance),
+              currency: balance.currency,
+            }}
+            chip
+            positiveSign={false}
+            tone="neutral"
+          />
+        </div>
+      ))}
+    </div>
+  </li>
+);
 
 const BalanceGroups = ({
   groups,
@@ -318,10 +349,7 @@ const BalanceGroups = ({
           <CardContent>
             <ul>
               {group.rows.map((row) => (
-                <BalanceRow
-                  key={`${row.account.account_id}:${row.balance.currency}`}
-                  row={row}
-                />
+                <BalanceRow key={row.account.account_id} row={row} />
               ))}
             </ul>
           </CardContent>

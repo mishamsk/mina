@@ -33,13 +33,14 @@ import { AccountTypeBadge } from "./account-type-badge";
 import { CreditLimitIndicator } from "./credit-limit-indicator";
 import { refreshAccountsAfterMutation } from "./use-accounts-resource";
 
-export type AccountTypeFilter = AccountType | "all";
+export type AccountTypeFilter = readonly AccountType[];
 
 interface AccountsTreeProps {
   readonly accounts: readonly Account[] | undefined;
   readonly balances: readonly AccountBalance[] | undefined;
   readonly errorMessage?: string;
   readonly groups: readonly GroupState[] | undefined;
+  readonly hideZeroBalances: boolean;
   readonly includeHidden: boolean;
   readonly loading: boolean;
   readonly onCreateAccount?: (opener: HTMLElement) => void;
@@ -65,7 +66,8 @@ type AccountDeleteTarget = {
 const accountTypeMatches = (
   account: Account,
   typeFilter: AccountTypeFilter,
-): boolean => typeFilter === "all" || account.account_type === typeFilter;
+): boolean =>
+  typeFilter.length === 0 || typeFilter.includes(account.account_type);
 
 const accountSearchMatches = (account: Account, search: string): boolean =>
   search.trim() === "" ||
@@ -75,6 +77,17 @@ const accountTreeName = (account: Account): string =>
   account.display_label_override
     ? `${account.fqn} (${account.display_label_override})`
     : account.fqn;
+
+const primaryStanding = (balance: AccountBalance): string =>
+  balance.remaining_credit ?? balance.current_balance;
+
+const accountHasNonZeroStanding = (
+  account: Account,
+  balancesByAccountId: ReadonlyMap<number, readonly AccountBalance[]>,
+): boolean =>
+  (balancesByAccountId.get(account.account_id) ?? []).some(
+    (balance) => Number(primaryStanding(balance)) !== 0,
+  );
 
 const interactiveTargetSelector =
   "a, button, input, select, textarea, summary, [role='button'], " +
@@ -96,10 +109,17 @@ const isInteractiveTarget = (
 export const accountTreeRows = (
   accounts: readonly Account[],
   {
+    balancesByAccountId,
+    hideZeroBalances,
     includeHidden,
     search,
     typeFilter,
   }: {
+    readonly balancesByAccountId: ReadonlyMap<
+      number,
+      readonly AccountBalance[]
+    >;
+    readonly hideZeroBalances: boolean;
     readonly includeHidden: boolean;
     readonly search: string;
     readonly typeFilter: AccountTypeFilter;
@@ -111,6 +131,10 @@ export const accountTreeRows = (
         (account) =>
           (includeHidden || !account.is_hidden) &&
           accountTypeMatches(account, typeFilter) &&
+          (!hideZeroBalances ||
+            account.account_type === "flow" ||
+            account.account_type === "system" ||
+            accountHasNonZeroStanding(account, balancesByAccountId)) &&
           accountSearchMatches(account, search),
       )
       .map((account) => [account.fqn, account]),
@@ -175,35 +199,43 @@ const BalanceAmounts = ({
   balances,
 }: {
   readonly balances: readonly AccountBalance[];
-}) => (
-  <div className="flex min-w-0 flex-col items-end gap-1">
-    {balances.map((balance) => {
-      const amount = {
-        amount: balance.remaining_credit ?? balance.current_balance,
-        currency: balance.currency,
-      };
-      return (
-        <div
-          key={`${balance.currency}:${balance.current_balance}`}
-          className="min-w-0 text-right"
-        >
-          {balance.remaining_credit !== undefined ? (
-            <span className="text-muted-foreground block truncate font-mono text-xs">
-              Remaining credit
-            </span>
-          ) : null}
-          <AmountText
-            amount={amount}
-            className="min-w-0 justify-end"
-            overflowTooltip
-            positiveSign={false}
-            tone="neutral"
-          />
-        </div>
-      );
-    })}
-  </div>
-);
+}) => {
+  const nonZeroBalances = balances.filter(
+    (balance) => Number(primaryStanding(balance)) !== 0,
+  );
+  const displayedBalances =
+    nonZeroBalances.length > 0 ? nonZeroBalances : balances.slice(0, 1);
+
+  return (
+    <div className="flex min-w-0 flex-col items-end gap-1">
+      {displayedBalances.map((balance) => {
+        const amount = {
+          amount: primaryStanding(balance),
+          currency: balance.currency,
+        };
+        return (
+          <div
+            key={`${balance.currency}:${balance.current_balance}`}
+            className="min-w-0 text-right"
+          >
+            {balance.remaining_credit !== undefined ? (
+              <span className="text-muted-foreground block truncate font-mono text-xs">
+                Remaining credit
+              </span>
+            ) : null}
+            <AmountText
+              amount={amount}
+              className="min-w-0 justify-end"
+              overflowTooltip
+              positiveSign={false}
+              tone="neutral"
+            />
+          </div>
+        );
+      })}
+    </div>
+  );
+};
 
 const HiddenRowIndicator = ({ label }: { readonly label: string }) => (
   <Tooltip
@@ -269,6 +301,7 @@ export const AccountsTree = ({
   balances,
   errorMessage,
   groups,
+  hideZeroBalances,
   includeHidden,
   loading,
   onCreateAccount,
@@ -288,16 +321,29 @@ export const AccountsTree = ({
   >();
   const [deleting, setDeleting] = useState(false);
   const accountsTableScrollRef = useRef<HTMLDivElement | null>(null);
-  const rows = useMemo(
-    () =>
-      accounts
-        ? accountTreeRows(accounts, { includeHidden, search, typeFilter })
-        : [],
-    [accounts, includeHidden, search, typeFilter],
-  );
   const accountBalancesById = useMemo(
     () => balancesByAccountId(balances),
     [balances],
+  );
+  const rows = useMemo(
+    () =>
+      accounts
+        ? accountTreeRows(accounts, {
+            balancesByAccountId: accountBalancesById,
+            hideZeroBalances,
+            includeHidden,
+            search,
+            typeFilter,
+          })
+        : [],
+    [
+      accountBalancesById,
+      accounts,
+      hideZeroBalances,
+      includeHidden,
+      search,
+      typeFilter,
+    ],
   );
   const groupByFqn = useMemo(
     () => new Map((groups ?? []).map((group) => [group.fqn, group])),

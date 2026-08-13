@@ -257,6 +257,9 @@ test("accounts page renders tree, URL toolbar state, balances, and sidebar navig
     page,
     `e2e:hidden:${browserName}:${unique}:Vault`,
   );
+  const zeroBalanceAccount = await createAccount(page, {
+    fqn: `e2e:zero:${browserName}:${unique}:Empty`,
+  });
   const accountsResponse = page.waitForResponse((response) => {
     const url = new URL(response.url());
     return (
@@ -286,6 +289,7 @@ test("accounts page renders tree, URL toolbar state, balances, and sidebar navig
     (balance) => balance.account_id === joint.account_id,
   );
   const sapphire = findByFqn(accounts, "bank:Chase:Sapphire");
+  const expenses = findByFqn(accounts, "employers:Acme:expenses");
   const sapphireBalance = balances.find(
     (balance) => balance.account_id === sapphire.account_id,
   );
@@ -326,6 +330,9 @@ test("accounts page renders tree, URL toolbar state, balances, and sidebar navig
     .getByTestId("accounts-tree-row")
     .filter({ hasText: "TraderJoes" })
     .first();
+  const sapphireRow = page
+    .getByTestId("accounts-tree-row")
+    .filter({ hasText: "Sapphire" });
   await expect(traderJoesRow).toContainText("Flow");
   await expect(traderJoesRow.getByTestId("amount-text")).toHaveCount(0);
 
@@ -336,25 +343,76 @@ test("accounts page renders tree, URL toolbar state, balances, and sidebar navig
   ).toHaveCount(0);
 
   await page.getByLabel("Type").click();
-  await page.getByRole("option", { exact: true, name: "Flow" }).click();
+  const typePopover = page.getByRole("dialog", { name: "Account types" });
+  await expect(typePopover).toBeVisible();
+  const jointRowBox = await jointRow.boundingBox();
+  expect(jointRowBox).not.toBeNull();
+  await page.mouse.click(
+    (jointRowBox?.x ?? 0) + 8,
+    (jointRowBox?.y ?? 0) + (jointRowBox?.height ?? 0) / 2,
+  );
+  await expect(typePopover).toBeHidden();
+  await expect(page).toHaveURL(/\/accounts$/);
+
+  const zeroBalanceRow = page
+    .getByTestId("accounts-tree-row")
+    .filter({ hasText: zeroBalanceAccount.fqn });
+  const hideZeroBalancesToggle = page.getByLabel("Hide zero-standing accounts");
+  await expect(zeroBalanceRow).toBeVisible();
+  await expect(hideZeroBalancesToggle).toHaveAttribute("aria-pressed", "false");
+  await expect(
+    hideZeroBalancesToggle.locator('[data-icon="zero-standing-shown"]'),
+  ).toBeVisible();
+  await hideZeroBalancesToggle.click();
+  await expect(page).toHaveURL(/\/accounts\?nonzero=true$/);
+  await expect(zeroBalanceRow).toHaveCount(0);
+  await expect(traderJoesRow).toBeVisible();
+  await expect(sapphireRow).toBeVisible();
+  await expect(hideZeroBalancesToggle).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    hideZeroBalancesToggle.locator('[data-icon="zero-standing-hidden"]'),
+  ).toBeVisible();
+  await hideZeroBalancesToggle.click();
+  await expect(page).toHaveURL(/\/accounts$/);
+  await expect(zeroBalanceRow).toBeVisible();
+
+  await page.getByLabel("Type").click();
+  await page.getByRole("checkbox", { exact: true, name: "Flow" }).click();
   await expect(page).toHaveURL(/\/accounts\?type=flow$/);
+  await page.getByRole("checkbox", { exact: true, name: "Party" }).click();
+  await expect
+    .poll(() => new URL(page.url()).searchParams.getAll("type"))
+    .toEqual(["party", "flow"]);
+  await page.keyboard.press("Escape");
+  const typeTrigger = page.getByRole("button", {
+    exact: true,
+    name: "Type: Party, Flow",
+  });
+  await expect(typeTrigger).toBeVisible();
+  await expect(typeTrigger).toBeFocused();
+  await typeTrigger.hover();
+  await expect(page.getByRole("tooltip")).toHaveText("Party, Flow");
   await expect(
     page.getByTestId("accounts-tree-row").filter({ hasText: "TraderJoes" }),
+  ).toBeVisible();
+  await expect(
+    page.getByTestId("accounts-tree-row").filter({ hasText: expenses.fqn }),
   ).toBeVisible();
   await expect(
     page.getByTestId("accounts-tree-row").filter({ hasText: "joint_checking" }),
   ).toHaveCount(0);
 
   await page.getByLabel("Search").fill("bank:Chase:Sapphire");
-  await expect(page).toHaveURL(/type=flow&q=bank%3AChase%3ASapphire/);
+  await expect(page).toHaveURL(
+    /type=party&type=flow&q=bank%3AChase%3ASapphire/,
+  );
   await expect(page.getByTestId("accounts-tree-row")).toHaveCount(0);
 
   await page.getByLabel("Type").click();
-  await page.getByRole("option", { exact: true, name: "All types" }).click();
+  await page.getByRole("checkbox", { exact: true, name: "Party" }).click();
+  await page.getByRole("checkbox", { exact: true, name: "Flow" }).click();
+  await page.keyboard.press("Escape");
   await expect(page).toHaveURL(/q=bank%3AChase%3ASapphire/);
-  const sapphireRow = page
-    .getByTestId("accounts-tree-row")
-    .filter({ hasText: "Sapphire" });
   await expect(sapphireRow).toBeVisible();
   await expect(sapphireRow).toContainText("Remaining credit");
   await expect(sapphireRow.getByTestId("amount-text")).toHaveText(
@@ -2603,6 +2661,19 @@ test("accounts page manages account forms, credit limits, and tombstone delete",
   await expect(createPanel.getByText("FQN is required.")).toBeVisible();
 
   await createPanel.getByLabel("FQN").fill(fqn);
+  const typeFilterTrigger = page.getByRole("button", {
+    exact: true,
+    name: "Type: All types",
+  });
+  await typeFilterTrigger.click();
+  const typeFilterPopover = page.getByRole("dialog", {
+    name: "Account types",
+  });
+  await expect(typeFilterPopover).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(typeFilterPopover).toBeHidden();
+  await expect(createPanel).toBeVisible();
+  await expect(createPanel.getByLabel("FQN")).toHaveValue(fqn);
   await createPanel.getByLabel("FQN").blur();
   await expect(createPanel.getByText("FQN is required.")).toHaveCount(0);
   await createPanel.getByLabel("Type").click();

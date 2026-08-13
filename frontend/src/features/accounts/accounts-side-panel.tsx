@@ -81,7 +81,7 @@ interface AccountsSidePanelProps {
 const validCurrencyPattern = /^([A-Z]{3}|C::.+)$/;
 const nonNegativeDecimalPattern = /^\d+(\.\d{1,8})?$/;
 const floatingOverlaySelector =
-  "[role='alertdialog'], [role='listbox'], [data-slot='select-content'][data-state='open']";
+  "[role='alertdialog'], [role='listbox'], [data-slot='popover-content'][data-state='open'], [data-slot='select-content'][data-state='open']";
 const hasMatchingDatalistOption = (input: HTMLInputElement): boolean => {
   const query = input.value.trim().toLocaleLowerCase();
   return Array.from(input.list?.options ?? []).some((option) =>

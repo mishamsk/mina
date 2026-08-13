@@ -9,9 +9,6 @@ interface AccountFixture {
 interface BalanceFixture {
   readonly account_id: number;
   readonly credit_limit?: string;
-  readonly currency: string;
-  readonly current_balance: string;
-  readonly current_balance_usd: string;
   readonly remaining_credit?: string;
 }
 
@@ -283,6 +280,39 @@ test("overview landing page renders grouped balances, pulse, and recent activity
   const narrowChartBox = await flowChart.boundingBox();
   const narrowBreakdownBox = await flowBreakdown.boundingBox();
   expect(narrowChartBox?.y).toBeLessThan(narrowBreakdownBox?.y ?? 0);
+});
+
+test("balance skeleton matches an ordinary loaded balance row", async ({
+  page,
+}) => {
+  let releaseBalances = (): void => {};
+  const balancesReleased = new Promise<void>((resolve) => {
+    releaseBalances = resolve;
+  });
+  let markBalancesReady = (): void => {};
+  const balancesReady = new Promise<void>((resolve) => {
+    markBalancesReady = resolve;
+  });
+  await page.route("**/api/accounts/balances**", async (route) => {
+    const response = await route.fetch();
+    markBalancesReady();
+    await balancesReleased;
+    await route.fulfill({ response });
+  });
+
+  await page.goto("/overview");
+  await balancesReady;
+  const skeletonRow = page.getByLabel("Loading balances").locator("li").first();
+  await expect(skeletonRow.locator('[data-slot="skeleton"]')).toHaveCount(3);
+  const skeletonHeight = (await skeletonRow.boundingBox())?.height;
+
+  releaseBalances();
+  const loadedRow = page.getByTestId("overview-balance-row").first();
+  await expect(loadedRow).toBeVisible();
+  expect((await loadedRow.boundingBox())?.height).toBeCloseTo(
+    skeletonHeight ?? 0,
+    0,
+  );
 });
 
 test("overview flow controls form an inline anchored control deck and retain the last report on failure", async ({

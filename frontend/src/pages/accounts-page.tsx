@@ -45,7 +45,7 @@ export const AccountsPage = () => {
   const createAccountButtonRef = useRef<HTMLButtonElement | null>(null);
   const panelOpenerRef = useRef<HTMLElement | null>(null);
   const restructureOpenerRef = useRef<HTMLElement | null>(null);
-  const { includeHidden, search, typeFilter } =
+  const { hideZeroBalances, includeHidden, search, typeFilter } =
     readAccountsSearchState(searchParams);
   const selectedAccount = accountsPage.snapshot?.accounts.find(
     (account) => account.account_id === selectedAccountId,
@@ -185,6 +185,7 @@ export const AccountsPage = () => {
         }
         toolbar={
           <AccountsToolbar
+            hideZeroBalances={hideZeroBalances}
             includeHidden={includeHidden}
             search={search}
             setSearchParams={setSearchParams}
@@ -196,6 +197,7 @@ export const AccountsPage = () => {
       <div className="min-h-0 flex-1">
         <AccountsPageContent
           accountsPage={accountsPage}
+          hideZeroBalances={hideZeroBalances}
           includeHidden={includeHidden}
           onCreateAccount={openCreatePanel}
           onEditAccount={openEditPanel}

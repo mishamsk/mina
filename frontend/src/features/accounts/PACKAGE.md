@@ -6,7 +6,8 @@
 
 ## Implicit Contracts
 
-- The chart snapshot includes hidden accounts but only its server-sorted first 500 rows; `q`, `type`, and `hidden` filter that snapshot locally and preserve unrelated URL parameters.
+- The chart snapshot includes hidden accounts but only its server-sorted first 500 rows; `q`, repeated `type`, `nonzero`, and `hidden` filter that snapshot locally and preserve unrelated URL parameters. Repeated types use any-of matching; no valid type selects all. The modal type picker absorbs its dismissing pointer event so it cannot activate an underlying tree row; its trigger names the current selection and exposes the full summary in a tooltip.
+- The `nonzero` chart filter follows the [Accounts toolbar rules](../../../../docs/webui-design.md#accounts).
 - Register snapshots are keyed by their account or group request. An exact cache miss may keep the last snapshot for that target visible while fetching; request-backed header, register, and transaction cache writes must reject results from an invalidated generation, while authoritative mutation responses may seed the transaction cache after invalidation.
 - A cache-missing account or group register runs one occurrence catch-up per mounted resource before loading records; its record query keeps the API default that excludes expected occurrences.
 - `page` and `pageSize` are register URL state; ledger owns the composable `transaction` detail parameter. Pointer interaction with register pagination closes detail before changing page state.
