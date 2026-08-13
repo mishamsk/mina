@@ -122,6 +122,22 @@ const uniqueRecordSources = (transaction: Transaction): string =>
     ", ",
   );
 
+const lastUpdatedLabel = (
+  createdAt: string | null | undefined,
+  updatedAt: string | null | undefined,
+): string => {
+  if (!updatedAt || updatedAt === createdAt) {
+    return "Never";
+  }
+
+  const updatedTime = Date.parse(updatedAt);
+  if (Number.isNaN(updatedTime)) {
+    return "Never";
+  }
+
+  return formatInstantTimestamp(updatedAt);
+};
+
 export const TransactionLifecycleStrip = ({
   transaction,
 }: {
@@ -562,6 +578,16 @@ const DetailRecordsTable = ({
                             </dd>
                           </>
                         ) : null}
+                        <dt className="text-muted-foreground">Updated</dt>
+                        <dd
+                          className="font-mono"
+                          data-testid="record-updated-at"
+                        >
+                          {lastUpdatedLabel(
+                            record.created_at,
+                            record.updated_at,
+                          )}
+                        </dd>
                         <dt className="text-muted-foreground">Role</dt>
                         <dd>{recordRoleLabel(record.record_role)}</dd>
                         <dt className="text-muted-foreground">Source</dt>
@@ -713,7 +739,15 @@ export const TransactionDetailContent = ({
           <dt className="font-heading text-muted-foreground uppercase">
             Created
           </dt>
-          <dd>{formatInstantTimestamp(transaction.created_at)}</dd>
+          <dd className="font-mono">
+            {formatInstantTimestamp(transaction.created_at)}
+          </dd>
+          <dt className="font-heading text-muted-foreground uppercase">
+            Updated
+          </dt>
+          <dd className="font-mono" data-testid="transaction-updated-at">
+            {lastUpdatedLabel(transaction.created_at, transaction.updated_at)}
+          </dd>
         </dl>
       </section>
     </div>

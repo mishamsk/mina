@@ -27,12 +27,28 @@ import {
   type Locator,
   openAccountTransactionDetail,
   openUrlTransactionDetail,
+  type Page,
   readStoredTransactionEntryDraft,
   type Route,
   type TransactionDetailFixture,
   type TransactionFixture,
   waitForLedgerLookups,
 } from "@tests/e2e/transactions/support";
+
+import type { Transaction } from "@/api";
+
+const formatBrowserTimestamp = async (
+  page: Page,
+  value: string,
+): Promise<string> =>
+  page.evaluate(
+    (timestamp) =>
+      new Intl.DateTimeFormat(undefined, {
+        dateStyle: "medium",
+        timeStyle: "medium",
+      }).format(new Date(timestamp)),
+    value,
+  );
 
 test("cold transaction detail deep link restores outside the list snapshot", async ({
   page,
@@ -527,7 +543,49 @@ test("transaction detail panel shows full records and supports deep links", asyn
     },
   });
   expect(spendResponse.ok()).toBe(true);
-  const transaction = (await spendResponse.json()) as TransactionFixture;
+  const transaction = (await spendResponse.json()) as Transaction;
+  expect(transaction.updated_at).toBe(transaction.created_at);
+  expect(
+    transaction.records.every(
+      (record) => record.updated_at === record.created_at,
+    ),
+  ).toBe(true);
+  const changedRecord = transaction.records[0];
+  expect(changedRecord).toBeDefined();
+  const updateResponse = await page.request.post(
+    "/api/records/bulk/reconciliation",
+    {
+      data: {
+        reconciliation_status: "reconciled",
+        record_ids: [changedRecord!.record_id],
+      },
+    },
+  );
+  expect(updateResponse.ok(), await updateResponse.text()).toBe(true);
+  const detailResponse = await page.request.get(
+    `/api/transactions/${transaction.transaction_id}`,
+  );
+  expect(detailResponse.ok(), await detailResponse.text()).toBe(true);
+  const updatedTransaction = (await detailResponse.json()) as Transaction;
+  const changedRecordIndex = updatedTransaction.records.findIndex(
+    (record) => record.record_id === changedRecord!.record_id,
+  );
+  const unchangedRecordIndex = updatedTransaction.records.findIndex(
+    (record) => record.record_id !== changedRecord!.record_id,
+  );
+  expect(changedRecordIndex).toBeGreaterThanOrEqual(0);
+  expect(unchangedRecordIndex).toBeGreaterThanOrEqual(0);
+  const updatedRecord = updatedTransaction.records[changedRecordIndex];
+  expect(updatedTransaction.updated_at).not.toBe(updatedTransaction.created_at);
+  expect(updatedRecord!.updated_at).not.toBe(updatedRecord!.created_at);
+  const expectedTransactionUpdate = await formatBrowserTimestamp(
+    page,
+    updatedTransaction.updated_at,
+  );
+  const expectedRecordUpdate = await formatBrowserTimestamp(
+    page,
+    updatedRecord!.updated_at,
+  );
   const alternateSpendResponse = await page.request.post(
     "/api/transactions/spend",
     {
@@ -602,6 +660,10 @@ test("transaction detail panel shows full records and supports deep links", asyn
   await expect(metadata.getByText("Class", { exact: true })).toHaveCount(0);
   await expect(metadata.getByText("Source", { exact: true })).toBeVisible();
   await expect(metadata.getByText("Created", { exact: true })).toBeVisible();
+  await expect(metadata.getByText("Updated", { exact: true })).toBeVisible();
+  await expect(metadata.getByTestId("transaction-updated-at")).toHaveText(
+    expectedTransactionUpdate,
+  );
   await expect(
     panel.getByTestId("amount-chip").filter({ hasText: "-42.19 $" }).first(),
   ).toBeVisible();
@@ -680,9 +742,12 @@ test("transaction detail panel shows full records and supports deep links", asyn
   await expect(recordTable.getByText(member.name, { exact: true })).toHaveCount(
     0,
   );
-  await recordRows.first().click();
+  await recordRows.nth(changedRecordIndex).click();
   const disclosure = recordTable.locator("tr.detail-records-disclosure-row");
   await expect(disclosure).toBeVisible();
+  await expect(disclosure.getByTestId("record-updated-at")).toHaveText(
+    expectedRecordUpdate,
+  );
   await expect(disclosure).toContainText(memo);
   for (const tag of createdTags) {
     await expect(
@@ -711,6 +776,14 @@ test("transaction detail panel shows full records and supports deep links", asyn
       "button, [data-slot='tooltip-trigger'], [data-testid*='chip']",
     ),
   ).toHaveCount(0);
+  await recordRows.nth(unchangedRecordIndex).click();
+  const unchangedDisclosure = recordRows
+    .nth(unchangedRecordIndex)
+    .locator("xpath=following-sibling::tr[1]");
+  await expect(unchangedDisclosure).toBeVisible();
+  await expect(unchangedDisclosure.getByTestId("record-updated-at")).toHaveText(
+    "Never",
+  );
 
   await page.keyboard.press("Escape");
   await expect(panel).toBeHidden();
@@ -723,6 +796,9 @@ test("transaction detail panel shows full records and supports deep links", asyn
     name: alternateTransaction.display_title,
   });
   await expect(alternatePanel).toBeVisible();
+  await expect(alternatePanel.getByTestId("transaction-updated-at")).toHaveText(
+    "Never",
+  );
   await page.keyboard.press("Escape");
 
   await activateTransactionRow(detailRow);
