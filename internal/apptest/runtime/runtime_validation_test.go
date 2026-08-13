@@ -41,6 +41,26 @@ func TestRuntimeValidationExpectedBehavior(t *testing.T) {
 		}
 	})
 
+	for _, retention := range []int{0, -1} {
+		t.Run("non-positive audit-log retention fails runtime composition", func(t *testing.T) {
+			_, err := apptest.NewResult(t, apptest.WithAuditLogRetentionMonths(retention))
+			if err == nil || !strings.Contains(err.Error(), "audit-log retention months must be positive") {
+				t.Fatalf("runtime composition error = %v, want positive audit-log retention failure", err)
+			}
+		})
+	}
+
+	t.Run("invalid audit-log compaction schedule fails runtime composition", func(t *testing.T) {
+		_, err := apptest.NewResult(
+			t,
+			apptest.WithOperationsEnabled(true),
+			apptest.WithAuditLogCompactionScheduleUTC("not-a-schedule"),
+		)
+		if err == nil || !strings.Contains(err.Error(), "audit-log compaction schedule") {
+			t.Fatalf("runtime composition error = %v, want audit-log schedule validation failure", err)
+		}
+	})
+
 	t.Run("impossible recurring schedule does not synthesize a fallback run", func(t *testing.T) {
 		clock := apptest.NewFakeClock(apptest.Timestamp("2026-01-01T00:00:00Z"))
 		client := newSharedClient(

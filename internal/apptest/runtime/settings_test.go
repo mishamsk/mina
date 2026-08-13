@@ -53,6 +53,15 @@ func TestSettingsReportsResolvedRuntimeValues(t *testing.T) {
 	if port.Help != "Resolved TCP port in Mina's serve configuration." {
 		t.Fatalf("serve port help = %q, want resolved configuration description", port.Help)
 	}
+	auditGroup := settingsGroup(t, response.JSON200.Groups, "audit_log", "API audit log", 50)
+	retention := settingsField(t, auditGroup.Fields, "audit_log.retention_months", 10)
+	if retention.Value != "6" || retention.Source != httpclient.Default || retention.Control != httpclient.Integer {
+		t.Fatalf("audit retention = %+v, want default integer value 6", retention)
+	}
+	schedule := settingsField(t, auditGroup.Fields, "audit_log.compaction_schedule_utc", 20)
+	if schedule.Value != "0 0 1 * *" || schedule.Source != httpclient.Default {
+		t.Fatalf("audit compaction schedule = %+v, want default monthly schedule", schedule)
+	}
 	assertSettingsUnchanged(t, client, response.JSON200)
 }
 
@@ -181,6 +190,30 @@ func TestSettingsReportsCLIOverrideSource(t *testing.T) {
 	port := settingsField(t, httpGroup.Fields, "serve.port", 20)
 	if port.Value != "18090" || port.Source != httpclient.CliOverride {
 		t.Fatalf("serve port = %+v, want CLI override value 18090", port)
+	}
+}
+
+func TestSettingsReportsAuditLogConfigAndOverrideSources(t *testing.T) {
+	scheduleOverride := "30 2 1 * *"
+	settingsSources, _ := apptest.WithSettingsSources(
+		t,
+		apptest.SettingsSourceValues{
+			ConfigFile:                            "[audit_log]\nretention_months = 9\ncompaction_schedule_utc = \"0 3 1 * *\"\n",
+			CLIOverrideAuditCompactionScheduleUTC: &scheduleOverride,
+		},
+	)
+	client := newSharedClient(t, settingsSources)
+
+	response, err := client.REST().GetSettingsWithResponse(context.Background())
+	requireSettingsResponse(t, err, response.StatusCode(), response.Body)
+	auditGroup := settingsGroup(t, response.JSON200.Groups, "audit_log", "API audit log", 50)
+	retention := settingsField(t, auditGroup.Fields, "audit_log.retention_months", 10)
+	if retention.Value != "9" || retention.Source != httpclient.ConfigFile {
+		t.Fatalf("audit retention = %+v, want config-file value 9", retention)
+	}
+	schedule := settingsField(t, auditGroup.Fields, "audit_log.compaction_schedule_utc", 20)
+	if schedule.Value != scheduleOverride || schedule.Source != httpclient.CliOverride {
+		t.Fatalf("audit compaction schedule = %+v, want CLI override %q", schedule, scheduleOverride)
 	}
 }
 

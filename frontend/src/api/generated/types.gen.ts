@@ -19,6 +19,43 @@ export type AuthenticationStatusResponse = {
     user?: AuthenticationUser | null;
 };
 
+export type ApiAuditClientSurface = 'rest' | 'web-ui' | 'cli' | 'mcp';
+
+export type ApiAuditEntry = {
+    api_audit_entry_id: number;
+    occurred_at: string;
+    operation_id: string;
+    method: string;
+    request_uri: string;
+    response_status: number;
+    duration_microseconds: number;
+    client_surface: ApiAuditClientSurface;
+    /**
+     * Captured valid JSON request value, or null when no valid JSON body was present.
+     */
+    request_json: unknown;
+    /**
+     * Whether request_json contains a captured valid JSON value, including JSON null.
+     */
+    request_json_present: boolean;
+    /**
+     * Captured valid JSON response value, or null when no valid JSON body was present.
+     */
+    response_json: unknown;
+    /**
+     * Whether response_json contains a captured valid JSON value, including JSON null.
+     */
+    response_json_present: boolean;
+};
+
+export type ApiAuditEntryListResponse = {
+    entries: Array<ApiAuditEntry>;
+    /**
+     * Count of matching entries before limit and offset are applied.
+     */
+    total_count: number;
+};
+
 export type DemoSeedResponse = {
     members: number;
     accounts: number;
@@ -1069,7 +1106,7 @@ export type BackgroundOperationSummary = {
     links: BackgroundOperationLinks;
 };
 
-export type BackgroundOperationId = 'exchange-rate-loading' | 'database-backup';
+export type BackgroundOperationId = 'exchange-rate-loading' | 'database-backup' | 'audit-log-compaction';
 
 export type BackgroundOperationRunOutcome = 'running' | 'succeeded' | 'failed' | 'skipped' | 'canceled';
 
@@ -1114,9 +1151,25 @@ export type DatabaseBackupStatusResponse = {
     completed_run_revision: number;
 };
 
+export type AuditLogCompactionStatusResponse = {
+    operation_id: 'audit-log-compaction';
+    enabled: boolean;
+    /**
+     * Five-field cron-style schedule interpreted in UTC.
+     */
+    schedule_utc: string;
+    state: 'idle' | 'running';
+    last_started_at?: string | null;
+    last_completed_at?: string | null;
+    last_success?: boolean | null;
+    last_error?: string | null;
+    run_count: number;
+    completed_run_revision: number;
+};
+
 export type OperationRunReferenceResponse = {
     operation_run_id: number;
-    operation_id: 'exchange-rate-loading' | 'database-backup';
+    operation_id: 'exchange-rate-loading' | 'database-backup' | 'audit-log-compaction';
     status_url: string;
 };
 
@@ -1136,6 +1189,10 @@ export type ExchangeRateLoadingRun = BackgroundOperationRun & {
 
 export type DatabaseBackupRun = BackgroundOperationRun & {
     operation_id: 'database-backup';
+};
+
+export type AuditLogCompactionRun = BackgroundOperationRun & {
+    operation_id: 'audit-log-compaction';
 };
 
 export type BackgroundOperationRunListResponse = {
@@ -1812,6 +1869,60 @@ export type LogoutResponses = {
 
 export type LogoutResponse = LogoutResponses[keyof LogoutResponses];
 
+export type ListApiAuditEntriesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Filter by an exact case-insensitive HTTP method.
+         */
+        method?: string;
+        /**
+         * Filter by an exact stable OpenAPI operation ID.
+         */
+        operation_id?: string;
+        /**
+         * Filter by caller-declared client surface.
+         */
+        client_surface?: ApiAuditClientSurface;
+        /**
+         * Maximum matching entries to return; defaults to 100.
+         */
+        limit?: number;
+        /**
+         * Zero-based number of matching entries to skip.
+         */
+        offset?: number;
+    };
+    url: '/api/audit-log/entries';
+};
+
+export type ListApiAuditEntriesErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The route does not support the requested method.
+     */
+    405: ErrorResponse;
+};
+
+export type ListApiAuditEntriesError = ListApiAuditEntriesErrors[keyof ListApiAuditEntriesErrors];
+
+export type ListApiAuditEntriesResponses = {
+    /**
+     * Bounded newest-first API audit-entry page.
+     */
+    200: ApiAuditEntryListResponse;
+};
+
+export type ListApiAuditEntriesResponse = ListApiAuditEntriesResponses[keyof ListApiAuditEntriesResponses];
+
 export type GetSettingsData = {
     body?: never;
     path?: never;
@@ -2218,6 +2329,110 @@ export type GetDatabaseBackupRunResponses = {
 };
 
 export type GetDatabaseBackupRunResponse = GetDatabaseBackupRunResponses[keyof GetDatabaseBackupRunResponses];
+
+export type GetAuditLogCompactionStatusData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/background-operations/audit-log-compaction/status';
+};
+
+export type GetAuditLogCompactionStatusErrors = {
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The route does not support the requested method.
+     */
+    405: ErrorResponse;
+};
+
+export type GetAuditLogCompactionStatusError = GetAuditLogCompactionStatusErrors[keyof GetAuditLogCompactionStatusErrors];
+
+export type GetAuditLogCompactionStatusResponses = {
+    /**
+     * API audit-log compaction status.
+     */
+    200: AuditLogCompactionStatusResponse;
+};
+
+export type GetAuditLogCompactionStatusResponse = GetAuditLogCompactionStatusResponses[keyof GetAuditLogCompactionStatusResponses];
+
+export type StartAuditLogCompactionRunData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/background-operations/audit-log-compaction/runs';
+};
+
+export type StartAuditLogCompactionRunErrors = {
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
+    /**
+     * The route does not support the requested method.
+     */
+    405: ErrorResponse;
+};
+
+export type StartAuditLogCompactionRunError = StartAuditLogCompactionRunErrors[keyof StartAuditLogCompactionRunErrors];
+
+export type StartAuditLogCompactionRunResponses = {
+    /**
+     * API audit-log compaction was invoked.
+     */
+    202: OperationRunReferenceResponse;
+};
+
+export type StartAuditLogCompactionRunResponse = StartAuditLogCompactionRunResponses[keyof StartAuditLogCompactionRunResponses];
+
+export type GetAuditLogCompactionRunData = {
+    body?: never;
+    path: {
+        /**
+         * Numeric identifier of the background-operation run.
+         */
+        operation_run_id: number;
+    };
+    query?: never;
+    url: '/api/background-operations/audit-log-compaction/runs/{operation_run_id}';
+};
+
+export type GetAuditLogCompactionRunErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The requested resource was not found.
+     */
+    404: ErrorResponse;
+    /**
+     * The route does not support the requested method.
+     */
+    405: ErrorResponse;
+};
+
+export type GetAuditLogCompactionRunError = GetAuditLogCompactionRunErrors[keyof GetAuditLogCompactionRunErrors];
+
+export type GetAuditLogCompactionRunResponses = {
+    /**
+     * API audit-log compaction run status.
+     */
+    200: AuditLogCompactionRun;
+};
+
+export type GetAuditLogCompactionRunResponse = GetAuditLogCompactionRunResponses[keyof GetAuditLogCompactionRunResponses];
 
 export type ListCategoriesData = {
     body?: never;

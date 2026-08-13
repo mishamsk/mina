@@ -96,6 +96,7 @@ Rules:
 ## REST API
 
 - Every application capability must be available through the API; authentication administration and offline database validation are deliberate CLI-only operational flows.
+- Every interactive user-facing state mutation goes through the REST handler over HTTP or in process; runtime-owned automatic work and offline administration remain outside the API audit trail.
 - API errors are stable, machine-readable JSON.
 - External REST authenticates with browser cookies or API keys; external MCP accepts API keys only. Public bootstrap routes and trusted in-process dispatch are explicit exceptions.
 - Dynamic filters, sort keys, and field names must come from typed allowlists.

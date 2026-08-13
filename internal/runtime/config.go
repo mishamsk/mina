@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -85,13 +86,15 @@ func resolveRuntimeDefaults(cfg appconfig.Config) appconfig.Config {
 // HTTPConfig controls process-local HTTP adapter behavior.
 type HTTPConfig struct {
 	AccessLog  io.Writer
+	ErrorLog   io.Writer
 	MCPVersion string
 	Timeout    time.Duration
 }
 
-// Clock returns the current process time.
+// Clock returns process time and provides cancelable deadline waits.
 type Clock interface {
 	Now() time.Time
+	WaitUntil(context.Context, time.Time) bool
 }
 
 // Dependencies contains side-effect boundary dependencies supplied by composition or tests.
@@ -134,6 +137,22 @@ func Validate(cfg appconfig.Config, operationsEnabled bool) error {
 			return fmt.Errorf("backup file directory is required when backup file schedule is configured")
 		}
 	}
+	if cfg.AuditLog.RetentionMonths <= 0 {
+		return fmt.Errorf("audit-log retention months must be positive")
+	}
+	if operationsEnabled {
+		if err := validateAuditLogCompactionSchedule(cfg.AuditLog.CompactionScheduleUTC); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateAuditLogCompactionSchedule(schedule string) error {
+	if err := background.ValidateSchedule(schedule); err != nil {
+		return fmt.Errorf("audit-log compaction schedule: %w", err)
+	}
+
 	return nil
 }
 
@@ -168,6 +187,21 @@ type systemClock struct{}
 
 func (systemClock) Now() time.Time {
 	return time.Now()
+}
+
+func (systemClock) WaitUntil(ctx context.Context, deadline time.Time) bool {
+	duration := time.Until(deadline)
+	if duration <= 0 {
+		return true
+	}
+	timer := time.NewTimer(duration)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
+	}
 }
 
 func (opts Options) clock() Clock {

@@ -105,7 +105,7 @@ Rules:
 - Selector hooks that return object, array, `Map`, or `Set` values use `useShallow`.
 - Action helpers must be usable inside and outside React components.
 - Action helpers mutate with `useXStore.setState(...)`; do not hide mutations inside React-only hooks.
-- Devtools action names use `StoreName/actionName`, e.g. `StatusPageStore/setStatusPageShowDetails`.
+- Devtools action names use `StoreName/actionName`, e.g. `TransactionsStore/setTransactionPage`.
 - Getters use `getXSnapshot` names for outside-React reads.
 - Mutations use Redux-devtools-compatible helper names such as `setX`, `updateX`, `clearX`, `resetX`, `hydrateX`, and `invalidateX`.
 

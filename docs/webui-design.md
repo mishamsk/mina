@@ -301,10 +301,12 @@ Each screen below defines its purpose, layout, behavior, and primary data source
 
 ### Status and Settings
 
-- Status: backend health, database location/schema, background operations (exchange-rate loading, backups) with recent runs and manual trigger buttons.
+- Status keeps backend health, schema, server-time, and database-encryption cards above URL-addressable Background operations and Audit log tabs; there is no Details preference or backend-route disclosure.
 - Operation navigation: an operation selector drills into a shared runs table showing the common run envelope — paged, newest first; columns: started, finished/duration, outcome, trigger. Selecting a run opens its detail.
 - Shared building blocks (selector, envelope runs table, run-detail frame) are common to all operations; each operation type ships a dedicated frontend module owning its run-detail rendering and operation-specific controls through that operation's named concrete APIs. There are no generic fallback renderers.
 - Module completeness is enforced statically: the module registry is keyed by the generated operation-id union, so a newly added operation type fails typecheck until its module exists.
+- Audit log: newest-first backend pagination with method, operation-ID, and client-surface filters; rows show timestamp, surface, method, operation/request URI, status, and duration. Selecting a row reveals all metadata plus formatted request and response JSON or a clear absent-body state.
+- Status tab, operation/run selection, audit filters, pagination, and selected audit entry are URL-owned and preserve parameters belonging to the other view.
 - Settings is a server-driven read-only view of the operational configuration loaded for the running process. It renders backend-provided groups, labels, help, active values, and the resolved config-file location without setting-key-specific UI code. Bare indicators beside each label mark non-default values and identify CLI or environment overrides; config-file origin is implicit.
 - Status reports whether database encryption is active as a labeled health card; the encrypted state includes a supporting lock icon.
 - Configuration is loaded once at startup; this screen does not mutate runtime state, write the config file, or predict values for a later process.

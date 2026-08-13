@@ -99,6 +99,29 @@ func (s *strictServer) GetDatabaseBackupStatus(
 	}, nil
 }
 
+func (s *strictServer) GetAuditLogCompactionStatus(
+	ctx context.Context,
+	_ openapi.GetAuditLogCompactionStatusRequestObject,
+) (openapi.GetAuditLogCompactionStatusResponseObject, error) {
+	status, err := s.deps.Operations.AuditLogCompactionStatus(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return openapi.GetAuditLogCompactionStatus200JSONResponse{
+		OperationId:          openapi.AuditLogCompactionStatusResponseOperationId(status.ID),
+		Enabled:              status.Enabled,
+		ScheduleUtc:          status.ScheduleUTC,
+		State:                openapi.AuditLogCompactionStatusResponseState(status.State),
+		LastStartedAt:        status.LastStartedAt,
+		LastCompletedAt:      status.LastCompletedAt,
+		LastSuccess:          status.LastSuccess,
+		LastError:            status.LastError,
+		RunCount:             status.RunCount,
+		CompletedRunRevision: status.CompletedRunRevision,
+	}, nil
+}
+
 func (s *strictServer) StartExchangeRateLoadingRun(
 	ctx context.Context,
 	_ openapi.StartExchangeRateLoadingRunRequestObject,
@@ -131,6 +154,22 @@ func (s *strictServer) StartDatabaseBackupRun(
 	}, nil
 }
 
+func (s *strictServer) StartAuditLogCompactionRun(
+	ctx context.Context,
+	_ openapi.StartAuditLogCompactionRunRequestObject,
+) (openapi.StartAuditLogCompactionRunResponseObject, error) {
+	run, err := s.deps.Operations.TriggerAuditLogCompactionOperation(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return openapi.StartAuditLogCompactionRun202JSONResponse{
+		OperationRunId: run.ID,
+		OperationId:    openapi.OperationRunReferenceResponseOperationId(run.OperationID),
+		StatusUrl:      auditLogCompactionRunURL(run.ID),
+	}, nil
+}
+
 func (s *strictServer) GetExchangeRateLoadingRun(
 	ctx context.Context,
 	request openapi.GetExchangeRateLoadingRunRequestObject,
@@ -153,6 +192,18 @@ func (s *strictServer) GetDatabaseBackupRun(
 	}
 
 	return openapi.GetDatabaseBackupRun200JSONResponse(databaseBackupRunAPIResponse(run)), nil
+}
+
+func (s *strictServer) GetAuditLogCompactionRun(
+	ctx context.Context,
+	request openapi.GetAuditLogCompactionRunRequestObject,
+) (openapi.GetAuditLogCompactionRunResponseObject, error) {
+	run, err := s.deps.Operations.GetAuditLogCompactionRun(ctx, request.OperationRunId)
+	if err != nil {
+		return nil, err
+	}
+
+	return openapi.GetAuditLogCompactionRun200JSONResponse(auditLogCompactionRunAPIResponse(run)), nil
 }
 
 func backgroundOperationRunAPIResponse(run operationruns.RunEnvelope) openapi.BackgroundOperationRun {
@@ -200,12 +251,28 @@ func databaseBackupRunAPIResponse(run operationruns.DatabaseBackupRun) openapi.D
 	}
 }
 
+func auditLogCompactionRunAPIResponse(run operationruns.AuditLogCompactionRun) openapi.AuditLogCompactionRun {
+	return openapi.AuditLogCompactionRun{
+		OperationRunId: run.ID,
+		OperationId:    openapi.AuditLogCompactionRunOperationId(run.OperationID),
+		Outcome:        openapi.BackgroundOperationRunOutcome(run.Status),
+		Trigger:        openapi.BackgroundOperationRunTrigger(run.Trigger),
+		StartedAt:      run.StartedAt,
+		CompletedAt:    run.CompletedAt,
+		Error:          run.Error,
+	}
+}
+
 func exchangeRateLoadingRunURL(runID int64) string {
 	return fmt.Sprintf("/api/background-operations/exchange-rate-loading/runs/%d", runID)
 }
 
 func databaseBackupRunURL(runID int64) string {
 	return fmt.Sprintf("/api/background-operations/database-backup/runs/%d", runID)
+}
+
+func auditLogCompactionRunURL(runID int64) string {
+	return fmt.Sprintf("/api/background-operations/audit-log-compaction/runs/%d", runID)
 }
 
 func operationLinks(operationID operationruns.OperationID) openapi.BackgroundOperationLinks {
@@ -223,6 +290,13 @@ func operationLinks(operationID operationruns.OperationID) openapi.BackgroundOpe
 			StartRun: "/api/background-operations/database-backup/runs",
 			Run:      "/api/background-operations/database-backup/runs/{operation_run_id}",
 			Runs:     "/api/background-operations/runs?operation_id=database-backup",
+		}
+	case operationruns.AuditLogCompactionOperationID:
+		return openapi.BackgroundOperationLinks{
+			Status:   "/api/background-operations/audit-log-compaction/status",
+			StartRun: "/api/background-operations/audit-log-compaction/runs",
+			Run:      "/api/background-operations/audit-log-compaction/runs/{operation_run_id}",
+			Runs:     "/api/background-operations/runs?operation_id=audit-log-compaction",
 		}
 	default:
 		return openapi.BackgroundOperationLinks{}

@@ -64,7 +64,10 @@ func NewRemote(serverURL string, options Options, extensions ...Extension) (*Ser
 	if err := validateServerURL(serverURL); err != nil {
 		return nil, err
 	}
-	clientOptions := []httpclient.ClientOption{httpclient.WithHTTPClient(&http.Client{})}
+	clientOptions := []httpclient.ClientOption{
+		httpclient.WithHTTPClient(&http.Client{}),
+		httpclient.WithClientSurface(httpclient.Mcp),
+	}
 	if options.APIKey != "" {
 		clientOptions = append(clientOptions, httpclient.WithBearerToken(options.APIKey))
 	}
@@ -81,7 +84,7 @@ func NewStreamableHTTP(restHandler http.Handler, options Options, extensions ...
 	if restHandler == nil {
 		return nil, errors.New("MCP Streamable HTTP requires a REST handler")
 	}
-	client, err := httpclient.NewInProcessClient(restHandler)
+	client, err := httpclient.NewInProcessClient(restHandler, httpclient.WithClientSurface(httpclient.Mcp))
 	if err != nil {
 		return nil, fmt.Errorf("create in-process REST client: %w", err)
 	}

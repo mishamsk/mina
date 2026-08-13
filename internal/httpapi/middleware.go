@@ -153,6 +153,10 @@ func openAPIValidationErrorHandler(
 }
 
 func openAPIValidationErrorMessage(r *http.Request, err error) string {
+	var maxBytesError *http.MaxBytesError
+	if errors.As(err, &maxBytesError) {
+		return fmt.Sprintf("request body exceeds %d MiB limit", maxBytesError.Limit/(1<<20))
+	}
 	var requestErr *openapi3filter.RequestError
 	if errors.As(err, &requestErr) {
 		if requestErr.RequestBody != nil {

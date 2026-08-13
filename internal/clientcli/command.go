@@ -293,7 +293,7 @@ func openSession(command *cobra.Command, options CommandOptions) (*Session, erro
 			return nil, err
 		}
 		apiKey := appconfig.APIKeyFromEnvironment()
-		clientOptions := []httpclient.ClientOption{}
+		clientOptions := []httpclient.ClientOption{httpclient.WithClientSurface(httpclient.Cli)}
 		if apiKey != "" {
 			clientOptions = append(clientOptions, httpclient.WithBearerToken(apiKey))
 		}
@@ -335,7 +335,7 @@ func openSession(command *cobra.Command, options CommandOptions) (*Session, erro
 		}
 		return nil, errors.New("open local client session: local session factory returned incomplete resources")
 	}
-	client, err := httpclient.NewInProcessClient(local.Handler)
+	client, err := httpclient.NewInProcessClient(local.Handler, httpclient.WithClientSurface(httpclient.Cli))
 	if err != nil {
 		if closeErr := local.Close(); closeErr != nil {
 			return nil, fmt.Errorf("create in-process client: %w; close local session: %w", err, closeErr)

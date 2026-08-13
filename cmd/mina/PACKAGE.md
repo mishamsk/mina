@@ -7,6 +7,7 @@
 ## Implicit Contracts
 
 - `mina db schema` prints the embedded current target DDL without loading configuration or opening a database.
+- Local client sessions route REST adapter diagnostics to command stderr before closing their one-shot runtime.
 
 ## Boundaries
 

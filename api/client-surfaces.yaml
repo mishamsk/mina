@@ -20,6 +20,13 @@ operations:
     mcp:
       state: excluded
       reason: MCP has no browser cookie session to clear.
+  listAPIAuditEntries:
+    cli: {state: exposed, name: list}
+    mcp:
+      state: exposed
+      name: list
+      description: Lists newest-first API mutation audit entries. Keep results bounded with limit and offset, and filter by method, operation_id, or client_surface when possible.
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   seedDemo:
     cli: {state: exposed, name: seed}
     mcp:
@@ -133,6 +140,36 @@ operations:
       state: exposed
       name: get_database_backup_run
       description: Use with an exact database-backup run ID, normally returned by the start tool. This returns one typed run; use operations_list_runs to discover historical IDs.
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
+  getAuditLogCompactionStatus:
+    cli: {state: exposed, name: audit-log-compaction-status}
+    mcp:
+      state: exposed
+      name: audit_log_compaction_status
+      description: Use for API audit-log compaction state; this does not start compaction or return one specific run. Use operations_get_audit_log_compaction_run with a known run ID.
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
+  startAuditLogCompactionRun:
+    cli:
+      state: exposed
+      name: start-audit-log-compaction
+      run_wait:
+        status_operation_id: getAuditLogCompactionRun
+        run_id_response_field: operation_run_id
+        status_path_parameter: operation_run_id
+        terminal_field: outcome
+        terminal_values: [succeeded, failed, skipped, canceled]
+        failure_values: [failed, canceled]
+    mcp:
+      state: exposed
+      name: start_audit_log_compaction
+      description: Starts one manual API audit-log compaction run and returns its run ID. Use the typed get-run tool to poll that run; call only when the user intends to delete expired audit history.
+      annotations: {read_only: false, destructive: true, idempotent: true, open_world: false}
+  getAuditLogCompactionRun:
+    cli: {state: exposed, name: get-audit-log-compaction-run}
+    mcp:
+      state: exposed
+      name: get_audit_log_compaction_run
+      description: Use with an exact API audit-log compaction run ID, normally returned by the start tool. This returns one typed run; use operations_list_runs to discover historical IDs.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
 
   listCategories:

@@ -26,6 +26,8 @@ const (
 	defaultExchangeRateLoadScheduleUTC = "0 17 * * *"
 	defaultFrankfurterBaseURL          = "https://api.frankfurter.dev/v2"
 	defaultExchangeRateStartupProvider = "frankfurter_file"
+	defaultAuditLogRetentionMonths     = 6
+	defaultAuditLogCompactionSchedule  = "0 0 1 * *"
 )
 
 // ConfigFileHelp documents the local config file path used by the loader.
@@ -45,6 +47,7 @@ type Config struct {
 	Serve             ServeConfig
 	ExchangeRates     ExchangeRateConfig
 	Backups           BackupConfig
+	AuditLog          AuditLogConfig
 }
 
 // ServeConfig contains source-loaded REST listener settings.
@@ -86,6 +89,14 @@ type FileBackupConfig struct {
 	ScheduleUTC string
 }
 
+// AuditLogConfig contains source-loaded API audit-history retention settings.
+type AuditLogConfig struct {
+	// RetentionMonths is the number of calendar months retained before the current month boundary.
+	RetentionMonths int
+	// CompactionScheduleUTC is a five-field cron-style UTC schedule.
+	CompactionScheduleUTC string
+}
+
 // Override is an optional caller-provided config value.
 type Override[T any] struct {
 	Val   T
@@ -114,6 +125,7 @@ type Overrides struct {
 	Serve             ServeOverrides
 	ExchangeRates     ExchangeRateOverrides
 	Backups           BackupOverrides
+	AuditLog          AuditLogOverrides
 }
 
 // ServeOverrides contains explicit REST listener config values.
@@ -146,6 +158,12 @@ type FileBackupOverrides struct {
 	Directory      Override[string]
 	RetentionCount Override[int]
 	ScheduleUTC    Override[string]
+}
+
+// AuditLogOverrides contains explicit API audit-history config values.
+type AuditLogOverrides struct {
+	RetentionMonths       Override[int]
+	CompactionScheduleUTC Override[string]
 }
 
 // Source describes where one config field may be loaded from.
@@ -200,6 +218,10 @@ const (
 	SourceBackupFileRetentionCount SourceKey = "backups.file.retention_count"
 	// SourceBackupFileScheduleUTC identifies the file backup schedule config source.
 	SourceBackupFileScheduleUTC SourceKey = "backups.file.schedule_utc"
+	// SourceAuditLogRetentionMonths identifies the audit-log retention config source.
+	SourceAuditLogRetentionMonths SourceKey = "audit_log.retention_months"
+	// SourceAuditLogCompactionScheduleUTC identifies the audit-log compaction schedule config source.
+	SourceAuditLogCompactionScheduleUTC SourceKey = "audit_log.compaction_schedule_utc"
 )
 
 type fileConfig struct {
@@ -210,6 +232,7 @@ type fileConfig struct {
 	Serve             serveFileConfig        `toml:"serve"`
 	ExchangeRates     exchangeRateFileConfig `toml:"exchange_rates"`
 	Backups           backupFileConfig       `toml:"backups"`
+	AuditLog          auditLogFileConfig     `toml:"audit_log"`
 }
 
 type serveFileConfig struct {
@@ -239,6 +262,11 @@ type fileBackupFileConfig struct {
 	ScheduleUTC    *string `toml:"schedule_utc" env:"MINA_BACKUP_FILE_SCHEDULE_UTC"`
 }
 
+type auditLogFileConfig struct {
+	RetentionMonths       *int    `toml:"retention_months" env:"MINA_AUDIT_LOG_RETENTION_MONTHS"`
+	CompactionScheduleUTC *string `toml:"compaction_schedule_utc" env:"MINA_AUDIT_LOG_COMPACTION_SCHEDULE_UTC"`
+}
+
 // DefaultServeConfig returns Mina's REST server defaults.
 func DefaultServeConfig() ServeConfig {
 	return ServeConfig{
@@ -254,6 +282,15 @@ func DefaultConfig() Config {
 		StartupValidation: defaultStartupValidation,
 		Serve:             DefaultServeConfig(),
 		ExchangeRates:     DefaultExchangeRateConfig(),
+		AuditLog:          DefaultAuditLogConfig(),
+	}
+}
+
+// DefaultAuditLogConfig returns API audit-history retention defaults.
+func DefaultAuditLogConfig() AuditLogConfig {
+	return AuditLogConfig{
+		RetentionMonths:       defaultAuditLogRetentionMonths,
+		CompactionScheduleUTC: defaultAuditLogCompactionSchedule,
 	}
 }
 
@@ -299,6 +336,8 @@ func Sources() map[SourceKey]Source {
 		SourceBackupFileDirectory:                 sourceFor(SourceBackupFileDirectory),
 		SourceBackupFileRetentionCount:            sourceFor(SourceBackupFileRetentionCount),
 		SourceBackupFileScheduleUTC:               sourceFor(SourceBackupFileScheduleUTC),
+		SourceAuditLogRetentionMonths:             sourceFor(SourceAuditLogRetentionMonths),
+		SourceAuditLogCompactionScheduleUTC:       sourceFor(SourceAuditLogCompactionScheduleUTC),
 	}
 }
 
@@ -323,6 +362,7 @@ func Load(opts LoadOptions, overrides Overrides) (Config, error) {
 	applyServeFile(&cfg, fileCfg)
 	applyExchangeRateFile(&cfg, fileCfg)
 	applyBackupFile(&cfg, fileCfg)
+	applyAuditLogFile(&cfg, fileCfg)
 	if fileCfg.AuthFile != nil {
 		if strings.TrimSpace(*fileCfg.AuthFile) == "" {
 			return Config{}, fmt.Errorf("read config file %s: auth_file must not be empty", configFilePath)
@@ -339,12 +379,14 @@ func Load(opts LoadOptions, overrides Overrides) (Config, error) {
 	applyServeFile(&cfg, envCfg)
 	applyExchangeRateFile(&cfg, envCfg)
 	applyBackupFile(&cfg, envCfg)
+	applyAuditLogFile(&cfg, envCfg)
 	markSettingSources(cfg.SettingSources, envCfg, SettingSourceEnvironment)
 
 	applyOverrides(&cfg, overrides)
 	applyServeOverrides(&cfg, overrides.Serve)
 	applyExchangeRateOverrides(&cfg, overrides.ExchangeRates)
 	applyBackupOverrides(&cfg, overrides.Backups)
+	applyAuditLogOverrides(&cfg, overrides.AuditLog)
 
 	return cfg, nil
 }
@@ -377,6 +419,15 @@ func applyBackupFile(cfg *Config, fileCfg fileConfig) {
 	}
 	if fileCfg.Backups.File.ScheduleUTC != nil {
 		cfg.Backups.File.ScheduleUTC = *fileCfg.Backups.File.ScheduleUTC
+	}
+}
+
+func applyAuditLogFile(cfg *Config, fileCfg fileConfig) {
+	if fileCfg.AuditLog.RetentionMonths != nil {
+		cfg.AuditLog.RetentionMonths = *fileCfg.AuditLog.RetentionMonths
+	}
+	if fileCfg.AuditLog.CompactionScheduleUTC != nil {
+		cfg.AuditLog.CompactionScheduleUTC = *fileCfg.AuditLog.CompactionScheduleUTC
 	}
 }
 
@@ -528,6 +579,11 @@ func applyBackupOverrides(cfg *Config, overrides BackupOverrides) {
 	applyOverride(&cfg.Backups.File.Directory, overrides.File.Directory, cfg.SettingSources, SourceBackupFileDirectory)
 	applyOverride(&cfg.Backups.File.RetentionCount, overrides.File.RetentionCount, cfg.SettingSources, SourceBackupFileRetentionCount)
 	applyOverride(&cfg.Backups.File.ScheduleUTC, overrides.File.ScheduleUTC, cfg.SettingSources, SourceBackupFileScheduleUTC)
+}
+
+func applyAuditLogOverrides(cfg *Config, overrides AuditLogOverrides) {
+	applyOverride(&cfg.AuditLog.RetentionMonths, overrides.RetentionMonths, cfg.SettingSources, SourceAuditLogRetentionMonths)
+	applyOverride(&cfg.AuditLog.CompactionScheduleUTC, overrides.CompactionScheduleUTC, cfg.SettingSources, SourceAuditLogCompactionScheduleUTC)
 }
 
 func applyOverride[T any](target *T, override Override[T], sources map[SourceKey]SettingSource, key SourceKey) {

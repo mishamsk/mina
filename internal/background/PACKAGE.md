@@ -12,7 +12,7 @@
 - Default and optional startup invocations pair their run function with one timeout budget shared by all retry attempts.
 - A run records one invocation despite retries. Only `Transient` errors retry (`MaxRetries + 1` attempts); cancellation or deadline errors record cancellation, `AlreadyDone` records success, and other errors record failure.
 - Runner shutdown can leave a started operation without a terminal status because canceled work does not write one.
-- Schedules use the runner clock in UTC and accept only five-field cron expressions.
+- Schedules use the runner clock in UTC and accept only five-field cron expressions; each idle schedule loop owns one cancelable clock-deadline wait until its next run.
 - Unrecorded submitted work shares cancellation and shutdown joining, but has no operation-run record, retry, or timeout policy; non-cancellation failures are logged.
 
 ## Boundaries

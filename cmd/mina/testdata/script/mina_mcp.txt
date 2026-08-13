@@ -54,6 +54,12 @@ mcpcall http http://127.0.0.1:$PORT/mcp members_create '{"body":{"name":"MCP Smo
 stdout '"status":201'
 stdout '"member_id":'
 
+# One launched-process identity smoke proves MCP's shared REST request editor.
+mcpcall http http://127.0.0.1:$PORT/mcp audit_log_list '{"operation_id":"createMember","client_surface":"mcp","limit":1}'
+stdout '"client_surface":"mcp"'
+stdout -count=1 '"operation_id":"createMember"'
+stdout '"response_status":201'
+
 # Non-loopback origins stay forbidden on Streamable HTTP.
 httpget -bearer-env MINA_API_KEY -method POST -status 403 -accept 'application/json, text/event-stream' -origin https://example.com -body initialize.json http://127.0.0.1:$PORT/mcp
 stdout 'Forbidden: Origin must be loopback'

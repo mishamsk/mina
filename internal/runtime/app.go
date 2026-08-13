@@ -21,6 +21,7 @@ import (
 	"github.com/mishamsk/mina/internal/providers/exchangerates/frankfurter"
 	"github.com/mishamsk/mina/internal/services/accountingschema"
 	"github.com/mishamsk/mina/internal/services/accounts"
+	"github.com/mishamsk/mina/internal/services/apiaudit"
 	authentication "github.com/mishamsk/mina/internal/services/authentication/online"
 	"github.com/mishamsk/mina/internal/services/backups"
 	"github.com/mishamsk/mina/internal/services/categories"
@@ -286,8 +287,8 @@ func newWithAppDB(ctx context.Context, appDB *store.AppDB, cfg appconfig.Config,
 	if err != nil {
 		return nil, err
 	}
-	trustedRESTHandler := httpapi.NewWithOptions(services.Dependencies, httpapi.Options{Timeout: opts.HTTP.Timeout})
-	externalRESTHandler := httpapi.ProtectREST(authenticationService, opts.clock(), trustedRESTHandler)
+	trustedRESTHandler := httpapi.NewWithOptions(services.Dependencies, httpapi.Options{ErrorLog: opts.HTTP.ErrorLog, Timeout: opts.HTTP.Timeout})
+	externalRESTHandler := httpapi.NewProtectedWithOptions(services.Dependencies, httpapi.Options{ErrorLog: opts.HTTP.ErrorLog, Timeout: opts.HTTP.Timeout})
 	var mcpHandler http.Handler
 	if opts.ExecutionProfile == ExecutionProfileLongRunning {
 		mcpHandler, err = mcpserver.NewStreamableHTTP(trustedRESTHandler, mcpserver.Options{
@@ -419,6 +420,10 @@ func newAccountingServices(
 				Enabled:     cfg.Backups.File.Directory != "",
 				ScheduleUTC: cfg.Backups.File.ScheduleUTC,
 			},
+			AuditLogCompaction: operationruns.OperationConfig{
+				Enabled:     true,
+				ScheduleUTC: cfg.AuditLog.CompactionScheduleUTC,
+			},
 		},
 		operationRepo,
 		opts.clock(),
@@ -449,6 +454,7 @@ func newAccountingServices(
 		transactionService,
 		opts.clock(),
 	)
+	apiAuditService := apiaudit.NewService(store.NewAPIAuditStore(appDB))
 	templateService := transactiontemplates.NewService(
 		store.NewTransactionTemplateStore(appDB),
 		accountService,
@@ -461,6 +467,7 @@ func newAccountingServices(
 	return appServices{
 		Dependencies: httpapi.Dependencies{
 			AccountingSchema: accountingschema.NewService(),
+			APIAudit:         apiAuditService,
 			Health:           health.NewService(store.NewHealthStore(appDB)),
 			Operations:       operationRuns,
 			Categories:       categoryService,
@@ -644,6 +651,9 @@ func (a *App) Close() error {
 	if a.background != nil {
 		a.background.Close()
 	}
+	if a.services.APIAudit != nil {
+		a.services.APIAudit.WaitForPendingRecords()
+	}
 	if a.appDB == nil {
 		return nil
 	}
@@ -693,6 +703,24 @@ func newAppBackgroundRunner(cfg appconfig.Config, opts Options, services appServ
 		backupOp.Schedule = cfg.Backups.File.ScheduleUTC
 	}
 	if err := runner.Register(backupOp); err != nil {
+		return nil, err
+	}
+
+	auditLogCompactionOp := background.Operation{
+		ID:  operationruns.AuditLogCompactionOperationID,
+		Key: string(operationruns.AuditLogCompactionOperationID),
+		Invocation: background.Invocation{
+			Run: func(ctx context.Context) error {
+				return services.APIAudit.Compact(ctx, opts.clock().Now(), cfg.AuditLog.RetentionMonths)
+			},
+			Timeout: 2 * time.Minute,
+		},
+		MaxRetries: 0,
+	}
+	if opts.automaticOperationsEnabled() {
+		auditLogCompactionOp.Schedule = cfg.AuditLog.CompactionScheduleUTC
+	}
+	if err := runner.Register(auditLogCompactionOp); err != nil {
 		return nil, err
 	}
 

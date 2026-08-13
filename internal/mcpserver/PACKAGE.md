@@ -10,6 +10,7 @@
 - Generated tools preserve their operations' declared REST inputs and invoke Mina only through their supplied generated `httpclient` REST client; MCP does not bypass REST validation or behavior.
 - Tool results expose the REST status and decoded JSON body as structured content. Non-2xx responses remain MCP tool errors and expose the raw REST error body.
 - Streamable HTTP dispatches through an in-process REST client backed by exactly the handler supplied by its caller; authentication and outer HTTP composition remain the caller's responsibility.
+- Remote stdio and in-process Streamable HTTP dispatch both apply the shared `mcp` client-surface editor to generated REST requests.
 - Streamable HTTP permits requests without `Origin`, but a present origin must be an HTTP(S) `localhost` or loopback-IP origin.
 
 ## Boundaries

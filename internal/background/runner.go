@@ -15,7 +15,6 @@ import (
 
 const (
 	defaultOperationTimeout = 2 * time.Minute
-	maxRecurringSleep       = time.Second
 )
 
 var errAlreadyRunning = errors.New("background operation already running")
@@ -79,9 +78,10 @@ type Invocation struct {
 	Timeout time.Duration
 }
 
-// Clock returns the current process time.
+// Clock returns process time and provides cancelable deadline waits.
 type Clock interface {
 	Now() time.Time
+	WaitUntil(context.Context, time.Time) bool
 }
 
 // Operation describes one registered background workflow.
@@ -313,27 +313,9 @@ func (r *Runner) runRecurring(ctx context.Context, op registeredOperation) {
 			}
 			continue
 		}
-		if !r.waitUntil(ctx, next) {
+		if !r.clock.WaitUntil(ctx, next) {
 			return
 		}
-	}
-}
-
-func (r *Runner) waitUntil(ctx context.Context, next time.Time) bool {
-	duration := next.Sub(r.clock.Now().UTC())
-	if duration <= 0 {
-		return true
-	}
-	if duration > maxRecurringSleep {
-		duration = maxRecurringSleep
-	}
-	timer := time.NewTimer(duration)
-	defer timer.Stop()
-	select {
-	case <-ctx.Done():
-		return false
-	case <-timer.C:
-		return true
 	}
 }
 

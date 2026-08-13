@@ -8,7 +8,10 @@ import (
 	"net/http"
 )
 
-const inProcessBaseURL = "http://mina.test"
+const (
+	inProcessBaseURL = "http://mina.test"
+	clientSurfaceKey = "X-Mina-Client-Surface"
+)
 
 // WithBearerToken adds one opaque API key to every generated remote request.
 func WithBearerToken(token string) ClientOption {
@@ -19,6 +22,19 @@ func WithBearerToken(token string) ClientOption {
 func BearerTokenEditor(token string) RequestEditorFn {
 	return func(_ context.Context, request *http.Request) error {
 		request.Header.Set("Authorization", "Bearer "+token)
+		return nil
+	}
+}
+
+// WithClientSurface attributes every generated request to one interactive client surface.
+func WithClientSurface(surface APIAuditClientSurface) ClientOption {
+	return WithRequestEditorFn(ClientSurfaceEditor(surface))
+}
+
+// ClientSurfaceEditor adds caller-declared audit attribution to a generated request.
+func ClientSurfaceEditor(surface APIAuditClientSurface) RequestEditorFn {
+	return func(_ context.Context, request *http.Request) error {
+		request.Header.Set(clientSurfaceKey, string(surface))
 		return nil
 	}
 }
@@ -50,10 +66,11 @@ func (d *HandlerDoer) Do(req *http.Request) (*http.Response, error) {
 }
 
 // NewInProcessClient returns a generated REST client backed by handler.
-func NewInProcessClient(handler http.Handler) (*ClientWithResponses, error) {
+func NewInProcessClient(handler http.Handler, options ...ClientOption) (*ClientWithResponses, error) {
+	options = append(options, WithHTTPClient(NewHandlerDoer(handler)))
 	return NewClientWithResponses(
 		inProcessBaseURL,
-		WithHTTPClient(NewHandlerDoer(handler)),
+		options...,
 	)
 }
 

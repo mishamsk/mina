@@ -414,6 +414,10 @@ func TestDatabaseBackupOperationExpectedBehavior(t *testing.T) {
 			apptest.WithBackupFileScheduleUTC("0 18 * * *"),
 		)
 
+		clock.WaitForPendingDeadlineWaits(t, 2)
+		if calls := clock.DeadlineWaitCalls(); calls != 2 {
+			t.Fatalf("shared deadline wait calls = %d, want backup and audit-compaction waits", calls)
+		}
 		before := client.DatabaseBackupStatus()
 		clock.Advance(time.Minute)
 		after := client.PollDatabaseBackupStatusRevision(before.CompletedRunRevision + 1)
@@ -423,6 +427,14 @@ func TestDatabaseBackupOperationExpectedBehavior(t *testing.T) {
 		requireLatestRunEnvelopeTrigger(t, client, httpclient.BackgroundOperationIdDatabaseBackup, httpclient.BackgroundOperationRunTriggerScheduled)
 		if len(backupFiles(t, backupDir)) != 1 {
 			t.Fatalf("scheduled backup files = %v, want one backup", backupFiles(t, backupDir))
+		}
+		clock.WaitForPendingDeadlineWaits(t, 2)
+		if calls := clock.DeadlineWaitCalls(); calls != 3 {
+			t.Fatalf("shared deadline wait calls after backup = %d, want one replacement backup wait", calls)
+		}
+		client.Close()
+		if pending := clock.PendingDeadlineWaits(); pending != 0 {
+			t.Fatalf("pending backup deadline waits after close = %d, want zero", pending)
 		}
 	})
 }

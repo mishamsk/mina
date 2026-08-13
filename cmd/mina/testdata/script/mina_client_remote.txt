@@ -35,6 +35,13 @@ stdout '"fqn":"RemoteCLI"'
 stdout '"tag_id"'
 ! stderr .
 
+# One launched-process identity smoke proves the remote CLI's shared request editor.
+exec mina client --server http://127.0.0.1:$PORT audit-log list --operation_id createTag --client_surface cli --limit 1
+stdout '"client_surface":"cli"'
+stdout '"operation_id":"createTag"'
+stdout '"total_count":1'
+! stderr .
+
 ! exec mina client --server http://127.0.0.1:$PORT tags create --json '{}'
 ! stdout .
 stderr '"code":"invalid_request"'

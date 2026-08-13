@@ -1,4 +1,9 @@
 import { client } from "./generated/client.gen";
+export {
+  type ApiAuditEntryForDisplay,
+  formatAuditJSONSource,
+  listApiAuditEntriesForDisplay,
+} from "./audit-log";
 export { apiErrorDetails, apiErrorMessage } from "./error-message";
 export * from "./generated";
 export * from "./ledger";
@@ -10,6 +15,7 @@ export interface NetworkFailure {
 }
 
 const defaultNetworkFailureMessage = "Network request failed";
+export const apiMutationCompletedEvent = "mina:api-mutation-completed";
 
 const requestAuthenticationGenerations = new WeakMap<Request, number>();
 let authenticationLifecycle: AuthenticationLifecycle | undefined;
@@ -50,6 +56,7 @@ export const configureApiClient = (baseUrl = getApiBaseUrl()): void => {
 };
 
 client.interceptors.request.use((request) => {
+  request.headers.set("X-Mina-Client-Surface", "web-ui");
   if (authenticationLifecycle) {
     requestAuthenticationGenerations.set(
       request,
@@ -57,6 +64,13 @@ client.interceptors.request.use((request) => {
     );
   }
   return request;
+});
+
+client.interceptors.response.use((response, request) => {
+  if (request.method !== "GET") {
+    window.dispatchEvent(new Event(apiMutationCompletedEvent));
+  }
+  return response;
 });
 
 client.interceptors.error.use((error, response, request) => {

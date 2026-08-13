@@ -5,11 +5,7 @@ import {
   openDB,
 } from "idb";
 
-import type {
-  StatusPageUiState,
-  TransactionEntryDraft,
-  UiPreferences,
-} from "@/models/ui-state";
+import type { TransactionEntryDraft, UiPreferences } from "@/models/ui-state";
 
 export interface StoredTransactionEntryDraft {
   readonly baseline: TransactionEntryDraft;
@@ -25,10 +21,6 @@ interface MinaUiDb extends DBSchema {
     readonly key: "transaction-entry";
     readonly value: TransactionEntryDraftStorageValue;
   };
-  readonly status_page_ui_state: {
-    readonly key: "status-page";
-    readonly value: StatusPageUiState;
-  };
   readonly ui_preferences: {
     readonly key: "preferences";
     readonly value: UiPreferences;
@@ -40,7 +32,6 @@ const databaseVersion = 3;
 const legacySpendEntryKey = "spend-entry";
 const legacySpendEntryStoreName = "spend_entry_draft";
 const preferencesKey = "preferences";
-const statusPageKey = "status-page";
 const transactionEntryKey = "transaction-entry";
 const transactionEntryStoreName = "transaction_entry_draft";
 
@@ -87,7 +78,6 @@ const openMinaUiDb = (): Promise<IDBPDatabase<MinaUiDb>> => {
     upgrade(database, oldVersion, _newVersion, transaction) {
       if (oldVersion < 1) {
         database.createObjectStore("ui_preferences");
-        database.createObjectStore("status_page_ui_state");
       }
       if (oldVersion < 3) {
         migrateTransactionEntryDraftStore(
@@ -117,20 +107,6 @@ export const writeUiPreferences = async (
 ): Promise<void> => {
   const database = await openMinaUiDb();
   await database.put("ui_preferences", preferences, preferencesKey);
-};
-
-export const readStatusPageUiState = async (): Promise<
-  StatusPageUiState | undefined
-> => {
-  const database = await openMinaUiDb();
-  return database.get("status_page_ui_state", statusPageKey);
-};
-
-export const writeStatusPageUiState = async (
-  state: StatusPageUiState,
-): Promise<void> => {
-  const database = await openMinaUiDb();
-  await database.put("status_page_ui_state", state, statusPageKey);
 };
 
 export const readTransactionEntryDraft = async (): Promise<

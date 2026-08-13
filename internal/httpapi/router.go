@@ -11,6 +11,7 @@ import (
 	"github.com/mishamsk/mina/internal/httpapi/openapi"
 	"github.com/mishamsk/mina/internal/services/accountingschema"
 	"github.com/mishamsk/mina/internal/services/accounts"
+	"github.com/mishamsk/mina/internal/services/apiaudit"
 	authentication "github.com/mishamsk/mina/internal/services/authentication/online"
 	"github.com/mishamsk/mina/internal/services/categories"
 	"github.com/mishamsk/mina/internal/services/creditlimits"
@@ -29,6 +30,7 @@ import (
 )
 
 const defaultLocalAPITimeout = 30 * time.Second
+const maxAPIRequestBodyBytes = 16 << 20
 
 // Dependencies are router inputs owned by higher-level composition.
 type Dependencies struct {
@@ -40,6 +42,7 @@ type Dependencies struct {
 	Tags              *tags.Service
 	Members           *members.Service
 	Accounts          *accounts.Service
+	APIAudit          *apiaudit.Service
 	CreditLimits      *creditlimits.Service
 	ExchangeRates     *exchangerates.Service
 	ExchangeRateCache *exchangeratecache.Service
@@ -74,19 +77,30 @@ func (deps Dependencies) clock() Clock {
 // Options controls process-local HTTP adapter behavior.
 type Options struct {
 	AccessLog io.Writer
+	ErrorLog  io.Writer
 	Timeout   time.Duration
-}
-
-// New builds the REST API handler tree.
-func New(deps Dependencies) http.Handler {
-	return NewWithOptions(deps, Options{})
 }
 
 // NewWithOptions builds the REST API handler tree with explicit adapter options.
 func NewWithOptions(deps Dependencies, opts Options) http.Handler {
+	return newHandler(deps, opts, nil)
+}
+
+// NewProtectedWithOptions builds the externally protected REST API handler tree.
+func NewProtectedWithOptions(deps Dependencies, opts Options) http.Handler {
+	return newHandler(deps, opts, func(next http.Handler) http.Handler {
+		return ProtectREST(deps.Authentication, deps.clock(), next)
+	})
+}
+
+func newHandler(deps Dependencies, opts Options, protect func(http.Handler) http.Handler) http.Handler {
 	router := chi.NewRouter()
 	spec := mustOpenAPIValidationSpec()
-	applyMiddleware(router, opts)
+	audit := mustNewAPIAuditMiddleware(spec, deps.APIAudit, deps.clock(), opts.ErrorLog)
+	applyMiddleware(router, opts, audit)
+	if protect != nil {
+		router.Use(protect)
+	}
 	router.NotFound(func(w http.ResponseWriter, _ *http.Request) {
 		WriteAPIError(w, http.StatusNotFound, openapi.APIErrorCodeNotFound, "route not found")
 	})
@@ -112,7 +126,7 @@ func NewWithOptions(deps Dependencies, opts Options) http.Handler {
 	return router
 }
 
-func applyMiddleware(router chi.Router, opts Options) {
+func applyMiddleware(router chi.Router, opts Options, audit func(http.Handler) http.Handler) {
 	timeout := opts.Timeout
 	if timeout == 0 {
 		timeout = defaultLocalAPITimeout
@@ -123,6 +137,15 @@ func applyMiddleware(router chi.Router, opts Options) {
 	if opts.AccessLog != nil {
 		router.Use(AccessLogger(opts.AccessLog))
 	}
+	router.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+			if request.Body != nil {
+				request.Body = http.MaxBytesReader(w, request.Body, maxAPIRequestBodyBytes)
+			}
+			next.ServeHTTP(w, request)
+		})
+	})
+	router.Use(audit)
 	router.Use(panicErrorEnvelope)
 	router.Use(withRecoveryLogEntry)
 	router.Use(middleware.Recoverer)

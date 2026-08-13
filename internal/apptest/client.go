@@ -32,13 +32,20 @@ type Client struct {
 
 // FakeClock is a test clock for runtime-owned current-time decisions.
 type FakeClock struct {
-	mu  sync.Mutex
-	now time.Time
+	mu        sync.Mutex
+	now       time.Time
+	waiters   map[*fakeClockWaiter]struct{}
+	waitCalls int
+}
+
+type fakeClockWaiter struct {
+	deadline time.Time
+	ready    chan struct{}
 }
 
 // NewFakeClock returns a fake clock fixed at now.
 func NewFakeClock(now time.Time) *FakeClock {
-	return &FakeClock{now: now}
+	return &FakeClock{now: now, waiters: make(map[*fakeClockWaiter]struct{})}
 }
 
 // Now returns the fake current time.
@@ -52,17 +59,90 @@ func (c *FakeClock) Now() time.Time {
 // Set moves the fake current time.
 func (c *FakeClock) Set(now time.Time) {
 	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	c.now = now
+	due := c.dueWaitersLocked()
+	c.mu.Unlock()
+	for _, waiter := range due {
+		close(waiter.ready)
+	}
 }
 
 // Advance moves the fake current time forward.
 func (c *FakeClock) Advance(duration time.Duration) {
 	c.mu.Lock()
+	c.now = c.now.Add(duration)
+	due := c.dueWaitersLocked()
+	c.mu.Unlock()
+	for _, waiter := range due {
+		close(waiter.ready)
+	}
+}
+
+// WaitUntil blocks until fake time reaches deadline or ctx is canceled.
+func (c *FakeClock) WaitUntil(ctx context.Context, deadline time.Time) bool {
+	c.mu.Lock()
+	c.waitCalls++
+	if !c.now.Before(deadline) {
+		c.mu.Unlock()
+		return true
+	}
+	waiter := &fakeClockWaiter{deadline: deadline, ready: make(chan struct{})}
+	c.waiters[waiter] = struct{}{}
+	c.mu.Unlock()
+
+	select {
+	case <-waiter.ready:
+		return true
+	case <-ctx.Done():
+		c.mu.Lock()
+		delete(c.waiters, waiter)
+		c.mu.Unlock()
+		return false
+	}
+}
+
+// PendingDeadlineWaits returns the number of clock deadlines currently waiting.
+func (c *FakeClock) PendingDeadlineWaits() int {
+	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.now = c.now.Add(duration)
+	return len(c.waiters)
+}
+
+// DeadlineWaitCalls returns the total number of deadline waits begun.
+func (c *FakeClock) DeadlineWaitCalls() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	return c.waitCalls
+}
+
+// WaitForPendingDeadlineWaits waits for recurring operation loops to install their clock waits.
+func (c *FakeClock) WaitForPendingDeadlineWaits(t testing.TB, count int) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		if c.PendingDeadlineWaits() == count {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("pending deadline waits = %d, want %d", c.PendingDeadlineWaits(), count)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func (c *FakeClock) dueWaitersLocked() []*fakeClockWaiter {
+	due := []*fakeClockWaiter{}
+	for waiter := range c.waiters {
+		if c.now.Before(waiter.deadline) {
+			continue
+		}
+		delete(c.waiters, waiter)
+		due = append(due, waiter)
+	}
+
+	return due
 }
 
 // Option customizes an in-process app test client.
@@ -83,13 +163,15 @@ type ProcessDB struct {
 
 // SettingsSourceValues describes representative settings values by effective source.
 type SettingsSourceValues struct {
-	ConfigFile                  string
-	ConfigFileMissing           bool
-	AuthenticationEmail         string
-	AuthenticationPassword      string
-	EnvironmentBackupDirectory  string
-	CLIOverrideAccountingSchema *string
-	CLIOverrideServePort        *int
+	ConfigFile                            string
+	ConfigFileMissing                     bool
+	AuthenticationEmail                   string
+	AuthenticationPassword                string
+	EnvironmentBackupDirectory            string
+	CLIOverrideAccountingSchema           *string
+	CLIOverrideServePort                  *int
+	CLIOverrideAuditRetentionMonths       *int
+	CLIOverrideAuditCompactionScheduleUTC *string
 }
 
 // AuthenticationFixture is test-owned CLI-managed authentication state.
@@ -169,6 +251,12 @@ func WithSettingsSources(
 	}
 	if values.CLIOverrideServePort != nil {
 		overrides.Serve.Port = appconfig.Set(*values.CLIOverrideServePort)
+	}
+	if values.CLIOverrideAuditRetentionMonths != nil {
+		overrides.AuditLog.RetentionMonths = appconfig.Set(*values.CLIOverrideAuditRetentionMonths)
+	}
+	if values.CLIOverrideAuditCompactionScheduleUTC != nil {
+		overrides.AuditLog.CompactionScheduleUTC = appconfig.Set(*values.CLIOverrideAuditCompactionScheduleUTC)
 	}
 	cfg, err := appconfig.Load(
 		appconfig.LoadOptions{ConfigFilePath: path},
@@ -367,6 +455,20 @@ func WithBackupFileRetentionCount(count int) Option {
 func WithBackupFileScheduleUTC(schedule string) Option {
 	return func(opts *clientOptions) {
 		opts.config.Backups.File.ScheduleUTC = schedule
+	}
+}
+
+// WithAuditLogRetentionMonths configures API audit-history retention through app config.
+func WithAuditLogRetentionMonths(months int) Option {
+	return func(opts *clientOptions) {
+		opts.config.AuditLog.RetentionMonths = months
+	}
+}
+
+// WithAuditLogCompactionScheduleUTC configures the API audit-history compaction schedule through app config.
+func WithAuditLogCompactionScheduleUTC(schedule string) Option {
+	return func(opts *clientOptions) {
+		opts.config.AuditLog.CompactionScheduleUTC = schedule
 	}
 }
 

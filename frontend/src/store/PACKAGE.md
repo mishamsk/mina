@@ -14,6 +14,7 @@
 - Account transaction fetches write only while their entry remains loading; mutation responses seed the cache independently so invalidation rejects older fetches.
 - Transaction-entry route results apply only to their exact requested entry. An entry launch waits for Edit-mode amount saves to succeed, and cancellation or any failed save discards the deferred launch.
 - Overview snapshots keep the backend household flow dataset and its recoverable section error beside balance, pulse, and recent-activity data.
+- Shareable Status state stays in the route URL and has no Zustand persistence lifecycle.
 
 ## Boundaries
 

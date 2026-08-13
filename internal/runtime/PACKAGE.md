@@ -6,7 +6,7 @@
 
 ## Implicit Contracts
 
-- An `App` owns its `AppDB` and background runner; `Close` cancels and joins runner work before closing the database.
+- An `App` owns its `AppDB` and background runner; `Close` cancels and joins runner work and bounded pending audit inserts before closing the database.
 - One app-local reference serializer is shared by dictionary and dependent-write services, so dictionary deletes cannot race writes that create dependent references.
 - Demo seeding runs through transaction-scoped service instances in one `AppDB` transaction; only a committed seed invalidates the main reference and needed-currency caches.
 - Long-running apps alone load online authentication, expose embedded MCP at `/mcp`, and can start automatic operations. One-shot apps skip startup validation and automatic operations; migration apps validate after migration without authentication or operations.
@@ -15,6 +15,9 @@
 - Built-in Frankfurter-file startup gives the initial cache read 15 minutes and retains the ordinary two-minute allowance to load safe progress afterward; API-only, injected, manual, and scheduled loads keep the ordinary short deadline.
 - Runtime resolves the accounting location, encryption key, and connection limit before delegating database open, migration, and read-only inspection mechanics to `store`.
 - Runtime composes the data-aggregate service's Household, Category, and Tag flow reports from the DuckDB repository, Category/Tag readers, transaction classifier, and runtime clock.
+- Runtime composes portable API audit persistence into trusted and externally protected REST trees so protection rejections are captured; audit insert failures do not change the determined REST outcome.
+- Runtime registers API audit-log compaction for manual execution in every app and schedules it only under long-running automatic-operation policy; compaction uses the shared runtime clock and configured retention.
+- The system clock installs one cancelable timer for each recurring-operation deadline without periodic wakeups.
 - The offline schema command reads the embedded target DDL through a static accessor; constructing an app still follows the normal database lifecycle.
 
 ## Boundaries

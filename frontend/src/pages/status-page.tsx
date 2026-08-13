@@ -1,23 +1,17 @@
 import { RefreshCw } from "lucide-react";
 import { Lock } from "pixelarticons/react";
+import { Tabs } from "radix-ui";
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router";
 
 import { getHealth, type HealthResponse, isNetworkFailure } from "../api";
 import { PageHelp } from "../components/page-help";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "../components/ui/card";
-import { Checkbox } from "../components/ui/checkbox";
-import { Separator } from "../components/ui/separator";
+import { Card, CardContent, CardHeader } from "../components/ui/card";
 import { Skeleton } from "../components/ui/skeleton";
 import { PageHeader } from "../features/app-shell";
-import { StatusOperations } from "../features/status";
-import { setStatusPageShowDetails, useStatusPageView } from "../store";
+import { StatusAuditLog, StatusOperations } from "../features/status";
 
 interface HealthState {
   readonly data: HealthResponse | undefined;
@@ -32,6 +26,8 @@ const initialHealthState: HealthState = {
   loading: true,
   serverTime: undefined,
 };
+
+type StatusTabValue = "operations" | "audit-log";
 
 const errorMessage = (error: unknown): string => {
   if (isNetworkFailure(error)) {
@@ -68,9 +64,19 @@ const formatServerTime = (value: string | undefined): string => {
 };
 
 export const StatusPage = () => {
-  const { showDetails } = useStatusPageView();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [health, setHealth] = useState<HealthState>(initialHealthState);
   const [refreshRevision, setRefreshRevision] = useState(0);
+  const activeTab =
+    searchParams.get("tab") === "audit-log" ? "audit-log" : "operations";
+
+  const setActiveTab = (tab: StatusTabValue) => {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.set("tab", tab);
+      return next;
+    });
+  };
 
   useEffect(() => {
     let active = true;
@@ -120,36 +126,22 @@ export const StatusPage = () => {
         eyebrow="Local web UI"
         help={
           <PageHelp label="Status help">
-            Backend health and local UI state for this Mina process.
+            Backend health, background work, and API mutation history for this
+            Mina process.
           </PageHelp>
         }
         actions={
-          <>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setRefreshRevision((revision) => revision + 1);
-              }}
-              disabled={health.loading}
-            >
-              <RefreshCw aria-hidden="true" />
-              Refresh
-            </Button>
-            <label
-              htmlFor="status-details"
-              className="bg-card text-foreground flex h-8 items-center gap-2 border-2 border-[var(--border-ink)] px-3 text-sm shadow-[var(--shadow-pixel)]"
-            >
-              <Checkbox
-                id="status-details"
-                checked={showDetails}
-                onCheckedChange={(checked) => {
-                  setStatusPageShowDetails(checked === true);
-                }}
-              />
-              <span>Details</span>
-            </label>
-          </>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              setRefreshRevision((revision) => revision + 1);
+            }}
+            disabled={health.loading}
+          >
+            <RefreshCw aria-hidden="true" />
+            Refresh
+          </Button>
         }
       />
 
@@ -231,21 +223,34 @@ export const StatusPage = () => {
         </div>
       ) : null}
 
-      {showDetails && health.data ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Backend health route</CardTitle>
-          </CardHeader>
-          <Separator />
-          <CardContent className="flex flex-wrap items-center gap-3">
-            <code className="bg-muted text-muted-foreground px-2 py-1 font-mono text-sm">
-              /api/health
-            </code>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      <StatusOperations refreshRevision={refreshRevision} />
+      <Tabs.Root
+        value={activeTab}
+        onValueChange={(value) => setActiveTab(value as StatusTabValue)}
+      >
+        <Tabs.List
+          className="bg-muted flex w-full border-2 border-[var(--border-ink)] p-1 shadow-[var(--shadow-pixel)] sm:w-fit"
+          aria-label="Status views"
+        >
+          <Tabs.Trigger
+            value="operations"
+            className="font-heading text-muted-foreground hover:text-foreground min-h-9 flex-1 border-2 border-transparent px-4 text-xs font-semibold uppercase transition-colors duration-150 ease-[steps(2)] data-[state=active]:border-[var(--border-ink)] data-[state=active]:bg-[var(--color-interactive-bright)] data-[state=active]:text-[var(--foreground)] motion-reduce:transition-none sm:flex-none"
+          >
+            Background operations
+          </Tabs.Trigger>
+          <Tabs.Trigger
+            value="audit-log"
+            className="font-heading text-muted-foreground hover:text-foreground min-h-9 flex-1 border-2 border-transparent px-4 text-xs font-semibold uppercase transition-colors duration-150 ease-[steps(2)] data-[state=active]:border-[var(--border-ink)] data-[state=active]:bg-[var(--color-interactive-bright)] data-[state=active]:text-[var(--foreground)] motion-reduce:transition-none sm:flex-none"
+          >
+            Audit log
+          </Tabs.Trigger>
+        </Tabs.List>
+        <Tabs.Content value="operations" className="mt-6">
+          <StatusOperations refreshRevision={refreshRevision} />
+        </Tabs.Content>
+        <Tabs.Content value="audit-log" className="mt-6">
+          <StatusAuditLog refreshRevision={refreshRevision} />
+        </Tabs.Content>
+      </Tabs.Root>
     </section>
   );
 };

@@ -4,6 +4,7 @@ import {
   type ReactNode,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { useSearchParams } from "react-router";
@@ -156,6 +157,7 @@ export const StatusOperations = ({
 }: {
   readonly refreshRevision: number;
 }) => {
+  const mountedRef = useRef(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const [operations, setOperations] = useState<OperationListState>(
     initialOperationListState,
@@ -167,6 +169,13 @@ export const StatusOperations = ({
   const [runDetail, setRunDetail] = useState<RunDetailState>(
     initialRunDetailState,
   );
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
   const [startingOperation, setStartingOperation] = useState(false);
   const [actionErrorMessage, setActionErrorMessage] = useState<string>();
   const [resourceRevision, setResourceRevision] = useState(0);
@@ -422,6 +431,9 @@ export const StatusOperations = ({
     setActionErrorMessage(undefined);
     setStartingOperation(true);
     const result = await selectedModule.start();
+    if (!mountedRef.current) {
+      return;
+    }
     setStartingOperation(false);
     if (result.error) {
       setActionErrorMessage(

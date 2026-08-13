@@ -24,6 +24,30 @@ const (
 	BrowserSessionScopes browserSessionContextKey = "browserSession.Scopes"
 )
 
+// Defines values for APIAuditClientSurface.
+const (
+	Cli   APIAuditClientSurface = "cli"
+	Mcp   APIAuditClientSurface = "mcp"
+	Rest  APIAuditClientSurface = "rest"
+	WebUi APIAuditClientSurface = "web-ui"
+)
+
+// Valid indicates whether the value is a known member of the APIAuditClientSurface enum.
+func (e APIAuditClientSurface) Valid() bool {
+	switch e {
+	case Cli:
+		return true
+	case Mcp:
+		return true
+	case Rest:
+		return true
+	case WebUi:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for APIErrorCode.
 const (
 	APIErrorCodeConflict         APIErrorCode = "conflict"
@@ -81,8 +105,57 @@ func (e AccountType) Valid() bool {
 	}
 }
 
+// Defines values for AuditLogCompactionRunOperationId.
+const (
+	AuditLogCompactionRunOperationIdAuditLogCompaction AuditLogCompactionRunOperationId = "audit-log-compaction"
+)
+
+// Valid indicates whether the value is a known member of the AuditLogCompactionRunOperationId enum.
+func (e AuditLogCompactionRunOperationId) Valid() bool {
+	switch e {
+	case AuditLogCompactionRunOperationIdAuditLogCompaction:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AuditLogCompactionStatusResponseOperationId.
+const (
+	AuditLogCompactionStatusResponseOperationIdAuditLogCompaction AuditLogCompactionStatusResponseOperationId = "audit-log-compaction"
+)
+
+// Valid indicates whether the value is a known member of the AuditLogCompactionStatusResponseOperationId enum.
+func (e AuditLogCompactionStatusResponseOperationId) Valid() bool {
+	switch e {
+	case AuditLogCompactionStatusResponseOperationIdAuditLogCompaction:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AuditLogCompactionStatusResponseState.
+const (
+	AuditLogCompactionStatusResponseStateIdle    AuditLogCompactionStatusResponseState = "idle"
+	AuditLogCompactionStatusResponseStateRunning AuditLogCompactionStatusResponseState = "running"
+)
+
+// Valid indicates whether the value is a known member of the AuditLogCompactionStatusResponseState enum.
+func (e AuditLogCompactionStatusResponseState) Valid() bool {
+	switch e {
+	case AuditLogCompactionStatusResponseStateIdle:
+		return true
+	case AuditLogCompactionStatusResponseStateRunning:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for BackgroundOperationId.
 const (
+	BackgroundOperationIdAuditLogCompaction  BackgroundOperationId = "audit-log-compaction"
 	BackgroundOperationIdDatabaseBackup      BackgroundOperationId = "database-backup"
 	BackgroundOperationIdExchangeRateLoading BackgroundOperationId = "exchange-rate-loading"
 )
@@ -90,6 +163,8 @@ const (
 // Valid indicates whether the value is a known member of the BackgroundOperationId enum.
 func (e BackgroundOperationId) Valid() bool {
 	switch e {
+	case BackgroundOperationIdAuditLogCompaction:
+		return true
 	case BackgroundOperationIdDatabaseBackup:
 		return true
 	case BackgroundOperationIdExchangeRateLoading:
@@ -410,6 +485,7 @@ func (e HouseholdFlowTrend) Valid() bool {
 
 // Defines values for OperationRunReferenceResponseOperationId.
 const (
+	AuditLogCompaction  OperationRunReferenceResponseOperationId = "audit-log-compaction"
 	DatabaseBackup      OperationRunReferenceResponseOperationId = "database-backup"
 	ExchangeRateLoading OperationRunReferenceResponseOperationId = "exchange-rate-loading"
 )
@@ -417,6 +493,8 @@ const (
 // Valid indicates whether the value is a known member of the OperationRunReferenceResponseOperationId enum.
 func (e OperationRunReferenceResponseOperationId) Valid() bool {
 	switch e {
+	case AuditLogCompaction:
+		return true
 	case DatabaseBackup:
 		return true
 	case ExchangeRateLoading:
@@ -1272,6 +1350,41 @@ func (e ListTransactionsParamsSortDir) Valid() bool {
 	}
 }
 
+// APIAuditClientSurface defines model for APIAuditClientSurface.
+type APIAuditClientSurface string
+
+// APIAuditEntry defines model for APIAuditEntry.
+type APIAuditEntry struct {
+	ApiAuditEntryId      int64                 `json:"api_audit_entry_id"`
+	ClientSurface        APIAuditClientSurface `json:"client_surface"`
+	DurationMicroseconds int64                 `json:"duration_microseconds"`
+	Method               string                `json:"method"`
+	OccurredAt           time.Time             `json:"occurred_at"`
+	OperationId          string                `json:"operation_id"`
+
+	// RequestJson Captured valid JSON request value, or null when no valid JSON body was present.
+	RequestJson interface{} `json:"request_json"`
+
+	// RequestJsonPresent Whether request_json contains a captured valid JSON value, including JSON null.
+	RequestJsonPresent bool   `json:"request_json_present"`
+	RequestUri         string `json:"request_uri"`
+
+	// ResponseJson Captured valid JSON response value, or null when no valid JSON body was present.
+	ResponseJson interface{} `json:"response_json"`
+
+	// ResponseJsonPresent Whether response_json contains a captured valid JSON value, including JSON null.
+	ResponseJsonPresent bool `json:"response_json_present"`
+	ResponseStatus      int  `json:"response_status"`
+}
+
+// APIAuditEntryListResponse defines model for APIAuditEntryListResponse.
+type APIAuditEntryListResponse struct {
+	Entries []APIAuditEntry `json:"entries"`
+
+	// TotalCount Count of matching entries before limit and offset are applied.
+	TotalCount int64 `json:"total_count"`
+}
+
 // APIError defines model for APIError.
 type APIError struct {
 	Code    APIErrorCode `json:"code"`
@@ -1366,6 +1479,42 @@ type AccountingSchemaResponse struct {
 	// Ddl Static current target accounting DDL generated from a pristine migrated database; not the opened database's live schema or a database initialization path.
 	Ddl string `json:"ddl"`
 }
+
+// AuditLogCompactionRun defines model for AuditLogCompactionRun.
+type AuditLogCompactionRun struct {
+	CompletedAt    *time.Time                       `json:"completed_at,omitempty"`
+	Error          *string                          `json:"error,omitempty"`
+	OperationId    AuditLogCompactionRunOperationId `json:"operation_id"`
+	OperationRunId int64                            `json:"operation_run_id"`
+	Outcome        BackgroundOperationRunOutcome    `json:"outcome"`
+	StartedAt      time.Time                        `json:"started_at"`
+	Trigger        BackgroundOperationRunTrigger    `json:"trigger"`
+}
+
+// AuditLogCompactionRunOperationId defines model for AuditLogCompactionRun.OperationId.
+type AuditLogCompactionRunOperationId string
+
+// AuditLogCompactionStatusResponse defines model for AuditLogCompactionStatusResponse.
+type AuditLogCompactionStatusResponse struct {
+	CompletedRunRevision int64                                       `json:"completed_run_revision"`
+	Enabled              bool                                        `json:"enabled"`
+	LastCompletedAt      *time.Time                                  `json:"last_completed_at,omitempty"`
+	LastError            *string                                     `json:"last_error,omitempty"`
+	LastStartedAt        *time.Time                                  `json:"last_started_at,omitempty"`
+	LastSuccess          *bool                                       `json:"last_success,omitempty"`
+	OperationId          AuditLogCompactionStatusResponseOperationId `json:"operation_id"`
+	RunCount             int64                                       `json:"run_count"`
+
+	// ScheduleUtc Five-field cron-style schedule interpreted in UTC.
+	ScheduleUtc string                                `json:"schedule_utc"`
+	State       AuditLogCompactionStatusResponseState `json:"state"`
+}
+
+// AuditLogCompactionStatusResponseOperationId defines model for AuditLogCompactionStatusResponse.OperationId.
+type AuditLogCompactionStatusResponseOperationId string
+
+// AuditLogCompactionStatusResponseState defines model for AuditLogCompactionStatusResponse.State.
+type AuditLogCompactionStatusResponseState string
 
 // AuthenticationStatusResponse defines model for AuthenticationStatusResponse.
 type AuthenticationStatusResponse struct {
@@ -2997,6 +3146,24 @@ type SeedDemoParams struct {
 	MaxMonths *int `form:"max_months,omitempty" json:"max_months,omitempty"`
 }
 
+// ListAPIAuditEntriesParams defines parameters for ListAPIAuditEntries.
+type ListAPIAuditEntriesParams struct {
+	// Method Filter by an exact case-insensitive HTTP method.
+	Method *string `form:"method,omitempty" json:"method,omitempty"`
+
+	// OperationId Filter by an exact stable OpenAPI operation ID.
+	OperationId *string `form:"operation_id,omitempty" json:"operation_id,omitempty"`
+
+	// ClientSurface Filter by caller-declared client surface.
+	ClientSurface *APIAuditClientSurface `form:"client_surface,omitempty" json:"client_surface,omitempty"`
+
+	// Limit Maximum matching entries to return; defaults to 100.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Offset Zero-based number of matching entries to skip.
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
 // ListBackgroundOperationRunEnvelopesParams defines parameters for ListBackgroundOperationRunEnvelopes.
 type ListBackgroundOperationRunEnvelopesParams struct {
 	// OperationId Filter run history to one registered background-operation type.
@@ -3818,6 +3985,9 @@ type ClientInterface interface {
 	// SeedDemo request
 	SeedDemo(ctx context.Context, params *SeedDemoParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListAPIAuditEntries request
+	ListAPIAuditEntries(ctx context.Context, params *ListAPIAuditEntriesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// LoginWithBody request with any body
 	LoginWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -3831,6 +4001,15 @@ type ClientInterface interface {
 
 	// ListBackgroundOperations request
 	ListBackgroundOperations(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// StartAuditLogCompactionRun request
+	StartAuditLogCompactionRun(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetAuditLogCompactionRun request
+	GetAuditLogCompactionRun(ctx context.Context, operationRunId int64, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetAuditLogCompactionStatus request
+	GetAuditLogCompactionStatus(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// StartDatabaseBackupRun request
 	StartDatabaseBackupRun(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -4392,6 +4571,18 @@ func (c *Client) SeedDemo(ctx context.Context, params *SeedDemoParams, reqEditor
 	return c.Client.Do(req)
 }
 
+func (c *Client) ListAPIAuditEntries(ctx context.Context, params *ListAPIAuditEntriesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListAPIAuditEntriesRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) LoginWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewLoginRequestWithBody(c.Server, contentType, body)
 	if err != nil {
@@ -4442,6 +4633,42 @@ func (c *Client) GetAuthenticationStatus(ctx context.Context, reqEditors ...Requ
 
 func (c *Client) ListBackgroundOperations(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListBackgroundOperationsRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) StartAuditLogCompactionRun(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewStartAuditLogCompactionRunRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetAuditLogCompactionRun(ctx context.Context, operationRunId int64, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAuditLogCompactionRunRequest(c.Server, operationRunId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetAuditLogCompactionStatus(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAuditLogCompactionStatusRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -6977,6 +7204,108 @@ func NewSeedDemoRequest(server string, params *SeedDemoParams) (*http.Request, e
 	return req, nil
 }
 
+// NewListAPIAuditEntriesRequest generates requests for ListAPIAuditEntries
+func NewListAPIAuditEntriesRequest(server string, params *ListAPIAuditEntriesParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/audit-log/entries")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Method != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "method", *params.Method, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.OperationId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "operation_id", *params.OperationId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.ClientSurface != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "client_surface", *params.ClientSurface, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Offset != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "offset", *params.Offset, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewLoginRequest calls the generic Login builder with application/json body
 func NewLoginRequest(server string, body LoginJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -7081,6 +7410,94 @@ func NewListBackgroundOperationsRequest(server string) (*http.Request, error) {
 	}
 
 	operationPath := fmt.Sprintf("/api/background-operations")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewStartAuditLogCompactionRunRequest generates requests for StartAuditLogCompactionRun
+func NewStartAuditLogCompactionRunRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/background-operations/audit-log-compaction/runs")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetAuditLogCompactionRunRequest generates requests for GetAuditLogCompactionRun
+func NewGetAuditLogCompactionRunRequest(server string, operationRunId int64) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "operation_run_id", operationRunId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "integer", Format: "int64"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/background-operations/audit-log-compaction/runs/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetAuditLogCompactionStatusRequest generates requests for GetAuditLogCompactionStatus
+func NewGetAuditLogCompactionStatusRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/background-operations/audit-log-compaction/status")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -12268,6 +12685,9 @@ type ClientWithResponsesInterface interface {
 	// SeedDemoWithResponse request
 	SeedDemoWithResponse(ctx context.Context, params *SeedDemoParams, reqEditors ...RequestEditorFn) (*SeedDemoResponse, error)
 
+	// ListAPIAuditEntriesWithResponse request
+	ListAPIAuditEntriesWithResponse(ctx context.Context, params *ListAPIAuditEntriesParams, reqEditors ...RequestEditorFn) (*ListAPIAuditEntriesResponse, error)
+
 	// LoginWithBodyWithResponse request with any body
 	LoginWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*LoginResponse, error)
 
@@ -12281,6 +12701,15 @@ type ClientWithResponsesInterface interface {
 
 	// ListBackgroundOperationsWithResponse request
 	ListBackgroundOperationsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListBackgroundOperationsResponse, error)
+
+	// StartAuditLogCompactionRunWithResponse request
+	StartAuditLogCompactionRunWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*StartAuditLogCompactionRunResponse, error)
+
+	// GetAuditLogCompactionRunWithResponse request
+	GetAuditLogCompactionRunWithResponse(ctx context.Context, operationRunId int64, reqEditors ...RequestEditorFn) (*GetAuditLogCompactionRunResponse, error)
+
+	// GetAuditLogCompactionStatusWithResponse request
+	GetAuditLogCompactionStatusWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetAuditLogCompactionStatusResponse, error)
 
 	// StartDatabaseBackupRunWithResponse request
 	StartDatabaseBackupRunWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*StartDatabaseBackupRunResponse, error)
@@ -13104,6 +13533,39 @@ func (r SeedDemoResponse) ContentType() string {
 	return ""
 }
 
+type ListAPIAuditEntriesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *APIAuditEntryListResponse
+	JSON400      *InvalidRequest
+	JSON401      *Unauthenticated
+	JSON405      *MethodNotAllowed
+}
+
+// Status returns HTTPResponse.Status
+func (r ListAPIAuditEntriesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListAPIAuditEntriesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListAPIAuditEntriesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type LoginResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -13225,6 +13687,105 @@ func (r ListBackgroundOperationsResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r ListBackgroundOperationsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type StartAuditLogCompactionRunResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON202      *OperationRunReferenceResponse
+	JSON401      *Unauthenticated
+	JSON403      *Forbidden
+	JSON405      *MethodNotAllowed
+}
+
+// Status returns HTTPResponse.Status
+func (r StartAuditLogCompactionRunResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r StartAuditLogCompactionRunResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r StartAuditLogCompactionRunResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetAuditLogCompactionRunResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *AuditLogCompactionRun
+	JSON400      *InvalidRequest
+	JSON401      *Unauthenticated
+	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
+}
+
+// Status returns HTTPResponse.Status
+func (r GetAuditLogCompactionRunResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetAuditLogCompactionRunResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetAuditLogCompactionRunResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetAuditLogCompactionStatusResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *AuditLogCompactionStatusResponse
+	JSON401      *Unauthenticated
+	JSON405      *MethodNotAllowed
+}
+
+// Status returns HTTPResponse.Status
+func (r GetAuditLogCompactionStatusResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetAuditLogCompactionStatusResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetAuditLogCompactionStatusResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -16167,6 +16728,15 @@ func (c *ClientWithResponses) SeedDemoWithResponse(ctx context.Context, params *
 	return ParseSeedDemoResponse(rsp)
 }
 
+// ListAPIAuditEntriesWithResponse request returning *ListAPIAuditEntriesResponse
+func (c *ClientWithResponses) ListAPIAuditEntriesWithResponse(ctx context.Context, params *ListAPIAuditEntriesParams, reqEditors ...RequestEditorFn) (*ListAPIAuditEntriesResponse, error) {
+	rsp, err := c.ListAPIAuditEntries(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListAPIAuditEntriesResponse(rsp)
+}
+
 // LoginWithBodyWithResponse request with arbitrary body returning *LoginResponse
 func (c *ClientWithResponses) LoginWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*LoginResponse, error) {
 	rsp, err := c.LoginWithBody(ctx, contentType, body, reqEditors...)
@@ -16209,6 +16779,33 @@ func (c *ClientWithResponses) ListBackgroundOperationsWithResponse(ctx context.C
 		return nil, err
 	}
 	return ParseListBackgroundOperationsResponse(rsp)
+}
+
+// StartAuditLogCompactionRunWithResponse request returning *StartAuditLogCompactionRunResponse
+func (c *ClientWithResponses) StartAuditLogCompactionRunWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*StartAuditLogCompactionRunResponse, error) {
+	rsp, err := c.StartAuditLogCompactionRun(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseStartAuditLogCompactionRunResponse(rsp)
+}
+
+// GetAuditLogCompactionRunWithResponse request returning *GetAuditLogCompactionRunResponse
+func (c *ClientWithResponses) GetAuditLogCompactionRunWithResponse(ctx context.Context, operationRunId int64, reqEditors ...RequestEditorFn) (*GetAuditLogCompactionRunResponse, error) {
+	rsp, err := c.GetAuditLogCompactionRun(ctx, operationRunId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetAuditLogCompactionRunResponse(rsp)
+}
+
+// GetAuditLogCompactionStatusWithResponse request returning *GetAuditLogCompactionStatusResponse
+func (c *ClientWithResponses) GetAuditLogCompactionStatusWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetAuditLogCompactionStatusResponse, error) {
+	rsp, err := c.GetAuditLogCompactionStatus(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetAuditLogCompactionStatusResponse(rsp)
 }
 
 // StartDatabaseBackupRunWithResponse request returning *StartDatabaseBackupRunResponse
@@ -17992,6 +18589,53 @@ func ParseSeedDemoResponse(rsp *http.Response) (*SeedDemoResponse, error) {
 	return response, nil
 }
 
+// ParseListAPIAuditEntriesResponse parses an HTTP response from a ListAPIAuditEntriesWithResponse call
+func ParseListAPIAuditEntriesResponse(rsp *http.Response) (*ListAPIAuditEntriesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListAPIAuditEntriesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest APIAuditEntryListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseLoginResponse parses an HTTP response from a LoginWithResponse call
 func ParseLoginResponse(rsp *http.Response) (*LoginResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -18121,6 +18765,147 @@ func ParseListBackgroundOperationsResponse(rsp *http.Response) (*ListBackgroundO
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest BackgroundOperationListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseStartAuditLogCompactionRunResponse parses an HTTP response from a StartAuditLogCompactionRunWithResponse call
+func ParseStartAuditLogCompactionRunResponse(rsp *http.Response) (*StartAuditLogCompactionRunResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &StartAuditLogCompactionRunResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest OperationRunReferenceResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetAuditLogCompactionRunResponse parses an HTTP response from a GetAuditLogCompactionRunWithResponse call
+func ParseGetAuditLogCompactionRunResponse(rsp *http.Response) (*GetAuditLogCompactionRunResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetAuditLogCompactionRunResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AuditLogCompactionRun
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetAuditLogCompactionStatusResponse parses an HTTP response from a GetAuditLogCompactionStatusWithResponse call
+func ParseGetAuditLogCompactionStatusResponse(rsp *http.Response) (*GetAuditLogCompactionStatusResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetAuditLogCompactionStatusResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AuditLogCompactionStatusResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

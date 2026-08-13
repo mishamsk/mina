@@ -1652,6 +1652,43 @@ func Operations() []Operation {
 			Invoke: invokeGetAccountingSchema,
 		},
 		{
+			ID:          "getAuditLogCompactionRun",
+			Method:      "GET",
+			Path:        "/api/background-operations/audit-log-compaction/runs/{operation_run_id}",
+			Summary:     "Get one API audit-log compaction run.",
+			Description: "Use with an exact API audit-log compaction run ID, normally returned by the start tool. This returns one typed run; use operations_list_runs to discover historical IDs.",
+			MCP: MCPOperation{
+				Group: "operations", Name: "get_audit_log_compaction_run",
+				ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"operation_run_id\":{\"description\":\"Numeric identifier of the background-operation run.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"operation_run_id\"],\"type\":\"object\"}"),
+			},
+			Input: InputDescriptor{
+				Path: []ParameterDescriptor{
+					{
+						Name:        "operation_run_id",
+						Type:        "integer",
+						Description: "Numeric identifier of the background-operation run.",
+						Required:    true,
+					},
+				},
+			},
+			Invoke: invokeGetAuditLogCompactionRun,
+		},
+		{
+			ID:          "getAuditLogCompactionStatus",
+			Method:      "GET",
+			Path:        "/api/background-operations/audit-log-compaction/status",
+			Summary:     "Get API audit-log compaction operation status.",
+			Description: "Use for API audit-log compaction state; this does not start compaction or return one specific run. Use operations_get_audit_log_compaction_run with a known run ID.",
+			MCP: MCPOperation{
+				Group: "operations", Name: "audit_log_compaction_status",
+				ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{},\"type\":\"object\"}"),
+			},
+			Input:  InputDescriptor{},
+			Invoke: invokeGetAuditLogCompactionStatus,
+		},
+		{
 			ID:          "getCategory",
 			Method:      "GET",
 			Path:        "/api/categories/{category_id}",
@@ -2304,6 +2341,54 @@ func Operations() []Operation {
 			Invoke: invokeGetTransactionTemplate,
 		},
 		{
+			ID:          "listAPIAuditEntries",
+			Method:      "GET",
+			Path:        "/api/audit-log/entries",
+			Summary:     "List newest-first API audit entries.",
+			Description: "Lists newest-first API mutation audit entries. Keep results bounded with limit and offset, and filter by method, operation_id, or client_surface when possible.",
+			MCP: MCPOperation{
+				Group: "audit_log", Name: "list",
+				ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"client_surface\":{\"description\":\"Filter by caller-declared client surface.\",\"enum\":[\"rest\",\"web-ui\",\"cli\",\"mcp\"],\"type\":\"string\"},\"limit\":{\"default\":100,\"description\":\"Maximum matching entries to return; defaults to 100.\",\"maximum\":500,\"minimum\":1,\"type\":\"integer\"},\"method\":{\"description\":\"Filter by an exact case-insensitive HTTP method.\",\"minLength\":1,\"type\":\"string\"},\"offset\":{\"default\":0,\"description\":\"Zero-based number of matching entries to skip.\",\"minimum\":0,\"type\":\"integer\"},\"operation_id\":{\"description\":\"Filter by an exact stable OpenAPI operation ID.\",\"minLength\":1,\"type\":\"string\"}},\"type\":\"object\"}"),
+			},
+			Input: InputDescriptor{
+				Query: []ParameterDescriptor{
+					{
+						Name:        "method",
+						Type:        "string",
+						Description: "Filter by an exact case-insensitive HTTP method.",
+						Required:    false,
+					},
+					{
+						Name:        "operation_id",
+						Type:        "string",
+						Description: "Filter by an exact stable OpenAPI operation ID.",
+						Required:    false,
+					},
+					{
+						Name:        "client_surface",
+						Type:        "string",
+						Description: "Filter by caller-declared client surface.",
+						Required:    false,
+						Enum:        []string{"rest", "web-ui", "cli", "mcp"},
+					},
+					{
+						Name:        "limit",
+						Type:        "integer",
+						Description: "Maximum matching entries to return; defaults to 100.",
+						Required:    false,
+					},
+					{
+						Name:        "offset",
+						Type:        "integer",
+						Description: "Zero-based number of matching entries to skip.",
+						Required:    false,
+					},
+				},
+			},
+			Invoke: invokeListAPIAuditEntries,
+		},
+		{
 			ID:          "listAccountBalances",
 			Method:      "GET",
 			Path:        "/api/accounts/balances",
@@ -2434,7 +2519,7 @@ func Operations() []Operation {
 			MCP: MCPOperation{
 				Group: "operations", Name: "list_runs",
 				ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false,
-				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"limit\":{\"description\":\"Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.\",\"maximum\":500,\"minimum\":1,\"type\":\"integer\"},\"offset\":{\"description\":\"Zero-based number of matching results to skip.\",\"minimum\":0,\"type\":\"integer\"},\"operation_id\":{\"description\":\"Filter run history to one registered background-operation type.\",\"enum\":[\"exchange-rate-loading\",\"database-backup\"],\"type\":\"string\"}},\"type\":\"object\"}"),
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"limit\":{\"description\":\"Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.\",\"maximum\":500,\"minimum\":1,\"type\":\"integer\"},\"offset\":{\"description\":\"Zero-based number of matching results to skip.\",\"minimum\":0,\"type\":\"integer\"},\"operation_id\":{\"description\":\"Filter run history to one registered background-operation type.\",\"enum\":[\"exchange-rate-loading\",\"database-backup\",\"audit-log-compaction\"],\"type\":\"string\"}},\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Query: []ParameterDescriptor{
@@ -2443,7 +2528,7 @@ func Operations() []Operation {
 						Type:        "string",
 						Description: "Filter run history to one registered background-operation type.",
 						Required:    false,
-						Enum:        []string{"exchange-rate-loading", "database-backup"},
+						Enum:        []string{"exchange-rate-loading", "database-backup", "audit-log-compaction"},
 					},
 					{
 						Name:        "limit",
@@ -4041,6 +4126,20 @@ func Operations() []Operation {
 			Invoke: invokeSetTagHiddenByPath,
 		},
 		{
+			ID:          "startAuditLogCompactionRun",
+			Method:      "POST",
+			Path:        "/api/background-operations/audit-log-compaction/runs",
+			Summary:     "Start an API audit-log compaction run.",
+			Description: "Starts one manual API audit-log compaction run and returns its run ID. Use the typed get-run tool to poll that run; call only when the user intends to delete expired audit history.",
+			MCP: MCPOperation{
+				Group: "operations", Name: "start_audit_log_compaction",
+				ReadOnly: false, Destructive: true, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{},\"type\":\"object\"}"),
+			},
+			Input:  InputDescriptor{},
+			Invoke: invokeStartAuditLogCompactionRun,
+		},
+		{
 			ID:          "startDatabaseBackupRun",
 			Method:      "POST",
 			Path:        "/api/background-operations/database-backup/runs",
@@ -5098,6 +5197,43 @@ func invokeGetAccountingSchema(ctx context.Context, client httpclient.ClientWith
 		return InvocationResult{}, err
 	}
 	response, err := client.GetAccountingSchemaWithResponse(ctx)
+	if err != nil {
+		return InvocationResult{}, err
+	}
+	if response == nil {
+		return InvocationResult{}, errors.New("generated client returned no operation response")
+	}
+	return normalizeInvocationResult(response.Body, response.HTTPResponse)
+}
+
+func invokeGetAuditLogCompactionRun(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
+	if err := validateInvocationInput(input, []string{"operation_run_id"}, nil, false, false); err != nil {
+		return InvocationResult{}, err
+	}
+	var pathValue0 int64
+	if err := parseInvocationValue(input.Path[0], false, &pathValue0); err != nil {
+		return InvocationResult{}, &InvocationInputError{
+			Location: "path",
+			Name:     "operation_run_id",
+			Value:    input.Path[0],
+			Err:      err,
+		}
+	}
+	response, err := client.GetAuditLogCompactionRunWithResponse(ctx, pathValue0)
+	if err != nil {
+		return InvocationResult{}, err
+	}
+	if response == nil {
+		return InvocationResult{}, errors.New("generated client returned no operation response")
+	}
+	return normalizeInvocationResult(response.Body, response.HTTPResponse)
+}
+
+func invokeGetAuditLogCompactionStatus(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
+	if err := validateInvocationInput(input, nil, nil, false, false); err != nil {
+		return InvocationResult{}, err
+	}
+	response, err := client.GetAuditLogCompactionStatusWithResponse(ctx)
 	if err != nil {
 		return InvocationResult{}, err
 	}
@@ -6330,6 +6466,121 @@ func invokeGetTransactionTemplate(ctx context.Context, client httpclient.ClientW
 		}
 	}
 	response, err := client.GetTransactionTemplateWithResponse(ctx, pathValue0)
+	if err != nil {
+		return InvocationResult{}, err
+	}
+	if response == nil {
+		return InvocationResult{}, errors.New("generated client returned no operation response")
+	}
+	return normalizeInvocationResult(response.Body, response.HTTPResponse)
+}
+
+func invokeListAPIAuditEntries(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
+	if err := validateInvocationInput(input, nil, []string{"client_surface", "limit", "method", "offset", "operation_id"}, false, false); err != nil {
+		return InvocationResult{}, err
+	}
+	params := &httpclient.ListAPIAuditEntriesParams{}
+	queryValues0, querySupplied0 := input.Query["method"]
+	if querySupplied0 {
+		if len(queryValues0) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "method",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues0)),
+			}
+		}
+		var queryValue0 string
+		if err := parseInvocationValue(queryValues0[0], true, &queryValue0); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "method",
+				Value:    queryValues0[0],
+				Err:      err,
+			}
+		}
+		params.Method = &queryValue0
+	}
+	queryValues1, querySupplied1 := input.Query["operation_id"]
+	if querySupplied1 {
+		if len(queryValues1) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "operation_id",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues1)),
+			}
+		}
+		var queryValue1 string
+		if err := parseInvocationValue(queryValues1[0], true, &queryValue1); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "operation_id",
+				Value:    queryValues1[0],
+				Err:      err,
+			}
+		}
+		params.OperationId = &queryValue1
+	}
+	queryValues2, querySupplied2 := input.Query["client_surface"]
+	if querySupplied2 {
+		if len(queryValues2) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "client_surface",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues2)),
+			}
+		}
+		var queryValue2 httpclient.APIAuditClientSurface
+		if err := parseInvocationValue(queryValues2[0], true, &queryValue2); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "client_surface",
+				Value:    queryValues2[0],
+				Err:      err,
+			}
+		}
+		params.ClientSurface = &queryValue2
+	}
+	queryValues3, querySupplied3 := input.Query["limit"]
+	if querySupplied3 {
+		if len(queryValues3) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "limit",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues3)),
+			}
+		}
+		var queryValue3 int
+		if err := parseInvocationValue(queryValues3[0], false, &queryValue3); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "limit",
+				Value:    queryValues3[0],
+				Err:      err,
+			}
+		}
+		params.Limit = &queryValue3
+	}
+	queryValues4, querySupplied4 := input.Query["offset"]
+	if querySupplied4 {
+		if len(queryValues4) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "offset",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues4)),
+			}
+		}
+		var queryValue4 int
+		if err := parseInvocationValue(queryValues4[0], false, &queryValue4); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "offset",
+				Value:    queryValues4[0],
+				Err:      err,
+			}
+		}
+		params.Offset = &queryValue4
+	}
+	response, err := client.ListAPIAuditEntriesWithResponse(ctx, params)
 	if err != nil {
 		return InvocationResult{}, err
 	}
@@ -9754,6 +10005,20 @@ func invokeSetTagHiddenByPath(ctx context.Context, client httpclient.ClientWithR
 		return InvocationResult{}, err
 	}
 	response, err := client.SetTagHiddenByPathWithBodyWithResponse(ctx, "application/json", bytes.NewReader(input.Body))
+	if err != nil {
+		return InvocationResult{}, err
+	}
+	if response == nil {
+		return InvocationResult{}, errors.New("generated client returned no operation response")
+	}
+	return normalizeInvocationResult(response.Body, response.HTTPResponse)
+}
+
+func invokeStartAuditLogCompactionRun(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
+	if err := validateInvocationInput(input, nil, nil, false, false); err != nil {
+		return InvocationResult{}, err
+	}
+	response, err := client.StartAuditLogCompactionRunWithResponse(ctx)
 	if err != nil {
 		return InvocationResult{}, err
 	}

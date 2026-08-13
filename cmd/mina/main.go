@@ -140,6 +140,7 @@ func newLocalClientSessionFactory(stdin io.Reader, stderr io.Writer) clientcli.L
 
 		appInstance, err := runtime.New(cmd.Context(), cfg, runtime.Options{
 			ExecutionProfile: runtime.ExecutionProfileOneShot,
+			HTTP:             runtime.HTTPConfig{ErrorLog: stderr},
 		})
 		if err != nil {
 			return clientcli.LocalSession{}, fmt.Errorf("startup error: %w", err)
@@ -476,6 +477,7 @@ func serve(
 		ExecutionProfile: runtime.ExecutionProfileLongRunning,
 		HTTP: runtime.HTTPConfig{
 			AccessLog:  accessLog,
+			ErrorLog:   stderr,
 			MCPVersion: version,
 		},
 		Operations: runtime.OperationConfig{

@@ -6,10 +6,6 @@ export interface UiPreferences {
   readonly transactionEntryActiveTab: TransactionEntryType;
 }
 
-export interface StatusPageUiState {
-  readonly showDetails: boolean;
-}
-
 export type TransactionEntryType =
   "spend" | "income" | "refund" | "transfer" | "exchange" | "advanced";
 

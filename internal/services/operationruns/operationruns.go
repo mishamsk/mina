@@ -16,6 +16,8 @@ const (
 	ExchangeRateLoadingOperationID OperationID = "exchange-rate-loading"
 	// DatabaseBackupOperationID identifies automatic and manual database backups.
 	DatabaseBackupOperationID OperationID = "database-backup"
+	// AuditLogCompactionOperationID identifies automatic and manual API audit-log compaction.
+	AuditLogCompactionOperationID OperationID = "audit-log-compaction"
 )
 
 // RunStatus is the observable lifecycle state of one operation invocation.
@@ -67,6 +69,20 @@ type DatabaseBackupStatus struct {
 	CompletedRunRevision int64
 }
 
+// AuditLogCompactionStatus is the public status for API audit-log compaction.
+type AuditLogCompactionStatus struct {
+	ID                   OperationID
+	Enabled              bool
+	ScheduleUTC          string
+	State                string
+	LastStartedAt        *time.Time
+	LastCompletedAt      *time.Time
+	LastSuccess          *bool
+	LastError            *string
+	RunCount             int64
+	CompletedRunRevision int64
+}
+
 // RunTrigger identifies how one operation invocation was initiated.
 type RunTrigger string
 
@@ -100,6 +116,11 @@ type DatabaseBackupRun struct {
 	RunEnvelope
 }
 
+// AuditLogCompactionRun is the concrete API audit-log compaction run detail.
+type AuditLogCompactionRun struct {
+	RunEnvelope
+}
+
 // OperationConfig contains observable configuration for one registered operation.
 type OperationConfig struct {
 	Enabled     bool
@@ -110,6 +131,7 @@ type OperationConfig struct {
 type Config struct {
 	ExchangeRateLoading OperationConfig
 	DatabaseBackup      OperationConfig
+	AuditLogCompaction  OperationConfig
 }
 
 // Repository stores background operation invocations.
@@ -234,6 +256,28 @@ func (s *Service) DatabaseBackupStatus(ctx context.Context) (DatabaseBackupStatu
 	}, nil
 }
 
+// AuditLogCompactionStatus returns API audit-log compaction operation status.
+func (s *Service) AuditLogCompactionStatus(ctx context.Context) (AuditLogCompactionStatus, error) {
+	count, latest, running, err := s.repo.RunStats(ctx, AuditLogCompactionOperationID)
+	if err != nil {
+		return AuditLogCompactionStatus{}, err
+	}
+
+	lastStartedAt, lastCompletedAt, lastSuccess, lastError := latestRunFields(latest)
+	return AuditLogCompactionStatus{
+		ID:                   AuditLogCompactionOperationID,
+		Enabled:              s.config.AuditLogCompaction.Enabled,
+		ScheduleUTC:          s.config.AuditLogCompaction.ScheduleUTC,
+		State:                state(running),
+		LastStartedAt:        lastStartedAt,
+		LastCompletedAt:      lastCompletedAt,
+		LastSuccess:          lastSuccess,
+		LastError:            lastError,
+		RunCount:             count,
+		CompletedRunRevision: count,
+	}, nil
+}
+
 // TriggerExchangeRateLoadingOperation triggers one asynchronous exchange-rate loading operation.
 func (s *Service) TriggerExchangeRateLoadingOperation(ctx context.Context) (RunEnvelope, error) {
 	if s.trigger == nil {
@@ -255,6 +299,15 @@ func (s *Service) TriggerDatabaseBackupOperation(ctx context.Context) (RunEnvelo
 	return s.trigger.Trigger(ctx, DatabaseBackupOperationID)
 }
 
+// TriggerAuditLogCompactionOperation triggers one asynchronous API audit-log compaction operation.
+func (s *Service) TriggerAuditLogCompactionOperation(ctx context.Context) (RunEnvelope, error) {
+	if s.trigger == nil {
+		return RunEnvelope{}, services.InvalidRequest("background operation trigger is not configured")
+	}
+
+	return s.trigger.Trigger(ctx, AuditLogCompactionOperationID)
+}
+
 // GetExchangeRateLoadingRun returns one exchange-rate loading operation run.
 func (s *Service) GetExchangeRateLoadingRun(ctx context.Context, runID int64) (ExchangeRateLoadingRun, error) {
 	run, err := s.getRun(ctx, ExchangeRateLoadingOperationID, runID)
@@ -273,6 +326,16 @@ func (s *Service) GetDatabaseBackupRun(ctx context.Context, runID int64) (Databa
 	}
 
 	return DatabaseBackupRun{RunEnvelope: run}, nil
+}
+
+// GetAuditLogCompactionRun returns one API audit-log compaction operation run.
+func (s *Service) GetAuditLogCompactionRun(ctx context.Context, runID int64) (AuditLogCompactionRun, error) {
+	run, err := s.getRun(ctx, AuditLogCompactionOperationID, runID)
+	if err != nil {
+		return AuditLogCompactionRun{}, err
+	}
+
+	return AuditLogCompactionRun{RunEnvelope: run}, nil
 }
 
 func (s *Service) getRun(ctx context.Context, operationID OperationID, runID int64) (RunEnvelope, error) {
@@ -304,6 +367,7 @@ func (s *Service) registeredOperations() []OperationID {
 	return []OperationID{
 		ExchangeRateLoadingOperationID,
 		DatabaseBackupOperationID,
+		AuditLogCompactionOperationID,
 	}
 }
 

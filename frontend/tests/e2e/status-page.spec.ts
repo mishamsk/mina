@@ -18,37 +18,6 @@ interface BalanceFixture {
   readonly remaining_credit?: string;
 }
 
-const waitForStatusDetailsPreference = async (page: Page) => {
-  await page.waitForFunction(
-    () =>
-      new Promise<boolean>((resolve, reject) => {
-        const openRequest = indexedDB.open("mina-ui-state");
-        openRequest.onerror = () => {
-          reject(new Error("mina-ui-state could not be opened"));
-        };
-        openRequest.onsuccess = () => {
-          const database = openRequest.result;
-          const transaction = database.transaction(
-            "status_page_ui_state",
-            "readonly",
-          );
-          const getRequest = transaction
-            .objectStore("status_page_ui_state")
-            .get("status-page");
-
-          getRequest.onerror = () => {
-            reject(new Error("status page state could not be read"));
-          };
-          getRequest.onsuccess = () => {
-            const result = getRequest.result as
-              { readonly showDetails?: unknown } | undefined;
-            resolve(result?.showDetails === true);
-          };
-        };
-      }),
-  );
-};
-
 const createAccount = async (
   page: Page,
   fqn: string,
@@ -177,15 +146,21 @@ test("status page reports backend health", async ({ page }) => {
   await expect(page.getByText("GMT")).toHaveCount(0);
 
   await expect(
-    page.getByText("Backend health and local UI state for this Mina process."),
+    page.getByText(
+      "Backend health, background work, and API mutation history for this Mina process.",
+    ),
   ).toBeHidden();
   await page.getByRole("button", { name: "Status help" }).click();
   await expect(
-    page.getByText("Backend health and local UI state for this Mina process."),
+    page.getByText(
+      "Backend health, background work, and API mutation history for this Mina process.",
+    ),
   ).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(
-    page.getByText("Backend health and local UI state for this Mina process."),
+    page.getByText(
+      "Backend health, background work, and API mutation history for this Mina process.",
+    ),
   ).toBeHidden();
 });
 
@@ -209,7 +184,9 @@ test("status page reports an encrypted database", async ({ page }) => {
   await expect(page.getByText("Not encrypted")).toHaveCount(0);
 });
 
-test("status page navigates registered operation runs", async ({ page }) => {
+test("status page navigates operations and inspects a web UI audit mutation", async ({
+  page,
+}) => {
   const firstRunResponse = await page.request.post(
     "/api/background-operations/exchange-rate-loading/runs",
   );
@@ -226,6 +203,18 @@ test("status page navigates registered operation runs", async ({ page }) => {
   };
 
   await page.goto("/status");
+  const largeIntegerMutationStatus = await page.evaluate(async () => {
+    const response = await fetch("/api/tags", {
+      body: '{"fqn":"Audit:LargeInteger","extra":9007199254740993}',
+      headers: {
+        "Content-Type": "application/json",
+        "X-Mina-Client-Surface": "web-ui",
+      },
+      method: "POST",
+    });
+    return response.status;
+  });
+  expect(largeIntegerMutationStatus).toBe(400);
   const backupRunResponse = await page.request.post(
     "/api/background-operations/database-backup/runs",
   );
@@ -240,6 +229,9 @@ test("status page navigates registered operation runs", async ({ page }) => {
     page.getByTestId("select-option-exchange-rate-loading"),
   ).toBeVisible();
   await expect(page.getByTestId("select-option-database-backup")).toBeVisible();
+  await expect(
+    page.getByTestId("select-option-audit-log-compaction"),
+  ).toBeVisible();
   await page.getByTestId("select-option-database-backup").click();
   await expect(page).toHaveURL(/operation=database-backup/);
 
@@ -296,6 +288,70 @@ test("status page navigates registered operation runs", async ({ page }) => {
   await expect(page).toHaveURL(
     /operation=exchange-rate-loading&runsPage=1&runsPageSize=50/,
   );
+
+  await operationSelect.click();
+  await page.getByTestId("select-option-audit-log-compaction").click();
+  await expect(page).toHaveURL(/operation=audit-log-compaction/);
+  await page.getByRole("button", { name: "Run now" }).click();
+  const compactionDetail = page.getByTestId("operation-run-detail");
+  await expect(compactionDetail).toContainText("API audit-log compaction");
+  await expect(compactionDetail).toContainText(
+    "Expired audit-history deletion",
+  );
+
+  await page.getByRole("tab", { name: "Audit log" }).click();
+  await expect(page).toHaveURL(/tab=audit-log/);
+  await expect(page.getByRole("checkbox", { name: "Details" })).toHaveCount(0);
+  await expect(page.getByText("Backend health route")).toHaveCount(0);
+
+  await page.getByRole("combobox", { name: "Surface filter" }).click();
+  await page.getByTestId("select-option-web-ui").click();
+  await page
+    .getByRole("textbox", { name: "Operation ID filter" })
+    .fill("startAuditLogCompactionRun");
+  await page.getByRole("button", { name: "Apply" }).click();
+  await expect(page).toHaveURL(/auditSurface=web-ui/);
+  await expect(page).toHaveURL(/auditOperation=startAuditLogCompactionRun/);
+  await expect(page).toHaveURL(/auditPage=1/);
+  await expect(page).toHaveURL(/auditPageSize=25/);
+
+  const auditRows = page.getByTestId("audit-log-table").locator("tbody tr");
+  await expect(auditRows).toHaveCount(1);
+  await expect(auditRows.first()).toContainText("web-ui");
+  await expect(auditRows.first()).toContainText("POST");
+  await expect(auditRows.first()).toContainText("startAuditLogCompactionRun");
+  await auditRows.first().click();
+  await expect(page).toHaveURL(/auditEntry=\d+/);
+
+  const auditDetail = page.getByTestId("audit-entry-detail");
+  await expect(auditDetail).toContainText("No request JSON body.");
+  await expect(auditDetail).toContainText(
+    '"operation_id": "audit-log-compaction"',
+  );
+  await page.reload();
+  await expect(page.getByTestId("audit-entry-detail")).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Audit log" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+
+  await page
+    .getByRole("textbox", { name: "Operation ID filter" })
+    .fill("createTag");
+  await page.getByRole("button", { name: "Apply" }).click();
+  const largeIntegerAuditRow = page
+    .getByTestId("audit-log-table")
+    .locator("tbody tr")
+    .filter({ hasText: "createTag" })
+    .first();
+  await expect(largeIntegerAuditRow).toBeVisible();
+  await largeIntegerAuditRow.click();
+  const requestJSON = page
+    .getByTestId("audit-entry-detail")
+    .getByRole("region", { name: "Request JSON" })
+    .locator("pre");
+  await expect(requestJSON).toContainText("9007199254740993");
+  await expect(requestJSON).not.toContainText("9007199254740992");
 });
 
 test("legacy ui deep links redirect to root routes preserving query", async ({
@@ -559,18 +615,4 @@ test("featured balance strip separates and labels party balances", async ({
       .getByTestId("featured-balance-row")
       .filter({ hasText: `OwedBy${unique}` }),
   ).toContainText("Owed by household");
-});
-
-test("status page UI preference survives reload", async ({ page }) => {
-  await page.goto("/status");
-
-  const details = page.getByRole("checkbox", { name: "Details" });
-  await details.check();
-  await expect(page.getByText("Backend health route")).toBeVisible();
-  await waitForStatusDetailsPreference(page);
-
-  await page.reload();
-
-  await expect(page.getByRole("checkbox", { name: "Details" })).toBeChecked();
-  await expect(page.getByText("Backend health route")).toBeVisible();
 });

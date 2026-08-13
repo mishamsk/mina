@@ -1,13 +1,17 @@
 import type { ReactNode } from "react";
 
 import {
+  type AuditLogCompactionRun,
   type BackgroundOperationId,
   type DatabaseBackupRun,
   type ExchangeRateLoadingRun,
+  getAuditLogCompactionRun,
+  getAuditLogCompactionStatus,
   getDatabaseBackupRun,
   getDatabaseBackupStatus,
   getExchangeRateLoadingRun,
   getExchangeRateLoadingStatus,
+  startAuditLogCompactionRun,
   startDatabaseBackupRun,
   startExchangeRateLoadingRun,
 } from "@/api";
@@ -19,7 +23,8 @@ export interface OperationStatusSummary {
   readonly state: string;
 }
 
-export type ConcreteOperationRun = ExchangeRateLoadingRun | DatabaseBackupRun;
+export type ConcreteOperationRun =
+  ExchangeRateLoadingRun | DatabaseBackupRun | AuditLogCompactionRun;
 
 export interface OperationModule {
   readonly label: string;
@@ -89,6 +94,22 @@ const DatabaseBackupRunDetail = ({
   </DefinitionList>
 );
 
+const AuditLogCompactionRunDetail = ({
+  run,
+}: {
+  readonly run: AuditLogCompactionRun;
+}) => (
+  <DefinitionList>
+    <DefinitionField label="Operation" value="API audit-log compaction" />
+    <DefinitionField label="Run ID" value={run.operation_run_id} />
+    <DefinitionField label="Work" value="Expired audit-history deletion" />
+    <DefinitionField
+      label="Result"
+      value={run.error ?? "No operation-specific message was recorded."}
+    />
+  </DefinitionList>
+);
+
 export const operationModules: Record<BackgroundOperationId, OperationModule> =
   {
     "exchange-rate-loading": {
@@ -150,6 +171,38 @@ export const operationModules: Record<BackgroundOperationId, OperationModule> =
       ),
       start: async () => {
         const result = await startDatabaseBackupRun();
+        return result.data
+          ? { runId: result.data.operation_run_id }
+          : { error: result.error };
+      },
+    },
+    "audit-log-compaction": {
+      label: "API audit-log compaction",
+      loadRun: async (runID) => {
+        const result = await getAuditLogCompactionRun({
+          path: { operation_run_id: runID },
+        });
+        return result.data ? { run: result.data } : { error: result.error };
+      },
+      loadStatus: async () => {
+        const result = await getAuditLogCompactionStatus();
+        if (!result.data) {
+          return { error: result.error };
+        }
+        return {
+          status: {
+            enabled: result.data.enabled,
+            runCount: result.data.run_count,
+            schedule: result.data.schedule_utc,
+            state: result.data.state,
+          },
+        };
+      },
+      renderRunDetail: (run) => (
+        <AuditLogCompactionRunDetail run={run as AuditLogCompactionRun} />
+      ),
+      start: async () => {
+        const result = await startAuditLogCompactionRun();
         return result.data
           ? { runId: result.data.operation_run_id }
           : { error: result.error };

@@ -7,6 +7,7 @@
 ## Implicit Contracts
 
 - Migration fixture clients upgrade an extracted archived database and complete full database validation before exposing REST behavior.
+- `FakeClock` deadline waits block without real-time polling, wake when fake time reaches their deadline, and release on runtime cancellation.
 
 ## Boundaries
 

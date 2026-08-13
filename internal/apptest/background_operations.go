@@ -111,3 +111,14 @@ func (c *Client) PollDatabaseBackupRun(runID int64) *httpclient.DatabaseBackupRu
 		time.Sleep(10 * time.Millisecond)
 	}
 }
+
+// AuditLogCompactionStatus returns the public API audit-log compaction status.
+func (c *Client) AuditLogCompactionStatus() *httpclient.AuditLogCompactionStatusResponse {
+	c.t.Helper()
+
+	response, err := c.REST().GetAuditLogCompactionStatusWithResponse(context.Background())
+	requireNoClientError(c, "get API audit-log compaction status", err)
+	requireStatus(c, "get API audit-log compaction status", response.StatusCode(), http.StatusOK, response.Body)
+
+	return response.JSON200
+}

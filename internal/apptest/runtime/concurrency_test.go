@@ -2,6 +2,7 @@ package runtime_test
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"sync"
 	"testing"
@@ -9,6 +10,64 @@ import (
 	"github.com/mishamsk/mina/internal/apptest"
 	"github.com/mishamsk/mina/internal/httpclient"
 )
+
+func TestConcurrentAPIAuditRecordingAndListing(t *testing.T) {
+	client := newSharedClient(t)
+	const workers = 4
+	const requestsPerWorker = 20
+	start := make(chan struct{})
+	errors := make(chan error, workers*2)
+	var pending sync.WaitGroup
+	pending.Add(workers * 2)
+
+	for worker := range workers {
+		go func() {
+			defer pending.Done()
+			<-start
+			for request := range requestsPerWorker {
+				response, err := client.REST().CreateTagWithResponse(
+					context.Background(),
+					httpclient.CreateTagRequest{Fqn: fmt.Sprintf("Audit:Concurrent:%d:%d", worker, request)},
+				)
+				if err != nil {
+					errors <- fmt.Errorf("create tag: %w", err)
+					return
+				}
+				if response.StatusCode() != http.StatusCreated {
+					errors <- fmt.Errorf("create tag status = %d; body %s", response.StatusCode(), response.Body)
+					return
+				}
+			}
+		}()
+		go func() {
+			defer pending.Done()
+			<-start
+			for range requestsPerWorker {
+				response, err := client.REST().ListAPIAuditEntriesWithResponse(context.Background(), nil)
+				if err != nil {
+					errors <- fmt.Errorf("list audit entries: %w", err)
+					return
+				}
+				if response.StatusCode() != http.StatusOK {
+					errors <- fmt.Errorf("list audit entries status = %d; body %s", response.StatusCode(), response.Body)
+					return
+				}
+			}
+		}()
+	}
+
+	close(start)
+	pending.Wait()
+	close(errors)
+	for err := range errors {
+		t.Error(err)
+	}
+
+	entries := listAPIAuditEntries(t, client, nil)
+	if entries.TotalCount != workers*requestsPerWorker {
+		t.Fatalf("audit entry count = %d, want %d", entries.TotalCount, workers*requestsPerWorker)
+	}
+}
 
 func TestConcurrentColdReferenceReads(t *testing.T) {
 	client := newSharedClient(t)

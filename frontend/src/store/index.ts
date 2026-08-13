@@ -106,13 +106,6 @@ export {
   usePreferencesView,
 } from "./preferences";
 export {
-  getStatusPageUiStateSnapshot,
-  hydrateStatusPageUiState,
-  setStatusPageShowDetails,
-  useStatusPageStore,
-  useStatusPageView,
-} from "./status-page";
-export {
   clearTagsPageLoading,
   getTagsSnapshot,
   invalidateTagsPage,

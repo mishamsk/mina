@@ -145,6 +145,63 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "405":
           $ref: "#/components/responses/MethodNotAllowed"
+  /api/audit-log/entries:
+    get:
+      operationId: listAPIAuditEntries
+      tags:
+        - audit-log
+      summary: List newest-first API audit entries.
+      parameters:
+        - name: method
+          in: query
+          required: false
+          description: Filter by an exact case-insensitive HTTP method.
+          schema:
+            type: string
+            minLength: 1
+        - name: operation_id
+          in: query
+          required: false
+          description: Filter by an exact stable OpenAPI operation ID.
+          schema:
+            type: string
+            minLength: 1
+        - name: client_surface
+          in: query
+          required: false
+          description: Filter by caller-declared client surface.
+          schema:
+            $ref: "#/components/schemas/APIAuditClientSurface"
+        - name: limit
+          in: query
+          required: false
+          description: Maximum matching entries to return; defaults to 100.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 100
+        - name: offset
+          in: query
+          required: false
+          description: Zero-based number of matching entries to skip.
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "200":
+          description: Bounded newest-first API audit-entry page.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/APIAuditEntryListResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
   /api/settings:
     get:
       operationId: getSettings
@@ -394,6 +451,72 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DatabaseBackupRun"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+  /api/background-operations/audit-log-compaction/status:
+    get:
+      operationId: getAuditLogCompactionStatus
+      tags:
+        - operations
+      summary: Get API audit-log compaction operation status.
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "200":
+          description: API audit-log compaction status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditLogCompactionStatusResponse"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+  /api/background-operations/audit-log-compaction/runs:
+    post:
+      operationId: startAuditLogCompactionRun
+      tags:
+        - operations
+      summary: Start an API audit-log compaction run.
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "202":
+          description: API audit-log compaction was invoked.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationRunReferenceResponse"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+  /api/background-operations/audit-log-compaction/runs/{operation_run_id}:
+    parameters:
+      - name: operation_run_id
+        description: "Numeric identifier of the background-operation run."
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+    get:
+      operationId: getAuditLogCompactionRun
+      tags:
+        - operations
+      summary: Get one API audit-log compaction run.
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "200":
+          description: API audit-log compaction run status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditLogCompactionRun"
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "404":
@@ -3953,6 +4076,81 @@ components:
           allOf:
             - $ref: "#/components/schemas/AuthenticationUser"
           nullable: true
+    APIAuditClientSurface:
+      type: string
+      enum:
+        - rest
+        - web-ui
+        - cli
+        - mcp
+    APIAuditEntry:
+      type: object
+      additionalProperties: false
+      required:
+        - api_audit_entry_id
+        - occurred_at
+        - operation_id
+        - method
+        - request_uri
+        - response_status
+        - duration_microseconds
+        - client_surface
+        - request_json
+        - request_json_present
+        - response_json
+        - response_json_present
+      properties:
+        api_audit_entry_id:
+          type: integer
+          format: int64
+          minimum: 1
+        occurred_at:
+          type: string
+          format: date-time
+        operation_id:
+          type: string
+        method:
+          type: string
+        request_uri:
+          type: string
+        response_status:
+          type: integer
+          minimum: 100
+          maximum: 599
+        duration_microseconds:
+          type: integer
+          format: int64
+          minimum: 0
+        client_surface:
+          $ref: "#/components/schemas/APIAuditClientSurface"
+        request_json:
+          description: Captured valid JSON request value, or null when no valid JSON body was present.
+          nullable: true
+        request_json_present:
+          type: boolean
+          description: Whether request_json contains a captured valid JSON value, including JSON null.
+        response_json:
+          description: Captured valid JSON response value, or null when no valid JSON body was present.
+          nullable: true
+        response_json_present:
+          type: boolean
+          description: Whether response_json contains a captured valid JSON value, including JSON null.
+    APIAuditEntryListResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - entries
+        - total_count
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/APIAuditEntry"
+        total_count:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Count of matching entries before limit and offset are applied.
     DemoSeedResponse:
       type: object
       additionalProperties: false
@@ -5872,9 +6070,11 @@ components:
       enum:
         - exchange-rate-loading
         - database-backup
+        - audit-log-compaction
       x-enum-varnames:
         - BackgroundOperationIdExchangeRateLoading
         - BackgroundOperationIdDatabaseBackup
+        - BackgroundOperationIdAuditLogCompaction
     BackgroundOperationRunOutcome:
       type: string
       enum:
@@ -5941,6 +6141,9 @@ components:
           enum:
             - idle
             - running
+          x-enum-varnames:
+            - ExchangeRateLoadingStatusResponseStateIdle
+            - ExchangeRateLoadingStatusResponseStateRunning
         last_started_at:
           type: string
           format: date-time
@@ -5988,6 +6191,59 @@ components:
           enum:
             - idle
             - running
+          x-enum-varnames:
+            - DatabaseBackupStatusResponseStateIdle
+            - DatabaseBackupStatusResponseStateRunning
+        last_started_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_success:
+          type: boolean
+          nullable: true
+        last_error:
+          type: string
+          nullable: true
+        run_count:
+          type: integer
+          format: int64
+          minimum: 0
+        completed_run_revision:
+          type: integer
+          format: int64
+          minimum: 0
+    AuditLogCompactionStatusResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - operation_id
+        - enabled
+        - schedule_utc
+        - state
+        - run_count
+        - completed_run_revision
+      properties:
+        operation_id:
+          type: string
+          enum:
+            - audit-log-compaction
+        enabled:
+          type: boolean
+        schedule_utc:
+          type: string
+          description: Five-field cron-style schedule interpreted in UTC.
+        state:
+          type: string
+          enum:
+            - idle
+            - running
+          x-enum-varnames:
+            - AuditLogCompactionStatusResponseStateIdle
+            - AuditLogCompactionStatusResponseStateRunning
         last_started_at:
           type: string
           format: date-time
@@ -6027,6 +6283,7 @@ components:
           enum:
             - exchange-rate-loading
             - database-backup
+            - audit-log-compaction
         status_url:
           type: string
     BackgroundOperationRun:
@@ -6080,6 +6337,17 @@ components:
               type: string
               enum:
                 - database-backup
+    AuditLogCompactionRun:
+      allOf:
+        - $ref: "#/components/schemas/BackgroundOperationRun"
+        - type: object
+          required:
+            - operation_id
+          properties:
+            operation_id:
+              type: string
+              enum:
+                - audit-log-compaction
     BackgroundOperationRunListResponse:
       type: object
       additionalProperties: false

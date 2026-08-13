@@ -8,7 +8,6 @@ import {
 } from "./authentication";
 import { hydrateUiPreferences } from "./preferences";
 import { createSelectors } from "./selectors";
-import { hydrateStatusPageUiState } from "./status-page";
 
 export type BootstrapStatus = "hydrating" | "ready" | "failed";
 
@@ -62,7 +61,7 @@ export const hydrateBrowserState = async (): Promise<void> => {
   try {
     initializeAuthenticationLifecycle();
     await hydrateAuthentication();
-    await Promise.all([hydrateUiPreferences(), hydrateStatusPageUiState()]);
+    await hydrateUiPreferences();
     setBootstrapReady();
   } catch (error) {
     setBootstrapFailed(error);

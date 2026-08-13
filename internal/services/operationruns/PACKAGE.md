@@ -11,6 +11,7 @@
 - Manual starts require runtime to connect the service to the background runner; without that connection, the service rejects the request rather than executing work itself.
 - Status summaries exclude active runs from the latest-result fields, run count, and completed-run revision; an active run affects only the `running`/`idle` state.
 - A concrete operation's run lookup returns not found for a run belonging to another operation.
+- The closed registry contains exchange-rate loading, database backup, and API audit-log compaction, each with concrete status and typed run projections.
 
 ## Boundaries
 

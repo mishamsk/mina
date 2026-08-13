@@ -10,6 +10,7 @@
 - Transaction-entry draft writes preserve the `baseline` and `persistBaseline` envelope fields so defaults and sticky values are not mistaken for user input.
 - Transaction-entry draft reads may return either an envelope or a bare draft; consumers must handle both.
 - Deleting a transaction-entry draft clears only that browser-persisted draft.
+- Status tabs, filters, pagination, and selected details are URL state and are not stored in IndexedDB.
 
 ## Boundaries
 

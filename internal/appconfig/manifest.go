@@ -34,6 +34,7 @@ const (
 	settingGroupHTTPServer     settingGroupKey = "http_server"
 	settingGroupExchangeRates  settingGroupKey = "exchange_rates"
 	settingGroupBackups        settingGroupKey = "backups"
+	settingGroupAuditLog       settingGroupKey = "audit_log"
 )
 
 type settingMetadata struct {
@@ -51,6 +52,7 @@ var settingGroupMetadataByKey = map[settingGroupKey]settingGroupMetadata{
 	settingGroupHTTPServer:     {Label: "HTTP server", Order: 20},
 	settingGroupExchangeRates:  {Label: "Exchange rates", Order: 30},
 	settingGroupBackups:        {Label: "Backups", Order: 40},
+	settingGroupAuditLog:       {Label: "API audit log", Order: 50},
 }
 
 // This map is the readable presentation companion to fileConfig. Snapshot
@@ -113,6 +115,14 @@ var settingMetadataByKey = map[SourceKey]settingMetadata{
 	SourceBackupFileScheduleUTC: {
 		Group: settingGroupBackups,
 		Label: "Backup schedule (UTC)", Help: "Optional five-field UTC schedule for automatic file backups.", Order: 30, Control: SettingControlText,
+	},
+	SourceAuditLogRetentionMonths: {
+		Group: settingGroupAuditLog,
+		Label: "Retention months", Help: "Calendar months retained before API audit entries become eligible for compaction.", Order: 10, Control: SettingControlInteger,
+	},
+	SourceAuditLogCompactionScheduleUTC: {
+		Group: settingGroupAuditLog,
+		Label: "Compaction schedule (UTC)", Help: "Five-field UTC schedule for automatic API audit-history compaction.", Order: 20, Control: SettingControlText,
 	},
 }
 
@@ -242,5 +252,7 @@ func settingValues(cfg Config) map[SourceKey]string {
 		SourceBackupFileDirectory:                 cfg.Backups.File.Directory,
 		SourceBackupFileRetentionCount:            strconv.Itoa(cfg.Backups.File.RetentionCount),
 		SourceBackupFileScheduleUTC:               cfg.Backups.File.ScheduleUTC,
+		SourceAuditLogRetentionMonths:             strconv.Itoa(cfg.AuditLog.RetentionMonths),
+		SourceAuditLogCompactionScheduleUTC:       cfg.AuditLog.CompactionScheduleUTC,
 	}
 }

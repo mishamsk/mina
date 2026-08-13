@@ -13,6 +13,7 @@
 - `Load`, rather than `DefaultConfig`, resolves the cache directory under `$XDG_CACHE_HOME/mina` or `os.UserCacheDir()/mina`; an explicit cache override is the only replacement.
 - Every TOML-backed field needs matching settings metadata with a compatible display type and unique group/field ordering. Snapshot construction rejects metadata or value-map drift so the runtime cannot expose an incomplete settings view.
 - `MINA_DATABASE_ENCRYPTION_KEY` and `MINA_API_KEY` use dedicated environment accessors and never enter ordinary config or settings snapshots; a present empty database-encryption key is invalid.
+- API audit history defaults to six retained calendar months with compaction at midnight UTC on each month's first day; both values follow ordinary source precedence and attribution.
 
 ## Boundaries
 
