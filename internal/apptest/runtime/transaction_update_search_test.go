@@ -33,6 +33,9 @@ func TestTransactionReplaceBoundary(t *testing.T) {
 	if updated.JSON200.InitiatedDate.String() != "2024-03-12" {
 		t.Fatalf("replaced initiated_date = %q, want 2024-03-12", updated.JSON200.InitiatedDate)
 	}
+	if !created.JSON201.UpdatedAt.Before(updated.JSON200.UpdatedAt) {
+		t.Fatalf("replaced updated_at = %s, want after %s", updated.JSON200.UpdatedAt, created.JSON201.UpdatedAt)
+	}
 	if len(updated.JSON200.Records) != 2 {
 		t.Fatalf("replaced record count = %d, want 2; body %+v", len(updated.JSON200.Records), updated.JSON200)
 	}
@@ -281,6 +284,65 @@ func TestTransactionCancelBoundary(t *testing.T) {
 	if cancelTombstoned.StatusCode() != http.StatusNotFound {
 		t.Fatalf("cancel tombstoned transaction status = %d, want %d; body %s", cancelTombstoned.StatusCode(), http.StatusNotFound, cancelTombstoned.Body)
 	}
+}
+
+func TestTransactionCancelRestoreUpdatedAtOrderingBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	refs := createTransactionRefs(t, client)
+	targetRequest := balancedTransactionRequest(refs)
+	targetRequest.Records[0].Settlement = apptest.PendingSettlement()
+	targetRequest.Records[0].ReconciliationStatus = httpclient.Unreconciled
+	target := createTransaction(t, client, targetRequest)
+	cancelPeer := createTransaction(t, client, balancedTransactionRequest(refs))
+
+	cancelled, err := client.REST().CancelTransactionWithResponse(context.Background(), target.JSON201.TransactionId)
+	requireNoTransportError(t, "cancel transaction for updated_at ordering", err)
+	if cancelled.StatusCode() != http.StatusOK {
+		t.Fatalf("cancel transaction for updated_at ordering status = %d, want %d; body %s", cancelled.StatusCode(), http.StatusOK, cancelled.Body)
+	}
+	if !cancelPeer.JSON201.UpdatedAt.Before(cancelled.JSON200.UpdatedAt) {
+		t.Fatalf("cancelled updated_at = %s, want after peer %s", cancelled.JSON200.UpdatedAt, cancelPeer.JSON201.UpdatedAt)
+	}
+
+	sortUpdated := httpclient.ListTransactionsParamsSortUpdatedAt
+	sortDescending := httpclient.ListTransactionsParamsSortDirDesc
+	allLifecycleStatuses := []httpclient.TransactionLifecycleStatus{
+		httpclient.TransactionLifecycleStatusActive,
+		httpclient.TransactionLifecycleStatusCancelled,
+	}
+	afterCancel, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+		LifecycleStatus: &allLifecycleStatuses,
+		Sort:            &sortUpdated,
+		SortDir:         &sortDescending,
+	})
+	requireNoTransportError(t, "list transactions after cancel by updated_at", err)
+	assertTransactionListResponse(t, "transactions after cancel by updated_at", afterCancel, []int64{
+		target.JSON201.TransactionId,
+		cancelPeer.JSON201.TransactionId,
+	}, 2)
+
+	restorePeer := createTransaction(t, client, balancedTransactionRequest(refs))
+	restored, err := client.REST().RestoreTransactionWithResponse(context.Background(), target.JSON201.TransactionId)
+	requireNoTransportError(t, "restore transaction for updated_at ordering", err)
+	if restored.StatusCode() != http.StatusOK {
+		t.Fatalf("restore transaction for updated_at ordering status = %d, want %d; body %s", restored.StatusCode(), http.StatusOK, restored.Body)
+	}
+	if !restorePeer.JSON201.UpdatedAt.Before(restored.JSON200.UpdatedAt) {
+		t.Fatalf("restored updated_at = %s, want after peer %s", restored.JSON200.UpdatedAt, restorePeer.JSON201.UpdatedAt)
+	}
+
+	activeLifecycleStatus := []httpclient.TransactionLifecycleStatus{httpclient.TransactionLifecycleStatusActive}
+	afterRestore, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+		LifecycleStatus: &activeLifecycleStatus,
+		Sort:            &sortUpdated,
+		SortDir:         &sortDescending,
+	})
+	requireNoTransportError(t, "list transactions after restore by updated_at", err)
+	assertTransactionListResponse(t, "transactions after restore by updated_at", afterRestore, []int64{
+		target.JSON201.TransactionId,
+		restorePeer.JSON201.TransactionId,
+		cancelPeer.JSON201.TransactionId,
+	}, 3)
 }
 
 func TestRecordSearchFiltersBoundary(t *testing.T) {
@@ -766,6 +828,169 @@ func TestRecordSearchPaginationBoundary(t *testing.T) {
 	assertInvalidAccountRecordSearchQuery(t, client, refs.CheckingAccountId, "offset=-1")
 	assertInvalidAccountRecordSearchQuery(t, client, refs.CheckingAccountId, "sort=created_at")
 	assertInvalidAccountRecordSearchQuery(t, client, refs.CheckingAccountId, "sort_dir=sideways")
+}
+
+func TestRecordSearchUpdatedAtOrderingBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	refs := createSearchRefs(t, client)
+	// Keep initiated dates opposite record-ID order so updated_at cannot alias the default sort.
+	first := createTransactionForDate(t, client, refs.transactionRefs, "2024-01-02", "First")
+	second := createTransactionForDate(t, client, refs.transactionRefs, "2024-01-01", "Second")
+	older := createTransactionForDate(t, client, refs.transactionRefs, "2024-01-03", "Older")
+	firstReplacement := balancedTransactionRequest(refs.transactionRefs)
+	firstReplacement.InitiatedDate = apptest.Date("2024-01-02")
+	firstMemo := "First"
+	firstReplacement.Records[0].Memo = &firstMemo
+	replacedFirst, err := client.REST().ReplaceTransactionWithResponse(context.Background(), first.JSON201.TransactionId, httpclient.UpdateTransactionRequest(firstReplacement))
+	requireNoTransportError(t, "replace first transaction", err)
+	if replacedFirst.StatusCode() != http.StatusOK {
+		t.Fatalf("replace first transaction status = %d, want %d; body %s", replacedFirst.StatusCode(), http.StatusOK, replacedFirst.Body)
+	}
+	firstRecordID := replacedFirst.JSON200.Records[0].RecordId
+	secondRecordID := second.JSON201.Records[0].RecordId
+	olderRecordID := older.JSON201.Records[0].RecordId
+	if first.JSON201.TransactionId >= second.JSON201.TransactionId || firstRecordID <= secondRecordID {
+		t.Fatalf("record-ID tiebreak fixture has transaction IDs %d, %d and record IDs %d, %d; want opposite ordering", first.JSON201.TransactionId, second.JSON201.TransactionId, firstRecordID, secondRecordID)
+	}
+
+	updated, err := client.REST().BulkSetJournalRecordReconciliationWithResponse(context.Background(), httpclient.BulkSetRecordReconciliationRequest{
+		RecordIds:            []int64{firstRecordID, secondRecordID},
+		ReconciliationStatus: httpclient.Unreconciled,
+	})
+	requireNoTransportError(t, "update tied records", err)
+	if updated.StatusCode() != http.StatusOK {
+		t.Fatalf("update tied records status = %d, want %d; body %s", updated.StatusCode(), http.StatusOK, updated.Body)
+	}
+
+	sortUpdated := httpclient.SearchJournalRecordsParamsSortUpdatedAt
+	sortAsc := httpclient.SearchJournalRecordsParamsSortDirAsc
+	globalAsc, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), &httpclient.SearchJournalRecordsParams{
+		AccountId: &refs.CheckingAccountId,
+		Sort:      &sortUpdated,
+		SortDir:   &sortAsc,
+	})
+	requireNoTransportError(t, "search records by updated_at ascending", err)
+	if globalAsc.StatusCode() != http.StatusOK {
+		t.Fatalf("search records by updated_at ascending status = %d, want %d; body %s", globalAsc.StatusCode(), http.StatusOK, globalAsc.Body)
+	}
+	assertRecordIDs(t, globalAsc.JSON200.Records, []int64{olderRecordID, secondRecordID, firstRecordID})
+	if !globalAsc.JSON200.Records[0].UpdatedAt.Before(globalAsc.JSON200.Records[1].UpdatedAt) {
+		t.Fatalf("updated_at values = %s and %s, want older timestamp first", globalAsc.JSON200.Records[0].UpdatedAt, globalAsc.JSON200.Records[1].UpdatedAt)
+	}
+	if !globalAsc.JSON200.Records[1].UpdatedAt.Equal(globalAsc.JSON200.Records[2].UpdatedAt) {
+		t.Fatalf("updated_at values = %s and %s, want tied timestamps", globalAsc.JSON200.Records[1].UpdatedAt, globalAsc.JSON200.Records[2].UpdatedAt)
+	}
+
+	sortDesc := httpclient.SearchJournalRecordsParamsSortDirDesc
+	globalDesc, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), &httpclient.SearchJournalRecordsParams{
+		AccountId: &refs.CheckingAccountId,
+		Sort:      &sortUpdated,
+		SortDir:   &sortDesc,
+	})
+	requireNoTransportError(t, "search records by updated_at descending", err)
+	if globalDesc.StatusCode() != http.StatusOK {
+		t.Fatalf("search records by updated_at descending status = %d, want %d; body %s", globalDesc.StatusCode(), http.StatusOK, globalDesc.Body)
+	}
+	assertRecordIDs(t, globalDesc.JSON200.Records, []int64{firstRecordID, secondRecordID, olderRecordID})
+
+	limitOne := 1
+	offsetTwo := 2
+	globalPage, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), &httpclient.SearchJournalRecordsParams{
+		AccountId: &refs.CheckingAccountId,
+		Sort:      &sortUpdated,
+		SortDir:   &sortAsc,
+		Limit:     &limitOne,
+		Offset:    &offsetTwo,
+	})
+	requireNoTransportError(t, "page tied updated_at records", err)
+	if globalPage.StatusCode() != http.StatusOK {
+		t.Fatalf("page tied updated_at records status = %d, want %d; body %s", globalPage.StatusCode(), http.StatusOK, globalPage.Body)
+	}
+	assertRecordIDs(t, globalPage.JSON200.Records, []int64{firstRecordID})
+
+	accountSortUpdated := httpclient.SearchAccountJournalRecordsParamsSortUpdatedAt
+	accountSortDesc := httpclient.SearchAccountJournalRecordsParamsSortDirDesc
+	accountDesc, err := client.REST().SearchAccountJournalRecordsWithResponse(context.Background(), refs.CheckingAccountId, &httpclient.SearchAccountJournalRecordsParams{
+		Sort:    &accountSortUpdated,
+		SortDir: &accountSortDesc,
+	})
+	requireNoTransportError(t, "search account records by updated_at descending", err)
+	if accountDesc.StatusCode() != http.StatusOK {
+		t.Fatalf("search account records by updated_at descending status = %d, want %d; body %s", accountDesc.StatusCode(), http.StatusOK, accountDesc.Body)
+	}
+	assertRecordIDs(t, accountDesc.JSON200.Records, []int64{firstRecordID, secondRecordID, olderRecordID})
+}
+
+func TestTransactionListUpdatedAtOrderingBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	refs := createSearchRefs(t, client)
+	// Keep initiated dates opposite transaction-ID order so updated_at cannot alias the default sort.
+	first := createTransactionForDate(t, client, refs.transactionRefs, "2024-01-03", "First")
+	second := createTransactionForDate(t, client, refs.transactionRefs, "2024-01-02", "Second")
+	older := createTransactionForDate(t, client, refs.transactionRefs, "2024-01-01", "Older")
+
+	updated, err := client.REST().BulkSetJournalRecordReconciliationWithResponse(context.Background(), httpclient.BulkSetRecordReconciliationRequest{
+		RecordIds: []int64{
+			first.JSON201.Records[0].RecordId,
+			second.JSON201.Records[0].RecordId,
+		},
+		ReconciliationStatus: httpclient.Unreconciled,
+	})
+	requireNoTransportError(t, "update records in tied transactions", err)
+	if updated.StatusCode() != http.StatusOK {
+		t.Fatalf("update records in tied transactions status = %d, want %d; body %s", updated.StatusCode(), http.StatusOK, updated.Body)
+	}
+
+	sortUpdated := httpclient.ListTransactionsParamsSortUpdatedAt
+	sortAsc := httpclient.ListTransactionsParamsSortDirAsc
+	ascending, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+		Sort:    &sortUpdated,
+		SortDir: &sortAsc,
+	})
+	requireNoTransportError(t, "list transactions by updated_at ascending", err)
+	if ascending.StatusCode() != http.StatusOK {
+		t.Fatalf("list transactions by updated_at ascending status = %d, want %d; body %s", ascending.StatusCode(), http.StatusOK, ascending.Body)
+	}
+	assertTransactionIDs(t, ascending.JSON200.Transactions, []int64{
+		older.JSON201.TransactionId,
+		first.JSON201.TransactionId,
+		second.JSON201.TransactionId,
+	})
+	if !ascending.JSON200.Transactions[0].UpdatedAt.Before(ascending.JSON200.Transactions[1].UpdatedAt) {
+		t.Fatalf("transaction updated_at values = %s and %s, want older timestamp first", ascending.JSON200.Transactions[0].UpdatedAt, ascending.JSON200.Transactions[1].UpdatedAt)
+	}
+	if !ascending.JSON200.Transactions[1].UpdatedAt.Equal(ascending.JSON200.Transactions[2].UpdatedAt) {
+		t.Fatalf("transaction updated_at values = %s and %s, want tied timestamps", ascending.JSON200.Transactions[1].UpdatedAt, ascending.JSON200.Transactions[2].UpdatedAt)
+	}
+
+	sortDesc := httpclient.ListTransactionsParamsSortDirDesc
+	descending, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+		Sort:    &sortUpdated,
+		SortDir: &sortDesc,
+	})
+	requireNoTransportError(t, "list transactions by updated_at descending", err)
+	if descending.StatusCode() != http.StatusOK {
+		t.Fatalf("list transactions by updated_at descending status = %d, want %d; body %s", descending.StatusCode(), http.StatusOK, descending.Body)
+	}
+	assertTransactionIDs(t, descending.JSON200.Transactions, []int64{
+		second.JSON201.TransactionId,
+		first.JSON201.TransactionId,
+		older.JSON201.TransactionId,
+	})
+
+	limitOne := 1
+	offsetOne := 1
+	page, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+		Sort:    &sortUpdated,
+		SortDir: &sortDesc,
+		Limit:   &limitOne,
+		Offset:  &offsetOne,
+	})
+	requireNoTransportError(t, "page tied updated_at transactions", err)
+	if page.StatusCode() != http.StatusOK {
+		t.Fatalf("page tied updated_at transactions status = %d, want %d; body %s", page.StatusCode(), http.StatusOK, page.Body)
+	}
+	assertTransactionIDs(t, page.JSON200.Transactions, []int64{first.JSON201.TransactionId})
 }
 
 func TestAccountRecordRunningBalanceBoundary(t *testing.T) {

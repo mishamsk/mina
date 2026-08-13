@@ -31,6 +31,10 @@ import {
   updateJournalRecordsTagsOperation,
 } from "@/api";
 import type { TransactionFilters } from "@/models/transaction-filters";
+import type {
+  TransactionSort,
+  TransactionSortDirection,
+} from "@/models/transaction-sorting";
 import {
   setTransactionEditModeAvailable,
   setTransactionEditModeEnabled,
@@ -52,6 +56,7 @@ import {
 import type { EditDockUpdate } from "./transaction-edit-dock";
 import {
   defaultTransactionPage,
+  readLiveSearchParams,
   readTransactionPageFromSearchParams,
   transactionOffsetFromPage,
 } from "./transaction-page-position";
@@ -130,14 +135,17 @@ export const useTransactionBrowserPage = ({
     });
   }, []);
   const dateJumpFocusRestoreRef = useRef<HTMLButtonElement | null>(null);
-  const { page, pageSize } = readTransactionPageFromSearchParams(searchParams);
+  const { page, pageSize, sort, sortDirection } =
+    readTransactionPageFromSearchParams(searchParams);
   const params: TransactionPageParams = useMemo(
     () => ({
       filters,
       limit: pageSize,
       offset: transactionOffsetFromPage(page, pageSize),
+      sort,
+      sortDirection,
     }),
-    [filters, page, pageSize],
+    [filters, page, pageSize, sort, sortDirection],
   );
   const {
     cancelDateJump,
@@ -155,6 +163,12 @@ export const useTransactionBrowserPage = ({
     readFiltersFromSearchParams,
     setSearchParams,
   });
+  const dateJumpEnabled = sort === "initiated_date" && sortDirection === "desc";
+  useEffect(() => {
+    if (!dateJumpEnabled) {
+      cancelDateJump();
+    }
+  }, [cancelDateJump, dateJumpEnabled]);
   const { lookups, page: pageResource } = useTransactionsResource(params);
   const displayedSnapshot = pageResource.displayedSnapshot;
   const displayedPageParams = displayedSnapshot?.params ?? params;
@@ -688,18 +702,30 @@ export const useTransactionBrowserPage = ({
           return refreshed.data;
         }),
       );
-      await refreshTransactionPageAfterEditModeSave(
+      const visibleTransactions = await refreshTransactionPageAfterEditModeSave(
         displayedPageParams,
         updatedTransactions,
       );
+      const visibleIds = new Set(
+        visibleTransactions.map((transaction) => transaction.transaction_id),
+      );
+      const updatedById = new Map(
+        visibleTransactions.map((transaction) => [
+          transaction.transaction_id,
+          transaction,
+        ]),
+      );
       setSelectedTransactionsById((current) => {
-        const next = new Map(current);
-        for (const transaction of updatedTransactions) {
-          if (next.has(transaction.transaction_id)) {
-            next.set(transaction.transaction_id, transaction);
-          }
-        }
-        return next;
+        return new Map(
+          Array.from(current).flatMap(([transactionId, transaction]) => {
+            if (!visibleIds.has(transactionId)) {
+              return [];
+            }
+            return [
+              [transactionId, updatedById.get(transactionId) ?? transaction],
+            ];
+          }),
+        );
       });
       showNotice(
         `${recordIds.length} record${recordIds.length === 1 ? "" : "s"} updated.`,
@@ -734,6 +760,62 @@ export const useTransactionBrowserPage = ({
       });
     },
     [cancelDateJump, clearTransactionSelection, setSearchParams],
+  );
+
+  const setSort = useCallback(
+    (nextSort: TransactionSort) => {
+      if (nextSort === sort) {
+        return;
+      }
+      cancelDateJump();
+      clearTransactionSelection();
+      const current = readLiveSearchParams();
+      const next = new URLSearchParams(current);
+      next.set("page", String(defaultTransactionPage));
+      next.set("sort", nextSort);
+      next.set("sortDir", sortDirection);
+      if (current.has("transaction")) {
+        const background = new URLSearchParams(next);
+        background.delete("transaction");
+        setSearchParams(background, { replace: true });
+      }
+      setSearchParams(next);
+    },
+    [
+      cancelDateJump,
+      clearTransactionSelection,
+      setSearchParams,
+      sort,
+      sortDirection,
+    ],
+  );
+
+  const setSortDirection = useCallback(
+    (nextSortDirection: TransactionSortDirection) => {
+      if (nextSortDirection === sortDirection) {
+        return;
+      }
+      cancelDateJump();
+      clearTransactionSelection();
+      const current = readLiveSearchParams();
+      const next = new URLSearchParams(current);
+      next.set("page", String(defaultTransactionPage));
+      next.set("sort", sort);
+      next.set("sortDir", nextSortDirection);
+      if (current.has("transaction")) {
+        const background = new URLSearchParams(next);
+        background.delete("transaction");
+        setSearchParams(background, { replace: true });
+      }
+      setSearchParams(next);
+    },
+    [
+      cancelDateJump,
+      clearTransactionSelection,
+      setSearchParams,
+      sort,
+      sortDirection,
+    ],
   );
 
   const jumpToPreviousDate = useCallback(
@@ -777,6 +859,7 @@ export const useTransactionBrowserPage = ({
     clearTransactionSelection,
     confirmRecurringOccurrenceFromRow,
     dateJumpAnchor,
+    dateJumpEnabled,
     dateJumpLoading,
     dateJumpValue,
     deleteSelectedTransaction,
@@ -804,8 +887,12 @@ export const useTransactionBrowserPage = ({
     selectableTransactionCount: selectableTransactions.length,
     setPage,
     setPageSize,
+    setSort,
+    setSortDirection,
     setEditMode: setTransactionEditModeEnabled,
     showNotice,
+    sort,
+    sortDirection,
     totalCount,
     toggleAmountDisplayMode,
     togglePageTransactionSelection,

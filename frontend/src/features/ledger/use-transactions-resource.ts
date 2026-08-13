@@ -95,6 +95,8 @@ const effectivePageParams = (
   filters: params.filters,
   limit: params.limit,
   offset,
+  sort: params.sort,
+  sortDirection: params.sortDirection,
 });
 
 const loadLedgerLookups = async (

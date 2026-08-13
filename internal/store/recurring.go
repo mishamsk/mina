@@ -540,7 +540,8 @@ func (s *RecurringStore) ConfirmOccurrence(ctx context.Context, id int64, pendin
 		result, err := tx.ExecContext(
 			ctx,
 			`UPDATE `+s.db.accountingName("transaction")+`
-SET lifecycle_status = CAST('ACTIVE' AS `+s.db.accountingName("transaction_lifecycle_status")+`)
+SET lifecycle_status = CAST('ACTIVE' AS `+s.db.accountingName("transaction_lifecycle_status")+`),
+    updated_at = CURRENT_TIMESTAMP
 WHERE transaction_id = ?
   AND tombstoned_at IS NULL
   AND lifecycle_status = CAST('EXPECTED' AS `+s.db.accountingName("transaction_lifecycle_status")+`)`,
@@ -634,8 +635,10 @@ WHERE transaction_id = ?
 		result, err = tx.ExecContext(
 			ctx,
 			`UPDATE `+s.db.accountingName("transaction")+`
-SET tombstoned_at = ?
+SET tombstoned_at = ?,
+    updated_at = ?
 WHERE transaction_id = ? AND tombstoned_at IS NULL`,
+			timestampArg(dismissedAt),
 			timestampArg(dismissedAt),
 			*current.GeneratedTransactionID,
 		)
@@ -882,7 +885,7 @@ func insertGeneratedRecurringTransaction(
 		ctx,
 		`INSERT INTO `+db.accountingName("transaction")+` (initiated_date, recurring_occurrence_id, lifecycle_status)
 VALUES (?, ?, CAST(? AS `+db.accountingName("transaction_lifecycle_status")+`))
-RETURNING transaction_id, initiated_date, recurring_occurrence_id, CAST(lifecycle_status AS VARCHAR), created_at, tombstoned_at`,
+RETURNING transaction_id, initiated_date, recurring_occurrence_id, CAST(lifecycle_status AS VARCHAR), created_at, updated_at, tombstoned_at`,
 		civilDateArg(initiatedDate),
 		occurrenceID,
 		enumValue(lifecycle),

@@ -712,15 +712,56 @@ func TestRecurringOccurrenceConfirmAndDismissBoundary(t *testing.T) {
 	confirmOccurrences := listRecurringOccurrences(t, client, &httpclient.ListRecurringOccurrencesParams{RecurringDefinitionId: &confirmDefinition.JSON201.RecurringDefinitionId})
 	expectedTransaction := getTransaction(t, client, *confirmOccurrences.JSON200.RecurringOccurrences[0].GeneratedTransactionId)
 	assertRecordLifecycleDates(t, "expected recurring transaction", expectedTransaction.JSON200.Records, nil, nil)
+	baseline := createTransaction(t, client, httpclient.CreateTransactionRequest{
+		InitiatedDate: apptest.Date(formatDate(today)),
+		Records: []httpclient.CreateJournalRecordRequest{
+			{
+				AccountId:            refs.CheckingAccountID,
+				Currency:             "USD",
+				Amount:               "-1.00",
+				Settlement:           apptest.PendingSettlement(),
+				ReconciliationStatus: httpclient.Unreconciled,
+				Source:               httpclient.WritableSourceManual,
+			},
+			{
+				AccountId:            refs.MerchantAccountID,
+				Currency:             "USD",
+				Amount:               "1.00",
+				CategoryId:           apptest.Int64Ptr(refs.CategoryID),
+				ReconciliationStatus: httpclient.Reconciled,
+				Source:               httpclient.WritableSourceManual,
+			},
+		},
+	})
+	baselineCancelled, err := client.REST().CancelTransactionWithResponse(context.Background(), baseline.JSON201.TransactionId)
+	requireNoTransportError(t, "cancel recurring confirmation ordering baseline", err)
+	if baselineCancelled.StatusCode() != http.StatusOK {
+		t.Fatalf("cancel recurring confirmation ordering baseline status = %d, want %d; body %s", baselineCancelled.StatusCode(), http.StatusOK, baselineCancelled.Body)
+	}
 	confirmStartedAt := time.Now().UTC().Add(-time.Second)
 	confirmed := confirmRecurringOccurrence(t, client, confirmOccurrences.JSON200.RecurringOccurrences[0].RecurringOccurrenceId)
 	assertReviewedOccurrence(t, *confirmed.JSON200, httpclient.RecurringOccurrenceStatusConfirmed)
 	assertRecurringActionStatus(t, "double confirm", confirmAgain(t, client, confirmed.JSON200.RecurringOccurrenceId), http.StatusBadRequest)
 	assertRecurringActionStatus(t, "dismiss after confirm", dismissAgain(t, client, confirmed.JSON200.RecurringOccurrenceId), http.StatusBadRequest)
 
-	defaultTransactions, err := client.REST().ListTransactionsWithResponse(context.Background(), nil)
+	confirmedTransaction := getTransaction(t, client, *confirmed.JSON200.GeneratedTransactionId)
+	if !expectedTransaction.JSON200.UpdatedAt.Before(confirmedTransaction.JSON200.UpdatedAt) ||
+		!baselineCancelled.JSON200.UpdatedAt.Before(confirmedTransaction.JSON200.UpdatedAt) {
+		t.Fatalf("confirmed transaction updated_at = %s, want after materialization %s and baseline %s", confirmedTransaction.JSON200.UpdatedAt, expectedTransaction.JSON200.UpdatedAt, baselineCancelled.JSON200.UpdatedAt)
+	}
+	sortUpdated := httpclient.ListTransactionsParamsSortUpdatedAt
+	sortDescending := httpclient.ListTransactionsParamsSortDirDesc
+	lifecycleStatuses := []httpclient.TransactionLifecycleStatus{
+		httpclient.TransactionLifecycleStatusActive,
+		httpclient.TransactionLifecycleStatusCancelled,
+	}
+	defaultTransactions, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+		LifecycleStatus: &lifecycleStatuses,
+		Sort:            &sortUpdated,
+		SortDir:         &sortDescending,
+	})
 	requireNoTransportError(t, "default confirmed transaction list", err)
-	assertTransactionListResponse(t, "default confirmed transaction list", defaultTransactions, []int64{*confirmed.JSON200.GeneratedTransactionId}, 1)
+	assertTransactionListResponse(t, "default confirmed transaction list", defaultTransactions, []int64{*confirmed.JSON200.GeneratedTransactionId, baseline.JSON201.TransactionId}, 2)
 	for _, record := range defaultTransactions.JSON200.Transactions[0].Records {
 		if record.LifecycleStatus != httpclient.TransactionLifecycleStatusActive || record.Source != httpclient.RecurringTemplate {
 			t.Fatalf("confirmed record lifecycle/source = %q/%q, want active/recurring_template", record.LifecycleStatus, record.Source)

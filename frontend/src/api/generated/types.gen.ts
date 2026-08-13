@@ -1486,6 +1486,10 @@ export type Transaction = {
     primary_amounts: Array<DisplayAmount>;
     shapes: Array<TransactionShape>;
     created_at: string;
+    /**
+     * Latest transaction or nested journal-record change time.
+     */
+    updated_at: string;
     tombstoned_at?: string | null;
     records: Array<JournalRecord>;
 };
@@ -5053,9 +5057,9 @@ export type ListTransactionsData = {
     path?: never;
     query?: {
         /**
-         * Field used to sort matching results; defaults to `initiated_date`.
+         * Field used to sort matching results; defaults to `initiated_date`. `updated_at` includes transaction and nested journal-record changes.
          */
-        sort?: 'initiated_date' | 'created_at';
+        sort?: 'initiated_date' | 'created_at' | 'updated_at';
         /**
          * Sort direction for matching results; defaults to `desc`.
          */
@@ -5540,9 +5544,9 @@ export type SearchJournalRecordsData = {
          */
         memo_contains?: string;
         /**
-         * Field used to sort matching results; defaults to `initiated_date`.
+         * Field used to sort matching results; defaults to `initiated_date`. Updated-date ordering uses `record_id` as the stable tiebreaker.
          */
-        sort?: 'initiated_date';
+        sort?: 'initiated_date' | 'updated_at';
         /**
          * Sort direction for matching results; defaults to `asc`.
          */
@@ -5574,7 +5578,7 @@ export type SearchJournalRecordsError = SearchJournalRecordsErrors[keyof SearchJ
 
 export type SearchJournalRecordsResponses = {
     /**
-     * Matching active journal records in transaction date order.
+     * Matching active journal records in the requested sort order.
      */
     200: JournalRecordSearchResponse;
 };
@@ -5663,9 +5667,9 @@ export type SearchAccountJournalRecordsData = {
          */
         include_running_balance?: boolean;
         /**
-         * Field used to sort matching results; defaults to `initiated_date`.
+         * Field used to sort matching results; defaults to `initiated_date`. Updated-date ordering uses `record_id` as the stable tiebreaker.
          */
-        sort?: 'initiated_date';
+        sort?: 'initiated_date' | 'updated_at';
         /**
          * Sort direction for matching results; defaults to `asc`.
          */

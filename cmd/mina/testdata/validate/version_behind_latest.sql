@@ -1,4 +1,5 @@
-DELETE FROM demo.schema_version
+UPDATE demo.schema_version
+SET is_applied = false
 WHERE version_id = (
 	SELECT MAX(version_id)
 	FROM demo.schema_version

@@ -15,6 +15,14 @@ import {
   transactionSettlements,
   transactionShapes,
 } from "@/models/transaction-filters";
+import {
+  defaultTransactionSort,
+  defaultTransactionSortDirection,
+  type TransactionSort,
+  type TransactionSortDirection,
+  transactionSortDirectionOptions,
+  transactionSortOptions,
+} from "@/models/transaction-sorting";
 
 export const defaultTransactionPage = 1;
 export const defaultTransactionPageSize = 50;
@@ -71,7 +79,12 @@ export const transactionPageFromOffset = (
 
 export const readTransactionPageFromSearchParams = (
   searchParams: URLSearchParams,
-): { readonly page: number; readonly pageSize: number } => {
+): {
+  readonly page: number;
+  readonly pageSize: number;
+  readonly sort: TransactionSort;
+  readonly sortDirection: TransactionSortDirection;
+} => {
   const page = parsePositiveInteger(
     searchParams.get("page"),
     defaultTransactionPage,
@@ -80,9 +93,19 @@ export const readTransactionPageFromSearchParams = (
     searchParams.get("pageSize"),
     defaultTransactionPageSize,
   );
+  const requestedSort = searchParams.get("sort");
+  const requestedSortDirection = searchParams.get("sortDir");
   return {
     page,
     pageSize: normalizeTransactionPageSize(requestedPageSize),
+    sort: transactionSortOptions.includes(requestedSort as TransactionSort)
+      ? (requestedSort as TransactionSort)
+      : defaultTransactionSort,
+    sortDirection: transactionSortDirectionOptions.includes(
+      requestedSortDirection as TransactionSortDirection,
+    )
+      ? (requestedSortDirection as TransactionSortDirection)
+      : defaultTransactionSortDirection,
   };
 };
 

@@ -88,6 +88,8 @@ export const useTransactionDateJump = ({
             filters: params.filters,
             limit: pageSize,
             offset: params.offset,
+            sort: params.sort,
+            sortDirection: params.sortDirection,
           },
           () => activeDateJumpIdRef.current === jumpId,
         );
@@ -131,6 +133,8 @@ export const useTransactionDateJump = ({
       pageSize,
       params.filters,
       params.offset,
+      params.sort,
+      params.sortDirection,
       readFiltersFromSearchParams,
       setSearchParams,
     ],

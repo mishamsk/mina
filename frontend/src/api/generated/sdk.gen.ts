@@ -1180,7 +1180,7 @@ export const dismissRecurringOccurrence = <ThrowOnError extends boolean = false>
 /**
  * List transactions with journal records.
  *
- * Defaults to `initiated_date` descending with `transaction_id` descending as the stable tiebreaker.
+ * Defaults to `initiated_date` descending. Every sort uses `transaction_id` in the same direction as the stable tiebreaker.
  */
 export const listTransactions = <ThrowOnError extends boolean = false>(options?: Options<ListTransactionsData, ThrowOnError>): RequestResult<ListTransactionsResponses, ListTransactionsErrors, ThrowOnError> => (options?.client ?? client).get<ListTransactionsResponses, ListTransactionsErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }, {

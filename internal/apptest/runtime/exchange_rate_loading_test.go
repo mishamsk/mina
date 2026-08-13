@@ -288,8 +288,12 @@ func TestExchangeRateLoadingExpectedBehavior(t *testing.T) {
 
 		triggerAndWaitForExchangeRateLoad(t, client)
 
-		assertRecordAmountUSD(t, readTransaction(exact.TransactionId), cash.AccountId, "-10.00000000")
-		assertRecordAmountUSD(t, readTransaction(exact.TransactionId), counterparty.AccountId, "10.00000000")
+		exactAfterBackfill := readTransaction(exact.TransactionId)
+		if !exact.UpdatedAt.Before(exactAfterBackfill.UpdatedAt) {
+			t.Fatalf("backfilled transaction updated_at = %s, want after %s", exactAfterBackfill.UpdatedAt, exact.UpdatedAt)
+		}
+		assertRecordAmountUSD(t, exactAfterBackfill, cash.AccountId, "-10.00000000")
+		assertRecordAmountUSD(t, exactAfterBackfill, counterparty.AccountId, "10.00000000")
 		assertRecordAmountUSD(t, readTransaction(exactAgain.TransactionId), cash.AccountId, "-20.00000000")
 		assertRecordAmountUSD(t, readTransaction(exactAgain.TransactionId), counterparty.AccountId, "20.00000000")
 		assertRecordAmountUSD(t, readTransaction(large.TransactionId), cash.AccountId, "-1234567890.12345678")

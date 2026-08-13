@@ -81,6 +81,7 @@ type Transaction struct {
 	PrimaryAmounts        []DisplayAmount
 	Shapes                []TransactionShape
 	CreatedAt             time.Time
+	UpdatedAt             time.Time
 	TombstonedAt          *time.Time
 	Records               []JournalRecord
 }
@@ -1834,8 +1835,8 @@ func validateJournalRecord(index int, record JournalRecordInput) error {
 }
 
 func validateRecordSearchOptions(opts RecordSearchOptions) error {
-	if opts.SortKey != "" && opts.SortKey != services.SortKeyInitiatedDate {
-		return services.InvalidRequest("sort must be initiated_date")
+	if opts.SortKey != "" && opts.SortKey != services.SortKeyInitiatedDate && opts.SortKey != services.SortKeyUpdatedAt {
+		return services.InvalidRequest("sort must be initiated_date or updated_at")
 	}
 	switch opts.SortDirection {
 	case "", services.SortDirectionAsc, services.SortDirectionDesc:

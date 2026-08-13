@@ -580,6 +580,43 @@ test("concurrent amount saves prune selected rows that leave the active filter",
   ]);
 });
 
+test("record-state updates prune selections moved off an updated-time page", async ({
+  page,
+}) => {
+  await page.goto(
+    "/transactions?page=1&pageSize=25&sort=updated_at&sortDir=asc",
+  );
+  await expect(page.getByText(/Page 1 of \d+/)).toBeVisible();
+  await page.getByRole("button", { name: "Edit mode" }).click();
+
+  const selectedRow = page
+    .locator("tbody tr[data-transaction-id]:not([aria-disabled='true'])")
+    .first();
+  const selectedTransactionId = await selectedRow.getAttribute(
+    "data-transaction-id",
+  );
+  expect(selectedTransactionId).not.toBeNull();
+  await selectedRow.click();
+
+  const header = page.getByTestId("transaction-browser-edit-mode-header");
+  await expect(header).toContainText("1 selected");
+  const updateResponse = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === "/api/records/bulk/reconciliation" &&
+      response.request().method() === "POST",
+  );
+  await page
+    .getByTestId("transaction-edit-dock")
+    .getByRole("button", { name: "Reconcile", exact: true })
+    .click();
+  await updateResponse;
+
+  await expect(header).toContainText("0 selected");
+  await expect(
+    page.locator(`tr[data-transaction-id='${selectedTransactionId}']`),
+  ).toHaveCount(0);
+});
+
 test("opening transaction entry waits for a pending amount save", async ({
   page,
 }, testInfo) => {

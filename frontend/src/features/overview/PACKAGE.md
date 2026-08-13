@@ -12,6 +12,7 @@
 - The initial household-flow skeleton reserves the complete top-line, inline-controlled visualization, and contributor-status footprint so later Overview sections do not shift.
 - Group balance rows by account type and FQN root. Featured status changes row order only; group subtotals remain signed current-balance USD aggregates even when a leaf leads with remaining credit.
 - Render the shared household top-line summaries and flow visualization before balances and the pulse/recent-activity row.
+- Recent activity uses the transaction browser's initiated-date-descending default order.
 - Use the shared ledger display semantics and navigate recent rows to Transactions with its `transaction` URL state; Overview does not own transaction detail state. See [web UI design](../../../../../docs/webui-design.md).
 
 ## Boundaries

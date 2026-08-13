@@ -269,6 +269,7 @@ export const ReferenceDrilldownPage = ({
         amountDisplayMode={browser.amountDisplayMode}
         amountSavePending={browser.pendingAmountSave}
         editMode={browser.editMode}
+        dateJumpEnabled={browser.dateJumpEnabled}
         dateJumpLoading={browser.dateJumpLoading}
         dateJumpValue={browser.dateJumpValue}
         onDateJumpToday={browser.jumpToCurrentDate}
@@ -291,10 +292,14 @@ export const ReferenceDrilldownPage = ({
         onSelectPage={browser.selectPageTransactions}
         onSearchChange={setSearchFilter}
         onSetEditMode={browser.setEditMode}
+        onSortChange={browser.setSort}
+        onSortDirectionChange={browser.setSortDirection}
         onToggleAmountDisplayMode={browser.toggleAmountDisplayMode}
         onTransactionClassChange={setTransactionClassFilter}
         selectableCount={browser.selectableTransactionCount}
         selectedCount={browser.selectedTransactionIds.size}
+        sort={browser.sort}
+        sortDirection={browser.sortDirection}
       />
       <div
         className="min-h-0 flex-1"

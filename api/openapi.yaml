@@ -2632,19 +2632,20 @@ paths:
       tags:
         - transactions
       summary: List transactions with journal records.
-      description: Defaults to `initiated_date` descending with `transaction_id` descending as the stable tiebreaker.
+      description: Defaults to `initiated_date` descending. Every sort uses `transaction_id` in the same direction as the stable tiebreaker.
       parameters:
         - name: sort
-          description: "Field used to sort matching results; defaults to `initiated_date`."
+          description: "Field used to sort matching results; defaults to `initiated_date`. `updated_at` includes transaction and nested journal-record changes."
           in: query
           required: false
           schema:
             type: string
-            enum: [initiated_date, created_at]
+            enum: [initiated_date, created_at, updated_at]
             default: initiated_date
             x-enum-varnames:
               - ListTransactionsParamsSortInitiatedDate
               - ListTransactionsParamsSortCreatedAt
+              - ListTransactionsParamsSortUpdatedAt
         - name: sort_dir
           description: "Sort direction for matching results; defaults to `desc`."
           in: query
@@ -3250,7 +3251,7 @@ paths:
           schema:
             type: string
         - name: sort
-          description: "Field used to sort matching results; defaults to `initiated_date`."
+          description: "Field used to sort matching results; defaults to `initiated_date`. Updated-date ordering uses `record_id` as the stable tiebreaker."
           in: query
           required: false
           schema:
@@ -3258,6 +3259,7 @@ paths:
             default: initiated_date
             enum:
               - initiated_date
+              - updated_at
         - name: sort_dir
           description: "Sort direction for matching results; defaults to `asc`."
           in: query
@@ -3287,7 +3289,7 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthenticated"
         "200":
-          description: Matching active journal records in transaction date order.
+          description: Matching active journal records in the requested sort order.
           content:
             application/json:
               schema:
@@ -3442,7 +3444,7 @@ paths:
             type: boolean
             default: false
         - name: sort
-          description: "Field used to sort matching results; defaults to `initiated_date`."
+          description: "Field used to sort matching results; defaults to `initiated_date`. Updated-date ordering uses `record_id` as the stable tiebreaker."
           in: query
           required: false
           schema:
@@ -3450,6 +3452,7 @@ paths:
             default: initiated_date
             enum:
               - initiated_date
+              - updated_at
         - name: sort_dir
           description: "Sort direction for matching results; defaults to `asc`."
           in: query
@@ -6877,6 +6880,7 @@ components:
         - primary_amounts
         - shapes
         - created_at
+        - updated_at
         - records
       properties:
         transaction_id:
@@ -6912,6 +6916,10 @@ components:
         created_at:
           type: string
           format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          description: Latest transaction or nested journal-record change time.
         tombstoned_at:
           type: string
           format: date-time

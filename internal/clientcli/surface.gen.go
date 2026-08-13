@@ -2766,16 +2766,16 @@ func Operations() []Operation {
 			Method:      "GET",
 			Path:        "/api/transactions",
 			Summary:     "List transactions with journal records.",
-			Description: "Defaults to `initiated_date` descending with `transaction_id` descending as the stable tiebreaker.",
+			Description: "Defaults to `initiated_date` descending. Every sort uses `transaction_id` in the same direction as the stable tiebreaker.",
 			CLI:         CLIOperation{Area: "transactions", Name: "list"},
 			Input: InputDescriptor{
 				Query: []ParameterDescriptor{
 					{
 						Name:        "sort",
 						Type:        "string",
-						Description: "Field used to sort matching results; defaults to `initiated_date`.",
+						Description: "Field used to sort matching results; defaults to `initiated_date`. `updated_at` includes transaction and nested journal-record changes.",
 						Required:    false,
-						Enum:        []string{"initiated_date", "created_at"},
+						Enum:        []string{"initiated_date", "created_at", "updated_at"},
 					},
 					{
 						Name:        "sort_dir",
@@ -3429,9 +3429,9 @@ func Operations() []Operation {
 					{
 						Name:        "sort",
 						Type:        "string",
-						Description: "Field used to sort matching results; defaults to `initiated_date`.",
+						Description: "Field used to sort matching results; defaults to `initiated_date`. Updated-date ordering uses `record_id` as the stable tiebreaker.",
 						Required:    false,
-						Enum:        []string{"initiated_date"},
+						Enum:        []string{"initiated_date", "updated_at"},
 					},
 					{
 						Name:        "sort_dir",
@@ -3592,9 +3592,9 @@ func Operations() []Operation {
 					{
 						Name:        "sort",
 						Type:        "string",
-						Description: "Field used to sort matching results; defaults to `initiated_date`.",
+						Description: "Field used to sort matching results; defaults to `initiated_date`. Updated-date ordering uses `record_id` as the stable tiebreaker.",
 						Required:    false,
-						Enum:        []string{"initiated_date"},
+						Enum:        []string{"initiated_date", "updated_at"},
 					},
 					{
 						Name:        "sort_dir",

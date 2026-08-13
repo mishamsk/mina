@@ -613,6 +613,7 @@ func transactionAPIResponse(transaction transactions.Transaction) openapi.Transa
 		LifecycleStatus:       openapi.TransactionLifecycleStatus(transaction.LifecycleStatus),
 		Settlement:            openapi.TransactionSettlement(transaction.Settlement),
 		CreatedAt:             transaction.CreatedAt.UTC(),
+		UpdatedAt:             transaction.UpdatedAt.UTC(),
 		TombstonedAt:          nullableTimestampTime(transaction.TombstonedAt),
 		Records:               journalRecordAPIResponses(transaction.Records),
 	}

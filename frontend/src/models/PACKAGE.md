@@ -2,7 +2,7 @@
 
 ## Purpose
 
-- Owns frontend UI-state shapes and canonical transaction-filter values that are not generated API DTOs.
+- Owns frontend UI-state shapes plus canonical transaction-filter and sorting values that are not generated API DTOs.
 
 ## Implicit Contracts
 

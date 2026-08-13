@@ -16,6 +16,10 @@ import {
   fetchTransactionPage,
   householdFlowSelectionFromDataset,
 } from "@/api";
+import {
+  defaultTransactionSort,
+  defaultTransactionSortDirection,
+} from "@/models/transaction-sorting";
 import type { OverviewBalanceRow } from "@/store";
 import {
   getTransactionsSnapshot,
@@ -111,7 +115,12 @@ const loadOverview = async (
       fetchOverviewAccounts(),
       fetchOverviewAccountBalances(),
       fetchTransactionMonthTotalsByMonth(month),
-      fetchTransactionPage({ limit: recentActivityLimit, offset: 0 }),
+      fetchTransactionPage({
+        limit: recentActivityLimit,
+        offset: 0,
+        sort: defaultTransactionSort,
+        sortDirection: defaultTransactionSortDirection,
+      }),
     ]);
 
   const commitCurrent = () =>

@@ -18,6 +18,10 @@ import {
   type TransactionFilters,
   transactionFilterSignature,
 } from "@/models/transaction-filters";
+import type {
+  TransactionSort,
+  TransactionSortDirection,
+} from "@/models/transaction-sorting";
 
 import { createSelectors } from "./selectors";
 
@@ -26,6 +30,8 @@ export interface TransactionsPageParams {
   readonly filters?: Partial<TransactionFilters>;
   readonly limit: number;
   readonly offset: number;
+  readonly sort: TransactionSort;
+  readonly sortDirection: TransactionSortDirection;
 }
 
 export interface TransactionPageSnapshot {
@@ -134,10 +140,9 @@ const transactionsStore = create<TransactionsState>()(
 
 export const useTransactionsStore = createSelectors(transactionsStore);
 
-// When sorting becomes user-facing, add sort and sort_dir to the URL state and snapshot key.
 export const transactionPageKey = (params: TransactionsPageParams): string => {
   const filterSignature = transactionFilterSignature(params.filters);
-  return `${params.limit}:${params.offset}:${filterSignature}`;
+  return `${params.limit}:${params.offset}:${params.sort}:${params.sortDirection}:${filterSignature}`;
 };
 
 export const transactionPageRequestKey = (

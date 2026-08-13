@@ -408,6 +408,9 @@ func TestTransactionRecordFieldsBoundary(t *testing.T) {
 	if created.StatusCode() != http.StatusCreated {
 		t.Fatalf("create status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
 	}
+	if created.JSON201.CreatedAt.IsZero() || created.JSON201.UpdatedAt.IsZero() {
+		t.Fatalf("transaction timestamps = %q/%q, want populated created_at/updated_at", created.JSON201.CreatedAt, created.JSON201.UpdatedAt)
+	}
 	record := created.JSON201.Records[0]
 	if record.Settlement == nil || *record.Settlement != httpclient.SettlementStatusPosted || record.LifecycleStatus != httpclient.TransactionLifecycleStatusActive {
 		t.Fatalf("settlement/lifecycle_status = %v/%q, want posted/active", record.Settlement, record.LifecycleStatus)

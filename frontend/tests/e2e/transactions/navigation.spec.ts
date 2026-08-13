@@ -271,6 +271,135 @@ test("transactions page steps adjacent date anchors", async ({ page }) => {
   await expect(nextDayButton).toBeEnabled();
 });
 
+test("transactions page chooses a stable sort field and direction", async ({
+  page,
+}) => {
+  await page.goto("/transactions?page=2&pageSize=25");
+  const sortMenu = page.getByRole("button", {
+    name: /^Sort transactions:/,
+  });
+  const dateJump = page.getByLabel("Go to day");
+
+  const firstTransactionRow = page
+    .locator("tbody > tr[data-transaction-id]")
+    .first();
+  await expect(firstTransactionRow).toBeVisible();
+  await firstTransactionRow.focus();
+  await firstTransactionRow.press("Enter");
+  const detailPanel = page.getByTestId("transaction-detail-panel");
+  await expect(detailPanel).toBeVisible();
+  await expect(page).toHaveURL(/[?&]transaction=\d+(?:&|$)/);
+
+  const updatedDescending = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/transactions" &&
+      url.searchParams.get("sort") === "updated_at" &&
+      url.searchParams.get("sort_dir") === "desc"
+    );
+  });
+  await sortMenu.focus();
+  await sortMenu.press("Enter");
+  await expect(
+    page.getByRole("dialog", { name: "Sort transactions" }),
+  ).toBeVisible();
+  await page.getByRole("button", { exact: true, name: "Updated" }).click();
+  await updatedDescending;
+  await expect(page).toHaveURL(
+    /\/transactions\?page=1&pageSize=25&transaction=\d+&sort=updated_at&sortDir=desc$/,
+  );
+  await expect(dateJump).toBeDisabled();
+  await page.goBack();
+  await expect(detailPanel).toBeHidden();
+  await expect(page).toHaveURL(
+    /\/transactions\?page=1&pageSize=25&sort=updated_at&sortDir=desc$/,
+  );
+
+  const updatedAscending = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/transactions" &&
+      url.searchParams.get("sort") === "updated_at" &&
+      url.searchParams.get("sort_dir") === "asc"
+    );
+  });
+  await sortMenu.click();
+  await page.getByRole("button", { exact: true, name: "Oldest first" }).click();
+  await updatedAscending;
+  await expect(page).toHaveURL(
+    /\/transactions\?page=1&pageSize=25&sort=updated_at&sortDir=asc$/,
+  );
+  const dateJumpDisabledReason =
+    "Date jumping requires Date sorting with newest first";
+  for (const controlName of [
+    "Previous day",
+    "Choose a day",
+    "Next day",
+    "Today",
+  ]) {
+    await expect(
+      page.getByLabel(`${controlName} unavailable: ${dateJumpDisabledReason}`, {
+        exact: true,
+      }),
+    ).toHaveAttribute("tabindex", "0");
+  }
+
+  for (const width of [1280, 600]) {
+    await page.setViewportSize({ width, height: 720 });
+    const overflow = await page
+      .getByTestId("transaction-browser-toolbar-row")
+      .evaluate((toolbar) => ({
+        document: document.documentElement.scrollWidth > window.innerWidth + 1,
+        toolbar: toolbar.scrollWidth > toolbar.clientWidth + 1,
+      }));
+    expect(overflow, `toolbar overflow at ${width}px`).toEqual({
+      document: false,
+      toolbar: false,
+    });
+  }
+  await page.setViewportSize({ width: 1280, height: 720 });
+
+  const initiatedAscending = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/transactions" &&
+      url.searchParams.get("sort") === "initiated_date" &&
+      url.searchParams.get("sort_dir") === "asc"
+    );
+  });
+  await page.getByRole("button", { exact: true, name: "Date" }).click();
+  await initiatedAscending;
+  await expect(dateJump).toBeDisabled();
+
+  const initiatedDescending = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/transactions" &&
+      url.searchParams.get("sort") === "initiated_date" &&
+      url.searchParams.get("sort_dir") === "desc"
+    );
+  });
+  await page.getByRole("button", { exact: true, name: "Newest first" }).click();
+  await initiatedDescending;
+  await expect(dateJump).toBeEnabled();
+});
+
+test("transactions page keeps its page when the active sort is reselected", async ({
+  page,
+}) => {
+  await page.goto("/transactions?page=2&pageSize=25");
+  const sortMenu = page.getByRole("button", {
+    name: /^Sort transactions:/,
+  });
+
+  await sortMenu.click();
+  await page.getByRole("button", { exact: true, name: "Date" }).click();
+  await expect(page).toHaveURL(/\/transactions\?page=2&pageSize=25$/);
+
+  await page.getByRole("button", { exact: true, name: "Newest first" }).click();
+  await expect(page).toHaveURL(/\/transactions\?page=2&pageSize=25$/);
+});
+
 test("transactions page repositions a same-page day jump, then keeps stepping and offers Today", async ({
   page,
 }) => {
@@ -291,6 +420,7 @@ test("transactions page repositions a same-page day jump, then keeps stepping an
   const samePageJump = (await (
     await samePageJumpResponse
   ).json()) as TransactionListFixture;
+  await expect(dateJump).toBeFocused();
   expect(samePageJump.offset).toBe(0);
   const samePageJumpAnchor = page.locator(
     `[data-date-jump-anchor="${mishaReviewDate}"]`,
@@ -340,9 +470,11 @@ test("transactions page repositions a same-page day jump, then keeps stepping an
       url.searchParams.get("anchor_date") === previousDate
     );
   });
-  await page.getByRole("button", { name: "Previous day" }).click();
+  const previousDayButton = page.getByRole("button", { name: "Previous day" });
+  await previousDayButton.click();
   await previousResponse;
   await expect(dateJump).toHaveValue(previousDate);
+  await expect(previousDayButton).toBeFocused();
 
   await expect(page.getByRole("button", { name: "Today" })).toBeVisible();
 
@@ -354,11 +486,13 @@ test("transactions page repositions a same-page day jump, then keeps stepping an
       url.searchParams.get("anchor_date") === today
     );
   });
-  await page.getByRole("button", { name: "Today" }).click();
+  const todayButton = page.getByRole("button", { name: "Today" });
+  await todayButton.click();
   const todayPage = (await (
     await todayResponse
   ).json()) as TransactionListFixture;
   await expect(dateJump).toHaveValue(today);
+  await expect(todayButton).toBeFocused();
   await expectTransactionsPageUrl(
     page,
     Math.floor(todayPage.offset / 50) + 1,

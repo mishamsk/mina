@@ -8,7 +8,7 @@ Mina has exactly four app test classes. All exercise Mina at a high-level app bo
 - `docker-lifecycle-tests`: Docker Compose deployment checks in `scripts/docker-service-test.sh`, driven by `just test-docker`.
 - No unit tests and no other app test locations.
 - No test code under `internal/tools/**`; validate tool changes with manual smoke checks, `just pre-commit`, and review.
-- Migration changes require evidence that every earlier `main` schema version upgrades through the real migration path and preserves its accounting data.
+- Each new migration carries an app-test that opens an immutable archived pre-migration database through `apptest.NewFromMigrationFixture`; the helper runs the real startup migration and full database validation before the test asserts preserved data and migration-specific transformations through REST.
 
 ## App-Tests
 

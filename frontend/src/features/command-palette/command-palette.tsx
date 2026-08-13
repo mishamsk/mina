@@ -61,6 +61,10 @@ import {
 import { formatDecimalAmount } from "@/features/ledger/format";
 import { useTransactionTemplatesResource } from "@/features/templates/use-transaction-templates-resource";
 import { cn } from "@/lib/utils";
+import {
+  defaultTransactionSort,
+  defaultTransactionSortDirection,
+} from "@/models/transaction-sorting";
 import type { TransactionEntryType } from "@/models/ui-state";
 import {
   closeCommandPalette,
@@ -917,6 +921,8 @@ export const CommandPalette = () => {
         filters: { search: transactionQuery },
         limit: transactionResultLimit,
         offset: 0,
+        sort: defaultTransactionSort,
+        sortDirection: defaultTransactionSortDirection,
       })
         .then((result) => {
           if (transactionSearchRequestRef.current !== requestId) {

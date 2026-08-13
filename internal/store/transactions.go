@@ -37,7 +37,7 @@ func (s *TransactionStore) Create(ctx context.Context, req transactions.PersistI
 			ctx,
 			`INSERT INTO `+s.db.accountingName("transaction")+` (initiated_date, recurring_occurrence_id, lifecycle_status)
 VALUES (?, ?, CAST(? AS `+s.db.accountingName("transaction_lifecycle_status")+`))
-RETURNING transaction_id, initiated_date, recurring_occurrence_id, CAST(lifecycle_status AS VARCHAR), created_at, tombstoned_at`,
+RETURNING transaction_id, initiated_date, recurring_occurrence_id, CAST(lifecycle_status AS VARCHAR), created_at, updated_at, tombstoned_at`,
 			civilDateArg(req.InitiatedDate),
 			req.RecurringOccurrenceID,
 			enumValue(req.LifecycleStatus),
@@ -75,9 +75,11 @@ func (s *TransactionStore) Replace(ctx context.Context, id int64, req transactio
 		row := tx.QueryRowContext(
 			ctx,
 			`UPDATE `+s.db.accountingName("transaction")+`
-SET initiated_date = ?, lifecycle_status = CAST(? AS `+s.db.accountingName("transaction_lifecycle_status")+`)
+SET initiated_date = ?,
+    lifecycle_status = CAST(? AS `+s.db.accountingName("transaction_lifecycle_status")+`),
+    updated_at = CURRENT_TIMESTAMP
 WHERE transaction_id = ? AND tombstoned_at IS NULL
-RETURNING transaction_id, initiated_date, recurring_occurrence_id, CAST(lifecycle_status AS VARCHAR), created_at, tombstoned_at`,
+RETURNING transaction_id, initiated_date, recurring_occurrence_id, CAST(lifecycle_status AS VARCHAR), created_at, updated_at, tombstoned_at`,
 			civilDateArg(req.InitiatedDate),
 			enumValue(req.LifecycleStatus),
 			id,
@@ -190,7 +192,8 @@ WHERE total_kind IS NOT NULL`,
 
 // BackfillMissingAmountUSD fills every currently resolvable active record in one update.
 func (s *TransactionStore) BackfillMissingAmountUSD(ctx context.Context) error {
-	if _, err := s.db.query().ExecContext(ctx, `WITH candidate AS (
+	return s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
+		rows, err := tx.QueryContext(ctx, `WITH candidate AS (
 	SELECT
 		jr.record_id,
 		jr.currency,
@@ -248,18 +251,41 @@ SET amount_usd = nonzero.amount_usd,
 FROM nonzero
 WHERE target.record_id = nonzero.record_id
   AND target.tombstoned_at IS NULL
-  AND target.amount_usd IS NULL`); err != nil {
-		return fmt.Errorf("backfill missing amount_usd from dense rates: %w", err)
-	}
+  AND target.amount_usd IS NULL
+RETURNING transaction_id`)
+		if err != nil {
+			return fmt.Errorf("backfill missing amount_usd from dense rates: %w", err)
+		}
+		transactionIDs := []int64{}
+		seenTransactionIDs := map[int64]struct{}{}
+		for rows.Next() {
+			var transactionID int64
+			if err := rows.Scan(&transactionID); err != nil {
+				return fmt.Errorf("scan amount_usd backfill transaction: %w", err)
+			}
+			if _, ok := seenTransactionIDs[transactionID]; ok {
+				continue
+			}
+			seenTransactionIDs[transactionID] = struct{}{}
+			transactionIDs = append(transactionIDs, transactionID)
+		}
+		if err := rows.Err(); err != nil {
+			_ = rows.Close()
+			return fmt.Errorf("iterate amount_usd backfill transactions: %w", err)
+		}
+		if err := rows.Close(); err != nil {
+			return fmt.Errorf("close amount_usd backfill transactions: %w", err)
+		}
 
-	return nil
+		return touchTransactionsByIDs(ctx, tx, s.db, transactionIDs)
+	})
 }
 
 // Get returns a transaction with nested journal records.
 func (s *TransactionStore) Get(ctx context.Context, id int64) (transactions.Transaction, error) {
 	transaction, err := scanTransaction(s.db.query().QueryRowContext(
 		ctx,
-		`SELECT transaction_id, initiated_date, recurring_occurrence_id, CAST(lifecycle_status AS VARCHAR), created_at, tombstoned_at
+		`SELECT transaction_id, initiated_date, recurring_occurrence_id, CAST(lifecycle_status AS VARCHAR), created_at, updated_at, tombstoned_at
 FROM `+s.db.accountingName("transaction")+`
 WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 		id,
@@ -283,7 +309,7 @@ WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 // List returns transactions with nested journal records in deterministic date order.
 func (s *TransactionStore) List(ctx context.Context, opts transactions.ListOptions) (transactions.ListResult, error) {
 	predicate := s.transactionListPredicate(opts)
-	query := `SELECT tx.transaction_id, tx.initiated_date, tx.recurring_occurrence_id, CAST(tx.lifecycle_status AS VARCHAR), tx.created_at, tx.tombstoned_at
+	query := `SELECT tx.transaction_id, tx.initiated_date, tx.recurring_occurrence_id, CAST(tx.lifecycle_status AS VARCHAR), tx.created_at, tx.updated_at, tx.tombstoned_at
 ` + predicate.query
 	totalCount, err := countMatchingRows(ctx, s.db.query(), "SELECT COUNT(*) "+predicate.query, predicate.args, "transactions", opts.IncludeTotalCount)
 	if err != nil {
@@ -715,7 +741,8 @@ func (s *TransactionStore) Tombstone(ctx context.Context, id int64) error {
 		result, err := tx.ExecContext(
 			ctx,
 			`UPDATE `+s.db.accountingName("transaction")+`
-SET tombstoned_at = CURRENT_TIMESTAMP
+SET tombstoned_at = CURRENT_TIMESTAMP,
+    updated_at = CURRENT_TIMESTAMP
 WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 			id,
 		)
@@ -800,9 +827,10 @@ func (s *TransactionStore) Cancel(ctx context.Context, id int64) (transactions.T
 		transaction, err = scanTransaction(tx.QueryRowContext(
 			ctx,
 			`UPDATE `+s.db.accountingName("transaction")+`
-SET lifecycle_status = CAST('CANCELLED' AS `+s.db.accountingName("transaction_lifecycle_status")+`)
+SET lifecycle_status = CAST('CANCELLED' AS `+s.db.accountingName("transaction_lifecycle_status")+`),
+    updated_at = CURRENT_TIMESTAMP
 WHERE transaction_id = ? AND tombstoned_at IS NULL
-RETURNING transaction_id, initiated_date, recurring_occurrence_id, CAST(lifecycle_status AS VARCHAR), created_at, tombstoned_at`,
+RETURNING transaction_id, initiated_date, recurring_occurrence_id, CAST(lifecycle_status AS VARCHAR), created_at, updated_at, tombstoned_at`,
 			id,
 		))
 		if errors.Is(err, sql.ErrNoRows) {
@@ -835,9 +863,10 @@ func (s *TransactionStore) Restore(ctx context.Context, id int64) (transactions.
 		transaction, err = scanTransaction(tx.QueryRowContext(
 			ctx,
 			`UPDATE `+s.db.accountingName("transaction")+`
-SET lifecycle_status = CAST('ACTIVE' AS `+s.db.accountingName("transaction_lifecycle_status")+`)
+SET lifecycle_status = CAST('ACTIVE' AS `+s.db.accountingName("transaction_lifecycle_status")+`),
+    updated_at = CURRENT_TIMESTAMP
 WHERE transaction_id = ? AND tombstoned_at IS NULL
-RETURNING transaction_id, initiated_date, recurring_occurrence_id, CAST(lifecycle_status AS VARCHAR), created_at, tombstoned_at`,
+RETURNING transaction_id, initiated_date, recurring_occurrence_id, CAST(lifecycle_status AS VARCHAR), created_at, updated_at, tombstoned_at`,
 			id,
 		))
 		if errors.Is(err, sql.ErrNoRows) {
@@ -1063,7 +1092,7 @@ WHERE record_id IN (`+placeholders(len(recordIDs))+`)`,
 			return fmt.Errorf("bulk categorize journal records: %w", err)
 		}
 
-		return nil
+		return touchTransactionsByRecordIDs(ctx, tx, s.db, recordIDs)
 	})
 	if err != nil {
 		return 0, err
@@ -1095,7 +1124,7 @@ WHERE jr.record_id = changes.record_id`,
 			return fmt.Errorf("bulk reassign journal record accounts: %w", err)
 		}
 
-		return nil
+		return touchTransactionsByRecordIDs(ctx, tx, s.db, recordIDs)
 	})
 	if err != nil {
 		return 0, err
@@ -1131,7 +1160,7 @@ WHERE record_id = ?`,
 			}
 		}
 
-		return nil
+		return touchTransactionsByRecordIDs(ctx, tx, s.db, recordIDs)
 	})
 	if err != nil {
 		return 0, err
@@ -1153,7 +1182,7 @@ SET member_id = ?,
 WHERE record_id IN (`+placeholders(len(recordIDs))+`)`, args...); err != nil {
 			return fmt.Errorf("bulk update journal record members: %w", err)
 		}
-		return nil
+		return touchTransactionsByRecordIDs(ctx, tx, s.db, recordIDs)
 	})
 	if err != nil {
 		return 0, err
@@ -1181,7 +1210,7 @@ WHERE jr.record_id = changes.record_id`,
 			return fmt.Errorf("bulk update journal record settlement: %w", err)
 		}
 
-		return nil
+		return touchTransactionsByRecordIDs(ctx, tx, s.db, recordIDs)
 	})
 	if err != nil {
 		return 0, err
@@ -1203,7 +1232,7 @@ SET reconciliation_status = CAST(? AS `+s.db.accountingName("reconciliation_stat
 WHERE record_id IN (`+placeholders(len(recordIDs))+`)`, args...); err != nil {
 			return fmt.Errorf("bulk update journal record reconciliation: %w", err)
 		}
-		return nil
+		return touchTransactionsByRecordIDs(ctx, tx, s.db, recordIDs)
 	})
 	if err != nil {
 		return 0, err
@@ -1221,6 +1250,47 @@ func explicitRecordDateValues(recordIDs []int64, pendingDates []*time.Time, post
 	return "VALUES " + strings.Join(rows, ", "), args
 }
 
+func touchTransactionsByRecordIDs(ctx context.Context, tx *sql.Tx, db *AppDB, recordIDs []int64) error {
+	if len(recordIDs) == 0 {
+		return nil
+	}
+
+	_, err := tx.ExecContext(
+		ctx,
+		`UPDATE `+db.accountingName("transaction")+` AS target
+SET updated_at = CURRENT_TIMESTAMP
+WHERE target.transaction_id IN (
+	SELECT DISTINCT transaction_id
+	FROM `+db.accountingName("journal_record")+`
+	WHERE record_id IN (`+placeholders(len(recordIDs))+`)
+)`,
+		int64Args(recordIDs)...,
+	)
+	if err != nil {
+		return fmt.Errorf("touch journal record transactions: %w", err)
+	}
+
+	return nil
+}
+
+func touchTransactionsByIDs(ctx context.Context, tx *sql.Tx, db *AppDB, transactionIDs []int64) error {
+	if len(transactionIDs) == 0 {
+		return nil
+	}
+
+	if _, err := tx.ExecContext(
+		ctx,
+		`UPDATE `+db.accountingName("transaction")+`
+SET updated_at = CURRENT_TIMESTAMP
+WHERE transaction_id IN (`+placeholders(len(transactionIDs))+`)`,
+		int64Args(transactionIDs)...,
+	); err != nil {
+		return fmt.Errorf("touch transactions: %w", err)
+	}
+
+	return nil
+}
+
 type transactionScanner interface {
 	Scan(dest ...any) error
 }
@@ -1231,6 +1301,7 @@ func scanTransaction(scanner transactionScanner) (transactions.Transaction, erro
 	var recurringOccurrenceID sql.NullInt64
 	var lifecycleStatus string
 	var createdAt time.Time
+	var updatedAt time.Time
 	var tombstonedAt sql.NullTime
 	if err := scanner.Scan(
 		&transaction.ID,
@@ -1238,6 +1309,7 @@ func scanTransaction(scanner transactionScanner) (transactions.Transaction, erro
 		&recurringOccurrenceID,
 		&lifecycleStatus,
 		&createdAt,
+		&updatedAt,
 		&tombstonedAt,
 	); err != nil {
 		return transactions.Transaction{}, err
@@ -1248,6 +1320,7 @@ func scanTransaction(scanner transactionScanner) (transactions.Transaction, erro
 		transaction.RecurringOccurrenceID = &recurringOccurrenceID.Int64
 	}
 	transaction.CreatedAt = createdAt.UTC()
+	transaction.UpdatedAt = updatedAt.UTC()
 	transaction.TombstonedAt = nullableTimeFromSQL(tombstonedAt)
 	transaction.Records = []transactions.JournalRecord{}
 
@@ -1733,8 +1806,10 @@ func int64Args(values []int64) []any {
 var transactionSortColumns = map[services.SortKey][]string{
 	services.SortKeyCreatedAt:     {"created_at"},
 	services.SortKeyInitiatedDate: {"initiated_date"},
+	services.SortKeyUpdatedAt:     {"updated_at"},
 }
 
 var recordSortColumns = map[services.SortKey][]string{
 	services.SortKeyInitiatedDate: {"tx.initiated_date", "jr.transaction_id", "jr.record_id"},
+	services.SortKeyUpdatedAt:     {"jr.updated_at", "jr.record_id"},
 }

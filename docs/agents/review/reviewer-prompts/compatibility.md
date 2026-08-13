@@ -5,6 +5,7 @@ Verify that upgrading an accounting database created by an earlier `main` versio
 - Preserves all accounting information, identities, relationships, and accounting meaning through each new migration, even when stored representations change.
 - Remains valid and usable when code that reads, calculates from, or validates persisted values changes.
 - Includes a migration that transforms earlier stored values when new code would otherwise reinterpret them, so their accounting meaning remains unchanged.
+- Covers each new migration with a migration app-test that upgrades an archived pre-migration database and verifies preserved data and migration-specific transformations through REST.
 
 Migration-file immutability is enforced programmatically and is outside this review. APIs, CLI and MCP commands, configuration, environment variables, files, backups, serialized runtime state, caches, downgrades, and old binaries opening newer schemas are not compatibility guarantees.
 

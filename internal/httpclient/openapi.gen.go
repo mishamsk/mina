@@ -885,12 +885,15 @@ func (e ListCreditLimitHistoryParamsSortDir) Valid() bool {
 // Defines values for SearchAccountJournalRecordsParamsSort.
 const (
 	SearchAccountJournalRecordsParamsSortInitiatedDate SearchAccountJournalRecordsParamsSort = "initiated_date"
+	SearchAccountJournalRecordsParamsSortUpdatedAt     SearchAccountJournalRecordsParamsSort = "updated_at"
 )
 
 // Valid indicates whether the value is a known member of the SearchAccountJournalRecordsParamsSort enum.
 func (e SearchAccountJournalRecordsParamsSort) Valid() bool {
 	switch e {
 	case SearchAccountJournalRecordsParamsSortInitiatedDate:
+		return true
+	case SearchAccountJournalRecordsParamsSortUpdatedAt:
 		return true
 	default:
 		return false
@@ -1041,12 +1044,15 @@ func (e ListMembersParamsSortDir) Valid() bool {
 // Defines values for SearchJournalRecordsParamsSort.
 const (
 	SearchJournalRecordsParamsSortInitiatedDate SearchJournalRecordsParamsSort = "initiated_date"
+	SearchJournalRecordsParamsSortUpdatedAt     SearchJournalRecordsParamsSort = "updated_at"
 )
 
 // Valid indicates whether the value is a known member of the SearchJournalRecordsParamsSort enum.
 func (e SearchJournalRecordsParamsSort) Valid() bool {
 	switch e {
 	case SearchJournalRecordsParamsSortInitiatedDate:
+		return true
+	case SearchJournalRecordsParamsSortUpdatedAt:
 		return true
 	default:
 		return false
@@ -1231,6 +1237,7 @@ func (e ListTransactionTemplatesParamsSortDir) Valid() bool {
 const (
 	ListTransactionsParamsSortCreatedAt     ListTransactionsParamsSort = "created_at"
 	ListTransactionsParamsSortInitiatedDate ListTransactionsParamsSort = "initiated_date"
+	ListTransactionsParamsSortUpdatedAt     ListTransactionsParamsSort = "updated_at"
 )
 
 // Valid indicates whether the value is a known member of the ListTransactionsParamsSort enum.
@@ -1239,6 +1246,8 @@ func (e ListTransactionsParamsSort) Valid() bool {
 	case ListTransactionsParamsSortCreatedAt:
 		return true
 	case ListTransactionsParamsSortInitiatedDate:
+		return true
+	case ListTransactionsParamsSortUpdatedAt:
 		return true
 	default:
 		return false
@@ -2559,6 +2568,9 @@ type Transaction struct {
 	TombstonedAt     *time.Time            `json:"tombstoned_at,omitempty"`
 	TransactionClass TransactionClass      `json:"transaction_class"`
 	TransactionId    int64                 `json:"transaction_id"`
+
+	// UpdatedAt Latest transaction or nested journal-record change time.
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // TransactionClass defines model for TransactionClass.
@@ -2957,7 +2969,7 @@ type SearchAccountJournalRecordsParams struct {
 	// IncludeRunningBalance When true, each returned account record includes the account balance after that record in chronological order. The running balance is computed over the account's full active history in that record's currency; pending and posted records contribute, cancelled records do not.
 	IncludeRunningBalance *bool `form:"include_running_balance,omitempty" json:"include_running_balance,omitempty"`
 
-	// Sort Field used to sort matching results; defaults to `initiated_date`.
+	// Sort Field used to sort matching results; defaults to `initiated_date`. Updated-date ordering uses `record_id` as the stable tiebreaker.
 	Sort *SearchAccountJournalRecordsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
 
 	// SortDir Sort direction for matching results; defaults to `asc`.
@@ -3275,7 +3287,7 @@ type SearchJournalRecordsParams struct {
 	// MemoContains Memo substring filter for matching journal records.
 	MemoContains *string `form:"memo_contains,omitempty" json:"memo_contains,omitempty"`
 
-	// Sort Field used to sort matching results; defaults to `initiated_date`.
+	// Sort Field used to sort matching results; defaults to `initiated_date`. Updated-date ordering uses `record_id` as the stable tiebreaker.
 	Sort *SearchJournalRecordsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
 
 	// SortDir Sort direction for matching results; defaults to `asc`.
@@ -3458,7 +3470,7 @@ type ListTransactionTemplatesParamsSortDir string
 
 // ListTransactionsParams defines parameters for ListTransactions.
 type ListTransactionsParams struct {
-	// Sort Field used to sort matching results; defaults to `initiated_date`.
+	// Sort Field used to sort matching results; defaults to `initiated_date`. `updated_at` includes transaction and nested journal-record changes.
 	Sort *ListTransactionsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
 
 	// SortDir Sort direction for matching results; defaults to `desc`.

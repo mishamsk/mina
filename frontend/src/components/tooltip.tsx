@@ -23,6 +23,7 @@ interface TooltipProps {
   readonly forceOpen?: boolean;
   readonly label: string;
   readonly onEscape?: () => void;
+  readonly triggerLabel?: string;
 }
 
 const suppressFocusTooltipAttribute = "data-mina-suppress-focus-tooltip";
@@ -61,6 +62,7 @@ export const Tooltip = ({
   forceOpen = false,
   label,
   onEscape,
+  triggerLabel,
 }: TooltipProps) => {
   const [open, setOpen] = useState(false);
   const [forcedOpenState, setForcedOpenState] = useState({
@@ -158,6 +160,7 @@ export const Tooltip = ({
       ) : (
         <TooltipTrigger asChild onFocusCapture={handleFocusCapture}>
           <span
+            aria-label={triggerLabel}
             className={cn("inline-flex max-w-full min-w-0", className)}
             tabIndex={focusable ? 0 : undefined}
           >

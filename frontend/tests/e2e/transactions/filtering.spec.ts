@@ -1703,6 +1703,7 @@ test("transactions filter toolbar suppresses open-control tooltips and supports 
   const dateJumpInput = page.getByLabel("Go to day");
   const nextDayButton = page.getByRole("button", { name: "Next day" });
   const todayButton = page.getByRole("button", { name: "Today" });
+  const sortMenu = page.getByRole("button", { name: /^Sort transactions:/ });
   const classFilter = page.getByLabel("Class");
   const amountDisplayToggle = page.getByTestId(
     "transaction-amount-display-toggle",
@@ -1712,6 +1713,9 @@ test("transactions filter toolbar suppresses open-control tooltips and supports 
   const filterTooltip = page
     .getByRole("tooltip")
     .filter({ hasText: "Open filters" });
+  const sortTooltip = page
+    .getByRole("tooltip")
+    .filter({ hasText: "Sort transactions" });
   const tabTo = async (target: Locator) => {
     await page.keyboard.press("Tab");
     await expect(target).toBeFocused();
@@ -1721,6 +1725,35 @@ test("transactions filter toolbar suppresses open-control tooltips and supports 
   await expect(filterTooltip).toBeVisible();
   await page.mouse.move(0, 0);
   await expect(filterTooltip).toBeHidden();
+
+  await sortMenu.hover();
+  await expect(sortTooltip).toBeVisible();
+  await sortMenu.click();
+  const sortPopover = page.locator('[data-slot="popover-content"]');
+  await expect(sortPopover).toBeVisible();
+  await sortMenu.hover();
+  await expect(sortTooltip).toBeHidden();
+  await page.mouse.move(0, 0);
+  await page.keyboard.press("Escape");
+  await expect(sortPopover).toBeHidden();
+  await expect(sortMenu).toBeFocused();
+  await expect(sortTooltip).toBeHidden();
+
+  await sortMenu.click();
+  await expect(sortPopover).toBeVisible();
+  await page.getByRole("heading", { name: "Transactions" }).click();
+  await expect(sortPopover).toBeHidden();
+  await expect(sortMenu).toBeFocused();
+
+  await sortMenu.click();
+  await expect(sortPopover).toBeVisible();
+  await amountDisplayToggle.click();
+  await expect(sortPopover).toBeHidden();
+  await expect(amountDisplayToggle).toBeFocused();
+  await expect(amountDisplayToggle).toHaveAttribute("aria-pressed", "true");
+  await amountDisplayToggle.press("Space");
+  await expect(amountDisplayToggle).toHaveAttribute("aria-pressed", "false");
+  await expect(sortPopover).toBeHidden();
 
   if (testInfo.project.name === "webkit") {
     await filterToggle.click();
@@ -1749,6 +1782,7 @@ test("transactions filter toolbar suppresses open-control tooltips and supports 
   await expect(nextDayButton).toBeFocused();
   await tabTo(todayButton);
   await tabTo(classFilter);
+  await tabTo(sortMenu);
   await tabTo(amountDisplayToggle);
   await tabTo(editModeButton);
   await tabTo(filterToggle);

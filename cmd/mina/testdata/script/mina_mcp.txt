@@ -29,10 +29,11 @@ stdout '^transport=stdio tool=accounts_delete read_only=false destructive=true i
 stdout '^transport=stdio tool=accounts_get '
 stdout '^transport=stdio tool=members_create '
 
-mcpcall stdio http://127.0.0.1:$PORT transactions_list '{"currency":["USD"],"limit":5}'
+mcpcall stdio http://127.0.0.1:$PORT transactions_list '{"currency":["USD"],"limit":5,"sort":"updated_at","sort_dir":"desc"}'
 stdout '"status":200'
 stdout '"transactions":\['
 stdout '"currency":"USD"'
+stdout -count=5 '"transaction_class":"[a-z]+","transaction_id":[0-9]+,"updated_at":"'
 stdout '"total_count":281'
 
 # Streamable HTTP lists and calls tools through the same listener.

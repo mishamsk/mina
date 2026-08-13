@@ -9,6 +9,7 @@ Flag problems when:
 - `e2e-tests` cover scenarios that can be moved to `app-tests` or dropped, including duplicate REST endpoint, domain validation, provider edge-case, or app scenario coverage.
 - `e2e-tests` contain validation matrices, exhaustive flag/config combinations, or library-owned CLI parsing coverage instead of launched-command, CLI/config/env, true-network REST, or IO/process-boundary smoke.
 - Test-client-only helpers are one-off, expose internals, or hide behavior that should be a user-visible REST API.
+- A new migration lacks a migration app-test using `apptest.NewFromMigrationFixture` to verify preserved data and migration-specific transformations through REST.
 
 Avoid generic requests for more tests, branch coverage, exhaustive cases, or more integration coverage. Prefer a small number of helpful client-driven scenarios that verify user-visible behavior. Prefer "move this to `app-tests`" or "drop this coverage" when an `e2e-test` is too broad.
 

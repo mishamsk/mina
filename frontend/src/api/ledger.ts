@@ -3,6 +3,10 @@ import {
   type TransactionFilters,
   transactionLifecycleStatuses,
 } from "@/models/transaction-filters";
+import type {
+  TransactionSort,
+  TransactionSortDirection,
+} from "@/models/transaction-sorting";
 
 import type {
   AccountingHistoryRange,
@@ -113,6 +117,8 @@ export interface TransactionPageParams {
   readonly filters?: Partial<TransactionFilters>;
   readonly limit: number;
   readonly offset: number;
+  readonly sort: TransactionSort;
+  readonly sortDirection: TransactionSortDirection;
 }
 
 export interface AccountRecordsPageParams {
@@ -384,9 +390,8 @@ export const fetchTransactionPage = (params: TransactionPageParams) =>
       offset: params.offset,
       anchor_date: params.anchorDate,
       ...transactionFilterQuery(params.filters),
-      // When sorting becomes user-facing, add sort and sort_dir to the URL state and snapshot key.
-      sort: "initiated_date",
-      sort_dir: "desc",
+      sort: params.sort,
+      sort_dir: params.sortDirection,
     },
   });
 
