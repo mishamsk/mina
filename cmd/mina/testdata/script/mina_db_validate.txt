@@ -10,7 +10,7 @@ stdout '^CREATE SCHEMA mina;;$'
 
 freeport
 exec mina serve --demo --db $WORK/demo.db --schema demo --yes --host 127.0.0.1 --port $PORT --quiet &server&
-httpget http://127.0.0.1:$PORT/api/health
+httpwait -timeout 15s '"status":"ok"' http://127.0.0.1:$PORT/api/health
 stdout '"status":"ok"'
 kill -INT server
 wait server
