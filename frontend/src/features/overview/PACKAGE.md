@@ -13,7 +13,7 @@
 - Follow the [balance display rules](../../../../../docs/webui-design.md#balances), then group rendered accounts by type and FQN root. Headers count only rendered account rows. Featured status changes account order only; group subtotals and unconverted counts include every server-provided balance row even when no native standing remains, and subtotals use signed current-balance USD values rather than remaining credit.
 - Render the shared household top-line summaries and flow visualization before balances and the pulse/recent-activity row.
 - Recent activity uses the transaction browser's initiated-date-descending default order.
-- Use the shared ledger display semantics and navigate recent rows to Transactions with its `transaction` URL state; Overview does not own transaction detail state. See [web UI design](../../../../../docs/webui-design.md).
+- Use server-derived display titles for recent activity and the shared ledger display semantics; navigate recent rows to Transactions with its `transaction` URL state. Overview does not own transaction detail state. See [web UI design](../../../../../docs/webui-design.md).
 
 ## Boundaries
 

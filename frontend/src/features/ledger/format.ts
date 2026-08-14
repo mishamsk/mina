@@ -107,7 +107,9 @@ export const buildLookupMaps = (
 export const transactionAccountFqnContext = (
   transaction: Transaction,
   maps: Pick<LookupMaps, "accountsById">,
-  options: { readonly includeDisplayTitle?: boolean } = {},
+  options: {
+    readonly includeDisplayTitle?: boolean;
+  } = {},
 ): string => {
   const fqns = Array.from(
     new Set(

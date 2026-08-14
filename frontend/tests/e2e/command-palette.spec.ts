@@ -424,6 +424,18 @@ test("command palette transaction search renders results and opens off-page deta
   await expect(option).toContainText("Jan 9");
   await expect(option).toContainText(transaction.display_title);
   await expect(option).toContainText(memo);
+  const optionLabel = await option.getAttribute("aria-label");
+  expect(optionLabel).toContain("cash:Wallet");
+  expect(optionLabel).toContain("merchant:PowellsBooks");
+  await option
+    .getByTestId("transaction-result-description")
+    .getByText(transaction.display_title, { exact: true })
+    .hover();
+  const summaryTooltip = page.getByRole("tooltip");
+  await expect(summaryTooltip).toContainText("cash:Wallet");
+  await expect(summaryTooltip).toContainText("merchant:PowellsBooks");
+  await page.mouse.move(0, 0);
+  await expect(summaryTooltip).toBeHidden();
   await expect(option.getByRole("img", { name: "Spend" })).toBeVisible();
   const amountChip = option.getByTestId("amount-chip");
   await expect(amountChip).toContainText("-9,999,999,999.87 $");
@@ -440,6 +452,68 @@ test("command palette transaction search renders results and opens off-page deta
   await expect(
     detailPanel.getByTestId("transaction-detail-summary-memo"),
   ).toHaveText(memo);
+  await deleteTransaction(page, transaction);
+});
+
+test("command palette transaction search falls back while account context loads", async ({
+  page,
+}, testInfo) => {
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const member = await createMember(page, `zzPaletteLookup ${unique}`);
+  const tag = await createTag(page, `zzE2EPaletteLookup:${unique}:Reference`);
+  const category = await createCategory(
+    page,
+    `zzE2EPaletteLookup:${unique}:Category`,
+  );
+  const memo = `E2E palette lookup context ${unique}`;
+  const transaction = await createSearchFixtureTransaction(page, {
+    amount: "123.45",
+    category,
+    initiatedDate: "2026-01-09",
+    member,
+    memo,
+    tag,
+  });
+  let releaseAccountLookup: (() => void) | undefined;
+  const accountLookupReleased = new Promise<void>((resolve) => {
+    releaseAccountLookup = resolve;
+  });
+
+  await page.route("**/api/accounts?**", async (route) => {
+    const url = new URL(route.request().url());
+    if (
+      route.request().method() !== "GET" ||
+      url.searchParams.get("include_tombstoned") !== "true"
+    ) {
+      await route.fallback();
+      return;
+    }
+
+    await accountLookupReleased;
+    await route.fulfill({
+      body: JSON.stringify({
+        error: { code: "unavailable", message: "Lookups unavailable." },
+      }),
+      contentType: "application/json",
+      status: 503,
+    });
+  });
+
+  await page.goto("/overview");
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
+  await openPalette(page);
+  const dialog = page.getByRole("dialog", { name: "Command Palette" });
+  await page.getByRole("combobox", { name: "Command search" }).fill(`'${memo}`);
+  await expect(dialog.getByText(transaction.display_title)).toBeVisible();
+
+  releaseAccountLookup?.();
+  await expect(dialog.getByRole("alert")).toHaveCount(0);
+  await expect(dialog.getByText(transaction.display_title)).toBeVisible();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(
+    new RegExp(`[?&]transaction=${transaction.transaction_id}(?:&|$)`),
+  );
   await deleteTransaction(page, transaction);
 });
 

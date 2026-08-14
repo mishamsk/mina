@@ -42,6 +42,7 @@ import { focusWithoutTooltip, Tooltip } from "@/components/tooltip";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   AmountText,
+  buildLookupMaps,
   captureTransactionEntryLaunchContext,
   ClassIcon,
   displayAmountKey,
@@ -54,6 +55,7 @@ import {
   MorePartsIndicator,
   refreshLedgerLookups,
   StatusIcon,
+  transactionAccountFqnContext,
   transactionClassLabel,
   transactionHasMoreParts,
   transactionPartsLabel,
@@ -365,6 +367,7 @@ const transactionResultAmountLabel = (
 
 const transactionResultOptionLabel = (
   transaction: Transaction,
+  displayTitleContext: string,
   memo: string | undefined,
   displayStatus: ReturnType<typeof lineStatus>,
 ): string => {
@@ -374,7 +377,7 @@ const transactionResultOptionLabel = (
     : undefined;
   return [
     `Transaction ${formatInitiatedDate(transaction.initiated_date)}`,
-    transaction.display_title,
+    displayTitleContext,
     `class ${transactionClassLabel(transaction.transaction_class)}`,
     displayStatus ? `status ${displayStatusLabel(displayStatus)}` : undefined,
     amountLabel ? `amount ${amountLabel}` : undefined,
@@ -425,6 +428,10 @@ export const CommandPalette = () => {
   const templates = useMemo(
     () => templatesResource.snapshot?.templates ?? [],
     [templatesResource.snapshot],
+  );
+  const lookupMaps = useMemo(
+    () => buildLookupMaps(lookups.snapshot),
+    [lookups.snapshot],
   );
   const query = searchState.query;
   const transactionSearchMode = query.startsWith("'");
@@ -1240,8 +1247,11 @@ export const CommandPalette = () => {
                           displayStatus === "mixed" ||
                           displayStatus === "cancelled";
                         const lineInactive = displayStatus === "cancelled";
+                        const displayTitleContext =
+                          transactionAccountFqnContext(transaction, lookupMaps);
                         const optionLabel = transactionResultOptionLabel(
                           transaction,
+                          displayTitleContext,
                           memo,
                           displayStatus,
                         );
@@ -1293,7 +1303,7 @@ export const CommandPalette = () => {
                             >
                               <Tooltip
                                 focusable={false}
-                                label={transaction.display_title}
+                                label={displayTitleContext}
                                 className="block min-w-0"
                               >
                                 <span

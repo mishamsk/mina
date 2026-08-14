@@ -195,7 +195,22 @@ test("Refund is money coming back and Exchange shows the server-derived effectiv
       response.request().method() === "POST",
   );
   await editor.getByRole("button", { name: "Save and add another" }).click();
-  expect((await exchangeResponse).ok()).toBe(true);
+  const savedExchangeResponse = await exchangeResponse;
+  expect(savedExchangeResponse.ok()).toBe(true);
+  const savedExchange = (await savedExchangeResponse.json()) as {
+    readonly display_title: string;
+  };
+  await expect(exchange.getByLabel("Date")).toBeFocused();
+
+  await page.setViewportSize({ width: 1000, height: 800 });
+  const savedExchangeContext = editor.getByLabel(/^Saved transaction /);
+  await savedExchangeContext.focus();
+  await expect(savedExchangeContext).toBeFocused();
+  const savedExchangeTooltip = page.getByRole("tooltip");
+  await expect(savedExchangeTooltip).toBeVisible();
+  await expect(savedExchangeTooltip).toContainText(savedExchange.display_title);
+  await expect(savedExchangeTooltip).toContainText("bank:Chase:joint_checking");
+  await expect(savedExchangeTooltip).toContainText("bank:Fidelity:EUR");
 });
 
 test("Exchange excludes destination accounts in the sold currency", async ({

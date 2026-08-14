@@ -91,10 +91,13 @@ import {
 } from "./entity-picker";
 import { captureTransactionEntryLaunchContext } from "./entry-launch-context";
 import {
+  buildLookupMaps,
   displayAmountKey,
   formatInitiatedDate,
   lineDisplayAmounts,
+  type LookupMaps,
   recordRoleLabel,
+  transactionAccountFqnContext,
   transactionHasMoreParts,
 } from "./format";
 import { ClassIcon } from "./line-icons";
@@ -2634,9 +2637,11 @@ const mergeLookupEntities = <Entity,>(
 
 const EntryRailRow = ({
   editable,
+  maps,
   transaction,
 }: {
   readonly editable: boolean;
+  readonly maps: Pick<LookupMaps, "accountsById">;
   readonly transaction: Transaction;
 }) => {
   const amounts = lineDisplayAmounts(transaction);
@@ -2644,6 +2649,7 @@ const EntryRailRow = ({
   const partsDescription = hasMoreParts
     ? moreTransactionPartsLabel(transaction)
     : undefined;
+  const displayTitleContext = transactionAccountFqnContext(transaction, maps);
   const content = (
     <>
       <span className="text-muted-foreground shrink-0">
@@ -2655,9 +2661,12 @@ const EntryRailRow = ({
         focusable={false}
       />
       <Tooltip
-        label={transaction.display_title}
+        label={displayTitleContext}
         className="min-w-0 flex-1"
         focusable={false}
+        triggerLabel={
+          editable ? undefined : `Recent transaction ${displayTitleContext}`
+        }
       >
         <span className="block truncate">{transaction.display_title}</span>
       </Tooltip>
@@ -2687,7 +2696,7 @@ const EntryRailRow = ({
       type="button"
       tabIndex={-1}
       className="session-tick flex w-full items-center gap-1 border-l-2 border-[var(--color-class-adjustment-ink)] bg-[var(--band)] px-2 py-1 text-left font-mono text-xs hover:bg-[var(--color-interactive-bright)]"
-      aria-label={`Edit saved transaction ${transaction.display_title}${
+      aria-label={`Edit saved transaction ${displayTitleContext}${
         partsDescription ? `. ${partsDescription}` : ""
       }`}
       onClick={() => {
@@ -2703,7 +2712,7 @@ const EntryRailRow = ({
     <div
       aria-label={
         partsDescription
-          ? `Recent transaction ${transaction.display_title}. ${partsDescription}`
+          ? `Recent transaction ${displayTitleContext}. ${partsDescription}`
           : undefined
       }
       className="flex items-center gap-1 px-2 py-1 font-mono text-xs"
@@ -2821,6 +2830,11 @@ export const EntryPanel = ({
       ),
     };
   }, [inlineCreatedLookups, lookupSnapshot]);
+  const lookupMaps = useMemo(() => buildLookupMaps(lookups), [lookups]);
+  const latestSessionTransaction = sessionTransactions[0];
+  const latestSessionTransactionContext = latestSessionTransaction
+    ? transactionAccountFqnContext(latestSessionTransaction, lookupMaps)
+    : undefined;
   const entryPanelRef = useRef<HTMLElement>(null);
   const entryScrollRegionRef = useRef<HTMLDivElement>(null);
   const addChargeButtonRef = useRef<HTMLButtonElement>(null);
@@ -5956,14 +5970,15 @@ export const EntryPanel = ({
                         {sessionCount}
                       </span>
                     </span>
-                    {sessionTransactions[0] ? (
+                    {latestSessionTransaction &&
+                    latestSessionTransactionContext ? (
                       <Tooltip
-                        label={sessionTransactions[0].display_title}
+                        label={latestSessionTransactionContext}
                         className="ml-2 min-w-0 xl:hidden"
-                        focusable={false}
+                        triggerLabel={`Saved transaction ${latestSessionTransactionContext}`}
                       >
                         <span className="block truncate">
-                          saved · {sessionTransactions[0].display_title}
+                          saved · {latestSessionTransaction.display_title}
                         </span>
                       </Tooltip>
                     ) : null}
@@ -6024,6 +6039,7 @@ export const EntryPanel = ({
                   <EntryRailRow
                     key={transaction.transaction_id}
                     editable
+                    maps={lookupMaps}
                     transaction={transaction}
                   />
                 ))
@@ -6042,6 +6058,7 @@ export const EntryPanel = ({
                   <EntryRailRow
                     key={transaction.transaction_id}
                     editable={false}
+                    maps={lookupMaps}
                     transaction={transaction}
                   />
                 ))}

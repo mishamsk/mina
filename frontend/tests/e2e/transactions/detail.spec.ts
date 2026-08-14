@@ -212,7 +212,9 @@ test("a captured BlueCash Target spend without amounts is offered for Spend and 
   await expect(entryEditor.getByLabel("Destination account")).toHaveValue(
     blueCash.fqn,
   );
-  await expect(entryEditor.getByLabel("Merchant")).toHaveValue(target.fqn);
+  await expect(entryEditor.getByLabel("Merchant", { exact: true })).toHaveValue(
+    target.fqn,
+  );
   await expect(entryEditor.getByLabel("Category")).toHaveValue(
     "Shopping:Household",
   );

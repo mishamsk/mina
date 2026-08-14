@@ -5,6 +5,8 @@ import (
 	"slices"
 	"strings"
 
+	"golang.org/x/text/currency"
+
 	"github.com/mishamsk/mina/internal/services"
 	"github.com/mishamsk/mina/internal/services/accounts"
 	"github.com/mishamsk/mina/internal/services/categories"
@@ -551,7 +553,7 @@ func transactionDisplayTitle(transaction Transaction) string {
 		}
 	}
 	if transaction.Class == TransactionClassCurrencyExchange {
-		if title := directionalCurrencyTitle(transaction.Records); title != "" {
+		if title := exchangeAccountTitle(transaction.Records); title != "" {
 			return title
 		}
 	}
@@ -570,7 +572,6 @@ func transactionDisplayTitle(transaction Transaction) string {
 	}
 	return "Transaction"
 }
-
 func titlePredicates(class TransactionClass) (func(JournalRecord) bool, func(JournalRecord) bool) {
 	switch class {
 	case TransactionClassSpend:
@@ -637,7 +638,61 @@ func uniqueAccountDisplayLabel(records []JournalRecord, include func(JournalReco
 	return name, name != ""
 }
 
-func directionalCurrencyTitle(records []JournalRecord) string {
+func exchangeAccountTitle(records []JournalRecord) string {
+	soldName, soldCurrency, soldAccountID, soldOK := uniqueExchangeSide(records, -1)
+	boughtName, boughtCurrency, boughtAccountID, boughtOK := uniqueExchangeSide(records, 1)
+	if !soldOK || !boughtOK {
+		return directionalCurrencyMarkerTitle(records)
+	}
+
+	soldMarker, boughtMarker := exchangeCurrencyMarkers(soldCurrency, boughtCurrency)
+	if soldAccountID == boughtAccountID {
+		return fmt.Sprintf("%s (%s → %s)", soldName, soldMarker, boughtMarker)
+	}
+	return fmt.Sprintf("%s (%s) → %s (%s)", soldName, soldMarker, boughtName, boughtMarker)
+}
+
+func uniqueExchangeSide(records []JournalRecord, sign int) (string, string, int64, bool) {
+	name := ""
+	currencyCode := ""
+	var accountID int64
+	found := false
+	for _, record := range records {
+		if record.Role != RecordRoleBalance || record.Amount.Sign() != sign {
+			continue
+		}
+		if !found {
+			name = record.AccountDisplayLabel
+			currencyCode = record.Currency
+			accountID = record.AccountID
+			found = true
+			continue
+		}
+		if record.AccountID != accountID {
+			return "", "", 0, false
+		}
+	}
+	return name, currencyCode, accountID, found
+}
+
+func exchangeCurrencyMarker(currencyCode string) string {
+	unit, err := currency.ParseISO(currencyCode)
+	if err != nil {
+		return currencyCode
+	}
+	return fmt.Sprint(currency.NarrowSymbol(unit))
+}
+
+func exchangeCurrencyMarkers(soldCurrency, boughtCurrency string) (string, string) {
+	soldMarker := exchangeCurrencyMarker(soldCurrency)
+	boughtMarker := exchangeCurrencyMarker(boughtCurrency)
+	if soldMarker == boughtMarker {
+		return soldCurrency, boughtCurrency
+	}
+	return soldMarker, boughtMarker
+}
+
+func directionalCurrencyMarkerTitle(records []JournalRecord) string {
 	sold := ""
 	bought := ""
 	for _, record := range records {
@@ -653,6 +708,7 @@ func directionalCurrencyTitle(records []JournalRecord) string {
 	if sold == "" || bought == "" {
 		return ""
 	}
+	sold, bought = exchangeCurrencyMarkers(sold, bought)
 	return sold + " → " + bought
 }
 

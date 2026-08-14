@@ -1537,7 +1537,7 @@ export type Transaction = {
     settlement: TransactionSettlement;
     transaction_class: TransactionClass;
     /**
-     * Server-derived transaction summary title for transaction lines.
+     * Server-derived transaction title for every presentation surface.
      */
     display_title: string;
     primary_amounts: Array<DisplayAmount>;

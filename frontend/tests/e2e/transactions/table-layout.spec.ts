@@ -521,6 +521,23 @@ test("transactions contain long amount chips and align the pagination footer", a
     .getByTestId("amount-chip")
     .filter({ hasText: fullAmountLabel })
     .locator("../..");
+  const singleRailAccountContext =
+    singleRailRow.getByLabel("Recent transaction");
+  await expect(singleRailAccountContext).toHaveAttribute(
+    "aria-label",
+    /cash:Wallet.*merchant:PowellsBooks/,
+  );
+  await expect(singleRailAccountContext).not.toHaveAttribute("tabindex");
+  await expect(
+    singleRailRow.locator(
+      "a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])",
+    ),
+  ).toHaveCount(0);
+  await singleRailAccountContext.hover();
+  await expect(page.getByRole("tooltip")).toContainText("cash:Wallet");
+  await expect(page.getByRole("tooltip")).toContainText(
+    "merchant:PowellsBooks",
+  );
   const [mixedBounds, singleBounds, mixedStyle, singleStyle] =
     await Promise.all([
       mixedRailRow.boundingBox(),
@@ -606,6 +623,90 @@ test("transactions display currency symbols with code fallback", async ({
       .filter({ hasText: memo })
       .locator(".transactions-amount-column"),
   ).toContainText("-3.21 XDR");
+});
+
+test("exchange rows identify same-account currencies", async ({
+  page,
+}, testInfo) => {
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const accounts = await listFixtures<AccountFixture>(
+    page,
+    "/api/accounts",
+    "accounts",
+  );
+  const exchangeAccount = findByFqn(accounts, "system:exchange");
+  const multiCurrencyAccount = await createAccount(
+    page,
+    `e2e:exchange-summary:${unique}:multi`,
+    "owned",
+  );
+  const sameMemo = `E2E same-account exchange summary ${unique}`;
+
+  const sameResponse = await page.request.post("/api/transactions", {
+    data: {
+      initiated_date: "2026-07-10",
+      records: [
+        {
+          account_id: multiCurrencyAccount.account_id,
+          amount: "-10.00000000",
+          amount_usd: "-10.00000000",
+          currency: "USD",
+          memo: sameMemo,
+          reconciliation_status: "unreconciled",
+          settlement: { status: "posted" },
+          source: "manual",
+        },
+        {
+          account_id: exchangeAccount.account_id,
+          amount: "10.00000000",
+          amount_usd: "10.00000000",
+          currency: "USD",
+          memo: sameMemo,
+          reconciliation_status: "unreconciled",
+          settlement: null,
+          source: "manual",
+        },
+        {
+          account_id: exchangeAccount.account_id,
+          amount: "-8.00000000",
+          amount_usd: "-10.00000000",
+          currency: "XDR",
+          memo: sameMemo,
+          reconciliation_status: "unreconciled",
+          settlement: null,
+          source: "manual",
+        },
+        {
+          account_id: multiCurrencyAccount.account_id,
+          amount: "8.00000000",
+          amount_usd: "10.00000000",
+          currency: "XDR",
+          memo: sameMemo,
+          reconciliation_status: "unreconciled",
+          settlement: { status: "posted" },
+          source: "manual",
+        },
+      ],
+    },
+  });
+  expect(sameResponse.ok(), await sameResponse.text()).toBe(true);
+
+  await page.goto(
+    `/transactions?q=${encodeURIComponent(unique)}&page=1&pageSize=50`,
+  );
+
+  const sameAccountTitle = `${multiCurrencyAccount.display_label} ($ → XDR)`;
+  const sameAccountLine = page
+    .getByTestId("transaction-line-title")
+    .filter({ hasText: sameAccountTitle });
+  await expect(sameAccountLine).toBeVisible();
+  await sameAccountLine.hover();
+  await expect(page.getByRole("tooltip")).toContainText(sameAccountTitle);
+  await sameAccountLine.click();
+  await expect(
+    page.getByRole("dialog", { name: sameAccountTitle }),
+  ).toBeVisible();
 });
 
 test("transactions page help and leaf category chips", async ({
@@ -708,7 +809,8 @@ test("transactions page help and leaf category chips", async ({
   const exchangeRow = page
     .getByRole("row")
     .filter({ has: page.getByRole("img", { name: "EXCHANGE" }) })
-    .filter({ hasText: "USD → EUR" })
+    .filter({ hasText: `${fundingAccount.display_label} ($)` })
+    .filter({ hasText: `${cashEUR.display_label} (€)` })
     .first();
   await expect(exchangeRow).toContainText("-224.00 $");
   await expect(exchangeRow).not.toContainText("200.00 €");

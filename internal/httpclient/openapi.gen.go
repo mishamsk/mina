@@ -2699,7 +2699,7 @@ type TagListResponse struct {
 type Transaction struct {
 	CreatedAt time.Time `json:"created_at"`
 
-	// DisplayTitle Server-derived transaction summary title for transaction lines.
+	// DisplayTitle Server-derived transaction title for every presentation surface.
 	DisplayTitle  string             `json:"display_title"`
 	InitiatedDate openapi_types.Date `json:"initiated_date"`
 

@@ -58,6 +58,7 @@ type workedExample struct {
 func TestDerivedAccountingSemanticsWorkedExamples(t *testing.T) {
 	client := newSharedClient(t)
 	fixture := newSemanticFixture(t, client)
+	multiCurrency := client.Scenario().AccountWithType("cash:ExchangeSummaryMulti", httpclient.WritableAccountTypeOwned)
 
 	examples := []workedExample{
 		{
@@ -207,7 +208,7 @@ func TestDerivedAccountingSemanticsWorkedExamples(t *testing.T) {
 				}
 			},
 			class:        httpclient.TransactionClassCurrencyExchange,
-			displayTitle: "USD → EUR",
+			displayTitle: "checking:Joint ($) → Travel:EUR (€)",
 			shapes: []expectedShape{{
 				shape: httpclient.TransactionShapeTypeExchange,
 				amounts: []httpclient.DisplayAmount{
@@ -218,6 +219,101 @@ func TestDerivedAccountingSemanticsWorkedExamples(t *testing.T) {
 					SoldCurrency:   "USD",
 					BoughtCurrency: "EUR",
 					Rate:           "1.10000000",
+				},
+			}},
+			roles: []httpclient.RecordRole{
+				httpclient.RecordRoleBalance,
+				httpclient.RecordRoleExchange,
+				httpclient.RecordRoleExchange,
+				httpclient.RecordRoleBalance,
+			},
+		},
+		{
+			name: "multi-account currency exchange",
+			records: func(f *semanticFixture) []httpclient.CreateJournalRecordRequest {
+				return []httpclient.CreateJournalRecordRequest{
+					semanticRecord(f.checking.AccountId, "-200.00", "USD", nil),
+					semanticRecord(f.savings.AccountId, "-130.00", "USD", nil),
+					semanticRecordWithoutSettlement(f.exchange.AccountId, "330.00", "USD", nil),
+					semanticRecordWithoutSettlement(f.exchange.AccountId, "-300.00", "EUR", nil),
+					semanticRecord(f.cashEUR.AccountId, "300.00", "EUR", nil),
+				}
+			},
+			class:        httpclient.TransactionClassCurrencyExchange,
+			displayTitle: "$ → €",
+			shapes: []expectedShape{{
+				shape: httpclient.TransactionShapeTypeExchange,
+				amounts: []httpclient.DisplayAmount{
+					{Currency: "USD", Amount: "-330.00000000", AmountUsd: apptest.StringPtr("-330.00000000")},
+					{Currency: "EUR", Amount: "300.00000000"},
+				},
+				effectiveRate: &httpclient.ExchangeEffectiveRate{
+					SoldCurrency:   "USD",
+					BoughtCurrency: "EUR",
+					Rate:           "1.10000000",
+				},
+			}},
+			roles: []httpclient.RecordRole{
+				httpclient.RecordRoleBalance,
+				httpclient.RecordRoleBalance,
+				httpclient.RecordRoleExchange,
+				httpclient.RecordRoleExchange,
+				httpclient.RecordRoleBalance,
+			},
+		},
+		{
+			name: "same-account crypto exchange with marker fallback",
+			records: func(f *semanticFixture) []httpclient.CreateJournalRecordRequest {
+				return []httpclient.CreateJournalRecordRequest{
+					semanticRecord(multiCurrency.AccountId, "-330.00", "USD", nil),
+					semanticRecordWithoutSettlement(f.exchange.AccountId, "330.00", "USD", nil),
+					semanticRecordWithoutSettlement(f.exchange.AccountId, "-300.00", "C::BTC", nil),
+					semanticRecord(multiCurrency.AccountId, "300.00", "C::BTC", nil),
+				}
+			},
+			class:        httpclient.TransactionClassCurrencyExchange,
+			displayTitle: "cash:ExchangeSummaryMulti ($ → C::BTC)",
+			shapes: []expectedShape{{
+				shape: httpclient.TransactionShapeTypeExchange,
+				amounts: []httpclient.DisplayAmount{
+					{Currency: "USD", Amount: "-330.00000000", AmountUsd: apptest.StringPtr("-330.00000000")},
+					{Currency: "C::BTC", Amount: "300.00000000"},
+				},
+				effectiveRate: &httpclient.ExchangeEffectiveRate{
+					SoldCurrency:   "USD",
+					BoughtCurrency: "C::BTC",
+					Rate:           "1.10000000",
+				},
+			}},
+			roles: []httpclient.RecordRole{
+				httpclient.RecordRoleBalance,
+				httpclient.RecordRoleExchange,
+				httpclient.RecordRoleExchange,
+				httpclient.RecordRoleBalance,
+			},
+		},
+		{
+			name: "same-account currency exchange with colliding markers",
+			records: func(f *semanticFixture) []httpclient.CreateJournalRecordRequest {
+				return []httpclient.CreateJournalRecordRequest{
+					semanticRecord(multiCurrency.AccountId, "-330.00", "USD", nil),
+					semanticRecordWithoutSettlement(f.exchange.AccountId, "330.00", "USD", nil),
+					semanticRecordWithoutSettlement(f.exchange.AccountId, "-450.00", "CAD", nil),
+					semanticRecord(multiCurrency.AccountId, "450.00", "CAD", nil),
+				}
+			},
+			class:        httpclient.TransactionClassCurrencyExchange,
+			displayTitle: "cash:ExchangeSummaryMulti (USD → CAD)",
+			shapes: []expectedShape{{
+				shape: httpclient.TransactionShapeTypeExchange,
+				amounts: []httpclient.DisplayAmount{
+					{Currency: "USD", Amount: "-330.00000000", AmountUsd: apptest.StringPtr("-330.00000000")},
+					{Currency: "CAD", Amount: "450.00000000"},
+				},
+				effectiveRate: &httpclient.ExchangeEffectiveRate{
+					SoldCurrency:   "USD",
+					BoughtCurrency: "CAD",
+					Rate:           "0.73333333",
 				},
 			}},
 			roles: []httpclient.RecordRole{
@@ -785,7 +881,8 @@ func TestExchangeShorthand(t *testing.T) {
 		}
 	}
 	assertDerivedTransaction(t, *response.JSON201, workedExample{
-		class: httpclient.TransactionClassCurrencyExchange,
+		class:        httpclient.TransactionClassCurrencyExchange,
+		displayTitle: "checking:Joint ($) → Travel:EUR (€)",
 		shapes: []expectedShape{{
 			shape: httpclient.TransactionShapeTypeExchange,
 			amounts: []httpclient.DisplayAmount{

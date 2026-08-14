@@ -7172,7 +7172,7 @@ components:
         display_title:
           type: string
           minLength: 1
-          description: Server-derived transaction summary title for transaction lines.
+          description: Server-derived transaction title for every presentation surface.
         primary_amounts:
           type: array
           items:
