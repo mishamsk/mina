@@ -686,6 +686,7 @@ test("returning to cached categories cancels a delayed intent retry", async ({
     .filter({ hasText: category.fqn });
   await expect(row).toBeVisible({ timeout: 10_000 });
   const intentSelect = page.getByRole("combobox", { name: "Economic intent" });
+  await page.clock.install();
 
   await intentSelect.click();
   const firstFailure = page.waitForResponse((response) => {
@@ -698,12 +699,12 @@ test("returning to cached categories cancels a delayed intent retry", async ({
   });
   await page.getByRole("option", { exact: true, name: "Income" }).click();
   await firstFailure;
-  await page.waitForTimeout(50);
+  await page.clock.runFor(50);
 
   await intentSelect.click();
   await page.getByRole("option", { exact: true, name: "All" }).click();
   await expect(row).toBeVisible();
-  await page.waitForTimeout(300);
+  await page.clock.runFor(300);
 
   expect(incomeRequestCount).toBe(1);
 });
