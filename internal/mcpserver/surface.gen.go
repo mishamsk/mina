@@ -1527,8 +1527,8 @@ func Operations() []Operation {
 			ID:          "deleteTransaction",
 			Method:      "DELETE",
 			Path:        "/api/transactions/{transaction_id}",
-			Summary:     "Tombstone a transaction and its journal records.",
-			Description: "Tombstone one transaction and all its journal records. This is destructive and requires explicit user intent; use transactions_cancel when history should remain active but excluded from balances and aggregates.",
+			Summary:     "Tombstone a transaction, its journal records, and their active record links.",
+			Description: "Tombstone one transaction, all its journal records, and every active link involving those records, including links to records in surviving transactions. This is destructive and requires explicit user intent; use transactions_cancel when history should remain active but excluded from balances and aggregates.",
 			MCP: MCPOperation{
 				Group: "transactions", Name: "delete",
 				ReadOnly: false, Destructive: true, Idempotent: true, OpenWorld: false,
@@ -3411,11 +3411,11 @@ func Operations() []Operation {
 			Method:      "PUT",
 			Path:        "/api/transactions/{transaction_id}",
 			Summary:     "Replace a transaction and its journal records.",
-			Description: "Replace one transaction with a full balanced journal while preserving its transaction ID. This tombstones prior active records; use only when the user intends a complete edit.",
+			Description: "Replace one transaction with a full balanced journal while preserving its transaction ID. Records supplying record_id retain that identity. An omitted record is tombstoned only when it is not imported, has no active raw-import metadata, and has no active record link; protected omissions return a conflict. Use only when the user intends a complete edit.",
 			MCP: MCPOperation{
 				Group: "transactions", Name: "replace",
 				ReadOnly: false, Destructive: false, Idempotent: true, OpenWorld: false,
-				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"initiated_date\":{\"description\":\"Human-facing transaction date in YYYY-MM-DD format.\",\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"records\":{\"description\":\"Complete journal-record set; active records must balance to zero within each currency.\",\"items\":{\"additionalProperties\":false,\"properties\":{\"account_id\":{\"description\":\"Account identifier for this journal record or request.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"amount\":{\"description\":\"JSON string, not a JSON number. Signed non-zero DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_usd\":{\"anyOf\":[{\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.\"},\"category_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}],\"description\":\"Category identifier for a flow record; omit or use null for every other account type.\"},\"currency\":{\"description\":\"Record currency using ISO 4217 or the `C::` crypto prefix; it must match the referenced account when that account is single-currency.\",\"pattern\":\"^([A-Z]{3}|C::.+)$\",\"type\":\"string\"},\"external_id\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Optional identifier assigned by an external system.\"},\"external_system\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Optional namespace for `external_id`, such as a provider name.\"},\"member_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}],\"description\":\"Optional household-member identifier for the journal records.\"},\"memo\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Optional memo text for the journal records.\"},\"reconciliation_status\":{\"description\":\"Whether a journal record has been reconciled with its external or expected source.\",\"enum\":[\"reconciled\",\"unreconciled\"],\"type\":\"string\"},\"settlement\":{\"anyOf\":[{\"allOf\":[{\"additionalProperties\":false,\"properties\":{\"pending_date\":{\"anyOf\":[{\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Exact UTC time the balance record entered pending; omitted manual values are derived by the service.\"},\"posted_date\":{\"anyOf\":[{\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Exact UTC time the balance record posted; omitted manual values are derived by the service.\"},\"status\":{\"description\":\"Server-derived balance-record settlement.\",\"enum\":[\"pending\",\"posted\"],\"type\":\"string\"}},\"required\":[\"status\"],\"type\":\"object\"}]},{\"type\":\"null\"}],\"description\":\"Settlement intent for owned and party records; use null for flow and system records.\"},\"source\":{\"description\":\"User-writable journal-record origin. Recurring-template records are created only by Mina.\",\"enum\":[\"manual\",\"imported\"],\"type\":\"string\"},\"tag_ids\":{\"description\":\"Tag identifiers to assign to the journal records.\",\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\"}},\"required\":[\"account_id\",\"amount\",\"currency\",\"reconciliation_status\",\"settlement\",\"source\"],\"type\":\"object\"},\"minItems\":2,\"type\":\"array\"}},\"required\":[\"initiated_date\",\"records\"],\"type\":\"object\"},\"transaction_id\":{\"description\":\"Numeric identifier of the transaction.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"body\",\"transaction_id\"],\"type\":\"object\"}"),
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"If-Match\":{\"description\":\"Strong ETag from the transaction response being replaced.\",\"minLength\":2,\"type\":\"string\"},\"body\":{\"additionalProperties\":false,\"properties\":{\"initiated_date\":{\"description\":\"Human-facing transaction date in YYYY-MM-DD format.\",\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"records\":{\"description\":\"Complete desired journal-record set. Retained records supply a unique record_id without provenance; new records omit record_id and may supply creation-time provenance. Active records must balance to zero within each currency.\",\"items\":{\"oneOf\":[{\"additionalProperties\":false,\"properties\":{\"account_id\":{\"description\":\"Account identifier for this retained journal record.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"amount\":{\"description\":\"JSON string, not a JSON number. Signed non-zero DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_usd\":{\"anyOf\":[{\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"JSON string or null, not a JSON number. Omission or explicit null preserves the stored value when amount and currency are unchanged and otherwise applies initiated-date inference.\"},\"category_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}],\"description\":\"Category identifier for a flow record; omit or use null for every other account type.\"},\"currency\":{\"description\":\"Record currency using ISO 4217 or the `C::` crypto prefix; it must match the referenced account when that account is single-currency.\",\"pattern\":\"^([A-Z]{3}|C::.+)$\",\"type\":\"string\"},\"member_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}],\"description\":\"Optional household-member identifier for the journal record.\"},\"memo\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Optional memo text for the journal record.\"},\"reconciliation_status\":{\"description\":\"Whether a journal record has been reconciled with its external or expected source.\",\"enum\":[\"reconciled\",\"unreconciled\"],\"type\":\"string\"},\"record_id\":{\"description\":\"Active journal-record identifier retained by this complete replacement; it must belong to the target transaction and may appear only once in the request.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"settlement\":{\"anyOf\":[{\"allOf\":[{\"additionalProperties\":false,\"properties\":{\"pending_date\":{\"anyOf\":[{\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Exact UTC time the balance record entered pending; omitted manual values are derived by the service.\"},\"posted_date\":{\"anyOf\":[{\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Exact UTC time the balance record posted; omitted manual values are derived by the service.\"},\"status\":{\"description\":\"Server-derived balance-record settlement.\",\"enum\":[\"pending\",\"posted\"],\"type\":\"string\"}},\"required\":[\"status\"],\"type\":\"object\"}]},{\"type\":\"null\"}],\"description\":\"Settlement intent for owned and party records; use null for flow and system records.\"},\"tag_ids\":{\"description\":\"Tag identifiers to assign to the journal record.\",\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\"}},\"required\":[\"account_id\",\"amount\",\"currency\",\"reconciliation_status\",\"record_id\",\"settlement\"],\"type\":\"object\"},{\"allOf\":[{\"additionalProperties\":false,\"properties\":{\"account_id\":{\"description\":\"Account identifier for this journal record or request.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"amount\":{\"description\":\"JSON string, not a JSON number. Signed non-zero DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_usd\":{\"anyOf\":[{\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.\"},\"category_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}],\"description\":\"Category identifier for a flow record; omit or use null for every other account type.\"},\"currency\":{\"description\":\"Record currency using ISO 4217 or the `C::` crypto prefix; it must match the referenced account when that account is single-currency.\",\"pattern\":\"^([A-Z]{3}|C::.+)$\",\"type\":\"string\"},\"external_id\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Optional identifier assigned by an external system.\"},\"external_system\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Optional namespace for `external_id`, such as a provider name.\"},\"member_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}],\"description\":\"Optional household-member identifier for the journal records.\"},\"memo\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Optional memo text for the journal records.\"},\"reconciliation_status\":{\"description\":\"Whether a journal record has been reconciled with its external or expected source.\",\"enum\":[\"reconciled\",\"unreconciled\"],\"type\":\"string\"},\"settlement\":{\"anyOf\":[{\"allOf\":[{\"additionalProperties\":false,\"properties\":{\"pending_date\":{\"anyOf\":[{\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Exact UTC time the balance record entered pending; omitted manual values are derived by the service.\"},\"posted_date\":{\"anyOf\":[{\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Exact UTC time the balance record posted; omitted manual values are derived by the service.\"},\"status\":{\"description\":\"Server-derived balance-record settlement.\",\"enum\":[\"pending\",\"posted\"],\"type\":\"string\"}},\"required\":[\"status\"],\"type\":\"object\"}]},{\"type\":\"null\"}],\"description\":\"Settlement intent for owned and party records; use null for flow and system records.\"},\"source\":{\"description\":\"User-writable journal-record origin. Recurring-template records are created only by Mina.\",\"enum\":[\"manual\",\"imported\"],\"type\":\"string\"},\"tag_ids\":{\"description\":\"Tag identifiers to assign to the journal records.\",\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\"}},\"required\":[\"account_id\",\"amount\",\"currency\",\"reconciliation_status\",\"settlement\",\"source\"],\"type\":\"object\"}],\"description\":\"A new journal record created by complete replacement; creation-time provenance is writable and record_id is not accepted.\"}]},\"minItems\":2,\"type\":\"array\"}},\"required\":[\"initiated_date\",\"records\"],\"type\":\"object\"},\"transaction_id\":{\"description\":\"Numeric identifier of the transaction.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"If-Match\",\"body\",\"transaction_id\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -3423,6 +3423,14 @@ func Operations() []Operation {
 						Name:        "transaction_id",
 						Type:        "integer",
 						Description: "Numeric identifier of the transaction.",
+						Required:    true,
+					},
+				},
+				Header: []ParameterDescriptor{
+					{
+						Name:        "If-Match",
+						Type:        "string",
+						Description: "Strong ETag from the transaction response being replaced.",
 						Required:    true,
 					},
 				},
@@ -3440,10 +3448,10 @@ func Operations() []Operation {
 						{
 							Name:        "records",
 							Type:        "array",
-							Description: "Complete journal-record set; active records must balance to zero within each currency.",
+							Description: "Complete desired journal-record set. Retained records supply a unique record_id without provenance; new records omit record_id and may supply creation-time provenance. Active records must balance to zero within each currency.",
 							Required:    true,
 							Array:       true,
-							ItemType:    "object",
+							ItemType:    "",
 						},
 					},
 					RequiredProperties: []string{"initiated_date", "records"},
@@ -4448,6 +4456,7 @@ func validateInvocationInput(
 	input InvocationInput,
 	pathNames []string,
 	queryNames []string,
+	headerNames []string,
 	bodyPresent bool,
 	bodyRequired bool,
 ) error {
@@ -4470,6 +4479,21 @@ func validateInvocationInput(
 		return &InvocationInputError{
 			Location: "query",
 			Name:     unknownQueryNames[0],
+			Err:      errors.New("parameter is not declared by the operation"),
+		}
+	}
+	var unknownHeaderNames []string
+	for name := range input.Header {
+		index := sort.SearchStrings(headerNames, name)
+		if index == len(headerNames) || headerNames[index] != name {
+			unknownHeaderNames = append(unknownHeaderNames, name)
+		}
+	}
+	if len(unknownHeaderNames) > 0 {
+		sort.Strings(unknownHeaderNames)
+		return &InvocationInputError{
+			Location: "header",
+			Name:     unknownHeaderNames[0],
 			Err:      errors.New("parameter is not declared by the operation"),
 		}
 	}
@@ -4510,7 +4534,7 @@ func normalizeInvocationResult(body []byte, response *http.Response) (Invocation
 }
 
 func invokeBulkCategorizeJournalRecords(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, nil, true, true); err != nil {
+	if err := validateInvocationInput(input, nil, nil, nil, true, true); err != nil {
 		return InvocationResult{}, err
 	}
 	response, err := client.BulkCategorizeJournalRecordsWithBodyWithResponse(ctx, "application/json", bytes.NewReader(input.Body))
@@ -4524,7 +4548,7 @@ func invokeBulkCategorizeJournalRecords(ctx context.Context, client httpclient.C
 }
 
 func invokeBulkReassignJournalRecordAccount(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, nil, true, true); err != nil {
+	if err := validateInvocationInput(input, nil, nil, nil, true, true); err != nil {
 		return InvocationResult{}, err
 	}
 	response, err := client.BulkReassignJournalRecordAccountWithBodyWithResponse(ctx, "application/json", bytes.NewReader(input.Body))
@@ -4538,7 +4562,7 @@ func invokeBulkReassignJournalRecordAccount(ctx context.Context, client httpclie
 }
 
 func invokeBulkSetJournalRecordMember(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, nil, true, true); err != nil {
+	if err := validateInvocationInput(input, nil, nil, nil, true, true); err != nil {
 		return InvocationResult{}, err
 	}
 	response, err := client.BulkSetJournalRecordMemberWithBodyWithResponse(ctx, "application/json", bytes.NewReader(input.Body))
@@ -4552,7 +4576,7 @@ func invokeBulkSetJournalRecordMember(ctx context.Context, client httpclient.Cli
 }
 
 func invokeBulkSetJournalRecordReconciliation(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, nil, true, true); err != nil {
+	if err := validateInvocationInput(input, nil, nil, nil, true, true); err != nil {
 		return InvocationResult{}, err
 	}
 	response, err := client.BulkSetJournalRecordReconciliationWithBodyWithResponse(ctx, "application/json", bytes.NewReader(input.Body))
@@ -4566,7 +4590,7 @@ func invokeBulkSetJournalRecordReconciliation(ctx context.Context, client httpcl
 }
 
 func invokeBulkSetJournalRecordSettlement(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, nil, true, true); err != nil {
+	if err := validateInvocationInput(input, nil, nil, nil, true, true); err != nil {
 		return InvocationResult{}, err
 	}
 	response, err := client.BulkSetJournalRecordSettlementWithBodyWithResponse(ctx, "application/json", bytes.NewReader(input.Body))
@@ -4580,7 +4604,7 @@ func invokeBulkSetJournalRecordSettlement(ctx context.Context, client httpclient
 }
 
 func invokeBulkUpdateJournalRecordTags(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, nil, true, true); err != nil {
+	if err := validateInvocationInput(input, nil, nil, nil, true, true); err != nil {
 		return InvocationResult{}, err
 	}
 	response, err := client.BulkUpdateJournalRecordTagsWithBodyWithResponse(ctx, "application/json", bytes.NewReader(input.Body))
@@ -4594,7 +4618,7 @@ func invokeBulkUpdateJournalRecordTags(ctx context.Context, client httpclient.Cl
 }
 
 func invokeCancelTransaction(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"transaction_id"}, nil, false, false); err != nil {
+	if err := validateInvocationInput(input, []string{"transaction_id"}, nil, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -4617,7 +4641,7 @@ func invokeCancelTransaction(ctx context.Context, client httpclient.ClientWithRe
 }
 
 func invokeClassifyTransaction(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, nil, true, true); err != nil {
+	if err := validateInvocationInput(input, nil, nil, nil, true, true); err != nil {
 		return InvocationResult{}, err
 	}
 	response, err := client.ClassifyTransactionWithBodyWithResponse(ctx, "application/json", bytes.NewReader(input.Body))
@@ -4631,7 +4655,7 @@ func invokeClassifyTransaction(ctx context.Context, client httpclient.ClientWith
 }
 
 func invokeConfirmNextRecurringDefinition(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"recurring_definition_id"}, nil, true, true); err != nil {
+	if err := validateInvocationInput(input, []string{"recurring_definition_id"}, nil, nil, true, true); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -4654,7 +4678,7 @@ func invokeConfirmNextRecurringDefinition(ctx context.Context, client httpclient
 }
 
 func invokeConfirmRecurringOccurrence(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"recurring_occurrence_id"}, nil, true, true); err != nil {
+	if err := validateInvocationInput(input, []string{"recurring_occurrence_id"}, nil, nil, true, true); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -4677,7 +4701,7 @@ func invokeConfirmRecurringOccurrence(ctx context.Context, client httpclient.Cli
 }
 
 func invokeCreateAccount(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, nil, true, true); err != nil {
+	if err := validateInvocationInput(input, nil, nil, nil, true, true); err != nil {
 		return InvocationResult{}, err
 	}
 	response, err := client.CreateAccountWithBodyWithResponse(ctx, "application/json", bytes.NewReader(input.Body))
@@ -4691,7 +4715,7 @@ func invokeCreateAccount(ctx context.Context, client httpclient.ClientWithRespon
 }
 
 func invokeCreateCategory(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, nil, true, true); err != nil {
+	if err := validateInvocationInput(input, nil, nil, nil, true, true); err != nil {
 		return InvocationResult{}, err
 	}
 	response, err := client.CreateCategoryWithBodyWithResponse(ctx, "application/json", bytes.NewReader(input.Body))
@@ -4705,7 +4729,7 @@ func invokeCreateCategory(ctx context.Context, client httpclient.ClientWithRespo
 }
 
 func invokeCreateCreditLimitHistory(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"account_id"}, nil, true, true); err != nil {
+	if err := validateInvocationInput(input, []string{"account_id"}, nil, nil, true, true); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -4728,7 +4752,7 @@ func invokeCreateCreditLimitHistory(ctx context.Context, client httpclient.Clien
 }
 
 func invokeCreateExchangeRate(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, nil, true, true); err != nil {
+	if err := validateInvocationInput(input, nil, nil, nil, true, true); err != nil {
 		return InvocationResult{}, err
 	}
 	response, err := client.CreateExchangeRateWithBodyWithResponse(ctx, "application/json", bytes.NewReader(input.Body))
@@ -4742,7 +4766,7 @@ func invokeCreateExchangeRate(ctx context.Context, client httpclient.ClientWithR
 }
 
 func invokeCreateExchangeTransaction(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, nil, true, true); err != nil {
+	if err := validateInvocationInput(input, nil, nil, nil, true, true); err != nil {
 		return InvocationResult{}, err
 	}
 	response, err := client.CreateExchangeTransactionWithBodyWithResponse(ctx, "application/json", bytes.NewReader(input.Body))
@@ -4756,7 +4780,7 @@ func invokeCreateExchangeTransaction(ctx context.Context, client httpclient.Clie
 }
 
 func invokeCreateIncomeTransaction(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, nil, true, true); err != nil {
+	if err := validateInvocationInput(input, nil, nil, nil, true, true); err != nil {
 		return InvocationResult{}, err
 	}
 	response, err := client.CreateIncomeTransactionWithBodyWithResponse(ctx, "application/json", bytes.NewReader(input.Body))
@@ -4770,7 +4794,7 @@ func invokeCreateIncomeTransaction(ctx context.Context, client httpclient.Client
 }
 
 func invokeCreateMember(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, nil, true, true); err != nil {
+	if err := validateInvocationInput(input, nil, nil, nil, true, true); err != nil {
 		return InvocationResult{}, err
 	}
 	response, err := client.CreateMemberWithBodyWithResponse(ctx, "application/json", bytes.NewReader(input.Body))
@@ -4784,7 +4808,7 @@ func invokeCreateMember(ctx context.Context, client httpclient.ClientWithRespons
 }
 
 func invokeCreateRecurringDefinition(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, nil, true, true); err != nil {
+	if err := validateInvocationInput(input, nil, nil, nil, true, true); err != nil {
 		return InvocationResult{}, err
 	}
 	response, err := client.CreateRecurringDefinitionWithBodyWithResponse(ctx, "application/json", bytes.NewReader(input.Body))
@@ -4798,7 +4822,7 @@ func invokeCreateRecurringDefinition(ctx context.Context, client httpclient.Clie
 }
 
 func invokeCreateRefundTransaction(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, nil, true, true); err != nil {
+	if err := validateInvocationInput(input, nil, nil, nil, true, true); err != nil {
 		return InvocationResult{}, err
 	}
 	response, err := client.CreateRefundTransactionWithBodyWithResponse(ctx, "application/json", bytes.NewReader(input.Body))
@@ -4812,7 +4836,7 @@ func invokeCreateRefundTransaction(ctx context.Context, client httpclient.Client
 }
 
 func invokeCreateSpendTransaction(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, nil, true, true); err != nil {
+	if err := validateInvocationInput(input, nil, nil, nil, true, true); err != nil {
 		return InvocationResult{}, err
 	}
 	response, err := client.CreateSpendTransactionWithBodyWithResponse(ctx, "application/json", bytes.NewReader(input.Body))
@@ -4826,7 +4850,7 @@ func invokeCreateSpendTransaction(ctx context.Context, client httpclient.ClientW
 }
 
 func invokeCreateTag(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, nil, true, true); err != nil {
+	if err := validateInvocationInput(input, nil, nil, nil, true, true); err != nil {
 		return InvocationResult{}, err
 	}
 	response, err := client.CreateTagWithBodyWithResponse(ctx, "application/json", bytes.NewReader(input.Body))
@@ -4840,7 +4864,7 @@ func invokeCreateTag(ctx context.Context, client httpclient.ClientWithResponsesI
 }
 
 func invokeCreateTransaction(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, nil, true, true); err != nil {
+	if err := validateInvocationInput(input, nil, nil, nil, true, true); err != nil {
 		return InvocationResult{}, err
 	}
 	response, err := client.CreateTransactionWithBodyWithResponse(ctx, "application/json", bytes.NewReader(input.Body))
@@ -4854,7 +4878,7 @@ func invokeCreateTransaction(ctx context.Context, client httpclient.ClientWithRe
 }
 
 func invokeCreateTransactionTemplate(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, nil, true, true); err != nil {
+	if err := validateInvocationInput(input, nil, nil, nil, true, true); err != nil {
 		return InvocationResult{}, err
 	}
 	response, err := client.CreateTransactionTemplateWithBodyWithResponse(ctx, "application/json", bytes.NewReader(input.Body))
@@ -4868,7 +4892,7 @@ func invokeCreateTransactionTemplate(ctx context.Context, client httpclient.Clie
 }
 
 func invokeCreateTransferTransaction(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, nil, true, true); err != nil {
+	if err := validateInvocationInput(input, nil, nil, nil, true, true); err != nil {
 		return InvocationResult{}, err
 	}
 	response, err := client.CreateTransferTransactionWithBodyWithResponse(ctx, "application/json", bytes.NewReader(input.Body))
@@ -4882,7 +4906,7 @@ func invokeCreateTransferTransaction(ctx context.Context, client httpclient.Clie
 }
 
 func invokeDeferRecurringDefinition(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"recurring_definition_id"}, nil, true, false); err != nil {
+	if err := validateInvocationInput(input, []string{"recurring_definition_id"}, nil, nil, true, false); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -4905,7 +4929,7 @@ func invokeDeferRecurringDefinition(ctx context.Context, client httpclient.Clien
 }
 
 func invokeDeleteAccount(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"account_id"}, nil, false, false); err != nil {
+	if err := validateInvocationInput(input, []string{"account_id"}, nil, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -4928,7 +4952,7 @@ func invokeDeleteAccount(ctx context.Context, client httpclient.ClientWithRespon
 }
 
 func invokeDeleteCategory(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"category_id"}, nil, false, false); err != nil {
+	if err := validateInvocationInput(input, []string{"category_id"}, nil, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -4951,7 +4975,7 @@ func invokeDeleteCategory(ctx context.Context, client httpclient.ClientWithRespo
 }
 
 func invokeDeleteCreditLimitHistory(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"credit_limit_history_id"}, nil, false, false); err != nil {
+	if err := validateInvocationInput(input, []string{"credit_limit_history_id"}, nil, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -4974,7 +4998,7 @@ func invokeDeleteCreditLimitHistory(ctx context.Context, client httpclient.Clien
 }
 
 func invokeDeleteExchangeRate(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"exchange_rate_id"}, nil, false, false); err != nil {
+	if err := validateInvocationInput(input, []string{"exchange_rate_id"}, nil, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -4997,7 +5021,7 @@ func invokeDeleteExchangeRate(ctx context.Context, client httpclient.ClientWithR
 }
 
 func invokeDeleteMember(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"member_id"}, nil, false, false); err != nil {
+	if err := validateInvocationInput(input, []string{"member_id"}, nil, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -5020,7 +5044,7 @@ func invokeDeleteMember(ctx context.Context, client httpclient.ClientWithRespons
 }
 
 func invokeDeleteRecurringDefinition(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"recurring_definition_id"}, nil, false, false); err != nil {
+	if err := validateInvocationInput(input, []string{"recurring_definition_id"}, nil, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -5043,7 +5067,7 @@ func invokeDeleteRecurringDefinition(ctx context.Context, client httpclient.Clie
 }
 
 func invokeDeleteTag(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"tag_id"}, nil, false, false); err != nil {
+	if err := validateInvocationInput(input, []string{"tag_id"}, nil, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -5066,7 +5090,7 @@ func invokeDeleteTag(ctx context.Context, client httpclient.ClientWithResponsesI
 }
 
 func invokeDeleteTransaction(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"transaction_id"}, nil, false, false); err != nil {
+	if err := validateInvocationInput(input, []string{"transaction_id"}, nil, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -5089,7 +5113,7 @@ func invokeDeleteTransaction(ctx context.Context, client httpclient.ClientWithRe
 }
 
 func invokeDeleteTransactionTemplate(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"transaction_template_id"}, nil, false, false); err != nil {
+	if err := validateInvocationInput(input, []string{"transaction_template_id"}, nil, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -5112,7 +5136,7 @@ func invokeDeleteTransactionTemplate(ctx context.Context, client httpclient.Clie
 }
 
 func invokeDismissRecurringOccurrence(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"recurring_occurrence_id"}, nil, false, false); err != nil {
+	if err := validateInvocationInput(input, []string{"recurring_occurrence_id"}, nil, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -5135,7 +5159,7 @@ func invokeDismissRecurringOccurrence(ctx context.Context, client httpclient.Cli
 }
 
 func invokeGetAccount(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"account_id"}, []string{"include_tombstoned"}, false, false); err != nil {
+	if err := validateInvocationInput(input, []string{"account_id"}, []string{"include_tombstoned"}, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -5179,7 +5203,7 @@ func invokeGetAccount(ctx context.Context, client httpclient.ClientWithResponses
 }
 
 func invokeGetAccountingHistoryRange(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, nil, false, false); err != nil {
+	if err := validateInvocationInput(input, nil, nil, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	response, err := client.GetAccountingHistoryRangeWithResponse(ctx)
@@ -5193,7 +5217,7 @@ func invokeGetAccountingHistoryRange(ctx context.Context, client httpclient.Clie
 }
 
 func invokeGetAccountingSchema(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, nil, false, false); err != nil {
+	if err := validateInvocationInput(input, nil, nil, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	response, err := client.GetAccountingSchemaWithResponse(ctx)
@@ -5207,7 +5231,7 @@ func invokeGetAccountingSchema(ctx context.Context, client httpclient.ClientWith
 }
 
 func invokeGetAuditLogCompactionRun(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"operation_run_id"}, nil, false, false); err != nil {
+	if err := validateInvocationInput(input, []string{"operation_run_id"}, nil, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -5230,7 +5254,7 @@ func invokeGetAuditLogCompactionRun(ctx context.Context, client httpclient.Clien
 }
 
 func invokeGetAuditLogCompactionStatus(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, nil, false, false); err != nil {
+	if err := validateInvocationInput(input, nil, nil, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	response, err := client.GetAuditLogCompactionStatusWithResponse(ctx)
@@ -5244,7 +5268,7 @@ func invokeGetAuditLogCompactionStatus(ctx context.Context, client httpclient.Cl
 }
 
 func invokeGetCategory(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"category_id"}, []string{"include_tombstoned"}, false, false); err != nil {
+	if err := validateInvocationInput(input, []string{"category_id"}, []string{"include_tombstoned"}, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -5288,7 +5312,7 @@ func invokeGetCategory(ctx context.Context, client httpclient.ClientWithResponse
 }
 
 func invokeGetCategoryGroupOverview(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, []string{"anchor_date", "breakdown", "excluded_contributor_id", "fqn", "grain", "named_series_count", "period_count", "trend"}, false, false); err != nil {
+	if err := validateInvocationInput(input, nil, []string{"anchor_date", "breakdown", "excluded_contributor_id", "fqn", "grain", "named_series_count", "period_count", "trend"}, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	params := &httpclient.GetCategoryGroupOverviewParams{}
@@ -5472,7 +5496,7 @@ func invokeGetCategoryGroupOverview(ctx context.Context, client httpclient.Clien
 }
 
 func invokeGetCategoryOverview(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"category_id"}, []string{"anchor_date", "breakdown", "excluded_contributor_id", "grain", "named_series_count", "period_count", "trend"}, false, false); err != nil {
+	if err := validateInvocationInput(input, []string{"category_id"}, []string{"anchor_date", "breakdown", "excluded_contributor_id", "grain", "named_series_count", "period_count", "trend"}, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -5638,7 +5662,7 @@ func invokeGetCategoryOverview(ctx context.Context, client httpclient.ClientWith
 }
 
 func invokeGetCreditLimitHistory(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"credit_limit_history_id"}, []string{"include_tombstoned"}, false, false); err != nil {
+	if err := validateInvocationInput(input, []string{"credit_limit_history_id"}, []string{"include_tombstoned"}, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -5682,7 +5706,7 @@ func invokeGetCreditLimitHistory(ctx context.Context, client httpclient.ClientWi
 }
 
 func invokeGetDatabaseBackupRun(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"operation_run_id"}, nil, false, false); err != nil {
+	if err := validateInvocationInput(input, []string{"operation_run_id"}, nil, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -5705,7 +5729,7 @@ func invokeGetDatabaseBackupRun(ctx context.Context, client httpclient.ClientWit
 }
 
 func invokeGetDatabaseBackupStatus(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, nil, false, false); err != nil {
+	if err := validateInvocationInput(input, nil, nil, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	response, err := client.GetDatabaseBackupStatusWithResponse(ctx)
@@ -5719,7 +5743,7 @@ func invokeGetDatabaseBackupStatus(ctx context.Context, client httpclient.Client
 }
 
 func invokeGetExchangeRateLoadingRun(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"operation_run_id"}, nil, false, false); err != nil {
+	if err := validateInvocationInput(input, []string{"operation_run_id"}, nil, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -5742,7 +5766,7 @@ func invokeGetExchangeRateLoadingRun(ctx context.Context, client httpclient.Clie
 }
 
 func invokeGetExchangeRateLoadingStatus(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, nil, false, false); err != nil {
+	if err := validateInvocationInput(input, nil, nil, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	response, err := client.GetExchangeRateLoadingStatusWithResponse(ctx)
@@ -5756,7 +5780,7 @@ func invokeGetExchangeRateLoadingStatus(ctx context.Context, client httpclient.C
 }
 
 func invokeGetHouseholdFlowReport(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, []string{"anchor_date", "breakdown", "excluded_contributor_id", "grain", "named_series_count", "period_count", "trend"}, false, false); err != nil {
+	if err := validateInvocationInput(input, nil, []string{"anchor_date", "breakdown", "excluded_contributor_id", "grain", "named_series_count", "period_count", "trend"}, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	params := &httpclient.GetHouseholdFlowReportParams{}
@@ -5913,7 +5937,7 @@ func invokeGetHouseholdFlowReport(ctx context.Context, client httpclient.ClientW
 }
 
 func invokeGetMember(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"member_id"}, []string{"include_tombstoned"}, false, false); err != nil {
+	if err := validateInvocationInput(input, []string{"member_id"}, []string{"include_tombstoned"}, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -5957,7 +5981,7 @@ func invokeGetMember(ctx context.Context, client httpclient.ClientWithResponsesI
 }
 
 func invokeGetRecurringDefinition(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"recurring_definition_id"}, nil, false, false); err != nil {
+	if err := validateInvocationInput(input, []string{"recurring_definition_id"}, nil, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -5980,7 +6004,7 @@ func invokeGetRecurringDefinition(ctx context.Context, client httpclient.ClientW
 }
 
 func invokeGetSettings(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, nil, false, false); err != nil {
+	if err := validateInvocationInput(input, nil, nil, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	response, err := client.GetSettingsWithResponse(ctx)
@@ -5994,7 +6018,7 @@ func invokeGetSettings(ctx context.Context, client httpclient.ClientWithResponse
 }
 
 func invokeGetTag(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"tag_id"}, []string{"include_tombstoned"}, false, false); err != nil {
+	if err := validateInvocationInput(input, []string{"tag_id"}, []string{"include_tombstoned"}, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -6038,7 +6062,7 @@ func invokeGetTag(ctx context.Context, client httpclient.ClientWithResponsesInte
 }
 
 func invokeGetTagGroupOverview(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, []string{"anchor_date", "breakdown", "excluded_contributor_id", "fqn", "grain", "named_series_count", "period_count", "trend"}, false, false); err != nil {
+	if err := validateInvocationInput(input, nil, []string{"anchor_date", "breakdown", "excluded_contributor_id", "fqn", "grain", "named_series_count", "period_count", "trend"}, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	params := &httpclient.GetTagGroupOverviewParams{}
@@ -6222,7 +6246,7 @@ func invokeGetTagGroupOverview(ctx context.Context, client httpclient.ClientWith
 }
 
 func invokeGetTagOverview(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"tag_id"}, []string{"anchor_date", "breakdown", "excluded_contributor_id", "grain", "named_series_count", "period_count", "trend"}, false, false); err != nil {
+	if err := validateInvocationInput(input, []string{"tag_id"}, []string{"anchor_date", "breakdown", "excluded_contributor_id", "grain", "named_series_count", "period_count", "trend"}, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -6388,7 +6412,7 @@ func invokeGetTagOverview(ctx context.Context, client httpclient.ClientWithRespo
 }
 
 func invokeGetTransaction(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"transaction_id"}, nil, false, false); err != nil {
+	if err := validateInvocationInput(input, []string{"transaction_id"}, nil, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -6411,7 +6435,7 @@ func invokeGetTransaction(ctx context.Context, client httpclient.ClientWithRespo
 }
 
 func invokeGetTransactionMonthTotals(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, []string{"month"}, false, false); err != nil {
+	if err := validateInvocationInput(input, nil, []string{"month"}, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	params := &httpclient.GetTransactionMonthTotalsParams{}
@@ -6453,7 +6477,7 @@ func invokeGetTransactionMonthTotals(ctx context.Context, client httpclient.Clie
 }
 
 func invokeGetTransactionTemplate(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"transaction_template_id"}, nil, false, false); err != nil {
+	if err := validateInvocationInput(input, []string{"transaction_template_id"}, nil, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -6476,7 +6500,7 @@ func invokeGetTransactionTemplate(ctx context.Context, client httpclient.ClientW
 }
 
 func invokeListAPIAuditEntries(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, []string{"client_surface", "limit", "method", "offset", "operation_id"}, false, false); err != nil {
+	if err := validateInvocationInput(input, nil, []string{"client_surface", "limit", "method", "offset", "operation_id"}, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	params := &httpclient.ListAPIAuditEntriesParams{}
@@ -6591,7 +6615,7 @@ func invokeListAPIAuditEntries(ctx context.Context, client httpclient.ClientWith
 }
 
 func invokeListAccountBalances(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, []string{"account_ids", "include_hidden"}, false, false); err != nil {
+	if err := validateInvocationInput(input, nil, []string{"account_ids", "include_hidden"}, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	params := &httpclient.ListAccountBalancesParams{}
@@ -6648,7 +6672,7 @@ func invokeListAccountBalances(ctx context.Context, client httpclient.ClientWith
 }
 
 func invokeListAccountGroups(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, []string{"include_hidden"}, false, false); err != nil {
+	if err := validateInvocationInput(input, nil, []string{"include_hidden"}, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	params := &httpclient.ListAccountGroupsParams{}
@@ -6683,7 +6707,7 @@ func invokeListAccountGroups(ctx context.Context, client httpclient.ClientWithRe
 }
 
 func invokeListAccounts(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, []string{"account_type", "include_hidden", "include_tombstoned", "is_featured", "limit", "offset", "sort", "sort_dir"}, false, false); err != nil {
+	if err := validateInvocationInput(input, nil, []string{"account_type", "include_hidden", "include_tombstoned", "is_featured", "limit", "offset", "sort", "sort_dir"}, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	params := &httpclient.ListAccountsParams{}
@@ -6858,7 +6882,7 @@ func invokeListAccounts(ctx context.Context, client httpclient.ClientWithRespons
 }
 
 func invokeListBackgroundOperationRunEnvelopes(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, []string{"limit", "offset", "operation_id"}, false, false); err != nil {
+	if err := validateInvocationInput(input, nil, []string{"limit", "offset", "operation_id"}, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	params := &httpclient.ListBackgroundOperationRunEnvelopesParams{}
@@ -6933,7 +6957,7 @@ func invokeListBackgroundOperationRunEnvelopes(ctx context.Context, client httpc
 }
 
 func invokeListBackgroundOperations(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, nil, false, false); err != nil {
+	if err := validateInvocationInput(input, nil, nil, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	response, err := client.ListBackgroundOperationsWithResponse(ctx)
@@ -6947,7 +6971,7 @@ func invokeListBackgroundOperations(ctx context.Context, client httpclient.Clien
 }
 
 func invokeListCategories(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, []string{"economic_intent", "include_hidden", "include_tombstoned", "is_featured", "limit", "offset", "sort", "sort_dir"}, false, false); err != nil {
+	if err := validateInvocationInput(input, nil, []string{"economic_intent", "include_hidden", "include_tombstoned", "is_featured", "limit", "offset", "sort", "sort_dir"}, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	params := &httpclient.ListCategoriesParams{}
@@ -7124,7 +7148,7 @@ func invokeListCategories(ctx context.Context, client httpclient.ClientWithRespo
 }
 
 func invokeListCategoryGroups(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, []string{"include_hidden"}, false, false); err != nil {
+	if err := validateInvocationInput(input, nil, []string{"include_hidden"}, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	params := &httpclient.ListCategoryGroupsParams{}
@@ -7159,7 +7183,7 @@ func invokeListCategoryGroups(ctx context.Context, client httpclient.ClientWithR
 }
 
 func invokeListCreditLimitHistory(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"account_id"}, []string{"include_tombstoned", "limit", "offset", "sort", "sort_dir"}, false, false); err != nil {
+	if err := validateInvocationInput(input, []string{"account_id"}, []string{"include_tombstoned", "limit", "offset", "sort", "sort_dir"}, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -7283,7 +7307,7 @@ func invokeListCreditLimitHistory(ctx context.Context, client httpclient.ClientW
 }
 
 func invokeListDailyExchangeRates(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, []string{"effective_date_from", "effective_date_to", "limit", "offset", "to_currency"}, false, false); err != nil {
+	if err := validateInvocationInput(input, nil, []string{"effective_date_from", "effective_date_to", "limit", "offset", "to_currency"}, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	params := &httpclient.ListDailyExchangeRatesParams{}
@@ -7398,7 +7422,7 @@ func invokeListDailyExchangeRates(ctx context.Context, client httpclient.ClientW
 }
 
 func invokeListExchangeRates(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, []string{"effective_date", "from_currency", "include_tombstoned", "limit", "offset", "sort", "sort_dir", "to_currency"}, false, false); err != nil {
+	if err := validateInvocationInput(input, nil, []string{"effective_date", "from_currency", "include_tombstoned", "limit", "offset", "sort", "sort_dir", "to_currency"}, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	params := &httpclient.ListExchangeRatesParams{}
@@ -7573,7 +7597,7 @@ func invokeListExchangeRates(ctx context.Context, client httpclient.ClientWithRe
 }
 
 func invokeListMembers(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, []string{"include_hidden", "include_tombstoned", "limit", "offset", "sort", "sort_dir"}, false, false); err != nil {
+	if err := validateInvocationInput(input, nil, []string{"include_hidden", "include_tombstoned", "limit", "offset", "sort", "sort_dir"}, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	params := &httpclient.ListMembersParams{}
@@ -7708,7 +7732,7 @@ func invokeListMembers(ctx context.Context, client httpclient.ClientWithResponse
 }
 
 func invokeListRecurringDefinitions(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, []string{"limit", "offset", "sort", "sort_dir"}, false, false); err != nil {
+	if err := validateInvocationInput(input, nil, []string{"limit", "offset", "sort", "sort_dir"}, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	params := &httpclient.ListRecurringDefinitionsParams{}
@@ -7803,7 +7827,7 @@ func invokeListRecurringDefinitions(ctx context.Context, client httpclient.Clien
 }
 
 func invokeListRecurringOccurrences(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, []string{"limit", "offset", "recurring_definition_id", "sort", "sort_dir", "status"}, false, false); err != nil {
+	if err := validateInvocationInput(input, nil, []string{"limit", "offset", "recurring_definition_id", "sort", "sort_dir", "status"}, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	params := &httpclient.ListRecurringOccurrencesParams{}
@@ -7940,7 +7964,7 @@ func invokeListRecurringOccurrences(ctx context.Context, client httpclient.Clien
 }
 
 func invokeListTagGroups(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, []string{"include_hidden"}, false, false); err != nil {
+	if err := validateInvocationInput(input, nil, []string{"include_hidden"}, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	params := &httpclient.ListTagGroupsParams{}
@@ -7975,7 +7999,7 @@ func invokeListTagGroups(ctx context.Context, client httpclient.ClientWithRespon
 }
 
 func invokeListTags(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, []string{"include_hidden", "include_tombstoned", "is_featured", "limit", "offset", "sort", "sort_dir"}, false, false); err != nil {
+	if err := validateInvocationInput(input, nil, []string{"include_hidden", "include_tombstoned", "is_featured", "limit", "offset", "sort", "sort_dir"}, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	params := &httpclient.ListTagsParams{}
@@ -8130,7 +8154,7 @@ func invokeListTags(ctx context.Context, client httpclient.ClientWithResponsesIn
 }
 
 func invokeListTransactionTemplates(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, []string{"limit", "offset", "sort", "sort_dir"}, false, false); err != nil {
+	if err := validateInvocationInput(input, nil, []string{"limit", "offset", "sort", "sort_dir"}, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	params := &httpclient.ListTransactionTemplatesParams{}
@@ -8225,7 +8249,7 @@ func invokeListTransactionTemplates(ctx context.Context, client httpclient.Clien
 }
 
 func invokeListTransactions(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, []string{"account_id", "amount_max", "amount_min", "amount_usd_max", "amount_usd_min", "anchor_date", "category_fqn_prefix", "category_id", "currency", "initiated_date_from", "initiated_date_to", "lifecycle_status", "limit", "member_id", "offset", "pending_date_from", "pending_date_to", "posted_date_from", "posted_date_to", "record_role", "search", "settlement", "sort", "sort_dir", "tag_fqn_prefix", "tag_id", "transaction_class", "transaction_shape"}, false, false); err != nil {
+	if err := validateInvocationInput(input, nil, []string{"account_id", "amount_max", "amount_min", "amount_usd_max", "amount_usd_min", "anchor_date", "category_fqn_prefix", "category_id", "currency", "initiated_date_from", "initiated_date_to", "lifecycle_status", "limit", "member_id", "offset", "pending_date_from", "pending_date_to", "posted_date_from", "posted_date_to", "record_role", "search", "settlement", "sort", "sort_dir", "tag_fqn_prefix", "tag_id", "transaction_class", "transaction_shape"}, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	params := &httpclient.ListTransactionsParams{}
@@ -8820,7 +8844,7 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 }
 
 func invokePauseRecurringDefinition(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"recurring_definition_id"}, nil, false, false); err != nil {
+	if err := validateInvocationInput(input, []string{"recurring_definition_id"}, nil, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -8843,7 +8867,7 @@ func invokePauseRecurringDefinition(ctx context.Context, client httpclient.Clien
 }
 
 func invokeReplaceRecurringDefinition(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"recurring_definition_id"}, nil, true, true); err != nil {
+	if err := validateInvocationInput(input, []string{"recurring_definition_id"}, nil, nil, true, true); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -8866,7 +8890,7 @@ func invokeReplaceRecurringDefinition(ctx context.Context, client httpclient.Cli
 }
 
 func invokeReplaceTransaction(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"transaction_id"}, nil, true, true); err != nil {
+	if err := validateInvocationInput(input, []string{"transaction_id"}, nil, []string{"If-Match"}, true, true); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -8878,7 +8902,24 @@ func invokeReplaceTransaction(ctx context.Context, client httpclient.ClientWithR
 			Err:      err,
 		}
 	}
-	response, err := client.ReplaceTransactionWithBodyWithResponse(ctx, pathValue0, "application/json", bytes.NewReader(input.Body))
+	params := &httpclient.ReplaceTransactionParams{}
+	headerValues0, headerSupplied0 := input.Header["If-Match"]
+	if !headerSupplied0 {
+		return InvocationResult{}, &InvocationInputError{
+			Location: "header",
+			Name:     "If-Match",
+			Err:      errors.New("value is required"),
+		}
+	}
+	if len(headerValues0) != 1 {
+		return InvocationResult{}, &InvocationInputError{
+			Location: "header",
+			Name:     "If-Match",
+			Err:      fmt.Errorf("got %d values, want 1", len(headerValues0)),
+		}
+	}
+	params.IfMatch = headerValues0[0]
+	response, err := client.ReplaceTransactionWithBodyWithResponse(ctx, pathValue0, params, "application/json", bytes.NewReader(input.Body))
 	if err != nil {
 		return InvocationResult{}, err
 	}
@@ -8889,7 +8930,7 @@ func invokeReplaceTransaction(ctx context.Context, client httpclient.ClientWithR
 }
 
 func invokeReplaceTransactionTemplate(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"transaction_template_id"}, nil, true, true); err != nil {
+	if err := validateInvocationInput(input, []string{"transaction_template_id"}, nil, nil, true, true); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -8912,7 +8953,7 @@ func invokeReplaceTransactionTemplate(ctx context.Context, client httpclient.Cli
 }
 
 func invokeRestoreTransaction(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"transaction_id"}, nil, false, false); err != nil {
+	if err := validateInvocationInput(input, []string{"transaction_id"}, nil, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -8935,7 +8976,7 @@ func invokeRestoreTransaction(ctx context.Context, client httpclient.ClientWithR
 }
 
 func invokeRestructureAccounts(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, nil, true, true); err != nil {
+	if err := validateInvocationInput(input, nil, nil, nil, true, true); err != nil {
 		return InvocationResult{}, err
 	}
 	response, err := client.RestructureAccountsWithBodyWithResponse(ctx, "application/json", bytes.NewReader(input.Body))
@@ -8949,7 +8990,7 @@ func invokeRestructureAccounts(ctx context.Context, client httpclient.ClientWith
 }
 
 func invokeRestructureCategories(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, nil, true, true); err != nil {
+	if err := validateInvocationInput(input, nil, nil, nil, true, true); err != nil {
 		return InvocationResult{}, err
 	}
 	response, err := client.RestructureCategoriesWithBodyWithResponse(ctx, "application/json", bytes.NewReader(input.Body))
@@ -8963,7 +9004,7 @@ func invokeRestructureCategories(ctx context.Context, client httpclient.ClientWi
 }
 
 func invokeRestructureTags(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, nil, true, true); err != nil {
+	if err := validateInvocationInput(input, nil, nil, nil, true, true); err != nil {
 		return InvocationResult{}, err
 	}
 	response, err := client.RestructureTagsWithBodyWithResponse(ctx, "application/json", bytes.NewReader(input.Body))
@@ -8977,7 +9018,7 @@ func invokeRestructureTags(ctx context.Context, client httpclient.ClientWithResp
 }
 
 func invokeRestructureTransactionTemplates(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, nil, true, true); err != nil {
+	if err := validateInvocationInput(input, nil, nil, nil, true, true); err != nil {
 		return InvocationResult{}, err
 	}
 	response, err := client.RestructureTransactionTemplatesWithBodyWithResponse(ctx, "application/json", bytes.NewReader(input.Body))
@@ -8991,7 +9032,7 @@ func invokeRestructureTransactionTemplates(ctx context.Context, client httpclien
 }
 
 func invokeResumeRecurringDefinition(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"recurring_definition_id"}, nil, false, false); err != nil {
+	if err := validateInvocationInput(input, []string{"recurring_definition_id"}, nil, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -9014,7 +9055,7 @@ func invokeResumeRecurringDefinition(ctx context.Context, client httpclient.Clie
 }
 
 func invokeSearchAccountJournalRecords(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"account_id"}, []string{"amount_max", "amount_min", "amount_usd_max", "amount_usd_min", "category_id", "include_running_balance", "initiated_date_from", "initiated_date_to", "lifecycle_status", "limit", "member_id", "memo_contains", "offset", "pending_date_from", "pending_date_to", "posted_date_from", "posted_date_to", "reconciliation_status", "settlement", "sort", "sort_dir", "tag_id"}, false, false); err != nil {
+	if err := validateInvocationInput(input, []string{"account_id"}, []string{"amount_max", "amount_min", "amount_usd_max", "amount_usd_min", "category_id", "include_running_balance", "initiated_date_from", "initiated_date_to", "lifecycle_status", "limit", "member_id", "memo_contains", "offset", "pending_date_from", "pending_date_to", "posted_date_from", "posted_date_to", "reconciliation_status", "settlement", "sort", "sort_dir", "tag_id"}, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -9478,7 +9519,7 @@ func invokeSearchAccountJournalRecords(ctx context.Context, client httpclient.Cl
 }
 
 func invokeSearchJournalRecords(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, []string{"account_fqn_prefix", "account_id", "amount_max", "amount_min", "amount_usd_max", "amount_usd_min", "category_id", "initiated_date_from", "initiated_date_to", "lifecycle_status", "limit", "member_id", "memo_contains", "offset", "pending_date_from", "pending_date_to", "posted_date_from", "posted_date_to", "reconciliation_status", "record_role", "settlement", "sort", "sort_dir", "tag_id"}, false, false); err != nil {
+	if err := validateInvocationInput(input, nil, []string{"account_fqn_prefix", "account_id", "amount_max", "amount_min", "amount_usd_max", "amount_usd_min", "category_id", "initiated_date_from", "initiated_date_to", "lifecycle_status", "limit", "member_id", "memo_contains", "offset", "pending_date_from", "pending_date_to", "posted_date_from", "posted_date_to", "reconciliation_status", "record_role", "settlement", "sort", "sort_dir", "tag_id"}, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	params := &httpclient.SearchJournalRecordsParams{}
@@ -9973,7 +10014,7 @@ func invokeSearchJournalRecords(ctx context.Context, client httpclient.ClientWit
 }
 
 func invokeSetAccountHiddenByPath(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, nil, true, true); err != nil {
+	if err := validateInvocationInput(input, nil, nil, nil, true, true); err != nil {
 		return InvocationResult{}, err
 	}
 	response, err := client.SetAccountHiddenByPathWithBodyWithResponse(ctx, "application/json", bytes.NewReader(input.Body))
@@ -9987,7 +10028,7 @@ func invokeSetAccountHiddenByPath(ctx context.Context, client httpclient.ClientW
 }
 
 func invokeSetCategoryHiddenByPath(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, nil, true, true); err != nil {
+	if err := validateInvocationInput(input, nil, nil, nil, true, true); err != nil {
 		return InvocationResult{}, err
 	}
 	response, err := client.SetCategoryHiddenByPathWithBodyWithResponse(ctx, "application/json", bytes.NewReader(input.Body))
@@ -10001,7 +10042,7 @@ func invokeSetCategoryHiddenByPath(ctx context.Context, client httpclient.Client
 }
 
 func invokeSetTagHiddenByPath(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, nil, true, true); err != nil {
+	if err := validateInvocationInput(input, nil, nil, nil, true, true); err != nil {
 		return InvocationResult{}, err
 	}
 	response, err := client.SetTagHiddenByPathWithBodyWithResponse(ctx, "application/json", bytes.NewReader(input.Body))
@@ -10015,7 +10056,7 @@ func invokeSetTagHiddenByPath(ctx context.Context, client httpclient.ClientWithR
 }
 
 func invokeStartAuditLogCompactionRun(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, nil, false, false); err != nil {
+	if err := validateInvocationInput(input, nil, nil, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	response, err := client.StartAuditLogCompactionRunWithResponse(ctx)
@@ -10029,7 +10070,7 @@ func invokeStartAuditLogCompactionRun(ctx context.Context, client httpclient.Cli
 }
 
 func invokeStartDatabaseBackupRun(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, nil, false, false); err != nil {
+	if err := validateInvocationInput(input, nil, nil, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	response, err := client.StartDatabaseBackupRunWithResponse(ctx)
@@ -10043,7 +10084,7 @@ func invokeStartDatabaseBackupRun(ctx context.Context, client httpclient.ClientW
 }
 
 func invokeStartExchangeRateLoadingRun(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, nil, false, false); err != nil {
+	if err := validateInvocationInput(input, nil, nil, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	response, err := client.StartExchangeRateLoadingRunWithResponse(ctx)
@@ -10057,7 +10098,7 @@ func invokeStartExchangeRateLoadingRun(ctx context.Context, client httpclient.Cl
 }
 
 func invokeUpdateAccount(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"account_id"}, nil, true, true); err != nil {
+	if err := validateInvocationInput(input, []string{"account_id"}, nil, nil, true, true); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -10080,7 +10121,7 @@ func invokeUpdateAccount(ctx context.Context, client httpclient.ClientWithRespon
 }
 
 func invokeUpdateCategory(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"category_id"}, nil, true, true); err != nil {
+	if err := validateInvocationInput(input, []string{"category_id"}, nil, nil, true, true); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -10103,7 +10144,7 @@ func invokeUpdateCategory(ctx context.Context, client httpclient.ClientWithRespo
 }
 
 func invokeUpdateExchangeRate(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"exchange_rate_id"}, nil, true, true); err != nil {
+	if err := validateInvocationInput(input, []string{"exchange_rate_id"}, nil, nil, true, true); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -10126,7 +10167,7 @@ func invokeUpdateExchangeRate(ctx context.Context, client httpclient.ClientWithR
 }
 
 func invokeUpdateMember(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"member_id"}, nil, true, true); err != nil {
+	if err := validateInvocationInput(input, []string{"member_id"}, nil, nil, true, true); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -10149,7 +10190,7 @@ func invokeUpdateMember(ctx context.Context, client httpclient.ClientWithRespons
 }
 
 func invokeUpdateMemberHidden(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"member_id"}, nil, true, true); err != nil {
+	if err := validateInvocationInput(input, []string{"member_id"}, nil, nil, true, true); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -10172,7 +10213,7 @@ func invokeUpdateMemberHidden(ctx context.Context, client httpclient.ClientWithR
 }
 
 func invokeUpdateTag(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"tag_id"}, nil, true, true); err != nil {
+	if err := validateInvocationInput(input, []string{"tag_id"}, nil, nil, true, true); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64

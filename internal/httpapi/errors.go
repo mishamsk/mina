@@ -45,6 +45,8 @@ func modelErrorCode(code services.ErrorCode) openapi.APIErrorCode {
 		return openapi.APIErrorCodeNotFound
 	case services.ErrorCodeConflict:
 		return openapi.APIErrorCodeConflict
+	case services.ErrorCodePreconditionFailed:
+		return openapi.APIErrorCodePreconditionFailed
 	default:
 		return openapi.APIErrorCodeInternalError
 	}
@@ -64,6 +66,10 @@ func statusForCode(code openapi.APIErrorCode) int {
 		return http.StatusMethodNotAllowed
 	case openapi.APIErrorCodeConflict:
 		return http.StatusConflict
+	case openapi.APIErrorCodePreconditionFailed:
+		return http.StatusPreconditionFailed
+	case openapi.APIErrorCodePreconditionRequired:
+		return http.StatusPreconditionRequired
 	default:
 		return http.StatusInternalServerError
 	}

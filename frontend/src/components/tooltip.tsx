@@ -23,6 +23,7 @@ interface TooltipProps {
   readonly forceOpen?: boolean;
   readonly label: string;
   readonly onEscape?: () => void;
+  readonly redispatchEscape?: boolean;
   readonly triggerLabel?: string;
 }
 
@@ -62,6 +63,7 @@ export const Tooltip = ({
   forceOpen = false,
   label,
   onEscape,
+  redispatchEscape = true,
   triggerLabel,
 }: TooltipProps) => {
   const [open, setOpen] = useState(false);
@@ -143,7 +145,7 @@ export const Tooltip = ({
     // delivery and forward the Escape from its original target after the
     // tooltip unmounts so exactly one interactive ladder level handles it.
     event.stopPropagation();
-    forwardEscapeTargetRef.current = event.target;
+    forwardEscapeTargetRef.current = redispatchEscape ? event.target : null;
     onEscape?.();
   };
 

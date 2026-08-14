@@ -12,8 +12,34 @@ import {
   getTransactionDetail,
   listFixtures,
   type Route,
+  type TransactionDetailFixture,
   type TransactionFixture,
 } from "@tests/e2e/transactions/support";
+
+const replacementBody = (
+  transaction: TransactionDetailFixture,
+  amount: string,
+) => ({
+  initiated_date: transaction.initiated_date,
+  records: transaction.records.map((record) => ({
+    account_id: record.account_id,
+    amount: record.amount.startsWith("-") ? `-${amount}` : amount,
+    category_id: record.category_id,
+    currency: record.currency,
+    member_id: record.member_id ?? null,
+    memo: record.memo,
+    reconciliation_status: record.reconciliation_status,
+    record_id: record.record_id,
+    settlement: record.settlement
+      ? {
+          ...(record.pending_date ? { pending_date: record.pending_date } : {}),
+          ...(record.posted_date ? { posted_date: record.posted_date } : {}),
+          status: record.settlement,
+        }
+      : null,
+    tag_ids: [...record.tag_ids],
+  })),
+});
 
 test("edit mode is keyboard-complete and keeps its dock in layout", async ({
   page,
@@ -442,6 +468,834 @@ test("eligible amount inputs save independently of selection and preserve keyboa
   ]);
 });
 
+test("stale row amount saves refresh the ETag before retry", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const transaction = await createSearchSpend(
+    page,
+    `E2E stale row amount ${unique}`,
+  );
+  const baseline = await getTransactionDetail(page, transaction);
+  await page.goto(
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(unique)}`,
+  );
+  await page.getByRole("button", { name: "Edit mode" }).click();
+  const amountInput = page.getByTestId(
+    `transaction-${transaction.transaction_id}-amount-input`,
+  );
+  await expect(amountInput).toBeVisible();
+
+  const winnerResponse = await page.request.put(
+    `/api/transactions/${transaction.transaction_id}`,
+    {
+      data: replacementBody(baseline, "14.00"),
+      headers: { "If-Match": baseline.etag },
+    },
+  );
+  expect(winnerResponse.ok(), await winnerResponse.text()).toBe(true);
+  const winner = (await winnerResponse.json()) as TransactionDetailFixture;
+
+  await amountInput.fill("16.00");
+  const staleResponsePromise = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname ===
+        `/api/transactions/${transaction.transaction_id}` &&
+      response.request().method() === "PUT",
+  );
+  await amountInput.press("Enter");
+  const staleResponse = await staleResponsePromise;
+  expect(staleResponse.status()).toBe(412);
+  await expect(amountInput).toHaveValue("16.00");
+  await expect(page.getByRole("alert")).toContainText(
+    "The latest version is shown",
+  );
+
+  const retryRequestPromise = page.waitForRequest(
+    (request) =>
+      new URL(request.url()).pathname ===
+        `/api/transactions/${transaction.transaction_id}` &&
+      request.method() === "PUT",
+  );
+  await amountInput.press("Enter");
+  const retryRequest = await retryRequestPromise;
+  expect(retryRequest.headers()["if-match"]).toBe(winner.etag);
+  await expect(amountInput).toHaveValue("16");
+
+  await deleteTransaction(page, transaction);
+});
+
+test("a concurrent cancellation keeps a stale amount draft recoverable", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const memo = `E2E cancelled stale amount ${unique}`;
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const funding = findByFqn(accounts, "bank:Chase:joint_checking");
+  const merchant = findByFqn(accounts, "merchant:PowellsBooks");
+  const category = findByFqn(categories, "Entertainment:Books");
+  const createResponse = await page.request.post("/api/transactions", {
+    data: {
+      initiated_date: "2026-05-31",
+      records: [
+        {
+          account_id: funding.account_id,
+          amount: "-12.34",
+          category_id: null,
+          currency: "USD",
+          memo,
+          reconciliation_status: "unreconciled",
+          settlement: { status: "pending" },
+          source: "manual",
+          tag_ids: [],
+        },
+        {
+          account_id: merchant.account_id,
+          amount: "12.34",
+          category_id: category.category_id,
+          currency: "USD",
+          memo,
+          reconciliation_status: "unreconciled",
+          settlement: null,
+          source: "manual",
+          tag_ids: [],
+        },
+      ],
+    },
+  });
+  expect(createResponse.ok(), await createResponse.text()).toBe(true);
+  const transaction = (await createResponse.json()) as TransactionFixture;
+
+  await page.goto(
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(unique)}`,
+  );
+  await page.getByRole("button", { name: "Edit mode" }).click();
+  const amountInput = page.getByTestId(
+    `transaction-${transaction.transaction_id}-amount-input`,
+  );
+
+  let releaseSave = () => {};
+  const saveGate = new Promise<void>((resolve) => {
+    releaseSave = resolve;
+  });
+  let markSaveStarted = () => {};
+  const saveStarted = new Promise<void>((resolve) => {
+    markSaveStarted = resolve;
+  });
+  const transactionPath = `/api/transactions/${transaction.transaction_id}`;
+  await page.route(`**${transactionPath}`, async (route) => {
+    if (route.request().method() !== "PUT") {
+      await route.continue();
+      return;
+    }
+    markSaveStarted();
+    await saveGate;
+    await route.continue();
+  });
+
+  const staleResponsePromise = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === transactionPath &&
+      response.request().method() === "PUT",
+  );
+  await amountInput.fill("16.00");
+  await amountInput.press("Enter");
+  await saveStarted;
+  const cancelResponse = await page.request.post(`${transactionPath}/cancel`);
+  expect(cancelResponse.ok(), await cancelResponse.text()).toBe(true);
+  releaseSave();
+  const staleResponse = await staleResponsePromise;
+  expect(staleResponse.status()).toBe(412);
+
+  await expect(amountInput).toBeVisible();
+  await expect(amountInput).toHaveValue("16.00");
+  await expect(amountInput).toBeDisabled();
+  await expect(amountInput).toHaveAttribute("tabindex", "-1");
+  await expect(amountInput.locator("..")).toHaveClass(/bg-muted/);
+  await expect(amountInput.locator("..")).toHaveClass(/shadow-none/);
+  await expect(page.getByRole("alert")).toContainText("changed elsewhere");
+  await expect(
+    page.getByRole("button", { name: "Review in Advanced" }),
+  ).toBeVisible();
+
+  await page.unroute(`**${transactionPath}`);
+  await page.getByRole("button", { name: "Review in Advanced" }).click();
+  const editor = page.getByRole("dialog", { name: "Transaction editor" });
+  await expect(editor.getByLabel("Record 1 amount")).toHaveValue("-16.00");
+  await expect(editor.getByLabel("Record 2 amount")).toHaveValue("16.00");
+
+  const externalRestoreResponse = await page.request.post(
+    `${transactionPath}/restore`,
+  );
+  expect(
+    externalRestoreResponse.ok(),
+    await externalRestoreResponse.text(),
+  ).toBe(true);
+  const externallyRestored =
+    (await externalRestoreResponse.json()) as TransactionDetailFixture;
+  const newerResponse = await page.request.put(transactionPath, {
+    data: replacementBody(externallyRestored, "14.00"),
+    headers: { "If-Match": externallyRestored.etag },
+  });
+  expect(newerResponse.ok(), await newerResponse.text()).toBe(true);
+  const newer = (await newerResponse.json()) as TransactionDetailFixture;
+
+  let replacementRequests = 0;
+  await page.route(`**${transactionPath}`, async (route) => {
+    if (route.request().method() === "PUT") {
+      replacementRequests += 1;
+    }
+    await route.continue();
+  });
+
+  let releaseRestore = () => {};
+  let markRestoreStarted = () => {};
+  const restoreGate = new Promise<void>((resolve) => {
+    releaseRestore = resolve;
+  });
+  const restoreStarted = new Promise<void>((resolve) => {
+    markRestoreStarted = resolve;
+  });
+  await page.route(`**${transactionPath}/restore`, async (route) => {
+    markRestoreStarted();
+    await restoreGate;
+    await route.continue();
+  });
+
+  const restoreResponsePromise = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === `${transactionPath}/restore` &&
+      response.request().method() === "POST",
+  );
+  await editor.getByRole("button", { name: "Update transaction" }).click();
+  await restoreStarted;
+  const closeButton = editor.getByRole("button", {
+    name: "Close transaction editor",
+  });
+  await expect(closeButton).toBeDisabled();
+  await closeButton
+    .locator("xpath=ancestor::*[@data-slot='tooltip-trigger']")
+    .focus();
+  await expect(page.getByRole("tooltip")).toHaveText(
+    "Wait for the cancelled-conflict retry before closing.",
+  );
+  releaseRestore();
+  const restoreResponse = await restoreResponsePromise;
+  expect(restoreResponse.ok(), await restoreResponse.text()).toBe(true);
+  const restored = (await restoreResponse.json()) as TransactionFixture;
+  expect(restored.etag).toBe(newer.etag);
+  await expect(editor.getByRole("alert")).toContainText("changed elsewhere");
+  await expect(editor.getByLabel("Record 1 amount")).toHaveValue("-16.00");
+  await expect(editor.getByLabel("Record 2 amount")).toHaveValue("16.00");
+  expect(replacementRequests).toBe(0);
+
+  const reappliedResponsePromise = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === transactionPath &&
+      response.request().method() === "PUT",
+  );
+  await editor.getByRole("button", { name: "Update transaction" }).click();
+  const reappliedResponse = await reappliedResponsePromise;
+  expect(reappliedResponse.ok(), await reappliedResponse.text()).toBe(true);
+  expect(reappliedResponse.request().headers()["if-match"]).toBe(newer.etag);
+
+  const reapplied =
+    (await reappliedResponse.json()) as TransactionDetailFixture;
+  expect(reapplied.lifecycle_status).toBe("active");
+  expect(reapplied.records.map((record) => record.amount)).toEqual([
+    "-16.00000000",
+    "16.00000000",
+  ]);
+  await page.unroute(`**${transactionPath}/restore`);
+  await page.unroute(`**${transactionPath}`);
+  await deleteTransaction(page, transaction);
+});
+
+test("failed stale amount refetch does not claim the winner is shown", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const transaction = await createSearchSpend(
+    page,
+    `E2E stale row refetch failure ${unique}`,
+  );
+  const baseline = await getTransactionDetail(page, transaction);
+  await page.goto(
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(unique)}`,
+  );
+  await page.getByRole("button", { name: "Edit mode" }).click();
+  const amountInput = page.getByTestId(
+    `transaction-${transaction.transaction_id}-amount-input`,
+  );
+  await expect(amountInput).toBeVisible();
+
+  const winnerResponse = await page.request.put(
+    `/api/transactions/${transaction.transaction_id}`,
+    {
+      data: replacementBody(baseline, "14.00"),
+      headers: { "If-Match": baseline.etag },
+    },
+  );
+  expect(winnerResponse.ok(), await winnerResponse.text()).toBe(true);
+  await page.route(
+    `**/api/transactions/${transaction.transaction_id}`,
+    async (route) => {
+      if (route.request().method() === "GET") {
+        await route.fulfill({ status: 503, body: "unavailable" });
+        return;
+      }
+      await route.continue();
+    },
+  );
+
+  await amountInput.fill("16.00");
+  await amountInput.press("Enter");
+  await expect(amountInput).toHaveValue("16.00");
+  await expect(page.getByRole("alert")).toContainText(
+    "latest version could not be loaded",
+  );
+  await expect(page.getByRole("alert")).not.toContainText(
+    "latest version is shown",
+  );
+
+  await page.unroute(`**/api/transactions/${transaction.transaction_id}`);
+  await deleteTransaction(page, transaction);
+});
+
+test("ordinary amount failures release conflict cleanup state", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const transaction = await createSearchSpend(
+    page,
+    `E2E ordinary amount failure ${unique}`,
+  );
+  await page.goto(
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(unique)}`,
+  );
+  await page.getByRole("button", { name: "Edit mode" }).click();
+  await page.getByRole("row").filter({ hasText: unique }).click();
+  const amountInput = page.getByTestId(
+    `transaction-${transaction.transaction_id}-amount-input`,
+  );
+
+  const transactionPath = `/api/transactions/${transaction.transaction_id}`;
+  await page.route(`**${transactionPath}`, async (route) => {
+    const request = route.request();
+    if (request.method() === "PUT") {
+      await route.fulfill({ status: 503, body: "unavailable" });
+      return;
+    }
+    await route.continue();
+  });
+
+  await amountInput.fill("16.00");
+  await amountInput.press("Enter");
+  await expect(page.getByRole("alert")).toBeVisible();
+  await expect(amountInput).toBeEnabled();
+  await expect(
+    page.getByRole("button", { name: "Review in Advanced" }),
+  ).toHaveCount(0);
+
+  let releaseDockUpdate = () => {};
+  const dockUpdateGate = new Promise<void>((resolve) => {
+    releaseDockUpdate = resolve;
+  });
+  let markDockUpdateStarted = () => {};
+  const dockUpdateStarted = new Promise<void>((resolve) => {
+    markDockUpdateStarted = resolve;
+  });
+  await page.route("**/api/records/bulk/reconciliation", async (route) => {
+    markDockUpdateStarted();
+    await dockUpdateGate;
+    await route.continue();
+  });
+  const dock = page.getByTestId("transaction-edit-dock");
+  const reconcile = dock.getByRole("button", {
+    name: "Reconcile",
+    exact: true,
+  });
+  await reconcile.dispatchEvent("click");
+  await dockUpdateStarted;
+  await expect(amountInput).toHaveAttribute("aria-disabled", "true");
+  await expect(
+    page.getByRole("button", { name: "Review in Advanced" }),
+  ).toHaveCount(0);
+  releaseDockUpdate();
+  await expect(reconcile).toBeEnabled();
+  await page.unroute("**/api/records/bulk/reconciliation");
+
+  await amountInput.press("Escape");
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(page.getByRole("combobox", { name: "Rows" })).toBeEnabled();
+
+  await page.getByRole("button", { name: "Done" }).click();
+  await expect(
+    page.getByTestId("transaction-browser-edit-mode-header"),
+  ).toHaveCount(0);
+
+  await page.unroute(`**${transactionPath}`);
+  await deleteTransaction(page, transaction);
+});
+
+test("amount conflict retention follows unresolved retry drafts", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const transaction = await createSearchSpend(
+    page,
+    `E2E amount retry retention ${unique}`,
+  );
+  const baseline = await getTransactionDetail(page, transaction);
+  const transactionPath = `/api/transactions/${transaction.transaction_id}`;
+  await page.goto(
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(unique)}`,
+  );
+  await page.getByRole("button", { name: "Edit mode" }).click();
+  const amountInput = page.getByTestId(
+    `transaction-${transaction.transaction_id}-amount-input`,
+  );
+  const rows = page.getByRole("combobox", { name: "Rows" });
+  await expect(amountInput).toBeVisible();
+
+  const firstWinnerResponse = await page.request.put(transactionPath, {
+    data: replacementBody(baseline, "14.00"),
+    headers: { "If-Match": baseline.etag },
+  });
+  expect(firstWinnerResponse.ok(), await firstWinnerResponse.text()).toBe(true);
+  const firstWinner =
+    (await firstWinnerResponse.json()) as TransactionDetailFixture;
+
+  await amountInput.fill("16.00");
+  await amountInput.press("Enter");
+  await expect(page.getByRole("alert")).toContainText("changed elsewhere");
+  await expect(rows).toBeDisabled();
+  const paginationExplanation =
+    "Resolve or discard the inline amount conflict before changing pagination.";
+  for (const control of [
+    rows,
+    page.getByRole("button", { name: "Previous" }),
+    page.getByRole("button", { name: "Next" }),
+  ]) {
+    await control
+      .locator("xpath=ancestor::*[@data-slot='tooltip-trigger']")
+      .hover();
+    await expect(page.getByRole("tooltip")).toHaveText(paginationExplanation);
+  }
+
+  await page.route(`**${transactionPath}`, async (route) => {
+    if (route.request().method() === "PUT") {
+      await route.fulfill({ status: 503, body: "unavailable" });
+      return;
+    }
+    await route.continue();
+  });
+  const rowsTooltipTrigger = rows.locator(
+    "xpath=ancestor::*[@data-slot='tooltip-trigger']",
+  );
+  await rowsTooltipTrigger.focus();
+  await expect(page.getByRole("alert")).toBeVisible();
+  await rowsTooltipTrigger.evaluate((element) =>
+    (element as HTMLElement).blur(),
+  );
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
+  );
+  await rowsTooltipTrigger.focus();
+  await expect(rowsTooltipTrigger).toBeFocused();
+  await expect(page.getByRole("tooltip")).toHaveText(paginationExplanation);
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("tooltip")).toBeHidden();
+  await expect(
+    page.getByTestId("transaction-browser-edit-mode-header"),
+  ).toBeVisible();
+  await expect(amountInput).toHaveValue("16.00");
+  await expect(page.getByRole("alert")).toBeVisible();
+
+  await amountInput.press("Enter");
+  await expect(page.getByRole("alert")).toBeVisible();
+  await expect(rows).toBeDisabled();
+
+  await amountInput.press("Escape");
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(rows).toBeEnabled();
+  await page.unroute(`**${transactionPath}`);
+
+  const matchingWinnerResponse = await page.request.put(transactionPath, {
+    data: replacementBody(firstWinner, "16.00"),
+    headers: { "If-Match": firstWinner.etag },
+  });
+  expect(matchingWinnerResponse.ok(), await matchingWinnerResponse.text()).toBe(
+    true,
+  );
+
+  await amountInput.fill("16.00");
+  await amountInput.press("Enter");
+  await expect(page.getByRole("alert")).toContainText("changed elsewhere");
+  await expect(rows).toBeDisabled();
+
+  await amountInput.press("Enter");
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(rows).toBeEnabled();
+  await deleteTransaction(page, transaction);
+});
+
+test("matching conflict winners reapply the active query", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const memo = `E2E matching winner filter ${unique}`;
+  const transaction = await createSearchSpend(page, memo);
+  const baseline = await getTransactionDetail(page, transaction);
+  await page.goto(
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(memo)}`,
+  );
+  await page.getByRole("button", { name: "Edit mode" }).click();
+  const amountInput = page.getByTestId(
+    `transaction-${transaction.transaction_id}-amount-input`,
+  );
+  await expect(amountInput).toBeVisible();
+
+  const winnerBody = replacementBody(baseline, "16.00");
+  for (const record of winnerBody.records) {
+    record.memo = `matching winner outside filter ${unique}`;
+  }
+  const winnerResponse = await page.request.put(
+    `/api/transactions/${transaction.transaction_id}`,
+    {
+      data: winnerBody,
+      headers: { "If-Match": baseline.etag },
+    },
+  );
+  expect(winnerResponse.ok(), await winnerResponse.text()).toBe(true);
+
+  await amountInput.fill("16.00");
+  await amountInput.press("Enter");
+  await expect(page.getByRole("alert")).toContainText("changed elsewhere");
+  await amountInput.press("Enter");
+  await expect(
+    page.locator(`[data-transaction-id="${transaction.transaction_id}"]`),
+  ).toHaveCount(0);
+  await expect(page.locator("[data-transaction-empty-action]")).toBeFocused();
+
+  await deleteTransaction(page, transaction);
+});
+
+test("stale row amount conflicts stay winner-backed outside the active query", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const memo = `E2E stale row filter ${unique}`;
+  const transaction = await createSearchSpend(page, memo);
+  const otherTransaction = await createSearchSpend(page, memo);
+  const baseline = await getTransactionDetail(page, transaction);
+  await page.goto(
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(memo)}`,
+  );
+  await page.getByRole("button", { name: "Edit mode" }).click();
+  const amountInput = page.getByTestId(
+    `transaction-${transaction.transaction_id}-amount-input`,
+  );
+  await expect(amountInput).toBeVisible();
+
+  const winnerBody = replacementBody(baseline, "14.00");
+  for (const record of winnerBody.records) {
+    record.memo = `winner outside filter ${unique}`;
+  }
+  const winnerResponse = await page.request.put(
+    `/api/transactions/${transaction.transaction_id}`,
+    {
+      data: winnerBody,
+      headers: { "If-Match": baseline.etag },
+    },
+  );
+  expect(winnerResponse.ok(), await winnerResponse.text()).toBe(true);
+  const winner = (await winnerResponse.json()) as TransactionDetailFixture;
+
+  let releaseWinnerFetch = () => {};
+  const winnerFetchGate = new Promise<void>((resolve) => {
+    releaseWinnerFetch = resolve;
+  });
+  let markWinnerFetchStarted = () => {};
+  const winnerFetchStarted = new Promise<void>((resolve) => {
+    markWinnerFetchStarted = resolve;
+  });
+  const transactionPath = `/api/transactions/${transaction.transaction_id}`;
+  await page.route(`**${transactionPath}`, async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.continue();
+      return;
+    }
+    markWinnerFetchStarted();
+    await winnerFetchGate;
+    await route.continue();
+  });
+
+  await amountInput.fill("16.00");
+  await amountInput.press("Enter");
+  await winnerFetchStarted;
+
+  const otherAmountInput = page.getByTestId(
+    `transaction-${otherTransaction.transaction_id}-amount-input`,
+  );
+  await otherAmountInput.fill("18.00");
+  await otherAmountInput.press("Enter");
+  await expect(
+    page.locator(`[data-transaction-id="${transaction.transaction_id}"]`),
+  ).toHaveCount(1);
+  await expect(amountInput).toHaveValue("16.00");
+
+  releaseWinnerFetch();
+  await expect(page.getByRole("alert")).toContainText("changed elsewhere");
+  await expect(
+    page.locator(`[data-transaction-id="${transaction.transaction_id}"]`),
+  ).toHaveCount(1);
+
+  await otherAmountInput.fill("20.00");
+  await otherAmountInput.press("Enter");
+  await expect(
+    page.locator(`[data-transaction-id="${transaction.transaction_id}"]`),
+  ).toHaveCount(1);
+  await expect(amountInput).toHaveValue("16.00");
+  await expect(page.getByRole("alert")).toContainText("changed elsewhere");
+
+  const retryRequestPromise = page.waitForRequest(
+    (request) =>
+      new URL(request.url()).pathname === transactionPath &&
+      request.method() === "PUT",
+  );
+  await amountInput.press("Enter");
+  const retryRequest = await retryRequestPromise;
+  expect(retryRequest.headers()["if-match"]).toBe(winner.etag);
+  await expect(
+    page.locator(`[data-transaction-id="${transaction.transaction_id}"]`),
+  ).toHaveCount(0);
+  await expect(
+    page.locator(`[data-transaction-id="${otherTransaction.transaction_id}"]`),
+  ).toBeFocused();
+
+  await page.unroute(`**${transactionPath}`);
+  await deleteTransaction(page, transaction);
+  await deleteTransaction(page, otherTransaction);
+});
+
+test("Done reapplies the active query after abandoning an amount conflict", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const memo = `E2E stale row Done ${unique}`;
+  const transaction = await createSearchSpend(page, memo);
+  const baseline = await getTransactionDetail(page, transaction);
+  await page.goto(
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(memo)}`,
+  );
+  await page.getByRole("button", { name: "Edit mode" }).click();
+  const amountInput = page.getByTestId(
+    `transaction-${transaction.transaction_id}-amount-input`,
+  );
+  await expect(amountInput).toBeVisible();
+
+  const winnerBody = replacementBody(baseline, "14.00");
+  for (const record of winnerBody.records) {
+    record.memo = `winner outside filter ${unique}`;
+  }
+  const winnerResponse = await page.request.put(
+    `/api/transactions/${transaction.transaction_id}`,
+    {
+      data: winnerBody,
+      headers: { "If-Match": baseline.etag },
+    },
+  );
+  expect(winnerResponse.ok(), await winnerResponse.text()).toBe(true);
+
+  await amountInput.fill("16.00");
+  await amountInput.press("Enter");
+  await expect(page.getByRole("alert")).toContainText("changed elsewhere");
+  await expect(
+    page.locator(`[data-transaction-id="${transaction.transaction_id}"]`),
+  ).toHaveCount(1);
+
+  await page.getByRole("button", { name: "Done" }).click();
+  await expect(
+    page.getByTestId("transaction-browser-edit-mode-header"),
+  ).toHaveCount(0);
+  await expect(
+    page.locator(`[data-transaction-id="${transaction.transaction_id}"]`),
+  ).toHaveCount(0);
+
+  await deleteTransaction(page, transaction);
+});
+
+test("shape-changing stale row amounts transfer into Advanced review", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const transaction = await createSearchSpend(
+    page,
+    `E2E stale row shape ${unique}`,
+  );
+  const baseline = await getTransactionDetail(page, transaction);
+  await page.goto(
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(unique)}`,
+  );
+  await page.getByRole("button", { name: "Edit mode" }).click();
+  const amountInput = page.getByTestId(
+    `transaction-${transaction.transaction_id}-amount-input`,
+  );
+  await expect(amountInput).toBeVisible();
+
+  const winnerBody = replacementBody(baseline, "14.00");
+  const negativeIndex = winnerBody.records.findIndex((record) =>
+    record.amount.startsWith("-"),
+  );
+  const positiveIndex = winnerBody.records.findIndex(
+    (record) => !record.amount.startsWith("-"),
+  );
+  const negativeRecord = winnerBody.records[negativeIndex]!;
+  const positiveRecord = winnerBody.records[positiveIndex]!;
+  positiveRecord.amount = "7.00";
+  const { record_id: _negativeRecordId, ...newNegativeRecord } = negativeRecord;
+  const { record_id: _recordId, ...newPositiveRecord } = positiveRecord;
+  const winnerResponse = await page.request.put(
+    `/api/transactions/${transaction.transaction_id}`,
+    {
+      data: {
+        ...winnerBody,
+        records: [
+          { ...newNegativeRecord, source: "manual" },
+          { ...newPositiveRecord, source: "manual" },
+          { ...newPositiveRecord, source: "manual" },
+        ],
+      },
+      headers: { "If-Match": baseline.etag },
+    },
+  );
+  expect(winnerResponse.ok(), await winnerResponse.text()).toBe(true);
+
+  await amountInput.fill("16.00");
+  const staleResponsePromise = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname ===
+        `/api/transactions/${transaction.transaction_id}` &&
+      response.request().method() === "PUT",
+  );
+  await amountInput.press("Enter");
+  const staleResponse = await staleResponsePromise;
+  expect(staleResponse.status()).toBe(412);
+  await expect(amountInput).toHaveValue("16.00");
+  await expect(amountInput).toBeDisabled();
+  await expect(page.getByRole("alert")).toContainText("changed elsewhere");
+
+  await page.getByRole("button", { name: "Review in Advanced" }).click();
+  const editor = page.getByRole("dialog", { name: "Transaction editor" });
+  await expect(editor.getByRole("tab", { name: "Advanced" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(editor.getByLabel("Record 1 amount")).toHaveValue("-16.00");
+  await expect(editor.getByLabel("Record 2 amount")).toHaveValue("16.00");
+
+  await page.keyboard.press("Escape");
+  const discardDialog = page.getByRole("alertdialog", {
+    name: "Discard transaction changes?",
+  });
+  await expect(discardDialog).toBeVisible();
+  await discardDialog.getByRole("button", { name: "Keep editing" }).click();
+  await expect(editor.getByLabel("Record 1 amount")).toHaveValue("-16.00");
+  await expect(editor.getByLabel("Record 2 amount")).toHaveValue("16.00");
+
+  await deleteTransaction(page, transaction);
+});
+
+test("discarding a visible shape-changing conflict keeps focus in its row", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const transaction = await createSearchSpend(
+    page,
+    `E2E stale row discard focus ${unique}`,
+  );
+  const baseline = await getTransactionDetail(page, transaction);
+  await page.goto(
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(unique)}`,
+  );
+  await page.getByRole("button", { name: "Edit mode" }).click();
+  const amountInput = page.getByTestId(
+    `transaction-${transaction.transaction_id}-amount-input`,
+  );
+  await expect(amountInput).toBeVisible();
+
+  let releaseSave = () => {};
+  const saveGate = new Promise<void>((resolve) => {
+    releaseSave = resolve;
+  });
+  let markSaveStarted = () => {};
+  const saveStarted = new Promise<void>((resolve) => {
+    markSaveStarted = resolve;
+  });
+  const transactionPath = `/api/transactions/${transaction.transaction_id}`;
+  await page.route(`**${transactionPath}`, async (route) => {
+    if (route.request().method() !== "PUT") {
+      await route.continue();
+      return;
+    }
+    markSaveStarted();
+    await saveGate;
+    await route.continue();
+  });
+  const staleResponsePromise = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === transactionPath &&
+      response.request().method() === "PUT",
+  );
+  await amountInput.fill("16.00");
+  await amountInput.press("Enter");
+  await saveStarted;
+
+  const winnerBody = replacementBody(baseline, "14.00");
+  const positiveRecord = winnerBody.records.find(
+    (record) => !record.amount.startsWith("-"),
+  )!;
+  positiveRecord.amount = "7.00";
+  const { record_id: _recordId, ...newPositiveRecord } = positiveRecord;
+  const winnerResponse = await page.request.put(
+    `/api/transactions/${transaction.transaction_id}`,
+    {
+      data: {
+        ...winnerBody,
+        records: [
+          ...winnerBody.records,
+          { ...newPositiveRecord, source: "manual" },
+        ],
+      },
+      headers: { "If-Match": baseline.etag },
+    },
+  );
+  expect(winnerResponse.ok(), await winnerResponse.text()).toBe(true);
+
+  releaseSave();
+  expect((await staleResponsePromise).status()).toBe(412);
+  await expect(page.getByRole("alert")).toContainText("changed elsewhere");
+  const row = page.locator(
+    `[data-transaction-id="${transaction.transaction_id}"]`,
+  );
+  await amountInput.press("Escape");
+  await expect(row).toBeVisible();
+  await expect(amountInput).toHaveCount(0);
+  await expect
+    .poll(() =>
+      row.evaluate((element) => element.contains(document.activeElement)),
+    )
+    .toBe(true);
+
+  await page.unroute(`**${transactionPath}`);
+  await deleteTransaction(page, transaction);
+});
+
 test("Done exits Edit mode after a pending amount save succeeds", async ({
   page,
 }, testInfo) => {
@@ -719,6 +1573,18 @@ test("record-state updates prune selections moved off an updated-time page", asy
 
   const header = page.getByTestId("transaction-browser-edit-mode-header");
   await expect(header).toContainText("1 selected");
+  const currentResponse = await page.request.get(
+    `/api/transactions/${selectedTransactionId}`,
+  );
+  expect(currentResponse.ok(), await currentResponse.text()).toBe(true);
+  const current = (await currentResponse.json()) as {
+    readonly records: readonly { readonly reconciliation_status: string }[];
+  };
+  const reconciliationAction = current.records.every(
+    (record) => record.reconciliation_status === "reconciled",
+  )
+    ? "Unreconcile"
+    : "Reconcile";
   const updateResponse = page.waitForResponse(
     (response) =>
       new URL(response.url()).pathname === "/api/records/bulk/reconciliation" &&
@@ -726,7 +1592,7 @@ test("record-state updates prune selections moved off an updated-time page", asy
   );
   await page
     .getByTestId("transaction-edit-dock")
-    .getByRole("button", { name: "Reconcile", exact: true })
+    .getByRole("button", { name: reconciliationAction, exact: true })
     .click();
   await updateResponse;
 

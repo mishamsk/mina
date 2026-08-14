@@ -50,13 +50,15 @@ func (e APIAuditClientSurface) Valid() bool {
 
 // Defines values for APIErrorCode.
 const (
-	APIErrorCodeConflict         APIErrorCode = "conflict"
-	APIErrorCodeForbidden        APIErrorCode = "forbidden"
-	APIErrorCodeInternalError    APIErrorCode = "internal_error"
-	APIErrorCodeInvalidRequest   APIErrorCode = "invalid_request"
-	APIErrorCodeMethodNotAllowed APIErrorCode = "method_not_allowed"
-	APIErrorCodeNotFound         APIErrorCode = "not_found"
-	APIErrorCodeUnauthenticated  APIErrorCode = "unauthenticated"
+	APIErrorCodeConflict             APIErrorCode = "conflict"
+	APIErrorCodeForbidden            APIErrorCode = "forbidden"
+	APIErrorCodeInternalError        APIErrorCode = "internal_error"
+	APIErrorCodeInvalidRequest       APIErrorCode = "invalid_request"
+	APIErrorCodeMethodNotAllowed     APIErrorCode = "method_not_allowed"
+	APIErrorCodeNotFound             APIErrorCode = "not_found"
+	APIErrorCodePreconditionFailed   APIErrorCode = "precondition_failed"
+	APIErrorCodePreconditionRequired APIErrorCode = "precondition_required"
+	APIErrorCodeUnauthenticated      APIErrorCode = "unauthenticated"
 )
 
 // Valid indicates whether the value is a known member of the APIErrorCode enum.
@@ -73,6 +75,10 @@ func (e APIErrorCode) Valid() bool {
 	case APIErrorCodeMethodNotAllowed:
 		return true
 	case APIErrorCodeNotFound:
+		return true
+	case APIErrorCodePreconditionFailed:
+		return true
+	case APIErrorCodePreconditionRequired:
 		return true
 	case APIErrorCodeUnauthenticated:
 		return true
@@ -1599,8 +1605,10 @@ type BulkReassignRecordsAccountRequest struct {
 
 // BulkRecordOperationResponse defines model for BulkRecordOperationResponse.
 type BulkRecordOperationResponse struct {
-	RecordIds    []int64 `json:"record_ids"`
-	UpdatedCount int     `json:"updated_count"`
+	RecordIds []int64 `json:"record_ids"`
+
+	// UpdatedCount Number of requested records whose persisted values materially changed; record_ids still echoes every requested ID.
+	UpdatedCount int `json:"updated_count"`
 }
 
 // BulkSetRecordMemberRequest defines model for BulkSetRecordMemberRequest.
@@ -2700,7 +2708,10 @@ type Transaction struct {
 	CreatedAt time.Time `json:"created_at"`
 
 	// DisplayTitle Server-derived transaction title for every presentation surface.
-	DisplayTitle  string             `json:"display_title"`
+	DisplayTitle string `json:"display_title"`
+
+	// Etag Strong ETag derived directly from updated_at; send this exact value in If-Match for complete replacement.
+	Etag          string             `json:"etag"`
 	InitiatedDate openapi_types.Date `json:"initiated_date"`
 
 	// LifecycleStatus Transaction lifecycle, independent from balance-record settlement and tombstoning.
@@ -2894,6 +2905,42 @@ type UpdateExchangeRateRequest struct {
 	Rate string `json:"rate"`
 }
 
+// UpdateExistingJournalRecordRequest defines model for UpdateExistingJournalRecordRequest.
+type UpdateExistingJournalRecordRequest struct {
+	// AccountId Account identifier for this retained journal record.
+	AccountId int64 `json:"account_id"`
+
+	// Amount JSON string, not a JSON number. Signed non-zero DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
+	Amount string `json:"amount"`
+
+	// AmountUsd JSON string or null, not a JSON number. Omission or explicit null preserves the stored value when amount and currency are unchanged and otherwise applies initiated-date inference.
+	AmountUsd *string `json:"amount_usd,omitempty"`
+
+	// CategoryId Category identifier for a flow record; omit or use null for every other account type.
+	CategoryId *int64 `json:"category_id,omitempty"`
+
+	// Currency Record currency using ISO 4217 or the `C::` crypto prefix; it must match the referenced account when that account is single-currency.
+	Currency string `json:"currency"`
+
+	// MemberId Optional household-member identifier for the journal record.
+	MemberId *int64 `json:"member_id,omitempty"`
+
+	// Memo Optional memo text for the journal record.
+	Memo *string `json:"memo,omitempty"`
+
+	// ReconciliationStatus Whether a journal record has been reconciled with its external or expected source.
+	ReconciliationStatus ReconciliationStatus `json:"reconciliation_status"`
+
+	// RecordId Active journal-record identifier retained by this complete replacement; it must belong to the target transaction and may appear only once in the request.
+	RecordId int64 `json:"record_id"`
+
+	// Settlement Settlement intent for owned and party records; use null for flow and system records.
+	Settlement *SettlementIntent `json:"settlement"`
+
+	// TagIds Tag identifiers to assign to the journal record.
+	TagIds *[]int64 `json:"tag_ids,omitempty"`
+}
+
 // UpdateMemberHiddenRequest defines model for UpdateMemberHiddenRequest.
 type UpdateMemberHiddenRequest struct {
 	// IsHidden Whether the entity is excluded from default lists.
@@ -2905,6 +2952,9 @@ type UpdateMemberRequest struct {
 	// Name Unique flat household-member name.
 	Name string `json:"name"`
 }
+
+// UpdateNewJournalRecordRequest defines model for UpdateNewJournalRecordRequest.
+type UpdateNewJournalRecordRequest = CreateJournalRecordRequest
 
 // UpdateTagRequest defines model for UpdateTagRequest.
 type UpdateTagRequest struct {
@@ -2920,8 +2970,13 @@ type UpdateTransactionRequest struct {
 	// InitiatedDate Human-facing transaction date in YYYY-MM-DD format.
 	InitiatedDate openapi_types.Date `json:"initiated_date"`
 
-	// Records Complete journal-record set; active records must balance to zero within each currency.
-	Records []CreateJournalRecordRequest `json:"records"`
+	// Records Complete desired journal-record set. Retained records supply a unique record_id without provenance; new records omit record_id and may supply creation-time provenance. Active records must balance to zero within each currency.
+	Records []UpdateTransactionRequest_Records_Item `json:"records"`
+}
+
+// UpdateTransactionRequest_Records_Item defines model for UpdateTransactionRequest.records.Item.
+type UpdateTransactionRequest_Records_Item struct {
+	union json.RawMessage
 }
 
 // WritableAccountType User-writable account semantic type. System accounts are installed and managed only by Mina.
@@ -2968,6 +3023,12 @@ type MethodNotAllowed = ErrorResponse
 
 // NotFound defines model for NotFound.
 type NotFound = ErrorResponse
+
+// PreconditionFailed defines model for PreconditionFailed.
+type PreconditionFailed = ErrorResponse
+
+// PreconditionRequired defines model for PreconditionRequired.
+type PreconditionRequired = ErrorResponse
 
 // TagFQNConflict defines model for TagFQNConflict.
 type TagFQNConflict = ErrorResponse
@@ -3734,6 +3795,12 @@ type GetTransactionMonthTotalsParams struct {
 	Month string `form:"month" json:"month"`
 }
 
+// ReplaceTransactionParams defines parameters for ReplaceTransaction.
+type ReplaceTransactionParams struct {
+	// IfMatch Strong ETag from the transaction response being replaced.
+	IfMatch string `json:"If-Match"`
+}
+
 // CreateAccountJSONRequestBody defines body for CreateAccount for application/json ContentType.
 type CreateAccountJSONRequestBody = CreateAccountRequest
 
@@ -3856,6 +3923,68 @@ type CreateTransferTransactionJSONRequestBody = CreateTransferTransactionRequest
 
 // ReplaceTransactionJSONRequestBody defines body for ReplaceTransaction for application/json ContentType.
 type ReplaceTransactionJSONRequestBody = UpdateTransactionRequest
+
+// AsUpdateExistingJournalRecordRequest returns the union data inside the UpdateTransactionRequest_Records_Item as a UpdateExistingJournalRecordRequest
+func (t UpdateTransactionRequest_Records_Item) AsUpdateExistingJournalRecordRequest() (UpdateExistingJournalRecordRequest, error) {
+	var body UpdateExistingJournalRecordRequest
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromUpdateExistingJournalRecordRequest overwrites any union data inside the UpdateTransactionRequest_Records_Item as the provided UpdateExistingJournalRecordRequest
+func (t *UpdateTransactionRequest_Records_Item) FromUpdateExistingJournalRecordRequest(v UpdateExistingJournalRecordRequest) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeUpdateExistingJournalRecordRequest performs a merge with any union data inside the UpdateTransactionRequest_Records_Item, using the provided UpdateExistingJournalRecordRequest
+func (t *UpdateTransactionRequest_Records_Item) MergeUpdateExistingJournalRecordRequest(v UpdateExistingJournalRecordRequest) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsUpdateNewJournalRecordRequest returns the union data inside the UpdateTransactionRequest_Records_Item as a UpdateNewJournalRecordRequest
+func (t UpdateTransactionRequest_Records_Item) AsUpdateNewJournalRecordRequest() (UpdateNewJournalRecordRequest, error) {
+	var body UpdateNewJournalRecordRequest
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromUpdateNewJournalRecordRequest overwrites any union data inside the UpdateTransactionRequest_Records_Item as the provided UpdateNewJournalRecordRequest
+func (t *UpdateTransactionRequest_Records_Item) FromUpdateNewJournalRecordRequest(v UpdateNewJournalRecordRequest) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeUpdateNewJournalRecordRequest performs a merge with any union data inside the UpdateTransactionRequest_Records_Item, using the provided UpdateNewJournalRecordRequest
+func (t *UpdateTransactionRequest_Records_Item) MergeUpdateNewJournalRecordRequest(v UpdateNewJournalRecordRequest) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t UpdateTransactionRequest_Records_Item) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *UpdateTransactionRequest_Records_Item) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
 
 // RequestEditorFn  is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error
@@ -4320,9 +4449,9 @@ type ClientInterface interface {
 	GetTransaction(ctx context.Context, transactionId int64, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ReplaceTransactionWithBody request with any body
-	ReplaceTransactionWithBody(ctx context.Context, transactionId int64, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ReplaceTransactionWithBody(ctx context.Context, transactionId int64, params *ReplaceTransactionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	ReplaceTransaction(ctx context.Context, transactionId int64, body ReplaceTransactionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ReplaceTransaction(ctx context.Context, transactionId int64, params *ReplaceTransactionParams, body ReplaceTransactionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CancelTransaction request
 	CancelTransaction(ctx context.Context, transactionId int64, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -6047,8 +6176,8 @@ func (c *Client) GetTransaction(ctx context.Context, transactionId int64, reqEdi
 	return c.Client.Do(req)
 }
 
-func (c *Client) ReplaceTransactionWithBody(ctx context.Context, transactionId int64, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewReplaceTransactionRequestWithBody(c.Server, transactionId, contentType, body)
+func (c *Client) ReplaceTransactionWithBody(ctx context.Context, transactionId int64, params *ReplaceTransactionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReplaceTransactionRequestWithBody(c.Server, transactionId, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -6059,8 +6188,8 @@ func (c *Client) ReplaceTransactionWithBody(ctx context.Context, transactionId i
 	return c.Client.Do(req)
 }
 
-func (c *Client) ReplaceTransaction(ctx context.Context, transactionId int64, body ReplaceTransactionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewReplaceTransactionRequest(c.Server, transactionId, body)
+func (c *Client) ReplaceTransaction(ctx context.Context, transactionId int64, params *ReplaceTransactionParams, body ReplaceTransactionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReplaceTransactionRequest(c.Server, transactionId, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -12473,18 +12602,18 @@ func NewGetTransactionRequest(server string, transactionId int64) (*http.Request
 }
 
 // NewReplaceTransactionRequest calls the generic ReplaceTransaction builder with application/json body
-func NewReplaceTransactionRequest(server string, transactionId int64, body ReplaceTransactionJSONRequestBody) (*http.Request, error) {
+func NewReplaceTransactionRequest(server string, transactionId int64, params *ReplaceTransactionParams, body ReplaceTransactionJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewReplaceTransactionRequestWithBody(server, transactionId, "application/json", bodyReader)
+	return NewReplaceTransactionRequestWithBody(server, transactionId, params, "application/json", bodyReader)
 }
 
 // NewReplaceTransactionRequestWithBody generates requests for ReplaceTransaction with any type of body
-func NewReplaceTransactionRequestWithBody(server string, transactionId int64, contentType string, body io.Reader) (*http.Request, error) {
+func NewReplaceTransactionRequestWithBody(server string, transactionId int64, params *ReplaceTransactionParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -12515,6 +12644,19 @@ func NewReplaceTransactionRequestWithBody(server string, transactionId int64, co
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithOptions("simple", false, "If-Match", params.IfMatch, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("If-Match", headerParam0)
+
+	}
 
 	return req, nil
 }
@@ -13020,9 +13162,9 @@ type ClientWithResponsesInterface interface {
 	GetTransactionWithResponse(ctx context.Context, transactionId int64, reqEditors ...RequestEditorFn) (*GetTransactionResponse, error)
 
 	// ReplaceTransactionWithBodyWithResponse request with any body
-	ReplaceTransactionWithBodyWithResponse(ctx context.Context, transactionId int64, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplaceTransactionResponse, error)
+	ReplaceTransactionWithBodyWithResponse(ctx context.Context, transactionId int64, params *ReplaceTransactionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplaceTransactionResponse, error)
 
-	ReplaceTransactionWithResponse(ctx context.Context, transactionId int64, body ReplaceTransactionJSONRequestBody, reqEditors ...RequestEditorFn) (*ReplaceTransactionResponse, error)
+	ReplaceTransactionWithResponse(ctx context.Context, transactionId int64, params *ReplaceTransactionParams, body ReplaceTransactionJSONRequestBody, reqEditors ...RequestEditorFn) (*ReplaceTransactionResponse, error)
 
 	// CancelTransactionWithResponse request
 	CancelTransactionWithResponse(ctx context.Context, transactionId int64, reqEditors ...RequestEditorFn) (*CancelTransactionResponse, error)
@@ -16459,6 +16601,9 @@ type ReplaceTransactionResponse struct {
 	JSON401      *Unauthenticated
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON412      *PreconditionFailed
+	JSON428      *PreconditionRequired
 }
 
 // Status returns HTTPResponse.Status
@@ -17801,16 +17946,16 @@ func (c *ClientWithResponses) GetTransactionWithResponse(ctx context.Context, tr
 }
 
 // ReplaceTransactionWithBodyWithResponse request with arbitrary body returning *ReplaceTransactionResponse
-func (c *ClientWithResponses) ReplaceTransactionWithBodyWithResponse(ctx context.Context, transactionId int64, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplaceTransactionResponse, error) {
-	rsp, err := c.ReplaceTransactionWithBody(ctx, transactionId, contentType, body, reqEditors...)
+func (c *ClientWithResponses) ReplaceTransactionWithBodyWithResponse(ctx context.Context, transactionId int64, params *ReplaceTransactionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplaceTransactionResponse, error) {
+	rsp, err := c.ReplaceTransactionWithBody(ctx, transactionId, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseReplaceTransactionResponse(rsp)
 }
 
-func (c *ClientWithResponses) ReplaceTransactionWithResponse(ctx context.Context, transactionId int64, body ReplaceTransactionJSONRequestBody, reqEditors ...RequestEditorFn) (*ReplaceTransactionResponse, error) {
-	rsp, err := c.ReplaceTransaction(ctx, transactionId, body, reqEditors...)
+func (c *ClientWithResponses) ReplaceTransactionWithResponse(ctx context.Context, transactionId int64, params *ReplaceTransactionParams, body ReplaceTransactionJSONRequestBody, reqEditors ...RequestEditorFn) (*ReplaceTransactionResponse, error) {
+	rsp, err := c.ReplaceTransaction(ctx, transactionId, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -22871,6 +23016,27 @@ func ParseReplaceTransactionResponse(rsp *http.Response) (*ReplaceTransactionRes
 			return nil, err
 		}
 		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 412:
+		var dest PreconditionFailed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON412 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 428:
+		var dest PreconditionRequired
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON428 = &dest
 
 	}
 

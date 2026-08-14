@@ -488,10 +488,10 @@ func TestTransactionSettlementNormalizationAndExactTimestampsBoundary(t *testing
 	replacementTime := apptest.Timestamp("2026-08-04T15:31:00Z")
 	clock.Set(replacementTime)
 	directPostedReplacement := settlementTransactionRequest(refs, "2024-03-14", httpclient.SettlementStatusPosted)
-	replaced, err := client.REST().ReplaceTransactionWithResponse(
+	replaced, err := client.ReplaceTransactionRetainingRecords(
 		context.Background(),
-		directPosted.JSON201.TransactionId,
-		httpclient.UpdateTransactionRequest(directPostedReplacement),
+		directPosted.JSON201,
+		directPostedReplacement,
 	)
 	requireNoTransportError(t, "replace direct posted transaction", err)
 	if replaced.StatusCode() != http.StatusOK {
@@ -519,10 +519,10 @@ func TestTransactionSettlementNormalizationAndExactTimestampsBoundary(t *testing
 	clock.Set(advancedReplacementTime)
 	advancedPostedRequest := settlementTransactionRequest(refs, "2024-03-14", httpclient.SettlementStatusPosted)
 	advancedPostedRequest.Records[0].Settlement.PendingDate = &pendingOperationTime
-	advancedPosted, err := client.REST().ReplaceTransactionWithResponse(
+	advancedPosted, err := client.ReplaceTransactionRetainingRecords(
 		context.Background(),
-		directPosted.JSON201.TransactionId,
-		httpclient.UpdateTransactionRequest(advancedPostedRequest),
+		pendingAfterEditMode.JSON200,
+		advancedPostedRequest,
 	)
 	requireNoTransportError(t, "post edit-mode pending transaction through replacement", err)
 	if advancedPosted.StatusCode() != http.StatusOK {
@@ -535,10 +535,10 @@ func TestTransactionSettlementNormalizationAndExactTimestampsBoundary(t *testing
 	sameDayPendingDate := apptest.Timestamp("2026-08-04T23:59:59Z")
 	sameDayPostedRequest := settlementTransactionRequest(refs, "2026-08-04", httpclient.SettlementStatusPosted)
 	sameDayPostedRequest.Records[0].Settlement.PendingDate = &sameDayPendingDate
-	sameDayPosted, err := client.REST().ReplaceTransactionWithResponse(
+	sameDayPosted, err := client.ReplaceTransactionRetainingRecords(
 		context.Background(),
-		sameDayPending.JSON201.TransactionId,
-		httpclient.UpdateTransactionRequest(sameDayPostedRequest),
+		sameDayPending.JSON201,
+		sameDayPostedRequest,
 	)
 	requireNoTransportError(t, "post same-day pending transaction through replacement", err)
 	if sameDayPosted.StatusCode() != http.StatusOK {
@@ -620,10 +620,10 @@ func TestTransactionSettlementNormalizationAndExactTimestampsBoundary(t *testing
 	}
 	importedReplacement.Records[0].Settlement.PendingDate = &importedReplacementPending
 	importedReplacement.Records[0].Settlement.PostedDate = &importedReplacementPosted
-	importedReplaced, err := client.REST().ReplaceTransactionWithResponse(
+	importedReplaced, err := client.ReplaceTransactionRetainingRecords(
 		context.Background(),
-		imported.JSON201.TransactionId,
-		httpclient.UpdateTransactionRequest(importedReplacement),
+		imported.JSON201,
+		importedReplacement,
 	)
 	requireNoTransportError(t, "replace imported transaction", err)
 	if importedReplaced.StatusCode() != http.StatusOK {
@@ -631,10 +631,12 @@ func TestTransactionSettlementNormalizationAndExactTimestampsBoundary(t *testing
 	}
 	assertRecordLifecycleDates(t, "imported replace", importedReplaced.JSON200.Records, &importedReplacementPending, &importedReplacementPosted)
 	assertRecordSources(t, "imported replace", importedReplaced.JSON200.Records, httpclient.Imported)
+	assertImportedRecordProvenance(t, "imported replace", importedReplaced.JSON200.Records)
 
 	importedRead := getTransaction(t, client, imported.JSON201.TransactionId)
 	assertRecordLifecycleDates(t, "imported read", importedRead.JSON200.Records, &importedReplacementPending, &importedReplacementPosted)
 	assertRecordSources(t, "imported read", importedRead.JSON200.Records, httpclient.Imported)
+	assertImportedRecordProvenance(t, "imported read", importedRead.JSON200.Records)
 
 	pendingFrom := apptest.Timestamp("2024-03-12T00:00:00Z")
 	pendingTo := apptest.Timestamp("2024-03-12T23:59:59Z")
@@ -654,6 +656,16 @@ func TestTransactionSettlementNormalizationAndExactTimestampsBoundary(t *testing
 		t.Fatalf("pending range record search status = %d, want %d; body %s", searched.StatusCode(), http.StatusOK, searched.Body)
 	}
 	assertRecordIDs(t, searched.JSON200.Records, []int64{pending.JSON201.Records[0].RecordId})
+}
+
+func assertImportedRecordProvenance(t *testing.T, label string, records []httpclient.JournalRecord) {
+	t.Helper()
+	for index, record := range records {
+		wantExternalID := "imported-create-" + strconv.Itoa(index)
+		if record.ExternalId == nil || *record.ExternalId != wantExternalID || record.ExternalSystem == nil || *record.ExternalSystem != "test-import" {
+			t.Fatalf("%s record %d provenance = %v/%v, want %q/%q", label, record.RecordId, record.ExternalId, record.ExternalSystem, wantExternalID, "test-import")
+		}
+	}
 }
 
 func assertTransactionListOffset(t *testing.T, label string, list httpclient.TransactionListResponse, want int) {
@@ -725,7 +737,13 @@ func TestTransactionMixedAndNotApplicableSettlementBoundary(t *testing.T) {
 	if settled.StatusCode() != http.StatusOK {
 		t.Fatalf("bulk settlement status = %d, want %d; body %s", settled.StatusCode(), http.StatusOK, settled.Body)
 	}
-	assertBulkResponse(t, settled.JSON200, balanceRecordIDs)
+	if settled.JSON200 == nil {
+		t.Fatal("bulk settlement response body is nil")
+	}
+	assertInt64s(t, settled.JSON200.RecordIds, balanceRecordIDs)
+	if settled.JSON200.UpdatedCount != 1 {
+		t.Fatalf("updated_count = %d, want 1", settled.JSON200.UpdatedCount)
+	}
 
 	read := getTransaction(t, client, mixed.JSON201.TransactionId)
 	if read.JSON200.Settlement != httpclient.TransactionSettlementPosted {
@@ -1345,7 +1363,7 @@ func TestTransactionRejectsTombstonedAccountAndCategoryReferences(t *testing.T) 
 
 	replaceWithTombstonedAccount := replacementTransactionRequest(refs)
 	replaceWithTombstonedAccount.Records[1].AccountId = tombstonedAccount.AccountId
-	rejectedReplaceAccount, err := client.REST().ReplaceTransactionWithResponse(context.Background(), created.JSON201.TransactionId, replaceWithTombstonedAccount)
+	rejectedReplaceAccount, err := client.ReplaceTransactionRetainingRecords(context.Background(), created.JSON201, replaceWithTombstonedAccount)
 	if err != nil {
 		t.Fatalf("replace with tombstoned account request: %v", err)
 	}
@@ -1355,7 +1373,7 @@ func TestTransactionRejectsTombstonedAccountAndCategoryReferences(t *testing.T) 
 
 	replaceWithTombstonedCategory := replacementTransactionRequest(refs)
 	replaceWithTombstonedCategory.Records[0].CategoryId = apptest.Int64Ptr(tombstonedCategory.CategoryId)
-	rejectedReplaceCategory, err := client.REST().ReplaceTransactionWithResponse(context.Background(), created.JSON201.TransactionId, replaceWithTombstonedCategory)
+	rejectedReplaceCategory, err := client.ReplaceTransactionRetainingRecords(context.Background(), created.JSON201, replaceWithTombstonedCategory)
 	if err != nil {
 		t.Fatalf("replace with tombstoned category request: %v", err)
 	}
@@ -1403,7 +1421,7 @@ func TestTransactionRejectsTombstonedMemberAndTagReferences(t *testing.T) {
 
 	replaceWithTombstonedMember := replacementTransactionRequest(refs)
 	replaceWithTombstonedMember.Records[0].MemberId = &tombstonedMember.MemberId
-	rejectedReplaceMember, err := client.REST().ReplaceTransactionWithResponse(context.Background(), created.JSON201.TransactionId, replaceWithTombstonedMember)
+	rejectedReplaceMember, err := client.ReplaceTransactionRetainingRecords(context.Background(), created.JSON201, replaceWithTombstonedMember)
 	if err != nil {
 		t.Fatalf("replace with tombstoned member request: %v", err)
 	}
@@ -1413,7 +1431,7 @@ func TestTransactionRejectsTombstonedMemberAndTagReferences(t *testing.T) {
 
 	replaceWithTombstonedTag := replacementTransactionRequest(refs)
 	replaceWithTombstonedTag.Records[0].TagIds = apptest.Int64SlicePtr(tombstonedTag.TagId)
-	rejectedReplaceTag, err := client.REST().ReplaceTransactionWithResponse(context.Background(), created.JSON201.TransactionId, replaceWithTombstonedTag)
+	rejectedReplaceTag, err := client.ReplaceTransactionRetainingRecords(context.Background(), created.JSON201, replaceWithTombstonedTag)
 	if err != nil {
 		t.Fatalf("replace with tombstoned tag request: %v", err)
 	}
@@ -1483,7 +1501,7 @@ func TestTransactionAcceptsHiddenActiveReferences(t *testing.T) {
 	replacement.Records[0].TagIds = apptest.Int64SlicePtr(hiddenTagResponse.JSON201.TagId)
 	replacement.Records[1].AccountId = hiddenMerchant.JSON201.AccountId
 	replacement.Records[1].CategoryId = apptest.Int64Ptr(hiddenCategory.CategoryId)
-	replaced, err := client.REST().ReplaceTransactionWithResponse(context.Background(), created.JSON201.TransactionId, replacement)
+	replaced, err := client.ReplaceTransactionRetainingRecords(context.Background(), created.JSON201, replacement)
 	if err != nil {
 		t.Fatalf("replace with hidden references request: %v", err)
 	}

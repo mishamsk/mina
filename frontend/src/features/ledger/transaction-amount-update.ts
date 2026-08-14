@@ -6,6 +6,8 @@ import type {
 
 export type AmountSavePageRefresh = (rowRemainsVisible: boolean) => void;
 
+export class TransactionAmountConflictError extends Error {}
+
 const amountWithRecordSign = (record: JournalRecord, amount: string): string =>
   `${record.amount.startsWith("-") ? "-" : ""}${amount}`;
 
@@ -17,8 +19,6 @@ const transactionRecordUpdate = (
   amount: amountWithRecordSign(record, amount),
   category_id: record.category_id,
   currency: record.currency,
-  external_id: record.external_id,
-  external_system: record.external_system,
   member_id: record.member_id,
   memo: record.memo,
   settlement: record.settlement
@@ -29,7 +29,7 @@ const transactionRecordUpdate = (
       }
     : null,
   reconciliation_status: record.reconciliation_status,
-  source: record.source === "imported" ? "imported" : "manual",
+  record_id: record.record_id,
   tag_ids: [...record.tag_ids],
 });
 

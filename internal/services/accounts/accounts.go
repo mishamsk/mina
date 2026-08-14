@@ -155,9 +155,9 @@ type Repository interface {
 	Tombstone(context.Context, int64) error
 }
 
-// ReferenceSerializer serializes dictionary deletes with writes that create dependent references.
-type ReferenceSerializer interface {
-	SerializeReferenceOperation(func() error) error
+// ReferenceCoordinator coordinates reference mutations with dependent writes.
+type ReferenceCoordinator interface {
+	WithExclusiveLease(context.Context, func(context.Context) error) error
 }
 
 // TypeChangeValidator verifies that changing an account type preserves the
@@ -169,13 +169,13 @@ type TypeChangeValidator interface {
 // Service owns account use cases and validation.
 type Service struct {
 	repo                Repository
-	refs                ReferenceSerializer
+	refs                ReferenceCoordinator
 	typeChangeValidator TypeChangeValidator
 	cache               *refcache.Dictionary[int64, accountReferenceState]
 }
 
 // NewService creates an account service backed by repo.
-func NewService(repo Repository, refs ReferenceSerializer) *Service {
+func NewService(repo Repository, refs ReferenceCoordinator) *Service {
 	service := &Service{repo: repo, refs: refs}
 	service.cache = refcache.NewDictionary(service.loadReferenceCache)
 	return service
@@ -208,7 +208,7 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (Account, error
 	}
 
 	var account Account
-	if err := s.refs.SerializeReferenceOperation(func() error {
+	if err := s.refs.WithExclusiveLease(ctx, func(ctx context.Context) error {
 		if err := s.ensureFQNAvailable(ctx, input.FQN); err != nil {
 			return err
 		}
@@ -419,7 +419,7 @@ func (s *Service) UpdateMutable(ctx context.Context, id int64, input UpdateInput
 	}
 
 	var account Account
-	if err := s.refs.SerializeReferenceOperation(func() error {
+	if err := s.refs.WithExclusiveLease(ctx, func(ctx context.Context) error {
 		current, err := s.repo.Get(ctx, id, false)
 		if errors.Is(err, services.ErrNotFound) {
 			return services.NotFound("account not found")
@@ -524,7 +524,7 @@ func (s *Service) Restructure(ctx context.Context, from string, to string) (int6
 	}
 
 	var movedCount int64
-	if err := s.refs.SerializeReferenceOperation(func() error {
+	if err := s.refs.WithExclusiveLease(ctx, func(ctx context.Context) error {
 		states, err := s.cache.Snapshot(ctx)
 		if err != nil {
 			return err
@@ -584,7 +584,7 @@ func (s *Service) SetHiddenByPath(ctx context.Context, path string, hidden bool)
 	}
 
 	var updatedCount int64
-	if err := s.refs.SerializeReferenceOperation(func() error {
+	if err := s.refs.WithExclusiveLease(ctx, func(ctx context.Context) error {
 		states, err := s.cache.Snapshot(ctx)
 		if err != nil {
 			return err
@@ -648,7 +648,7 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 		return services.InvalidRequest("account_id must be positive")
 	}
 
-	if err := s.refs.SerializeReferenceOperation(func() error {
+	if err := s.refs.WithExclusiveLease(ctx, func(ctx context.Context) error {
 		current, err := s.repo.Get(ctx, id, false)
 		if errors.Is(err, services.ErrNotFound) {
 			return services.NotFound("account not found")

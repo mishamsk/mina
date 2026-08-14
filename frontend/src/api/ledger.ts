@@ -1173,10 +1173,14 @@ export const createJournalTransaction = (body: CreateTransactionRequest) =>
 
 export const replaceLedgerTransaction = (
   transactionId: number,
+  etag: string,
   body: UpdateTransactionRequest,
 ) =>
   replaceGeneratedTransaction({
     body,
+    headers: {
+      "If-Match": etag,
+    },
     path: {
       transaction_id: transactionId,
     },

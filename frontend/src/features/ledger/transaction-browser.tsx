@@ -22,7 +22,7 @@ import {
   useState,
 } from "react";
 
-import type { Tag, Transaction } from "@/api";
+import type { JournalRecord, Tag, Transaction } from "@/api";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { RowActions } from "@/components/row-actions";
 import { focusWithoutTooltip, Tooltip } from "@/components/tooltip";
@@ -145,6 +145,15 @@ interface TransactionBrowserProps {
     postedDate?: string,
   ) => Promise<void>;
   readonly onSetEditMode: (enabled: boolean) => void;
+  readonly onRecoverTransactionAmountConflict?: (
+    transaction: Transaction,
+    records: readonly [JournalRecord, JournalRecord],
+    amount: string,
+  ) => void;
+  readonly onDiscardTransactionAmountConflict?: (
+    transaction: Transaction,
+    onPageRefresh?: AmountSavePageRefresh,
+  ) => Promise<void>;
   readonly onSplitTransaction?: (
     transaction: Transaction,
     opener?: HTMLElement,
@@ -480,6 +489,11 @@ const isInteractiveTarget = (
   return interactiveTarget !== null && interactiveTarget !== currentTarget;
 };
 
+interface AmountEditorRetention {
+  readonly records: readonly [JournalRecord, JournalRecord];
+  readonly transaction: Transaction;
+}
+
 export const TransactionBrowser = ({
   amountDisplayMode,
   preview = false,
@@ -497,6 +511,7 @@ export const TransactionBrowser = ({
   onFilterTag,
   onNewTransaction,
   onDeleteTransaction,
+  onDiscardTransactionAmountConflict,
   onDismissRecurringOccurrence,
   onDuplicateTransaction,
   onEditTransaction,
@@ -506,6 +521,7 @@ export const TransactionBrowser = ({
   onPreviousPage,
   onRetryRefresh,
   onPostTransaction,
+  onRecoverTransactionAmountConflict,
   onSetEditMode,
   onSplitTransaction,
   onSelectRange,
@@ -569,30 +585,71 @@ export const TransactionBrowser = ({
   const [pendingDockTransactionIds, setPendingDockTransactionIds] = useState<
     ReadonlyMap<number, number>
   >(() => new Map());
+  const [amountEditorRecords, setAmountEditorRecords] = useState<
+    ReadonlyMap<number, AmountEditorRetention>
+  >(() => new Map());
   const [renderedEditMode, setRenderedEditMode] = useState(editMode);
   if (renderedEditMode !== editMode) {
     setRenderedEditMode(editMode);
     setActiveEditDock(undefined);
     setEditDockOpenedFromRow(false);
   }
+  const previousEditModeRef = useRef(editMode);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const selectionAnchorIdRef = useRef<number | null>(null);
   const deletedRowFocusIndexRef = useRef<number | undefined>(undefined);
   const consumedDateJumpAnchorRef =
     useRef<TransactionBrowserProps["dateJumpAnchor"]>(undefined);
+
   const maps = useMemo(() => buildLookupMaps(lookups), [lookups]);
+  const amountDraftRetained = amountEditorRecords.size > 0;
+  const visibleTransactions = useMemo(() => {
+    const current = [...(transactions ?? [])];
+    const currentIDs = new Set(
+      current.map((transaction) => transaction.transaction_id),
+    );
+    for (const retained of amountEditorRecords.values()) {
+      if (!currentIDs.has(retained.transaction.transaction_id)) {
+        current.push(retained.transaction);
+      }
+    }
+    return current;
+  }, [amountEditorRecords, transactions]);
+
+  useEffect(() => {
+    const previousEditMode = previousEditModeRef.current;
+    previousEditModeRef.current = editMode;
+    if (!previousEditMode || editMode) {
+      return;
+    }
+    const abandonedAmountConflict = visibleTransactions.find((transaction) =>
+      amountEditorRecords.has(transaction.transaction_id),
+    );
+    setAmountEditorRecords(new Map());
+    if (abandonedAmountConflict && onDiscardTransactionAmountConflict) {
+      void onDiscardTransactionAmountConflict(abandonedAmountConflict).catch(
+        () => undefined,
+      );
+    }
+  }, [
+    amountEditorRecords,
+    editMode,
+    onDiscardTransactionAmountConflict,
+    visibleTransactions,
+  ]);
+
   const today = localTodayISODate();
   const selectableTransactions = useMemo(
     () =>
-      (transactions ?? []).filter(
+      visibleTransactions.filter(
         (transaction) => transaction.lifecycle_status === "active",
       ),
-    [transactions],
+    [visibleTransactions],
   );
   const selectedCount = selectedTransactionIds.size;
   const [selectedRowFocusIndex, setSelectedRowFocusIndex] = useState(-1);
-  const currentSelectedRowIndex = (transactions ?? []).findIndex(
-    (transaction) => selectedTransactionIds.has(transaction.transaction_id),
+  const currentSelectedRowIndex = visibleTransactions.findIndex((transaction) =>
+    selectedTransactionIds.has(transaction.transaction_id),
   );
   const changeActiveEditDock = (action: EditDockAction | undefined) => {
     if (action && currentSelectedRowIndex >= 0) {
@@ -684,10 +741,10 @@ export const TransactionBrowser = ({
   const rangeTransactionIds = useCallback(
     (targetTransactionId: number): readonly number[] => {
       const anchorTransactionId = selectionAnchorIdRef.current;
-      const anchorIndex = (transactions ?? []).findIndex(
+      const anchorIndex = visibleTransactions.findIndex(
         (transaction) => transaction.transaction_id === anchorTransactionId,
       );
-      const targetIndex = (transactions ?? []).findIndex(
+      const targetIndex = visibleTransactions.findIndex(
         (transaction) => transaction.transaction_id === targetTransactionId,
       );
       if (targetIndex < 0) {
@@ -700,12 +757,12 @@ export const TransactionBrowser = ({
 
       const start = Math.min(anchorIndex, targetIndex);
       const end = Math.max(anchorIndex, targetIndex);
-      return (transactions ?? [])
+      return visibleTransactions
         .slice(start, end + 1)
         .filter((transaction) => transaction.lifecycle_status === "active")
         .map((transaction) => transaction.transaction_id);
     },
-    [transactions],
+    [visibleTransactions],
   );
 
   const toggleRowSelection = useCallback(
@@ -1142,7 +1199,7 @@ export const TransactionBrowser = ({
     );
   }
 
-  if (!transactions || transactions.length === 0) {
+  if (visibleTransactions.length === 0) {
     return (
       <div
         ref={rootRef}
@@ -1279,7 +1336,7 @@ export const TransactionBrowser = ({
                 </tr>
               </thead>
               <tbody>
-                {transactions.map((transaction, transactionIndex) => {
+                {visibleTransactions.map((transaction, transactionIndex) => {
                   const title = transaction.display_title;
                   const initiatedDate = formatInitiatedDateParts(
                     transaction.initiated_date,
@@ -1290,6 +1347,11 @@ export const TransactionBrowser = ({
                   const member = lineMember(transaction, maps);
                   const simpleAmountRecords =
                     simpleTransactionAmountRecords(transaction);
+                  const retainedAmountEditorRecords = amountEditorRecords.get(
+                    transaction.transaction_id,
+                  );
+                  const editableAmountRecords =
+                    simpleAmountRecords ?? retainedAmountEditorRecords?.records;
                   const displayStatus = lineStatus(transaction);
                   const amounts = lineDisplayAmounts(transaction);
                   const hasMoreParts = transactionHasMoreParts(transaction);
@@ -1314,9 +1376,10 @@ export const TransactionBrowser = ({
                     transaction.transaction_id,
                   );
                   const amountEditable =
-                    transaction.lifecycle_status === "active" &&
-                    simpleAmountRecords !== undefined &&
-                    amounts.length === 1;
+                    editableAmountRecords !== undefined &&
+                    (retainedAmountEditorRecords !== undefined ||
+                      (transaction.lifecycle_status === "active" &&
+                        amounts.length === 1));
                   const occurrenceActionBusy =
                     confirmingOccurrenceId !== undefined || dismissing;
                   const walkRowFocus = (
@@ -1324,7 +1387,7 @@ export const TransactionBrowser = ({
                     direction: -1 | 1,
                   ) => {
                     const nextTransaction =
-                      transactions[transactionIndex + direction];
+                      visibleTransactions[transactionIndex + direction];
                     if (!nextTransaction) {
                       return;
                     }
@@ -1393,7 +1456,13 @@ export const TransactionBrowser = ({
                           "outline-2 outline-offset-[-2px] outline-[var(--ring)]",
                         lineInactive && "text-muted-foreground line-through",
                       )}
-                      aria-disabled={editMode && !selectable ? true : undefined}
+                      aria-disabled={
+                        editMode &&
+                        !selectable &&
+                        retainedAmountEditorRecords === undefined
+                          ? true
+                          : undefined
+                      }
                       aria-selected={editMode ? selected : undefined}
                       data-date-jump-anchor={
                         dateJumpHighlight?.transactionId ===
@@ -1645,12 +1714,19 @@ export const TransactionBrowser = ({
                               : "flex-row flex-nowrap",
                           )}
                         >
+                          {hasMoreParts ? (
+                            <MorePartsIndicator transaction={transaction} />
+                          ) : null}
                           {editMode && amountEditable ? (
                             <TransactionAmountInput
-                              disabled={pendingDockTransactionIds.has(
-                                transaction.transaction_id,
-                              )}
-                              records={simpleAmountRecords}
+                              disabled={
+                                transaction.lifecycle_status !== "active" ||
+                                simpleAmountRecords === undefined ||
+                                pendingDockTransactionIds.has(
+                                  transaction.transaction_id,
+                                )
+                              }
+                              records={editableAmountRecords}
                               testIdPrefix={`transaction-${transaction.transaction_id}`}
                               transaction={transaction}
                               onInvalidChange={(invalid) => {
@@ -1659,20 +1735,63 @@ export const TransactionBrowser = ({
                                   invalid,
                                 );
                               }}
-                              onPendingChange={(pending, successful) => {
+                              onPendingChange={(
+                                pending,
+                                successful,
+                                staleConflict,
+                              ) => {
+                                setAmountEditorRecords((current) => {
+                                  const next = new Map(current);
+                                  if (successful || staleConflict === false) {
+                                    next.delete(transaction.transaction_id);
+                                  } else if (pending && simpleAmountRecords) {
+                                    next.set(transaction.transaction_id, {
+                                      records: simpleAmountRecords,
+                                      transaction,
+                                    });
+                                  } else if (
+                                    staleConflict &&
+                                    retainedAmountEditorRecords
+                                  ) {
+                                    next.set(transaction.transaction_id, {
+                                      ...retainedAmountEditorRecords,
+                                      transaction,
+                                    });
+                                  }
+                                  return next;
+                                });
                                 setTransactionAmountSavePending(
                                   transaction.transaction_id,
                                   pending,
                                   successful,
                                 );
                               }}
+                              onRecoverConflict={
+                                onRecoverTransactionAmountConflict
+                              }
+                              onDiscardConflict={
+                                onDiscardTransactionAmountConflict
+                                  ? async (current, onPageRefresh) => {
+                                      await onDiscardTransactionAmountConflict(
+                                        current,
+                                        (visible) => {
+                                          setAmountEditorRecords((records) => {
+                                            const next = new Map(records);
+                                            next.delete(current.transaction_id);
+                                            return next;
+                                          });
+                                          window.requestAnimationFrame(() => {
+                                            onPageRefresh?.(visible);
+                                          });
+                                        },
+                                      );
+                                    }
+                                  : undefined
+                              }
                               onSave={onUpdateTransactionAmount}
                             />
                           ) : (
                             <>
-                              {hasMoreParts ? (
-                                <MorePartsIndicator transaction={transaction} />
-                              ) : null}
                               {amounts.map((amount, index) => (
                                 <Fragment
                                   key={`${displayAmountKey(amount)}:${index}`}
@@ -1999,23 +2118,31 @@ export const TransactionBrowser = ({
                 <label htmlFor="transactions-page-size" className="font-medium">
                   Rows
                 </label>
-                <Select
-                  value={String(pageSize)}
-                  onValueChange={(value) => {
-                    onPageSizeChange(Number(value));
-                  }}
+                <Tooltip
+                  disabled={!amountDraftRetained}
+                  focusable={amountDraftRetained}
+                  label="Resolve or discard the inline amount conflict before changing pagination."
+                  redispatchEscape={false}
                 >
-                  <SelectTrigger id="transactions-page-size" size="compact">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {transactionPageSizeOptions.map((option) => (
-                      <SelectItem key={option} value={String(option)}>
-                        {option}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  <Select
+                    disabled={amountDraftRetained}
+                    value={String(pageSize)}
+                    onValueChange={(value) => {
+                      onPageSizeChange(Number(value));
+                    }}
+                  >
+                    <SelectTrigger id="transactions-page-size" size="compact">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {transactionPageSizeOptions.map((option) => (
+                        <SelectItem key={option} value={String(option)}>
+                          {option}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Tooltip>
               </div>
               <div className="flex items-center gap-3">
                 {loading ? (
@@ -2033,24 +2160,38 @@ export const TransactionBrowser = ({
                     ? ""
                     : ` of ${Math.max(1, Math.ceil(totalCount / pageSize))}`}
                 </span>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={onPreviousPage}
-                  disabled={page <= 1}
+                <Tooltip
+                  disabled={!amountDraftRetained}
+                  focusable={amountDraftRetained}
+                  label="Resolve or discard the inline amount conflict before changing pagination."
+                  redispatchEscape={false}
                 >
-                  Previous
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={onNextPage}
-                  disabled={!hasNextPage}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={onPreviousPage}
+                    disabled={amountDraftRetained || page <= 1}
+                  >
+                    Previous
+                  </Button>
+                </Tooltip>
+                <Tooltip
+                  disabled={!amountDraftRetained}
+                  focusable={amountDraftRetained}
+                  label="Resolve or discard the inline amount conflict before changing pagination."
+                  redispatchEscape={false}
                 >
-                  Next
-                </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={onNextPage}
+                    disabled={amountDraftRetained || !hasNextPage}
+                  >
+                    Next
+                  </Button>
+                </Tooltip>
               </div>
             </div>
           ) : null}

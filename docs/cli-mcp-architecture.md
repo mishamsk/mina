@@ -124,11 +124,12 @@ operations:
 - The CLI fails instead of silently selecting ephemeral database state when neither target is configured.
 - OpenAPI path parameters become required positional arguments in path-template order.
 - OpenAPI query parameters become typed flags; array parameters use repeatable values.
+- OpenAPI header parameters become typed flags, including required conditional-write headers; array parameters use repeatable values.
 - Every JSON request body accepts `--json` with inline JSON, `@file`, or `-` for standard input.
 - After resolving `$ref`, a body also receives typed field flags when its schema is one top-level object without composition or free-form additional properties and every property is a non-null scalar, enum, or array of those types.
 - Optional body properties are omitted when their flags are absent; required properties are enforced unless `--json` is used.
 - `--json` and body field flags are mutually exclusive; bodies outside the simple-object rule use `--json` only.
-- A body/query/reserved flag-name collision makes that body JSON-only instead of introducing implicit prefixes.
+- A body/query/header/reserved flag-name collision makes that body JSON-only instead of introducing implicit prefixes.
 - Successful response bodies are written to stdout as JSON.
 - A configured local run-wait failure is the exception: its HTTP-success terminal body is written to stderr and the command exits non-zero.
 - REST error envelopes are written to stderr and produce a non-zero exit status.
@@ -149,7 +150,7 @@ mina client --db ./mina.db transactions create --json @transaction.json
 - The official `modelcontextprotocol/go-sdk` owns MCP protocol behavior.
 - One generated registry owns tool definitions for every explicitly exposed MCP operation.
 - MCP tool names are composed from the configured group and tool name.
-- Tool input schemas combine OpenAPI path parameters, query parameters, and an optional nested `body` property.
+- Tool input schemas combine OpenAPI path, query, and header parameters with an optional nested `body` property.
 - The generator converts the supported OpenAPI 3.0 schema subset into MCP-compatible JSON Schema.
 - REST remains the final transport-shape and domain validation boundary.
 - Results include the REST status and decoded JSON body as structured content.

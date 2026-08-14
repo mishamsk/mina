@@ -33,10 +33,9 @@ const (
 
 // Finding is one database validation finding.
 type Finding struct {
-	Severity         Severity
-	Layer            string
-	Message          string
-	UniqueIndexDrift string
+	Severity Severity
+	Layer    string
+	Message  string
 }
 
 // Report is the complete validation result.
@@ -79,7 +78,7 @@ type Repository interface {
 	TargetCatalog(context.Context) (ValidationCatalog, error)
 	CheckReferenceRegistryCompleteness(context.Context, ValidationCatalog) error
 	ReferentialFindings(context.Context) ([]Finding, error)
-	InvariantFindings(context.Context, []string) ([]Finding, error)
+	InvariantFindings(context.Context) ([]Finding, error)
 }
 
 // TransactionReader supplies transactions for persisted classification validation.
@@ -295,7 +294,7 @@ func (s *Service) Validate(ctx context.Context, level Level) (Report, error) {
 		sortFindings(report.Findings)
 		return report, nil
 	}
-	invariantFindings, err := s.repo.InvariantFindings(ctx, uniqueIndexDrifts(report.Findings))
+	invariantFindings, err := s.repo.InvariantFindings(ctx)
 	if err != nil {
 		return Report{}, err
 	}
@@ -374,18 +373,6 @@ func (s *Service) classificationFindings(ctx context.Context) ([]Finding, error)
 	}
 
 	return findings, nil
-}
-
-func uniqueIndexDrifts(findings []Finding) []string {
-	indexes := []string{}
-	for _, finding := range findings {
-		if finding.UniqueIndexDrift == "" {
-			continue
-		}
-		indexes = append(indexes, finding.UniqueIndexDrift)
-	}
-
-	return indexes
 }
 
 func diffSchemaCatalogs(reference ValidationCatalog, target ValidationCatalog) []Finding {
@@ -499,22 +486,14 @@ func diffIndexes(reference ValidationCatalog, target ValidationCatalog) []Findin
 		ref := reference.Indexes[name]
 		got, ok := target.Indexes[name]
 		if !ok {
-			finding := schemaFinding(SeverityWarning, missingIndexMessage(ref))
-			if ref.Unique {
-				finding.UniqueIndexDrift = ref.Name
-			}
-			findings = append(findings, finding)
+			findings = append(findings, schemaFinding(SeverityWarning, missingIndexMessage(ref)))
 			continue
 		}
 		if ref.TableName != got.TableName ||
 			ref.Unique != got.Unique ||
 			ref.Primary != got.Primary ||
 			normalizeCatalogSQL(ref.Expressions) != normalizeCatalogSQL(got.Expressions) {
-			finding := schemaFinding(SeverityWarning, "index "+name+" definition mismatch")
-			if ref.Unique {
-				finding.UniqueIndexDrift = ref.Name
-			}
-			findings = append(findings, finding)
+			findings = append(findings, schemaFinding(SeverityWarning, "index "+name+" definition mismatch"))
 		}
 	}
 	for _, name := range sortedKeys(target.Indexes) {

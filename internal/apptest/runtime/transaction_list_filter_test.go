@@ -654,10 +654,10 @@ func TestTransactionListReferenceMetadataSearchIgnoresReplacedRecordsBoundary(t 
 		PendingDate: "2024-05-02T00:00:00Z",
 		Settlement:  apptest.PostedSettlement(),
 	})
-	replaced, err := client.REST().ReplaceTransactionWithResponse(
+	replaced, err := client.ReplaceTransactionWithNewRecords(
 		context.Background(),
-		created.JSON201.TransactionId,
-		httpclient.UpdateTransactionRequest(replacement),
+		created.JSON201,
+		replacement,
 	)
 	requireNoTransportError(t, "replace transaction before reference metadata search", err)
 	if replaced.StatusCode() != http.StatusOK {
@@ -773,10 +773,10 @@ func TestTransactionListFiltersIgnoreReplacedRecordsBoundary(t *testing.T) {
 		PostedDate:  ptrTo("2024-02-04T00:00:00Z"),
 		Settlement:  apptest.PostedSettlement(),
 	})
-	replaced, err := client.REST().ReplaceTransactionWithResponse(
+	replaced, err := client.ReplaceTransactionWithNewRecords(
 		context.Background(),
-		created.JSON201.TransactionId,
-		httpclient.UpdateTransactionRequest(replacement),
+		created.JSON201,
+		replacement,
 	)
 	requireNoTransportError(t, "replace transaction before list filters", err)
 	if replaced.StatusCode() != http.StatusOK {

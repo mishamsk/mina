@@ -30,17 +30,22 @@ interface MemberFixture {
 
 interface TransactionFixture {
   readonly display_title: string;
+  readonly etag: string;
   readonly initiated_date?: string;
   readonly lifecycle_status?: string;
   readonly settlement?: string;
   readonly transaction_id: number;
+  readonly updated_at: string;
 }
 
 interface JournalRecordFixture {
   readonly account_id: number;
   readonly amount: string;
+  readonly amount_usd?: string | null;
   readonly category_id: number | null;
   readonly currency: string;
+  readonly external_id?: string | null;
+  readonly external_system?: string | null;
   readonly member_id?: number | null;
   readonly memo?: string | null;
   readonly lifecycle_status?: string;

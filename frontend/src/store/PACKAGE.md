@@ -13,7 +13,7 @@
 - Transaction-page cache identity includes server sort field and direction so differently ordered pages never share snapshots.
 - Category-page snapshot identity and request state include normalized economic intent; restoring its loaded key clears another key's transient request state.
 - Account transaction fetches write only while their entry remains loading; mutation responses seed the cache independently so invalidation rejects older fetches.
-- Transaction-entry route results apply only to their exact requested entry. An entry launch waits for Edit-mode amount saves to succeed, and cancellation or any failed save discards the deferred launch.
+- Transaction-entry route results apply only to their exact requested entry. An entry launch waits for Edit-mode amount saves to succeed, and cancellation or any failed save discards the deferred launch; a shape-changing inline conflict may carry its transient amount and matching record IDs into an Advanced edit launch.
 - Overview snapshots keep the backend household flow dataset and its recoverable section error beside balance, pulse, and recent-activity data.
 - Shareable Status state stays in the route URL and has no Zustand persistence lifecycle.
 

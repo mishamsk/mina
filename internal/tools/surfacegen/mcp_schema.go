@@ -28,6 +28,14 @@ func buildMCPInputSchema(operation codegen.OperationDefinition) ([]byte, error) 
 			required = append(required, parameter.ParamName)
 		}
 	}
+	for _, parameter := range operation.HeaderParams {
+		if err := addMCPParameterSchema(properties, parameter); err != nil {
+			return nil, fmt.Errorf("header parameter %q: %w", parameter.ParamName, err)
+		}
+		if parameter.Required {
+			required = append(required, parameter.ParamName)
+		}
+	}
 	if operation.HasBody() {
 		if _, exists := properties["body"]; exists {
 			return nil, errors.New("parameter name collides with reserved body property")

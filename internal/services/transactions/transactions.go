@@ -69,6 +69,19 @@ const (
 	SourceRecurringTemplate Source = "recurring_template"
 )
 
+var (
+	// ErrImportedRecordRemoval identifies an atomic replacement that would remove imported identity.
+	ErrImportedRecordRemoval = errors.New("imported journal record removal")
+	// ErrLinkedRecordRemoval identifies an atomic replacement that would remove linked identity.
+	ErrLinkedRecordRemoval = errors.New("linked journal record removal")
+	// ErrExpectedRecurringMutation identifies a generic mutation of an expected recurring transaction.
+	ErrExpectedRecurringMutation = errors.New("expected recurring transaction mutation")
+	// ErrInactiveTransactionMutation identifies a journal-record mutation whose transaction is not active.
+	ErrInactiveTransactionMutation = errors.New("inactive transaction mutation")
+	// ErrTransactionNotPending identifies cancellation of a transaction that is not wholly pending.
+	ErrTransactionNotPending = errors.New("transaction is not wholly pending")
+)
+
 // Transaction is a double-entry transaction with nested journal records.
 type Transaction struct {
 	ID                    int64
@@ -119,10 +132,23 @@ type JournalRecord struct {
 	TombstonedAt                *time.Time
 }
 
-// CreateInput contains fields for creating or replacing a transaction.
+// CreateInput contains fields for creating a transaction.
 type CreateInput struct {
 	InitiatedDate values.CivilDate
 	Records       []JournalRecordInput
+}
+
+// UpdateInput contains one complete desired transaction aggregate plus its write precondition.
+type UpdateInput struct {
+	InitiatedDate values.CivilDate
+	ExpectedETag  string
+	Records       []UpdateJournalRecordInput
+}
+
+// UpdateJournalRecordInput is either a retained record with RecordID or a new record without it.
+type UpdateJournalRecordInput struct {
+	RecordID *int64
+	JournalRecordInput
 }
 
 // JournalRecordInput is one record inside a transaction write request.
@@ -154,11 +180,13 @@ type PersistInput struct {
 	InitiatedDate         values.CivilDate
 	RecurringOccurrenceID *int64
 	LifecycleStatus       LifecycleStatus
+	ExpectedUpdatedAt     *time.Time
 	Records               []PersistJournalRecordInput
 }
 
 // PersistJournalRecordInput contains explicit normalized journal-record values.
 type PersistJournalRecordInput struct {
+	RecordID             *int64
 	AccountID            int64
 	MemberID             *int64
 	Currency             string
@@ -365,8 +393,6 @@ type Repository interface {
 	List(context.Context, ListOptions) (ListResult, error)
 	MonthTotals(context.Context, MonthTotalsRange) (MonthActivityTotals, error)
 	Tombstone(context.Context, int64) error
-	HasExpectedRecurringOccurrenceTransaction(context.Context, int64) (bool, error)
-	HasExpectedRecurringOccurrenceRecords(context.Context, []int64) (bool, error)
 	SearchRecords(context.Context, RecordSearchOptions) (services.PaginatedList[JournalRecord], error)
 	TransactionsByRecordIDs(context.Context, []int64) ([]Transaction, error)
 	TransactionsByAccountID(context.Context, int64) ([]Transaction, error)
@@ -408,9 +434,9 @@ type AmountUSDDeriver interface {
 	SignedAmountUSD(context.Context, string, values.Decimal, values.CivilDate) (*values.Decimal, error)
 }
 
-// ReferenceSerializer serializes dependent writes with dictionary deletes.
-type ReferenceSerializer interface {
-	SerializeReferenceOperation(func() error) error
+// ReferenceCoordinator coordinates reference-dependent transaction writes with reference mutations.
+type ReferenceCoordinator interface {
+	WithSharedLease(context.Context, func(context.Context) error) error
 }
 
 // Service owns transaction, journal record, and bulk record use cases.
@@ -421,7 +447,7 @@ type Service struct {
 	tags                 TagReferenceValidator
 	members              MemberReferenceValidator
 	amountUSDDeriver     AmountUSDDeriver
-	refs                 ReferenceSerializer
+	refs                 ReferenceCoordinator
 	clock                Clock
 	currencyUsageChanged func()
 }
@@ -439,7 +465,7 @@ func NewService(
 	tags TagReferenceValidator,
 	members MemberReferenceValidator,
 	amountUSDDeriver AmountUSDDeriver,
-	refs ReferenceSerializer,
+	refs ReferenceCoordinator,
 	clock Clock,
 	currencyUsageChanged func(),
 ) *Service {
@@ -532,7 +558,7 @@ func validateClassificationRecord(index int, record ClassificationRecordInput) e
 
 // Create validates and creates a transaction and its journal records.
 func (s *Service) Create(ctx context.Context, input CreateInput) (Transaction, error) {
-	if err := validateTransactionInput(input); err != nil {
+	if err := validateTransactionInput(input, false); err != nil {
 		return Transaction{}, err
 	}
 	defaultSettlementDate := SettlementTimestampFromInitiatedDate(input.InitiatedDate)
@@ -544,7 +570,7 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (Transaction, e
 	}
 
 	var transaction Transaction
-	if err := s.refs.SerializeReferenceOperation(func() error {
+	if err := s.refs.WithSharedLease(ctx, func(ctx context.Context) error {
 		persistInput, err := s.preparePersistInput(
 			ctx,
 			input,
@@ -586,26 +612,49 @@ func validateCreateSettlementDefaults(records []JournalRecordInput, defaultDate 
 	return nil
 }
 
-// Replace validates and replaces a transaction and its journal records.
-func (s *Service) Replace(ctx context.Context, id int64, input CreateInput) (Transaction, error) {
+// Replace validates and reconciles a complete desired transaction by journal-record identity.
+func (s *Service) Replace(ctx context.Context, id int64, input UpdateInput) (Transaction, error) {
 	if id <= 0 {
 		return Transaction{}, services.InvalidRequest("transaction_id must be positive")
 	}
-	if err := validateTransactionInput(input); err != nil {
+	expectedUpdatedAt, err := updatedAtFromETag(input.ExpectedETag)
+	if err != nil {
 		return Transaction{}, err
 	}
-	if err := s.inferMissingAmountUSD(ctx, &input); err != nil {
+	if err := validateUpdateRecordShapes(input.Records); err != nil {
 		return Transaction{}, err
 	}
 
 	var transaction Transaction
-	if err := s.refs.SerializeReferenceOperation(func() error {
-		if err := s.validateActiveTransactionMutation(ctx, id); err != nil {
-			return err
-		}
-		persistInput, err := s.preparePersistInput(ctx, input, LifecycleStatusActive, s.clock.Now().UTC())
+	if err := s.refs.WithSharedLease(ctx, func(ctx context.Context) error {
+		current, err := s.Get(ctx, id)
 		if err != nil {
 			return err
+		}
+		if ETag(current.UpdatedAt) != input.ExpectedETag {
+			return services.PreconditionFailed("transaction changed since it was read")
+		}
+		if current.LifecycleStatus != LifecycleStatusActive {
+			return services.InvalidRequest("only active transactions can be replaced")
+		}
+		currentByID := journalRecordsByID(current.Records)
+		desired, recordIDs, err := desiredReplacement(currentByID, input)
+		if err != nil {
+			return err
+		}
+		if err := validateTransactionInput(desired, true); err != nil {
+			return err
+		}
+		if err := s.inferReplacementMissingAmountUSD(ctx, &desired, currentByID, recordIDs); err != nil {
+			return err
+		}
+		persistInput, err := s.preparePersistInput(ctx, desired, LifecycleStatusActive, s.clock.Now().UTC())
+		if err != nil {
+			return err
+		}
+		persistInput.ExpectedUpdatedAt = &current.UpdatedAt
+		for index := range persistInput.Records {
+			persistInput.Records[index].RecordID = recordIDs[index]
 		}
 		replaced, err := s.repo.Replace(ctx, id, persistInput)
 		if errors.Is(err, services.ErrInvalidReference) {
@@ -613,6 +662,15 @@ func (s *Service) Replace(ctx context.Context, id int64, input CreateInput) (Tra
 		}
 		if errors.Is(err, services.ErrNotFound) {
 			return services.NotFound("transaction not found")
+		}
+		if errors.Is(err, services.ErrPreconditionFailed) {
+			return services.PreconditionFailed("transaction changed since it was read")
+		}
+		if errors.Is(err, ErrImportedRecordRemoval) {
+			return services.Conflict("imported journal records must be retained by complete replacement")
+		}
+		if errors.Is(err, ErrLinkedRecordRemoval) {
+			return services.Conflict("linked journal records cannot be removed by complete replacement")
 		}
 		if err != nil {
 			return err
@@ -627,9 +685,90 @@ func (s *Service) Replace(ctx context.Context, id int64, input CreateInput) (Tra
 		return Transaction{}, err
 	}
 
-	s.notifyCurrencyUsageChanged()
+	if !transaction.UpdatedAt.Equal(expectedUpdatedAt) {
+		s.notifyCurrencyUsageChanged()
+	}
 
 	return transaction, nil
+}
+
+// ETag returns the canonical strong validator for a transaction update timestamp.
+func ETag(updatedAt time.Time) string {
+	return `"` + updatedAt.UTC().Format(time.RFC3339Nano) + `"`
+}
+
+func updatedAtFromETag(etag string) (time.Time, error) {
+	if !validStrongETag(etag) {
+		return time.Time{}, services.InvalidRequest("If-Match must be a strong transaction ETag")
+	}
+	updatedAt, err := time.Parse(time.RFC3339Nano, etag[1:len(etag)-1])
+	if err != nil || ETag(updatedAt) != etag {
+		return time.Time{}, services.PreconditionFailed("transaction changed since it was read")
+	}
+	return updatedAt.UTC(), nil
+}
+
+func validStrongETag(etag string) bool {
+	if len(etag) < 2 || etag[0] != '"' || etag[len(etag)-1] != '"' {
+		return false
+	}
+	for index := 1; index < len(etag)-1; index++ {
+		character := etag[index]
+		if character != 0x21 && (character < 0x23 || character > 0x7e) && character < 0x80 {
+			return false
+		}
+	}
+	return true
+}
+
+func validateUpdateRecordShapes(records []UpdateJournalRecordInput) error {
+	if len(records) < 2 {
+		return services.InvalidRequest("transaction requires at least two records")
+	}
+	seen := make(map[int64]struct{}, len(records))
+	for index, record := range records {
+		if record.RecordID == nil {
+			if record.Source == SourceRecurringTemplate {
+				return services.InvalidRequest(indexedField(index, "source") + " must be manual or imported")
+			}
+			continue
+		}
+		if *record.RecordID <= 0 {
+			return services.InvalidRequest(indexedField(index, "record_id") + " must be positive")
+		}
+		if _, ok := seen[*record.RecordID]; ok {
+			return services.InvalidRequest(indexedField(index, "record_id") + " must be unique")
+		}
+		seen[*record.RecordID] = struct{}{}
+		if record.Source != "" || record.ExternalID != nil || record.ExternalSystem != nil {
+			return services.InvalidRequest(indexedField(index, "record_id") + " cannot be combined with creation provenance")
+		}
+	}
+	return nil
+}
+
+func desiredReplacement(currentByID map[int64]JournalRecord, input UpdateInput) (CreateInput, []*int64, error) {
+	desired := CreateInput{InitiatedDate: input.InitiatedDate, Records: make([]JournalRecordInput, 0, len(input.Records))}
+	recordIDs := make([]*int64, 0, len(input.Records))
+	for index, update := range input.Records {
+		record := update.JournalRecordInput
+		if update.RecordID != nil {
+			currentRecord, ok := currentByID[*update.RecordID]
+			if !ok {
+				return CreateInput{}, nil, services.InvalidRequest(indexedField(index, "record_id") + " must belong to the target transaction")
+			}
+			record.Source = currentRecord.Source
+			record.ExternalID = currentRecord.ExternalID
+			record.ExternalSystem = currentRecord.ExternalSystem
+			if record.AmountUSD == nil && amountAndCurrencyUnchanged(record, currentRecord) {
+				record.AmountUSD = currentRecord.AmountUSD
+			}
+		}
+		desired.Records = append(desired.Records, record)
+		recordIDs = append(recordIDs, update.RecordID)
+	}
+
+	return desired, recordIDs, nil
 }
 
 func (s *Service) notifyCurrencyUsageChanged() {
@@ -661,6 +800,44 @@ func (s *Service) inferMissingAmountUSD(ctx context.Context, input *CreateInput)
 	return nil
 }
 
+func (s *Service) inferReplacementMissingAmountUSD(ctx context.Context, input *CreateInput, currentByID map[int64]JournalRecord, recordIDs []*int64) error {
+	for index := range input.Records {
+		if input.Records[index].AmountUSD != nil {
+			continue
+		}
+		if recordIDs[index] != nil {
+			currentRecord := currentByID[*recordIDs[index]]
+			if amountAndCurrencyUnchanged(input.Records[index], currentRecord) {
+				continue
+			}
+		}
+		amountUSD, err := s.amountUSDDeriver.SignedAmountUSD(
+			ctx,
+			input.Records[index].Currency,
+			input.Records[index].Amount,
+			input.InitiatedDate,
+		)
+		if err != nil {
+			return err
+		}
+		input.Records[index].AmountUSD = amountUSD
+	}
+
+	return nil
+}
+
+func journalRecordsByID(records []JournalRecord) map[int64]JournalRecord {
+	byID := make(map[int64]JournalRecord, len(records))
+	for _, record := range records {
+		byID[record.ID] = record
+	}
+	return byID
+}
+
+func amountAndCurrencyUnchanged(input JournalRecordInput, current JournalRecord) bool {
+	return input.Currency == current.Currency && input.Amount.Cmp(current.Amount) == 0
+}
+
 // BackfillMissingAmountUSD fills unresolved journal records when amount USD can be derived.
 func (s *Service) BackfillMissingAmountUSD(ctx context.Context) error {
 	return s.repo.BackfillMissingAmountUSD(ctx)
@@ -689,27 +866,31 @@ func (s *Service) Cancel(ctx context.Context, id int64) (Transaction, error) {
 		return Transaction{}, services.InvalidRequest("transaction_id must be positive")
 	}
 
-	var transaction Transaction
-	err := s.refs.SerializeReferenceOperation(func() error {
-		current, err := s.Get(ctx, id)
-		if err != nil {
-			return err
-		}
-		if current.LifecycleStatus == LifecycleStatusCancelled {
-			transaction = current
-			return nil
-		}
-		if current.LifecycleStatus != LifecycleStatusActive {
-			return services.InvalidRequest("only active transactions can be cancelled")
-		}
-		if current.Settlement != SettlementSummaryPending {
-			return services.InvalidRequest("only wholly pending transactions can be cancelled")
-		}
-		transaction, err = s.repo.Cancel(ctx, id)
-		return err
-	})
+	current, err := s.Get(ctx, id)
+	if err != nil {
+		return Transaction{}, err
+	}
+	if current.LifecycleStatus == LifecycleStatusCancelled {
+		return current, nil
+	}
+	if current.LifecycleStatus != LifecycleStatusActive {
+		return Transaction{}, services.InvalidRequest("only active transactions can be cancelled")
+	}
+	if current.Settlement != SettlementSummaryPending {
+		return Transaction{}, services.InvalidRequest("only wholly pending transactions can be cancelled")
+	}
+	transaction, err := s.repo.Cancel(ctx, id)
 	if errors.Is(err, services.ErrNotFound) {
 		return Transaction{}, services.NotFound("transaction not found")
+	}
+	if errors.Is(err, ErrInactiveTransactionMutation) {
+		return Transaction{}, services.InvalidRequest("only active transactions can be cancelled")
+	}
+	if errors.Is(err, ErrTransactionNotPending) {
+		return Transaction{}, services.InvalidRequest("only wholly pending transactions can be cancelled")
+	}
+	if errors.Is(err, services.ErrConflict) {
+		return Transaction{}, concurrentTransactionMutationError()
 	}
 	if err != nil {
 		return Transaction{}, err
@@ -724,22 +905,26 @@ func (s *Service) Restore(ctx context.Context, id int64) (Transaction, error) {
 		return Transaction{}, services.InvalidRequest("transaction_id must be positive")
 	}
 
-	var transaction Transaction
-	err := s.refs.SerializeReferenceOperation(func() error {
-		current, err := s.Get(ctx, id)
-		if err != nil {
-			return err
-		}
-		if current.LifecycleStatus == LifecycleStatusActive {
-			transaction = current
-			return nil
-		}
-		if current.LifecycleStatus != LifecycleStatusCancelled {
-			return services.InvalidRequest("only cancelled transactions can be restored")
-		}
-		transaction, err = s.repo.Restore(ctx, id)
-		return err
-	})
+	current, err := s.Get(ctx, id)
+	if err != nil {
+		return Transaction{}, err
+	}
+	if current.LifecycleStatus == LifecycleStatusActive {
+		return current, nil
+	}
+	if current.LifecycleStatus != LifecycleStatusCancelled {
+		return Transaction{}, services.InvalidRequest("only cancelled transactions can be restored")
+	}
+	transaction, err := s.repo.Restore(ctx, id)
+	if errors.Is(err, services.ErrNotFound) {
+		return Transaction{}, services.NotFound("transaction not found")
+	}
+	if errors.Is(err, ErrInactiveTransactionMutation) {
+		return Transaction{}, services.InvalidRequest("only cancelled transactions can be restored")
+	}
+	if errors.Is(err, services.ErrConflict) {
+		return Transaction{}, concurrentTransactionMutationError()
+	}
 	if err != nil {
 		return Transaction{}, err
 	}
@@ -972,36 +1157,12 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 		return services.InvalidRequest("transaction_id must be positive")
 	}
 
-	if err := s.validateGenericTransactionMutation(ctx, id); err != nil {
-		return err
-	}
 	if err := s.repo.Tombstone(ctx, id); errors.Is(err, services.ErrNotFound) {
 		return services.NotFound("transaction not found")
+	} else if errors.Is(err, ErrExpectedRecurringMutation) {
+		return expectedRecurringMutationError()
 	} else if err != nil {
 		return err
-	}
-
-	return nil
-}
-
-func (s *Service) validateActiveTransactionMutation(ctx context.Context, transactionID int64) error {
-	transaction, err := s.Get(ctx, transactionID)
-	if err != nil {
-		return err
-	}
-	if transaction.LifecycleStatus != LifecycleStatusActive {
-		return services.InvalidRequest("only active transactions can be replaced")
-	}
-	return nil
-}
-
-func (s *Service) validateGenericTransactionMutation(ctx context.Context, transactionID int64) error {
-	generatedExpected, err := s.repo.HasExpectedRecurringOccurrenceTransaction(ctx, transactionID)
-	if err != nil {
-		return err
-	}
-	if generatedExpected {
-		return services.InvalidRequest("expected recurring transactions must be changed through recurring occurrence endpoints")
 	}
 
 	return nil
@@ -1083,16 +1244,19 @@ func (s *Service) BulkCategorize(ctx context.Context, recordIDs []int64, categor
 		return BulkRecordOperationResponse{}, services.InvalidRequest("category_id must be positive")
 	}
 	var count int
-	if err := s.refs.SerializeReferenceOperation(func() error {
-		if err := s.validateNoExpectedRecurringOccurrenceRecords(ctx, recordIDs); err != nil {
-			return err
-		}
+	if err := s.refs.WithSharedLease(ctx, func(ctx context.Context) error {
 		if err := s.validateBulkCategorizeClassification(ctx, recordIDs, categoryID); err != nil {
 			return err
 		}
 		updated, err := s.repo.BulkCategorize(ctx, recordIDs, categoryID)
+		if errors.Is(err, ErrExpectedRecurringMutation) {
+			return expectedRecurringMutationError()
+		}
 		if errors.Is(err, services.ErrInvalidReference) {
 			return services.InvalidRequest("records or category missing or inactive resource")
+		}
+		if errors.Is(err, services.ErrConflict) {
+			return concurrentTransactionMutationError()
 		}
 		if err != nil {
 			return err
@@ -1124,10 +1288,7 @@ func (s *Service) BulkUpdateTags(ctx context.Context, recordIDs []int64, addTagI
 		return BulkRecordOperationResponse{}, err
 	}
 	var count int
-	if err := s.refs.SerializeReferenceOperation(func() error {
-		if err := s.validateNoExpectedRecurringOccurrenceRecords(ctx, recordIDs); err != nil {
-			return err
-		}
+	if err := s.refs.WithSharedLease(ctx, func(ctx context.Context) error {
 		tagIDs := append(append([]int64{}, addTagIDs...), removeTagIDs...)
 		if _, err := s.tags.ValidateActiveReferences(ctx, tagIDs, tags.ReferenceOptions{AllowHidden: true}); err != nil {
 			if errors.Is(err, services.ErrInvalidReference) {
@@ -1136,8 +1297,14 @@ func (s *Service) BulkUpdateTags(ctx context.Context, recordIDs []int64, addTagI
 			return err
 		}
 		updated, err := s.repo.BulkUpdateTags(ctx, recordIDs, addTagIDs, removeTagIDs)
+		if errors.Is(err, ErrExpectedRecurringMutation) {
+			return expectedRecurringMutationError()
+		}
 		if errors.Is(err, services.ErrInvalidReference) {
 			return services.InvalidRequest("records or tags missing or inactive resource")
+		}
+		if errors.Is(err, services.ErrConflict) {
+			return concurrentTransactionMutationError()
 		}
 		if err != nil {
 			return err
@@ -1161,10 +1328,7 @@ func (s *Service) BulkSetMember(ctx context.Context, recordIDs []int64, memberID
 	}
 
 	var count int
-	if err := s.refs.SerializeReferenceOperation(func() error {
-		if err := s.validateNoExpectedRecurringOccurrenceRecords(ctx, recordIDs); err != nil {
-			return err
-		}
+	if err := s.refs.WithSharedLease(ctx, func(ctx context.Context) error {
 		if _, err := s.members.ValidateActiveReferences(ctx, optionalID(memberID), members.ReferenceOptions{AllowHidden: true}); err != nil {
 			if errors.Is(err, services.ErrInvalidReference) {
 				return services.InvalidRequest("member missing or inactive resource")
@@ -1172,8 +1336,14 @@ func (s *Service) BulkSetMember(ctx context.Context, recordIDs []int64, memberID
 			return err
 		}
 		updated, err := s.repo.BulkSetMember(ctx, recordIDs, memberID)
+		if errors.Is(err, ErrExpectedRecurringMutation) {
+			return expectedRecurringMutationError()
+		}
 		if errors.Is(err, services.ErrInvalidReference) {
 			return services.InvalidRequest("records missing or inactive resource")
+		}
+		if errors.Is(err, services.ErrConflict) {
+			return concurrentTransactionMutationError()
 		}
 		if err != nil {
 			return err
@@ -1196,10 +1366,7 @@ func (s *Service) BulkReassignAccount(ctx context.Context, recordIDs []int64, ac
 		return BulkRecordOperationResponse{}, services.InvalidRequest("account_id must be positive")
 	}
 	var count int
-	if err := s.refs.SerializeReferenceOperation(func() error {
-		if err := s.validateNoExpectedRecurringOccurrenceRecords(ctx, recordIDs); err != nil {
-			return err
-		}
+	if err := s.refs.WithSharedLease(ctx, func(ctx context.Context) error {
 		account, affected, err := s.validateBulkReassignAccountClassification(ctx, recordIDs, accountID)
 		if err != nil {
 			return err
@@ -1209,8 +1376,17 @@ func (s *Service) BulkReassignAccount(ctx context.Context, recordIDs []int64, ac
 			return err
 		}
 		updated, err := s.repo.BulkReassignAccount(ctx, recordIDs, accountID, pendingDates, postedDates)
+		if errors.Is(err, ErrExpectedRecurringMutation) {
+			return expectedRecurringMutationError()
+		}
+		if errors.Is(err, ErrInactiveTransactionMutation) {
+			return services.InvalidRequest("accounts can only change on active transactions")
+		}
 		if errors.Is(err, services.ErrInvalidReference) {
 			return services.InvalidRequest("records or account missing or inactive resource")
+		}
+		if errors.Is(err, services.ErrConflict) {
+			return concurrentTransactionMutationError()
 		}
 		if err != nil {
 			return err
@@ -1233,26 +1409,28 @@ func (s *Service) BulkSetSettlement(ctx context.Context, recordIDs []int64, sett
 		return BulkRecordOperationResponse{}, services.InvalidRequest("settlement must be pending or posted")
 	}
 
-	var count int
-	if err := s.refs.SerializeReferenceOperation(func() error {
-		pendingDates, postedDates, err := s.normalizedBulkSettlement(ctx, recordIDs, settlement)
-		if err != nil {
-			return err
-		}
-		updated, err := s.repo.BulkSetSettlement(ctx, recordIDs, pendingDates, postedDates)
-		if errors.Is(err, services.ErrInvalidReference) {
-			return services.InvalidRequest("records missing or inactive resource")
-		}
-		if err != nil {
-			return err
-		}
-		count = updated
-		return nil
-	}); err != nil {
+	pendingDates, postedDates, err := s.normalizedBulkSettlement(ctx, recordIDs, settlement)
+	if err != nil {
+		return BulkRecordOperationResponse{}, err
+	}
+	updated, err := s.repo.BulkSetSettlement(ctx, recordIDs, pendingDates, postedDates)
+	if errors.Is(err, ErrExpectedRecurringMutation) {
+		return BulkRecordOperationResponse{}, expectedRecurringMutationError()
+	}
+	if errors.Is(err, ErrInactiveTransactionMutation) {
+		return BulkRecordOperationResponse{}, services.InvalidRequest("settlement can only change on active transactions")
+	}
+	if errors.Is(err, services.ErrInvalidReference) {
+		return BulkRecordOperationResponse{}, services.InvalidRequest("records missing or inactive resource")
+	}
+	if errors.Is(err, services.ErrConflict) {
+		return BulkRecordOperationResponse{}, concurrentTransactionMutationError()
+	}
+	if err != nil {
 		return BulkRecordOperationResponse{}, err
 	}
 
-	return bulkRecordOperationResponse(recordIDs, count), nil
+	return bulkRecordOperationResponse(recordIDs, updated), nil
 }
 
 // BulkSetReconciliation changes reconciliation on selected active records.
@@ -1267,8 +1445,17 @@ func (s *Service) BulkSetReconciliation(ctx context.Context, recordIDs []int64, 
 		return BulkRecordOperationResponse{}, err
 	}
 	updated, err := s.repo.BulkSetReconciliation(ctx, recordIDs, status)
+	if errors.Is(err, ErrExpectedRecurringMutation) {
+		return BulkRecordOperationResponse{}, expectedRecurringMutationError()
+	}
+	if errors.Is(err, ErrInactiveTransactionMutation) {
+		return BulkRecordOperationResponse{}, services.InvalidRequest("records can only change on active transactions")
+	}
 	if errors.Is(err, services.ErrInvalidReference) {
 		return BulkRecordOperationResponse{}, services.InvalidRequest("records missing or inactive resource")
+	}
+	if errors.Is(err, services.ErrConflict) {
+		return BulkRecordOperationResponse{}, concurrentTransactionMutationError()
 	}
 	if err != nil {
 		return BulkRecordOperationResponse{}, err
@@ -1508,16 +1695,12 @@ func (s *Service) validateBulkReassignAccountClassification(ctx context.Context,
 	return accountReference, affected, nil
 }
 
-func (s *Service) validateNoExpectedRecurringOccurrenceRecords(ctx context.Context, recordIDs []int64) error {
-	generatedExpected, err := s.repo.HasExpectedRecurringOccurrenceRecords(ctx, recordIDs)
-	if err != nil {
-		return err
-	}
-	if generatedExpected {
-		return services.InvalidRequest("expected recurring transactions must be changed through recurring occurrence endpoints")
-	}
+func expectedRecurringMutationError() error {
+	return services.InvalidRequest("expected recurring transactions must be changed through recurring occurrence endpoints")
+}
 
-	return nil
+func concurrentTransactionMutationError() error {
+	return services.Conflict("transaction changed concurrently; retry request")
 }
 
 func (s *Service) normalizedBulkSettlement(ctx context.Context, recordIDs []int64, settlement SettlementIntent) ([]*time.Time, []*time.Time, error) {
@@ -1751,14 +1934,14 @@ func SettlementTimestampFromInitiatedDate(initiatedDate values.CivilDate) time.T
 	return initiatedDate.Time().Add(24*time.Hour - time.Second)
 }
 
-func validateTransactionInput(input CreateInput) error {
+func validateTransactionInput(input CreateInput, allowRecurringSource bool) error {
 	if len(input.Records) < 2 {
 		return services.InvalidRequest("transaction requires at least two records")
 	}
 
 	balances := map[string]values.Decimal{}
 	for index, record := range input.Records {
-		if err := validateJournalRecord(index, record); err != nil {
+		if err := validateJournalRecord(index, record, allowRecurringSource); err != nil {
 			return err
 		}
 		if balance, ok := balances[record.Currency]; ok {
@@ -1780,7 +1963,7 @@ func validateTransactionInput(input CreateInput) error {
 	return nil
 }
 
-func validateJournalRecord(index int, record JournalRecordInput) error {
+func validateJournalRecord(index int, record JournalRecordInput, allowRecurringSource bool) error {
 	if record.AccountID <= 0 {
 		return services.InvalidRequest(indexedField(index, "account_id") + " must be positive")
 	}
@@ -1821,7 +2004,7 @@ func validateJournalRecord(index int, record JournalRecordInput) error {
 	if err := validateReconciliationStatus(index, record.ReconciliationStatus); err != nil {
 		return err
 	}
-	if record.Source != SourceManual && record.Source != SourceImported {
+	if record.Source != SourceManual && record.Source != SourceImported && (!allowRecurringSource || record.Source != SourceRecurringTemplate) {
 		return services.InvalidRequest(indexedField(index, "source") + " must be manual or imported")
 	}
 	if record.Memo != nil && strings.TrimSpace(*record.Memo) != *record.Memo {

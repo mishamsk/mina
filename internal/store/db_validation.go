@@ -19,7 +19,7 @@ import (
 )
 
 // PinnedMigrationContentHash is the validator-reviewed sha256 of embedded migration SQL.
-const PinnedMigrationContentHash = "c27b60d4fe74779f08d54a5426b803d4e951645910891b728c63101cb1c17338"
+const PinnedMigrationContentHash = "ec2f2a63892fa5801b96766b75556c5c1dd963624fc717854d15c36cd041e2c9"
 
 const validationTrimSpaceCharactersSQL = `' ' || ` +
 	`chr(9) || chr(10) || chr(11) || chr(12) || chr(13) || ` +
@@ -187,7 +187,7 @@ func (s *DBValidationStore) ReferentialFindings(ctx context.Context) ([]dbvalida
 }
 
 // InvariantFindings runs SQL-backed invariant and value-domain checks.
-func (s *DBValidationStore) InvariantFindings(ctx context.Context, missingUniqueIndexes []string) ([]dbvalidation.Finding, error) {
+func (s *DBValidationStore) InvariantFindings(ctx context.Context) ([]dbvalidation.Finding, error) {
 	findings := []dbvalidation.Finding{}
 	queryChecks := []func(context.Context) ([]dbvalidation.Finding, error){
 		s.fixedSystemAccountFindings,
@@ -229,7 +229,7 @@ func (s *DBValidationStore) InvariantFindings(ctx context.Context, missingUnique
 		return nil, err
 	}
 	findings = append(findings, hierarchyFindings...)
-	duplicateFindings, err := s.duplicateActiveFindings(ctx, missingUniqueIndexes)
+	duplicateFindings, err := s.duplicateActiveFindings(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -982,13 +982,9 @@ ORDER BY fqn`,
 	return fqns, nil
 }
 
-func (s *DBValidationStore) duplicateActiveFindings(ctx context.Context, missingUniqueIndexes []string) ([]dbvalidation.Finding, error) {
+func (s *DBValidationStore) duplicateActiveFindings(ctx context.Context) ([]dbvalidation.Finding, error) {
 	findings := []dbvalidation.Finding{}
-	for _, indexName := range missingUniqueIndexes {
-		check, ok := activeUniquenessChecks()[indexName]
-		if !ok {
-			continue
-		}
+	for _, check := range activeUniquenessChecks() {
 		checkFindings, err := s.existsFinding(ctx, check.query(s), dbvalidation.SeverityWarning, check.message)
 		if err != nil {
 			return nil, err
@@ -1004,72 +1000,78 @@ type activeUniquenessCheck struct {
 	query   func(*DBValidationStore) string
 }
 
-func activeUniquenessChecks() map[string]activeUniquenessCheck {
-	return map[string]activeUniquenessCheck{
-		"account_active_fqn_unique": {
+func activeUniquenessChecks() []activeUniquenessCheck {
+	return []activeUniquenessCheck{
+		{
 			message: "duplicate active account.fqn",
 			query: func(s *DBValidationStore) string {
 				return duplicateActiveQuery(s, "account", "fqn")
 			},
 		},
-		"category_active_fqn_unique": {
-			message: "duplicate active category.fqn",
-			query: func(s *DBValidationStore) string {
-				return duplicateActiveQuery(s, "category", "fqn")
-			},
-		},
-		"tag_active_fqn_unique": {
-			message: "duplicate active tag.fqn",
-			query: func(s *DBValidationStore) string {
-				return duplicateActiveQuery(s, "tag", "fqn")
-			},
-		},
-		"transaction_template_active_fqn_unique": {
-			message: "duplicate active transaction_template.fqn",
-			query: func(s *DBValidationStore) string {
-				return duplicateActiveQuery(s, "transaction_template", "fqn")
-			},
-		},
-		"recurring_definition_active_fqn_unique": {
-			message: "duplicate active recurring_definition.fqn",
-			query: func(s *DBValidationStore) string {
-				return duplicateActiveQuery(s, "recurring_definition", "fqn")
-			},
-		},
-		"member_active_name_unique": {
-			message: "duplicate active member.name",
-			query: func(s *DBValidationStore) string {
-				return duplicateActiveQuery(s, "member", "name")
-			},
-		},
-		"credit_limit_history_active_account_date_unique": {
-			message: "duplicate active credit_limit_history account_id/effective_date",
-			query: func(s *DBValidationStore) string {
-				return duplicateActiveCompositeQuery(s, "credit_limit_history", "account_id", "effective_date")
-			},
-		},
-		"exchange_rate_active_pair_date_unique": {
-			message: "duplicate active exchange_rate from_currency/to_currency/effective_date",
-			query: func(s *DBValidationStore) string {
-				return duplicateActiveCompositeQuery(s, "exchange_rate", "from_currency", "to_currency", "effective_date")
-			},
-		},
-		"budget_active_category_month_unique": {
+		{
 			message: "duplicate active budget category_fqn/month",
 			query: func(s *DBValidationStore) string {
 				return duplicateActiveCompositeQuery(s, "budget", "category_fqn", "month")
 			},
 		},
-		"imported_record_metadata_active_record_unique": {
+		{
+			message: "duplicate active category.fqn",
+			query: func(s *DBValidationStore) string {
+				return duplicateActiveQuery(s, "category", "fqn")
+			},
+		},
+		{
+			message: "duplicate active credit_limit_history account_id/effective_date",
+			query: func(s *DBValidationStore) string {
+				return duplicateActiveCompositeQuery(s, "credit_limit_history", "account_id", "effective_date")
+			},
+		},
+		{
+			message: "duplicate active exchange_rate from_currency/to_currency/effective_date",
+			query: func(s *DBValidationStore) string {
+				return duplicateActiveCompositeQuery(s, "exchange_rate", "from_currency", "to_currency", "effective_date")
+			},
+		},
+		{
 			message: "duplicate active imported_record_metadata.record_id",
 			query: func(s *DBValidationStore) string {
 				return duplicateActiveQuery(s, "imported_record_metadata", "record_id")
 			},
 		},
-		"record_link_active_pair_unique": {
+		{
+			message: "duplicate active member.name",
+			query: func(s *DBValidationStore) string {
+				return duplicateActiveQuery(s, "member", "name")
+			},
+		},
+		{
 			message: "duplicate active record_link origin_record_id/settlement_record_id",
 			query: func(s *DBValidationStore) string {
 				return duplicateActiveCompositeQuery(s, "record_link", "origin_record_id", "settlement_record_id")
+			},
+		},
+		{
+			message: "duplicate active recurring_definition.fqn",
+			query: func(s *DBValidationStore) string {
+				return duplicateActiveQuery(s, "recurring_definition", "fqn")
+			},
+		},
+		{
+			message: "duplicate recurring_occurrence recurring_definition_id/scheduled_date",
+			query: func(s *DBValidationStore) string {
+				return duplicateCompositeQuery(s, "recurring_occurrence", "recurring_definition_id", "scheduled_date")
+			},
+		},
+		{
+			message: "duplicate active tag.fqn",
+			query: func(s *DBValidationStore) string {
+				return duplicateActiveQuery(s, "tag", "fqn")
+			},
+		},
+		{
+			message: "duplicate active transaction_template.fqn",
+			query: func(s *DBValidationStore) string {
+				return duplicateActiveQuery(s, "transaction_template", "fqn")
 			},
 		},
 	}
@@ -1095,6 +1097,20 @@ func duplicateActiveCompositeQuery(s *DBValidationStore, table string, columns .
 	SELECT 1
 	FROM ` + s.db.accountingName(table) + `
 	WHERE tombstoned_at IS NULL
+	GROUP BY ` + strings.Join(quotedColumns, ", ") + `
+	HAVING COUNT(*) > 1
+)`
+}
+
+func duplicateCompositeQuery(s *DBValidationStore, table string, columns ...string) string {
+	quotedColumns := make([]string, 0, len(columns))
+	for _, column := range columns {
+		quotedColumns = append(quotedColumns, QuoteIdentifier(column))
+	}
+
+	return `SELECT EXISTS (
+	SELECT 1
+	FROM ` + s.db.accountingName(table) + `
 	GROUP BY ` + strings.Join(quotedColumns, ", ") + `
 	HAVING COUNT(*) > 1
 )`

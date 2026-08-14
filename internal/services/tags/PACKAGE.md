@@ -6,7 +6,7 @@
 
 ## Implicit Contracts
 
-- Each service instance keeps a process-local reference snapshot for FQN hierarchy and reference checks. Tag mutations and dependent writes must share `ReferenceSerializer`; direct persistence changes must invalidate the snapshot before later service use.
+- Each service instance keeps a process-local reference snapshot for FQN hierarchy and reference checks. Tag mutations hold the app-wide exclusive reference lease through persistence and cache publication; dependent writes use the corresponding shared lease, and direct persistence changes must invalidate the snapshot.
 - Active tag FQNs cannot prefix one another. Restructure atomically rewrites an active subtree, rejecting destination conflicts and moves into a group’s own subtree.
 - Hidden active tags are valid references only when callers explicitly allow them.
 - Groups derive from every active leaf, including hidden leaves; a group is hidden only when all its leaves are hidden.

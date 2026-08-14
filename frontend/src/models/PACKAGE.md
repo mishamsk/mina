@@ -10,6 +10,7 @@
 - Transaction-filter enum lists are constrained by generated REST types; update them when the supported REST enum set changes.
 - Transaction filters carry exact Category and Tag FQN-prefix scopes for group drill-downs alongside leaf ID filters.
 - Status view selection, filters, pagination, and detail identity are URL query state rather than frontend-owned persisted models.
+- Editable journal-record drafts retain server record identities; only newly introduced draft records lack an identity.
 
 ## Boundaries
 

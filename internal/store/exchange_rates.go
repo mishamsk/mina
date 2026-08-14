@@ -276,9 +276,6 @@ RETURNING exchange_rate_id, from_currency, to_currency, rate, effective_date, cr
 		)
 		rate, err = scanExchangeRate(row)
 		if err != nil {
-			if isUniqueConstraintError(err) {
-				return fmt.Errorf("%w: active exchange rate already exists for currency pair and effective date", services.ErrConflict)
-			}
 			return fmt.Errorf("insert exchange rate: %w", err)
 		}
 

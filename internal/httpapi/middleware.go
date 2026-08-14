@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/getkin/kin-openapi/openapi3"
@@ -145,11 +146,24 @@ func openAPIValidationErrorHandler(
 	r *http.Request,
 	opts openapimiddleware.ErrorHandlerOpts,
 ) {
+	if missingRequiredIfMatch(err) {
+		WriteAPIError(w, http.StatusPreconditionRequired, openapi.APIErrorCodePreconditionRequired, "header parameter \"If-Match\" is required")
+		return
+	}
 	status := opts.StatusCode
 	if status == 0 || status >= http.StatusInternalServerError {
 		status = http.StatusBadRequest
 	}
 	WriteAPIError(w, status, openapi.APIErrorCodeInvalidRequest, openAPIValidationErrorMessage(r, err))
+}
+
+func missingRequiredIfMatch(err error) bool {
+	var requestErr *openapi3filter.RequestError
+	return errors.As(err, &requestErr) &&
+		requestErr.Parameter != nil &&
+		requestErr.Parameter.In == openapi3.ParameterInHeader &&
+		strings.EqualFold(requestErr.Parameter.Name, "If-Match") &&
+		errors.Is(requestErr.Err, openapi3filter.ErrInvalidRequired)
 }
 
 func openAPIValidationErrorMessage(r *http.Request, err error) string {

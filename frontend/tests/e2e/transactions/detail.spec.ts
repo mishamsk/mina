@@ -554,11 +554,15 @@ test("transaction detail panel shows full records and supports deep links", asyn
   ).toBe(true);
   const changedRecord = transaction.records[0];
   expect(changedRecord).toBeDefined();
+  const changedReconciliationStatus =
+    changedRecord!.reconciliation_status === "reconciled"
+      ? "unreconciled"
+      : "reconciled";
   const updateResponse = await page.request.post(
     "/api/records/bulk/reconciliation",
     {
       data: {
-        reconciliation_status: "reconciled",
+        reconciliation_status: changedReconciliationStatus,
         record_ids: [changedRecord!.record_id],
       },
     },
@@ -2055,6 +2059,14 @@ test("sparse shorthand metadata survives merchant removal while Duplicate uses A
   await expect(
     entryPanel.getByRole("heading", { name: "New journal" }),
   ).toBeVisible();
+  await expect(
+    journalRecord(page, 1).getByRole("combobox", {
+      name: "Record 1 origin",
+    }),
+  ).toBeVisible();
+  await expect(
+    journalRecord(page, 1).getByRole("button", { name: "Remove record 1" }),
+  ).toBeEnabled();
   await page.getByRole("button", { name: "Close transaction editor" }).click();
   await expect(entryPanel).toHaveCount(0);
   await page.goto("/transactions?page=1&pageSize=50");
@@ -2113,6 +2125,102 @@ test("sparse shorthand metadata survives merchant removal while Duplicate uses A
       tag_ids: [],
     },
   ]);
+});
+
+test("journal conversion keeps surviving merchant record identities", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const booksAccount = findByFqn(accounts, "merchant:PowellsBooks");
+  const targetAccount = findByFqn(accounts, "merchant:Target");
+  const groceriesAccount = findByFqn(accounts, "merchant:TraderJoes");
+  const booksCategory = findByFqn(categories, "Entertainment:Books");
+  const groceriesCategory = findByFqn(categories, "Food:Groceries");
+  const memo = `E2E merchant identities ${unique}`;
+  const response = await page.request.post("/api/transactions", {
+    data: {
+      initiated_date: "2026-07-05",
+      records: [
+        {
+          account_id: fundingAccount.account_id,
+          amount: "-60.00",
+          category_id: null,
+          currency: "USD",
+          memo,
+          reconciliation_status: "unreconciled",
+          settlement: { status: "posted" },
+          source: "manual",
+          tag_ids: [],
+        },
+        ...[
+          [booksAccount, booksCategory, "10.00"],
+          [targetAccount, groceriesCategory, "20.00"],
+          [groceriesAccount, groceriesCategory, "30.00"],
+        ].map(([account, category, amount]) => ({
+          account_id: (account as AccountFixture).account_id,
+          amount,
+          category_id: (category as CategoryFixture).category_id,
+          currency: "USD",
+          memo,
+          reconciliation_status: "unreconciled",
+          settlement: null,
+          source: "manual",
+          tag_ids: [],
+        })),
+      ],
+    },
+  });
+  expect(response.ok(), await response.text()).toBe(true);
+  const transaction = (await response.json()) as TransactionDetailFixture;
+
+  await page.goto(
+    `/transactions?page=1&pageSize=50&entry=edit:${transaction.transaction_id}`,
+  );
+  const entryPanel = page.getByRole("dialog", { name: "Transaction editor" });
+  await expect(
+    entryPanel.getByRole("heading", { name: "Edit spend" }),
+  ).toBeVisible();
+  await entryPanel
+    .getByRole("group", { name: "Merchant 1" })
+    .getByRole("button", { name: "Remove merchant" })
+    .click();
+  await entryPanel.getByRole("button", { name: "Edit as journal" }).click();
+
+  const replaceRequestPromise = page.waitForRequest(
+    (request) =>
+      new URL(request.url()).pathname ===
+        `/api/transactions/${transaction.transaction_id}` &&
+      request.method() === "PUT",
+  );
+  await entryPanel.getByRole("button", { name: "Update transaction" }).click();
+  const replaceRequest = await replaceRequestPromise;
+  const replacement = replaceRequest.postDataJSON() as {
+    readonly records: readonly {
+      readonly account_id: number;
+      readonly record_id?: number;
+    }[];
+  };
+  expect(replacement.records).toMatchObject([
+    {
+      account_id: fundingAccount.account_id,
+      record_id: transaction.records[0]!.record_id,
+    },
+    {
+      account_id: targetAccount.account_id,
+      record_id: transaction.records[2]!.record_id,
+    },
+    {
+      account_id: groceriesAccount.account_id,
+      record_id: transaction.records[3]!.record_id,
+    },
+  ]);
+  await expect(entryPanel).toHaveCount(0);
+  await deleteTransaction(page, transaction);
 });
 
 test("transaction detail edit preserves imported sources through the journal editor", async ({

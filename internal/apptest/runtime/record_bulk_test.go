@@ -139,6 +139,152 @@ func TestRecordBulkOperationsBoundary(t *testing.T) {
 	assertRecordIDs(t, statusRecords.JSON200.Records, []int64{firstRecordID, secondRecordID})
 }
 
+func TestRecordBulkTransactionETagMaterialAndNoOpBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	refs := createSearchRefs(t, client)
+	created := createTransaction(t, client, balancedTransactionRequest(refs.transactionRefs))
+	transactionID := created.JSON201.TransactionId
+	firstRecordID := created.JSON201.Records[0].RecordId
+	secondRecordID := created.JSON201.Records[1].RecordId
+	replacementMerchant := client.Scenario().Account("merchant:BulkTimestampReplacement")
+
+	assertMaterialThenNoOpTransactionETag(t, client, transactionID, "category", []int64{secondRecordID}, func() (int, int, error) {
+		response, err := client.REST().BulkCategorizeJournalRecordsWithResponse(context.Background(), httpclient.BulkCategorizeRecordsRequest{
+			RecordIds: []int64{secondRecordID}, CategoryId: refs.SecondCategoryId,
+		})
+		if err != nil {
+			return 0, 0, err
+		}
+		if response.JSON200 == nil {
+			return response.StatusCode(), 0, nil
+		}
+		return response.StatusCode(), response.JSON200.UpdatedCount, nil
+	})
+	assertMaterialThenNoOpTransactionETag(t, client, transactionID, "tags", []int64{firstRecordID, secondRecordID}, func() (int, int, error) {
+		response, err := client.REST().BulkUpdateJournalRecordTagsWithResponse(context.Background(), httpclient.BulkTagRecordsRequest{
+			RecordIds: []int64{firstRecordID, secondRecordID}, AddTagIds: apptest.Int64SlicePtr(refs.SecondTagId), RemoveTagIds: apptest.Int64SlicePtr(refs.TagId),
+		})
+		if err != nil {
+			return 0, 0, err
+		}
+		if response.JSON200 == nil {
+			return response.StatusCode(), 0, nil
+		}
+		return response.StatusCode(), response.JSON200.UpdatedCount, nil
+	})
+	assertMaterialThenNoOpTransactionETag(t, client, transactionID, "member", []int64{secondRecordID}, func() (int, int, error) {
+		response, err := client.REST().BulkSetJournalRecordMemberWithResponse(context.Background(), httpclient.BulkSetRecordMemberRequest{
+			RecordIds: []int64{secondRecordID}, MemberId: &refs.SecondMemberId,
+		})
+		if err != nil {
+			return 0, 0, err
+		}
+		if response.JSON200 == nil {
+			return response.StatusCode(), 0, nil
+		}
+		return response.StatusCode(), response.JSON200.UpdatedCount, nil
+	})
+	assertMaterialThenNoOpTransactionETag(t, client, transactionID, "account", []int64{secondRecordID}, func() (int, int, error) {
+		response, err := client.REST().BulkReassignJournalRecordAccountWithResponse(context.Background(), httpclient.BulkReassignRecordsAccountRequest{
+			RecordIds: []int64{secondRecordID}, AccountId: replacementMerchant.AccountId,
+		})
+		if err != nil {
+			return 0, 0, err
+		}
+		if response.JSON200 == nil {
+			return response.StatusCode(), 0, nil
+		}
+		return response.StatusCode(), response.JSON200.UpdatedCount, nil
+	})
+	assertMaterialThenNoOpTransactionETag(t, client, transactionID, "settlement", []int64{firstRecordID}, func() (int, int, error) {
+		response, err := client.REST().BulkSetJournalRecordSettlementWithResponse(context.Background(), httpclient.BulkSetRecordSettlementRequest{
+			RecordIds: []int64{firstRecordID}, Settlement: httpclient.SettlementStatusPending,
+		})
+		if err != nil {
+			return 0, 0, err
+		}
+		if response.JSON200 == nil {
+			return response.StatusCode(), 0, nil
+		}
+		return response.StatusCode(), response.JSON200.UpdatedCount, nil
+	})
+	assertMaterialThenNoOpTransactionETag(t, client, transactionID, "reconciliation", []int64{firstRecordID, secondRecordID}, func() (int, int, error) {
+		response, err := client.REST().BulkSetJournalRecordReconciliationWithResponse(context.Background(), httpclient.BulkSetRecordReconciliationRequest{
+			RecordIds: []int64{firstRecordID, secondRecordID}, ReconciliationStatus: httpclient.Unreconciled,
+		})
+		if err != nil {
+			return 0, 0, err
+		}
+		if response.JSON200 == nil {
+			return response.StatusCode(), 0, nil
+		}
+		return response.StatusCode(), response.JSON200.UpdatedCount, nil
+	})
+}
+
+func assertMaterialThenNoOpTransactionETag(t *testing.T, client *apptest.Client, transactionID int64, operation string, changedRecordIDs []int64, mutate func() (int, int, error)) {
+	t.Helper()
+	before := getTransaction(t, client, transactionID).JSON200
+	beforeRecords := journalRecordsByID(before.Records)
+	changedRecords := make(map[int64]struct{}, len(changedRecordIDs))
+	for _, recordID := range changedRecordIDs {
+		changedRecords[recordID] = struct{}{}
+	}
+	status, updatedCount, err := mutate()
+	requireNoTransportError(t, operation+" material mutation", err)
+	if status != http.StatusOK {
+		t.Fatalf("%s material mutation status = %d, want %d", operation, status, http.StatusOK)
+	}
+	if updatedCount != len(changedRecordIDs) {
+		t.Fatalf("%s material mutation updated_count = %d, want %d", operation, updatedCount, len(changedRecordIDs))
+	}
+	after := getTransaction(t, client, transactionID).JSON200
+	if after.Etag == before.Etag || !before.UpdatedAt.Before(after.UpdatedAt) {
+		t.Fatalf("%s material mutation etag/updated_at = %q/%s, want after %q/%s", operation, after.Etag, after.UpdatedAt, before.Etag, before.UpdatedAt)
+	}
+	for _, record := range after.Records {
+		prior := beforeRecords[record.RecordId]
+		if record.CreatedAt != prior.CreatedAt {
+			t.Fatalf("%s material mutation record %d created_at = %s, want %s", operation, record.RecordId, record.CreatedAt, prior.CreatedAt)
+		}
+		if _, changed := changedRecords[record.RecordId]; changed {
+			if !prior.UpdatedAt.Before(record.UpdatedAt) {
+				t.Fatalf("%s material mutation record %d updated_at = %s, want after %s", operation, record.RecordId, record.UpdatedAt, prior.UpdatedAt)
+			}
+		} else if record.UpdatedAt != prior.UpdatedAt {
+			t.Fatalf("%s material mutation untouched record %d updated_at = %s, want %s", operation, record.RecordId, record.UpdatedAt, prior.UpdatedAt)
+		}
+	}
+
+	status, updatedCount, err = mutate()
+	requireNoTransportError(t, operation+" exact no-op", err)
+	if status != http.StatusOK {
+		t.Fatalf("%s exact no-op status = %d, want %d", operation, status, http.StatusOK)
+	}
+	if updatedCount != 0 {
+		t.Fatalf("%s exact no-op updated_count = %d, want 0", operation, updatedCount)
+	}
+	noOp := getTransaction(t, client, transactionID).JSON200
+	if noOp.Etag != after.Etag || !noOp.UpdatedAt.Equal(after.UpdatedAt) {
+		t.Fatalf("%s exact no-op etag/updated_at = %q/%s, want %q/%s", operation, noOp.Etag, noOp.UpdatedAt, after.Etag, after.UpdatedAt)
+	}
+	afterRecords := journalRecordsByID(after.Records)
+	for _, record := range noOp.Records {
+		material := afterRecords[record.RecordId]
+		if record.CreatedAt != material.CreatedAt || record.UpdatedAt != material.UpdatedAt {
+			t.Fatalf("%s exact no-op record %d timestamps = %s/%s, want %s/%s", operation, record.RecordId, record.CreatedAt, record.UpdatedAt, material.CreatedAt, material.UpdatedAt)
+		}
+	}
+}
+
+func journalRecordsByID(records []httpclient.JournalRecord) map[int64]httpclient.JournalRecord {
+	byID := make(map[int64]httpclient.JournalRecord, len(records))
+	for _, record := range records {
+		byID[record.RecordId] = record
+	}
+	return byID
+}
+
 func TestRecordBulkMemberValidationAndAtomicityBoundary(t *testing.T) {
 	client := newSharedClient(t)
 	refs := createSearchRefs(t, client)
@@ -528,6 +674,36 @@ func TestRecordBulkSettlementAndTransactionLifecycleBoundary(t *testing.T) {
 	if cancelled.JSON200.Settlement != httpclient.TransactionSettlementPending {
 		t.Fatalf("cancelled transaction settlement = %q, want pending", cancelled.JSON200.Settlement)
 	}
+
+	categorized, err := client.REST().BulkCategorizeJournalRecordsWithResponse(context.Background(), httpclient.BulkCategorizeRecordsRequest{
+		RecordIds:  []int64{transaction.JSON201.Records[1].RecordId},
+		CategoryId: refs.SecondCategoryId,
+	})
+	requireNoTransportError(t, "categorize cancelled transaction record", err)
+	if categorized.StatusCode() != http.StatusOK {
+		t.Fatalf("categorize cancelled transaction record status = %d, want %d; body %s", categorized.StatusCode(), http.StatusOK, categorized.Body)
+	}
+	assertBulkResponse(t, categorized.JSON200, []int64{transaction.JSON201.Records[1].RecordId})
+
+	tagged, err := client.REST().BulkUpdateJournalRecordTagsWithResponse(context.Background(), httpclient.BulkTagRecordsRequest{
+		RecordIds: []int64{transaction.JSON201.Records[1].RecordId},
+		AddTagIds: apptest.Int64SlicePtr(refs.SecondTagId),
+	})
+	requireNoTransportError(t, "tag cancelled transaction record", err)
+	if tagged.StatusCode() != http.StatusOK {
+		t.Fatalf("tag cancelled transaction record status = %d, want %d; body %s", tagged.StatusCode(), http.StatusOK, tagged.Body)
+	}
+	assertBulkResponse(t, tagged.JSON200, []int64{transaction.JSON201.Records[1].RecordId})
+
+	memberSet, err := client.REST().BulkSetJournalRecordMemberWithResponse(context.Background(), httpclient.BulkSetRecordMemberRequest{
+		RecordIds: []int64{transaction.JSON201.Records[1].RecordId},
+		MemberId:  &refs.SecondMemberId,
+	})
+	requireNoTransportError(t, "set member on cancelled transaction record", err)
+	if memberSet.StatusCode() != http.StatusOK {
+		t.Fatalf("set member on cancelled transaction record status = %d, want %d; body %s", memberSet.StatusCode(), http.StatusOK, memberSet.Body)
+	}
+	assertBulkResponse(t, memberSet.JSON200, []int64{transaction.JSON201.Records[1].RecordId})
 
 	restored, err := client.REST().RestoreTransactionWithResponse(context.Background(), transaction.JSON201.TransactionId)
 	requireNoTransportError(t, "restore transaction", err)

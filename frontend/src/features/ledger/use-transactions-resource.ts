@@ -429,12 +429,12 @@ export const invalidateReferencePagesAfterTransactionMutation = (): void => {
 
 export const invalidateAccountRegistersForTransaction = (
   transaction: Transaction,
-  previousTransaction?: Transaction,
+  previousTransactions: readonly Transaction[] = [],
 ): void => {
   const accountIds = new Set(
-    [previousTransaction, transaction]
-      .filter((value): value is Transaction => Boolean(value))
-      .flatMap((value) => value.records.map((record) => record.account_id)),
+    [...previousTransactions, transaction].flatMap((value) =>
+      value.records.map((record) => record.account_id),
+    ),
   );
 
   invalidateAccountTransactionCache(transaction.transaction_id);
@@ -450,7 +450,7 @@ export const refreshTransactionPageAfterSave = async (
   params: TransactionPageParams,
   transactionId: number,
   transaction?: Transaction,
-  previousTransaction?: Transaction,
+  previousTransactions: readonly Transaction[] = [],
   options: {
     readonly onPageRefresh?: (rowRemainsVisible: boolean) => void;
     readonly pageRefreshMode?: "background" | "blocking";
@@ -458,7 +458,7 @@ export const refreshTransactionPageAfterSave = async (
 ): Promise<boolean> => {
   invalidateReferencePagesAfterTransactionMutation();
   if (transaction) {
-    invalidateAccountRegistersForTransaction(transaction, previousTransaction);
+    invalidateAccountRegistersForTransaction(transaction, previousTransactions);
   }
 
   if (options.pageRefreshMode !== "blocking") {
@@ -499,9 +499,38 @@ export const refreshTransactionPageAfterSave = async (
   );
 };
 
+export const publishTransactionConflictWinner = (
+  params: TransactionPageParams,
+  transaction: Transaction,
+  previousTransaction: Transaction,
+): boolean => {
+  const displayedTransaction = getTransactionsSnapshot().pages[
+    transactionPageKey(params)
+  ]?.transactions.find(
+    (current) => current.transaction_id === transaction.transaction_id,
+  );
+  if (
+    displayedTransaction &&
+    normalizedTimestampSortKey(displayedTransaction.updated_at) >
+      normalizedTimestampSortKey(transaction.updated_at)
+  ) {
+    return false;
+  }
+  invalidateReferencePagesAfterTransactionMutation();
+  invalidateAccountRegistersForTransaction(transaction, [previousTransaction]);
+  updateDisplayedTransactionPage(params, transaction);
+  void Promise.all([refreshFeaturedBalances(), refreshOverview()]);
+  return true;
+};
+
+const normalizedTimestampSortKey = (value: string): string => {
+  const utc = /^(.*?)(?:\.(\d+))?Z$/.exec(value);
+  return utc ? `${utc[1]}.${(utc[2] ?? "").padEnd(9, "0")}Z` : value;
+};
+
 export const refreshViewsAfterEntrySave = async (
   transaction: Transaction,
-  previousTransaction?: Transaction,
+  previousTransactions: readonly Transaction[] = [],
   options: {
     readonly onPageRefresh?: (rowRemainsVisible: boolean) => void;
     readonly pageRefreshMode?: "background" | "blocking";
@@ -523,7 +552,7 @@ export const refreshViewsAfterEntrySave = async (
       currentPage.params,
       transaction.transaction_id,
       transaction,
-      previousTransaction,
+      previousTransactions,
       {
         onPageRefresh: options.onPageRefresh,
         pageRefreshMode: options.pageRefreshMode ?? "blocking",
@@ -534,7 +563,7 @@ export const refreshViewsAfterEntrySave = async (
   }
 
   invalidateReferencePagesAfterTransactionMutation();
-  invalidateAccountRegistersForTransaction(transaction, previousTransaction);
+  invalidateAccountRegistersForTransaction(transaction, previousTransactions);
   retainAccountTransactionSnapshot();
   cancelAllPageRefreshCallbacks();
   invalidateTransactionPages();

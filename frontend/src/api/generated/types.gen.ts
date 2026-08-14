@@ -261,7 +261,7 @@ export type DailyExchangeRateListResponse = {
 };
 
 export type ApiError = {
-    code: 'invalid_request' | 'unauthenticated' | 'forbidden' | 'not_found' | 'method_not_allowed' | 'conflict' | 'internal_error';
+    code: 'invalid_request' | 'unauthenticated' | 'forbidden' | 'not_found' | 'method_not_allowed' | 'conflict' | 'precondition_failed' | 'precondition_required' | 'internal_error';
     message: string;
 };
 
@@ -423,6 +423,55 @@ export type CreateJournalRecordRequest = {
     external_system?: string | null;
 };
 
+export type UpdateExistingJournalRecordRequest = {
+    /**
+     * Active journal-record identifier retained by this complete replacement; it must belong to the target transaction and may appear only once in the request.
+     */
+    record_id: number;
+    /**
+     * Account identifier for this retained journal record.
+     */
+    account_id: number;
+    /**
+     * Optional household-member identifier for the journal record.
+     */
+    member_id?: number | null;
+    /**
+     * Record currency using ISO 4217 or the `C::` crypto prefix; it must match the referenced account when that account is single-currency.
+     */
+    currency: string;
+    /**
+     * JSON string, not a JSON number. Signed non-zero DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
+     */
+    amount: string;
+    /**
+     * JSON string or null, not a JSON number. Omission or explicit null preserves the stored value when amount and currency are unchanged and otherwise applies initiated-date inference.
+     */
+    amount_usd?: string | null;
+    /**
+     * Category identifier for a flow record; omit or use null for every other account type.
+     */
+    category_id?: number | null;
+    /**
+     * Tag identifiers to assign to the journal record.
+     */
+    tag_ids?: Array<number>;
+    /**
+     * Optional memo text for the journal record.
+     */
+    memo?: string | null;
+    /**
+     * Settlement intent for owned and party records; use null for flow and system records.
+     */
+    settlement: SettlementIntent | null;
+    reconciliation_status: ReconciliationStatus;
+};
+
+/**
+ * A new journal record created by complete replacement; creation-time provenance is writable and record_id is not accepted.
+ */
+export type UpdateNewJournalRecordRequest = CreateJournalRecordRequest;
+
 export type BulkCategorizeRecordsRequest = {
     /**
      * Journal-record identifiers to update.
@@ -504,6 +553,9 @@ export type BulkSetRecordReconciliationRequest = {
 
 export type BulkRecordOperationResponse = {
     record_ids: Array<number>;
+    /**
+     * Number of requested records whose persisted values materially changed; record_ids still echoes every requested ID.
+     */
     updated_count: number;
 };
 
@@ -955,9 +1007,9 @@ export type UpdateTransactionRequest = {
      */
     initiated_date: string;
     /**
-     * Complete journal-record set; active records must balance to zero within each currency.
+     * Complete desired journal-record set. Retained records supply a unique record_id without provenance; new records omit record_id and may supply creation-time provenance. Active records must balance to zero within each currency.
      */
-    records: Array<CreateJournalRecordRequest>;
+    records: Array<UpdateExistingJournalRecordRequest | UpdateNewJournalRecordRequest>;
 };
 
 export type TransactionTemplateWriteRequest = {
@@ -1528,6 +1580,10 @@ export type RecurringOccurrenceListResponse = {
 
 export type Transaction = {
     transaction_id: number;
+    /**
+     * Strong ETag derived directly from updated_at; send this exact value in If-Match for complete replacement.
+     */
+    etag: string;
     initiated_date: string;
     /**
      * Occurrence this transaction was generated from; null for non-recurring transactions; the definition is reached via the occurrence.
@@ -6160,7 +6216,7 @@ export type DeleteTransactionError = DeleteTransactionErrors[keyof DeleteTransac
 
 export type DeleteTransactionResponses = {
     /**
-     * Transaction tombstoned.
+     * Transaction, journal records, and affected record links tombstoned.
      */
     204: void;
 };
@@ -6207,6 +6263,12 @@ export type GetTransactionResponse = GetTransactionResponses[keyof GetTransactio
 
 export type ReplaceTransactionData = {
     body: UpdateTransactionRequest;
+    headers: {
+        /**
+         * Strong ETag from the transaction response being replaced.
+         */
+        'If-Match': string;
+    };
     path: {
         /**
          * Numeric identifier of the transaction.
@@ -6234,6 +6296,18 @@ export type ReplaceTransactionErrors = {
      * The requested resource was not found.
      */
     404: ErrorResponse;
+    /**
+     * The request conflicts with existing state.
+     */
+    409: ErrorResponse;
+    /**
+     * The supplied write precondition no longer matches current state.
+     */
+    412: ErrorResponse;
+    /**
+     * The required write precondition was not supplied.
+     */
+    428: ErrorResponse;
 };
 
 export type ReplaceTransactionError = ReplaceTransactionErrors[keyof ReplaceTransactionErrors];

@@ -2,7 +2,7 @@ import { Plus } from "pixelarticons/react";
 import { useCallback, useEffect, useMemo } from "react";
 import { useLocation, useSearchParams } from "react-router";
 
-import type { Transaction } from "@/api";
+import type { JournalRecord, Transaction } from "@/api";
 import { PageHelp } from "@/components/page-help";
 import { Toast, toastDurationMs } from "@/components/toast";
 import { Button } from "@/components/ui/button";
@@ -77,6 +77,25 @@ export const TransactionsPage = () => {
     },
     [browser],
   );
+
+  const recoverTransactionAmountConflict = (
+    transaction: Transaction,
+    records: readonly [JournalRecord, JournalRecord],
+    amount: string,
+  ) => {
+    openTransactionEntryLaunch(
+      {
+        amountConflict: {
+          amount,
+          recordIds: [records[0].record_id, records[1].record_id],
+        },
+        transaction,
+        type: "edit",
+      },
+      captureTransactionEntryLaunchContext(),
+    );
+    browser.dismissNotice();
+  };
 
   const splitTransaction = useCallback(
     (transaction: Transaction) => {
@@ -272,6 +291,9 @@ export const TransactionsPage = () => {
             }}
             onNewTransaction={openEntryPanel}
             onDeleteTransaction={browser.deleteTransactionFromRow}
+            onDiscardTransactionAmountConflict={
+              browser.discardTransactionAmountConflict
+            }
             onDismissRecurringOccurrence={
               browser.dismissRecurringOccurrenceFromRow
             }
@@ -288,6 +310,9 @@ export const TransactionsPage = () => {
               );
             }}
             onPostTransaction={browser.postTransaction}
+            onRecoverTransactionAmountConflict={
+              recoverTransactionAmountConflict
+            }
             onSetEditMode={browser.setEditMode}
             onSplitTransaction={splitTransaction}
             onSelectRange={browser.selectTransactionRange}

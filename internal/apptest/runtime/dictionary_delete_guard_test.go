@@ -206,7 +206,7 @@ func TestDictionaryDeleteAllowsTombstonedTransactionRecordsUnderActiveTransactio
 	transaction := client.Scenario().BalancedTransaction(refs)
 	replacementRefs := replacementTransactionRefs(t, client)
 
-	replaced, err := client.REST().ReplaceTransactionWithResponse(context.Background(), transaction.TransactionId, httpclient.UpdateTransactionRequest{
+	replaced, err := client.ReplaceTransactionWithNewRecords(context.Background(), &transaction, httpclient.CreateTransactionRequest{
 		InitiatedDate: apptest.Date("2024-01-03"),
 		Records: []httpclient.CreateJournalRecordRequest{
 			{

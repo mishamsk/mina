@@ -6,7 +6,7 @@
 
 ## Implicit Contracts
 
-- No implicit contracts.
+- Generated surfaces preserve supported path, query, and header parameters; required conditional-write headers remain explicit caller inputs.
 
 ## Boundaries
 

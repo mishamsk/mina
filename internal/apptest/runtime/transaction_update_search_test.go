@@ -3,6 +3,7 @@ package runtime_test
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"testing"
 	"time"
 
@@ -22,7 +23,7 @@ func TestTransactionReplaceBoundary(t *testing.T) {
 	oldRecordIDs := recordIDs(created.JSON201.Records)
 
 	replacement := replacementTransactionRequest(refs)
-	updated, err := client.REST().ReplaceTransactionWithResponse(context.Background(), created.JSON201.TransactionId, replacement)
+	updated, err := client.ReplaceTransactionRetainingRecords(context.Background(), created.JSON201, replacement)
 	requireNoTransportError(t, "replace transaction", err)
 	if updated.StatusCode() != http.StatusOK {
 		t.Fatalf("replace status = %d, want %d; body %s", updated.StatusCode(), http.StatusOK, updated.Body)
@@ -39,7 +40,7 @@ func TestTransactionReplaceBoundary(t *testing.T) {
 	if len(updated.JSON200.Records) != 2 {
 		t.Fatalf("replaced record count = %d, want 2; body %+v", len(updated.JSON200.Records), updated.JSON200)
 	}
-	assertNoRecordIDs(t, updated.JSON200.Records, oldRecordIDs)
+	assertRecordIDs(t, updated.JSON200.Records, oldRecordIDs)
 
 	search, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), nil)
 	requireNoTransportError(t, "search records", err)
@@ -50,7 +51,7 @@ func TestTransactionReplaceBoundary(t *testing.T) {
 
 	amountUnbalanced := replacementTransactionRequest(refs)
 	amountUnbalanced.Records[1].Amount = "19.00"
-	rejected, err := client.REST().ReplaceTransactionWithResponse(context.Background(), created.JSON201.TransactionId, amountUnbalanced)
+	rejected, err := client.ReplaceTransactionRetainingRecords(context.Background(), updated.JSON200, amountUnbalanced)
 	requireNoTransportError(t, "replace transaction", err)
 	if rejected.StatusCode() != http.StatusBadRequest {
 		t.Fatalf("amount-unbalanced replace status = %d, want %d; body %s", rejected.StatusCode(), http.StatusBadRequest, rejected.Body)
@@ -62,11 +63,20 @@ func TestTransactionReplaceBoundary(t *testing.T) {
 		t.Fatalf("read after amount-unbalanced replace status = %d, want %d; body %s", readAfterRejected.StatusCode(), http.StatusOK, readAfterRejected.Body)
 	}
 	assertRecordIDs(t, readAfterRejected.JSON200.Records, recordIDs(updated.JSON200.Records))
+	if readAfterRejected.JSON200.Etag != updated.JSON200.Etag || !readAfterRejected.JSON200.UpdatedAt.Equal(updated.JSON200.UpdatedAt) {
+		t.Fatalf("transaction changed after rejected replace: etag/updated_at = %q/%s, want %q/%s", readAfterRejected.JSON200.Etag, readAfterRejected.JSON200.UpdatedAt, updated.JSON200.Etag, updated.JSON200.UpdatedAt)
+	}
+	for index, record := range readAfterRejected.JSON200.Records {
+		want := updated.JSON200.Records[index]
+		if record.Amount != want.Amount || record.CreatedAt != want.CreatedAt || record.UpdatedAt != want.UpdatedAt {
+			t.Fatalf("record %d changed after rejected replace: amount/created_at/updated_at = %s/%s/%s, want %s/%s/%s", record.RecordId, record.Amount, record.CreatedAt, record.UpdatedAt, want.Amount, want.CreatedAt, want.UpdatedAt)
+		}
+	}
 
 	usdUnbalanced := replacementTransactionRequest(refs)
 	usdUnbalanced.Records[0].AmountUsd = nil
 	usdUnbalanced.Records[1].AmountUsd = apptest.StringPtr("19.00")
-	usdUpdated, err := client.REST().ReplaceTransactionWithResponse(context.Background(), created.JSON201.TransactionId, usdUnbalanced)
+	usdUpdated, err := client.ReplaceTransactionRetainingRecords(context.Background(), updated.JSON200, usdUnbalanced)
 	requireNoTransportError(t, "replace transaction", err)
 	if usdUpdated.StatusCode() != http.StatusOK {
 		t.Fatalf("usd-unbalanced replace status = %d, want %d; body %s", usdUpdated.StatusCode(), http.StatusOK, usdUpdated.Body)
@@ -85,6 +95,491 @@ func TestTransactionReplaceBoundary(t *testing.T) {
 	}
 }
 
+func TestTransactionReplaceDateOnlyAdvancesTransactionTimestampBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	refs := createTransactionRefs(t, client)
+	request := balancedTransactionRequest(refs)
+	created := createTransaction(t, client, request).JSON201
+
+	replacement := request
+	replacement.InitiatedDate = apptest.Date("2024-03-09")
+	response, err := client.ReplaceTransactionRetainingRecords(
+		context.Background(),
+		created,
+		replacement,
+	)
+	requireNoTransportError(t, "replace transaction date only", err)
+	if response.StatusCode() != http.StatusOK {
+		t.Fatalf("date-only replacement status = %d, want %d; body %s", response.StatusCode(), http.StatusOK, response.Body)
+	}
+	if response.JSON200.Etag == created.Etag || !created.UpdatedAt.Before(response.JSON200.UpdatedAt) {
+		t.Fatalf("date-only replacement etag/updated_at = %q/%s, want after %q/%s", response.JSON200.Etag, response.JSON200.UpdatedAt, created.Etag, created.UpdatedAt)
+	}
+	for index, record := range response.JSON200.Records {
+		before := created.Records[index]
+		if record.RecordId != before.RecordId || !record.CreatedAt.Equal(before.CreatedAt) || !record.UpdatedAt.Equal(before.UpdatedAt) {
+			t.Fatalf("date-only replacement record %d identity/timestamps = %d/%s/%s, want %d/%s/%s", index, record.RecordId, record.CreatedAt, record.UpdatedAt, before.RecordId, before.CreatedAt, before.UpdatedAt)
+		}
+	}
+}
+
+func TestTransactionReplaceMatchesRetainedRecordsByIDNotPositionBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	refs := createTransactionRefs(t, client)
+	request := balancedTransactionRequest(refs)
+	created := createTransaction(t, client, request)
+
+	firstMemo := "fields retained with first record identity"
+	first := request.Records[0]
+	first.Amount = "-17.00"
+	first.Memo = &firstMemo
+	secondMemo := "fields retained with second record identity"
+	second := request.Records[1]
+	second.Amount = "17.00"
+	second.Memo = &secondMemo
+	reordered := httpclient.UpdateTransactionRequest{
+		InitiatedDate: request.InitiatedDate,
+		Records: []httpclient.UpdateTransactionRequest_Records_Item{
+			apptest.ExistingTransactionRecord(created.JSON201.Records[1].RecordId, second),
+			apptest.ExistingTransactionRecord(created.JSON201.Records[0].RecordId, first),
+		},
+	}
+
+	replaced, err := client.REST().ReplaceTransactionWithResponse(
+		context.Background(),
+		created.JSON201.TransactionId,
+		&httpclient.ReplaceTransactionParams{IfMatch: created.JSON201.Etag},
+		reordered,
+	)
+	requireNoTransportError(t, "replace transaction with reordered retained identities", err)
+	if replaced.StatusCode() != http.StatusOK {
+		t.Fatalf("reordered retained replace status = %d, want %d; body %s", replaced.StatusCode(), http.StatusOK, replaced.Body)
+	}
+
+	byID := make(map[int64]httpclient.JournalRecord, len(replaced.JSON200.Records))
+	for _, record := range replaced.JSON200.Records {
+		byID[record.RecordId] = record
+	}
+	wants := []struct {
+		id      int64
+		account int64
+		amount  string
+		memo    string
+	}{
+		{id: created.JSON201.Records[0].RecordId, account: first.AccountId, amount: "-17.00000000", memo: firstMemo},
+		{id: created.JSON201.Records[1].RecordId, account: second.AccountId, amount: "17.00000000", memo: secondMemo},
+	}
+	for _, want := range wants {
+		got, ok := byID[want.id]
+		if !ok || got.AccountId != want.account || got.Amount != want.amount || got.Memo == nil || *got.Memo != want.memo {
+			t.Fatalf("record %d after reordered retention = %+v, want account/amount/memo %d/%s/%q", want.id, got, want.account, want.amount, want.memo)
+		}
+	}
+}
+
+func TestTransactionReplaceIdentityPreconditionsAndProvenanceBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	refs := createTransactionRefs(t, client)
+	created := createTransaction(t, client, balancedTransactionRequest(refs))
+	current := created.JSON201
+	if len(current.Etag) < 3 || current.Etag[0] != '"' || current.Etag[len(current.Etag)-1] != '"' {
+		t.Fatalf("transaction etag = %q, want strong quoted value", current.Etag)
+	}
+	wantETag := strconv.Quote(current.UpdatedAt.UTC().Format(time.RFC3339Nano))
+	if current.Etag != wantETag {
+		t.Fatalf("transaction etag = %q, want quoted canonical updated_at %q", current.Etag, wantETag)
+	}
+
+	base := balancedTransactionRequest(refs)
+	noOp := httpclient.UpdateTransactionRequest{
+		InitiatedDate: base.InitiatedDate,
+		Records: []httpclient.UpdateTransactionRequest_Records_Item{
+			apptest.ExistingTransactionRecord(current.Records[0].RecordId, base.Records[0]),
+			apptest.ExistingTransactionRecord(current.Records[1].RecordId, base.Records[1]),
+		},
+	}
+
+	missing, err := client.REST().ReplaceTransactionWithResponse(
+		context.Background(),
+		current.TransactionId,
+		&httpclient.ReplaceTransactionParams{IfMatch: current.Etag},
+		noOp,
+		func(_ context.Context, request *http.Request) error {
+			request.Header.Del("If-Match")
+			return nil
+		},
+	)
+	requireNoTransportError(t, "replace transaction without precondition", err)
+	if missing.StatusCode() != http.StatusPreconditionRequired || missing.JSON428 == nil || missing.JSON428.Error.Code != httpclient.APIErrorCodePreconditionRequired {
+		t.Fatalf("missing-precondition response = %d/%+v, want 428/%q; body %s", missing.StatusCode(), missing.JSON428, httpclient.APIErrorCodePreconditionRequired, missing.Body)
+	}
+
+	for _, etag := range []string{`W/"opaque"`, `opaque`} {
+		malformed, err := client.REST().ReplaceTransactionWithResponse(
+			context.Background(),
+			current.TransactionId,
+			&httpclient.ReplaceTransactionParams{IfMatch: etag},
+			noOp,
+		)
+		requireNoTransportError(t, "replace transaction with malformed ETag", err)
+		if malformed.StatusCode() != http.StatusBadRequest || malformed.JSON400 == nil || malformed.JSON400.Error.Code != httpclient.APIErrorCodeInvalidRequest {
+			t.Fatalf("malformed precondition %q response = %d/%+v, want 400/%q; body %s", etag, malformed.StatusCode(), malformed.JSON400, httpclient.APIErrorCodeInvalidRequest, malformed.Body)
+		}
+	}
+
+	for _, etag := range []string{`"opaque"`, `""`, `"opaque\q"`} {
+		opaque, err := client.REST().ReplaceTransactionWithResponse(
+			context.Background(),
+			current.TransactionId,
+			&httpclient.ReplaceTransactionParams{IfMatch: etag},
+			noOp,
+		)
+		requireNoTransportError(t, "replace transaction with nonmatching opaque ETag", err)
+		if opaque.StatusCode() != http.StatusPreconditionFailed || opaque.JSON412 == nil || opaque.JSON412.Error.Code != httpclient.APIErrorCodePreconditionFailed {
+			t.Fatalf("opaque precondition %q response = %d/%+v, want 412/%q; body %s", etag, opaque.StatusCode(), opaque.JSON412, httpclient.APIErrorCodePreconditionFailed, opaque.Body)
+		}
+	}
+
+	zeroTime, err := client.REST().ReplaceTransactionWithResponse(
+		context.Background(),
+		current.TransactionId,
+		&httpclient.ReplaceTransactionParams{IfMatch: `"0001-01-01T00:00:00Z"`},
+		noOp,
+	)
+	requireNoTransportError(t, "replace transaction with zero-time ETag", err)
+	if zeroTime.StatusCode() != http.StatusPreconditionFailed || zeroTime.JSON412 == nil || zeroTime.JSON412.Error.Code != httpclient.APIErrorCodePreconditionFailed {
+		t.Fatalf("zero-time precondition response = %d/%+v, want 412/%q; body %s", zeroTime.StatusCode(), zeroTime.JSON412, httpclient.APIErrorCodePreconditionFailed, zeroTime.Body)
+	}
+
+	unchanged, err := client.REST().ReplaceTransactionWithResponse(
+		context.Background(),
+		current.TransactionId,
+		&httpclient.ReplaceTransactionParams{IfMatch: current.Etag},
+		noOp,
+	)
+	requireNoTransportError(t, "replace transaction exact no-op", err)
+	if unchanged.StatusCode() != http.StatusOK {
+		t.Fatalf("exact no-op status = %d, want %d; body %s", unchanged.StatusCode(), http.StatusOK, unchanged.Body)
+	}
+	if unchanged.JSON200.Etag != current.Etag || !unchanged.JSON200.UpdatedAt.Equal(current.UpdatedAt) {
+		t.Fatalf("exact no-op etag/updated_at = %q/%s, want %q/%s", unchanged.JSON200.Etag, unchanged.JSON200.UpdatedAt, current.Etag, current.UpdatedAt)
+	}
+	for index := range current.Records {
+		if unchanged.JSON200.Records[index].CreatedAt != current.Records[index].CreatedAt || unchanged.JSON200.Records[index].UpdatedAt != current.Records[index].UpdatedAt {
+			t.Fatalf("exact no-op record %d timestamps changed from %s/%s to %s/%s", current.Records[index].RecordId, current.Records[index].CreatedAt, current.Records[index].UpdatedAt, unchanged.JSON200.Records[index].CreatedAt, unchanged.JSON200.Records[index].UpdatedAt)
+		}
+	}
+
+	provenanceBody := map[string]any{
+		"initiated_date": base.InitiatedDate.String(),
+		"records": []any{
+			map[string]any{
+				"record_id": current.Records[0].RecordId, "account_id": base.Records[0].AccountId, "currency": "USD", "amount": "-10.00",
+				"settlement": base.Records[0].Settlement, "reconciliation_status": base.Records[0].ReconciliationStatus, "source": "manual",
+			},
+			map[string]any{
+				"record_id": current.Records[1].RecordId, "account_id": base.Records[1].AccountId, "currency": "USD", "amount": "10.00",
+				"category_id": base.Records[1].CategoryId, "settlement": nil, "reconciliation_status": base.Records[1].ReconciliationStatus,
+			},
+		},
+	}
+	provenanceRejected, err := client.REST().ReplaceTransactionWithBodyWithResponse(
+		context.Background(),
+		current.TransactionId,
+		&httpclient.ReplaceTransactionParams{IfMatch: current.Etag},
+		"application/json",
+		apptest.JSONReader(provenanceBody),
+	)
+	requireNoTransportError(t, "replace existing transaction record with provenance", err)
+	if provenanceRejected.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("existing provenance status = %d, want %d; body %s", provenanceRejected.StatusCode(), http.StatusBadRequest, provenanceRejected.Body)
+	}
+
+	externalID := "provider-record-42"
+	externalSystem := "test-provider"
+	retained := base.Records[0]
+	retained.Amount = "-25.00"
+	retained.AmountUsd = nil
+	newImported := base.Records[1]
+	newImported.Amount = "25.00"
+	newImported.AmountUsd = apptest.StringPtr("23.50")
+	newImported.Source = httpclient.WritableSourceImported
+	newImported.ExternalId = &externalID
+	newImported.ExternalSystem = &externalSystem
+	material := httpclient.UpdateTransactionRequest{
+		InitiatedDate: base.InitiatedDate,
+		Records: []httpclient.UpdateTransactionRequest_Records_Item{
+			apptest.ExistingTransactionRecord(current.Records[0].RecordId, retained),
+			apptest.NewTransactionRecord(newImported),
+		},
+	}
+	replaced, err := client.REST().ReplaceTransactionWithResponse(
+		context.Background(),
+		current.TransactionId,
+		&httpclient.ReplaceTransactionParams{IfMatch: current.Etag},
+		material,
+	)
+	requireNoTransportError(t, "replace transaction with retained and imported records", err)
+	if replaced.StatusCode() != http.StatusOK {
+		t.Fatalf("identity replacement status = %d, want %d; body %s", replaced.StatusCode(), http.StatusOK, replaced.Body)
+	}
+	winner := replaced.JSON200
+	if winner.Etag == current.Etag || !current.UpdatedAt.Before(winner.UpdatedAt) {
+		t.Fatalf("material replacement etag/updated_at = %q/%s, want changed after %q/%s", winner.Etag, winner.UpdatedAt, current.Etag, current.UpdatedAt)
+	}
+	if winner.Records[0].RecordId != current.Records[0].RecordId || winner.Records[0].CreatedAt != current.Records[0].CreatedAt {
+		t.Fatalf("retained record identity/created_at = %d/%s, want %d/%s", winner.Records[0].RecordId, winner.Records[0].CreatedAt, current.Records[0].RecordId, current.Records[0].CreatedAt)
+	}
+	if !current.Records[0].UpdatedAt.Before(winner.Records[0].UpdatedAt) {
+		t.Fatalf("retained record updated_at = %s, want after %s", winner.Records[0].UpdatedAt, current.Records[0].UpdatedAt)
+	}
+	if winner.Records[1].RecordId == current.Records[1].RecordId ||
+		winner.Records[1].Source != httpclient.Imported ||
+		winner.Records[1].ExternalId == nil || *winner.Records[1].ExternalId != externalID ||
+		winner.Records[1].ExternalSystem == nil || *winner.Records[1].ExternalSystem != externalSystem ||
+		winner.Records[1].AmountUsd == nil || *winner.Records[1].AmountUsd != "23.50000000" {
+		t.Fatalf("new imported record = %+v, want new identity with preserved importer provenance", winner.Records[1])
+	}
+	if winner.Records[0].AmountUsd == nil || *winner.Records[0].AmountUsd != "-25.00000000" {
+		t.Fatalf("changed retained amount_usd = %v, want inferred -25.00000000", winner.Records[0].AmountUsd)
+	}
+
+	stale, err := client.REST().ReplaceTransactionWithResponse(
+		context.Background(),
+		current.TransactionId,
+		&httpclient.ReplaceTransactionParams{IfMatch: current.Etag},
+		noOp,
+	)
+	requireNoTransportError(t, "replace transaction with stale precondition", err)
+	if stale.StatusCode() != http.StatusPreconditionFailed || stale.JSON412 == nil || stale.JSON412.Error.Code != httpclient.APIErrorCodePreconditionFailed {
+		t.Fatalf("stale-precondition response = %d/%+v, want 412/%q; body %s", stale.StatusCode(), stale.JSON412, httpclient.APIErrorCodePreconditionFailed, stale.Body)
+	}
+	readWinner := getTransaction(t, client, current.TransactionId)
+	if readWinner.JSON200.Etag != winner.Etag || recordIDs(readWinner.JSON200.Records)[1] != winner.Records[1].RecordId {
+		t.Fatalf("transaction changed after stale write: got %+v, want winner %+v", readWinner.JSON200, winner)
+	}
+
+	manualReplacement := newImported
+	manualReplacement.Source = httpclient.WritableSourceManual
+	manualReplacement.ExternalId = nil
+	manualReplacement.ExternalSystem = nil
+	omitImported := httpclient.UpdateTransactionRequest{
+		InitiatedDate: base.InitiatedDate,
+		Records: []httpclient.UpdateTransactionRequest_Records_Item{
+			apptest.ExistingTransactionRecord(winner.Records[0].RecordId, retained),
+			apptest.NewTransactionRecord(manualReplacement),
+		},
+	}
+	importedRejected, err := client.REST().ReplaceTransactionWithResponse(
+		context.Background(),
+		winner.TransactionId,
+		&httpclient.ReplaceTransactionParams{IfMatch: winner.Etag},
+		omitImported,
+	)
+	requireNoTransportError(t, "replace transaction omitting imported record", err)
+	if importedRejected.StatusCode() != http.StatusConflict || importedRejected.JSON409 == nil {
+		t.Fatalf("omit imported record response = %d/%+v, want 409; body %s", importedRejected.StatusCode(), importedRejected.JSON409, importedRejected.Body)
+	}
+
+	duplicate := httpclient.UpdateTransactionRequest{
+		InitiatedDate: base.InitiatedDate,
+		Records: []httpclient.UpdateTransactionRequest_Records_Item{
+			apptest.ExistingTransactionRecord(winner.Records[0].RecordId, retained),
+			apptest.ExistingTransactionRecord(winner.Records[0].RecordId, newImported),
+		},
+	}
+	duplicateRejected, err := client.REST().ReplaceTransactionWithResponse(
+		context.Background(),
+		winner.TransactionId,
+		&httpclient.ReplaceTransactionParams{IfMatch: winner.Etag},
+		duplicate,
+	)
+	requireNoTransportError(t, "replace transaction with duplicate record ID", err)
+	if duplicateRejected.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("duplicate record ID status = %d, want %d; body %s", duplicateRejected.StatusCode(), http.StatusBadRequest, duplicateRejected.Body)
+	}
+
+	other := createTransaction(t, client, balancedTransactionRequest(refs))
+	foreign := httpclient.UpdateTransactionRequest{
+		InitiatedDate: base.InitiatedDate,
+		Records: []httpclient.UpdateTransactionRequest_Records_Item{
+			apptest.ExistingTransactionRecord(other.JSON201.Records[0].RecordId, retained),
+			apptest.ExistingTransactionRecord(winner.Records[1].RecordId, newImported),
+		},
+	}
+	foreignRejected, err := client.REST().ReplaceTransactionWithResponse(
+		context.Background(),
+		winner.TransactionId,
+		&httpclient.ReplaceTransactionParams{IfMatch: winner.Etag},
+		foreign,
+	)
+	requireNoTransportError(t, "replace transaction with foreign record ID", err)
+	if foreignRejected.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("foreign record ID status = %d, want %d; body %s", foreignRejected.StatusCode(), http.StatusBadRequest, foreignRejected.Body)
+	}
+}
+
+func TestTransactionReplaceSubMicrosecondSettlementIsExactNoOpBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	refs := createTransactionRefs(t, client)
+	request := balancedTransactionRequest(refs)
+	pendingDate := apptest.Timestamp("2024-03-10T12:34:56.123456789Z")
+	postedDate := apptest.Timestamp("2024-03-11T12:34:56.987654321Z")
+	request.Records[0].Settlement = &httpclient.SettlementIntent{
+		Status:      httpclient.SettlementStatusPosted,
+		PendingDate: &pendingDate,
+		PostedDate:  &postedDate,
+	}
+	created := createTransaction(t, client, request).JSON201
+
+	current := created
+	for attempt := 1; attempt <= 2; attempt++ {
+		replaced, err := client.ReplaceTransactionRetainingRecords(context.Background(), current, request)
+		requireNoTransportError(t, "replace transaction with sub-microsecond settlement", err)
+		if replaced.StatusCode() != http.StatusOK {
+			t.Fatalf("replacement %d status = %d, want %d; body %s", attempt, replaced.StatusCode(), http.StatusOK, replaced.Body)
+		}
+		if replaced.JSON200.Etag != created.Etag || !replaced.JSON200.UpdatedAt.Equal(created.UpdatedAt) {
+			t.Fatalf("replacement %d etag/updated_at = %q/%s, want %q/%s", attempt, replaced.JSON200.Etag, replaced.JSON200.UpdatedAt, created.Etag, created.UpdatedAt)
+		}
+		current = replaced.JSON200
+	}
+}
+
+func TestTransactionReplaceDateOnlyPreservesStoredAmountUSDWhenValuationOmittedBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	refs := createTransactionRefs(t, client)
+	checking := client.Scenario().AccountWithCurrency("checking:PreservedValuation", "CHF")
+	request := httpclient.CreateTransactionRequest{
+		InitiatedDate: apptest.Date("2024-03-10"),
+		Records: []httpclient.CreateJournalRecordRequest{
+			{
+				AccountId:            checking.AccountId,
+				Amount:               "-12.34",
+				AmountUsd:            apptest.StringPtr("-7.89"),
+				Currency:             "CHF",
+				ReconciliationStatus: httpclient.Unreconciled,
+				Settlement:           apptest.PostedSettlement(),
+				Source:               httpclient.WritableSourceManual,
+			},
+			{
+				AccountId:            refs.MerchantAccountId,
+				Amount:               "12.34",
+				AmountUsd:            apptest.StringPtr("7.89"),
+				CategoryId:           &refs.CategoryId,
+				Currency:             "CHF",
+				ReconciliationStatus: httpclient.Unreconciled,
+				Source:               httpclient.WritableSourceManual,
+			},
+		},
+	}
+	created := createTransaction(t, client, request)
+
+	records := make([]httpclient.UpdateTransactionRequest_Records_Item, len(request.Records))
+	for index, record := range request.Records {
+		record.AmountUsd = nil
+		records[index] = apptest.ExistingTransactionRecord(created.JSON201.Records[index].RecordId, record)
+	}
+	replaced, err := client.REST().ReplaceTransactionWithResponse(
+		context.Background(),
+		created.JSON201.TransactionId,
+		&httpclient.ReplaceTransactionParams{IfMatch: created.JSON201.Etag},
+		httpclient.UpdateTransactionRequest{
+			InitiatedDate: apptest.Date("2024-03-11"),
+			Records:       records,
+		},
+	)
+	requireNoTransportError(t, "replace transaction without repeated valuation", err)
+	if replaced.StatusCode() != http.StatusOK {
+		t.Fatalf("replace transaction status = %d, want %d; body %s", replaced.StatusCode(), http.StatusOK, replaced.Body)
+	}
+	want := []string{"-7.89000000", "7.89000000"}
+	for index, record := range replaced.JSON200.Records {
+		if record.AmountUsd == nil || *record.AmountUsd != want[index] {
+			t.Fatalf("record %d amount_usd = %v, want %s", record.RecordId, record.AmountUsd, want[index])
+		}
+	}
+}
+
+func TestTransactionReplacePreservesStoredNullAmountUSDOnExactNoOpBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	refs := createTransactionRefs(t, client)
+	checking := client.Scenario().AccountWithCurrency("checking:PreservedNullValuation", "CHF")
+	request := httpclient.CreateTransactionRequest{
+		InitiatedDate: apptest.Date("2024-03-10"),
+		Records: []httpclient.CreateJournalRecordRequest{
+			{
+				AccountId:            checking.AccountId,
+				Amount:               "-12.34",
+				Currency:             "CHF",
+				ReconciliationStatus: httpclient.Unreconciled,
+				Settlement: &httpclient.SettlementIntent{
+					Status:     httpclient.SettlementStatusPosted,
+					PostedDate: apptest.TimestampPtr("2024-03-10T23:59:59Z"),
+				},
+				Source: httpclient.WritableSourceManual,
+			},
+			{
+				AccountId:            refs.MerchantAccountId,
+				Amount:               "12.34",
+				CategoryId:           &refs.CategoryId,
+				Currency:             "CHF",
+				ReconciliationStatus: httpclient.Unreconciled,
+				Source:               httpclient.WritableSourceManual,
+			},
+		},
+	}
+	created := createTransaction(t, client, request)
+	for _, record := range created.JSON201.Records {
+		if record.AmountUsd != nil {
+			t.Fatalf("created record %d amount_usd = %v, want nil", record.RecordId, record.AmountUsd)
+		}
+	}
+
+	createExchangeRate(t, client, "USD", "CHF", "0.90000000", "2024-03-10T00:00:00Z")
+	replaced, err := client.ReplaceTransactionRetainingRecords(context.Background(), created.JSON201, request)
+	requireNoTransportError(t, "replace transaction exact no-op after rate becomes available", err)
+	if replaced.StatusCode() != http.StatusOK {
+		t.Fatalf("exact no-op status = %d, want %d; body %s", replaced.StatusCode(), http.StatusOK, replaced.Body)
+	}
+	if replaced.JSON200.Etag != created.JSON201.Etag || !replaced.JSON200.UpdatedAt.Equal(created.JSON201.UpdatedAt) {
+		t.Fatalf("exact no-op etag/updated_at = %q/%s, want %q/%s", replaced.JSON200.Etag, replaced.JSON200.UpdatedAt, created.JSON201.Etag, created.JSON201.UpdatedAt)
+	}
+	for _, record := range replaced.JSON200.Records {
+		if record.AmountUsd != nil {
+			t.Fatalf("replaced record %d amount_usd = %v, want nil", record.RecordId, record.AmountUsd)
+		}
+	}
+}
+
+func TestTransactionReplaceEquivalentTagOrderIsExactNoOpBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	refs := createTransactionRefs(t, client)
+	secondTag := client.Scenario().Tag("Purpose:Reordered")
+	request := balancedTransactionRequest(refs)
+	request.Records[0].TagIds = apptest.Int64SlicePtr(refs.TagId, secondTag.TagId)
+	created := createTransaction(t, client, request)
+
+	request.Records[0].TagIds = apptest.Int64SlicePtr(secondTag.TagId, refs.TagId)
+	replaced, err := client.ReplaceTransactionRetainingRecords(
+		context.Background(),
+		created.JSON201,
+		request,
+	)
+	requireNoTransportError(t, "replace transaction with reordered tags", err)
+	if replaced.StatusCode() != http.StatusOK {
+		t.Fatalf("reordered-tag replace status = %d, want %d; body %s", replaced.StatusCode(), http.StatusOK, replaced.Body)
+	}
+	if replaced.JSON200.Etag != created.JSON201.Etag || !replaced.JSON200.UpdatedAt.Equal(created.JSON201.UpdatedAt) {
+		t.Fatalf("reordered-tag etag/updated_at = %q/%s, want %q/%s", replaced.JSON200.Etag, replaced.JSON200.UpdatedAt, created.JSON201.Etag, created.JSON201.UpdatedAt)
+	}
+	for index := range created.JSON201.Records {
+		if replaced.JSON200.Records[index].UpdatedAt != created.JSON201.Records[index].UpdatedAt {
+			t.Fatalf("reordered-tag record %d updated_at = %s, want %s", replaced.JSON200.Records[index].RecordId, replaced.JSON200.Records[index].UpdatedAt, created.JSON201.Records[index].UpdatedAt)
+		}
+	}
+}
+
 func TestTransactionReplaceInfersMissingNonUSDAmountUSD(t *testing.T) {
 	client := newSharedClient(t)
 	refs := createTransactionRefs(t, client)
@@ -97,7 +592,7 @@ func TestTransactionReplaceInfersMissingNonUSDAmountUSD(t *testing.T) {
 	createExchangeRate(t, client, "USD", "EUR", "1.10000000", "2024-03-12T00:00:00Z")
 	eurCash := client.Scenario().AccountWithCurrency("cash:Replace:EUR", "EUR")
 	eurMerchant := client.Scenario().Account("merchant:Replace:EuroCoffee")
-	replacement := httpclient.UpdateTransactionRequest{
+	replacement := httpclient.CreateTransactionRequest{
 		InitiatedDate: apptest.Date("2024-03-12"),
 		Records: []httpclient.CreateJournalRecordRequest{
 			{
@@ -119,7 +614,7 @@ func TestTransactionReplaceInfersMissingNonUSDAmountUSD(t *testing.T) {
 		},
 	}
 
-	replaced, err := client.REST().ReplaceTransactionWithResponse(context.Background(), created.JSON201.TransactionId, replacement)
+	replaced, err := client.ReplaceTransactionRetainingRecords(context.Background(), created.JSON201, replacement)
 	requireNoTransportError(t, "replace transaction", err)
 	if replaced.StatusCode() != http.StatusOK {
 		t.Fatalf("replace status = %d, want %d; body %s", replaced.StatusCode(), http.StatusOK, replaced.Body)
@@ -196,7 +691,7 @@ func TestTransactionCancelBoundary(t *testing.T) {
 	apptest.AssertTransactionLifecycle(t, cancelled.JSON200, httpclient.TransactionLifecycleStatusCancelled)
 	assertTransactionCancelPreservedFields(t, created.JSON201.Records, cancelled.JSON200.Records)
 
-	replaced, err := client.REST().ReplaceTransactionWithResponse(context.Background(), created.JSON201.TransactionId, replacementTransactionRequest(refs))
+	replaced, err := client.ReplaceTransactionRetainingRecords(context.Background(), cancelled.JSON200, replacementTransactionRequest(refs))
 	requireNoTransportError(t, "replace cancelled transaction", err)
 	if replaced.StatusCode() != http.StatusBadRequest {
 		t.Fatalf("replace cancelled status = %d, want %d; body %s", replaced.StatusCode(), http.StatusBadRequest, replaced.Body)
@@ -235,6 +730,9 @@ func TestTransactionCancelBoundary(t *testing.T) {
 		t.Fatalf("repeat cancel transaction status = %d, want %d; body %s", repeated.StatusCode(), http.StatusOK, repeated.Body)
 	}
 	apptest.AssertTransactionLifecycle(t, repeated.JSON200, httpclient.TransactionLifecycleStatusCancelled)
+	if repeated.JSON200.Etag != cancelled.JSON200.Etag || !repeated.JSON200.UpdatedAt.Equal(cancelled.JSON200.UpdatedAt) {
+		t.Fatalf("repeat cancel etag/updated_at = %q/%s, want %q/%s", repeated.JSON200.Etag, repeated.JSON200.UpdatedAt, cancelled.JSON200.Etag, cancelled.JSON200.UpdatedAt)
+	}
 
 	accountIDs := []int64{refs.CheckingAccountId}
 	balances, err := client.REST().ListAccountBalancesWithResponse(context.Background(), &httpclient.ListAccountBalancesParams{AccountIds: &accountIDs})
@@ -265,6 +763,9 @@ func TestTransactionCancelBoundary(t *testing.T) {
 	requireNoTransportError(t, "repeat restore transaction", err)
 	if restoredAgain.StatusCode() != http.StatusOK {
 		t.Fatalf("repeat restore transaction status = %d, want %d; body %s", restoredAgain.StatusCode(), http.StatusOK, restoredAgain.Body)
+	}
+	if restoredAgain.JSON200.Etag != restored.JSON200.Etag || !restoredAgain.JSON200.UpdatedAt.Equal(restored.JSON200.UpdatedAt) {
+		t.Fatalf("repeat restore etag/updated_at = %q/%s, want %q/%s", restoredAgain.JSON200.Etag, restoredAgain.JSON200.UpdatedAt, restored.JSON200.Etag, restored.JSON200.UpdatedAt)
 	}
 
 	missing, err := client.REST().CancelTransactionWithResponse(context.Background(), created.JSON201.TransactionId+9999)
@@ -841,12 +1342,32 @@ func TestRecordSearchUpdatedAtOrderingBoundary(t *testing.T) {
 	firstReplacement.InitiatedDate = apptest.Date("2024-01-02")
 	firstMemo := "First"
 	firstReplacement.Records[0].Memo = &firstMemo
-	replacedFirst, err := client.REST().ReplaceTransactionWithResponse(context.Background(), first.JSON201.TransactionId, httpclient.UpdateTransactionRequest(firstReplacement))
-	requireNoTransportError(t, "replace first transaction", err)
+	replacedFirst, err := client.REST().ReplaceTransactionWithResponse(
+		context.Background(),
+		first.JSON201.TransactionId,
+		&httpclient.ReplaceTransactionParams{IfMatch: first.JSON201.Etag},
+		httpclient.UpdateTransactionRequest{
+			InitiatedDate: firstReplacement.InitiatedDate,
+			Records: []httpclient.UpdateTransactionRequest_Records_Item{
+				apptest.NewTransactionRecord(firstReplacement.Records[0]),
+				apptest.ExistingTransactionRecord(first.JSON201.Records[1].RecordId, firstReplacement.Records[1]),
+			},
+		},
+	)
+	requireNoTransportError(t, "replace first transaction checking record", err)
 	if replacedFirst.StatusCode() != http.StatusOK {
-		t.Fatalf("replace first transaction status = %d, want %d; body %s", replacedFirst.StatusCode(), http.StatusOK, replacedFirst.Body)
+		t.Fatalf("replace first transaction checking record status = %d, want %d; body %s", replacedFirst.StatusCode(), http.StatusOK, replacedFirst.Body)
 	}
-	firstRecordID := replacedFirst.JSON200.Records[0].RecordId
+	var firstRecordID int64
+	for _, record := range replacedFirst.JSON200.Records {
+		if record.AccountId == refs.CheckingAccountId {
+			firstRecordID = record.RecordId
+			break
+		}
+	}
+	if firstRecordID == 0 {
+		t.Fatal("replacement checking record is missing")
+	}
 	secondRecordID := second.JSON201.Records[0].RecordId
 	olderRecordID := older.JSON201.Records[0].RecordId
 	if first.JSON201.TransactionId >= second.JSON201.TransactionId || firstRecordID <= secondRecordID {
@@ -1199,11 +1720,11 @@ func createSearchRefs(t *testing.T, client *apptest.Client) searchRefs {
 	}
 }
 
-func replacementTransactionRequest(refs transactionRefs) httpclient.UpdateTransactionRequest {
+func replacementTransactionRequest(refs transactionRefs) httpclient.CreateTransactionRequest {
 	memo := "Replacement"
 	pendingDate := apptest.Timestamp("2024-03-12T00:00:00Z")
 	postedDate := apptest.Timestamp("2024-03-13T00:00:00Z")
-	return httpclient.UpdateTransactionRequest{
+	return httpclient.CreateTransactionRequest{
 		InitiatedDate: apptest.Date("2024-03-12"),
 		Records: []httpclient.CreateJournalRecordRequest{
 			{
@@ -1425,19 +1946,5 @@ func assertAccountRecordSearchNotFound(t *testing.T, client *apptest.Client, acc
 	}
 	if response.JSON404 == nil || response.JSON404.Error.Code != httpclient.APIErrorCodeNotFound {
 		t.Fatalf("missing account records error = %+v, want %q; body %s", response.JSON404, httpclient.APIErrorCodeNotFound, response.Body)
-	}
-}
-
-func assertNoRecordIDs(t *testing.T, records []httpclient.JournalRecord, blocked []int64) {
-	t.Helper()
-
-	blockedSet := map[int64]struct{}{}
-	for _, id := range blocked {
-		blockedSet[id] = struct{}{}
-	}
-	for _, record := range records {
-		if _, ok := blockedSet[record.RecordId]; ok {
-			t.Fatalf("record id %d unexpectedly reused from tombstoned records %+v", record.RecordId, blocked)
-		}
 	}
 }

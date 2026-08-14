@@ -343,7 +343,13 @@ ORDER BY recurring_definition_id ASC`,
 // CreateExpectedOccurrences atomically inserts a catch-up batch of EXPECTED occurrences and generated transactions.
 func (s *RecurringStore) CreateExpectedOccurrences(ctx context.Context, inputs []recurring.ExpectedOccurrenceInput) error {
 	return s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
+		seenSlots := make(map[string]struct{}, len(inputs))
 		for _, input := range inputs {
+			key := fmt.Sprintf("%d/%s", input.Definition.ID, input.ScheduledDate.String())
+			if _, exists := seenSlots[key]; exists {
+				return services.ErrConflict
+			}
+			seenSlots[key] = struct{}{}
 			if _, err := createOccurrenceWithTransactionTx(
 				ctx,
 				tx,
@@ -355,9 +361,6 @@ func (s *RecurringStore) CreateExpectedOccurrences(ctx context.Context, inputs [
 				input.Records,
 				nil,
 			); err != nil {
-				if errors.Is(err, services.ErrConflict) || errors.Is(err, services.ErrNotFound) {
-					continue
-				}
 				return err
 			}
 		}
@@ -415,6 +418,9 @@ func createOccurrenceWithTransactionTx(
 	records []transactions.PersistJournalRecordInput,
 	reviewedAt *time.Time,
 ) (recurring.Occurrence, error) {
+	if err := ensureRecurringOccurrenceSlotAvailable(ctx, tx, db, definition.ID, scheduledDate); err != nil {
+		return recurring.Occurrence{}, err
+	}
 	occurrence, err := scanMaterializedRecurringOccurrence(tx.QueryRowContext(
 		ctx,
 		`INSERT INTO `+db.accountingName("recurring_occurrence")+` (
@@ -441,9 +447,6 @@ RETURNING recurring_occurrence_id, recurring_definition_id, scheduled_date, CAST
 		return recurring.Occurrence{}, services.ErrNotFound
 	}
 	if err != nil {
-		if isUniqueConstraintError(err) {
-			return recurring.Occurrence{}, services.ErrConflict
-		}
 		return recurring.Occurrence{}, fmt.Errorf("insert recurring occurrence: %w", err)
 	}
 
@@ -569,17 +572,26 @@ WHERE jr.account_id = a.account_id
 			nullableTimestampArg(pendingDate), nullableTimestampArg(postedDate), *current.GeneratedTransactionID); err != nil {
 			return fmt.Errorf("stamp recurring occurrence balance records: %w", err)
 		}
-		if _, err := tx.ExecContext(
+		result, err = tx.ExecContext(
 			ctx,
 			`UPDATE `+s.db.accountingName("recurring_occurrence")+`
 SET status = CAST('CONFIRMED' AS `+s.db.accountingName("recurring_occurrence_status")+`),
     reviewed_at = ?,
     updated_at = CURRENT_TIMESTAMP
-WHERE recurring_occurrence_id = ?`,
+WHERE recurring_occurrence_id = ?
+  AND status = CAST('EXPECTED' AS `+s.db.accountingName("recurring_occurrence_status")+`)`,
 			timestampArg(reviewedAt),
 			id,
-		); err != nil {
+		)
+		if err != nil {
 			return fmt.Errorf("confirm recurring occurrence: %w", err)
+		}
+		updated, err = result.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("confirm recurring occurrence affected rows: %w", err)
+		}
+		if updated == 0 {
+			return services.ErrConflict
 		}
 		confirmed, err := selectRecurringOccurrenceByID(ctx, tx, s.db, id)
 		if err != nil {
@@ -652,18 +664,27 @@ WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 		if updated == 0 {
 			return services.ErrConflict
 		}
-		if _, err := tx.ExecContext(
+		result, err = tx.ExecContext(
 			ctx,
 			`UPDATE `+s.db.accountingName("recurring_occurrence")+`
 SET status = CAST('DISMISSED' AS `+s.db.accountingName("recurring_occurrence_status")+`),
     reviewed_at = ?,
     updated_at = ?
-WHERE recurring_occurrence_id = ?`,
+WHERE recurring_occurrence_id = ?
+  AND status = CAST('EXPECTED' AS `+s.db.accountingName("recurring_occurrence_status")+`)`,
 			timestampArg(dismissedAt),
 			timestampArg(dismissedAt),
 			id,
-		); err != nil {
+		)
+		if err != nil {
 			return fmt.Errorf("dismiss recurring occurrence: %w", err)
+		}
+		updated, err = result.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("dismiss recurring occurrence affected rows: %w", err)
+		}
+		if updated == 0 {
+			return services.ErrConflict
 		}
 		dismissed, err := selectRecurringOccurrenceByID(ctx, tx, s.db, id)
 		if err != nil {
@@ -767,6 +788,13 @@ func (s *RecurringStore) ResumeDefinition(
 	skippedSlots []values.CivilDate,
 ) (recurring.Definition, error) {
 	err := s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
+		seenSlots := make(map[string]struct{}, len(skippedSlots))
+		for _, slot := range skippedSlots {
+			if _, exists := seenSlots[slot.String()]; exists {
+				return services.ErrConflict
+			}
+			seenSlots[slot.String()] = struct{}{}
+		}
 		result, err := tx.ExecContext(
 			ctx,
 			`UPDATE `+s.db.accountingName("recurring_definition")+`
@@ -789,9 +817,6 @@ WHERE recurring_definition_id = ? AND tombstoned_at IS NULL`,
 		}
 		for _, slot := range skippedSlots {
 			if _, err := insertDeferredOccurrence(ctx, tx, s.db, definition.ID, definition.FQN, slot, definition.DefinitionVersion); err != nil {
-				if errors.Is(err, services.ErrConflict) {
-					continue
-				}
 				return err
 			}
 		}
@@ -911,6 +936,9 @@ func insertDeferredOccurrence(
 	scheduledDate values.CivilDate,
 	definitionVersion int64,
 ) (recurring.Occurrence, error) {
+	if err := ensureRecurringOccurrenceSlotAvailable(ctx, tx, db, definitionID, scheduledDate); err != nil {
+		return recurring.Occurrence{}, err
+	}
 	occurrence, err := scanMaterializedRecurringOccurrence(tx.QueryRowContext(
 		ctx,
 		`INSERT INTO `+db.accountingName("recurring_occurrence")+` (
@@ -924,13 +952,31 @@ RETURNING recurring_occurrence_id, recurring_definition_id, scheduled_date, CAST
 		definitionVersion,
 	), definitionFQN)
 	if err != nil {
-		if isUniqueConstraintError(err) {
-			return recurring.Occurrence{}, services.ErrConflict
-		}
 		return recurring.Occurrence{}, fmt.Errorf("insert deferred recurring occurrence: %w", err)
 	}
 
 	return occurrence, nil
+}
+
+func ensureRecurringOccurrenceSlotAvailable(
+	ctx context.Context,
+	queryer rowQuerier,
+	db *AppDB,
+	definitionID int64,
+	scheduledDate values.CivilDate,
+) error {
+	var exists bool
+	if err := queryer.QueryRowContext(ctx, `SELECT EXISTS (
+	SELECT 1
+	FROM `+db.accountingName("recurring_occurrence")+`
+	WHERE recurring_definition_id = ? AND scheduled_date = ?
+)`, definitionID, civilDateArg(scheduledDate)).Scan(&exists); err != nil {
+		return fmt.Errorf("check recurring occurrence slot: %w", err)
+	}
+	if exists {
+		return services.ErrConflict
+	}
+	return nil
 }
 
 type recurringOccurrenceScanner interface {

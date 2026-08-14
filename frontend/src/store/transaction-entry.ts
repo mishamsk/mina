@@ -18,6 +18,10 @@ export interface TransactionEntryLaunchContext {
 }
 
 export interface TransactionEntryLaunch {
+  readonly amountConflict?: {
+    readonly amount: string;
+    readonly recordIds: readonly [number, number];
+  };
   readonly transaction: Transaction;
   readonly type: TransactionEntryLaunchType;
 }

@@ -20,6 +20,7 @@ import {
   type CreateExchangeTransactionRequest,
   createIncome,
   type CreateIncomeTransactionRequest,
+  type CreateJournalRecordRequest,
   createJournalTransaction,
   createLedgerAccount,
   createLedgerCategory,
@@ -31,9 +32,11 @@ import {
   type CreateTransactionRequest,
   createTransfer,
   type CreateTransferTransactionRequest,
+  fetchTransactionById,
   type JournalRecord,
   type Member,
   replaceLedgerTransaction,
+  restoreTransactionById,
   type Tag,
   type Transaction,
   type TransactionClassification,
@@ -69,7 +72,7 @@ import {
   readTransactionEntryDraft,
   writeTransactionEntryDraft,
 } from "@/services/indexeddb";
-import type { LedgerLookupsSnapshot } from "@/store";
+import { getTransactionsSnapshot, type LedgerLookupsSnapshot } from "@/store";
 import {
   addCategoryPickerCategory,
   getUiPreferencesSnapshot,
@@ -128,13 +131,17 @@ export interface EntryPanelProps {
 }
 
 export type EntryPanelLaunch = {
+  readonly amountConflict?: {
+    readonly amount: string;
+    readonly recordIds: readonly [number, number];
+  };
   readonly transaction: Transaction;
   readonly type: "duplicate" | "edit" | "split";
 };
 
 export interface EntryPanelSaveContext {
-  readonly operation: "created" | "updated";
-  readonly previousTransaction?: Transaction;
+  readonly operation: "created" | "refreshed" | "updated";
+  readonly previousTransactions?: readonly Transaction[];
 }
 
 type FieldName =
@@ -169,6 +176,8 @@ type AdvancedRecordFieldName =
   | "amount"
   | "categoryId"
   | "currency"
+  | "externalId"
+  | "externalSystem"
   | "memberId"
   | "memo"
   | "pendingDateTime"
@@ -188,10 +197,12 @@ interface ShorthandFit {
 
 interface ReplacementContext {
   readonly fit?: ShorthandFit;
+  readonly restoreCancelledOnSave?: boolean;
   readonly transaction: Transaction;
 }
 
 interface LaunchDraft {
+  readonly baseline?: TransactionEntryDraft;
   readonly draft: TransactionEntryDraft;
   readonly persistence: DraftPersistenceMode;
   readonly replacement?: ReplacementContext;
@@ -388,6 +399,7 @@ const blankRecordRowDraft = (): JournalRecordRowDraft => ({
   settlement: "posted",
   reconciliationStatus: "unreconciled",
   source: "manual",
+  sourceRecordId: undefined,
   sourceAmount: undefined,
   sourceAmountUsd: undefined,
   sourceCurrency: undefined,
@@ -597,6 +609,41 @@ const shorthandFitRecordsInAdvancedOrder = (
     ];
   }
   return [fit.negativeRecord, fit.positiveRecord, ...fit.additionalRecords];
+};
+
+const advancedDraftFromShorthandReplacement = (
+  entryType: ShorthandTransactionEntryType,
+  draft: TransactionEntryTabDraft,
+  fit: ShorthandFit,
+  lookups: LedgerLookupsSnapshot | undefined,
+): AdvancedTransactionEntryDraft => {
+  const advancedDraft = shorthandDraftToAdvanced(entryType, draft, lookups);
+  const originalRecords = shorthandFitRecordsInAdvancedOrder(fit);
+  return {
+    ...advancedDraft,
+    records: advancedDraft.records.map((row, index) => {
+      const original =
+        entryType === "spend" && index > 0
+          ? originalRecords.find(
+              (record) =>
+                record.record_id ===
+                draft.spendMerchants[index - 1]?.sourceRecordId,
+            )
+          : originalRecords[index];
+      return original
+        ? {
+            ...recordRowDraftFromJournalRecord(original),
+            accountId: row.accountId,
+            amount: row.amount,
+            categoryId: row.categoryId,
+            currency: row.currency,
+            memberId: row.memberId,
+            memo: row.memo,
+            tagIds: row.tagIds,
+          }
+        : row;
+    }),
+  };
 };
 
 const defaultDraft = (): TransactionEntryDraft => ({
@@ -1027,6 +1074,21 @@ const writableRecordSource = (
 ): JournalRecordRowDraft["source"] =>
   record.source === "imported" ? "imported" : "manual";
 
+const retainedRecordOriginLabel = (
+  row: JournalRecordRowDraft,
+  transaction: Transaction | undefined,
+): string => {
+  const source = transaction?.records.find(
+    (record) => record.record_id === row.sourceRecordId,
+  )?.source;
+  if (source === "recurring_template") {
+    return "Recurring template · identity retained";
+  }
+  return row.source === "imported"
+    ? "Imported · identity retained"
+    : "Manual · identity retained";
+};
+
 const recordRowDraftFromJournalRecord = (
   record: JournalRecord,
 ): JournalRecordRowDraft => ({
@@ -1042,6 +1104,7 @@ const recordRowDraftFromJournalRecord = (
   settlement: record.settlement ?? "posted",
   reconciliationStatus: record.reconciliation_status,
   source: writableRecordSource(record),
+  sourceRecordId: record.record_id,
   sourceAmount: record.amount,
   sourceAmountUsd: record.amount_usd,
   sourceCurrency: record.currency,
@@ -1060,6 +1123,22 @@ const advancedDraftFromTransaction = (
     recordRowDraftFromJournalRecord,
   ),
 });
+
+const advancedDuplicateDraftFromTransaction = (
+  transaction: Transaction,
+): AdvancedTransactionEntryDraft => {
+  const draft = advancedDraftFromTransaction(transaction);
+  return {
+    ...draft,
+    records: draft.records.map((record) => ({
+      ...record,
+      source: "manual",
+      sourceRecordId: undefined,
+      sourceExternalId: undefined,
+      sourceExternalSystem: undefined,
+    })),
+  };
+};
 
 const splitDraftFromTransaction = (
   transaction: Transaction,
@@ -1140,6 +1219,9 @@ const recordRowUserInput = (row: JournalRecordRowDraft) => ({
   postedDateTime: row.postedDateTime.trim(),
   settlement: row.settlement,
   reconciliationStatus: row.reconciliationStatus,
+  source: row.source,
+  sourceExternalId: row.sourceExternalId?.trim(),
+  sourceExternalSystem: row.sourceExternalSystem?.trim(),
   tagIds: row.tagIds,
 });
 
@@ -1544,6 +1626,56 @@ const launchDraftFromTransaction = (
   launch: EntryPanelLaunch,
   lookups: LedgerLookupsSnapshot,
 ): LaunchDraft => {
+  if (launch.type === "edit" && launch.amountConflict) {
+    const conflictedRecordIDs = new Set(launch.amountConflict.recordIds);
+    const advanced = advancedDraftFromTransaction(launch.transaction);
+    const baseline = {
+      ...defaultDraft(),
+      activeTab: "advanced" as const,
+      advanced,
+    };
+    const hasRetainedConflictIdentity = advanced.records.some(
+      (record) =>
+        record.sourceRecordId !== undefined &&
+        conflictedRecordIDs.has(record.sourceRecordId),
+    );
+    const fallbackSigns = new Set<"negative" | "positive">();
+    return {
+      baseline,
+      draft: {
+        ...defaultDraft(),
+        activeTab: "advanced",
+        advanced: {
+          ...advanced,
+          records: advanced.records.map((record) => {
+            const sign = record.amount.startsWith("-")
+              ? "negative"
+              : "positive";
+            const matchesRetainedIdentity =
+              record.sourceRecordId !== undefined &&
+              conflictedRecordIDs.has(record.sourceRecordId);
+            const isFallbackMatch =
+              !hasRetainedConflictIdentity && !fallbackSigns.has(sign);
+            if (!matchesRetainedIdentity && !isFallbackMatch) {
+              return record;
+            }
+            fallbackSigns.add(sign);
+            return {
+              ...record,
+              amount: amountWithSign(launch.amountConflict!.amount, sign),
+            };
+          }),
+        },
+      },
+      persistence: "launch",
+      replacement: {
+        restoreCancelledOnSave:
+          launch.transaction.lifecycle_status === "cancelled",
+        transaction: launch.transaction,
+      },
+    };
+  }
+
   if (launch.type === "split") {
     return {
       draft: {
@@ -1570,7 +1702,10 @@ const launchDraftFromTransaction = (
       draft: {
         ...defaultDraft(),
         activeTab: "advanced",
-        advanced: advancedDraftFromTransaction(launch.transaction),
+        advanced:
+          launch.type === "duplicate"
+            ? advancedDuplicateDraftFromTransaction(launch.transaction)
+            : advancedDraftFromTransaction(launch.transaction),
       },
       persistence: launch.type === "duplicate" ? "ordinary" : "launch",
       replacement:
@@ -1586,7 +1721,10 @@ const launchDraftFromTransaction = (
     draft: {
       ...defaultDraft(),
       activeTab: fit.entryType,
-      advanced: advancedDraftFromTransaction(launch.transaction),
+      advanced:
+        launch.type === "duplicate"
+          ? advancedDuplicateDraftFromTransaction(launch.transaction)
+          : advancedDraftFromTransaction(launch.transaction),
       tabs: {
         ...defaultDraft().tabs,
         [fit.entryType]: tabDraftFromShorthandFit(launch.transaction, fit),
@@ -1845,6 +1983,29 @@ const validateAdvancedDraft = (
       errors[advancedErrorKey(rowIndex, "currency")] =
         "Use a 3-letter code or C:: crypto code.";
     }
+    if (row.sourceRecordId === undefined && row.source === "imported") {
+      const externalID = row.sourceExternalId?.trim() ?? "";
+      const externalSystem = row.sourceExternalSystem?.trim() ?? "";
+      if (externalID && !externalSystem) {
+        errors[advancedErrorKey(rowIndex, "externalSystem")] =
+          "External system is required with an external ID.";
+      }
+      if (externalSystem && !externalID) {
+        errors[advancedErrorKey(rowIndex, "externalId")] =
+          "External ID is required with an external system.";
+      }
+      if (row.sourceExternalId && row.sourceExternalId !== externalID) {
+        errors[advancedErrorKey(rowIndex, "externalId")] =
+          "Remove surrounding whitespace.";
+      }
+      if (
+        row.sourceExternalSystem &&
+        row.sourceExternalSystem !== externalSystem
+      ) {
+        errors[advancedErrorKey(rowIndex, "externalSystem")] =
+          "Remove surrounding whitespace.";
+      }
+    }
     if (
       isMovementAccountType(accountTypeForId(lookups, row.accountId)) &&
       row.pendingDateTime.trim() &&
@@ -1912,29 +2073,14 @@ const allCurrenciesBalanced = (balances: readonly CurrencyBalance[]): boolean =>
 
 const externalMetadataFromDraftRow = (
   row: JournalRecordRowDraft,
-): Pick<
-  UpdateTransactionRequest["records"][number],
-  "external_id" | "external_system"
+): Partial<
+  Pick<CreateJournalRecordRequest, "external_id" | "external_system">
 > => ({
   ...(row.sourceExternalId !== undefined
     ? { external_id: row.sourceExternalId }
     : {}),
   ...(row.sourceExternalSystem !== undefined
     ? { external_system: row.sourceExternalSystem }
-    : {}),
-});
-
-const externalMetadataFromJournalRecord = (
-  record: JournalRecord,
-): Pick<
-  UpdateTransactionRequest["records"][number],
-  "external_id" | "external_system"
-> => ({
-  ...(record.external_id !== undefined
-    ? { external_id: record.external_id }
-    : {}),
-  ...(record.external_system !== undefined
-    ? { external_system: record.external_system }
     : {}),
 });
 
@@ -1988,13 +2134,12 @@ const updateRecordFromDraftRow = (
     movementAccount && row.settlement === "posted"
       ? settlementDateTimeToISO(row.postedDateTime, row.sourcePostedDate)
       : undefined;
-  return {
+  const common = {
     account_id: row.accountId!,
     amount,
     category_id: row.categoryId ?? null,
     currency,
     ...amountUsdFromDraftRow(row),
-    ...externalMetadataFromDraftRow(row),
     member_id: row.memberId ?? null,
     memo: row.memo.trim() ? row.memo.trim() : null,
     settlement: movementAccount
@@ -2005,8 +2150,15 @@ const updateRecordFromDraftRow = (
         }
       : null,
     reconciliation_status: row.reconciliationStatus,
-    source: row.source,
     tag_ids: [...row.tagIds],
+  };
+  if (row.sourceRecordId !== undefined) {
+    return { ...common, record_id: row.sourceRecordId };
+  }
+  return {
+    ...common,
+    ...externalMetadataFromDraftRow(row),
+    source: row.source,
   };
 };
 
@@ -2017,6 +2169,77 @@ const updateBodyFromAdvancedDraft = (
   initiated_date: draft.date,
   records: draft.records.map((row) => updateRecordFromDraftRow(row, lookups)),
 });
+
+const transactionRecordIDs = (transaction: Transaction): readonly number[] =>
+  activeTransactionRecords(transaction).map((record) => record.record_id);
+
+const advancedDraftRebasedOnWinner = (
+  draft: AdvancedTransactionEntryDraft,
+  winner: Transaction,
+): AdvancedTransactionEntryDraft => {
+  const winnerByID = new Map(
+    activeTransactionRecords(winner).map((record) => [
+      record.record_id,
+      record,
+    ]),
+  );
+  const locallyRetainedIDs = new Set(
+    draft.records.flatMap((record) =>
+      record.sourceRecordId === undefined ? [] : [record.sourceRecordId],
+    ),
+  );
+  const records = draft.records.map((record): JournalRecordRowDraft => {
+    const winningRecord =
+      record.sourceRecordId === undefined
+        ? undefined
+        : winnerByID.get(record.sourceRecordId);
+    return {
+      ...record,
+      source: winningRecord
+        ? writableRecordSource(winningRecord)
+        : record.sourceRecordId !== undefined
+          ? "manual"
+          : record.source,
+      sourceAmount: winningRecord
+        ? winningRecord.amount
+        : record.sourceRecordId !== undefined
+          ? undefined
+          : record.sourceAmount,
+      sourceAmountUsd: winningRecord
+        ? winningRecord.amount_usd
+        : record.sourceRecordId !== undefined
+          ? undefined
+          : record.sourceAmountUsd,
+      sourceCurrency: winningRecord
+        ? winningRecord.currency
+        : record.sourceRecordId !== undefined
+          ? undefined
+          : record.sourceCurrency,
+      sourceExternalId: winningRecord
+        ? winningRecord.external_id
+        : record.sourceRecordId !== undefined
+          ? undefined
+          : record.sourceExternalId,
+      sourceExternalSystem: winningRecord
+        ? winningRecord.external_system
+        : record.sourceRecordId !== undefined
+          ? undefined
+          : record.sourceExternalSystem,
+      sourceRecordId: winningRecord?.record_id,
+    };
+  });
+
+  for (const record of activeTransactionRecords(winner)) {
+    if (
+      record.source === "imported" &&
+      !locallyRetainedIDs.has(record.record_id)
+    ) {
+      records.push(recordRowDraftFromJournalRecord(record));
+    }
+  }
+
+  return { ...draft, records };
+};
 
 const updateRecordFromShorthandDraft = (
   record: JournalRecord,
@@ -2040,7 +2263,6 @@ const updateRecordFromShorthandDraft = (
     category_id: categoryId ?? null,
     currency: normalizedCurrency,
     ...amountUsdFromJournalRecord(record, amount, normalizedCurrency),
-    ...externalMetadataFromJournalRecord(record),
     member_id: preserveOriginalMember
       ? (record.member_id ?? null)
       : (draft.memberId ?? null),
@@ -2057,7 +2279,7 @@ const updateRecordFromShorthandDraft = (
         }
       : null,
     reconciliation_status: record.reconciliation_status,
-    source: writableRecordSource(record),
+    record_id: record.record_id,
     tag_ids: [...draft.tagIds],
   };
 };
@@ -2189,8 +2411,8 @@ const updateBodyFromShorthandDraft = (
           ? draft.sourceAccountId!
           : draft.merchantAccountId!;
   const positiveAccountId = draft.destinationAccountId!;
-  const [primarySpendMerchant, ...remainingSpendMerchants] =
-    draft.spendMerchants;
+  const primarySpendMerchant = draft.spendMerchants[0];
+  const originalSpendRecords = [fit.positiveRecord, ...fit.additionalRecords];
 
   const records: UpdateTransactionRequest["records"] = [
     updateRecordFromShorthandDraft(
@@ -2207,45 +2429,32 @@ const updateBodyFromShorthandDraft = (
       preserveOriginalMemo,
     ),
     ...(fit.entryType === "spend" && primarySpendMerchant
-      ? [
-          updateRecordFromShorthandDraft(
-            fit.positiveRecord,
-            draft,
-            primarySpendMerchant.accountId!,
-            "positive",
-            primarySpendMerchant.categoryId,
-            primarySpendMerchant.amount,
-            draft.currency,
-            preserveOriginalMember,
-            preserveOriginalMemo,
-          ),
-          ...remainingSpendMerchants.map((merchant) => {
-            const originalRecord = fit.additionalRecords.find(
-              (record) => record.record_id === merchant.sourceRecordId,
-            );
-            return originalRecord
-              ? updateRecordFromShorthandDraft(
-                  originalRecord,
-                  draft,
-                  merchant.accountId!,
-                  "positive",
-                  merchant.categoryId,
-                  merchant.amount,
-                  draft.currency,
-                  preserveOriginalMember,
-                  preserveOriginalMemo,
-                )
-              : addedRecordFromShorthandDraft(
-                  fit.positiveRecord,
-                  draft,
-                  merchant.accountId!,
-                  normalizeAmount(merchant.amount)!,
-                  merchant.categoryId!,
-                  preserveOriginalMember,
-                  preserveOriginalMemo,
-                );
-          }),
-        ]
+      ? draft.spendMerchants.map((merchant) => {
+          const originalRecord = originalSpendRecords.find(
+            (record) => record.record_id === merchant.sourceRecordId,
+          );
+          return originalRecord
+            ? updateRecordFromShorthandDraft(
+                originalRecord,
+                draft,
+                merchant.accountId!,
+                "positive",
+                merchant.categoryId,
+                merchant.amount,
+                draft.currency,
+                preserveOriginalMember,
+                preserveOriginalMemo,
+              )
+            : addedRecordFromShorthandDraft(
+                fit.positiveRecord,
+                draft,
+                merchant.accountId!,
+                normalizeAmount(merchant.amount)!,
+                merchant.categoryId!,
+                preserveOriginalMember,
+                preserveOriginalMemo,
+              );
+        })
       : [
           updateRecordFromShorthandDraft(
             fit.positiveRecord,
@@ -2321,6 +2530,8 @@ const advancedFieldErrorsFromAPI = (message: string): AdvancedFieldErrors => {
       ["amount", ["amount"]],
       ["categoryId", ["category_id", "category"]],
       ["currency", ["currency"]],
+      ["externalId", ["external_id", "external id"]],
+      ["externalSystem", ["external_system", "external system"]],
       ["memberId", ["member_id", "member"]],
       ["memo", ["memo"]],
       ["postedDateTime", ["posted_date", "posted date"]],
@@ -2753,6 +2964,8 @@ export const EntryPanel = ({
   >();
   const [draftReady, setDraftReady] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [cancelledConflictSavePending, setCancelledConflictSavePending] =
+    useState(false);
   const [sessionCount, setSessionCount] = useState(0);
   const [sessionTransactions, setSessionTransactions] = useState<
     readonly Transaction[]
@@ -2762,6 +2975,8 @@ export const EntryPanel = ({
   const [replacement, setReplacement] = useState<
     ReplacementContext | undefined
   >();
+  const [replacementRefreshRequired, setReplacementRefreshRequired] =
+    useState(false);
   const templatesResource = useTransactionTemplatesResource(
     open && !replacement,
   );
@@ -2794,6 +3009,8 @@ export const EntryPanel = ({
   const [clearingDraft, setClearingDraft] = useState(false);
   const [clearDraftError, setClearDraftError] = useState<string>();
   const [confirmCloseDiscardOpen, setConfirmCloseDiscardOpen] = useState(false);
+  const [discardingConflictedEdit, setDiscardingConflictedEdit] =
+    useState(false);
   const [attentionErrorCount, setAttentionErrorCount] = useState(0);
   const [inlineCreatedLookups, setInlineCreatedLookups] = useState<{
     readonly accounts: readonly Account[];
@@ -2844,6 +3061,7 @@ export const EntryPanel = ({
   const clearDraftButtonRef = useRef<HTMLButtonElement>(null);
   const merchantRemoveButtonRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const dateInputRef = useRef<HTMLInputElement>(null);
+  const submitButtonRef = useRef<HTMLButtonElement>(null);
   const rememberedActiveTabRef = useRef<TransactionEntryType>("spend");
   const initialTabOverrideRef = useRef<TransactionEntryType | undefined>(
     undefined,
@@ -2866,6 +3084,23 @@ export const EntryPanel = ({
   const ordinaryDraftStoredRef = useRef(false);
   const lastStoredDraftFingerprintRef = useRef<string | undefined>(undefined);
   const templateFocusDeferredRef = useRef(false);
+  const cancelledConflictSavePendingRef = useRef(false);
+  const preserveFocusOnReplacementChangeRef = useRef(false);
+
+  const publishRefreshedReplacement = useCallback(() => {
+    if (
+      !replacement ||
+      !launch ||
+      (!replacementRefreshRequired &&
+        replacement.transaction.etag === launch.transaction.etag)
+    ) {
+      return undefined;
+    }
+    return onSaved(replacement.transaction, {
+      operation: "refreshed",
+      previousTransactions: [launch.transaction],
+    });
+  }, [launch, onSaved, replacement, replacementRefreshRequired]);
 
   const focusTemplatePicker = useCallback(() => {
     setTemplatePickerOpenOnFocus(false);
@@ -2878,6 +3113,9 @@ export const EntryPanel = ({
   }, []);
 
   const requestClose = useCallback(() => {
+    if (cancelledConflictSavePendingRef.current) {
+      return;
+    }
     const modifiedReplacement =
       replacement !== undefined &&
       launchDraftBaselineRef.current !== undefined &&
@@ -2886,8 +3124,13 @@ export const EntryPanel = ({
       setConfirmCloseDiscardOpen(true);
       return;
     }
+    const refreshedReplacement = publishRefreshedReplacement();
+    if (refreshedReplacement) {
+      void refreshedReplacement.finally(onClose);
+      return;
+    }
     onClose();
-  }, [draft, onClose, replacement]);
+  }, [draft, onClose, publishRefreshedReplacement, replacement]);
 
   useEffect(() => {
     if (!closeRequestRef) {
@@ -2963,6 +3206,12 @@ export const EntryPanel = ({
   const launchKey = launch
     ? `${launch.type}:${launch.transaction.transaction_id}`
     : `create:${initialTab ?? "remembered"}`;
+  const editorSessionRef = useRef({ generation: 0 });
+  useLayoutEffect(() => {
+    editorSessionRef.current = {
+      generation: editorSessionRef.current.generation + 1,
+    };
+  }, [launchKey, open]);
   const advancedSettlementDatesToggled =
     advancedSettlementDatesLaunchKey === launchKey;
   const launchLookupsReady = Boolean(lookups);
@@ -3015,7 +3264,7 @@ export const EntryPanel = ({
     setDraftPersistence(pendingLaunchDraft.persistence);
     launchDraftBaselineRef.current =
       pendingLaunchDraft.persistence === "launch"
-        ? pendingLaunchDraft.draft
+        ? (pendingLaunchDraft.baseline ?? pendingLaunchDraft.draft)
         : undefined;
     setPendingLaunchDraft(undefined);
     setConfirmDiscardDraftOpen(false);
@@ -3135,12 +3384,16 @@ export const EntryPanel = ({
           setReplacement(nextDraft.replacement);
           setDraftPersistence(nextDraft.persistence);
           launchDraftBaselineRef.current =
-            nextDraft.persistence === "launch" ? nextDraft.draft : undefined;
+            nextDraft.persistence === "launch"
+              ? (nextDraft.baseline ?? nextDraft.draft)
+              : undefined;
         }
         setPickerLifecycle((current) => current + 1);
         setInitializedLaunchKey(launchKey);
         setInitializedLaunch(launch);
         setDraftReady(true);
+        setSaving(false);
+        setReplacementRefreshRequired(false);
       }
     });
 
@@ -3206,6 +3459,10 @@ export const EntryPanel = ({
       return;
     }
     if (!currentDraftReady) {
+      return;
+    }
+    if (preserveFocusOnReplacementChangeRef.current) {
+      preserveFocusOnReplacementChangeRef.current = false;
       return;
     }
     if (!replacement && templatesColdLoading) {
@@ -3869,9 +4126,13 @@ export const EntryPanel = ({
 
   const focusAfterAdvancedRecordRemoval = useCallback((rowIndex: number) => {
     window.requestAnimationFrame(() => {
+      const enabledRemoveButton = (index: number) => {
+        const button = advancedRemoveButtonRefs.current[index];
+        return button && !button.disabled ? button : undefined;
+      };
       const target =
-        advancedRemoveButtonRefs.current[rowIndex] ??
-        advancedRemoveButtonRefs.current[rowIndex - 1] ??
+        enabledRemoveButton(rowIndex) ??
+        enabledRemoveButton(rowIndex - 1) ??
         addAdvancedRecordButtonRef.current;
       focusWithoutTooltip(target, { preventScroll: true });
     });
@@ -3879,9 +4140,13 @@ export const EntryPanel = ({
 
   const focusAfterMerchantRemoval = useCallback((merchantIndex: number) => {
     window.requestAnimationFrame(() => {
+      const enabledRemoveButton = (index: number) => {
+        const button = merchantRemoveButtonRefs.current[index];
+        return button && !button.disabled ? button : undefined;
+      };
       const target =
-        merchantRemoveButtonRefs.current[merchantIndex] ??
-        merchantRemoveButtonRefs.current[merchantIndex - 1] ??
+        enabledRemoveButton(merchantIndex) ??
+        enabledRemoveButton(merchantIndex - 1) ??
         addMerchantButtonRef.current;
       focusWithoutTooltip(target, { preventScroll: true });
     });
@@ -3925,27 +4190,12 @@ export const EntryPanel = ({
       lookups,
     );
     if (replacement?.fit?.entryType === activeShorthandTab) {
-      const originalRecords = shorthandFitRecordsInAdvancedOrder(
+      advancedDraft = advancedDraftFromShorthandReplacement(
+        activeShorthandTab,
+        activeTabDraft,
         replacement.fit,
+        lookups,
       );
-      advancedDraft = {
-        ...advancedDraft,
-        records: advancedDraft.records.map((row, index) => {
-          const original = originalRecords[index];
-          return original
-            ? {
-                ...recordRowDraftFromJournalRecord(original),
-                accountId: row.accountId,
-                amount: row.amount,
-                categoryId: row.categoryId,
-                currency: row.currency,
-                memberId: row.memberId,
-                memo: row.memo,
-                tagIds: row.tagIds,
-              }
-            : row;
-        }),
-      };
     }
 
     userSelectedActiveTabRef.current = true;
@@ -4214,25 +4464,205 @@ export const EntryPanel = ({
           );
         }
 
+        const submitSessionGeneration = editorSessionRef.current.generation;
+        const adoptReplacementWinner = async (winning: Transaction) => {
+          let winningLookups = lookups;
+          if (
+            activeTransactionRecords(winning).some(
+              (record) =>
+                accountTypeForId(winningLookups, record.account_id) ===
+                undefined,
+            )
+          ) {
+            await refreshLedgerLookups();
+            if (
+              editorSessionRef.current.generation !== submitSessionGeneration
+            ) {
+              return;
+            }
+            winningLookups = getTransactionsSnapshot().lookups;
+          }
+          const winningFit = winningLookups
+            ? shorthandFitFromTransaction(winning, winningLookups)
+            : undefined;
+          const structurallyChanged =
+            !sameIds(
+              transactionRecordIDs(replacement.transaction),
+              transactionRecordIDs(winning),
+            ) ||
+            (activeShorthandTab !== undefined &&
+              winningFit?.entryType !== activeShorthandTab);
+          const nextReplacement = {
+            fit:
+              structurallyChanged || replacement.fit === undefined
+                ? undefined
+                : winningFit,
+            restoreCancelledOnSave: winning.lifecycle_status === "cancelled",
+            transaction: winning,
+          };
+          latestReplacementRef.current = nextReplacement;
+          preserveFocusOnReplacementChangeRef.current = true;
+          setReplacement(nextReplacement);
+          if (structurallyChanged) {
+            setDraft((current) => {
+              const currentAdvanced =
+                current.activeTab === "advanced"
+                  ? current.advanced
+                  : replacement.fit?.entryType === current.activeTab
+                    ? advancedDraftFromShorthandReplacement(
+                        current.activeTab,
+                        current.tabs[current.activeTab],
+                        replacement.fit,
+                        winningLookups,
+                      )
+                    : current.advanced;
+              return {
+                ...current,
+                activeTab: "advanced",
+                advanced: advancedDraftRebasedOnWinner(
+                  currentAdvanced,
+                  winning,
+                ),
+              };
+            });
+          } else {
+            setDraft((current) =>
+              current.activeTab === "advanced"
+                ? {
+                    ...current,
+                    advanced: advancedDraftRebasedOnWinner(
+                      current.advanced,
+                      winning,
+                    ),
+                  }
+                : current,
+            );
+          }
+          setGeneralError(
+            winning.lifecycle_status === "cancelled"
+              ? structurallyChanged
+                ? "This transaction was cancelled elsewhere. Your draft was rebased with the latest record identities; review the Advanced journal and save again to restore the transaction and reapply it."
+                : "This transaction was cancelled elsewhere. Your draft is preserved; review it and save again to restore the transaction and reapply it."
+              : structurallyChanged
+                ? "This transaction changed elsewhere. Your draft was rebased with the latest record identities; review the Advanced journal and save again to reapply it."
+                : "This transaction changed elsewhere. Your draft is preserved; review it and save again to reapply it to the refreshed transaction.",
+          );
+        };
+        const cancelledConflictRetry =
+          replacement.transaction.lifecycle_status === "cancelled" &&
+          replacement.restoreCancelledOnSave === true;
+        cancelledConflictSavePendingRef.current = cancelledConflictRetry;
+        setCancelledConflictSavePending(cancelledConflictRetry);
         setSaving(true);
         try {
+          if (replacementRefreshRequired) {
+            const refreshed = await fetchTransactionById(
+              replacement.transaction.transaction_id,
+            );
+            if (
+              editorSessionRef.current.generation !== submitSessionGeneration
+            ) {
+              return;
+            }
+            if (!refreshed.data) {
+              setGeneralError(
+                `This transaction changed elsewhere, but the latest version could not be loaded. Your draft is preserved; try again. ${apiErrorMessage(refreshed.error)}`,
+              );
+              return;
+            }
+            setReplacementRefreshRequired(false);
+            await adoptReplacementWinner(refreshed.data);
+            return;
+          }
+          const transactionForReplace = replacement.transaction;
+          if (transactionForReplace.lifecycle_status === "cancelled") {
+            if (!replacement.restoreCancelledOnSave) {
+              setGeneralError(
+                "Restore this cancelled transaction before editing it.",
+              );
+              return;
+            }
+            const restored = await restoreTransactionById(
+              transactionForReplace.transaction_id,
+            );
+            if (
+              editorSessionRef.current.generation !== submitSessionGeneration
+            ) {
+              return;
+            }
+            if (!restored.data) {
+              setGeneralError(
+                apiErrorMessage(
+                  restored.error,
+                  "The cancelled transaction could not be restored. Your draft is preserved; refresh and try again.",
+                ),
+              );
+              return;
+            }
+            await adoptReplacementWinner(restored.data);
+            return;
+          }
           const result = await replaceLedgerTransaction(
-            replacement.transaction.transaction_id,
+            transactionForReplace.transaction_id,
+            transactionForReplace.etag,
             body,
           );
 
           if (result.data) {
+            const previousTransactions = [
+              ...(launch &&
+              launch.transaction.etag !== replacement.transaction.etag
+                ? [launch.transaction]
+                : []),
+              ...(replacement.transaction.etag !== transactionForReplace.etag
+                ? [replacement.transaction]
+                : []),
+            ];
             setReplacement(undefined);
+            setReplacementRefreshRequired(false);
             launchDraftBaselineRef.current = undefined;
             latestReplacementRef.current = undefined;
             await onSaved(result.data, {
               operation: "updated",
-              previousTransaction: replacement.transaction,
+              previousTransactions: [
+                transactionForReplace,
+                ...previousTransactions,
+              ],
             });
             setFieldErrors({});
             setAdvancedFieldErrors({});
             setGeneralError(undefined);
             onClose();
+            return;
+          }
+
+          if (result.response?.status === 412) {
+            if (
+              editorSessionRef.current.generation !== submitSessionGeneration
+            ) {
+              return;
+            }
+            const refreshed = await fetchTransactionById(
+              replacement.transaction.transaction_id,
+            );
+            if (
+              editorSessionRef.current.generation !== submitSessionGeneration
+            ) {
+              return;
+            }
+            if (refreshed.data) {
+              setReplacementRefreshRequired(false);
+              await adoptReplacementWinner(refreshed.data);
+              return;
+            }
+            setReplacementRefreshRequired(true);
+            setGeneralError(
+              `This transaction changed elsewhere, but the latest version could not be loaded. Your draft is preserved; try again. ${apiErrorMessage(refreshed.error)}`,
+            );
+            return;
+          }
+
+          if (editorSessionRef.current.generation !== submitSessionGeneration) {
             return;
           }
 
@@ -4257,7 +4687,11 @@ export const EntryPanel = ({
           focusFirstError();
           return;
         } finally {
-          setSaving(false);
+          cancelledConflictSavePendingRef.current = false;
+          if (editorSessionRef.current.generation === submitSessionGeneration) {
+            setCancelledConflictSavePending(false);
+            setSaving(false);
+          }
         }
       }
 
@@ -4302,7 +4736,13 @@ export const EntryPanel = ({
                   }
                 : null,
               reconciliation_status: "unreconciled" as const,
-              source: "manual" as const,
+              source: row.source,
+              ...(row.source === "imported"
+                ? {
+                    external_id: row.sourceExternalId,
+                    external_system: row.sourceExternalSystem,
+                  }
+                : {}),
               tag_ids: [...row.tagIds],
             };
           }),
@@ -4672,11 +5112,13 @@ export const EntryPanel = ({
       focusSpendMerchantError,
       focusFirstError,
       localAdvancedErrors,
+      launch,
       launchKey,
       lookups,
       onClose,
       onSaved,
       replacement,
+      replacementRefreshRequired,
     ],
   );
 
@@ -4709,6 +5151,8 @@ export const EntryPanel = ({
       : activeConfig
         ? options[activeConfig.secondaryAccountOptionSet]
         : [];
+  const chargeIsRetainedImportedRecord =
+    replacement?.fit?.additionalRecords[0]?.source === "imported";
 
   if (!open) {
     return null;
@@ -4747,15 +5191,29 @@ export const EntryPanel = ({
             {panelTitle}
           </h2>
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          aria-label="Close transaction editor"
-          onClick={requestClose}
-        >
-          <Close aria-hidden="true" />
-        </Button>
+        {cancelledConflictSavePending ? (
+          <Tooltip label="Wait for the cancelled-conflict retry before closing.">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              aria-label="Close transaction editor"
+              disabled
+            >
+              <Close aria-hidden="true" />
+            </Button>
+          </Tooltip>
+        ) : (
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            aria-label="Close transaction editor"
+            onClick={requestClose}
+          >
+            <Close aria-hidden="true" />
+          </Button>
+        )}
       </div>
 
       <div
@@ -4965,8 +5423,31 @@ export const EntryPanel = ({
                             </span>
                           ) : null}
                           <Tooltip
-                            label={`Remove record ${rowIndex + 1}`}
-                            asChild
+                            label={
+                              row.source === "imported" &&
+                              row.sourceRecordId !== undefined
+                                ? "Imported records keep their identity and cannot be removed"
+                                : `Remove record ${rowIndex + 1}`
+                            }
+                            asChild={
+                              !(
+                                row.source === "imported" &&
+                                row.sourceRecordId !== undefined
+                              )
+                            }
+                            className={
+                              row.source === "imported" &&
+                              row.sourceRecordId !== undefined
+                                ? "cursor-not-allowed"
+                                : undefined
+                            }
+                            redispatchEscape={false}
+                            triggerLabel={
+                              row.source === "imported" &&
+                              row.sourceRecordId !== undefined
+                                ? `Remove record ${rowIndex + 1} unavailable`
+                                : undefined
+                            }
                           >
                             <Button
                               ref={(element) => {
@@ -4977,6 +5458,10 @@ export const EntryPanel = ({
                               variant="outline"
                               size="icon-sm"
                               aria-label={`Remove record ${rowIndex + 1}`}
+                              disabled={
+                                row.source === "imported" &&
+                                row.sourceRecordId !== undefined
+                              }
                               onClick={() => {
                                 updateAdvancedDraft({
                                   records: draft.advanced.records.filter(
@@ -5164,6 +5649,128 @@ export const EntryPanel = ({
                               }}
                             />
                           </AdvancedRecordField>
+                          <AdvancedRecordField label="Origin">
+                            {row.sourceRecordId !== undefined ? (
+                              <Tooltip
+                                asChild
+                                label={retainedRecordOriginLabel(
+                                  row,
+                                  replacement?.transaction,
+                                )}
+                              >
+                                <div
+                                  className="bg-muted h-9 min-w-0 truncate border-2 border-[var(--border-ink)] px-2 py-[0.375rem] font-mono text-sm shadow-[var(--shadow-pixel)]"
+                                  tabIndex={0}
+                                >
+                                  {retainedRecordOriginLabel(
+                                    row,
+                                    replacement?.transaction,
+                                  )}
+                                </div>
+                              </Tooltip>
+                            ) : (
+                              <Select
+                                value={row.source}
+                                onValueChange={(value) => {
+                                  updateAdvancedRow(rowIndex, {
+                                    source:
+                                      value as JournalRecordRowDraft["source"],
+                                    ...(value === "manual"
+                                      ? {
+                                          sourceExternalId: undefined,
+                                          sourceExternalSystem: undefined,
+                                        }
+                                      : {}),
+                                  });
+                                }}
+                              >
+                                <SelectTrigger
+                                  id={`advanced-record-${rowIndex}-source`}
+                                  className="w-full"
+                                  aria-label={`Record ${rowIndex + 1} origin`}
+                                >
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="manual">Manual</SelectItem>
+                                  <SelectItem value="imported">
+                                    Imported
+                                  </SelectItem>
+                                </SelectContent>
+                              </Select>
+                            )}
+                          </AdvancedRecordField>
+                          {row.sourceRecordId === undefined &&
+                          row.source === "imported" ? (
+                            <>
+                              <AdvancedRecordField label="External system">
+                                <input
+                                  id={`advanced-record-${rowIndex}-external-system`}
+                                  aria-label={`Record ${rowIndex + 1} external system`}
+                                  aria-invalid={Boolean(
+                                    advancedFieldError(
+                                      advancedFieldErrors,
+                                      rowIndex,
+                                      "externalSystem",
+                                    ),
+                                  )}
+                                  className="bg-card h-9 w-full border-2 border-[var(--border-ink)] px-2 font-mono text-sm shadow-[var(--shadow-pixel)]"
+                                  value={row.sourceExternalSystem ?? ""}
+                                  onBlur={() => {
+                                    setAdvancedFieldErrors(
+                                      validateAdvancedDraft(draft.advanced),
+                                    );
+                                  }}
+                                  onChange={(event) => {
+                                    updateAdvancedRow(rowIndex, {
+                                      sourceExternalSystem:
+                                        event.target.value || null,
+                                    });
+                                  }}
+                                />
+                                <FieldError
+                                  message={advancedFieldError(
+                                    advancedFieldErrors,
+                                    rowIndex,
+                                    "externalSystem",
+                                  )}
+                                />
+                              </AdvancedRecordField>
+                              <AdvancedRecordField label="External ID">
+                                <input
+                                  id={`advanced-record-${rowIndex}-external-id`}
+                                  aria-label={`Record ${rowIndex + 1} external ID`}
+                                  aria-invalid={Boolean(
+                                    advancedFieldError(
+                                      advancedFieldErrors,
+                                      rowIndex,
+                                      "externalId",
+                                    ),
+                                  )}
+                                  className="bg-card h-9 w-full border-2 border-[var(--border-ink)] px-2 font-mono text-sm shadow-[var(--shadow-pixel)]"
+                                  value={row.sourceExternalId ?? ""}
+                                  onBlur={() => {
+                                    setAdvancedFieldErrors(
+                                      validateAdvancedDraft(draft.advanced),
+                                    );
+                                  }}
+                                  onChange={(event) => {
+                                    updateAdvancedRow(rowIndex, {
+                                      sourceExternalId:
+                                        event.target.value || null,
+                                    });
+                                  }}
+                                />
+                                <FieldError
+                                  message={advancedFieldError(
+                                    advancedFieldErrors,
+                                    rowIndex,
+                                    "externalId",
+                                  )}
+                                />
+                              </AdvancedRecordField>
+                            </>
+                          ) : null}
                           {isMovementAccountType(
                             accountTypeForId(lookups, row.accountId),
                           ) ? (
@@ -5490,117 +6097,155 @@ export const EntryPanel = ({
                 {activeTab === "spend" ? (
                   <>
                     {activeTabDraft.spendMerchants.map(
-                      (merchant, merchantIndex) => (
-                        <fieldset
-                          key={merchant.draftId}
-                          className="flex flex-col gap-3 border-2 border-[var(--border-ink)] bg-[var(--band)] p-3"
-                          aria-label={`Merchant ${merchantIndex + 1}`}
-                        >
-                          <legend className="font-heading px-1 text-xs font-semibold uppercase">
-                            Merchant {merchantIndex + 1}
-                          </legend>
-                          <EntityPicker
-                            key={`${pickerLifecycle}:${activeTab}:${merchant.draftId}:account`}
-                            createConflictOptions={
-                              createConflictOptions.accounts
-                            }
-                            createOption={createFlowAccountOption}
-                            id={`spend-merchant-${merchantIndex}-account`}
-                            label="Merchant account"
-                            options={options.flowAccounts}
-                            value={merchant.accountId}
-                            onChange={(accountId) => {
-                              updateSpendMerchant(merchantIndex, merchant, {
-                                accountId,
-                              });
-                            }}
-                          />
-                          <FieldError
-                            message={
-                              merchantFieldErrors[merchant.draftId]?.accountId
-                            }
-                          />
-                          <div className="flex flex-col gap-1">
-                            <label
-                              htmlFor={`spend-merchant-${merchantIndex}-amount`}
-                              className="text-sm font-semibold"
-                            >
-                              Amount
-                            </label>
-                            <input
-                              id={`spend-merchant-${merchantIndex}-amount`}
-                              inputMode="decimal"
-                              className="bg-card h-9 border-2 border-[var(--border-ink)] px-2 font-mono text-sm shadow-[var(--shadow-pixel)]"
-                              value={merchant.amount}
-                              onBlur={() => {
-                                validateSpendMerchantField(merchant, "amount");
-                              }}
-                              onChange={(event) => {
+                      (merchant, merchantIndex) => {
+                        const merchantIsRetainedImportedRecord =
+                          merchant.sourceRecordId !== undefined &&
+                          replacement?.transaction.records.some(
+                            (record) =>
+                              record.record_id === merchant.sourceRecordId &&
+                              record.source === "imported",
+                          );
+                        const merchantCanBeRemoved =
+                          activeTabDraft.spendMerchants.length > 1;
+                        return (
+                          <fieldset
+                            key={merchant.draftId}
+                            className="flex flex-col gap-3 border-2 border-[var(--border-ink)] bg-[var(--band)] p-3"
+                            aria-label={`Merchant ${merchantIndex + 1}`}
+                          >
+                            <legend className="font-heading px-1 text-xs font-semibold uppercase">
+                              Merchant {merchantIndex + 1}
+                            </legend>
+                            <EntityPicker
+                              key={`${pickerLifecycle}:${activeTab}:${merchant.draftId}:account`}
+                              createConflictOptions={
+                                createConflictOptions.accounts
+                              }
+                              createOption={createFlowAccountOption}
+                              id={`spend-merchant-${merchantIndex}-account`}
+                              label="Merchant account"
+                              options={options.flowAccounts}
+                              value={merchant.accountId}
+                              onChange={(accountId) => {
                                 updateSpendMerchant(merchantIndex, merchant, {
-                                  amount: event.target.value,
+                                  accountId,
                                 });
                               }}
                             />
                             <FieldError
                               message={
-                                merchantFieldErrors[merchant.draftId]?.amount
+                                merchantFieldErrors[merchant.draftId]?.accountId
                               }
                             />
-                          </div>
-                          <EntityPicker
-                            key={`${pickerLifecycle}:${activeTab}:${merchant.draftId}:category`}
-                            createConflictOptions={
-                              createConflictOptions.categories
-                            }
-                            createOption={(fqn) =>
-                              createCategoryOption(fqn, "expense")
-                            }
-                            id={`spend-merchant-${merchantIndex}-category`}
-                            label="Category"
-                            options={options.categories}
-                            value={merchant.categoryId}
-                            onChange={(categoryId) => {
-                              updateSpendMerchant(merchantIndex, merchant, {
-                                categoryId,
-                              });
-                            }}
-                          />
-                          <FieldError
-                            message={
-                              merchantFieldErrors[merchant.draftId]?.categoryId
-                            }
-                          />
-                          {merchantIndex > 0 ? (
-                            <Button
-                              ref={(element) => {
-                                merchantRemoveButtonRefs.current[
-                                  merchantIndex
-                                ] = element;
-                              }}
-                              type="button"
-                              variant="outline"
-                              onClick={() => {
-                                updateActiveTabDraft({
-                                  spendMerchants:
-                                    activeTabDraft.spendMerchants.filter(
-                                      (_merchant, index) =>
-                                        index !== merchantIndex,
-                                    ),
+                            <div className="flex flex-col gap-1">
+                              <label
+                                htmlFor={`spend-merchant-${merchantIndex}-amount`}
+                                className="text-sm font-semibold"
+                              >
+                                Amount
+                              </label>
+                              <input
+                                id={`spend-merchant-${merchantIndex}-amount`}
+                                inputMode="decimal"
+                                className="bg-card h-9 border-2 border-[var(--border-ink)] px-2 font-mono text-sm shadow-[var(--shadow-pixel)]"
+                                value={merchant.amount}
+                                onBlur={() => {
+                                  validateSpendMerchantField(
+                                    merchant,
+                                    "amount",
+                                  );
+                                }}
+                                onChange={(event) => {
+                                  updateSpendMerchant(merchantIndex, merchant, {
+                                    amount: event.target.value,
+                                  });
+                                }}
+                              />
+                              <FieldError
+                                message={
+                                  merchantFieldErrors[merchant.draftId]?.amount
+                                }
+                              />
+                            </div>
+                            <EntityPicker
+                              key={`${pickerLifecycle}:${activeTab}:${merchant.draftId}:category`}
+                              createConflictOptions={
+                                createConflictOptions.categories
+                              }
+                              createOption={(fqn) =>
+                                createCategoryOption(fqn, "expense")
+                              }
+                              id={`spend-merchant-${merchantIndex}-category`}
+                              label="Category"
+                              options={options.categories}
+                              value={merchant.categoryId}
+                              onChange={(categoryId) => {
+                                updateSpendMerchant(merchantIndex, merchant, {
+                                  categoryId,
                                 });
-                                setMerchantFieldErrors((currentErrors) => {
-                                  const nextErrors = { ...currentErrors };
-                                  delete nextErrors[merchant.draftId];
-                                  return nextErrors;
-                                });
-                                focusAfterMerchantRemoval(merchantIndex);
                               }}
-                            >
-                              <Trash aria-hidden="true" />
-                              Remove merchant
-                            </Button>
-                          ) : null}
-                        </fieldset>
-                      ),
+                            />
+                            <FieldError
+                              message={
+                                merchantFieldErrors[merchant.draftId]
+                                  ?.categoryId
+                              }
+                            />
+                            {merchantCanBeRemoved &&
+                            merchantIsRetainedImportedRecord ? (
+                              <Tooltip
+                                label="Imported records keep their identity and cannot be removed"
+                                className="w-full cursor-not-allowed"
+                                redispatchEscape={false}
+                                triggerLabel="Remove merchant unavailable"
+                              >
+                                <Button
+                                  ref={(element) => {
+                                    merchantRemoveButtonRefs.current[
+                                      merchantIndex
+                                    ] = element;
+                                  }}
+                                  type="button"
+                                  variant="outline"
+                                  className="w-full"
+                                  disabled={merchantIsRetainedImportedRecord}
+                                >
+                                  <Trash aria-hidden="true" />
+                                  Remove merchant
+                                </Button>
+                              </Tooltip>
+                            ) : merchantCanBeRemoved ? (
+                              <Button
+                                ref={(element) => {
+                                  merchantRemoveButtonRefs.current[
+                                    merchantIndex
+                                  ] = element;
+                                }}
+                                type="button"
+                                variant="outline"
+                                onClick={() => {
+                                  updateActiveTabDraft({
+                                    spendMerchants:
+                                      activeTabDraft.spendMerchants.filter(
+                                        (_merchant, index) =>
+                                          index !== merchantIndex,
+                                      ),
+                                  });
+                                  setMerchantFieldErrors((currentErrors) => {
+                                    const nextErrors = { ...currentErrors };
+                                    delete nextErrors[merchant.draftId];
+                                    return nextErrors;
+                                  });
+                                  focusAfterMerchantRemoval(merchantIndex);
+                                }}
+                              >
+                                <Trash aria-hidden="true" />
+                                Remove merchant
+                              </Button>
+                            ) : null}
+                          </fieldset>
+                        );
+                      },
                     )}
                     <Button
                       ref={addMerchantButtonRef}
@@ -5860,22 +6505,41 @@ export const EntryPanel = ({
                         }}
                       />
                       <FieldError message={fieldErrors.chargeCategoryId} />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => {
-                          updateActiveTabDraft({
-                            chargeAccountId: undefined,
-                            chargeAmount: "",
-                            chargeCategoryId: undefined,
-                            chargeEnabled: false,
-                          });
-                          focusAfterChargeRemoval();
-                        }}
-                      >
-                        <Trash aria-hidden="true" />
-                        Remove charge
-                      </Button>
+                      {chargeIsRetainedImportedRecord ? (
+                        <Tooltip
+                          label="Imported records keep their identity and cannot be removed"
+                          className="w-full cursor-not-allowed"
+                          redispatchEscape={false}
+                          triggerLabel="Remove charge unavailable"
+                        >
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="w-full"
+                            disabled
+                          >
+                            <Trash aria-hidden="true" />
+                            Remove charge
+                          </Button>
+                        </Tooltip>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => {
+                            updateActiveTabDraft({
+                              chargeAccountId: undefined,
+                              chargeAmount: "",
+                              chargeCategoryId: undefined,
+                              chargeEnabled: false,
+                            });
+                            focusAfterChargeRemoval();
+                          }}
+                        >
+                          <Trash aria-hidden="true" />
+                          Remove charge
+                        </Button>
+                      )}
                     </fieldset>
                   ) : (
                     <Button
@@ -6011,7 +6675,11 @@ export const EntryPanel = ({
                     {saving ? "Saving" : "Save and close"}
                   </Button>
                 ) : null}
-                <Button type="submit" disabled={submitDisabled}>
+                <Button
+                  ref={submitButtonRef}
+                  type="submit"
+                  disabled={submitDisabled}
+                >
                   <Check aria-hidden="true" />
                   {saving
                     ? "Saving"
@@ -6150,13 +6818,30 @@ export const EntryPanel = ({
       </ConfirmationDialog>
       <ConfirmationDialog
         cancelLabel="Keep editing"
+        cancelPendingTooltip="Transaction refresh is in progress."
         confirmIcon={<Trash aria-hidden="true" />}
         confirmLabel="Discard changes"
+        confirmPendingTooltip="Transaction refresh is already in progress."
         errorMessage={undefined}
-        onConfirm={onClose}
-        onOpenChange={setConfirmCloseDiscardOpen}
+        onConfirm={() => {
+          const refreshedReplacement = publishRefreshedReplacement();
+          if (refreshedReplacement) {
+            setDiscardingConflictedEdit(true);
+            void refreshedReplacement.finally(() => {
+              setDiscardingConflictedEdit(false);
+              onClose();
+            });
+            return;
+          }
+          onClose();
+        }}
+        onOpenChange={(nextOpen) => {
+          if (!discardingConflictedEdit) {
+            setConfirmCloseDiscardOpen(nextOpen);
+          }
+        }}
         open={confirmCloseDiscardOpen}
-        pending={false}
+        pending={discardingConflictedEdit}
         pendingLabel="Discarding"
         title="Discard transaction changes?"
       >

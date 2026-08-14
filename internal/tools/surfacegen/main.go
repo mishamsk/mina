@@ -913,13 +913,26 @@ func validateOperationShape(path string, operationID string, info operationInfo)
 			continue
 		}
 		parameter := parameterRef.Value
-		if parameter.In != openapi3.ParameterInPath && parameter.In != openapi3.ParameterInQuery {
+		if parameter.In != openapi3.ParameterInPath && parameter.In != openapi3.ParameterInQuery && parameter.In != openapi3.ParameterInHeader {
 			findings = append(findings, finding{
 				path:      path,
 				operation: operationID,
 				message: fmt.Sprintf(
-					"parameter %q uses unsupported location %q; only path and query are supported",
+					"parameter %q uses unsupported location %q; only path, query, and header are supported",
 					parameter.Name, parameter.In,
+				),
+			})
+			continue
+		}
+		if parameter.In == openapi3.ParameterInHeader &&
+			(!parameter.Required || parameter.Schema == nil || parameter.Schema.Value == nil ||
+				!parameter.Schema.Value.Type.Is(openapi3.TypeString)) {
+			findings = append(findings, finding{
+				path:      path,
+				operation: operationID,
+				message: fmt.Sprintf(
+					"header parameter %q must use a required string schema",
+					parameter.Name,
 				),
 			})
 			continue

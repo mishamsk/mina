@@ -30,6 +30,7 @@ import {
   canSplitTransaction,
   captureTransactionEntryLaunchContext,
   EntryModal,
+  invalidateAccountRegistersForTransaction,
   refreshLedgerLookups,
   refreshViewsAfterEntrySave,
   transactionEntrySavedEvent,
@@ -415,6 +416,7 @@ export const AppShell = ({ children }: AppShellProps) => {
           if (
             result.data &&
             !result.data.tombstoned_at &&
+            (type !== "edit" || result.data.lifecycle_status === "active") &&
             (type !== "split" || canSplitTransaction(result.data))
           ) {
             resolveTransactionEntryRoute(entryParam, {
@@ -429,7 +431,9 @@ export const AppShell = ({ children }: AppShellProps) => {
               result.error,
               type === "split"
                 ? `Transaction #${transactionId} is unavailable for Split.`
-                : `Transaction #${transactionId} could not be found.`,
+                : type === "edit"
+                  ? `Transaction #${transactionId} is unavailable for Edit.`
+                  : `Transaction #${transactionId} could not be found.`,
             ),
           );
         });
@@ -734,7 +738,7 @@ export const AppShell = ({ children }: AppShellProps) => {
             : undefined;
           await refreshViewsAfterEntrySave(
             transaction,
-            context.previousTransaction,
+            context.previousTransactions,
             {
               onPageRefresh: (rowRemainsVisible) => {
                 window.requestAnimationFrame(() => {
@@ -755,11 +759,29 @@ export const AppShell = ({ children }: AppShellProps) => {
                   : "blocking",
             },
           );
-          window.dispatchEvent(
-            new CustomEvent(transactionEntrySavedEvent, {
-              detail: transaction,
-            }),
-          );
+          let publishedTransaction =
+            context.operation === "refreshed" ? undefined : transaction;
+          if (context.operation === "refreshed") {
+            const latest = await fetchTransactionById(
+              transaction.transaction_id,
+            );
+            publishedTransaction = latest.data;
+            if (latest.data) {
+              invalidateAccountRegistersForTransaction(latest.data, [
+                transaction,
+              ]);
+            }
+          }
+          if (publishedTransaction) {
+            window.dispatchEvent(
+              new CustomEvent(transactionEntrySavedEvent, {
+                detail: publishedTransaction,
+              }),
+            );
+          }
+          if (context.operation === "refreshed") {
+            return;
+          }
           entrySaveNoticeIdRef.current += 1;
           setEntrySaveNotice({
             id: entrySaveNoticeIdRef.current,

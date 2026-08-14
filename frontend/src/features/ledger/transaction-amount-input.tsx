@@ -1,10 +1,15 @@
+import { Pencil } from "pixelarticons/react";
 import { useEffect, useId, useRef, useState } from "react";
 
 import type { JournalRecord, Transaction } from "@/api";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { currencyDisplayMarker } from "@/utils/currency";
 
-import type { AmountSavePageRefresh } from "./transaction-amount-update";
+import {
+  type AmountSavePageRefresh,
+  TransactionAmountConflictError,
+} from "./transaction-amount-update";
 import { transactionRowFallback } from "./transaction-row-focus";
 
 const amountPattern = /^\d+(\.\d{1,8})?$/;
@@ -51,7 +56,20 @@ interface TransactionAmountInputProps {
   readonly testIdPrefix: string;
   readonly transaction: Transaction;
   readonly onInvalidChange?: (invalid: boolean) => void;
-  readonly onPendingChange?: (pending: boolean, successful?: boolean) => void;
+  readonly onPendingChange?: (
+    pending: boolean,
+    successful?: boolean,
+    staleConflict?: boolean,
+  ) => void;
+  readonly onRecoverConflict?: (
+    transaction: Transaction,
+    records: readonly [JournalRecord, JournalRecord],
+    amount: string,
+  ) => void;
+  readonly onDiscardConflict?: (
+    transaction: Transaction,
+    onPageRefresh?: AmountSavePageRefresh,
+  ) => Promise<void>;
   readonly onSave: (
     transaction: Transaction,
     amount: string,
@@ -62,7 +80,9 @@ interface TransactionAmountInputProps {
 export const TransactionAmountInput = ({
   disabled = false,
   onInvalidChange,
+  onDiscardConflict,
   onPendingChange,
+  onRecoverConflict,
   onSave,
   records,
   testIdPrefix,
@@ -71,18 +91,25 @@ export const TransactionAmountInput = ({
   const amountFromRecords = compactAmount(records[0].amount);
   const [draftAmount, setDraftAmount] = useState<string>();
   const [errorMessage, setErrorMessage] = useState<string>();
+  const [staleConflict, setStaleConflict] = useState(false);
   const [saving, setSaving] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const onInvalidChangeRef = useRef(onInvalidChange);
+  const onPendingChangeRef = useRef(onPendingChange);
   const pendingFocusTargetRef = useRef<HTMLElement | undefined>(undefined);
   const savingRef = useRef(false);
   const skipNextBlurRef = useRef(false);
+  const staleConflictRef = useRef(false);
   const errorId = useId();
   const amount = draftAmount ?? amountFromRecords;
 
   useEffect(() => {
     onInvalidChangeRef.current = onInvalidChange;
   }, [onInvalidChange]);
+
+  useEffect(() => {
+    onPendingChangeRef.current = onPendingChange;
+  }, [onPendingChange]);
 
   useEffect(
     () => () => {
@@ -95,6 +122,8 @@ export const TransactionAmountInput = ({
     onInvalidChange?.(false);
     setDraftAmount(undefined);
     setErrorMessage(undefined);
+    setStaleConflict(false);
+    staleConflictRef.current = false;
   };
 
   const save = async (focusTarget?: HTMLElement) => {
@@ -121,9 +150,23 @@ export const TransactionAmountInput = ({
       return;
     }
     if (normalizedAmount === normalizeAmount(amountFromRecords)) {
+      const restoreFallback = transactionRowFallback(
+        inputRef.current,
+        transaction.transaction_id,
+      );
+      if (staleConflict && onDiscardConflict) {
+        await onDiscardConflict(transaction, (visible) => {
+          if (!visible) {
+            restoreFallback();
+          }
+        });
+      }
       onInvalidChange?.(false);
       setDraftAmount(undefined);
       setErrorMessage(undefined);
+      setStaleConflict(false);
+      staleConflictRef.current = false;
+      onPendingChangeRef.current?.(false, true, false);
       if (focusTarget) {
         skipNextBlurRef.current = true;
         focusTarget.focus();
@@ -139,10 +182,11 @@ export const TransactionAmountInput = ({
     );
     pendingFocusTargetRef.current = focusTarget;
     savingRef.current = true;
-    onPendingChange?.(true);
+    onPendingChangeRef.current?.(true);
     setSaving(true);
     setErrorMessage(undefined);
     let successful = false;
+    let conflictRetained = staleConflict;
     try {
       const rowRemainsVisible = await onSave(
         transaction,
@@ -155,6 +199,8 @@ export const TransactionAmountInput = ({
       );
       successful = true;
       setDraftAmount(undefined);
+      setStaleConflict(false);
+      staleConflictRef.current = false;
       if (rowRemainsVisible === false) {
         restoreFallback();
       } else if (pendingFocusTargetRef.current?.isConnected) {
@@ -162,6 +208,10 @@ export const TransactionAmountInput = ({
         pendingFocusTargetRef.current.focus();
       }
     } catch (error) {
+      const conflicted = error instanceof TransactionAmountConflictError;
+      conflictRetained = conflictRetained || conflicted;
+      setStaleConflict(conflictRetained);
+      staleConflictRef.current = conflictRetained;
       setErrorMessage(
         error instanceof Error ? error.message : "The API request failed.",
       );
@@ -178,7 +228,7 @@ export const TransactionAmountInput = ({
     } finally {
       pendingFocusTargetRef.current = undefined;
       savingRef.current = false;
-      onPendingChange?.(false, successful);
+      onPendingChangeRef.current?.(false, successful, conflictRetained);
       setSaving(false);
     }
   };
@@ -203,6 +253,8 @@ export const TransactionAmountInput = ({
           "bg-card flex h-8 w-full min-w-24 items-center border-2 border-[var(--border-ink)] px-2 font-mono text-sm shadow-[var(--shadow-chip)]",
           errorMessage && "border-destructive",
           inputTone,
+          disabled &&
+            "bg-muted text-muted-foreground cursor-not-allowed border-[var(--muted-foreground)] shadow-none",
         )}
         data-transaction-row-interactive
       >
@@ -212,15 +264,22 @@ export const TransactionAmountInput = ({
           aria-describedby={errorMessage ? errorId : undefined}
           aria-disabled={saving || disabled ? true : undefined}
           aria-invalid={errorMessage ? true : undefined}
-          className="min-w-0 flex-1 bg-transparent text-right font-mono tabular-nums"
+          className={cn(
+            "min-w-0 flex-1 bg-transparent text-right font-mono tabular-nums",
+            disabled && "cursor-not-allowed",
+          )}
           data-testid={`${testIdPrefix}-amount-input`}
           id={`${testIdPrefix}-amount`}
           inputMode="decimal"
           readOnly={saving || disabled}
+          tabIndex={disabled ? -1 : undefined}
           value={amount}
           onBlur={() => {
             if (skipNextBlurRef.current) {
               skipNextBlurRef.current = false;
+              return;
+            }
+            if (staleConflictRef.current) {
               return;
             }
             void save();
@@ -235,7 +294,21 @@ export const TransactionAmountInput = ({
               if (draftAmount !== undefined || errorMessage) {
                 event.preventDefault();
                 event.stopPropagation();
+                const refreshAfterDiscard = staleConflict && onDiscardConflict;
+                const restoreFallback = transactionRowFallback(
+                  inputRef.current,
+                  transaction.transaction_id,
+                );
                 restore();
+                if (refreshAfterDiscard) {
+                  void refreshAfterDiscard(transaction, (visible) => {
+                    if (visible && inputRef.current?.isConnected) {
+                      inputRef.current.focus({ preventScroll: true });
+                      return;
+                    }
+                    restoreFallback();
+                  });
+                }
               }
               return;
             }
@@ -264,13 +337,28 @@ export const TransactionAmountInput = ({
         </span>
       </span>
       {errorMessage ? (
-        <p
-          id={errorId}
-          className="text-destructive max-w-44 text-right text-xs"
-          role="alert"
-        >
-          {errorMessage}
-        </p>
+        <div className="flex max-w-52 flex-col items-end gap-1">
+          <p
+            id={errorId}
+            className="text-destructive text-right text-xs"
+            role="alert"
+          >
+            {errorMessage}
+          </p>
+          {staleConflict && disabled && onRecoverConflict ? (
+            <Button
+              className="h-7 px-2 text-xs"
+              type="button"
+              variant="outline"
+              onClick={() => {
+                onRecoverConflict(transaction, records, amount);
+              }}
+            >
+              <Pencil aria-hidden="true" />
+              Review in Advanced
+            </Button>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );

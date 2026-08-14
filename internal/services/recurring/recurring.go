@@ -19,6 +19,7 @@ import (
 	"github.com/mishamsk/mina/internal/services/transactions"
 	"github.com/mishamsk/mina/internal/services/transactiontemplates"
 	"github.com/mishamsk/mina/internal/services/values"
+	"github.com/mishamsk/mina/internal/x/lease"
 )
 
 // ScheduleClass identifies the recurring schedule class derived from schedule_rule.kind.
@@ -239,9 +240,15 @@ type AmountUSDDeriver interface {
 	SignedAmountUSD(context.Context, string, values.Decimal, values.CivilDate) (*values.Decimal, error)
 }
 
-// ReferenceSerializer serializes dependent writes with dictionary deletes.
-type ReferenceSerializer interface {
-	SerializeReferenceOperation(func() error) error
+// ReferenceCoordinator coordinates definition mutations with dependent writes.
+type ReferenceCoordinator interface {
+	WithSharedLease(context.Context, func(context.Context) error) error
+	WithExclusiveLease(context.Context, func(context.Context) error) error
+}
+
+// OccurrenceWriter serializes recurring occurrence slot and lifecycle writes.
+type OccurrenceWriter interface {
+	WithExclusiveLease(context.Context, func(context.Context) error) error
 }
 
 // Service owns recurring definition use cases and validation.
@@ -253,7 +260,8 @@ type Service struct {
 	members              MemberReferenceValidator
 	templates            TemplateReader
 	amountUSD            AmountUSDDeriver
-	refs                 ReferenceSerializer
+	refs                 ReferenceCoordinator
+	occurrences          OccurrenceWriter
 	clock                transactions.Clock
 	currencyUsageChanged func()
 }
@@ -267,7 +275,8 @@ func NewService(
 	members MemberReferenceValidator,
 	templates TemplateReader,
 	amountUSD AmountUSDDeriver,
-	refs ReferenceSerializer,
+	refs ReferenceCoordinator,
+	occurrences OccurrenceWriter,
 	clock transactions.Clock,
 	currencyUsageChanged func(),
 ) *Service {
@@ -280,6 +289,7 @@ func NewService(
 		templates:            templates,
 		amountUSD:            amountUSD,
 		refs:                 refs,
+		occurrences:          occurrences,
 		clock:                clock,
 		currencyUsageChanged: currencyUsageChanged,
 	}
@@ -288,7 +298,7 @@ func NewService(
 // Create validates and creates a recurring definition.
 func (s *Service) Create(ctx context.Context, input WriteInput) (Definition, error) {
 	var definition Definition
-	if err := s.refs.SerializeReferenceOperation(func() error {
+	if err := s.refs.WithExclusiveLease(ctx, func(ctx context.Context) error {
 		save, err := s.prepareCreateInput(ctx, input)
 		if err != nil {
 			return err
@@ -385,14 +395,21 @@ func (s *Service) ConfirmOccurrence(ctx context.Context, id int64, settlement tr
 	if err != nil {
 		return Occurrence{}, err
 	}
-	occurrence, err := s.repo.ConfirmOccurrence(ctx, id, pendingDate, postedDate, now)
-	if errors.Is(err, services.ErrNotFound) {
-		return Occurrence{}, services.NotFound("recurring occurrence not found")
-	}
-	if errors.Is(err, services.ErrConflict) {
-		return Occurrence{}, services.InvalidRequest("recurring occurrence must be expected")
-	}
-	if err != nil {
+	var occurrence Occurrence
+	if err := s.occurrences.WithExclusiveLease(ctx, func(ctx context.Context) error {
+		confirmed, err := s.repo.ConfirmOccurrence(ctx, id, pendingDate, postedDate, now)
+		if errors.Is(err, services.ErrNotFound) {
+			return services.NotFound("recurring occurrence not found")
+		}
+		if errors.Is(err, services.ErrConflict) {
+			return services.InvalidRequest("recurring occurrence must be expected")
+		}
+		if err != nil {
+			return err
+		}
+		occurrence = confirmed
+		return nil
+	}); err != nil {
 		return Occurrence{}, err
 	}
 	s.notifyCurrencyUsageChanged()
@@ -405,14 +422,21 @@ func (s *Service) DismissOccurrence(ctx context.Context, id int64) (Occurrence, 
 	if id <= 0 {
 		return Occurrence{}, services.InvalidRequest("recurring_occurrence_id must be positive")
 	}
-	occurrence, err := s.repo.DismissOccurrence(ctx, id, s.clock.Now().UTC())
-	if errors.Is(err, services.ErrNotFound) {
-		return Occurrence{}, services.NotFound("recurring occurrence not found")
-	}
-	if errors.Is(err, services.ErrConflict) {
-		return Occurrence{}, services.InvalidRequest("recurring occurrence must be expected")
-	}
-	if err != nil {
+	var occurrence Occurrence
+	if err := s.occurrences.WithExclusiveLease(ctx, func(ctx context.Context) error {
+		dismissed, err := s.repo.DismissOccurrence(ctx, id, s.clock.Now().UTC())
+		if errors.Is(err, services.ErrNotFound) {
+			return services.NotFound("recurring occurrence not found")
+		}
+		if errors.Is(err, services.ErrConflict) {
+			return services.InvalidRequest("recurring occurrence must be expected")
+		}
+		if err != nil {
+			return err
+		}
+		occurrence = dismissed
+		return nil
+	}); err != nil {
 		return Occurrence{}, err
 	}
 
@@ -424,12 +448,14 @@ func (s *Service) ConfirmNext(ctx context.Context, definitionID int64, today val
 	if definitionID <= 0 {
 		return Occurrence{}, services.InvalidRequest("recurring_definition_id must be positive")
 	}
-	if err := s.materializeDueOccurrences(ctx, today); err != nil {
-		return Occurrence{}, err
-	}
-
 	var occurrence Occurrence
-	if err := s.refs.SerializeReferenceOperation(func() error {
+	if err := lease.Combine(ctx, []lease.Func{
+		s.refs.WithSharedLease,
+		s.occurrences.WithExclusiveLease,
+	}, func(ctx context.Context) error {
+		if err := s.materializeDueOccurrencesSerialized(ctx, today); err != nil {
+			return err
+		}
 		definition, err := s.repo.Get(ctx, definitionID)
 		if errors.Is(err, services.ErrNotFound) {
 			return services.NotFound("recurring definition not found")
@@ -474,39 +500,49 @@ func (s *Service) Defer(ctx context.Context, definitionID int64, today values.Ci
 	if definitionID <= 0 {
 		return Occurrence{}, services.InvalidRequest("recurring_definition_id must be positive")
 	}
-	if err := s.materializeDueOccurrences(ctx, today); err != nil {
-		return Occurrence{}, err
-	}
-	definition, err := s.repo.Get(ctx, definitionID)
-	if errors.Is(err, services.ErrNotFound) {
-		return Occurrence{}, services.NotFound("recurring definition not found")
-	}
-	if err != nil {
-		return Occurrence{}, err
-	}
-	if definition.PausedAt != nil {
-		return Occurrence{}, services.InvalidRequest("recurring definition is paused")
-	}
-	if definition.ScheduleClass != ScheduleClassInterval {
-		return Occurrence{}, services.InvalidRequest("defer is only supported for interval recurring definitions")
-	}
-	every, unit, err := deferOffset(input, definition.ScheduleRule)
-	if err != nil {
-		return Occurrence{}, err
-	}
-	scheduledDate, err := NextDueDateAfter(definition.ScheduleRule, definition.AnchorDate, definition.LastOccurrenceDate)
-	if err != nil {
-		return Occurrence{}, err
-	}
-	newAnchor := IntervalDueDate(scheduledDate, every, unit)
-	occurrence, err := s.repo.DeferOccurrenceAndShiftAnchor(ctx, definition, scheduledDate, newAnchor)
-	if errors.Is(err, services.ErrConflict) {
-		return Occurrence{}, services.Conflict("recurring occurrence slot already exists")
-	}
-	if errors.Is(err, services.ErrNotFound) {
-		return Occurrence{}, services.NotFound("recurring definition not found")
-	}
-	if err != nil {
+	var occurrence Occurrence
+	if err := lease.Combine(ctx, []lease.Func{
+		s.refs.WithExclusiveLease,
+		s.occurrences.WithExclusiveLease,
+	}, func(ctx context.Context) error {
+		if err := s.materializeDueOccurrencesSerialized(ctx, today); err != nil {
+			return err
+		}
+		definition, err := s.repo.Get(ctx, definitionID)
+		if errors.Is(err, services.ErrNotFound) {
+			return services.NotFound("recurring definition not found")
+		}
+		if err != nil {
+			return err
+		}
+		if definition.PausedAt != nil {
+			return services.InvalidRequest("recurring definition is paused")
+		}
+		if definition.ScheduleClass != ScheduleClassInterval {
+			return services.InvalidRequest("defer is only supported for interval recurring definitions")
+		}
+		every, unit, err := deferOffset(input, definition.ScheduleRule)
+		if err != nil {
+			return err
+		}
+		scheduledDate, err := NextDueDateAfter(definition.ScheduleRule, definition.AnchorDate, definition.LastOccurrenceDate)
+		if err != nil {
+			return err
+		}
+		newAnchor := IntervalDueDate(scheduledDate, every, unit)
+		deferred, err := s.repo.DeferOccurrenceAndShiftAnchor(ctx, definition, scheduledDate, newAnchor)
+		if errors.Is(err, services.ErrConflict) {
+			return services.Conflict("recurring occurrence slot already exists")
+		}
+		if errors.Is(err, services.ErrNotFound) {
+			return services.NotFound("recurring definition not found")
+		}
+		if err != nil {
+			return err
+		}
+		occurrence = deferred
+		return nil
+	}); err != nil {
 		return Occurrence{}, err
 	}
 
@@ -518,20 +554,26 @@ func (s *Service) Pause(ctx context.Context, definitionID int64) (Definition, er
 	if definitionID <= 0 {
 		return Definition{}, services.InvalidRequest("recurring_definition_id must be positive")
 	}
-	definition, err := s.repo.PauseDefinition(ctx, definitionID)
-	if errors.Is(err, services.ErrNotFound) {
-		return Definition{}, services.NotFound("recurring definition not found")
-	}
-	if err != nil {
+	var definition Definition
+	if err := s.refs.WithExclusiveLease(ctx, func(ctx context.Context) error {
+		paused, err := s.repo.PauseDefinition(ctx, definitionID)
+		if errors.Is(err, services.ErrNotFound) {
+			return services.NotFound("recurring definition not found")
+		}
+		if err != nil {
+			return err
+		}
+		withDisplay, err := s.withDisplayAmounts(ctx, withNextDueDate(paused))
+		if err != nil {
+			return err
+		}
+		definition = withDisplay
+		return nil
+	}); err != nil {
 		return Definition{}, err
 	}
 
-	withDisplay, err := s.withDisplayAmounts(ctx, withNextDueDate(definition))
-	if err != nil {
-		return Definition{}, err
-	}
-
-	return withDisplay, nil
+	return definition, nil
 }
 
 // Resume clears pause state and prevents backlog across the paused window.
@@ -539,45 +581,50 @@ func (s *Service) Resume(ctx context.Context, definitionID int64, today values.C
 	if definitionID <= 0 {
 		return Definition{}, services.InvalidRequest("recurring_definition_id must be positive")
 	}
-	definition, err := s.repo.Get(ctx, definitionID)
-	if errors.Is(err, services.ErrNotFound) {
-		return Definition{}, services.NotFound("recurring definition not found")
-	}
-	if err != nil {
-		return Definition{}, err
-	}
-	if definition.PausedAt == nil {
-		withDisplay, err := s.withDisplayAmounts(ctx, withNextDueDate(definition))
-		if err != nil {
-			return Definition{}, err
+	var resumed Definition
+	if err := lease.Combine(ctx, []lease.Func{
+		s.refs.WithExclusiveLease,
+		s.occurrences.WithExclusiveLease,
+	}, func(ctx context.Context) error {
+		definition, err := s.repo.Get(ctx, definitionID)
+		if errors.Is(err, services.ErrNotFound) {
+			return services.NotFound("recurring definition not found")
 		}
-		return withDisplay, nil
-	}
-	newAnchor := definition.AnchorDate
-	skippedSlots := []values.CivilDate{}
-	if definition.ScheduleClass == ScheduleClassInterval {
-		newAnchor = today
-	} else {
-		skipThrough := values.CivilDateFromTime(today.Time().AddDate(0, 0, -1))
-		skippedSlots, err = s.skippedDateRuleSlots(ctx, definition, skipThrough)
 		if err != nil {
-			return Definition{}, err
+			return err
 		}
-	}
-	resumed, err := s.repo.ResumeDefinition(ctx, definition, newAnchor, skippedSlots)
-	if errors.Is(err, services.ErrNotFound) {
-		return Definition{}, services.NotFound("recurring definition not found")
-	}
-	if err != nil {
+		resumed = definition
+		if definition.PausedAt != nil {
+			newAnchor := definition.AnchorDate
+			skippedSlots := []values.CivilDate{}
+			if definition.ScheduleClass == ScheduleClassInterval {
+				newAnchor = today
+			} else {
+				skipThrough := values.CivilDateFromTime(today.Time().AddDate(0, 0, -1))
+				skippedSlots, err = s.skippedDateRuleSlots(ctx, definition, skipThrough)
+				if err != nil {
+					return err
+				}
+			}
+			updated, err := s.repo.ResumeDefinition(ctx, definition, newAnchor, skippedSlots)
+			if errors.Is(err, services.ErrNotFound) {
+				return services.NotFound("recurring definition not found")
+			}
+			if err != nil {
+				return err
+			}
+			resumed = updated
+		}
+		withDisplay, err := s.withDisplayAmounts(ctx, withNextDueDate(resumed))
+		if err != nil {
+			return err
+		}
+		resumed = withDisplay
+		return nil
+	}); err != nil {
 		return Definition{}, err
 	}
-
-	withDisplay, err := s.withDisplayAmounts(ctx, withNextDueDate(resumed))
-	if err != nil {
-		return Definition{}, err
-	}
-
-	return withDisplay, nil
+	return resumed, nil
 }
 
 // Replace validates and atomically updates a recurring definition's schedule and active records.
@@ -587,7 +634,7 @@ func (s *Service) Replace(ctx context.Context, id int64, input WriteInput) (Defi
 	}
 
 	var definition Definition
-	if err := s.refs.SerializeReferenceOperation(func() error {
+	if err := s.refs.WithExclusiveLease(ctx, func(ctx context.Context) error {
 		current, err := s.repo.Get(ctx, id)
 		if errors.Is(err, services.ErrNotFound) {
 			return services.NotFound("recurring definition not found")
@@ -635,7 +682,7 @@ func (s *Service) Cancel(ctx context.Context, id int64) error {
 		return services.InvalidRequest("recurring_definition_id must be positive")
 	}
 
-	if err := s.refs.SerializeReferenceOperation(func() error {
+	if err := s.refs.WithExclusiveLease(ctx, func(ctx context.Context) error {
 		if err := s.repo.Tombstone(ctx, id); errors.Is(err, services.ErrNotFound) {
 			return services.NotFound("recurring definition not found")
 		} else if err != nil {
@@ -651,7 +698,10 @@ func (s *Service) Cancel(ctx context.Context, id int64) error {
 }
 
 func (s *Service) materializeDueOccurrences(ctx context.Context, today values.CivilDate) error {
-	return s.refs.SerializeReferenceOperation(func() error {
+	return lease.Combine(ctx, []lease.Func{
+		s.refs.WithSharedLease,
+		s.occurrences.WithExclusiveLease,
+	}, func(ctx context.Context) error {
 		return s.materializeDueOccurrencesSerialized(ctx, today)
 	})
 }

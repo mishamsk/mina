@@ -9,7 +9,7 @@
 - Needed currencies are a lazily loaded snapshot of the repository's active non-USD journal-record currencies. Invalidate it whenever those currencies can change; otherwise later loads can omit newly used currencies.
 - For every tracked currency, loading begins at its latest active USD rate (inclusively) through the provider's settled date. If an unresolved record lacks an exact rate before that point, it instead backfills from seven days before the earliest such date to retain an interpolation bracket.
 - A provider that cannot report a settled date uses the loader clock's current civil date. A latest rate after the settled date suppresses that currency's request.
-- Provider results are passed as active `USD -> currency` daily upserts. Providers must return rates for the requested currency and window; this service does not verify that association.
+- Provider results are passed as one active `USD -> currency` daily upsert batch. The exchange-rate writer validates repeated keys and serializes persistence; providers must return rates for the requested currency and window.
 - Unsupported pairs and unavailable dates skip only their currency. Other provider errors do not stop remaining currencies: successful rates are persisted together, then the first error is returned.
 - Provider implementations must wrap transient outages in `ErrProviderUnavailable` or `ErrProviderTimeout`; runtime classifies only those errors as retryable.
 

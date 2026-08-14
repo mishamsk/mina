@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -55,33 +56,88 @@ func (s *RecordLinkStore) BatchCreate(ctx context.Context, inputs []RecordLinkCr
 	}
 
 	err := s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
-		for _, input := range inputs {
-			row := tx.QueryRowContext(
-				ctx,
-				`INSERT INTO `+s.db.accountingName("record_link")+` (
+		valuesSQL, args := recordLinkInputValues(inputs)
+		defer func() { _ = dropRecordLinkInputTables(ctx, tx) }()
+		if _, err := tx.ExecContext(ctx, `CREATE OR REPLACE TEMP TABLE record_link_input AS
+SELECT input.*,
+	origin.transaction_id AS origin_transaction_id,
+	settlement.transaction_id AS settlement_transaction_id,
+	origin.record_id IS NOT NULL AND origin.tombstoned_at IS NULL
+		AND origin_parent.transaction_id IS NOT NULL AND origin_parent.tombstoned_at IS NULL AS origin_active,
+	settlement.record_id IS NOT NULL AND settlement.tombstoned_at IS NULL
+		AND settlement_parent.transaction_id IS NOT NULL AND settlement_parent.tombstoned_at IS NULL AS settlement_active
+FROM (`+valuesSQL+`) AS input(input_index, origin_record_id, settlement_record_id, link_type, memo)
+LEFT JOIN `+s.db.accountingName("journal_record")+` AS origin ON origin.record_id = input.origin_record_id
+LEFT JOIN `+s.db.accountingName("transaction")+` AS origin_parent ON origin_parent.transaction_id = origin.transaction_id
+LEFT JOIN `+s.db.accountingName("journal_record")+` AS settlement ON settlement.record_id = input.settlement_record_id
+LEFT JOIN `+s.db.accountingName("transaction")+` AS settlement_parent ON settlement_parent.transaction_id = settlement.transaction_id`, args...); err != nil {
+			return fmt.Errorf("stage record link input: %w", err)
+		}
+
+		var duplicatePairs int
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM (
+	SELECT origin_record_id, settlement_record_id
+	FROM record_link_input
+	GROUP BY origin_record_id, settlement_record_id
+	HAVING COUNT(*) > 1
+)`).Scan(&duplicatePairs); err != nil {
+			return fmt.Errorf("validate duplicate record link input: %w", err)
+		}
+		var invalidParents int
+		var existingCount int
+		if err := tx.QueryRowContext(ctx, `SELECT
+	COUNT(*) FILTER (WHERE origin_transaction_id IS NULL OR settlement_transaction_id IS NULL OR NOT origin_active OR NOT settlement_active),
+	COUNT(*) FILTER (WHERE existing.record_link_id IS NOT NULL)
+FROM record_link_input AS input
+LEFT JOIN `+s.db.accountingName("record_link")+` AS existing
+	ON existing.origin_record_id = input.origin_record_id
+	AND existing.settlement_record_id = input.settlement_record_id
+	AND existing.tombstoned_at IS NULL`).Scan(&invalidParents, &existingCount); err != nil {
+			return fmt.Errorf("validate record link input: %w", err)
+		}
+		if duplicatePairs > 0 || existingCount > 0 {
+			return fmt.Errorf("%w: active record link already exists for origin and settlement records", ErrConflict)
+		}
+		if invalidParents > 0 {
+			return ErrInvalidReference
+		}
+
+		rows, err := tx.QueryContext(ctx, `INSERT INTO `+s.db.accountingName("record_link")+` (
 	origin_record_id, settlement_record_id, link_type, memo
 )
-VALUES (?, ?, ?, ?)
+SELECT origin_record_id, settlement_record_id, link_type, memo
+FROM record_link_input
+ORDER BY input_index
 RETURNING record_link_id, origin_record_id, settlement_record_id, CAST(link_type AS VARCHAR), memo,
-	created_at, updated_at, tombstoned_at`,
-				input.OriginRecordID,
-				input.SettlementRecordID,
-				string(input.LinkType),
-				optionalStringArg(input.Memo),
-			)
-			created, err := scanRecordLink(row)
+	created_at, updated_at, tombstoned_at`)
+		if err != nil {
+			return fmt.Errorf("insert record link batch: %w", err)
+		}
+		for rows.Next() {
+			created, err := scanRecordLink(rows)
 			if err != nil {
-				if isUniqueConstraintError(err) {
-					return fmt.Errorf("%w: active record link already exists for origin and settlement records", ErrConflict)
-				}
-				return fmt.Errorf("insert record link: %w", err)
+				_ = rows.Close()
+				return fmt.Errorf("scan inserted record link: %w", err)
 			}
 			links = append(links, created)
 		}
+		if err := rows.Err(); err != nil {
+			_ = rows.Close()
+			return fmt.Errorf("iterate inserted record links: %w", err)
+		}
+		if err := rows.Close(); err != nil {
+			return fmt.Errorf("close inserted record links: %w", err)
+		}
 
-		return nil
+		if err := createRecordLinkParentInput(ctx, tx); err != nil {
+			return err
+		}
+		return touchTransactionsFromInput(ctx, tx, s.db, "record_link_parent_input")
 	})
 	if err != nil {
+		if isDuckDBTransactionConflictError(err) {
+			return nil, ErrConflict
+		}
 		return nil, err
 	}
 
@@ -139,21 +195,85 @@ func (s *RecordLinkStore) TombstoneByIDs(ctx context.Context, ids []int64) error
 		return nil
 	}
 
-	return s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
+	err := s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
+		ids = uniqueSortedInt64s(ids)
+		valuesSQL, args := int64InputValues(ids)
+		defer func() { _ = dropRecordLinkInputTables(ctx, tx) }()
+		if _, err := tx.ExecContext(ctx, `CREATE OR REPLACE TEMP TABLE record_link_input AS
+SELECT link.record_link_id,
+	origin.transaction_id AS origin_transaction_id,
+	settlement.transaction_id AS settlement_transaction_id,
+	origin_parent.transaction_id IS NOT NULL AS origin_parent_exists,
+	settlement_parent.transaction_id IS NOT NULL AS settlement_parent_exists
+FROM (`+valuesSQL+`) AS requested(record_link_id)
+JOIN `+s.db.accountingName("record_link")+` AS link
+	ON link.record_link_id = requested.record_link_id AND link.tombstoned_at IS NULL
+LEFT JOIN `+s.db.accountingName("journal_record")+` AS origin ON origin.record_id = link.origin_record_id
+LEFT JOIN `+s.db.accountingName("transaction")+` AS origin_parent ON origin_parent.transaction_id = origin.transaction_id
+LEFT JOIN `+s.db.accountingName("journal_record")+` AS settlement ON settlement.record_id = link.settlement_record_id
+LEFT JOIN `+s.db.accountingName("transaction")+` AS settlement_parent ON settlement_parent.transaction_id = settlement.transaction_id`, args...); err != nil {
+			return fmt.Errorf("stage record link tombstones: %w", err)
+		}
+		var invalidParents int
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FILTER (
+	WHERE origin_transaction_id IS NULL OR settlement_transaction_id IS NULL OR NOT origin_parent_exists OR NOT settlement_parent_exists
+) FROM record_link_input`).Scan(&invalidParents); err != nil {
+			return fmt.Errorf("validate record link parents: %w", err)
+		}
+		if invalidParents > 0 {
+			return ErrInvalidReference
+		}
 		if _, err := tx.ExecContext(
 			ctx,
-			`UPDATE `+s.db.accountingName("record_link")+`
+			`UPDATE `+s.db.accountingName("record_link")+` AS link
 SET tombstoned_at = CURRENT_TIMESTAMP,
     updated_at = CURRENT_TIMESTAMP
-WHERE record_link_id IN (`+placeholders(len(ids))+`)
-  AND tombstoned_at IS NULL`,
-			int64Args(ids)...,
+			FROM record_link_input AS input
+WHERE link.record_link_id = input.record_link_id
+  AND link.tombstoned_at IS NULL`,
 		); err != nil {
 			return fmt.Errorf("tombstone record links: %w", err)
 		}
 
-		return nil
+		if err := createRecordLinkParentInput(ctx, tx); err != nil {
+			return err
+		}
+		return touchTransactionsFromInput(ctx, tx, s.db, "record_link_parent_input")
 	})
+	if isDuckDBTransactionConflictError(err) {
+		return ErrConflict
+	}
+	return err
+}
+
+func recordLinkInputValues(inputs []RecordLinkCreateInput) (string, []any) {
+	rows := make([]string, 0, len(inputs))
+	args := make([]any, 0, len(inputs)*5)
+	for index, input := range inputs {
+		rows = append(rows, "(CAST(? AS BIGINT), CAST(? AS BIGINT), CAST(? AS BIGINT), CAST(? AS VARCHAR), CAST(? AS VARCHAR))")
+		args = append(args, int64(index), input.OriginRecordID, input.SettlementRecordID, string(input.LinkType), optionalStringArg(input.Memo))
+	}
+	return "VALUES " + strings.Join(rows, ", "), args
+}
+
+func createRecordLinkParentInput(ctx context.Context, tx *sql.Tx) error {
+	if _, err := tx.ExecContext(ctx, `CREATE OR REPLACE TEMP TABLE record_link_parent_input AS
+SELECT DISTINCT origin_transaction_id AS transaction_id FROM record_link_input
+UNION
+SELECT DISTINCT settlement_transaction_id AS transaction_id FROM record_link_input`); err != nil {
+		return fmt.Errorf("stage record link parent updates: %w", err)
+	}
+	return nil
+}
+
+func dropRecordLinkInputTables(ctx context.Context, tx *sql.Tx) error {
+	if _, err := tx.ExecContext(ctx, "DROP TABLE IF EXISTS record_link_parent_input"); err != nil {
+		return fmt.Errorf("drop record link parent input: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, "DROP TABLE IF EXISTS record_link_input"); err != nil {
+		return fmt.Errorf("drop record link input: %w", err)
+	}
+	return nil
 }
 
 type recordLinkScanner interface {

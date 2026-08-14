@@ -1511,7 +1511,9 @@ export const bulkSetJournalRecordReconciliation = <ThrowOnError extends boolean 
 });
 
 /**
- * Tombstone a transaction and its journal records.
+ * Tombstone a transaction, its journal records, and their active record links.
+ *
+ * Tombstones the transaction and every journal record it contains. Every active record link involving one of those records is also tombstoned, including links to records in surviving transactions.
  */
 export const deleteTransaction = <ThrowOnError extends boolean = false>(options: Options<DeleteTransactionData, ThrowOnError>): RequestResult<DeleteTransactionResponses, DeleteTransactionErrors, ThrowOnError> => (options.client ?? client).delete<DeleteTransactionResponses, DeleteTransactionErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }, {
@@ -1539,7 +1541,7 @@ export const getTransaction = <ThrowOnError extends boolean = false>(options: Op
 /**
  * Replace a transaction and its journal records.
  *
- * Replaces initiated_date and the full journal record set atomically. The transaction_id is preserved, previous active records are tombstoned, and replacement records must balance to zero amount within each currency.
+ * Replaces initiated_date and the complete desired journal record set atomically. Records with record_id retain identity and creation provenance, and records without record_id are created. An omitted record is tombstoned only when it is not imported, has no active raw-import metadata, and has no active record link; otherwise omission returns a conflict. The transaction_id is preserved and records must balance to zero amount within each currency.
  */
 export const replaceTransaction = <ThrowOnError extends boolean = false>(options: Options<ReplaceTransactionData, ThrowOnError>): RequestResult<ReplaceTransactionResponses, ReplaceTransactionErrors, ThrowOnError> => (options.client ?? client).put<ReplaceTransactionResponses, ReplaceTransactionErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }, {

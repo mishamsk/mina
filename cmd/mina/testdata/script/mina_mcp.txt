@@ -46,6 +46,12 @@ stdout '"status":200'
 stdout '"account_id":8'
 stdout '"fqn":"bank:Chase:joint_checking"'
 
+# Required replacement headers cross the launched MCP boundary into REST.
+mcpcall http http://127.0.0.1:$PORT/mcp transactions_create '{"body":{"initiated_date":"2026-07-15","records":[{"account_id":8,"amount":"-1.00","currency":"USD","reconciliation_status":"unreconciled","settlement":{"status":"posted"},"source":"manual","tag_ids":[]},{"account_id":31,"amount":"1.00","category_id":55,"currency":"USD","reconciliation_status":"unreconciled","settlement":null,"source":"manual","tag_ids":[]}]}}'
+stdout '"transaction_id":1073'
+! mcpcall http http://127.0.0.1:$PORT/mcp transactions_replace '{"If-Match":"\"2020-01-01T00:00:00Z\"","body":{"initiated_date":"2026-07-15","records":[{"account_id":8,"amount":"-1.00","currency":"USD","reconciliation_status":"unreconciled","settlement":{"status":"posted"},"source":"manual","tag_ids":[]},{"account_id":31,"amount":"1.00","category_id":55,"currency":"USD","reconciliation_status":"unreconciled","settlement":null,"source":"manual","tag_ids":[]}]},"transaction_id":1073}'
+stderr '"code":"precondition_failed"'
+
 ! mcpcall http http://127.0.0.1:$PORT/mcp members_create '{"body":{"name":""}}'
 stderr '"code":"invalid_request"'
 stderr '"message"'

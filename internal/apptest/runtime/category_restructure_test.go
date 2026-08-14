@@ -18,6 +18,13 @@ func TestCategoryRestructureCoreCases(t *testing.T) {
 		t.Fatalf("category rename moved_count = %d, want 1", rename.JSON200.MovedCount)
 	}
 	assertCategoryFQN(t, client, renamed.CategoryId, "restructure:Category:New")
+	reused := createCategoryForRestructure(t, client, "restructure:Category:Old")
+	assertCategoryFQN(t, client, reused.CategoryId, "restructure:Category:Old")
+	conflict, err := client.REST().CreateCategoryWithResponse(context.Background(), httpclient.CreateCategoryRequest{
+		Fqn:            "restructure:Category:New:Child",
+		EconomicIntent: httpclient.CategoryEconomicIntentExpense,
+	})
+	requireClientResponse(t, "create child under moved category leaf", err, conflict.StatusCode(), http.StatusConflict, conflict.Body)
 
 	leaf := createCategoryForRestructure(t, client, "restructure:CategoryLeafGroup")
 	leafToGroup := restructureCategories(t, client, "restructure:CategoryLeafGroup", "restructure:CategoryLeafGroup:Other")

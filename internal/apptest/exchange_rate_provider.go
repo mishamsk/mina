@@ -12,12 +12,19 @@ import (
 
 // FakeExchangeRateProvider is a test provider for exchange-rate loading.
 type FakeExchangeRateProvider struct {
-	mu           sync.Mutex
-	rates        map[string]map[string]string
-	err          error
-	blockReady   chan struct{}
-	blockRelease chan struct{}
-	blockOnce    sync.Once
+	mu            sync.Mutex
+	rates         map[string]map[string]string
+	repeatedRates []fakeProviderRate
+	err           error
+	blockReady    chan struct{}
+	blockRelease  chan struct{}
+	blockOnce     sync.Once
+}
+
+type fakeProviderRate struct {
+	currency string
+	date     string
+	rate     string
 }
 
 // NewFakeExchangeRateProvider returns a provider that serves configured daily rates.
@@ -62,6 +69,14 @@ func (p *FakeExchangeRateProvider) Set(currency string, date string, rate string
 		p.rates[currency] = make(map[string]string)
 	}
 	p.rates[currency][date] = rate
+}
+
+// Add appends one provider-returned row without deduplicating its currency/date key.
+func (p *FakeExchangeRateProvider) Add(currency string, date string, rate string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	p.repeatedRates = append(p.repeatedRates, fakeProviderRate{currency: currency, date: date, rate: rate})
 }
 
 // Fail makes provider calls fail with message.
@@ -122,10 +137,6 @@ func (p *FakeExchangeRateProvider) SettledThroughDate(
 		return values.CivilDate{}, false, p.err
 	}
 	rates := p.rates[currency]
-	if len(rates) == 0 {
-		return values.CivilDate{}, false, nil
-	}
-
 	var latest values.CivilDate
 	for date := range rates {
 		parsed, err := values.ParseCivilDate(date)
@@ -135,6 +146,21 @@ func (p *FakeExchangeRateProvider) SettledThroughDate(
 		if latest.Time().IsZero() || parsed.Time().After(latest.Time()) {
 			latest = parsed
 		}
+	}
+	for _, rate := range p.repeatedRates {
+		if rate.currency != currency {
+			continue
+		}
+		parsed, err := values.ParseCivilDate(rate.date)
+		if err != nil {
+			return values.CivilDate{}, false, err
+		}
+		if latest.Time().IsZero() || parsed.Time().After(latest.Time()) {
+			latest = parsed
+		}
+	}
+	if latest.Time().IsZero() {
+		return values.CivilDate{}, false, nil
 	}
 
 	return latest, true, nil
@@ -172,6 +198,23 @@ func (p *FakeExchangeRateProvider) Rates(
 			EffectiveDate: parsedDate,
 			Rate:          parsedRate,
 		})
+	}
+	for _, configured := range p.repeatedRates {
+		if configured.currency != currency {
+			continue
+		}
+		parsedDate, err := values.ParseCivilDate(configured.date)
+		if err != nil {
+			return nil, err
+		}
+		parsedRate, err := values.ParsePositiveDecimal(configured.rate)
+		if err != nil {
+			return nil, err
+		}
+		if parsedDate.Time().Before(start.Time()) || parsedDate.Time().After(end.Time()) {
+			continue
+		}
+		result = append(result, exchangerateloading.ProviderRate{Currency: currency, EffectiveDate: parsedDate, Rate: parsedRate})
 	}
 
 	return result, nil

@@ -6,7 +6,8 @@
 
 ## Implicit Contracts
 
-- Definition writes, cancellation, catch-up materialization, and `ConfirmNext` share the reference-operation serializer with dictionary mutations; an active reference cannot be tombstoned between validation and its dependent write.
+- Definition create, replace, pause, resume, defer, and cancellation hold the app-wide exclusive reference lease; reference-dependent materialization and `ConfirmNext` use its shared lease.
+- One app-scoped occurrence writer covers slot creation and occurrence lifecycle changes. Composite operations use the ordered lease combinator to acquire the required reference lease before the occurrence writer, and the store still rejects existing or repeated permanent definition/date slots inside the committing transaction.
 - There is no scheduler: occurrence listing, `ConfirmNext`, and `Defer` catch up slots through their caller-supplied civil date before choosing a slot. Catch-up is idempotent by definition/date slot and creates only expected transactions.
 - Occurrence slots are permanent audit state. Only an expected occurrence can be confirmed or dismissed; confirmation atomically activates its transaction and applies settlement only to owned/party records, while dismissal tombstones the transaction without freeing the slot.
 - Confirmation and dismissal pass service-clock lifecycle timestamps into their atomic repository operation; SQL does not select those timestamps.

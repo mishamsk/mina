@@ -493,9 +493,9 @@ func TestRecurringExpectedTransactionsRejectGenericMutationsBoundary(t *testing.
 	transaction := getTransaction(t, client, transactionID)
 	selectedRecordIDs := recordIDs(transaction.JSON200.Records)
 
-	replaced, err := client.REST().ReplaceTransactionWithResponse(
+	replaced, err := client.ReplaceTransactionRetainingRecords(
 		context.Background(),
-		transactionID,
+		transaction.JSON200,
 		recurringExpectedReplacementRequest(refs, "Recurring guard replace"),
 	)
 	requireNoTransportError(t, "replace generated expected transaction", err)
@@ -765,6 +765,46 @@ func TestRecurringOccurrenceConfirmAndDismissBoundary(t *testing.T) {
 			if !record.PostedDate.Equal(client.Now()) {
 				t.Fatalf("confirmed recurring posted_date = %v, want %s", record.PostedDate, client.Now())
 			}
+		}
+	}
+
+	replacementRequest := httpclient.CreateTransactionRequest{
+		InitiatedDate: confirmedTransaction.JSON200.InitiatedDate,
+		Records:       make([]httpclient.CreateJournalRecordRequest, 0, len(confirmedTransaction.JSON200.Records)),
+	}
+	replacementMemo := "confirmed recurring replacement"
+	for _, record := range confirmedTransaction.JSON200.Records {
+		var settlement *httpclient.SettlementIntent
+		if record.Settlement != nil {
+			settlement = &httpclient.SettlementIntent{
+				Status:      *record.Settlement,
+				PendingDate: record.PendingDate,
+				PostedDate:  record.PostedDate,
+			}
+		}
+		tagIDs := append([]int64{}, record.TagIds...)
+		replacementRequest.Records = append(replacementRequest.Records, httpclient.CreateJournalRecordRequest{
+			AccountId:            record.AccountId,
+			Amount:               record.Amount,
+			AmountUsd:            record.AmountUsd,
+			CategoryId:           record.CategoryId,
+			Currency:             record.Currency,
+			MemberId:             record.MemberId,
+			Memo:                 &replacementMemo,
+			ReconciliationStatus: record.ReconciliationStatus,
+			Settlement:           settlement,
+			Source:               httpclient.WritableSourceManual,
+			TagIds:               &tagIDs,
+		})
+	}
+	replacedConfirmed, err := client.ReplaceTransactionRetainingRecords(context.Background(), confirmedTransaction.JSON200, replacementRequest)
+	requireNoTransportError(t, "replace confirmed recurring transaction", err)
+	if replacedConfirmed.StatusCode() != http.StatusOK {
+		t.Fatalf("replace confirmed recurring transaction status = %d, want %d; body %s", replacedConfirmed.StatusCode(), http.StatusOK, replacedConfirmed.Body)
+	}
+	for index, record := range replacedConfirmed.JSON200.Records {
+		if record.RecordId != confirmedTransaction.JSON200.Records[index].RecordId || record.Source != httpclient.RecurringTemplate {
+			t.Fatalf("replaced confirmed record identity/source = %d/%q, want %d/recurring_template", record.RecordId, record.Source, confirmedTransaction.JSON200.Records[index].RecordId)
 		}
 	}
 
@@ -1220,10 +1260,10 @@ func recurringDefinitionRequest(
 	}
 }
 
-func recurringExpectedReplacementRequest(refs recurringDefinitionRefs, memo string) httpclient.UpdateTransactionRequest {
+func recurringExpectedReplacementRequest(refs recurringDefinitionRefs, memo string) httpclient.CreateTransactionRequest {
 	pendingDate := apptest.Timestamp("2024-03-12T00:00:00Z")
 	postedDate := apptest.Timestamp("2024-03-13T00:00:00Z")
-	return httpclient.UpdateTransactionRequest{
+	return httpclient.CreateTransactionRequest{
 		InitiatedDate: apptest.Date("2024-03-12"),
 		Records: []httpclient.CreateJournalRecordRequest{
 			{

@@ -7,8 +7,9 @@
 ## Implicit Contracts
 
 - An `App` owns its `AppDB` and background runner; `Close` cancels and joins runner work and bounded pending audit inserts before closing the database.
-- One app-local reference serializer is shared by dictionary and dependent-write services, so dictionary deletes cannot race writes that create dependent references.
-- Demo seeding runs through transaction-scoped service instances in one `AppDB` transaction; only a committed seed invalidates the main reference and needed-currency caches.
+- One app-local read/write lease gives reference and reusable-definition mutations exclusive access and reference-dependent writes shared access; exchange-rate and recurring-occurrence writers have separate app-local exclusive leases.
+- Lock order is the reference lease, then an owner-specific writer lease, then the database transaction; the generic lease combinator preserves that order and propagates exact lease ownership through context.
+- Demo seeding holds every app lease through its single `AppDB` commit and main-cache invalidation; transaction-scoped services reuse those leases and safely re-enter them through the propagated context.
 - Long-running apps alone load online authentication, expose embedded MCP at `/mcp`, and can start automatic operations. One-shot apps skip startup validation and automatic operations; migration apps validate after migration without authentication or operations.
 - Embedded MCP dispatches to the trusted REST handler, then receives MCP-specific API-key protection; it must not be built from the root composed handler.
 - Every app submits the initial dense exchange-rate cache rebuild as unrecorded, best-effort runner work. Exchange-rate loads rebuild that cache and backfill missing transaction `amount_usd` after every non-canceled attempt.

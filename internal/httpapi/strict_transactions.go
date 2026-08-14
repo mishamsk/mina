@@ -304,9 +304,14 @@ func (s *strictServer) RestoreTransaction(ctx context.Context, request openapi.R
 }
 
 func (s *strictServer) ReplaceTransaction(ctx context.Context, request openapi.ReplaceTransactionRequestObject) (openapi.ReplaceTransactionResponseObject, error) {
-	input, err := transactionAPIInput(request.Body.InitiatedDate, request.Body.Records)
+	records, err := updateJournalRecordAPIInputs(request.Body.Records)
 	if err != nil {
 		return nil, err
+	}
+	input := transactions.UpdateInput{
+		InitiatedDate: civilDateFromOpenAPI(request.Body.InitiatedDate),
+		ExpectedETag:  request.Params.IfMatch,
+		Records:       records,
 	}
 
 	transaction, err := s.deps.Transactions.Replace(ctx, request.TransactionId, input)
@@ -601,9 +606,56 @@ func journalRecordAPIInputs(records []openapi.CreateJournalRecordRequest) ([]tra
 	return inputs, nil
 }
 
+func updateJournalRecordAPIInputs(records []openapi.UpdateTransactionRequest_Records_Item) ([]transactions.UpdateJournalRecordInput, error) {
+	inputs := make([]transactions.UpdateJournalRecordInput, 0, len(records))
+	for index, item := range records {
+		existing, err := item.AsUpdateExistingJournalRecordRequest()
+		if err != nil {
+			return nil, services.InvalidRequest(recordField(index, "record_id") + " has invalid update shape")
+		}
+		if existing.RecordId == 0 {
+			created, err := item.AsUpdateNewJournalRecordRequest()
+			if err != nil {
+				return nil, services.InvalidRequest(recordField(index, "record_id") + " has invalid new-record shape")
+			}
+			mapped, err := journalRecordAPIInputs([]openapi.CreateJournalRecordRequest{created})
+			if err != nil {
+				return nil, err
+			}
+			inputs = append(inputs, transactions.UpdateJournalRecordInput{JournalRecordInput: mapped[0]})
+			continue
+		}
+		amount, err := decimalField(recordField(index, "amount"), existing.Amount)
+		if err != nil {
+			return nil, err
+		}
+		amountUSD, err := optionalDecimalField(recordField(index, "amount_usd"), existing.AmountUsd)
+		if err != nil {
+			return nil, err
+		}
+		inputs = append(inputs, transactions.UpdateJournalRecordInput{
+			RecordID: &existing.RecordId,
+			JournalRecordInput: transactions.JournalRecordInput{
+				AccountID:            existing.AccountId,
+				MemberID:             existing.MemberId,
+				Currency:             existing.Currency,
+				Amount:               amount,
+				AmountUSD:            amountUSD,
+				CategoryID:           existing.CategoryId,
+				TagIDs:               cloneOptionalInt64Slice(existing.TagIds),
+				Memo:                 existing.Memo,
+				Settlement:           transactionAPISettlementIntentPtr(existing.Settlement),
+				ReconciliationStatus: transactions.ReconciliationStatus(existing.ReconciliationStatus),
+			},
+		})
+	}
+	return inputs, nil
+}
+
 func transactionAPIResponse(transaction transactions.Transaction) openapi.Transaction {
 	return openapi.Transaction{
 		TransactionId:         transaction.ID,
+		Etag:                  transactions.ETag(transaction.UpdatedAt),
 		InitiatedDate:         openAPIDate(transaction.InitiatedDate),
 		TransactionClass:      openapi.TransactionClass(transaction.Class),
 		DisplayTitle:          transaction.DisplayTitle,

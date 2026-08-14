@@ -7,7 +7,7 @@
 ## Implicit Contracts
 
 - Each service instance keeps a process-local reference snapshot for FQN hierarchy checks and dependent-reference validation. Direct persistence changes must invalidate it before later service use.
-- Account mutations and dependent writes share `ReferenceSerializer`, so a dependent write cannot race an account tombstone or reference-state mutation.
+- Every account mutation holds the app-wide exclusive reference lease through persistence and cache publication; dependent writes use the corresponding shared lease.
 - Only `owned`, `party`, and `flow` accounts are user-writable. The `system` namespace and fixed system accounts remain readable and referenceable but reject creation and every mutation.
 - An account-type change requires the injected transaction validator to reclassify every affected active transaction; without that validator, type changes are rejected.
 - Account-currency transitions follow [account-currency semantics](../../../docs/accounting-semantics.md#account-currency): active credit-limit history blocks any real change, and a new single currency must match all active journal and recurring-definition records.

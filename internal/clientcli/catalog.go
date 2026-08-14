@@ -36,14 +36,15 @@ type RunWait struct {
 	FailureValues       []string
 }
 
-// InputDescriptor describes an operation's ordered path, query, and body inputs.
+// InputDescriptor describes an operation's ordered path, query, header, and body inputs.
 type InputDescriptor struct {
-	Path  []ParameterDescriptor
-	Query []ParameterDescriptor
-	Body  BodyDescriptor
+	Path   []ParameterDescriptor
+	Query  []ParameterDescriptor
+	Header []ParameterDescriptor
+	Body   BodyDescriptor
 }
 
-// ParameterDescriptor describes a path or query parameter.
+// ParameterDescriptor describes a path, query, or header parameter.
 type ParameterDescriptor struct {
 	Name        string
 	Type        string
@@ -77,9 +78,10 @@ type BodyPropertyDescriptor struct {
 
 // InvocationInput contains transport-neutral values for one operation invocation.
 type InvocationInput struct {
-	Path  []string
-	Query map[string][]string
-	Body  []byte
+	Path   []string
+	Query  map[string][]string
+	Header map[string][]string
+	Body   []byte
 }
 
 // InvocationResult contains the normalized raw HTTP result of an invocation.

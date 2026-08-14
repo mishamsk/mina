@@ -11,4 +11,4 @@
 ## Boundaries
 
 - Owns: app-boundary REST scenarios using `internal/apptest` composition.
-- Does not own: store, service, router, or live database-catalog assertions.
+- Does not own: reusable test harness machinery or store, service, router, and live database-catalog assertions.

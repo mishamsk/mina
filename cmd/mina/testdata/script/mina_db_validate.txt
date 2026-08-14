@@ -262,13 +262,11 @@ stdout 'warning: invariant: duplicate active category.fqn'
 duckdbclone $WORK/demo.db $WORK/inv_duplicate_active_imported_metadata.db
 duckdbexec $WORK/inv_duplicate_active_imported_metadata.db inv_duplicate_active_imported_metadata.sql
 exec mina db validate --db $WORK/inv_duplicate_active_imported_metadata.db --schema demo
-stdout 'warning: schema: missing unique index imported_record_metadata_active_record_unique'
 stdout 'warning: invariant: duplicate active imported_record_metadata.record_id'
 
 duckdbclone $WORK/demo.db $WORK/inv_duplicate_active_record_link.db
 duckdbexec $WORK/inv_duplicate_active_record_link.db inv_duplicate_active_record_link.sql
 exec mina db validate --db $WORK/inv_duplicate_active_record_link.db --schema demo
-stdout 'warning: schema: missing unique index record_link_active_pair_unique'
 stdout 'warning: invariant: duplicate active record_link origin_record_id/settlement_record_id'
 
 duckdbclone $WORK/demo.db $WORK/inv_mismatched_active_category_index.db

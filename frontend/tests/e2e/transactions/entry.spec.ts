@@ -12,6 +12,7 @@ import {
   createMember,
   createSearchSpend,
   delayTransactionEntryDraftDeletion,
+  deleteTransaction,
   expect,
   expectAdvancedBalanceStatus,
   expectAdvancedRecordUsableAtDockedWidth,
@@ -19,6 +20,7 @@ import {
   failTransactionEntryDraftDeletion,
   fillAndExpectValue,
   findByFqn,
+  getTransactionDetail,
   hideAccount,
   journalRecord,
   listFixtures,
@@ -28,6 +30,31 @@ import {
   type TransactionFixture,
   waitForLedgerLookups,
 } from "@tests/e2e/transactions/support";
+
+const existingRecordUpdateBody = (
+  transaction: TransactionDetailFixture,
+  memo: string,
+) => ({
+  initiated_date: transaction.initiated_date,
+  records: transaction.records.map((record) => ({
+    account_id: record.account_id,
+    amount: record.amount,
+    category_id: record.category_id,
+    currency: record.currency,
+    member_id: record.member_id ?? null,
+    memo,
+    reconciliation_status: record.reconciliation_status,
+    record_id: record.record_id,
+    settlement: record.settlement
+      ? {
+          ...(record.pending_date ? { pending_date: record.pending_date } : {}),
+          ...(record.posted_date ? { posted_date: record.posted_date } : {}),
+          status: record.settlement,
+        }
+      : null,
+    tag_ids: [...record.tag_ids],
+  })),
+});
 
 test("the entry modal traps focus while lookups load", async ({ page }) => {
   let releaseCategories = () => {};
@@ -56,6 +83,39 @@ test("the entry modal traps focus while lookups load", async ({ page }) => {
   } finally {
     releaseCategories();
   }
+});
+
+test("enabled shorthand removals do not claim imported restrictions", async ({
+  page,
+}) => {
+  await page.goto("/transactions?entry=new");
+  const editor = page.getByRole("dialog", { name: "Transaction editor" });
+  const spendPanel = editor.getByRole("tabpanel", { name: "Spend" });
+
+  await spendPanel.getByRole("button", { name: "Add merchant" }).click();
+  const secondMerchant = spendPanel.getByRole("group", { name: "Merchant 2" });
+  await expect(
+    secondMerchant.getByRole("combobox", { name: "Merchant account" }),
+  ).toBeFocused();
+  const removeMerchant = secondMerchant.getByRole("button", {
+    name: "Remove merchant",
+  });
+  await removeMerchant.focus();
+  await expect(removeMerchant).toBeFocused();
+  await expect(page.getByRole("tooltip")).toHaveCount(0);
+
+  await editor.getByRole("tab", { name: "Transfer" }).click();
+  const transferPanel = editor.getByRole("tabpanel", { name: "Transfer" });
+  await transferPanel.getByRole("button", { name: "Add charge" }).click();
+  await expect(
+    transferPanel.getByRole("combobox", { name: "Charge account" }),
+  ).toBeFocused();
+  const removeCharge = transferPanel.getByRole("button", {
+    name: "Remove charge",
+  });
+  await removeCharge.focus();
+  await expect(removeCharge).toBeFocused();
+  await expect(page.getByRole("tooltip")).toHaveCount(0);
 });
 
 test("clear draft confirms hand-entered and restored work and deletes persistence", async ({
@@ -321,6 +381,713 @@ test("pristine create drafts do not block saved transaction launches", async ({
   await expect(
     page.getByRole("alertdialog", { name: "Discard entry draft" }),
   ).toHaveCount(0);
+});
+
+test("complete editor updates retain identities and create imported legs", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const transaction = await createSearchSpend(
+    page,
+    `E2E identity update ${unique}`,
+  );
+  const before = await getTransactionDetail(page, transaction);
+
+  await page.goto(
+    `/transactions?page=1&pageSize=50&entry=edit:${transaction.transaction_id}`,
+  );
+  const editor = page.getByRole("dialog", { name: "Transaction editor" });
+  await expect(
+    editor.getByRole("heading", { name: "Edit spend" }),
+  ).toBeVisible();
+  await editor.getByRole("button", { name: "Edit as journal" }).click();
+
+  const firstRecord = journalRecord(page, 1);
+  const secondRecord = journalRecord(page, 2);
+  await expect(
+    firstRecord.getByText("Manual · identity retained"),
+  ).toBeVisible();
+  await expect(
+    secondRecord.getByText("Manual · identity retained"),
+  ).toBeVisible();
+  await secondRecord.getByLabel("Amount").fill("10.00");
+
+  await editor.getByRole("button", { name: "Add record" }).click();
+  const importedRecord = journalRecord(page, 3);
+  await chooseOptionByKeyboard(
+    page,
+    "Account",
+    "Powells",
+    "merchant:PowellsBooks",
+    { scope: importedRecord },
+  );
+  await importedRecord.getByLabel("Amount").fill("2.34");
+  await chooseOptionByKeyboard(
+    page,
+    "Category",
+    "Books",
+    "Entertainment:Books",
+    { scope: importedRecord },
+  );
+  await importedRecord
+    .getByRole("combobox", { name: "Record 3 origin" })
+    .click();
+  await page.getByRole("option", { name: "Imported" }).click();
+  await importedRecord
+    .getByLabel("Record 3 external system", { exact: true })
+    .fill("e2e-provider");
+  await importedRecord
+    .getByLabel("Record 3 external ID", { exact: true })
+    .fill(`record-${unique}`);
+
+  const updateRequestPromise = page.waitForRequest(
+    (request) =>
+      new URL(request.url()).pathname ===
+        `/api/transactions/${transaction.transaction_id}` &&
+      request.method() === "PUT",
+  );
+  const updateResponsePromise = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname ===
+        `/api/transactions/${transaction.transaction_id}` &&
+      response.request().method() === "PUT",
+  );
+  await editor.getByRole("button", { name: "Update transaction" }).click();
+  const updateRequest = await updateRequestPromise;
+  const updateResponse = await updateResponsePromise;
+  expect(updateResponse.ok(), await updateResponse.text()).toBe(true);
+  expect(updateRequest.headers()["if-match"]).toBe(before.etag);
+  const requestBody = updateRequest.postDataJSON() as {
+    readonly records: readonly Record<string, unknown>[];
+  };
+  expect(requestBody.records.slice(0, 2)).toMatchObject(
+    before.records.map((record) => ({ record_id: record.record_id })),
+  );
+  for (const retained of requestBody.records.slice(0, 2)) {
+    expect(retained).not.toHaveProperty("source");
+    expect(retained).not.toHaveProperty("external_id");
+    expect(retained).not.toHaveProperty("external_system");
+  }
+  expect(requestBody.records[2]).toMatchObject({
+    external_id: `record-${unique}`,
+    external_system: "e2e-provider",
+    source: "imported",
+  });
+  expect(requestBody.records[2]).not.toHaveProperty("record_id");
+
+  const after = (await updateResponse.json()) as TransactionDetailFixture;
+  expect(after.records.slice(0, 2).map((record) => record.record_id)).toEqual(
+    before.records.map((record) => record.record_id),
+  );
+  expect(after.records[2]).toMatchObject({
+    external_id: `record-${unique}`,
+    external_system: "e2e-provider",
+    source: "imported",
+  });
+  expect(after.etag).not.toBe(before.etag);
+
+  await page.goto(
+    `/transactions?page=1&pageSize=50&entry=edit:${transaction.transaction_id}`,
+  );
+  await expect(
+    editor
+      .getByRole("group", { name: "Merchant 1" })
+      .getByRole("button", { name: "Remove merchant" }),
+  ).toBeEnabled();
+  await editor
+    .getByRole("group", { name: "Merchant 2" })
+    .getByLabel("Remove merchant unavailable")
+    .hover();
+  await expect(page.getByRole("tooltip")).toHaveText(
+    "Imported records keep their identity and cannot be removed",
+  );
+  const unavailableMerchantRemove = editor
+    .getByRole("group", { name: "Merchant 2" })
+    .getByLabel("Remove merchant unavailable");
+  await unavailableMerchantRemove.focus();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("tooltip")).toBeHidden();
+  await expect(editor).toBeVisible();
+  await expect(
+    page.getByRole("alertdialog", { name: "Discard transaction changes?" }),
+  ).toHaveCount(0);
+  await editor.getByRole("button", { name: "Edit as journal" }).click();
+  const retainedImported = journalRecord(page, 3);
+  await expect(
+    retainedImported.getByText("Imported · identity retained"),
+  ).toBeVisible();
+  await expect(
+    retainedImported.getByRole("button", { name: "Remove record 3" }),
+  ).toBeDisabled();
+  await retainedImported.getByLabel("Remove record 3 unavailable").hover();
+  await expect(page.getByRole("tooltip")).toHaveText(
+    "Imported records keep their identity and cannot be removed",
+  );
+  await retainedImported.getByLabel("Remove record 3 unavailable").focus();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("tooltip")).toBeHidden();
+  await expect(editor).toBeVisible();
+  await expect(
+    page.getByRole("alertdialog", { name: "Discard transaction changes?" }),
+  ).toHaveCount(0);
+  await expect(
+    secondRecord.getByRole("button", { name: "Remove record 2" }),
+  ).toBeEnabled();
+  await secondRecord.getByRole("button", { name: "Remove record 2" }).click();
+  await expect(
+    firstRecord.getByRole("button", { name: "Remove record 1" }),
+  ).toBeFocused();
+
+  await page.getByRole("button", { name: "Close transaction editor" }).click();
+  await page
+    .getByRole("alertdialog", { name: "Discard transaction changes?" })
+    .getByRole("button", { name: "Discard changes" })
+    .click();
+  await deleteTransaction(page, transaction);
+
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const transferResponse = await page.request.post("/api/transactions", {
+    data: {
+      initiated_date: "2026-08-14",
+      records: [
+        {
+          account_id: findByFqn(accounts, "cash:Wallet").account_id,
+          amount: "-12.00",
+          currency: "USD",
+          reconciliation_status: "unreconciled",
+          settlement: { status: "posted" },
+          source: "manual",
+        },
+        {
+          account_id: findByFqn(accounts, "bank:Ally:emergency_savings")
+            .account_id,
+          amount: "10.00",
+          currency: "USD",
+          reconciliation_status: "unreconciled",
+          settlement: { status: "posted" },
+          source: "manual",
+        },
+        {
+          account_id: findByFqn(accounts, "bank:Chase:fees").account_id,
+          amount: "2.00",
+          category_id: findByFqn(categories, "Bank:Fees").category_id,
+          currency: "USD",
+          external_id: `charge-${unique}`,
+          external_system: "e2e-provider",
+          reconciliation_status: "unreconciled",
+          settlement: null,
+          source: "imported",
+        },
+      ],
+    },
+  });
+  expect(transferResponse.ok(), await transferResponse.text()).toBe(true);
+  const transfer = (await transferResponse.json()) as TransactionDetailFixture;
+  await page.goto(
+    `/transactions?page=1&pageSize=50&entry=edit:${transfer.transaction_id}`,
+  );
+  const unavailableChargeRemove = editor.locator(
+    '[data-slot="tooltip-trigger"][aria-label="Remove charge unavailable"]',
+  );
+  await unavailableChargeRemove.hover();
+  await expect(page.getByRole("tooltip")).toHaveText(
+    "Imported records keep their identity and cannot be removed",
+  );
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("tooltip")).toBeHidden();
+  await expect(editor).toBeVisible();
+  await expect(
+    page.getByRole("alertdialog", { name: "Discard transaction changes?" }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "Close transaction editor" }).click();
+  await deleteTransaction(page, transfer);
+});
+
+test("advanced duplicates create manual identities without copied provenance", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
+  const category = findByFqn(categories, "Entertainment:Books");
+  const response = await page.request.post("/api/transactions", {
+    data: {
+      initiated_date: "2026-08-14",
+      records: [
+        {
+          account_id: fundingAccount.account_id,
+          amount: "-12.34",
+          currency: "USD",
+          reconciliation_status: "unreconciled",
+          settlement: { status: "posted" },
+          source: "imported",
+          external_id: `funding-${unique}`,
+          external_system: "e2e-provider",
+        },
+        {
+          account_id: merchantAccount.account_id,
+          amount: "12.34",
+          category_id: category.category_id,
+          currency: "USD",
+          reconciliation_status: "unreconciled",
+          settlement: null,
+          source: "imported",
+          external_id: `merchant-${unique}`,
+          external_system: "e2e-provider",
+        },
+      ],
+    },
+  });
+  expect(response.ok(), await response.text()).toBe(true);
+  const transaction = (await response.json()) as TransactionDetailFixture;
+
+  await page.goto(
+    `/transactions?page=1&pageSize=50&entry=duplicate:${transaction.transaction_id}`,
+  );
+  const editor = page.getByRole("dialog", { name: "Transaction editor" });
+  await editor.getByRole("button", { name: "Edit as journal" }).click();
+  const createRequestPromise = page.waitForRequest(
+    (request) =>
+      new URL(request.url()).pathname === "/api/transactions" &&
+      request.method() === "POST",
+  );
+  await editor.getByRole("button", { name: "Save and add another" }).click();
+  const createRequest = await createRequestPromise;
+  const body = createRequest.postDataJSON() as {
+    readonly records: readonly Record<string, unknown>[];
+  };
+  expect(body.records).toHaveLength(2);
+  for (const record of body.records) {
+    expect(record).toMatchObject({ source: "manual" });
+    expect(record).not.toHaveProperty("record_id");
+    expect(record).not.toHaveProperty("external_id");
+    expect(record).not.toHaveProperty("external_system");
+  }
+});
+
+test("stale editor saves preserve the draft and explicitly reapply", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const transaction = await createSearchSpend(
+    page,
+    `E2E stale editor ${unique}`,
+  );
+  const staleBaseline = await getTransactionDetail(page, transaction);
+  const draftMemo = `E2E preserved draft ${unique}`;
+  const winnerMemo = `E2E winning memo ${unique}`;
+
+  await page.goto(
+    `/transactions?page=1&pageSize=50&entry=edit:${transaction.transaction_id}`,
+  );
+  const editor = page.getByRole("dialog", { name: "Transaction editor" });
+  const spendPanel = editor.getByRole("tabpanel", { name: "Spend" });
+  await expect(
+    editor.getByRole("heading", { name: "Edit spend" }),
+  ).toBeVisible();
+  await spendPanel.getByLabel("Memo").fill(draftMemo);
+
+  const winningResponse = await page.request.put(
+    `/api/transactions/${transaction.transaction_id}`,
+    {
+      data: existingRecordUpdateBody(staleBaseline, winnerMemo),
+      headers: { "If-Match": staleBaseline.etag },
+    },
+  );
+  expect(winningResponse.ok(), await winningResponse.text()).toBe(true);
+  const winner = (await winningResponse.json()) as TransactionDetailFixture;
+
+  const staleResponsePromise = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname ===
+        `/api/transactions/${transaction.transaction_id}` &&
+      response.request().method() === "PUT",
+  );
+  await editor.getByRole("button", { name: "Update transaction" }).click();
+  const staleResponse = await staleResponsePromise;
+  expect(staleResponse.status()).toBe(412);
+  await expect(editor.getByRole("alert")).toContainText(
+    "changed elsewhere. Your draft is preserved",
+  );
+  await expect(spendPanel.getByLabel("Memo")).toHaveValue(draftMemo);
+
+  const retryRequestPromise = page.waitForRequest(
+    (request) =>
+      new URL(request.url()).pathname ===
+        `/api/transactions/${transaction.transaction_id}` &&
+      request.method() === "PUT",
+  );
+  const retryResponsePromise = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname ===
+        `/api/transactions/${transaction.transaction_id}` &&
+      response.request().method() === "PUT",
+  );
+  await editor.getByRole("button", { name: "Update transaction" }).click();
+  const retryRequest = await retryRequestPromise;
+  const retryResponse = await retryResponsePromise;
+  expect(retryRequest.headers()["if-match"]).toBe(winner.etag);
+  expect(retryResponse.ok(), await retryResponse.text()).toBe(true);
+
+  const reapplied = await getTransactionDetail(page, transaction);
+  expect(reapplied.records.every((record) => record.memo === draftMemo)).toBe(
+    true,
+  );
+  expect(reapplied.etag).not.toBe(winner.etag);
+  await deleteTransaction(page, transaction);
+});
+
+test("same-identity stale shape changes rebase the draft onto winner IDs", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const transaction = await createSearchSpend(
+    page,
+    `E2E stale semantic shape ${unique}`,
+  );
+  const baseline = await getTransactionDetail(page, transaction);
+  const accounts = await listFixtures<AccountFixture>(
+    page,
+    "/api/accounts",
+    "accounts",
+  );
+  const destination = findByFqn(accounts, "bank:Chase:joint_checking");
+
+  await page.goto(
+    `/transactions?page=1&pageSize=50&entry=edit:${transaction.transaction_id}`,
+  );
+  const editor = page.getByRole("dialog", { name: "Transaction editor" });
+  const spendPanel = editor.getByRole("tabpanel", { name: "Spend" });
+  await spendPanel.getByLabel("Memo").fill(`local-${unique}`);
+
+  const winnerBody = existingRecordUpdateBody(baseline, `winner-${unique}`);
+  const positiveRecord = winnerBody.records.find((record) =>
+    record.amount.startsWith("-"),
+  );
+  const destinationRecord = winnerBody.records.find(
+    (record) => !record.amount.startsWith("-"),
+  );
+  expect(positiveRecord).toBeDefined();
+  expect(destinationRecord).toBeDefined();
+  destinationRecord!.account_id = destination.account_id;
+  destinationRecord!.category_id = null;
+  destinationRecord!.settlement = { status: "posted" };
+  const winnerResponse = await page.request.put(
+    `/api/transactions/${transaction.transaction_id}`,
+    {
+      data: winnerBody,
+      headers: { "If-Match": baseline.etag },
+    },
+  );
+  expect(winnerResponse.ok(), await winnerResponse.text()).toBe(true);
+  const winner = (await winnerResponse.json()) as TransactionDetailFixture;
+
+  await editor.getByRole("button", { name: "Update transaction" }).click();
+  await expect(
+    editor.getByRole("heading", { name: "Edit journal" }),
+  ).toBeVisible();
+  await expect(editor.getByRole("alert")).toContainText(
+    "rebased with the latest record identities",
+  );
+
+  const retryRequestPromise = page.waitForRequest(
+    (request) =>
+      new URL(request.url()).pathname ===
+        `/api/transactions/${transaction.transaction_id}` &&
+      request.method() === "PUT",
+  );
+  const retryResponsePromise = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname ===
+        `/api/transactions/${transaction.transaction_id}` &&
+      response.request().method() === "PUT",
+  );
+  await editor.getByRole("button", { name: "Update transaction" }).click();
+  const retryRequest = await retryRequestPromise;
+  const retryResponse = await retryResponsePromise;
+  const retryBody = retryRequest.postDataJSON() as {
+    readonly records: readonly { readonly record_id?: number }[];
+  };
+  expect(retryRequest.headers()["if-match"]).toBe(winner.etag);
+  expect(retryBody.records.map((record) => record.record_id)).toEqual(
+    baseline.records.map((record) => record.record_id),
+  );
+  expect(retryResponse.ok(), await retryResponse.text()).toBe(true);
+
+  await deleteTransaction(page, transaction);
+});
+
+test("structural stale rebases preserve edits made while saving", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const transaction = await createSearchSpend(
+    page,
+    `E2E pending structural rebase ${unique}`,
+  );
+  const baseline = await getTransactionDetail(page, transaction);
+  await page.goto(
+    `/transactions?page=1&pageSize=50&entry=edit:${transaction.transaction_id}`,
+  );
+  const editor = page.getByRole("dialog", { name: "Transaction editor" });
+  await editor.getByRole("tab", { name: "Advanced" }).click();
+  const memoInput = editor.getByLabel("Record 1 memo");
+  await memoInput.fill(`submitted-${unique}`);
+
+  let releaseSave = () => {};
+  const saveGate = new Promise<void>((resolve) => {
+    releaseSave = resolve;
+  });
+  let markSaveStarted = () => {};
+  const saveStarted = new Promise<void>((resolve) => {
+    markSaveStarted = resolve;
+  });
+  const transactionPath = `/api/transactions/${transaction.transaction_id}`;
+  await page.route(`**${transactionPath}`, async (route) => {
+    if (route.request().method() !== "PUT") {
+      await route.continue();
+      return;
+    }
+    markSaveStarted();
+    await saveGate;
+    await route.continue();
+  });
+
+  const staleResponsePromise = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === transactionPath &&
+      response.request().method() === "PUT",
+  );
+  await editor.getByRole("button", { name: "Update transaction" }).click();
+  await saveStarted;
+  const pendingMemo = `edited-while-saving-${unique}`;
+  await memoInput.fill(pendingMemo);
+  await editor.getByLabel("Record 1 amount").fill("");
+
+  const winnerBody = existingRecordUpdateBody(baseline, `winner-${unique}`);
+  const positiveRecord = winnerBody.records.find(
+    (record) => !record.amount.startsWith("-"),
+  );
+  expect(positiveRecord).toBeDefined();
+  positiveRecord!.amount = (Number(positiveRecord!.amount) / 2).toFixed(8);
+  const { record_id: _recordId, ...newPositiveRecord } = positiveRecord!;
+  const winnerResponse = await page.request.put(transactionPath, {
+    data: {
+      ...winnerBody,
+      records: [
+        ...winnerBody.records,
+        { ...newPositiveRecord, source: "manual" },
+      ],
+    },
+    headers: { "If-Match": baseline.etag },
+  });
+  expect(winnerResponse.ok(), await winnerResponse.text()).toBe(true);
+
+  releaseSave();
+  const staleResponse = await staleResponsePromise;
+  expect(staleResponse.status()).toBe(412);
+  await expect(editor.getByRole("alert")).toContainText(
+    "rebased with the latest record identities",
+  );
+  await expect(editor.getByLabel("Record 1 memo")).toHaveValue(pendingMemo);
+  await expect(editor.getByLabel("Record 1 amount")).toHaveValue("");
+
+  await page.unroute(`**${transactionPath}`);
+  await deleteTransaction(page, transaction);
+});
+
+test("structural stale shorthand rebases preserve edits made while saving", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const transaction = await createSearchSpend(
+    page,
+    `E2E pending shorthand rebase ${unique}`,
+  );
+  const baseline = await getTransactionDetail(page, transaction);
+  await page.goto(
+    `/transactions?page=1&pageSize=50&entry=edit:${transaction.transaction_id}`,
+  );
+  const editor = page.getByRole("dialog", { name: "Transaction editor" });
+  const memoInput = editor
+    .getByRole("tabpanel", { name: "Spend" })
+    .getByLabel("Memo");
+  await memoInput.fill(`submitted-${unique}`);
+
+  let releaseSave = () => {};
+  const saveGate = new Promise<void>((resolve) => {
+    releaseSave = resolve;
+  });
+  let markSaveStarted = () => {};
+  const saveStarted = new Promise<void>((resolve) => {
+    markSaveStarted = resolve;
+  });
+  const transactionPath = `/api/transactions/${transaction.transaction_id}`;
+  await page.route(`**${transactionPath}`, async (route) => {
+    if (route.request().method() !== "PUT") {
+      await route.continue();
+      return;
+    }
+    markSaveStarted();
+    await saveGate;
+    await route.continue();
+  });
+
+  const staleResponsePromise = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === transactionPath &&
+      response.request().method() === "PUT",
+  );
+  await editor.getByRole("button", { name: "Update transaction" }).click();
+  await saveStarted;
+  const pendingMemo = `edited-while-saving-${unique}`;
+  await memoInput.fill(pendingMemo);
+
+  const winnerBody = existingRecordUpdateBody(baseline, `winner-${unique}`);
+  const positiveRecord = winnerBody.records.find(
+    (record) => !record.amount.startsWith("-"),
+  );
+  expect(positiveRecord).toBeDefined();
+  positiveRecord!.amount = (Number(positiveRecord!.amount) / 2).toFixed(8);
+  const { record_id: _recordId, ...newPositiveRecord } = positiveRecord!;
+  const winnerResponse = await page.request.put(transactionPath, {
+    data: {
+      ...winnerBody,
+      records: [
+        ...winnerBody.records,
+        { ...newPositiveRecord, source: "manual" },
+      ],
+    },
+    headers: { "If-Match": baseline.etag },
+  });
+  expect(winnerResponse.ok(), await winnerResponse.text()).toBe(true);
+
+  releaseSave();
+  const staleResponse = await staleResponsePromise;
+  expect(staleResponse.status()).toBe(412);
+  await expect(editor.getByRole("alert")).toContainText(
+    "rebased with the latest record identities",
+  );
+  await expect(editor.getByRole("tab", { name: "Advanced" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(editor.getByLabel("Record 1 memo")).toHaveValue(pendingMemo);
+
+  await page.unroute(`**${transactionPath}`);
+  await deleteTransaction(page, transaction);
+});
+
+test("discarding a stale draft disables repeated refresh requests", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const transaction = await createSearchSpend(
+    page,
+    `E2E stale discard ${unique}`,
+  );
+  const baseline = await getTransactionDetail(page, transaction);
+  await page.goto(
+    `/transactions?page=1&pageSize=50&entry=edit:${transaction.transaction_id}`,
+  );
+  const editor = page.getByRole("dialog", { name: "Transaction editor" });
+  await editor
+    .getByRole("tabpanel", { name: "Spend" })
+    .getByLabel("Memo")
+    .fill(`local-${unique}`);
+  const winnerResponse = await page.request.put(
+    `/api/transactions/${transaction.transaction_id}`,
+    {
+      data: existingRecordUpdateBody(baseline, `winner-${unique}`),
+      headers: { "If-Match": baseline.etag },
+    },
+  );
+  expect(winnerResponse.ok(), await winnerResponse.text()).toBe(true);
+  await editor.getByRole("button", { name: "Update transaction" }).click();
+  await expect(editor.getByRole("alert")).toContainText("changed elsewhere");
+  await editor
+    .getByRole("button", { name: "Close transaction editor" })
+    .click();
+
+  let releasePageRefresh = () => {};
+  const pageRefreshGate = new Promise<void>((resolve) => {
+    releasePageRefresh = resolve;
+  });
+  let pageRefreshCount = 0;
+  await page.route("**/api/transactions?**", async (route) => {
+    pageRefreshCount += 1;
+    await pageRefreshGate;
+    await route.continue();
+  });
+  const discardDialog = page.getByRole("alertdialog", {
+    name: "Discard transaction changes?",
+  });
+  const discardChanges = discardDialog.getByRole("button", {
+    name: "Discard changes",
+  });
+  await discardChanges.focus();
+  await discardChanges.press("Enter");
+  const pendingDiscard = discardDialog.getByRole("button", {
+    name: "Discarding",
+  });
+  await expect(pendingDiscard).toHaveAttribute("aria-disabled", "true");
+  await expect(pendingDiscard).toBeFocused();
+  await expect(
+    discardDialog.getByRole("button", { name: "Keep editing" }),
+  ).toHaveAttribute("aria-disabled", "true");
+  await expect.poll(() => pageRefreshCount).toBe(1);
+  releasePageRefresh();
+  await expect(editor).toHaveCount(0);
+
+  await deleteTransaction(page, transaction);
+});
+
+test("closing an unchanged stale editor publishes the fetched winner", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const initialMemo = `E2E pristine stale ${unique}`;
+  const winnerMemo = `E2E pristine winner outside filter`;
+  const transaction = await createSearchSpend(page, initialMemo);
+  const baseline = await getTransactionDetail(page, transaction);
+  await page.goto(
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(initialMemo)}&entry=edit:${transaction.transaction_id}`,
+  );
+  const editor = page.getByRole("dialog", { name: "Transaction editor" });
+  await expect(
+    editor.getByRole("tabpanel", { name: "Spend" }).getByLabel("Memo"),
+  ).toHaveValue(initialMemo);
+
+  const winnerResponse = await page.request.put(
+    `/api/transactions/${transaction.transaction_id}`,
+    {
+      data: existingRecordUpdateBody(baseline, winnerMemo),
+      headers: { "If-Match": baseline.etag },
+    },
+  );
+  expect(winnerResponse.ok(), await winnerResponse.text()).toBe(true);
+  await editor.getByRole("button", { name: "Update transaction" }).click();
+  await expect(editor.getByRole("alert")).toContainText("changed elsewhere");
+
+  await editor
+    .getByRole("button", { name: "Close transaction editor" })
+    .click();
+  await expect(editor).toHaveCount(0);
+  await expect(
+    page.getByRole("row").filter({ hasText: initialMemo }),
+  ).toHaveCount(0);
+  await expect(
+    page.locator("[data-transaction-detail-restore-target]"),
+  ).toBeFocused();
+
+  await deleteTransaction(page, transaction);
 });
 
 test("dirty and stale-pristine entry drafts use their initialization baseline", async ({
@@ -613,10 +1380,49 @@ test("advanced journal entry gates balance, persists drafts, and saves records",
     { scope: thirdRecord },
   );
   await thirdRecord.getByLabel("Memo").fill(memo);
+  await thirdRecord.getByRole("combobox", { name: "Record 3 origin" }).click();
+  await page.getByRole("option", { name: "Imported" }).click();
+  await thirdRecord
+    .getByLabel("Record 3 external system", { exact: true })
+    .fill("e2e-provider");
+  await thirdRecord
+    .getByLabel("Record 3 external system", { exact: true })
+    .blur();
+  await expect(
+    thirdRecord.getByText("External ID is required with an external system."),
+  ).toBeVisible();
+  await thirdRecord
+    .getByLabel("Record 3 external ID", { exact: true })
+    .fill(` create-${unique} `);
+  await thirdRecord.getByLabel("Record 3 external ID", { exact: true }).blur();
+  await expect(
+    thirdRecord.getByText("Remove surrounding whitespace."),
+  ).toBeVisible();
+  await thirdRecord
+    .getByLabel("Record 3 external ID", { exact: true })
+    .fill(`create-${unique}`);
+  await thirdRecord.getByLabel("Record 3 external ID", { exact: true }).blur();
+  await expect(
+    thirdRecord.getByText("Remove surrounding whitespace."),
+  ).toHaveCount(0);
 
   await expectAdvancedBalanceStatus(page, "USD", "Balanced");
   await expect(saveButton).toBeEnabled();
+  const createRequestPromise = page.waitForRequest(
+    (request) =>
+      new URL(request.url()).pathname === "/api/transactions" &&
+      request.method() === "POST",
+  );
   await saveButton.click();
+  const createRequest = await createRequestPromise;
+  const requestBody = createRequest.postDataJSON() as {
+    readonly records: readonly Record<string, unknown>[];
+  };
+  expect(requestBody.records[2]).toMatchObject({
+    external_id: `create-${unique}`,
+    external_system: "e2e-provider",
+    source: "imported",
+  });
 
   await expect(page.getByText("Entries this session: 1")).toBeVisible();
   await page.getByRole("button", { name: "Close transaction editor" }).click();
@@ -1756,6 +2562,7 @@ test("entry modal deep links compose with history and report missing transaction
       funding_account_id: fundingAccount.account_id,
       initiated_date: "2026-07-10",
       memo,
+      settlement: { status: "pending" },
     },
   });
   expect(spendResponse.ok(), await spendResponse.text()).toBe(true);
@@ -1791,6 +2598,18 @@ test("entry modal deep links compose with history and report missing transaction
     entryModal.getByRole("heading", { name: "New spend" }),
   ).toBeVisible();
   await expect(entryModal.getByLabel("Memo")).toHaveValue(memo);
+
+  const cancelResponse = await page.request.post(
+    `/api/transactions/${transaction.transaction_id}/cancel`,
+  );
+  expect(cancelResponse.ok(), await cancelResponse.text()).toBe(true);
+  await page.goto(`/settings?entry=edit:${transaction.transaction_id}`);
+  await expect(
+    entryModal.getByRole("heading", { name: "Transaction unavailable" }),
+  ).toBeVisible();
+  await expect(entryModal.getByRole("alert")).toContainText(
+    `Transaction #${transaction.transaction_id} is unavailable for Edit.`,
+  );
 
   await page.goto("/settings?entry=edit:999999999");
   await expect(

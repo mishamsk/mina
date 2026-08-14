@@ -341,6 +341,9 @@ export const updateDisplayedTransactionPage = (
       }
 
       const pageErrorMessage = state.pageErrorMessages[key];
+      const transactionDisplayed = page.transactions.some(
+        (current) => current.transaction_id === transaction.transaction_id,
+      );
       return {
         errorMessage: undefined,
         lastLoadedPageKey: key,
@@ -348,11 +351,13 @@ export const updateDisplayedTransactionPage = (
         pages: {
           [key]: {
             ...page,
-            transactions: page.transactions.map((current) =>
-              current.transaction_id === transaction.transaction_id
-                ? transaction
-                : current,
-            ),
+            transactions: transactionDisplayed
+              ? page.transactions.map((current) =>
+                  current.transaction_id === transaction.transaction_id
+                    ? transaction
+                    : current,
+                )
+              : [...page.transactions, transaction],
           },
         },
         pageErrorMessages: pageErrorMessage ? { [key]: pageErrorMessage } : {},

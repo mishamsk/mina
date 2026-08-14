@@ -51,6 +51,7 @@ import {
 } from "./edit-mode-prediction";
 import {
   type AmountSavePageRefresh,
+  TransactionAmountConflictError,
   transactionAmountUpdateBody,
 } from "./transaction-amount-update";
 import type { EditDockUpdate } from "./transaction-edit-dock";
@@ -64,6 +65,7 @@ import { useTransactionDateJump } from "./use-transaction-date-jump";
 import { useTransactionDetail } from "./use-transaction-detail";
 import {
   invalidateAccountRegistersForTransaction,
+  publishTransactionConflictWinner,
   refreshTransactionPageAfterEditModeSave,
   refreshTransactionPageAfterSave,
   useTransactionsResource,
@@ -368,7 +370,7 @@ export const useTransactionBrowserPage = ({
         displayedPageParams,
         transaction.transaction_id,
         transaction,
-        undefined,
+        [],
         { pageRefreshMode: "blocking" },
       );
       showNotice("Transaction deleted.");
@@ -390,7 +392,7 @@ export const useTransactionBrowserPage = ({
         params,
         transaction.transaction_id,
         undefined,
-        transaction,
+        [transaction],
         { pageRefreshMode: "blocking" },
       );
     },
@@ -410,7 +412,7 @@ export const useTransactionBrowserPage = ({
         displayedPageParams,
         transaction.transaction_id,
         result.data,
-        transaction,
+        [transaction],
         { pageRefreshMode: "blocking" },
       );
       await detail.refreshSelectedTransactionDetail(
@@ -447,7 +449,7 @@ export const useTransactionBrowserPage = ({
         displayedPageParams,
         transaction.transaction_id,
         transaction,
-        transaction,
+        [transaction],
         { pageRefreshMode: "blocking" },
       );
       await detail.refreshSelectedTransactionDetail(transaction.transaction_id);
@@ -475,7 +477,7 @@ export const useTransactionBrowserPage = ({
         displayedPageParams,
         transaction.transaction_id,
         transaction,
-        undefined,
+        [],
         { pageRefreshMode: "blocking" },
       );
       await detail.refreshSelectedTransactionDetail(transaction.transaction_id);
@@ -506,7 +508,7 @@ export const useTransactionBrowserPage = ({
         displayedPageParams,
         transaction.transaction_id,
         transaction,
-        undefined,
+        [],
         { pageRefreshMode: "blocking" },
       );
       showNotice("Occurrence dismissed.");
@@ -522,9 +524,35 @@ export const useTransactionBrowserPage = ({
     ) => {
       const result = await replaceLedgerTransaction(
         transaction.transaction_id,
+        transaction.etag,
         transactionAmountUpdateBody(transaction, amount),
       );
       if (!result.data) {
+        if (result.response?.status === 412) {
+          const refreshed = await fetchTransactionById(
+            transaction.transaction_id,
+          );
+          if (refreshed.data) {
+            const published = publishTransactionConflictWinner(
+              displayedPageParams,
+              refreshed.data,
+              transaction,
+            );
+            if (published) {
+              updateSelectedTransactionSnapshot(refreshed.data);
+              await detail.refreshSelectedTransactionDetail(
+                transaction.transaction_id,
+                refreshed.data,
+              );
+            }
+            throw new TransactionAmountConflictError(
+              "This transaction changed elsewhere. The latest version is shown; review the amount and save again.",
+            );
+          }
+          throw new TransactionAmountConflictError(
+            `This transaction changed elsewhere, but the latest version could not be loaded. Your amount is preserved; refresh and try again. ${apiErrorMessage(refreshed.error)}`,
+          );
+        }
         throw new Error(apiErrorMessage(result.error));
       }
 
@@ -533,7 +561,7 @@ export const useTransactionBrowserPage = ({
         displayedPageParams,
         transaction.transaction_id,
         result.data,
-        transaction,
+        [transaction],
         {
           onPageRefresh: (visible) => {
             if (!visible) {
@@ -558,6 +586,26 @@ export const useTransactionBrowserPage = ({
       removeSelectedTransaction,
       updateSelectedTransactionSnapshot,
     ],
+  );
+
+  const discardTransactionAmountConflict = useCallback(
+    async (transaction: Transaction, onPageRefresh?: AmountSavePageRefresh) => {
+      await refreshTransactionPageAfterSave(
+        displayedPageParams,
+        transaction.transaction_id,
+        transaction,
+        [],
+        {
+          onPageRefresh: (rowRemainsVisible) => {
+            if (!rowRemainsVisible) {
+              removeSelectedTransaction(transaction.transaction_id);
+            }
+            onPageRefresh?.(rowRemainsVisible);
+          },
+        },
+      );
+    },
+    [displayedPageParams, removeSelectedTransaction],
   );
 
   const updateTransactionsEditReferences = useCallback(
@@ -899,6 +947,7 @@ export const useTransactionBrowserPage = ({
     toggleTransactionSelection,
     updateSelectedTransactionSnapshot,
     transactions,
+    discardTransactionAmountConflict,
     updateTransactionAmount,
     updateTransactionsEditReferences,
     updateTransactionsEditRecordState,

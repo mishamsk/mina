@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -62,44 +63,85 @@ func (s *ImportedRecordMetadataStore) BatchCreate(ctx context.Context, inputs []
 	}
 
 	err := s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
-		for _, input := range inputs {
-			row := tx.QueryRowContext(
-				ctx,
-				`INSERT INTO `+s.db.accountingName("imported_record_metadata")+` (
+		valuesSQL, args := importedMetadataInputValues(inputs)
+		defer func() { _, _ = tx.ExecContext(ctx, "DROP TABLE IF EXISTS imported_metadata_input") }()
+		if _, err := tx.ExecContext(ctx, `CREATE OR REPLACE TEMP TABLE imported_metadata_input AS
+SELECT input.*, jr.transaction_id, jr.record_id IS NOT NULL AND jr.tombstoned_at IS NULL AS record_active,
+	parent.transaction_id IS NOT NULL AND parent.tombstoned_at IS NULL AS parent_active
+FROM (`+valuesSQL+`) AS input(
+	input_index, record_id, external_system, external_id, description, merchant_name, mcc_code,
+	provider_category, provider_category_detailed, provider_status,
+	provider_authorized_at, provider_posted_at, raw_payload
+)
+LEFT JOIN `+s.db.accountingName("journal_record")+` AS jr ON jr.record_id = input.record_id
+LEFT JOIN `+s.db.accountingName("transaction")+` AS parent ON parent.transaction_id = jr.transaction_id`, args...); err != nil {
+			return fmt.Errorf("stage imported metadata input: %w", err)
+		}
+
+		var inputCount int
+		var distinctRecordCount int
+		var invalidParentCount int
+		var existingCount int
+		if err := tx.QueryRowContext(ctx, `SELECT
+	COUNT(*),
+	COUNT(DISTINCT input.record_id),
+	COUNT(*) FILTER (WHERE input.transaction_id IS NULL OR NOT input.record_active OR NOT input.parent_active),
+	COUNT(*) FILTER (WHERE existing.imported_record_metadata_id IS NOT NULL)
+FROM imported_metadata_input AS input
+LEFT JOIN `+s.db.accountingName("imported_record_metadata")+` AS existing
+	ON existing.record_id = input.record_id AND existing.tombstoned_at IS NULL`).Scan(
+			&inputCount,
+			&distinctRecordCount,
+			&invalidParentCount,
+			&existingCount,
+		); err != nil {
+			return fmt.Errorf("validate imported metadata input: %w", err)
+		}
+		if inputCount != distinctRecordCount || existingCount > 0 {
+			return fmt.Errorf("%w: active imported record metadata already exists for journal record", ErrConflict)
+		}
+		if invalidParentCount > 0 {
+			return ErrInvalidReference
+		}
+
+		rows, err := tx.QueryContext(ctx, `INSERT INTO `+s.db.accountingName("imported_record_metadata")+` (
 	record_id, external_system, external_id, description, merchant_name, mcc_code,
 	provider_category, provider_category_detailed, provider_status,
 	provider_authorized_at, provider_posted_at, raw_payload
 )
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS JSON))
+SELECT record_id, external_system, external_id, description, merchant_name, mcc_code,
+	provider_category, provider_category_detailed, provider_status,
+	provider_authorized_at, provider_posted_at, raw_payload
+FROM imported_metadata_input
+ORDER BY input_index
 RETURNING imported_record_metadata_id, record_id, external_system, external_id, description, merchant_name, mcc_code,
 	provider_category, provider_category_detailed, provider_status, provider_authorized_at, provider_posted_at, CAST(raw_payload AS VARCHAR),
-	created_at, updated_at, tombstoned_at`,
-				input.RecordID,
-				input.ExternalSystem,
-				optionalStringArg(input.ExternalID),
-				optionalStringArg(input.Description),
-				optionalStringArg(input.MerchantName),
-				optionalStringArg(input.MCCCode),
-				optionalStringArg(input.ProviderCategory),
-				optionalStringArg(input.ProviderCategoryDetailed),
-				optionalStringArg(input.ProviderStatus),
-				nullableTimestampArg(input.ProviderAuthorizedAt),
-				nullableTimestampArg(input.ProviderPostedAt),
-				rawJSONArg(input.RawPayload),
-			)
-			created, err := scanImportedRecordMetadata(row)
+	created_at, updated_at, tombstoned_at`)
+		if err != nil {
+			return fmt.Errorf("insert imported metadata batch: %w", err)
+		}
+		for rows.Next() {
+			created, err := scanImportedRecordMetadata(rows)
 			if err != nil {
-				if isUniqueConstraintError(err) {
-					return fmt.Errorf("%w: active imported record metadata already exists for journal record", ErrConflict)
-				}
-				return fmt.Errorf("insert imported record metadata: %w", err)
+				_ = rows.Close()
+				return fmt.Errorf("scan inserted imported metadata: %w", err)
 			}
 			metadata = append(metadata, created)
 		}
+		if err := rows.Err(); err != nil {
+			_ = rows.Close()
+			return fmt.Errorf("iterate inserted imported metadata: %w", err)
+		}
+		if err := rows.Close(); err != nil {
+			return fmt.Errorf("close inserted imported metadata: %w", err)
+		}
 
-		return nil
+		return touchTransactionsFromInput(ctx, tx, s.db, "imported_metadata_input")
 	})
 	if err != nil {
+		if isDuckDBTransactionConflictError(err) {
+			return nil, ErrConflict
+		}
 		return nil, err
 	}
 
@@ -153,21 +195,71 @@ func (s *ImportedRecordMetadataStore) TombstoneByRecordIDs(ctx context.Context, 
 		return nil
 	}
 
-	return s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
+	err := s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
+		recordIDs = uniqueSortedInt64s(recordIDs)
+		valuesSQL, args := int64InputValues(recordIDs)
+		defer func() { _, _ = tx.ExecContext(ctx, "DROP TABLE IF EXISTS imported_metadata_input") }()
+		if _, err := tx.ExecContext(ctx, `CREATE OR REPLACE TEMP TABLE imported_metadata_input AS
+SELECT DISTINCT metadata.record_id, jr.transaction_id, parent.transaction_id IS NOT NULL AS parent_exists
+FROM (`+valuesSQL+`) AS requested(record_id)
+JOIN `+s.db.accountingName("imported_record_metadata")+` AS metadata
+	ON metadata.record_id = requested.record_id AND metadata.tombstoned_at IS NULL
+LEFT JOIN `+s.db.accountingName("journal_record")+` AS jr ON jr.record_id = metadata.record_id
+LEFT JOIN `+s.db.accountingName("transaction")+` AS parent ON parent.transaction_id = jr.transaction_id`, args...); err != nil {
+			return fmt.Errorf("stage imported metadata tombstones: %w", err)
+		}
+		var invalidParents int
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FILTER (WHERE transaction_id IS NULL OR NOT parent_exists)
+FROM imported_metadata_input`).Scan(&invalidParents); err != nil {
+			return fmt.Errorf("validate imported metadata parents: %w", err)
+		}
+		if invalidParents > 0 {
+			return ErrInvalidReference
+		}
 		if _, err := tx.ExecContext(
 			ctx,
-			`UPDATE `+s.db.accountingName("imported_record_metadata")+`
+			`UPDATE `+s.db.accountingName("imported_record_metadata")+` AS metadata
 SET tombstoned_at = CURRENT_TIMESTAMP,
     updated_at = CURRENT_TIMESTAMP
-WHERE record_id IN (`+placeholders(len(recordIDs))+`)
-  AND tombstoned_at IS NULL`,
-			int64Args(recordIDs)...,
+			FROM imported_metadata_input AS input
+WHERE metadata.record_id = input.record_id
+  AND metadata.tombstoned_at IS NULL`,
 		); err != nil {
 			return fmt.Errorf("tombstone imported record metadata: %w", err)
 		}
 
-		return nil
+		return touchTransactionsFromInput(ctx, tx, s.db, "imported_metadata_input")
 	})
+	if isDuckDBTransactionConflictError(err) {
+		return ErrConflict
+	}
+	return err
+}
+
+func importedMetadataInputValues(inputs []ImportedRecordMetadataCreateInput) (string, []any) {
+	rows := make([]string, 0, len(inputs))
+	args := make([]any, 0, len(inputs)*13)
+	for index, input := range inputs {
+		rows = append(rows, `(CAST(? AS BIGINT), CAST(? AS BIGINT), CAST(? AS VARCHAR), CAST(? AS VARCHAR), CAST(? AS VARCHAR),
+	CAST(? AS VARCHAR), CAST(? AS VARCHAR), CAST(? AS VARCHAR), CAST(? AS VARCHAR), CAST(? AS VARCHAR),
+	CAST(? AS TIMESTAMP), CAST(? AS TIMESTAMP), CAST(? AS JSON))`)
+		args = append(args,
+			int64(index),
+			input.RecordID,
+			input.ExternalSystem,
+			optionalStringArg(input.ExternalID),
+			optionalStringArg(input.Description),
+			optionalStringArg(input.MerchantName),
+			optionalStringArg(input.MCCCode),
+			optionalStringArg(input.ProviderCategory),
+			optionalStringArg(input.ProviderCategoryDetailed),
+			optionalStringArg(input.ProviderStatus),
+			nullableTimestampArg(input.ProviderAuthorizedAt),
+			nullableTimestampArg(input.ProviderPostedAt),
+			rawJSONArg(input.RawPayload),
+		)
+	}
+	return "VALUES " + strings.Join(rows, ", "), args
 }
 
 type importedRecordMetadataScanner interface {

@@ -57,6 +57,9 @@ RETURNING credit_limit_history_id, account_id, credit_limit, effective_date, cre
 		return nil
 	})
 	if err != nil {
+		if isDuckDBTransactionConflictError(err) {
+			return creditlimits.CreditLimitHistory{}, fmt.Errorf("%w: active credit limit history already exists for account and effective date", services.ErrConflict)
+		}
 		return creditlimits.CreditLimitHistory{}, err
 	}
 

@@ -6,7 +6,7 @@
 
 ## Implicit Contracts
 
-- Creation is serialized with account deletion; a successful active row becomes an active account dependency, preventing a dangling history row or account-tombstone race.
+- Creation holds the app-wide shared reference lease across account validation and commit, serializing with account deletion so a successful active row becomes an active account dependency without a dangling-history or account-tombstone race; DuckDB owns active account/date uniqueness.
 - An active entry requires a single-currency account and has no stored currency. It prevents that account's currency changing; tombstoned values must not be reinterpreted after a later currency change.
 - Current-limit lookups use the service clock's local civil date, exclude tombstones, select the latest effective row (highest ID breaks ties), and omit accounts without an applicable limit.
 - Remaining credit is defined here as current credit limit plus Mina's signed balance. Do not clamp it or convert it to an absolute value; it may be negative.

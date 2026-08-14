@@ -3797,7 +3797,15 @@ paths:
       tags:
         - transactions
       summary: Replace a transaction and its journal records.
-      description: Replaces initiated_date and the full journal record set atomically. The transaction_id is preserved, previous active records are tombstoned, and replacement records must balance to zero amount within each currency.
+      description: Replaces initiated_date and the complete desired journal record set atomically. Records with record_id retain identity and creation provenance, and records without record_id are created. An omitted record is tombstoned only when it is not imported, has no active raw-import metadata, and has no active record link; otherwise omission returns a conflict. The transaction_id is preserved and records must balance to zero amount within each currency.
+      parameters:
+        - name: If-Match
+          in: header
+          required: true
+          description: Strong ETag from the transaction response being replaced.
+          schema:
+            type: string
+            minLength: 2
       requestBody:
         required: true
         content:
@@ -3819,18 +3827,25 @@ paths:
           $ref: "#/components/responses/InvalidRequest"
         "404":
           $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
     delete:
       operationId: deleteTransaction
       tags:
         - transactions
-      summary: Tombstone a transaction and its journal records.
+      summary: Tombstone a transaction, its journal records, and their active record links.
+      description: Tombstones the transaction and every journal record it contains. Every active record link involving one of those records is also tombstoned, including links to records in surviving transactions.
       responses:
         "401":
           $ref: "#/components/responses/Unauthenticated"
         "403":
           $ref: "#/components/responses/Forbidden"
         "204":
-          description: Transaction tombstoned.
+          description: Transaction, journal records, and affected record links tombstoned.
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "404":
@@ -4007,6 +4022,18 @@ components:
             $ref: "#/components/schemas/ErrorResponse"
     Conflict:
       description: The request conflicts with existing state.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    PreconditionFailed:
+      description: The supplied write precondition no longer matches current state.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    PreconditionRequired:
+      description: The required write precondition was not supplied.
       content:
         application/json:
           schema:
@@ -4590,6 +4617,8 @@ components:
             - not_found
             - method_not_allowed
             - conflict
+            - precondition_failed
+            - precondition_required
             - internal_error
         message:
           type: string
@@ -4834,6 +4863,76 @@ components:
           description: "Optional namespace for `external_id`, such as a provider name."
           type: string
           nullable: true
+    UpdateExistingJournalRecordRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - record_id
+        - account_id
+        - currency
+        - amount
+        - settlement
+        - reconciliation_status
+      properties:
+        record_id:
+          description: Active journal-record identifier retained by this complete replacement; it must belong to the target transaction and may appear only once in the request.
+          type: integer
+          format: int64
+          minimum: 1
+        account_id:
+          description: "Account identifier for this retained journal record."
+          type: integer
+          format: int64
+          minimum: 1
+        member_id:
+          description: "Optional household-member identifier for the journal record."
+          type: integer
+          format: int64
+          minimum: 1
+          nullable: true
+        currency:
+          description: "Record currency using ISO 4217 or the `C::` crypto prefix; it must match the referenced account when that account is single-currency."
+          type: string
+          pattern: ^([A-Z]{3}|C::.+)$
+        amount:
+          type: string
+          description: JSON string, not a JSON number. Signed non-zero DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
+          pattern: ^-?[0-9]{1,10}(\.[0-9]{1,8})?$
+          maxLength: 20
+        amount_usd:
+          type: string
+          nullable: true
+          description: JSON string or null, not a JSON number. Omission or explicit null preserves the stored value when amount and currency are unchanged and otherwise applies initiated-date inference.
+          pattern: ^-?[0-9]{1,10}(\.[0-9]{1,8})?$
+          maxLength: 20
+        category_id:
+          description: "Category identifier for a flow record; omit or use null for every other account type."
+          type: integer
+          format: int64
+          minimum: 1
+          nullable: true
+        tag_ids:
+          description: "Tag identifiers to assign to the journal record."
+          type: array
+          items:
+            type: integer
+            format: int64
+            minimum: 1
+        memo:
+          description: "Optional memo text for the journal record."
+          type: string
+          nullable: true
+        settlement:
+          description: Settlement intent for owned and party records; use null for flow and system records.
+          allOf:
+            - $ref: "#/components/schemas/SettlementIntent"
+          nullable: true
+        reconciliation_status:
+          $ref: "#/components/schemas/ReconciliationStatus"
+    UpdateNewJournalRecordRequest:
+      description: A new journal record created by complete replacement; creation-time provenance is writable and record_id is not accepted.
+      allOf:
+        - $ref: "#/components/schemas/CreateJournalRecordRequest"
     BulkCategorizeRecordsRequest:
       type: object
       additionalProperties: false
@@ -4997,6 +5096,7 @@ components:
         updated_count:
           type: integer
           minimum: 0
+          description: Number of requested records whose persisted values materially changed; record_ids still echoes every requested ID.
     CreateSpendTransactionRequest:
       type: object
       additionalProperties: false
@@ -5837,11 +5937,13 @@ components:
           pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
           format: date
         records:
-          description: "Complete journal-record set; active records must balance to zero within each currency."
+          description: "Complete desired journal-record set. Retained records supply a unique record_id without provenance; new records omit record_id and may supply creation-time provenance. Active records must balance to zero within each currency."
           type: array
           minItems: 2
           items:
-            $ref: "#/components/schemas/CreateJournalRecordRequest"
+            oneOf:
+              - $ref: "#/components/schemas/UpdateExistingJournalRecordRequest"
+              - $ref: "#/components/schemas/UpdateNewJournalRecordRequest"
     TransactionTemplateWriteRequest:
       type: object
       additionalProperties: false
@@ -7139,6 +7241,7 @@ components:
       additionalProperties: false
       required:
         - transaction_id
+        - etag
         - initiated_date
         - recurring_occurrence_id
         - lifecycle_status
@@ -7154,6 +7257,10 @@ components:
         transaction_id:
           type: integer
           format: int64
+        etag:
+          type: string
+          minLength: 3
+          description: Strong ETag derived directly from updated_at; send this exact value in If-Match for complete replacement.
         initiated_date:
           type: string
           pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$

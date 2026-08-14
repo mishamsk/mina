@@ -67,14 +67,20 @@ type Repository interface {
 	BracketingActiveUSDRates(context.Context, string, values.CivilDate) (USDRateBracket, error)
 }
 
+// WriterCoordinator serializes exchange-rate business-key writes through commit.
+type WriterCoordinator interface {
+	WithExclusiveLease(context.Context, func(context.Context) error) error
+}
+
 // Service owns exchange rate use cases and validation.
 type Service struct {
-	repo Repository
+	repo   Repository
+	writer WriterCoordinator
 }
 
 // NewService creates an exchange rate service backed by repo.
-func NewService(repo Repository) *Service {
-	return &Service{repo: repo}
+func NewService(repo Repository, writer WriterCoordinator) *Service {
+	return &Service{repo: repo, writer: writer}
 }
 
 // SignedAmountUSD derives the signed USD value for a journal record amount.
@@ -139,11 +145,18 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (ExchangeRate, 
 		return ExchangeRate{}, services.InvalidRequest("rate must be greater than zero")
 	}
 
-	rate, err := s.repo.Create(ctx, input)
-	if errors.Is(err, services.ErrConflict) {
-		return ExchangeRate{}, services.Conflict("active exchange rate already exists for currency pair and effective date")
-	}
-	if err != nil {
+	var rate ExchangeRate
+	if err := s.writer.WithExclusiveLease(ctx, func(ctx context.Context) error {
+		created, err := s.repo.Create(ctx, input)
+		if errors.Is(err, services.ErrConflict) {
+			return services.Conflict("active exchange rate already exists for currency pair and effective date")
+		}
+		if err != nil {
+			return err
+		}
+		rate = created
+		return nil
+	}); err != nil {
 		return ExchangeRate{}, err
 	}
 
@@ -184,16 +197,24 @@ func (s *Service) List(ctx context.Context, opts ListOptions) (services.Paginate
 
 // UpsertActiveUSDRates creates or updates active USD exchange rates.
 func (s *Service) UpsertActiveUSDRates(ctx context.Context, rates []UpsertRate) error {
-	for _, rate := range rates {
-		if err := validateCurrencyCode("to_currency", rate.ToCurrency); err != nil {
-			return err
+	return s.writer.WithExclusiveLease(ctx, func(ctx context.Context) error {
+		keys := make(map[string]struct{}, len(rates))
+		for _, rate := range rates {
+			if err := validateCurrencyCode("to_currency", rate.ToCurrency); err != nil {
+				return err
+			}
+			if rate.Rate.Sign() <= 0 {
+				return services.InvalidRequest("rate must be greater than zero")
+			}
+			key := rate.ToCurrency + ":" + rate.EffectiveDate.String()
+			if _, duplicate := keys[key]; duplicate {
+				return services.Conflict("duplicate active exchange rate in loading batch")
+			}
+			keys[key] = struct{}{}
 		}
-		if rate.Rate.Sign() <= 0 {
-			return services.InvalidRequest("rate must be greater than zero")
-		}
-	}
 
-	return s.repo.UpsertActiveUSDRates(ctx, rates)
+		return s.repo.UpsertActiveUSDRates(ctx, rates)
+	})
 }
 
 // UpdateRate validates and updates an exchange rate value.
@@ -205,11 +226,18 @@ func (s *Service) UpdateRate(ctx context.Context, id int64, input UpdateInput) (
 		return ExchangeRate{}, services.InvalidRequest("rate must be greater than zero")
 	}
 
-	rate, err := s.repo.UpdateRate(ctx, id, input.Rate)
-	if errors.Is(err, services.ErrNotFound) {
-		return ExchangeRate{}, services.NotFound("exchange rate not found")
-	}
-	if err != nil {
+	var rate ExchangeRate
+	if err := s.writer.WithExclusiveLease(ctx, func(ctx context.Context) error {
+		updated, err := s.repo.UpdateRate(ctx, id, input.Rate)
+		if errors.Is(err, services.ErrNotFound) {
+			return services.NotFound("exchange rate not found")
+		}
+		if err != nil {
+			return err
+		}
+		rate = updated
+		return nil
+	}); err != nil {
 		return ExchangeRate{}, err
 	}
 
@@ -222,13 +250,14 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 		return services.InvalidRequest("exchange_rate_id must be positive")
 	}
 
-	if err := s.repo.Tombstone(ctx, id); errors.Is(err, services.ErrNotFound) {
-		return services.NotFound("exchange rate not found")
-	} else if err != nil {
-		return err
-	}
-
-	return nil
+	return s.writer.WithExclusiveLease(ctx, func(ctx context.Context) error {
+		if err := s.repo.Tombstone(ctx, id); errors.Is(err, services.ErrNotFound) {
+			return services.NotFound("exchange rate not found")
+		} else if err != nil {
+			return err
+		}
+		return nil
+	})
 }
 
 func inferredAmountOutsideDecimalRange(err error) bool {

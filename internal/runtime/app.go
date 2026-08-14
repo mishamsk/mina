@@ -43,6 +43,7 @@ import (
 	"github.com/mishamsk/mina/internal/services/values"
 	"github.com/mishamsk/mina/internal/store"
 	"github.com/mishamsk/mina/internal/webui"
+	"github.com/mishamsk/mina/internal/x/lease"
 )
 
 // App owns one opened accounting state, app services, and composed HTTP handler.
@@ -66,7 +67,13 @@ type appServices struct {
 	Backup                     *backups.Service
 	ExchangeRateLoading        *exchangerateloading.Service
 	StartupExchangeRateLoading *exchangerateloading.Service
-	ReferenceSerializer        *referenceSerializer
+	Leases                     accountingLeases
+}
+
+type accountingLeases struct {
+	references    *lease.Lease
+	exchangeRates *lease.Lease
+	occurrences   *lease.Lease
 }
 
 // New opens the configured database, applies migrations, and wires the composed HTTP handler.
@@ -327,8 +334,12 @@ func newAppServices(
 	operationRepo operationruns.Repository,
 	authenticationService *authentication.Service,
 ) (appServices, error) {
-	referenceSerializer := &referenceSerializer{}
-	services, err := newAccountingServices(appDB, cfg, opts, operationRepo, referenceSerializer)
+	leases := accountingLeases{
+		references:    lease.New(lease.SharedCapable),
+		exchangeRates: lease.New(lease.ExclusiveOnly),
+		occurrences:   lease.New(lease.ExclusiveOnly),
+	}
+	services, err := newAccountingServices(appDB, cfg, opts, operationRepo, leases)
 	if err != nil {
 		return appServices{}, err
 	}
@@ -377,14 +388,14 @@ func newAccountingServices(
 	cfg appconfig.Config,
 	opts Options,
 	operationRepo operationruns.Repository,
-	referenceSerializer *referenceSerializer,
+	leases accountingLeases,
 ) (appServices, error) {
 	exchangeRateStore := store.NewExchangeRateStore(appDB)
 	startupProvider, err := startupExchangeRateProvider(cfg, opts)
 	if err != nil {
 		return appServices{}, err
 	}
-	exchangeRates := exchangerates.NewService(exchangeRateStore)
+	exchangeRates := exchangerates.NewService(exchangeRateStore, leases.exchangeRates)
 	exchangeRateLoading := exchangerateloading.NewService(
 		exchangeRateStore,
 		exchangeRates,
@@ -432,10 +443,10 @@ func newAccountingServices(
 	categoryStore := store.NewCategoryStore(appDB)
 	tagStore := store.NewTagStore(appDB)
 	memberStore := store.NewMemberStore(appDB)
-	accountService := accounts.NewService(accountStore, referenceSerializer)
-	categoryService := categories.NewService(categoryStore, referenceSerializer)
-	tagService := tags.NewService(tagStore, referenceSerializer)
-	memberService := members.NewService(memberStore, referenceSerializer)
+	accountService := accounts.NewService(accountStore, leases.references)
+	categoryService := categories.NewService(categoryStore, leases.references)
+	tagService := tags.NewService(tagStore, leases.references)
+	memberService := members.NewService(memberStore, leases.references)
 	transactionService := transactions.NewService(
 		store.NewTransactionStore(appDB),
 		accountService,
@@ -443,7 +454,7 @@ func newAccountingServices(
 		tagService,
 		memberService,
 		exchangeRates,
-		referenceSerializer,
+		leases.references,
 		opts.clock(),
 		currencyUsageChanged,
 	)
@@ -461,7 +472,7 @@ func newAccountingServices(
 		categoryService,
 		tagService,
 		memberService,
-		referenceSerializer,
+		leases.references,
 	)
 	accountService.SetTypeChangeValidator(transactionService)
 	return appServices{
@@ -474,7 +485,7 @@ func newAccountingServices(
 			Tags:             tagService,
 			Members:          memberService,
 			Accounts:         accountService,
-			CreditLimits:     creditlimits.NewService(store.NewCreditLimitHistoryStore(appDB), accountService, referenceSerializer, opts.clock()),
+			CreditLimits:     creditlimits.NewService(store.NewCreditLimitHistoryStore(appDB), accountService, leases.references, opts.clock()),
 			ExchangeRates:    exchangeRates,
 			Transactions:     transactionService,
 			DataAggregates:   dataAggregateService,
@@ -487,7 +498,8 @@ func newAccountingServices(
 				memberService,
 				templateService,
 				exchangeRates,
-				referenceSerializer,
+				leases.references,
+				leases.occurrences,
 				opts.clock(),
 				currencyUsageChanged,
 			),
@@ -496,7 +508,7 @@ func newAccountingServices(
 		Backup:                     backupService,
 		ExchangeRateLoading:        exchangeRateLoading,
 		StartupExchangeRateLoading: startupExchangeRateLoading,
-		ReferenceSerializer:        referenceSerializer,
+		Leases:                     leases,
 	}, nil
 }
 
@@ -568,26 +580,24 @@ func demoDependencies(s appServices) demo.Services {
 func newDemoService(appDB *store.AppDB, cfg appconfig.Config, opts Options, mainServices appServices) *demo.Service {
 	return demo.NewService(demo.Dependencies{
 		Clock: opts.clock(),
-		Atomic: func(ctx context.Context, fn func(demo.Services) error) error {
-			if err := appDB.WithTx(ctx, nil, func(txAppDB *store.AppDB) error {
-				txServices, err := newAccountingServices(
-					txAppDB,
-					cfg,
-					opts,
-					nil,
-					mainServices.ReferenceSerializer,
-				)
-				if err != nil {
+		Atomic: func(ctx context.Context, fn func(context.Context, demo.Services) error) error {
+			return lease.Combine(ctx, []lease.Func{
+				mainServices.Leases.references.WithExclusiveLease,
+				mainServices.Leases.exchangeRates.WithExclusiveLease,
+				mainServices.Leases.occurrences.WithExclusiveLease,
+			}, func(ctx context.Context) error {
+				if err := appDB.WithTx(ctx, nil, func(txAppDB *store.AppDB) error {
+					txServices, err := newAccountingServices(txAppDB, cfg, opts, nil, mainServices.Leases)
+					if err != nil {
+						return err
+					}
+					return fn(ctx, demoDependencies(txServices))
+				}); err != nil {
 					return err
 				}
-
-				return fn(demoDependencies(txServices))
-			}); err != nil {
-				return err
-			}
-
-			invalidateReferenceCaches(mainServices)
-			return nil
+				invalidateReferenceCaches(mainServices)
+				return nil
+			})
 		},
 	})
 }

@@ -21,6 +21,10 @@ func TestTagRestructureRenameWithSubtree(t *testing.T) {
 	}
 	assertTagFQN(t, client, first.TagId, "restructure:Tag:New:First")
 	assertTagFQN(t, client, second.TagId, "restructure:Tag:New:Second")
+	reused := createTagForRestructure(t, client, "restructure:Tag:Old")
+	assertTagFQN(t, client, reused.TagId, "restructure:Tag:Old")
+	conflict, err := client.REST().CreateTagWithResponse(context.Background(), httpclient.CreateTagRequest{Fqn: "restructure:Tag:New:First:Child"})
+	requireClientResponse(t, "create child under moved tag leaf", err, conflict.StatusCode(), http.StatusConflict, conflict.Body)
 
 	leaf := createTagForRestructure(t, client, "restructure:TagLeafGroup")
 	leafToGroup := restructureTags(t, client, "restructure:TagLeafGroup", "restructure:TagLeafGroup:Other")

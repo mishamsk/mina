@@ -11,6 +11,7 @@
 - Non-USD conversion uses an exact rate or linear interpolation strictly inside two brackets. Missing brackets, a rounded-zero result, and decimal overflow return `nil`.
 - Derivation does not persist or backfill values; callers decide whether to use its result, while `transactions` owns backfill of unresolved journal records.
 - A create conflicts only with an active rate for the same currency pair and effective timestamp; tombstoned rates do not block a new active rate.
+- One app-scoped writer serializes manual create, rate update, tombstoning, and provider batch upserts through commit; a batch rejects repeated currency/date keys before persistence.
 
 ## Boundaries
 

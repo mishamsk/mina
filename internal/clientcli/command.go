@@ -224,6 +224,9 @@ func newOperationCommand(operation Operation, sessionFactory SessionFactory) *co
 	for _, parameter := range operation.Input.Query {
 		addTypedFlag(cmd.Flags(), parameter.Name, parameter.Type, parameter.ItemType, parameter.Array, parameter.Description, parameter.Enum)
 	}
+	for _, parameter := range operation.Input.Header {
+		addTypedFlag(cmd.Flags(), headerFlagName(parameter.Name), parameter.Type, parameter.ItemType, parameter.Array, parameter.Description, parameter.Enum)
+	}
 
 	bodyFieldFlags := make(map[string]BodyPropertyDescriptor)
 	if operation.Input.Body.Present {
@@ -528,8 +531,9 @@ func composeInvocationInput(
 	bodyFields map[string]BodyPropertyDescriptor,
 ) (InvocationInput, error) {
 	input := InvocationInput{
-		Path:  append([]string(nil), args...),
-		Query: make(map[string][]string),
+		Path:   append([]string(nil), args...),
+		Query:  make(map[string][]string),
+		Header: make(map[string][]string),
 	}
 	for _, parameter := range operation.Input.Query {
 		if !cmd.Flags().Changed(parameter.Name) {
@@ -540,6 +544,17 @@ func composeInvocationInput(
 			return InvocationInput{}, err
 		}
 		input.Query[parameter.Name] = values
+	}
+	for _, parameter := range operation.Input.Header {
+		flagName := headerFlagName(parameter.Name)
+		if !cmd.Flags().Changed(flagName) {
+			continue
+		}
+		values, err := typedFlagStrings(cmd.Flags(), flagName, parameter.Type, parameter.ItemType, parameter.Array)
+		if err != nil {
+			return InvocationInput{}, err
+		}
+		input.Header[parameter.Name] = values
 	}
 	if !operation.Input.Body.Present {
 		return input, nil
@@ -623,12 +638,15 @@ func bodySupportsFieldFlags(input InputDescriptor) bool {
 	if !input.Body.Simple {
 		return false
 	}
-	names := make(map[string]struct{}, len(input.Query)+len(reservedBodyFlagNames))
+	names := make(map[string]struct{}, len(input.Query)+len(input.Header)+len(reservedBodyFlagNames))
 	for name := range reservedBodyFlagNames {
 		names[name] = struct{}{}
 	}
 	for _, parameter := range input.Query {
 		names[parameter.Name] = struct{}{}
+	}
+	for _, parameter := range input.Header {
+		names[headerFlagName(parameter.Name)] = struct{}{}
 	}
 	for _, property := range input.Body.Properties {
 		if _, collision := names[property.Name]; collision {
@@ -636,6 +654,10 @@ func bodySupportsFieldFlags(input InputDescriptor) bool {
 		}
 	}
 	return true
+}
+
+func headerFlagName(name string) string {
+	return strings.ToLower(name)
 }
 
 func addTypedFlag(

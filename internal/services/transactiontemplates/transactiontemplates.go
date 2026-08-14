@@ -99,9 +99,9 @@ type MemberReferenceValidator interface {
 	ValidateActiveReferences(context.Context, []int64, members.ReferenceOptions) (map[int64]members.Reference, error)
 }
 
-// ReferenceSerializer serializes dependent writes with dictionary deletes.
-type ReferenceSerializer interface {
-	SerializeReferenceOperation(func() error) error
+// ReferenceCoordinator coordinates reusable-definition mutations with dependent writes.
+type ReferenceCoordinator interface {
+	WithExclusiveLease(context.Context, func(context.Context) error) error
 }
 
 // Service owns transaction-template use cases and validation.
@@ -111,7 +111,7 @@ type Service struct {
 	categories CategoryReferenceValidator
 	tags       TagReferenceValidator
 	members    MemberReferenceValidator
-	refs       ReferenceSerializer
+	refs       ReferenceCoordinator
 }
 
 // NewService creates a transaction-template service backed by repositories.
@@ -121,7 +121,7 @@ func NewService(
 	categories CategoryReferenceValidator,
 	tags TagReferenceValidator,
 	members MemberReferenceValidator,
-	refs ReferenceSerializer,
+	refs ReferenceCoordinator,
 ) *Service {
 	return &Service{
 		repo:       repo,
@@ -136,7 +136,7 @@ func NewService(
 // Create validates and creates a transaction template.
 func (s *Service) Create(ctx context.Context, input WriteInput) (Template, error) {
 	var template Template
-	if err := s.refs.SerializeReferenceOperation(func() error {
+	if err := s.refs.WithExclusiveLease(ctx, func(ctx context.Context) error {
 		if err := s.validateTemplateInput(ctx, input.FQN, input.Records); err != nil {
 			return err
 		}
@@ -226,7 +226,7 @@ func (s *Service) Replace(ctx context.Context, id int64, input WriteInput) (Temp
 		return Template{}, err
 	}
 	var template Template
-	if err := s.refs.SerializeReferenceOperation(func() error {
+	if err := s.refs.WithExclusiveLease(ctx, func(ctx context.Context) error {
 		current, err := s.repo.Get(ctx, id)
 		if errors.Is(err, services.ErrNotFound) {
 			return services.NotFound("transaction template not found")
@@ -282,7 +282,7 @@ func (s *Service) Restructure(ctx context.Context, from string, to string) (int6
 	}
 
 	var movedCount int64
-	if err := s.refs.SerializeReferenceOperation(func() error {
+	if err := s.refs.WithExclusiveLease(ctx, func(ctx context.Context) error {
 		refs, err := s.repo.ListActiveFQNs(ctx)
 		if err != nil {
 			return err
@@ -344,7 +344,7 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 		return services.InvalidRequest("transaction_template_id must be positive")
 	}
 
-	if err := s.refs.SerializeReferenceOperation(func() error {
+	if err := s.refs.WithExclusiveLease(ctx, func(ctx context.Context) error {
 		if err := s.repo.Tombstone(ctx, id); errors.Is(err, services.ErrNotFound) {
 			return services.NotFound("transaction template not found")
 		} else if err != nil {

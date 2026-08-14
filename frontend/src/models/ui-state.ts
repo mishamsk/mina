@@ -66,6 +66,7 @@ export interface JournalRecordRowDraft {
   readonly settlement: JournalRecordDraftSettlement;
   readonly reconciliationStatus: JournalRecordDraftReconciliationStatus;
   readonly source: "imported" | "manual";
+  readonly sourceRecordId: number | undefined;
   readonly tagIds: readonly number[];
 }
 

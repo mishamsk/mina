@@ -693,14 +693,14 @@ operations:
     mcp:
       state: exposed
       name: replace
-      description: Replace one transaction with a full balanced journal while preserving its transaction ID. This tombstones prior active records; use only when the user intends a complete edit.
+      description: Replace one transaction with a full balanced journal while preserving its transaction ID. Records supplying record_id retain that identity. An omitted record is tombstoned only when it is not imported, has no active raw-import metadata, and has no active record link; protected omissions return a conflict. Use only when the user intends a complete edit.
       annotations: {read_only: false, destructive: false, idempotent: true, open_world: false}
   deleteTransaction:
     cli: {state: exposed, name: delete}
     mcp:
       state: exposed
       name: delete
-      description: Tombstone one transaction and all its journal records. This is destructive and requires explicit user intent; use transactions_cancel when history should remain active but excluded from balances and aggregates.
+      description: Tombstone one transaction, all its journal records, and every active link involving those records, including links to records in surviving transactions. This is destructive and requires explicit user intent; use transactions_cancel when history should remain active but excluded from balances and aggregates.
       annotations: {read_only: false, destructive: true, idempotent: true, open_world: false}
   cancelTransaction:
     cli: {state: exposed, name: cancel}

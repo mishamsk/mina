@@ -55,7 +55,7 @@ export const useAccountRegisterTransactionDetail = ({
       transaction.transaction_id,
       transaction,
     );
-    await refreshViewsAfterEntrySave(transaction, previousTransaction, {
+    await refreshViewsAfterEntrySave(transaction, [previousTransaction], {
       retainAccountTransactionSnapshot: true,
     });
   };
@@ -101,7 +101,7 @@ export const useAccountRegisterTransactionDetail = ({
     );
     await refreshViewsAfterEntrySave(
       postedTransaction ?? transaction,
-      transaction,
+      [transaction],
       {
         retainAccountTransactionSnapshot: Boolean(postedTransaction),
       },
@@ -116,7 +116,7 @@ export const useAccountRegisterTransactionDetail = ({
     }
     detail.closeTransactionDetail({ suppressFetch: true });
     showNotice("Transaction deleted.");
-    await refreshViewsAfterEntrySave(transaction, transaction);
+    await refreshViewsAfterEntrySave(transaction, [transaction]);
   };
 
   const confirmRecurringOccurrence = async (transaction: Transaction) => {
@@ -131,7 +131,7 @@ export const useAccountRegisterTransactionDetail = ({
         apiErrorMessage(result.error, "Occurrence could not be confirmed."),
       );
     }
-    await refreshViewsAfterEntrySave(transaction, transaction);
+    await refreshViewsAfterEntrySave(transaction, [transaction]);
     await detail.refreshSelectedTransactionDetail(transaction.transaction_id);
     showNotice("Occurrence confirmed.");
   };
@@ -149,7 +149,7 @@ export const useAccountRegisterTransactionDetail = ({
       );
     }
     detail.closeTransactionDetail();
-    await refreshViewsAfterEntrySave(transaction, transaction);
+    await refreshViewsAfterEntrySave(transaction, [transaction]);
     showNotice("Occurrence dismissed.");
   };
 

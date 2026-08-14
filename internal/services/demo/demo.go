@@ -22,7 +22,7 @@ import (
 
 // Dependencies are root demo seeding service dependencies.
 type Dependencies struct {
-	Atomic func(context.Context, func(Services) error) error
+	Atomic func(context.Context, func(context.Context, Services) error) error
 	Clock  Clock
 }
 
@@ -90,7 +90,7 @@ func (s *Service) Seed(ctx context.Context, anchorDate *values.CivilDate, maxMon
 	}
 
 	var summary Summary
-	err := s.deps.Atomic(ctx, func(services Services) error {
+	err := s.deps.Atomic(ctx, func(ctx context.Context, services Services) error {
 		builder := seedBuilder{
 			services:   services,
 			anchorDate: *anchorDate,

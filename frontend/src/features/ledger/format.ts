@@ -355,10 +355,21 @@ export const isExpectedRecurringOccurrence = (
   transaction.lifecycle_status === "expected" &&
   transaction.recurring_occurrence_id !== null;
 
-export const canSplitTransaction = (transaction: Transaction): boolean =>
-  transaction.lifecycle_status === "active" &&
-  (transaction.transaction_class === "spend" ||
-    transaction.transaction_class === "income");
+export const canSplitTransaction = (transaction: Transaction): boolean => {
+  const splitRole =
+    transaction.transaction_class === "spend"
+      ? "expense"
+      : transaction.transaction_class === "income"
+        ? "income"
+        : undefined;
+  if (transaction.lifecycle_status !== "active" || !splitRole) {
+    return false;
+  }
+  const splitRecord = transaction.records.find(
+    (record) => !record.tombstoned_at && record.record_role === splitRole,
+  );
+  return splitRecord !== undefined && splitRecord.source !== "imported";
+};
 
 export const recordStatus = (
   record: JournalRecord,

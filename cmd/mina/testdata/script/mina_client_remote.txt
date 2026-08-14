@@ -29,6 +29,12 @@ stdout '"transaction_id":846'
 stdout '"records":\['
 ! stderr .
 
+# Required replacement headers cross the launched CLI boundary into REST.
+exec mina client --server http://127.0.0.1:$PORT transactions create --json @replacement.json
+stdout '"transaction_id":1073'
+! exec mina client --server http://127.0.0.1:$PORT transactions replace 1073 --if-match '"2020-01-01T00:00:00Z"' --json @replacement.json
+stderr '"code":"precondition_failed"'
+
 # JSON bodies pass through for successful and failing writes.
 exec mina client --server http://127.0.0.1:$PORT tags create --json '{"fqn":"RemoteCLI"}'
 stdout '"fqn":"RemoteCLI"'
@@ -52,6 +58,9 @@ wait server
 
 -- client-config.toml --
 auth_file = "client-auth.toml"
+
+-- replacement.json --
+{"initiated_date":"2026-07-15","records":[{"account_id":8,"amount":"-1.00","currency":"USD","reconciliation_status":"unreconciled","settlement":{"status":"posted"},"source":"manual","tag_ids":[]},{"account_id":31,"amount":"1.00","category_id":55,"currency":"USD","reconciliation_status":"unreconciled","settlement":null,"source":"manual","tag_ids":[]}]}
 
 -- client-auth.toml --
 version = 1

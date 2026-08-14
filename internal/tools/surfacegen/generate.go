@@ -305,6 +305,7 @@ func writeOperation(output *bytes.Buffer, surface string, generated generatedOpe
 	fmt.Fprintln(output, "\t\t\tInput: InputDescriptor{")
 	writeParameterDescriptors(output, "Path", generated.definition.PathParams)
 	writeParameterDescriptors(output, "Query", generated.definition.QueryParams)
+	writeParameterDescriptors(output, "Header", generated.definition.HeaderParams)
 	writeBodyDescriptor(output, generated.definition)
 	fmt.Fprintln(output, "\t\t\t},")
 	fmt.Fprintf(output, "\t\t\tInvoke: invoke%s,\n", generated.definition.OperationId)
@@ -501,6 +502,7 @@ func writeHelpers(output *bytes.Buffer) {
 	fmt.Fprintln(output, `	input InvocationInput,`)
 	fmt.Fprintln(output, `	pathNames []string,`)
 	fmt.Fprintln(output, `	queryNames []string,`)
+	fmt.Fprintln(output, `	headerNames []string,`)
 	fmt.Fprintln(output, `	bodyPresent bool,`)
 	fmt.Fprintln(output, `	bodyRequired bool,`)
 	fmt.Fprintln(output, `) error {`)
@@ -523,6 +525,21 @@ func writeHelpers(output *bytes.Buffer) {
 	fmt.Fprintln(output, `		return &InvocationInputError{`)
 	fmt.Fprintln(output, `			Location: "query",`)
 	fmt.Fprintln(output, `			Name: unknownQueryNames[0],`)
+	fmt.Fprintln(output, `			Err: errors.New("parameter is not declared by the operation"),`)
+	fmt.Fprintln(output, `		}`)
+	fmt.Fprintln(output, `	}`)
+	fmt.Fprintln(output, `	var unknownHeaderNames []string`)
+	fmt.Fprintln(output, `	for name := range input.Header {`)
+	fmt.Fprintln(output, `		index := sort.SearchStrings(headerNames, name)`)
+	fmt.Fprintln(output, `		if index == len(headerNames) || headerNames[index] != name {`)
+	fmt.Fprintln(output, `			unknownHeaderNames = append(unknownHeaderNames, name)`)
+	fmt.Fprintln(output, `		}`)
+	fmt.Fprintln(output, `	}`)
+	fmt.Fprintln(output, `	if len(unknownHeaderNames) > 0 {`)
+	fmt.Fprintln(output, `		sort.Strings(unknownHeaderNames)`)
+	fmt.Fprintln(output, `		return &InvocationInputError{`)
+	fmt.Fprintln(output, `			Location: "header",`)
+	fmt.Fprintln(output, `			Name: unknownHeaderNames[0],`)
 	fmt.Fprintln(output, `			Err: errors.New("parameter is not declared by the operation"),`)
 	fmt.Fprintln(output, `		}`)
 	fmt.Fprintln(output, `	}`)
@@ -582,10 +599,17 @@ func writeInvoker(output *bytes.Buffer, operation generatedOperation) {
 		queryNames = append(queryNames, parameter.ParamName)
 	}
 	sort.Strings(queryNames)
+	headerNames := make([]string, 0, len(definition.HeaderParams))
+	for _, parameter := range definition.HeaderParams {
+		headerNames = append(headerNames, parameter.ParamName)
+	}
+	sort.Strings(headerNames)
 	fmt.Fprint(output, "\tif err := validateInvocationInput(input, ")
 	writeStringSlice(output, pathNames)
 	fmt.Fprint(output, ", ")
 	writeStringSlice(output, queryNames)
+	fmt.Fprint(output, ", ")
+	writeStringSlice(output, headerNames)
 	fmt.Fprintf(output, ", %t, %t); err != nil {\n", definition.HasBody(), definition.BodyRequired)
 	fmt.Fprintln(output, "\t\treturn InvocationResult{}, err")
 	fmt.Fprintln(output, "\t}")
@@ -593,10 +617,13 @@ func writeInvoker(output *bytes.Buffer, operation generatedOperation) {
 	for index, parameter := range definition.PathParams {
 		writePathConversion(output, index, parameter)
 	}
-	if len(definition.QueryParams) > 0 {
+	if len(definition.QueryParams) > 0 || len(definition.HeaderParams) > 0 {
 		fmt.Fprintf(output, "\tparams := &httpclient.%sParams{}\n", definition.OperationId)
 		for index, parameter := range definition.QueryParams {
 			writeQueryConversion(output, index, parameter)
+		}
+		for index, parameter := range definition.HeaderParams {
+			writeHeaderConversion(output, index, parameter)
 		}
 	}
 
@@ -609,7 +636,7 @@ func writeInvoker(output *bytes.Buffer, operation generatedOperation) {
 	for index := range definition.PathParams {
 		fmt.Fprintf(output, ", pathValue%d", index)
 	}
-	if len(definition.QueryParams) > 0 {
+	if len(definition.QueryParams) > 0 || len(definition.HeaderParams) > 0 {
 		fmt.Fprint(output, ", params")
 	}
 	if definition.HasBody() {
@@ -676,9 +703,30 @@ func writeQueryConversion(output *bytes.Buffer, index int, parameter codegen.Par
 	fmt.Fprintln(output, "\t}")
 }
 
-func writeRequiredQueryError(output *bytes.Buffer, name string) {
+func writeHeaderConversion(output *bytes.Buffer, index int, parameter codegen.ParameterDefinition) {
+	valuesName := fmt.Sprintf("headerValues%d", index)
+	suppliedName := fmt.Sprintf("headerSupplied%d", index)
+	fmt.Fprintf(output, "\t%s, %s := input.Header[%q]\n", valuesName, suppliedName, parameter.ParamName)
+	fmt.Fprintf(output, "\tif !%s {\n", suppliedName)
+	writeRequiredParameterError(output, "header", parameter.ParamName)
+	fmt.Fprintln(output, "\t}")
+	fmt.Fprintf(output, "\tif len(%s) != 1 {\n", valuesName)
 	fmt.Fprintln(output, "\t\treturn InvocationResult{}, &InvocationInputError{")
-	fmt.Fprintln(output, "\t\t\tLocation: \"query\",")
+	fmt.Fprintln(output, "\t\t\tLocation: \"header\",")
+	fmt.Fprintf(output, "\t\t\tName: %q,\n", parameter.ParamName)
+	fmt.Fprintf(output, "\t\t\tErr: fmt.Errorf(\"got %%d values, want 1\", len(%s)),\n", valuesName)
+	fmt.Fprintln(output, "\t\t}")
+	fmt.Fprintln(output, "\t}")
+	fmt.Fprintf(output, "\tparams.%s = %s[0]\n", parameter.GoName(), valuesName)
+}
+
+func writeRequiredQueryError(output *bytes.Buffer, name string) {
+	writeRequiredParameterError(output, "query", name)
+}
+
+func writeRequiredParameterError(output *bytes.Buffer, location string, name string) {
+	fmt.Fprintln(output, "\t\treturn InvocationResult{}, &InvocationInputError{")
+	fmt.Fprintf(output, "\t\t\tLocation: %q,\n", location)
 	fmt.Fprintf(output, "\t\t\tName: %q,\n", name)
 	fmt.Fprintln(output, "\t\t\tErr: errors.New(\"value is required\"),")
 	fmt.Fprintln(output, "\t\t}")

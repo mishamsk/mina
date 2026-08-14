@@ -270,8 +270,9 @@ func invocationInput(
 	arguments map[string]json.RawMessage,
 ) (InvocationInput, error) {
 	input := InvocationInput{
-		Path:  make([]string, len(operation.Input.Path)),
-		Query: make(map[string][]string),
+		Path:   make([]string, len(operation.Input.Path)),
+		Query:  make(map[string][]string),
+		Header: make(map[string][]string),
 	}
 	for index, parameter := range operation.Input.Path {
 		value, err := scalarArgument(arguments[parameter.Name])
@@ -290,6 +291,17 @@ func invocationInput(
 			return InvocationInput{}, fmt.Errorf("query argument %q: %w", parameter.Name, err)
 		}
 		input.Query[parameter.Name] = values
+	}
+	for _, parameter := range operation.Input.Header {
+		raw, supplied := arguments[parameter.Name]
+		if !supplied {
+			continue
+		}
+		values, err := queryArgument(raw, parameter.Array)
+		if err != nil {
+			return InvocationInput{}, fmt.Errorf("header argument %q: %w", parameter.Name, err)
+		}
+		input.Header[parameter.Name] = values
 	}
 	if raw, supplied := arguments["body"]; supplied {
 		body, err := json.Marshal(raw)

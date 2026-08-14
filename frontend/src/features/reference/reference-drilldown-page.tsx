@@ -2,6 +2,7 @@ import { Reload } from "pixelarticons/react";
 import { useCallback, useMemo } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 
+import type { JournalRecord, Transaction } from "@/api";
 import { Toast, toastDurationMs } from "@/components/toast";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -259,6 +260,25 @@ export const ReferenceDrilldownPage = ({
     });
   }, [setTransactionFilters]);
 
+  const recoverTransactionAmountConflict = (
+    transaction: Transaction,
+    records: readonly [JournalRecord, JournalRecord],
+    amount: string,
+  ) => {
+    openTransactionEntryLaunch(
+      {
+        amountConflict: {
+          amount,
+          recordIds: [records[0].record_id, records[1].record_id],
+        },
+        transaction,
+        type: "edit",
+      },
+      captureTransactionEntryLaunchContext(),
+    );
+    browser.dismissNotice();
+  };
+
   return (
     <div className="flex h-full min-h-0 flex-col gap-6">
       <TransactionBrowserToolbar
@@ -331,6 +351,9 @@ export const ReferenceDrilldownPage = ({
             addEntityFilter("tag", tagId);
           }}
           onDeleteTransaction={browser.deleteTransactionFromRow}
+          onDiscardTransactionAmountConflict={
+            browser.discardTransactionAmountConflict
+          }
           onDismissRecurringOccurrence={
             browser.dismissRecurringOccurrenceFromRow
           }
@@ -355,6 +378,7 @@ export const ReferenceDrilldownPage = ({
             browser.setPage(Math.max(defaultTransactionPage, browser.page - 1));
           }}
           onPostTransaction={browser.postTransaction}
+          onRecoverTransactionAmountConflict={recoverTransactionAmountConflict}
           onSetEditMode={browser.setEditMode}
           onSplitTransaction={(transaction) => {
             openTransactionEntryLaunch(

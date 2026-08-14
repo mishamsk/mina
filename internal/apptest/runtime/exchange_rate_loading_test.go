@@ -12,6 +12,30 @@ import (
 )
 
 func TestExchangeRateLoadingExpectedBehavior(t *testing.T) {
+	t.Run("rejects a repeated provider key atomically", func(t *testing.T) {
+		clock := apptest.NewFakeClock(apptest.Timestamp("2026-04-01T12:00:00Z"))
+		provider := apptest.NewFakeExchangeRateProvider()
+		provider.Add("EUR", "2026-04-01", "1.12000000")
+		provider.Add("EUR", "2026-04-01", "1.13000000")
+		provider.Add("CHF", "2026-04-01", "0.94000000")
+		client := newSharedClient(t, apptest.WithClock(clock), apptest.WithExchangeRateLoading(false), apptest.WithExchangeRateProviderFactory(provider))
+		createForeignCurrencyTransaction(t, client, foreignCurrencyTransaction{Currency: "EUR", InitiatedDate: "2026-04-01", PostedAt: apptest.TimestampPtr("2026-04-01T12:00:00Z")})
+		createForeignCurrencyTransaction(t, client, foreignCurrencyTransaction{Currency: "CHF", InitiatedDate: "2026-04-01", PostedAt: apptest.TimestampPtr("2026-04-01T12:00:00Z")})
+
+		started, err := client.REST().StartExchangeRateLoadingRunWithResponse(context.Background())
+		requireClientResponse(t, "start repeated-key exchange-rate load", err, started.StatusCode(), http.StatusAccepted, started.Body)
+		run := client.PollExchangeRateLoadingRun(started.JSON202.OperationRunId)
+		if run.Outcome != httpclient.BackgroundOperationRunOutcomeFailed {
+			t.Fatalf("repeated-key load outcome = %q, want failed; error = %v", run.Outcome, run.Error)
+		}
+		if rates := listExchangeRatesForPair(t, client, "USD", "EUR"); len(rates) != 0 {
+			t.Fatalf("EUR rates after repeated-key load = %+v, want none", rates)
+		}
+		if rates := listExchangeRatesForPair(t, client, "USD", "CHF"); len(rates) != 0 {
+			t.Fatalf("CHF rates after repeated-key load = %+v, want none", rates)
+		}
+	})
+
 	t.Run("updates existing active rates", func(t *testing.T) {
 		provider := apptest.NewFakeExchangeRateProvider()
 		provider.Set("EUR", "2026-03-31", "1.12000000")
@@ -161,13 +185,14 @@ func TestExchangeRateLoadingExpectedBehavior(t *testing.T) {
 		})
 		triggerAndWaitForExchangeRateLoad(t, client)
 		assertExchangeRateDateExists(t, client, "USD", "EUR", "2026-03-31")
+		current := getTransaction(t, client, transaction.TransactionId)
 
 		checking := client.Scenario().AccountWithCurrency("checking:ReplacementCHF", "CHF")
 		counterparty := client.Scenario().Account("counterparty:ReplacementCHF")
 		category := client.Scenario().Category("Transfers:ReplacementCHF")
 		pendingAt := apptest.Timestamp("2026-04-10T12:00:00Z")
 		postedAt := apptest.TimestampPtr("2026-04-10T12:00:00Z")
-		replaced, err := client.REST().ReplaceTransactionWithResponse(context.Background(), transaction.TransactionId, httpclient.UpdateTransactionRequest{
+		replaced, err := client.ReplaceTransactionRetainingRecords(context.Background(), current.JSON200, httpclient.CreateTransactionRequest{
 			InitiatedDate: apptest.Date("2026-04-10"),
 			Records: []httpclient.CreateJournalRecordRequest{
 				{

@@ -9,6 +9,8 @@ var (
 	ErrConflict = errors.New("conflict")
 	// ErrInvalidReference identifies a missing or inactive referenced row.
 	ErrInvalidReference = errors.New("invalid reference")
+	// ErrPreconditionFailed identifies an atomic write comparison mismatch.
+	ErrPreconditionFailed = errors.New("precondition failed")
 )
 
 // ErrorCode identifies app-layer use-case failures.
@@ -21,6 +23,8 @@ const (
 	ErrorCodeNotFound ErrorCode = "not_found"
 	// ErrorCodeConflict identifies a request that conflicts with existing state.
 	ErrorCodeConflict ErrorCode = "conflict"
+	// ErrorCodePreconditionFailed identifies a stale conditional write.
+	ErrorCodePreconditionFailed ErrorCode = "precondition_failed"
 )
 
 // Error is an app-layer use-case error.
@@ -46,4 +50,9 @@ func NotFound(message string) *Error {
 // Conflict returns a state-conflict error.
 func Conflict(message string) *Error {
 	return &Error{Code: ErrorCodeConflict, Message: message}
+}
+
+// PreconditionFailed returns a stale conditional-write error.
+func PreconditionFailed(message string) *Error {
+	return &Error{Code: ErrorCodePreconditionFailed, Message: message}
 }

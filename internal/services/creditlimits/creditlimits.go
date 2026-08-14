@@ -47,9 +47,9 @@ type AccountReferenceValidator interface {
 	ValidateActiveReferences(context.Context, []int64, accounts.ReferenceOptions) (map[int64]accounts.Reference, error)
 }
 
-// ReferenceSerializer serializes account deletes with writes that create dependent references.
-type ReferenceSerializer interface {
-	SerializeReferenceOperation(func() error) error
+// ReferenceCoordinator coordinates account mutations with dependent writes.
+type ReferenceCoordinator interface {
+	WithSharedLease(context.Context, func(context.Context) error) error
 }
 
 // Clock supplies the current process time for effective credit-limit lookups.
@@ -61,7 +61,7 @@ type Clock interface {
 type Service struct {
 	repo     Repository
 	accounts AccountReferenceValidator
-	refs     ReferenceSerializer
+	refs     ReferenceCoordinator
 	clock    Clock
 }
 
@@ -72,7 +72,7 @@ func RemainingCredit(creditLimit, balance values.Decimal) (values.Decimal, error
 }
 
 // NewService creates a credit limit history service backed by repo.
-func NewService(repo Repository, accounts AccountReferenceValidator, refs ReferenceSerializer, clock Clock) *Service {
+func NewService(repo Repository, accounts AccountReferenceValidator, refs ReferenceCoordinator, clock Clock) *Service {
 	return &Service{
 		repo:     repo,
 		accounts: accounts,
@@ -91,7 +91,7 @@ func (s *Service) Create(ctx context.Context, accountID int64, input CreateInput
 	}
 
 	var history CreditLimitHistory
-	if err := s.refs.SerializeReferenceOperation(func() error {
+	if err := s.refs.WithSharedLease(ctx, func(ctx context.Context) error {
 		account, err := s.accounts.ValidateActiveReference(ctx, accountID, accounts.ReferenceOptions{AllowHidden: true})
 		if err != nil {
 			if errors.Is(err, services.ErrInvalidReference) {

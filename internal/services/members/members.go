@@ -73,20 +73,20 @@ type Repository interface {
 	Tombstone(context.Context, int64) error
 }
 
-// ReferenceSerializer serializes dictionary deletes with writes that create dependent references.
-type ReferenceSerializer interface {
-	SerializeReferenceOperation(func() error) error
+// ReferenceCoordinator coordinates reference mutations with dependent writes.
+type ReferenceCoordinator interface {
+	WithExclusiveLease(context.Context, func(context.Context) error) error
 }
 
 // Service owns household member use cases and validation.
 type Service struct {
 	repo  Repository
-	refs  ReferenceSerializer
+	refs  ReferenceCoordinator
 	cache *refcache.Dictionary[int64, memberReferenceState]
 }
 
 // NewService creates a member service backed by repo.
-func NewService(repo Repository, refs ReferenceSerializer) *Service {
+func NewService(repo Repository, refs ReferenceCoordinator) *Service {
 	service := &Service{repo: repo, refs: refs}
 	service.cache = refcache.NewDictionary(service.loadReferenceCache)
 	return service
@@ -98,15 +98,21 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (Member, error)
 		return Member{}, err
 	}
 
-	member, err := s.repo.Create(ctx, input)
-	if errors.Is(err, services.ErrConflict) {
-		return Member{}, services.Conflict("active member name already exists")
-	}
-	if err != nil {
+	var member Member
+	if err := s.refs.WithExclusiveLease(ctx, func(ctx context.Context) error {
+		created, err := s.repo.Create(ctx, input)
+		if errors.Is(err, services.ErrConflict) {
+			return services.Conflict("active member name already exists")
+		}
+		if err != nil {
+			return err
+		}
+		member = created
+		s.cacheActiveReference(created)
+		return nil
+	}); err != nil {
 		return Member{}, err
 	}
-
-	s.cacheActiveReference(member)
 
 	return member, nil
 }
@@ -161,7 +167,7 @@ func (s *Service) UpdateHidden(ctx context.Context, id int64, isHidden *bool) (M
 	}
 
 	var member Member
-	if err := s.refs.SerializeReferenceOperation(func() error {
+	if err := s.refs.WithExclusiveLease(ctx, func(ctx context.Context) error {
 		updated, err := s.repo.UpdateHidden(ctx, id, *isHidden)
 		if errors.Is(err, services.ErrNotFound) {
 			return services.NotFound("member not found")
@@ -224,18 +230,24 @@ func (s *Service) UpdateName(ctx context.Context, id int64, input UpdateInput) (
 		return Member{}, err
 	}
 
-	member, err := s.repo.UpdateName(ctx, id, input.Name)
-	if errors.Is(err, services.ErrConflict) {
-		return Member{}, services.Conflict("active member name already exists")
-	}
-	if errors.Is(err, services.ErrNotFound) {
-		return Member{}, services.NotFound("member not found")
-	}
-	if err != nil {
+	var member Member
+	if err := s.refs.WithExclusiveLease(ctx, func(ctx context.Context) error {
+		updated, err := s.repo.UpdateName(ctx, id, input.Name)
+		if errors.Is(err, services.ErrConflict) {
+			return services.Conflict("active member name already exists")
+		}
+		if errors.Is(err, services.ErrNotFound) {
+			return services.NotFound("member not found")
+		}
+		if err != nil {
+			return err
+		}
+		member = updated
+		s.cacheActiveReference(updated)
+		return nil
+	}); err != nil {
 		return Member{}, err
 	}
-
-	s.cacheActiveReference(member)
 
 	return member, nil
 }
@@ -260,7 +272,7 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 		return services.InvalidRequest("member_id must be positive")
 	}
 
-	if err := s.refs.SerializeReferenceOperation(func() error {
+	if err := s.refs.WithExclusiveLease(ctx, func(ctx context.Context) error {
 		if _, err := s.repo.Get(ctx, id, false); errors.Is(err, services.ErrNotFound) {
 			return services.NotFound("member not found")
 		} else if err != nil {

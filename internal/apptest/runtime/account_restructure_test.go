@@ -18,6 +18,13 @@ func TestAccountRestructureRenameMoveAndLeafToGroup(t *testing.T) {
 		t.Fatalf("rename moved_count = %d, want 1", rename.JSON200.MovedCount)
 	}
 	assertAccountFQN(t, client, renamed.AccountId, "restructure:Accounts:New")
+	reused := createAccountForRestructure(t, client, "restructure:Accounts:Old", httpclient.WritableAccountTypeFlow, false, nil)
+	assertAccountFQN(t, client, reused.AccountId, "restructure:Accounts:Old")
+	conflict, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
+		Fqn:         "restructure:Accounts:New:Child",
+		AccountType: httpclient.WritableAccountTypeFlow,
+	})
+	requireClientResponse(t, "create child under moved account leaf", err, conflict.StatusCode(), http.StatusConflict, conflict.Body)
 
 	currency := "USD"
 	checking := createAccountForRestructure(t, client, "restructure:Bank:Old:Checking", httpclient.WritableAccountTypeOwned, false, &currency)

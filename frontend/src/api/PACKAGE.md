@@ -14,6 +14,7 @@
 - Helpers that return a complete lookup or management set must follow backend pagination and preserve typed filters on every page request; paged record browsers stay backend-paginated.
 - Category management reads may fetch one typed intent independently so an open editor excluded by the visible filter can reconcile server-owned deleteability without replacing its draft.
 - Transaction page helpers require a typed sort field and direction and pass them directly to the generated client.
+- Complete transaction replacement passes the caller's ETag through `If-Match`; response helpers retain the canonical response ETag, and normalized failures preserve 412 so ledger workflows can recover stale drafts.
 - Flow-report helpers pass the shared typed anchor/window configuration without transforming report values; the accounting-history-range helper remains a separate generated read.
 - Status consumes generated paged audit-entry DTO metadata and their JSON-presence flags without a persistent frontend cache; its thin response helper retains each JSON field's transport source for exact evidence formatting without JavaScript number coercion.
 

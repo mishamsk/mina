@@ -7,6 +7,8 @@
 ## Implicit Contracts
 
 - Generated commands, declared REST inputs, and invokers are built only from this package's catalog and call Mina only through `internal/httpclient`; excluded operations cannot leak into the generated CLI surface.
+- Generated transaction replacement input exposes retained-record identity separately from creation-time provenance and requires the caller's ETag precondition; it does not infer record matches.
+- CLI header flags are lowercase while invocation maps retain their canonical OpenAPI names for generated HTTP requests.
 - An explicit `--server` selects remote mode; otherwise a configured or explicit `--db` selects local mode. Both explicit selectors are rejected, and an empty local database target is rejected rather than opening ephemeral state.
 - Local mode accepts its handler and cleanup only from the process-injected factory. Generated command paths close the session; extensions that open one must close it, and `Session.Close` runs cleanup at most once. A factory missing either resource is rejected and any supplied cleanup is run.
 - Remote mode alone reads `MINA_API_KEY` through the env-only accessor and adds it as a bearer credential; local in-process requests are credential-free.

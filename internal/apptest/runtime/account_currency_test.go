@@ -43,10 +43,10 @@ func TestAccountCurrencyInvariantAcrossTransactionMutationBoundaries(t *testing.
 		t.Fatalf("replace target create status = %d, want %d; body %s", replaceTarget.StatusCode(), http.StatusCreated, replaceTarget.Body)
 	}
 	assertCurrencyWriteRejected(t, "ordinary replace", func() (int, []byte, error) {
-		response, replaceErr := client.REST().ReplaceTransactionWithResponse(
+		response, replaceErr := client.ReplaceTransactionRetainingRecords(
 			context.Background(),
-			replaceTarget.JSON201.TransactionId,
-			httpclient.UpdateTransactionRequest(mismatched),
+			replaceTarget.JSON201,
+			mismatched,
 		)
 		return response.StatusCode(), response.Body, replaceErr
 	})

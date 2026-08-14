@@ -754,16 +754,16 @@ func TestAccountCurrencyTransitionsBoundary(t *testing.T) {
 	}
 
 	replacementAccount := scenario.AccountWithType("checking:CurrencyTransitionReplacement", httpclient.WritableAccountTypeOwned)
-	replacement, err := client.REST().ReplaceTransactionWithResponse(
+	replacement, err := client.ReplaceTransactionRetainingRecords(
 		context.Background(),
-		transaction.JSON201.TransactionId,
-		httpclient.UpdateTransactionRequest(accountTypeChangeTransactionRequest(
+		transaction.JSON201,
+		accountTypeChangeTransactionRequest(
 			replacementAccount.AccountId,
 			merchant.AccountId,
 			category.CategoryId,
 			"-10.00",
 			"10.00",
-		)),
+		),
 	)
 	if err != nil {
 		t.Fatalf("replace transaction away from account request: %v", err)
