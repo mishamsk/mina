@@ -434,7 +434,7 @@ func TestDailyExchangeRateSnapshotRebuildsFromPersistedRates(t *testing.T) {
 	setup.Close()
 
 	client := newSharedClient(t, apptest.WithAccountingSchema(schema))
-	response := waitForDailyExchangeRateCount(t, client, 4)
+	response := client.AwaitDailyExchangeRateCount(4)
 	want := []struct {
 		currency     string
 		date         string
@@ -490,7 +490,7 @@ func TestDailyExchangeRateSnapshotOrdersUnfilteredPagesByCurrencyAndDate(t *test
 	setup.Close()
 
 	client := newSharedClient(t, apptest.WithAccountingSchema(schema))
-	waitForDailyExchangeRateCount(t, client, 2)
+	client.AwaitDailyExchangeRateCount(2)
 
 	limit := 1
 	for offset, expected := range []struct {
@@ -528,7 +528,7 @@ func TestDailyExchangeRateSnapshotInterpolatesLargeValidRates(t *testing.T) {
 	setup.Close()
 
 	client := newSharedClient(t, apptest.WithAccountingSchema(schema))
-	response := waitForDailyExchangeRateCount(t, client, 3)
+	response := client.AwaitDailyExchangeRateCount(3)
 	middle := response.JSON200.ExchangeRates[1]
 	if middle.EffectiveDate.Format("2006-01-02") != "2026-04-02" ||
 		middle.Rate != "4500050000.00000000" || !middle.Interpolated {
@@ -544,7 +544,7 @@ func TestDailyExchangeRateSnapshotRoundsInterpolationTiesToEven(t *testing.T) {
 	setup.Close()
 
 	client := newSharedClient(t, apptest.WithAccountingSchema(schema))
-	response := waitForDailyExchangeRateCount(t, client, 3)
+	response := client.AwaitDailyExchangeRateCount(3)
 	middle := response.JSON200.ExchangeRates[1]
 	if middle.EffectiveDate.Format("2006-01-02") != "2026-04-02" ||
 		middle.Rate != "1.00000002" || !middle.Interpolated {
@@ -569,7 +569,7 @@ func TestDailyExchangeRateSnapshotExcludesTombstonedSourceRates(t *testing.T) {
 	setup.Close()
 
 	client := newSharedClient(t, apptest.WithAccountingSchema(schema))
-	response := waitForDailyExchangeRateCount(t, client, 3)
+	response := client.AwaitDailyExchangeRateCount(3)
 	middle := response.JSON200.ExchangeRates[1]
 	if middle.EffectiveDate.Format("2006-01-02") != "2026-04-02" ||
 		middle.Rate != "1.10000000" || !middle.Interpolated {
@@ -591,38 +591,16 @@ func TestDailyExchangeRateSnapshotsAreIsolatedAcrossSimultaneousApps(t *testing.
 	first := newSharedClient(t, apptest.WithAccountingSchema(firstSchema))
 	second := newSharedClient(t, apptest.WithAccountingSchema(secondSchema))
 
-	firstRates := waitForDailyExchangeRateCount(t, first, 1)
+	firstRates := first.AwaitDailyExchangeRateCount(1)
 	if firstRates.StatusCode() != http.StatusOK || len(firstRates.JSON200.ExchangeRates) != 1 ||
 		firstRates.JSON200.ExchangeRates[0].ToCurrency != "EUR" {
 		t.Fatalf("first app daily exchange rates = %+v, want isolated EUR row; body %s", firstRates.JSON200, firstRates.Body)
 	}
 
-	secondRates := waitForDailyExchangeRateCount(t, second, 1)
+	secondRates := second.AwaitDailyExchangeRateCount(1)
 	if secondRates.StatusCode() != http.StatusOK || len(secondRates.JSON200.ExchangeRates) != 1 ||
 		secondRates.JSON200.ExchangeRates[0].ToCurrency != "CHF" {
 		t.Fatalf("second app daily exchange rates = %+v, want isolated CHF row; body %s", secondRates.JSON200, secondRates.Body)
-	}
-}
-
-func waitForDailyExchangeRateCount(t *testing.T, client *apptest.Client, count int) *httpclient.ListDailyExchangeRatesResponse {
-	t.Helper()
-
-	deadline := time.Now().Add(2 * time.Second)
-	for {
-		response, err := client.REST().ListDailyExchangeRatesWithResponse(context.Background(), nil)
-		if err != nil {
-			t.Fatalf("list daily exchange rates: %v", err)
-		}
-		if response.StatusCode() != http.StatusOK {
-			t.Fatalf("list daily exchange rates status = %d, want %d; body %s", response.StatusCode(), http.StatusOK, response.Body)
-		}
-		if len(response.JSON200.ExchangeRates) == count {
-			return response
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("daily exchange rate count = %d, want %d", len(response.JSON200.ExchangeRates), count)
-		}
-		time.Sleep(10 * time.Millisecond)
 	}
 }
 

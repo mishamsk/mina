@@ -6,7 +6,7 @@
 
 ## Implicit Contracts
 
-- No implicit contracts.
+- Scenarios use `internal/apptest` fake time, schema allocation, REST-state waits, and controlled side-effect events; direct wall-clock waits, host-local time, random fixtures, and UUID fixtures are forbidden.
 
 ## Boundaries
 

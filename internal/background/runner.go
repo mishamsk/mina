@@ -203,8 +203,13 @@ func (r *Runner) Start() {
 			})
 		}
 		if op.schedule != nil {
+			next := op.schedule.Next(r.clock.Now().UTC())
+			if next.IsZero() {
+				r.log("%s schedule has no next matching time\n", op.ID)
+				continue
+			}
 			r.Submit(string(op.ID)+" schedule", func(ctx context.Context) error {
-				r.runRecurring(ctx, op)
+				r.runRecurring(ctx, op, next)
 				return nil
 			})
 		}
@@ -289,12 +294,7 @@ func (r *Runner) launch(name string, ctx context.Context, done func(), run func(
 	}()
 }
 
-func (r *Runner) runRecurring(ctx context.Context, op registeredOperation) {
-	next := op.schedule.Next(r.clock.Now().UTC())
-	if next.IsZero() {
-		r.log("%s schedule has no next matching time\n", op.ID)
-		return
-	}
+func (r *Runner) runRecurring(ctx context.Context, op registeredOperation, next time.Time) {
 	for {
 		if err := ctx.Err(); err != nil {
 			return

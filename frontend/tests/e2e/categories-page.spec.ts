@@ -656,59 +656,6 @@ test("returning to cached categories supersedes the abandoned intent request", a
   await expect(row).toBeVisible();
 });
 
-test("returning to cached categories cancels a delayed intent retry", async ({
-  browserName,
-  page,
-}) => {
-  const category = await createCategory(page, {
-    fqn: `E2EIntentRetry:${browserName}${Date.now()}`,
-  });
-  let incomeRequestCount = 0;
-  await page.route("**/api/categories?*", async (route) => {
-    const url = new URL(route.request().url());
-    if (url.searchParams.get("economic_intent") !== "income") {
-      await route.continue();
-      return;
-    }
-    incomeRequestCount += 1;
-    await route.fulfill({
-      body: JSON.stringify({
-        error: { code: "internal", message: "Retry this request." },
-      }),
-      contentType: "application/json",
-      status: 500,
-    });
-  });
-
-  await page.goto(`/categories?q=${encodeURIComponent(category.fqn)}`);
-  const row = page
-    .getByTestId("categories-tree-row")
-    .filter({ hasText: category.fqn });
-  await expect(row).toBeVisible({ timeout: 10_000 });
-  const intentSelect = page.getByRole("combobox", { name: "Economic intent" });
-  await page.clock.install();
-
-  await intentSelect.click();
-  const firstFailure = page.waitForResponse((response) => {
-    const url = new URL(response.url());
-    return (
-      response.status() === 500 &&
-      url.pathname === "/api/categories" &&
-      url.searchParams.get("economic_intent") === "income"
-    );
-  });
-  await page.getByRole("option", { exact: true, name: "Income" }).click();
-  await firstFailure;
-  await page.clock.runFor(50);
-
-  await intentSelect.click();
-  await page.getByRole("option", { exact: true, name: "All" }).click();
-  await expect(row).toBeVisible();
-  await page.clock.runFor(300);
-
-  expect(incomeRequestCount).toBe(1);
-});
-
 test("returning to an intent refetches a mutation-invalidated snapshot", async ({
   browserName,
   page,

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/mishamsk/mina/internal/services/exchangerateloading"
 	"github.com/mishamsk/mina/internal/services/values"
@@ -94,11 +93,7 @@ func (p *FakeExchangeRateProvider) WaitUntilBlocked(t *testing.T) {
 		t.Fatal("provider is not configured to block")
 	}
 
-	select {
-	case <-ready:
-	case <-time.After(2 * time.Second):
-		t.Fatal("provider was not called")
-	}
+	AwaitSignal(t, ready, "exchange-rate provider call")
 }
 
 // Release unblocks provider calls blocked by BlockUntilReleased.

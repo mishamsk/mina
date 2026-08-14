@@ -38,11 +38,7 @@ func (b *BlockedDatabaseBackup) WaitUntilStarted(t *testing.T) {
 		t.Fatal("database backup blocker is not configured")
 	}
 
-	select {
-	case <-b.provider.blockReady:
-	case <-time.After(2 * time.Second):
-		t.Fatal("database backup did not start")
-	}
+	AwaitSignal(t, b.provider.blockReady, "database backup start")
 }
 
 // Release lets blocked database backup runs finish.

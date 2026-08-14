@@ -500,7 +500,6 @@ func TestRecordBulkSettlementAndTransactionLifecycleBoundary(t *testing.T) {
 		t.Fatalf("pending transaction dates/settlement = %v/%q, want nil/pending", read.JSON200.Records[0].PostedDate, read.JSON200.Settlement)
 	}
 
-	postedStartedAt := time.Now().UTC().Add(-time.Second)
 	posted, err := client.REST().BulkSetJournalRecordSettlementWithResponse(context.Background(), httpclient.BulkSetRecordSettlementRequest{
 		RecordIds: []int64{balanceRecordID}, Settlement: httpclient.SettlementStatusPosted,
 	})
@@ -509,7 +508,9 @@ func TestRecordBulkSettlementAndTransactionLifecycleBoundary(t *testing.T) {
 		t.Fatalf("set posted status = %d, want %d; body %s", posted.StatusCode(), http.StatusOK, posted.Body)
 	}
 	read = getTransaction(t, client, transaction.JSON201.TransactionId)
-	assertLifecycleTimestampBetween(t, "posted_date", read.JSON200.Records[0].PostedDate, postedStartedAt, time.Now().UTC().Add(time.Second))
+	if postedAt := read.JSON200.Records[0].PostedDate; postedAt == nil || !postedAt.Equal(client.Now()) {
+		t.Fatalf("posted_date = %v, want %s", postedAt, client.Now())
+	}
 	if read.JSON200.Settlement != httpclient.TransactionSettlementPosted {
 		t.Fatalf("posted transaction settlement = %q, want posted", read.JSON200.Settlement)
 	}

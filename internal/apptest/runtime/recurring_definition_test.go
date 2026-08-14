@@ -74,9 +74,8 @@ func TestRecurringDefinitionCreateReadListUpdateCancelBoundary(t *testing.T) {
 }
 
 func TestRecurringDefinitionAndOccurrenceListQueryBoundary(t *testing.T) {
-	base := time.Date(2024, 4, 15, 12, 0, 0, 0, time.Local)
-	clock := apptest.NewFakeClock(base)
-	client := newSharedClient(t, apptest.WithClock(clock))
+	base := time.Date(2024, 4, 15, 12, 0, 0, 0, time.FixedZone("local", -4*60*60))
+	client := newSharedClient(t, apptest.WithClock(apptest.NewFakeClock(base)))
 	refs := createRecurringDefinitionRefs(t, client, "RecurringListQuery")
 
 	alpha := createRecurringDefinition(t, client, recurringDefinitionRequest("RecurringListQuery:Alpha", refs, "-10.00000000", "10.00000000", intervalRule(1, "WEEK"), "2024-04-01"))
@@ -377,9 +376,8 @@ func TestRecurringDefinitionTemplateSeedAndDeleteGuards(t *testing.T) {
 }
 
 func TestRecurringOccurrenceMaterializationReviewQueueBoundary(t *testing.T) {
-	now := time.Now()
-	clock := apptest.NewFakeClock(now)
-	client := newSharedClient(t, apptest.WithClock(clock))
+	client := newSharedClient(t)
+	now := client.Now()
 	refs := createRecurringDefinitionRefs(t, client, "RecurringMaterialize")
 	today := civilDateOnly(now)
 	anchor := today.AddDate(0, 0, -21)
@@ -473,9 +471,8 @@ func TestRecurringOccurrenceMaterializationReviewQueueBoundary(t *testing.T) {
 }
 
 func TestRecurringExpectedTransactionsRejectGenericMutationsBoundary(t *testing.T) {
-	now := time.Now()
-	clock := apptest.NewFakeClock(now)
-	client := newSharedClient(t, apptest.WithClock(clock))
+	client := newSharedClient(t)
+	now := client.Now()
 	refs := createRecurringDefinitionRefs(t, client, "RecurringGenericGuard")
 	today := civilDateOnly(now)
 
@@ -577,9 +574,8 @@ func TestRecurringExpectedTransactionsRejectGenericMutationsBoundary(t *testing.
 }
 
 func TestRecurringOccurrenceDateRuleMaterializationBoundary(t *testing.T) {
-	now := time.Now()
-	clock := apptest.NewFakeClock(now)
-	client := newSharedClient(t, apptest.WithClock(clock))
+	client := newSharedClient(t)
+	now := client.Now()
 	refs := createRecurringDefinitionRefs(t, client, "RecurringDateRules")
 	today := civilDateOnly(now)
 	anchor := firstDayOfMonth(today.AddDate(0, -2, 0))
@@ -611,9 +607,8 @@ func TestRecurringOccurrenceDateRuleMaterializationBoundary(t *testing.T) {
 }
 
 func TestRecurringDateRuleResumeOnDueDateMaterializesBoundary(t *testing.T) {
-	now := time.Now()
-	clock := apptest.NewFakeClock(now)
-	client := newSharedClient(t, apptest.WithClock(clock))
+	client := newSharedClient(t)
+	now := client.Now()
 	refs := createRecurringDefinitionRefs(t, client, "RecurringResumeDueDate")
 	today := civilDateOnly(now)
 
@@ -639,9 +634,8 @@ func TestRecurringDateRuleResumeOnDueDateMaterializesBoundary(t *testing.T) {
 }
 
 func TestRecurringOccurrenceStatusFilterBoundary(t *testing.T) {
-	now := time.Now()
-	clock := apptest.NewFakeClock(now)
-	client := newSharedClient(t, apptest.WithClock(clock))
+	client := newSharedClient(t)
+	now := client.Now()
 	refs := createRecurringDefinitionRefs(t, client, "RecurringStatusFilter")
 	today := civilDateOnly(now)
 
@@ -695,9 +689,8 @@ func TestRecurringOccurrenceStatusFilterBoundary(t *testing.T) {
 }
 
 func TestRecurringOccurrenceConfirmAndDismissBoundary(t *testing.T) {
-	now := time.Now()
-	clock := apptest.NewFakeClock(now)
-	client := newSharedClient(t, apptest.WithClock(clock))
+	client := newSharedClient(t)
+	now := client.Now()
 	refs := createRecurringDefinitionRefs(t, client, "RecurringReview")
 	today := civilDateOnly(now)
 
@@ -738,7 +731,6 @@ func TestRecurringOccurrenceConfirmAndDismissBoundary(t *testing.T) {
 	if baselineCancelled.StatusCode() != http.StatusOK {
 		t.Fatalf("cancel recurring confirmation ordering baseline status = %d, want %d; body %s", baselineCancelled.StatusCode(), http.StatusOK, baselineCancelled.Body)
 	}
-	confirmStartedAt := time.Now().UTC().Add(-time.Second)
 	confirmed := confirmRecurringOccurrence(t, client, confirmOccurrences.JSON200.RecurringOccurrences[0].RecurringOccurrenceId)
 	assertReviewedOccurrence(t, *confirmed.JSON200, httpclient.RecurringOccurrenceStatusConfirmed)
 	assertRecurringActionStatus(t, "double confirm", confirmAgain(t, client, confirmed.JSON200.RecurringOccurrenceId), http.StatusBadRequest)
@@ -770,7 +762,9 @@ func TestRecurringOccurrenceConfirmAndDismissBoundary(t *testing.T) {
 			if *record.Settlement != httpclient.SettlementStatusPosted || record.PendingDate != nil || record.PostedDate == nil {
 				t.Fatalf("confirmed balance record settlement/pending_date/posted_date = %v/%v/%v", record.Settlement, record.PendingDate, record.PostedDate)
 			}
-			assertLifecycleTimestampBetween(t, "confirmed recurring posted_date", record.PostedDate, confirmStartedAt, time.Now().UTC().Add(time.Second))
+			if !record.PostedDate.Equal(client.Now()) {
+				t.Fatalf("confirmed recurring posted_date = %v, want %s", record.PostedDate, client.Now())
+			}
 		}
 	}
 
@@ -919,7 +913,7 @@ func TestRecurringDefinitionConfirmNextBoundary(t *testing.T) {
 		}
 	}
 
-	clock.Set(nextDue.AddDate(0, 0, 7))
+	client.SetTime(nextDue.AddDate(0, 0, 7))
 	afterNextSlot := listRecurringOccurrences(t, client, &httpclient.ListRecurringOccurrencesParams{RecurringDefinitionId: &definition.JSON201.RecurringDefinitionId})
 	if len(afterNextSlot.JSON200.RecurringOccurrences) != 2 {
 		t.Fatalf("confirm-next occurrence count = %d, want 2; occurrences = %+v", len(afterNextSlot.JSON200.RecurringOccurrences), afterNextSlot.JSON200.RecurringOccurrences)
@@ -933,9 +927,8 @@ func TestRecurringDefinitionConfirmNextBoundary(t *testing.T) {
 }
 
 func TestRecurringDefinitionDeferBoundary(t *testing.T) {
-	now := time.Now()
-	clock := apptest.NewFakeClock(now)
-	client := newSharedClient(t, apptest.WithClock(clock))
+	client := newSharedClient(t)
+	now := client.Now()
 	refs := createRecurringDefinitionRefs(t, client, "RecurringDefer")
 	today := civilDateOnly(now)
 	nextDue := today.AddDate(0, 0, 7)
@@ -990,9 +983,8 @@ func TestRecurringDefinitionDeferBoundary(t *testing.T) {
 }
 
 func TestRecurringDefinitionReviewActionsCatchUpOverdueSlots(t *testing.T) {
-	now := time.Now()
-	clock := apptest.NewFakeClock(now)
-	client := newSharedClient(t, apptest.WithClock(clock))
+	client := newSharedClient(t)
+	now := client.Now()
 	refs := createRecurringDefinitionRefs(t, client, "RecurringActionCatchUp")
 	today := civilDateOnly(now)
 	anchor := today.AddDate(0, 0, -14)
@@ -1045,9 +1037,9 @@ func TestRecurringDefinitionReviewActionsCatchUpOverdueSlots(t *testing.T) {
 }
 
 func TestRecurringDefinitionPauseResumeBoundary(t *testing.T) {
-	base := firstDayOfMonth(civilDateOnly(time.Now()))
-	clock := apptest.NewFakeClock(base)
-	client := newSharedClient(t, apptest.WithClock(clock))
+	client := newSharedClient(t)
+	base := firstDayOfMonth(civilDateOnly(client.Now()))
+	client.SetTime(base)
 	refs := createRecurringDefinitionRefs(t, client, "RecurringPause")
 
 	interval := createRecurringDefinition(t, client, recurringDefinitionRequest(
@@ -1064,7 +1056,7 @@ func TestRecurringDefinitionPauseResumeBoundary(t *testing.T) {
 	}
 	assertRecurringOccurrenceCount(t, listRecurringOccurrences(t, client, &httpclient.ListRecurringOccurrencesParams{RecurringDefinitionId: &interval.JSON201.RecurringDefinitionId}), 0)
 	resumeDate := base.AddDate(0, 0, 14)
-	clock.Set(resumeDate)
+	client.SetTime(resumeDate)
 	assertRecurringOccurrenceCount(t, listRecurringOccurrences(t, client, &httpclient.ListRecurringOccurrencesParams{RecurringDefinitionId: &interval.JSON201.RecurringDefinitionId}), 0)
 	resumed := resumeRecurringDefinition(t, client, interval.JSON201.RecurringDefinitionId)
 	if resumed.JSON200.PausedAt != nil || resumed.JSON200.AnchorDate.Format("2006-01-02") != formatDate(resumeDate) {
@@ -1083,7 +1075,7 @@ func TestRecurringDefinitionPauseResumeBoundary(t *testing.T) {
 	))
 	pauseRecurringDefinition(t, client, dateRule.JSON201.RecurringDefinitionId)
 	dateResume := base.AddDate(0, 2, 0)
-	clock.Set(dateResume)
+	client.SetTime(dateResume)
 	resumeRecurringDefinition(t, client, dateRule.JSON201.RecurringDefinitionId)
 	dateOccurrences := listRecurringOccurrences(t, client, &httpclient.ListRecurringOccurrencesParams{RecurringDefinitionId: &dateRule.JSON201.RecurringDefinitionId})
 	if len(dateOccurrences.JSON200.RecurringOccurrences) != 2 ||
@@ -1091,7 +1083,7 @@ func TestRecurringDefinitionPauseResumeBoundary(t *testing.T) {
 		dateOccurrences.JSON200.RecurringOccurrences[1].Status != httpclient.RecurringOccurrenceStatusDeferred {
 		t.Fatalf("date-rule resumed occurrences = %+v, want two deferred skipped slots", dateOccurrences.JSON200.RecurringOccurrences)
 	}
-	clock.Set(time.Date(dateResume.Year(), dateResume.Month(), 15, 12, 0, 0, 0, dateResume.Location()))
+	client.SetTime(time.Date(dateResume.Year(), dateResume.Month(), 15, 12, 0, 0, 0, dateResume.Location()))
 	dateDue := listRecurringOccurrences(t, client, &httpclient.ListRecurringOccurrencesParams{RecurringDefinitionId: &dateRule.JSON201.RecurringDefinitionId})
 	if len(dateDue.JSON200.RecurringOccurrences) != 3 || dateDue.JSON200.RecurringOccurrences[2].Status != httpclient.RecurringOccurrenceStatusExpected {
 		t.Fatalf("date-rule post-resume occurrences = %+v, want deferred/deferred/expected", dateDue.JSON200.RecurringOccurrences)
@@ -1099,9 +1091,8 @@ func TestRecurringDefinitionPauseResumeBoundary(t *testing.T) {
 }
 
 func TestRecurringDefinitionQueueSurvivesPauseAndCancelBoundary(t *testing.T) {
-	now := time.Now()
-	clock := apptest.NewFakeClock(now)
-	client := newSharedClient(t, apptest.WithClock(clock))
+	client := newSharedClient(t)
+	now := client.Now()
 	refs := createRecurringDefinitionRefs(t, client, "RecurringQueue")
 	today := civilDateOnly(now)
 
@@ -1132,15 +1123,14 @@ func TestRecurringDefinitionQueueSurvivesPauseAndCancelBoundary(t *testing.T) {
 		t.Fatalf("cancel recurring definition status = %d, want %d; body %s", deleted.StatusCode(), http.StatusNoContent, deleted.Body)
 	}
 	dismissRecurringOccurrence(t, client, cancelledOccurrences.JSON200.RecurringOccurrences[0].RecurringOccurrenceId)
-	clock.Set(today.AddDate(0, 0, 7))
+	client.SetTime(today.AddDate(0, 0, 7))
 	afterCancel := listRecurringOccurrences(t, client, &httpclient.ListRecurringOccurrencesParams{RecurringDefinitionId: &cancelledDefinition.JSON201.RecurringDefinitionId})
 	assertRecurringOccurrenceIDs(t, afterCancel.JSON200.RecurringOccurrences, []int64{cancelledOccurrences.JSON200.RecurringOccurrences[0].RecurringOccurrenceId})
 }
 
 func TestRecurringDefinitionEditFutureOnlyBoundary(t *testing.T) {
-	now := time.Now()
-	clock := apptest.NewFakeClock(now)
-	client := newSharedClient(t, apptest.WithClock(clock))
+	client := newSharedClient(t)
+	now := client.Now()
 	refs := createRecurringDefinitionRefs(t, client, "RecurringEditFuture")
 	today := civilDateOnly(now)
 
@@ -1164,7 +1154,7 @@ func TestRecurringDefinitionEditFutureOnlyBoundary(t *testing.T) {
 	if replaced.StatusCode() != http.StatusOK {
 		t.Fatalf("replace recurring definition status = %d, want %d; body %s", replaced.StatusCode(), http.StatusOK, replaced.Body)
 	}
-	clock.Set(today.AddDate(0, 0, 7))
+	client.SetTime(today.AddDate(0, 0, 7))
 	secondOccurrences := listRecurringOccurrences(t, client, &httpclient.ListRecurringOccurrencesParams{RecurringDefinitionId: &definition.JSON201.RecurringDefinitionId})
 	if len(secondOccurrences.JSON200.RecurringOccurrences) != 2 ||
 		secondOccurrences.JSON200.RecurringOccurrences[0].MaterializedDefinitionVersion != 1 ||

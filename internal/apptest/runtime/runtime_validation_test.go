@@ -74,32 +74,14 @@ func TestRuntimeValidationExpectedBehavior(t *testing.T) {
 
 		startup := client.PollExchangeRateLoadingStatusRevision(1)
 		clock.Advance(9 * 366 * 24 * time.Hour)
-		requireStableExchangeRateLoadingStatus(t, client, startup.RunCount, startup.CompletedRunRevision, 1200*time.Millisecond)
-	})
-}
-
-func requireStableExchangeRateLoadingStatus(
-	t *testing.T,
-	client *apptest.Client,
-	wantRunCount int64,
-	wantCompletedRunRevision int64,
-	stableFor time.Duration,
-) {
-	t.Helper()
-
-	deadline := time.Now().Add(stableFor)
-	for time.Now().Before(deadline) {
 		status := client.ExchangeRateLoadingStatus()
-		if status.State != httpclient.ExchangeRateLoadingStatusResponseStateIdle ||
-			status.RunCount != wantRunCount ||
-			status.CompletedRunRevision != wantCompletedRunRevision {
+		if status.State != httpclient.ExchangeRateLoadingStatusResponseStateIdle || status.RunCount != startup.RunCount || status.CompletedRunRevision != startup.CompletedRunRevision {
 			t.Fatalf(
-				"exchange-rate loading status = %+v, want idle with run counters %d/%d",
+				"exchange-rate loading status = %+v, want unchanged idle run counters %d/%d",
 				status,
-				wantRunCount,
-				wantCompletedRunRevision,
+				startup.RunCount,
+				startup.CompletedRunRevision,
 			)
 		}
-		time.Sleep(25 * time.Millisecond)
-	}
+	})
 }

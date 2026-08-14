@@ -409,10 +409,11 @@ func TestAPIAuditCapturesAuthenticationAndOriginRejections(t *testing.T) {
 	assertAuditJSONField(t, entries.Entries[1].RequestJson, "fqn", "Audit:Unauthenticated")
 }
 
-func TestAPIAuditDoesNotDelayAuthenticationRejectionWhileFinishingBody(t *testing.T) {
+func TestAPIAuditReturnsAuthenticationRejectionWhileRequestBodyReadIsBlocked(t *testing.T) {
 	fixture := apptest.NewAuthenticationFixture(t)
 	client := newSharedClient(t, apptest.WithAuthenticationFile(fixture.Path))
 	unblock := make(chan struct{})
+	defer close(unblock)
 	type result struct {
 		response *httpclient.CreateTagResponse
 		err      error
@@ -432,17 +433,10 @@ func TestAPIAuditDoesNotDelayAuthenticationRejectionWhileFinishingBody(t *testin
 		completed <- result{response: response, err: err}
 	}()
 
-	select {
-	case got := <-completed:
-		close(unblock)
-		requireNoTransportError(t, "create unauthenticated tag without reading body", got.err)
-		if got.response.StatusCode() != http.StatusUnauthorized {
-			t.Fatalf("unauthenticated tag status = %d, want %d; body %s", got.response.StatusCode(), http.StatusUnauthorized, got.response.Body)
-		}
-	case <-time.After(250 * time.Millisecond):
-		close(unblock)
-		<-completed
-		t.Fatal("unauthenticated request read its body before returning")
+	got := apptest.AwaitValue(t, completed, "authentication rejection")
+	requireNoTransportError(t, "create unauthenticated tag without reading body", got.err)
+	if got.response.StatusCode() != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated tag status = %d, want %d; body %s", got.response.StatusCode(), http.StatusUnauthorized, got.response.Body)
 	}
 }
 

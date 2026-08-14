@@ -13,7 +13,7 @@ import (
 )
 
 func TestSeedDemoThroughREST(t *testing.T) {
-	clock := apptest.NewFakeClock(time.Date(2026, 7, 14, 12, 0, 0, 0, time.Local))
+	clock := apptest.NewFakeClock(time.Date(2026, 7, 14, 12, 0, 0, 0, time.FixedZone("local", -4*60*60)))
 	client := newSharedClient(t, apptest.WithAccountingSchema("app_admin_demo_seed"), apptest.WithClock(clock))
 	anchorDate := apptest.Date("2026-07-15")
 

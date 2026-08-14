@@ -1197,7 +1197,7 @@ func TestAccountRejectsHierarchyFQNConflict(t *testing.T) {
 }
 
 func TestAccountRejectsHierarchyFQNConflictAgainstStoredState(t *testing.T) {
-	schema := fmt.Sprintf("account_hierarchy_stored_state_%d", time.Now().UnixNano())
+	schema := apptest.AccountingSchemaName(t, "account_hierarchy_stored_state")
 	currency := "USD"
 
 	setup := newSharedClient(t, apptest.WithAccountingSchema(schema))

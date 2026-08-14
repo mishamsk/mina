@@ -93,15 +93,7 @@ func TestAuditCompactionScheduleUsesCancelableClockDeadline(t *testing.T) {
 	}
 
 	clock.Advance(time.Minute)
-	deadline := time.Now().Add(2 * time.Second)
-	status := client.AuditLogCompactionStatus()
-	for status.CompletedRunRevision < 1 {
-		if time.Now().After(deadline) {
-			t.Fatalf("completed_run_revision = %d, want at least 1; status = %+v", status.CompletedRunRevision, status)
-		}
-		time.Sleep(10 * time.Millisecond)
-		status = client.AuditLogCompactionStatus()
-	}
+	status := client.AwaitAuditLogCompactionStatusRevision(1)
 	if status.LastSuccess == nil || !*status.LastSuccess {
 		t.Fatalf("scheduled audit compaction status = %+v, want success", status)
 	}
@@ -111,11 +103,12 @@ func TestAuditCompactionScheduleUsesCancelableClockDeadline(t *testing.T) {
 		t.Fatalf("deadline wait calls after scheduled run = %d, want next monthly deadline only", calls)
 	}
 
-	startedClosing := time.Now()
-	client.Close()
-	if elapsed := time.Since(startedClosing); elapsed > 500*time.Millisecond {
-		t.Fatalf("close with far-future deadline took %s, want prompt cancellation", elapsed)
-	}
+	closed := make(chan struct{})
+	go func() {
+		defer close(closed)
+		client.Close()
+	}()
+	apptest.AwaitSignal(t, closed, "runtime close with far-future deadline")
 	if pending := clock.PendingDeadlineWaits(); pending != 0 {
 		t.Fatalf("pending deadline waits after close = %d, want zero", pending)
 	}
@@ -148,18 +141,7 @@ func startAuditLogCompaction(t *testing.T, client *apptest.Client) *httpclient.A
 		t.Fatalf("audit compaction start response = %+v, want operation identity and typed run URL %q", started.JSON202, wantURL)
 	}
 
-	deadline := time.Now().Add(2 * time.Second)
-	for {
-		response, err := client.REST().GetAuditLogCompactionRunWithResponse(context.Background(), started.JSON202.OperationRunId)
-		requireClientResponse(t, "get API audit-log compaction run", err, response.StatusCode(), http.StatusOK, response.Body)
-		if response.JSON200.Outcome != httpclient.BackgroundOperationRunOutcomeRunning {
-			return response.JSON200
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("run %d did not complete; run = %+v", started.JSON202.OperationRunId, response.JSON200)
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+	return client.AwaitAuditLogCompactionRun(started.JSON202.OperationRunId)
 }
 
 func assertCompactionTagEntries(t *testing.T, client *apptest.Client, wantNewestFirst []string) {

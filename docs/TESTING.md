@@ -23,6 +23,8 @@ Mina has exactly four app test classes. All exercise Mina at a high-level app bo
 - Assert observable state through REST APIs exposed by the client.
 - Use only in-memory app state and test-owned temp IO.
 - Do not read or write host user cache, config, or data locations.
+- Use the fake clock supplied by `apptest.New` for current time and deadline progression; app-test bodies must not read wall time, wait on real-time deadlines, use host-local time, or generate random or UUID fixtures.
+- Synchronize asynchronous scenarios through `internal/apptest` REST-state and controlled-fake helpers. A harness watchdog may fail a hang diagnostically, but elapsed wall time must never establish a passing condition.
 - Keep test bodies readable as user scenarios, not setup plumbing.
 - Do not call stores, services, repositories, handlers, routers, or private helpers.
 - Do not run SQL or inspect database tables from `app-test` functions.

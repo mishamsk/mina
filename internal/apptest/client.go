@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -22,11 +23,20 @@ import (
 
 const duckDBDriverName = "duckdb"
 
+var accountingSchemaSequence atomic.Uint64
+var accountingSchemaNames sync.Map
+
+type accountingSchemaKey struct {
+	t     testing.TB
+	label string
+}
+
 // Client sends generated REST requests through an in-process app handler.
 type Client struct {
 	t      *testing.T
 	rest   *httpclient.ClientWithResponses
 	app    *runtime.App
+	clock  runtime.Clock
 	closed bool
 }
 
@@ -120,16 +130,24 @@ func (c *FakeClock) DeadlineWaitCalls() int {
 // WaitForPendingDeadlineWaits waits for recurring operation loops to install their clock waits.
 func (c *FakeClock) WaitForPendingDeadlineWaits(t testing.TB, count int) {
 	t.Helper()
-	deadline := time.Now().Add(2 * time.Second)
-	for {
-		if c.PendingDeadlineWaits() == count {
-			return
+	awaitCondition(t, fmt.Sprintf("%d pending fake-clock deadline waits", count), func(context.Context) (struct{}, bool) {
+		return struct{}{}, c.PendingDeadlineWaits() == count
+	})
+}
+
+// WaitForDeadline waits until a fake-clock waiter is installed for deadline.
+func (c *FakeClock) WaitForDeadline(t testing.TB, deadline time.Time) {
+	t.Helper()
+	awaitCondition(t, fmt.Sprintf("fake-clock deadline %s", deadline.Format(time.RFC3339Nano)), func(context.Context) (struct{}, bool) {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		for waiter := range c.waiters {
+			if waiter.deadline.Equal(deadline) {
+				return struct{}{}, true
+			}
 		}
-		if time.Now().After(deadline) {
-			t.Fatalf("pending deadline waits = %d, want %d", c.PendingDeadlineWaits(), count)
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+		return struct{}{}, false
+	})
 }
 
 func (c *FakeClock) dueWaitersLocked() []*fakeClockWaiter {
@@ -521,10 +539,14 @@ func NewResult(t *testing.T, options ...Option) (*Client, error) {
 	cfg.CacheDir = filepath.Join(operationalDir, "cache")
 	cfg.ConfigFilePath = filepath.Join(operationalDir, "config.toml")
 	cfg.ExchangeRates.AutomaticLoadingEnabled = false
+	clock := NewFakeClock(Timestamp("2026-08-14T12:00:00Z"))
 	opts := clientOptions{
 		config: cfg,
 		runtimeOptions: runtime.Options{
 			ExecutionProfile: runtime.ExecutionProfileLongRunning,
+			Dependencies: runtime.Dependencies{
+				Clock: clock,
+			},
 		},
 	}
 	for _, option := range options {
@@ -557,9 +579,10 @@ func NewResult(t *testing.T, options ...Option) (*Client, error) {
 		return nil, fmt.Errorf("new generated REST client: %w", err)
 	}
 	client := &Client{
-		t:    t,
-		rest: restClient,
-		app:  appInstance,
+		t:     t,
+		rest:  restClient,
+		app:   appInstance,
+		clock: opts.runtimeOptions.Dependencies.Clock,
 	}
 	t.Cleanup(client.Close)
 
@@ -590,6 +613,33 @@ func (c *Client) REST() *httpclient.ClientWithResponses {
 	return c.rest
 }
 
+// Now returns the test app's current time.
+func (c *Client) Now() time.Time {
+	c.t.Helper()
+	return c.clock.Now()
+}
+
+// SetTime moves the test app's fake clock to now.
+func (c *Client) SetTime(now time.Time) {
+	c.t.Helper()
+	c.fakeClock().Set(now)
+}
+
+// AdvanceTime advances the test app's fake clock by duration.
+func (c *Client) AdvanceTime(duration time.Duration) {
+	c.t.Helper()
+	c.fakeClock().Advance(duration)
+}
+
+func (c *Client) fakeClock() *FakeClock {
+	c.t.Helper()
+	clock, ok := c.clock.(*FakeClock)
+	if !ok {
+		c.t.Fatal("test app clock is not an apptest fake clock")
+	}
+	return clock
+}
+
 // Close releases resources owned by the in-process test app.
 func (c *Client) Close() {
 	c.t.Helper()
@@ -604,8 +654,18 @@ func (c *Client) Close() {
 
 func testSchemaName(t *testing.T) string {
 	t.Helper()
+	return AccountingSchemaName(t, "app")
+}
 
-	name := strings.ToLower(t.Name())
+// AccountingSchemaName returns a process-unique schema name without wall time or randomness.
+func AccountingSchemaName(t testing.TB, label string) string {
+	t.Helper()
+	key := accountingSchemaKey{t: t, label: label}
+	if existing, ok := accountingSchemaNames.Load(key); ok {
+		return existing.(string)
+	}
+
+	name := strings.ToLower(t.Name() + "_" + label)
 	var builder strings.Builder
 	builder.WriteString("test_")
 	for _, char := range name {
@@ -618,6 +678,14 @@ func testSchemaName(t *testing.T) string {
 			builder.WriteByte('_')
 		}
 	}
+	fmt.Fprintf(&builder, "_%d", accountingSchemaSequence.Add(1))
 
-	return builder.String()
+	candidate := builder.String()
+	actual, loaded := accountingSchemaNames.LoadOrStore(key, candidate)
+	if !loaded {
+		t.Cleanup(func() {
+			accountingSchemaNames.Delete(key)
+		})
+	}
+	return actual.(string)
 }

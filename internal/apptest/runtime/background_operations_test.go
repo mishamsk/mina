@@ -213,7 +213,7 @@ func TestBackgroundOperationExpectedBehavior(t *testing.T) {
 	})
 
 	t.Run("startup load completes when enabled", func(t *testing.T) {
-		schema := fmt.Sprintf("startup_exchange_rate_loading_fixture_%d", time.Now().UnixNano())
+		schema := apptest.AccountingSchemaName(t, "startup_exchange_rate_loading_fixture")
 		cacheDir := filepath.Join(t.TempDir(), "mina")
 		installFrankfurterCacheFixture(t, cacheDir)
 		clock := apptest.NewFakeClock(apptest.Timestamp("2026-04-01T12:00:00Z"))
@@ -247,7 +247,7 @@ func TestBackgroundOperationExpectedBehavior(t *testing.T) {
 	})
 
 	t.Run("startup load ignores provider-only cache quote codes", func(t *testing.T) {
-		schema := fmt.Sprintf("startup_exchange_rate_loading_provider_quotes_%d", time.Now().UnixNano())
+		schema := apptest.AccountingSchemaName(t, "startup_exchange_rate_loading_provider_quotes")
 		cacheDir := filepath.Join(t.TempDir(), "mina")
 		writeFrankfurterCache(t, cacheDir, frankfurterCacheRow("2024-04-02", "EUR", "0.93000000")+frankfurterCacheRow("2024-04-02", "GGP", "0.79000000"))
 		clock := apptest.NewFakeClock(apptest.Timestamp("2024-04-02T12:00:00Z"))
@@ -280,7 +280,7 @@ func TestBackgroundOperationExpectedBehavior(t *testing.T) {
 	})
 
 	t.Run("startup load accepts safe partial cache and app remains usable", func(t *testing.T) {
-		schema := fmt.Sprintf("startup_exchange_rate_loading_partial_cache_%d", time.Now().UnixNano())
+		schema := apptest.AccountingSchemaName(t, "startup_exchange_rate_loading_partial_cache")
 		cacheDir := filepath.Join(t.TempDir(), "mina")
 		writeFrankfurterCache(t, cacheDir, frankfurterCacheRow("2024-04-02", "EUR", "0.93000000"))
 		clock := apptest.NewFakeClock(apptest.Timestamp("2024-04-02T12:00:00Z"))
@@ -316,7 +316,7 @@ func TestBackgroundOperationExpectedBehavior(t *testing.T) {
 	})
 
 	t.Run("startup load replaces malformed cache with a full refetch", func(t *testing.T) {
-		schema := fmt.Sprintf("startup_exchange_rate_loading_malformed_cache_%d", time.Now().UnixNano())
+		schema := apptest.AccountingSchemaName(t, "startup_exchange_rate_loading_malformed_cache")
 		cacheDir := filepath.Join(t.TempDir(), "mina")
 		clock := apptest.NewFakeClock(apptest.Timestamp("2026-04-01T12:00:00Z"))
 		seedExchangeRateLoadingTransaction(t, schema, clock)
@@ -349,7 +349,7 @@ func TestBackgroundOperationExpectedBehavior(t *testing.T) {
 	})
 
 	t.Run("interrupted cache population preserves partial cache and later resumes", func(t *testing.T) {
-		schema := fmt.Sprintf("startup_exchange_rate_loading_interrupted_cache_%d", time.Now().UnixNano())
+		schema := apptest.AccountingSchemaName(t, "startup_exchange_rate_loading_interrupted_cache")
 		cacheDir := filepath.Join(t.TempDir(), "mina")
 		clock := apptest.NewFakeClock(apptest.Timestamp("2026-04-01T12:00:00Z"))
 		seedExchangeRateLoadingTransaction(t, schema, clock)
@@ -400,19 +400,14 @@ func TestBackgroundOperationExpectedBehavior(t *testing.T) {
 		if resumedStatus.LastSuccess == nil || !*resumedStatus.LastSuccess {
 			t.Fatalf("resumed startup status = %+v, want successful startup run", resumedStatus)
 		}
-		select {
-		case got := <-resumedRequestFrom:
-			if got != "2024-04-02" {
-				t.Fatalf("resumed provider request from = %q, want %q", got, "2024-04-02")
-			}
-		case <-time.After(2 * time.Second):
-			t.Fatal("timed out waiting for resumed provider request")
+		if got := apptest.AwaitValue(t, resumedRequestFrom, "resumed provider request"); got != "2024-04-02" {
+			t.Fatalf("resumed provider request from = %q, want %q", got, "2024-04-02")
 		}
 		assertExchangeRateRateOnDate(t, resumed, "USD", "EUR", "2024-04-02", "0.93000000")
 	})
 
 	t.Run("canceled cache population preserves safe partial cache", func(t *testing.T) {
-		schema := fmt.Sprintf("startup_exchange_rate_loading_canceled_cache_%d", time.Now().UnixNano())
+		schema := apptest.AccountingSchemaName(t, "startup_exchange_rate_loading_canceled_cache")
 		cacheDir := filepath.Join(t.TempDir(), "mina")
 		clock := apptest.NewFakeClock(apptest.Timestamp("2026-04-01T12:00:00Z"))
 		seedExchangeRateLoadingTransaction(t, schema, clock)
@@ -435,7 +430,7 @@ func TestBackgroundOperationExpectedBehavior(t *testing.T) {
 				})
 			})),
 		)
-		waitForChannel(t, blocked, "cache population to block")
+		apptest.AwaitSignal(t, blocked, "cache population to block")
 		client.Close()
 
 		assertFrankfurterCache(t, cacheDir, frankfurterCacheRow("2024-04-02", "EUR", "0.93000000"))
@@ -443,20 +438,18 @@ func TestBackgroundOperationExpectedBehavior(t *testing.T) {
 	})
 
 	t.Run("startup accepts CDN JSON and keeps it when the cache read expires", func(t *testing.T) {
-		schema := fmt.Sprintf("startup_exchange_rate_loading_timed_out_cache_%d", time.Now().UnixNano())
+		schema := apptest.AccountingSchemaName(t, "startup_exchange_rate_loading_timed_out_cache")
 		cacheDir := filepath.Join(t.TempDir(), "mina")
 		clock := apptest.NewFakeClock(apptest.Timestamp("2026-04-01T12:00:00Z"))
 		seedExchangeRateLoadingTransaction(t, schema, clock)
-		cacheClient := cacheHTTPClientWithContentType("application/json", func(request *http.Request) io.ReadCloser {
+		cacheClient := cacheHTTPClientWithContentType("application/json", func(_ *http.Request) io.ReadCloser {
 			return pipeCacheBody(func(w *io.PipeWriter) {
 				writePipeString(w, "["+frankfurterCacheRow("2024-04-02", "EUR", "0.93000000")+",")
 				writePipeString(w, frankfurterCacheRow("2025-04-01", "EUR", "1.01000000")+",")
 				writePipeString(w, `{"date":"2026-04-01","base":"USD"`)
-				<-request.Context().Done()
-				_ = w.CloseWithError(request.Context().Err())
+				_ = w.CloseWithError(context.DeadlineExceeded)
 			})
 		})
-		cacheClient.Timeout = 50 * time.Millisecond
 
 		client := newSharedClient(
 			t,
@@ -477,12 +470,12 @@ func TestBackgroundOperationExpectedBehavior(t *testing.T) {
 	})
 
 	t.Run("slow cache stream installs a final cache", func(t *testing.T) {
-		schema := fmt.Sprintf("startup_exchange_rate_loading_slow_cache_%d", time.Now().UnixNano())
+		schema := apptest.AccountingSchemaName(t, "startup_exchange_rate_loading_slow_cache")
 		cacheDir := filepath.Join(t.TempDir(), "mina")
 		clock := apptest.NewFakeClock(apptest.Timestamp("2026-04-01T12:00:00Z"))
 		seedExchangeRateLoadingTransaction(t, schema, clock)
 		blocked := make(chan struct{})
-		requestDeadlineRemaining := make(chan time.Duration, 1)
+		requestHasDeadline := make(chan bool, 1)
 		release := make(chan struct{})
 
 		client := newSharedClient(
@@ -493,12 +486,8 @@ func TestBackgroundOperationExpectedBehavior(t *testing.T) {
 			apptest.WithOperationsEnabled(true),
 			apptest.WithExchangeRateLoading(true),
 			apptest.WithFrankfurterCacheHTTPClient(cacheHTTPClient(func(request *http.Request) io.ReadCloser {
-				deadline, ok := request.Context().Deadline()
-				if ok {
-					requestDeadlineRemaining <- time.Until(deadline)
-				} else {
-					requestDeadlineRemaining <- 0
-				}
+				_, ok := request.Context().Deadline()
+				requestHasDeadline <- ok
 				return pipeCacheBody(func(w *io.PipeWriter) {
 					writePipeString(w, frankfurterCacheRow("2024-04-02", "EUR", "0.93000000"))
 					close(blocked)
@@ -512,9 +501,9 @@ func TestBackgroundOperationExpectedBehavior(t *testing.T) {
 				})
 			})),
 		)
-		waitForChannel(t, blocked, "cache stream to pause")
-		if remaining := <-requestDeadlineRemaining; remaining < 14*time.Minute || remaining > 15*time.Minute {
-			t.Fatalf("startup cache request deadline remaining = %s, want approximately 15m", remaining)
+		apptest.AwaitSignal(t, blocked, "cache stream to pause")
+		if !apptest.AwaitValue(t, requestHasDeadline, "startup cache request deadline") {
+			t.Fatal("startup cache request has no deadline")
 		}
 		close(release)
 		status := client.PollExchangeRateLoadingStatusRevision(1)
@@ -529,7 +518,7 @@ func TestBackgroundOperationExpectedBehavior(t *testing.T) {
 	})
 
 	t.Run("cache population preserves competing install", func(t *testing.T) {
-		schema := fmt.Sprintf("startup_exchange_rate_loading_competing_cache_%d", time.Now().UnixNano())
+		schema := apptest.AccountingSchemaName(t, "startup_exchange_rate_loading_competing_cache")
 		cacheDir := filepath.Join(t.TempDir(), "mina")
 		clock := apptest.NewFakeClock(apptest.Timestamp("2026-04-01T12:00:00Z"))
 		seedExchangeRateLoadingTransaction(t, schema, clock)
@@ -561,7 +550,7 @@ func TestBackgroundOperationExpectedBehavior(t *testing.T) {
 	})
 
 	t.Run("cache population preserves competing resume", func(t *testing.T) {
-		schema := fmt.Sprintf("startup_exchange_rate_loading_competing_resume_%d", time.Now().UnixNano())
+		schema := apptest.AccountingSchemaName(t, "startup_exchange_rate_loading_competing_resume")
 		cacheDir := filepath.Join(t.TempDir(), "mina")
 		clock := apptest.NewFakeClock(apptest.Timestamp("2026-04-01T12:00:00Z"))
 		seedExchangeRateLoadingTransaction(t, schema, clock)
@@ -594,7 +583,7 @@ func TestBackgroundOperationExpectedBehavior(t *testing.T) {
 	})
 
 	t.Run("startup provider failure is observable and REST remains usable", func(t *testing.T) {
-		schema := fmt.Sprintf("startup_exchange_rate_loading_failure_fixture_%d", time.Now().UnixNano())
+		schema := apptest.AccountingSchemaName(t, "startup_exchange_rate_loading_failure_fixture")
 		provider := apptest.NewFakeExchangeRateProvider()
 		provider.Fail("provider unavailable")
 		setup := newSharedClient(
@@ -649,13 +638,21 @@ func TestBackgroundOperationExpectedBehavior(t *testing.T) {
 			PostedAt:      apptest.TimestampPtr("2026-04-01T12:00:00Z"),
 		})
 
-		before := client.ExchangeRateLoadingStatus()
+		client.AwaitBackgroundOperationRun(
+			httpclient.BackgroundOperationIdExchangeRateLoading,
+			httpclient.BackgroundOperationRunTriggerStartup,
+			httpclient.BackgroundOperationRunOutcomeSucceeded,
+			clock.Now(),
+		)
+		scheduledAt := apptest.Timestamp("2026-04-02T18:00:00Z")
+		clock.WaitForDeadline(t, scheduledAt)
 		clock.Advance(time.Minute)
-		after := client.PollExchangeRateLoadingStatusRevision(before.CompletedRunRevision + 1)
-		if after.LastStartedAt == nil || after.LastStartedAt.Before(apptest.Timestamp("2026-04-02T18:00:00Z")) {
-			t.Fatalf("last_started_at = %v, want scheduled fake-clock time", after.LastStartedAt)
-		}
-		requireLatestRunEnvelopeTrigger(t, client, httpclient.BackgroundOperationIdExchangeRateLoading, httpclient.BackgroundOperationRunTriggerScheduled)
+		client.AwaitBackgroundOperationRun(
+			httpclient.BackgroundOperationIdExchangeRateLoading,
+			httpclient.BackgroundOperationRunTriggerScheduled,
+			httpclient.BackgroundOperationRunOutcomeSucceeded,
+			scheduledAt,
+		)
 		assertExchangeRateDateExists(t, client, "USD", "EUR", "2026-04-01")
 	})
 
@@ -705,7 +702,7 @@ func TestBackgroundOperationExpectedBehavior(t *testing.T) {
 		if run.Outcome != httpclient.BackgroundOperationRunOutcomeFailed || run.Error == nil || *run.Error != "provider unavailable" {
 			t.Fatalf("failure run = %+v, want failed run with provider error", run)
 		}
-		daily := waitForDailyExchangeRateCount(t, client, 1)
+		daily := client.AwaitDailyExchangeRateCount(1)
 		if daily.JSON200.ExchangeRates[0].ToCurrency != "EUR" || daily.JSON200.ExchangeRates[0].Rate != "2.00000000" {
 			t.Fatalf("daily rates after provider failure = %+v, want EUR rate 2.00000000", daily.JSON200)
 		}
@@ -893,16 +890,6 @@ func pipeCacheBody(write func(*io.PipeWriter)) io.ReadCloser {
 func writePipeString(writer *io.PipeWriter, value string) {
 	if _, err := writer.Write([]byte(value)); err != nil {
 		_ = writer.CloseWithError(err)
-	}
-}
-
-func waitForChannel(t *testing.T, ch <-chan struct{}, label string) {
-	t.Helper()
-
-	select {
-	case <-ch:
-	case <-time.After(2 * time.Second):
-		t.Fatalf("timed out waiting for %s", label)
 	}
 }
 

@@ -1634,14 +1634,6 @@ func assertRecordTimestamps(t *testing.T, label string, record httpclient.Journa
 	}
 }
 
-func assertLifecycleTimestampBetween(t *testing.T, label string, got *time.Time, from time.Time, to time.Time) {
-	t.Helper()
-
-	if got == nil || got.Before(from) || got.After(to) {
-		t.Fatalf("%s = %v, want between %s and %s", label, got, from.Format(time.RFC3339Nano), to.Format(time.RFC3339Nano))
-	}
-}
-
 func assertBodyContains(t *testing.T, label string, body []byte, want string) {
 	t.Helper()
 
