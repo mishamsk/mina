@@ -65,12 +65,14 @@ export {
   useBootstrapView,
 } from "./bootstrap";
 export {
+  type CategoriesPageKey,
   type CategoriesPageSnapshot,
   clearCategoriesPageLoading,
   getCategoriesSnapshot,
   invalidateCategoriesPage,
   setCategoriesPage,
   setCategoriesPageError,
+  setCategoriesPageFromCache,
   setCategoriesPageLoading,
   useCategoriesPageView,
   useCategoriesStore,

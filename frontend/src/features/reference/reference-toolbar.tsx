@@ -1,5 +1,5 @@
 import { Eye, EyeOff, Search } from "pixelarticons/react";
-import { useCallback, useState } from "react";
+import { type ReactNode, useCallback, useState } from "react";
 import type { SetURLSearchParams } from "react-router";
 
 import { Tooltip } from "@/components/tooltip";
@@ -30,6 +30,7 @@ const updateReferenceSearchParam = (
 };
 
 interface ReferenceToolbarProps {
+  readonly extraControls?: ReactNode;
   readonly includeHidden: boolean;
   readonly search: string;
   readonly searchInputId: string;
@@ -42,6 +43,7 @@ interface ReferenceToolbarProps {
 }
 
 export const ReferenceToolbar = ({
+  extraControls,
   includeHidden,
   search,
   searchInputId,
@@ -128,6 +130,8 @@ export const ReferenceToolbar = ({
           />
         </div>
       </div>
+
+      {extraControls}
 
       {showIncludeHiddenToggle ? (
         <Tooltip

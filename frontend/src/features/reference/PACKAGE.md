@@ -6,7 +6,7 @@
 
 ## Implicit Contracts
 
-- The toolbar owns only URL parameters `q` and `hidden`: trim and omit an empty search, encode enabled hidden items as `hidden=true`, and preserve unrelated parameters.
+- The toolbar owns only URL parameters `q` and `hidden`: trim and omit an empty search, encode enabled hidden items as `hidden=true`, preserve unrelated parameters, and render feature-supplied standing controls without owning their state.
 - Tree rows come from visible matching leaves; group API data supplies group state only. Do not render orphan groups or use a group's hidden state to hide visible descendants.
 - Trees activate leaf rows; Category and Tag indexes also activate groups to canonical FQN-prefix overview routes. Embedded controls must not activate the row, and the supplied opener is returned to the owner for focus recovery.
 - Member drill-down callers supply the resolved scoped IDs. The shell strips that dimension from browser-controlled URL filters and reapplies it, so its entity filter cannot be cleared or broadened by the transaction toolbar.

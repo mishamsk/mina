@@ -1,16 +1,25 @@
 import { Plus } from "pixelarticons/react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 
 import {
   apiErrorMessage,
   type Category,
+  type CategoryEconomicIntent,
+  fetchCategoriesForManagement,
   restructureLedgerCategories,
 } from "@/api";
 import { PageHelp } from "@/components/page-help";
 import { Toast, toastDurationMs } from "@/components/toast";
 import { focusWithoutTooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { PageHeader } from "@/features/app-shell";
 import {
   CategoriesPageContent,
@@ -34,12 +43,22 @@ interface Notice {
 const movedCategoryMessage = (count: number): string =>
   `Moved ${count} ${count === 1 ? "category" : "categories"}.`;
 
+const readCategoryEconomicIntent = (
+  searchParams: URLSearchParams,
+): CategoryEconomicIntent | undefined => {
+  const economicIntent = searchParams.get("economic_intent");
+  return economicIntent === "income" || economicIntent === "expense"
+    ? economicIntent
+    : undefined;
+};
+
 export const CategoriesPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const categoriesPage = useCategoriesResource();
+  const economicIntent = readCategoryEconomicIntent(searchParams);
+  const categoriesPage = useCategoriesResource(economicIntent);
   const [panelMode, setPanelMode] = useState<"create" | "edit" | undefined>();
-  const [selectedCategoryId, setSelectedCategoryId] = useState<
-    number | undefined
+  const [selectedCategory, setSelectedCategory] = useState<
+    Category | undefined
   >();
   const [restructurePath, setRestructurePath] = useState<string | undefined>();
   const [restructureError, setRestructureError] = useState<
@@ -50,9 +69,68 @@ export const CategoriesPage = () => {
   const panelOpenerRef = useRef<HTMLElement | null>(null);
   const restructureOpenerRef = useRef<HTMLElement | null>(null);
   const { includeHidden, search } = readCategoriesSearchState(searchParams);
-  const selectedCategory = categoriesPage.snapshot?.categories.find(
+  const categoriesSnapshot = categoriesPage.snapshot;
+  const selectedCategoryId = selectedCategory?.category_id;
+  const selectedCategoryEconomicIntent = selectedCategory?.economic_intent;
+  const refreshedSelectedCategory = categoriesSnapshot?.categories.find(
     (category) => category.category_id === selectedCategoryId,
   );
+  const selectedCategoryForEditor =
+    selectedCategory && refreshedSelectedCategory
+      ? {
+          ...selectedCategory,
+          deletable: refreshedSelectedCategory.deletable,
+        }
+      : selectedCategory;
+
+  useEffect(() => {
+    if (
+      selectedCategoryId === undefined ||
+      selectedCategoryEconomicIntent === undefined ||
+      refreshedSelectedCategory ||
+      !categoriesSnapshot
+    ) {
+      return;
+    }
+
+    let current = true;
+    void fetchCategoriesForManagement(selectedCategoryEconomicIntent).then(
+      (result) => {
+        const refreshedCategory = result.data?.categories.find(
+          (category) => category.category_id === selectedCategoryId,
+        );
+        if (!current || !refreshedCategory) {
+          return;
+        }
+        setSelectedCategory((category) =>
+          category?.category_id === refreshedCategory.category_id
+            ? { ...category, deletable: refreshedCategory.deletable }
+            : category,
+        );
+      },
+    );
+
+    return () => {
+      current = false;
+    };
+  }, [
+    categoriesSnapshot,
+    refreshedSelectedCategory,
+    selectedCategoryEconomicIntent,
+    selectedCategoryId,
+  ]);
+
+  const setEconomicIntent = (value: string) => {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      if (value === "income" || value === "expense") {
+        next.set("economic_intent", value);
+      } else {
+        next.delete("economic_intent");
+      }
+      return next;
+    });
+  };
 
   const showNotice = (message: string, tone: Notice["tone"] = "success") => {
     setNotice((current) => ({
@@ -80,7 +158,7 @@ export const CategoriesPage = () => {
     setRestructureError(undefined);
     restructureOpenerRef.current = null;
     panelOpenerRef.current = opener;
-    setSelectedCategoryId(undefined);
+    setSelectedCategory(undefined);
     setPanelMode("create");
   };
 
@@ -89,25 +167,25 @@ export const CategoriesPage = () => {
     setRestructureError(undefined);
     restructureOpenerRef.current = null;
     panelOpenerRef.current = opener;
-    setSelectedCategoryId(category.category_id);
+    setSelectedCategory(category);
     setPanelMode("edit");
   };
 
   const closePanel = () => {
     setPanelMode(undefined);
-    setSelectedCategoryId(undefined);
+    setSelectedCategory(undefined);
     restorePanelOpenerFocus();
   };
 
   const closeDeletedCategoryEditor = (categoryId: number) => {
-    if (panelMode === "edit" && selectedCategoryId === categoryId) {
+    if (panelMode === "edit" && selectedCategory?.category_id === categoryId) {
       closePanel();
     }
   };
 
   const openRestructureDialog = (fqn: string, opener: HTMLElement) => {
     setPanelMode(undefined);
-    setSelectedCategoryId(undefined);
+    setSelectedCategory(undefined);
     panelOpenerRef.current = null;
     restructureOpenerRef.current = opener;
     setRestructureError(undefined);
@@ -191,6 +269,33 @@ export const CategoriesPage = () => {
         }
         toolbar={
           <ReferenceToolbar
+            extraControls={
+              <div className="flex flex-col gap-1">
+                <label
+                  htmlFor="categories-economic-intent"
+                  className="font-heading text-xs font-semibold text-[var(--frame-muted)] uppercase"
+                >
+                  Economic intent
+                </label>
+                <Select
+                  value={economicIntent ?? "all"}
+                  onValueChange={setEconomicIntent}
+                >
+                  <SelectTrigger
+                    id="categories-economic-intent"
+                    className="min-w-32"
+                    size="compact"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    <SelectItem value="income">Income</SelectItem>
+                    <SelectItem value="expense">Expense</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            }
             includeHidden={includeHidden}
             search={search}
             searchInputId="categories-search"
@@ -206,6 +311,7 @@ export const CategoriesPage = () => {
       <div className="min-h-0 flex-1">
         <CategoriesPageContent
           categoriesPage={categoriesPage}
+          economicIntent={economicIntent}
           includeHidden={includeHidden}
           onCategoryDeleted={closeDeletedCategoryEditor}
           onEditCategory={openEditPanel}
@@ -228,7 +334,8 @@ export const CategoriesPage = () => {
         }}
       />
       <CategoriesSidePanel
-        category={selectedCategory}
+        category={selectedCategoryForEditor}
+        initialEconomicIntent={economicIntent}
         mode={panelMode ?? "create"}
         open={Boolean(panelMode)}
         onClose={closePanel}

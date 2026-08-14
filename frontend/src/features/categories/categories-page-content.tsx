@@ -8,7 +8,7 @@ import {
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router";
 
-import type { Category, GroupState } from "@/api";
+import type { Category, CategoryEconomicIntent, GroupState } from "@/api";
 import {
   apiErrorMessage,
   deleteLedgerCategoryById,
@@ -42,6 +42,7 @@ interface CategoriesPageContentProps {
     readonly loading: boolean;
     readonly snapshot: CategoriesPageSnapshot | undefined;
   };
+  readonly economicIntent: CategoryEconomicIntent | undefined;
   readonly includeHidden: boolean;
   readonly onCategoryDeleted: (categoryId: number) => void;
   readonly onEditCategory: (category: Category, opener: HTMLElement) => void;
@@ -64,6 +65,7 @@ const renderCategoryBadge = (row: ReferenceTreeRow<Category, GroupState>) => {
 
 export const CategoriesPageContent = ({
   categoriesPage,
+  economicIntent,
   includeHidden,
   onCategoryDeleted,
   onEditCategory,
@@ -324,7 +326,11 @@ export const CategoriesPageContent = ({
       <div className="min-h-0 flex-1">
         <ReferenceTree
           badgeHeader="Intent"
-          emptyDescription="The category tree will show category paths, economic intent, and hidden state once categories exist."
+          emptyDescription={
+            economicIntent
+              ? "No categories match the current search and filters. The tree shows category paths, economic intent, and hidden state."
+              : "The category tree will show category paths, economic intent, and hidden state once categories exist."
+          }
           emptyFilteredDescription="No categories match the current search and filters. The tree shows category paths, economic intent, and hidden state."
           emptyTitle="No categories"
           errorMessage={

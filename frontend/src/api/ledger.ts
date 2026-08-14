@@ -625,9 +625,13 @@ export const fetchAccountsPage = async () => {
   return { accounts, balances, groups };
 };
 
-const listCategoriesPageForManagement = (offset: number) =>
+const listCategoriesPageForManagement = (
+  offset: number,
+  economicIntent?: CategoryEconomicIntent,
+) =>
   listCategories({
     query: {
+      economic_intent: economicIntent ? [economicIntent] : undefined,
       include_hidden: true,
       limit: lookupLimit,
       offset,
@@ -636,8 +640,10 @@ const listCategoriesPageForManagement = (offset: number) =>
     },
   });
 
-const listAllCategoriesForManagement = async () => {
-  const firstPage = await listCategoriesPageForManagement(0);
+export const fetchCategoriesForManagement = async (
+  economicIntent?: CategoryEconomicIntent,
+) => {
+  const firstPage = await listCategoriesPageForManagement(0, economicIntent);
   if (
     !firstPage.data ||
     firstPage.data.categories.length >= firstPage.data.total_count
@@ -651,7 +657,7 @@ const listAllCategoriesForManagement = async () => {
     offset < firstPage.data.total_count;
     offset += lookupLimit
   ) {
-    const page = await listCategoriesPageForManagement(offset);
+    const page = await listCategoriesPageForManagement(offset, economicIntent);
     if (!page.data) {
       return page;
     }
@@ -667,9 +673,11 @@ const listAllCategoriesForManagement = async () => {
   };
 };
 
-export const fetchCategoriesPage = async () => {
+export const fetchCategoriesPage = async (
+  economicIntent?: CategoryEconomicIntent,
+) => {
   const [categories, groups] = await Promise.all([
-    listAllCategoriesForManagement(),
+    fetchCategoriesForManagement(economicIntent),
     listCategoryGroups({
       query: {
         include_hidden: true,

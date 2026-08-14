@@ -1,15 +1,22 @@
 import { useEffect, useRef } from "react";
 
-import { apiErrorMessage, fetchCategoriesPage } from "@/api";
+import {
+  apiErrorMessage,
+  type CategoryEconomicIntent,
+  fetchCategoriesPage,
+} from "@/api";
 import { refreshLedgerLookups } from "@/features/ledger";
 import { refreshOverview } from "@/features/overview";
 import {
+  type CategoriesPageKey,
   clearCategoriesPageLoading,
   getCategoriesSnapshot,
+  invalidateCategoriesPage,
   invalidateCategoryPickerCategories,
   invalidateTransactionPages,
   setCategoriesPage,
   setCategoriesPageError,
+  setCategoriesPageFromCache,
   setCategoriesPageLoading,
   useCategoriesPageView,
 } from "@/store";
@@ -18,9 +25,13 @@ let categoriesPageLoadGeneration = 0;
 const categoriesPageRefreshRetryDelayMs = 200;
 const categoriesPageRefreshAttempts = 8;
 
-const nextCategoriesPageLoadGeneration = (): number => {
+const categoriesPageKey = (
+  economicIntent?: CategoryEconomicIntent,
+): CategoriesPageKey => economicIntent ?? "all";
+
+const nextCategoriesPageLoadGeneration = (key: CategoriesPageKey): number => {
   categoriesPageLoadGeneration += 1;
-  setCategoriesPageLoading();
+  setCategoriesPageLoading(key);
   return categoriesPageLoadGeneration;
 };
 
@@ -37,9 +48,10 @@ const waitForCategoriesPageRetry = (): Promise<void> =>
   });
 
 const fetchCategoriesPageWithRetries = async (
+  economicIntent: CategoryEconomicIntent | undefined,
   shouldContinue: () => boolean,
 ): Promise<Awaited<ReturnType<typeof fetchCategoriesPage>>> => {
-  let result = await fetchCategoriesPage();
+  let result = await fetchCategoriesPage(economicIntent);
   for (
     let attempt = 1;
     attempt < categoriesPageRefreshAttempts && !categoriesPageLoaded(result);
@@ -49,19 +61,26 @@ const fetchCategoriesPageWithRetries = async (
       return result;
     }
     await waitForCategoriesPageRetry();
-    result = await fetchCategoriesPage();
+    if (!shouldContinue()) {
+      return result;
+    }
+    result = await fetchCategoriesPage(economicIntent);
   }
   return result;
 };
 
 const loadCategoriesPage = async (
   generation: number,
+  economicIntent?: CategoryEconomicIntent,
   shouldCommit: () => boolean = () => true,
 ): Promise<boolean> => {
   const isCurrentLoad = () => isCurrentCategoriesPageLoad(generation);
   const commitCurrent = () => shouldCommit() && isCurrentLoad();
 
-  const result = await fetchCategoriesPageWithRetries(commitCurrent);
+  const result = await fetchCategoriesPageWithRetries(
+    economicIntent,
+    commitCurrent,
+  );
   if (!commitCurrent()) {
     if (isCurrentLoad()) {
       clearCategoriesPageLoading();
@@ -82,17 +101,30 @@ const loadCategoriesPage = async (
   setCategoriesPage({
     categories: result.categories.data.categories,
     groups: result.groups.data.groups,
+    key: categoriesPageKey(economicIntent),
   });
   return true;
 };
 
+const currentCategoriesPageEconomicIntent = () => {
+  const snapshot = getCategoriesSnapshot();
+  const key = snapshot.requestKey ?? snapshot.snapshot?.key;
+  return key === "all" ? undefined : key;
+};
+
 export const refreshCategoriesPage = async (): Promise<boolean> => {
-  return loadCategoriesPage(nextCategoriesPageLoadGeneration());
+  const economicIntent = currentCategoriesPageEconomicIntent();
+  const key = categoriesPageKey(economicIntent);
+  return loadCategoriesPage(
+    nextCategoriesPageLoadGeneration(key),
+    economicIntent,
+  );
 };
 
 export const refreshCategoriesAfterMutation = async (options?: {
   readonly bulk?: boolean;
 }): Promise<boolean> => {
+  invalidateCategoriesPage();
   invalidateCategoryPickerCategories();
   if (options?.bulk) {
     invalidateTransactionPages();
@@ -102,7 +134,9 @@ export const refreshCategoriesAfterMutation = async (options?: {
   return categoriesRefreshed;
 };
 
-export const useCategoriesResource = () => {
+export const useCategoriesResource = (
+  economicIntent?: CategoryEconomicIntent,
+) => {
   const categoriesPage = useCategoriesPageView();
   const mountedRef = useRef(false);
 
@@ -115,22 +149,37 @@ export const useCategoriesResource = () => {
 
   useEffect(() => {
     const snapshot = getCategoriesSnapshot();
+    const key = categoriesPageKey(economicIntent);
+    if (snapshot.snapshot?.key === key && !snapshot.stale) {
+      if (
+        snapshot.requestKey !== key &&
+        (snapshot.loading || snapshot.errorMessage)
+      ) {
+        categoriesPageLoadGeneration += 1;
+        setCategoriesPageFromCache(key);
+      }
+      return;
+    }
     if (
-      (snapshot.snapshot && !snapshot.stale) ||
-      snapshot.loading ||
-      snapshot.errorMessage
+      (snapshot.loading && snapshot.requestKey === key) ||
+      (snapshot.errorMessage && snapshot.requestKey === key)
     ) {
       return;
     }
 
-    const generation = nextCategoriesPageLoadGeneration();
+    const generation = nextCategoriesPageLoadGeneration(key);
 
-    void loadCategoriesPage(generation, () => mountedRef.current);
+    void loadCategoriesPage(
+      generation,
+      economicIntent,
+      () => mountedRef.current,
+    );
   }, [
     categoriesPage.errorMessage,
     categoriesPage.loading,
     categoriesPage.snapshot,
     categoriesPage.stale,
+    economicIntent,
   ]);
 
   return categoriesPage;

@@ -11,7 +11,8 @@
 - Every configured browser request declares the `web-ui` client surface in the same interceptor that preserves authentication-generation handling.
 - Every completed non-`GET` browser request emits one process-local mutation event so mounted resource views can refresh after any REST outcome.
 - Normalize failures with no HTTP response as `NetworkFailure`; preserve HTTP error payloads for the shared error-message helpers.
-- Helpers that return a complete lookup or management set must follow backend pagination; paged record browsers stay backend-paginated.
+- Helpers that return a complete lookup or management set must follow backend pagination and preserve typed filters on every page request; paged record browsers stay backend-paginated.
+- Category management reads may fetch one typed intent independently so an open editor excluded by the visible filter can reconcile server-owned deleteability without replacing its draft.
 - Transaction page helpers require a typed sort field and direction and pass them directly to the generated client.
 - Flow-report helpers pass the shared typed anchor/window configuration without transforming report values; the accounting-history-range helper remains a separate generated read.
 - Status consumes generated paged audit-entry DTO metadata and their JSON-presence flags without a persistent frontend cache; its thin response helper retains each JSON field's transport source for exact evidence formatting without JavaScript number coercion.

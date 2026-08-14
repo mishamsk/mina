@@ -44,6 +44,7 @@ interface CategoryFormState {
 
 interface CategoriesSidePanelProps {
   readonly category: Category | undefined;
+  readonly initialEconomicIntent?: CategoryEconomicIntent;
   readonly mode: "create" | "edit";
   readonly onClose: () => void;
   readonly onNotice: (message: string) => void;
@@ -63,8 +64,10 @@ const intentEffects = {
     "Negative flow records are income; positive flow records are clawback.",
 } satisfies Record<CategoryEconomicIntent, string>;
 
-const blankForm = (): CategoryFormState => ({
-  economicIntent: "",
+const blankForm = (
+  initialEconomicIntent?: CategoryEconomicIntent,
+): CategoryFormState => ({
+  economicIntent: initialEconomicIntent ?? "",
   fqn: "",
   isHidden: false,
 });
@@ -138,6 +141,7 @@ const Field = ({
 
 const CategoriesSidePanelContent = ({
   category,
+  initialEconomicIntent,
   mode,
   onClose,
   onNotice,
@@ -146,7 +150,9 @@ const CategoriesSidePanelContent = ({
   const panelSessionActiveRef = useRef(true);
   const categoryDeleteButtonRef = useRef<HTMLButtonElement | null>(null);
   const [form, setForm] = useState<CategoryFormState>(() =>
-    mode === "create" ? blankForm() : formFromCategory(category),
+    mode === "create"
+      ? blankForm(initialEconomicIntent)
+      : formFromCategory(category),
   );
   const [fieldErrors, setFieldErrors] = useState<CategoryFormErrors>({});
   const [saving, setSaving] = useState(false);
@@ -197,9 +203,9 @@ const CategoriesSidePanelContent = ({
       }
     };
 
-    document.addEventListener("keydown", onKeyDown, { capture: true });
+    window.addEventListener("keydown", onKeyDown);
     return () => {
-      document.removeEventListener("keydown", onKeyDown, { capture: true });
+      window.removeEventListener("keydown", onKeyDown);
     };
   }, [onClose]);
 
@@ -504,6 +510,7 @@ export const CategoriesSidePanel = (props: CategoriesSidePanelProps) => {
     <CategoriesSidePanelContent
       key={`${props.mode}:${props.category?.category_id ?? "new"}`}
       category={props.category}
+      initialEconomicIntent={props.initialEconomicIntent}
       mode={props.mode}
       onClose={props.onClose}
       onNotice={props.onNotice}

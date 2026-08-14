@@ -292,6 +292,616 @@ test("categories page renders demo hierarchy, intent badges, URL search, and hid
   await expect(hiddenRow.getByLabel("Hidden item")).toBeVisible();
 });
 
+test("categories economic intent filter is URL-backed and filters API requests", async ({
+  browserName,
+  page,
+}) => {
+  const unique = `${browserName.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const incomeCategory = await createCategory(page, {
+    economicIntent: "income",
+    fqn: `E2EIntent:${unique}:IncomeLeaf`,
+  });
+  const expenseCategory = await createCategory(page, {
+    economicIntent: "expense",
+    fqn: `E2EIntent:${unique}:ExpenseLeaf`,
+  });
+  const intentSelect = page.getByRole("combobox", { name: "Economic intent" });
+  const incomeRow = page
+    .getByTestId("categories-tree-row")
+    .filter({ hasText: incomeCategory.fqn });
+  const expenseRow = page
+    .getByTestId("categories-tree-row")
+    .filter({ hasText: expenseCategory.fqn });
+  const waitForCategories = (economicIntent: "expense" | "income" | null) =>
+    page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return (
+        response.request().method() === "GET" &&
+        url.pathname === "/api/categories" &&
+        url.searchParams.get("economic_intent") === economicIntent
+      );
+    });
+  const chooseIntent = async (label: "All" | "Expense" | "Income") => {
+    await intentSelect.click();
+    await page.getByRole("option", { exact: true, name: label }).click();
+  };
+  const expectNewCategoryIntent = async (
+    label: "Income" | "Expense" | "Select intent",
+  ) => {
+    await page.getByRole("button", { name: "New category" }).click();
+    const panel = page.getByRole("dialog", { name: "Create category" });
+    await expect(panel.getByRole("combobox", { name: "Intent" })).toHaveText(
+      label,
+    );
+    await panel.getByRole("button", { name: "Close category panel" }).click();
+  };
+
+  const allResponse = waitForCategories(null);
+  await page.goto(`/categories?q=${encodeURIComponent(`E2EIntent:${unique}`)}`);
+  await allResponse;
+  await expect(intentSelect).toHaveText("All");
+  await expect(incomeRow).toBeVisible();
+  await expect(expenseRow).toBeVisible();
+  await expectNewCategoryIntent("Select intent");
+
+  const incomeResponse = waitForCategories("income");
+  await chooseIntent("Income");
+  await incomeResponse;
+  await expect(page).toHaveURL(/economic_intent=income/);
+  await expect(intentSelect).toHaveText("Income");
+  await expect(incomeRow).toBeVisible();
+  await expect(expenseRow).toHaveCount(0);
+  await expectNewCategoryIntent("Income");
+
+  const reloadResponse = waitForCategories("income");
+  await page.reload();
+  await reloadResponse;
+  await expect(intentSelect).toHaveText("Income");
+  await expect(incomeRow).toBeVisible();
+  await expect(expenseRow).toHaveCount(0);
+
+  const expenseResponse = waitForCategories("expense");
+  await chooseIntent("Expense");
+  await expenseResponse;
+  await expect(page).toHaveURL(/economic_intent=expense/);
+  await expect(intentSelect).toHaveText("Expense");
+  await expect(incomeRow).toHaveCount(0);
+  await expect(expenseRow).toBeVisible();
+  await expectNewCategoryIntent("Expense");
+
+  const backResponse = waitForCategories("income");
+  await page.goBack();
+  await backResponse;
+  await expect(intentSelect).toHaveText("Income");
+  await expect(incomeRow).toBeVisible();
+  await expect(expenseRow).toHaveCount(0);
+
+  const forwardResponse = waitForCategories("expense");
+  await page.goForward();
+  await forwardResponse;
+  await expect(intentSelect).toHaveText("Expense");
+  await expect(incomeRow).toHaveCount(0);
+  await expect(expenseRow).toBeVisible();
+
+  const resetResponse = waitForCategories(null);
+  await chooseIntent("All");
+  await resetResponse;
+  await expect(page).not.toHaveURL(/economic_intent=(?:expense|income)/);
+  await expect(intentSelect).toHaveText("All");
+  await expect(incomeRow).toBeVisible();
+  await expect(expenseRow).toBeVisible();
+});
+
+test("category editor survives intent filters and adopts refreshed deleteability", async ({
+  browserName,
+  page,
+}) => {
+  const unique = `${browserName}${Date.now()}`;
+  const category = await createCategory(page, {
+    economicIntent: "income",
+    fqn: `E2EIntentEditor:${unique}`,
+  });
+  const expenseCategory = await createCategory(page, {
+    economicIntent: "expense",
+    fqn: `E2EIntentRefresh:${unique}`,
+  });
+  let incomeRequestCount = 0;
+  let markDeleteabilityRefreshed: (() => void) | undefined;
+  const deleteabilityRefreshed = new Promise<void>((resolve) => {
+    markDeleteabilityRefreshed = resolve;
+  });
+  await page.route("**/api/categories?*", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.get("economic_intent") !== "income") {
+      await route.continue();
+      return;
+    }
+    incomeRequestCount += 1;
+    if (incomeRequestCount === 1) {
+      await route.continue();
+      return;
+    }
+    const response = await route.fetch();
+    const body = (await response.json()) as {
+      readonly categories: readonly (CategoryFixture & {
+        readonly deletable?: boolean;
+      })[];
+    };
+    await route.fulfill({
+      response,
+      json: {
+        ...body,
+        categories: body.categories.map((listedCategory) =>
+          listedCategory.category_id === category.category_id
+            ? { ...listedCategory, deletable: false }
+            : listedCategory,
+        ),
+      },
+    });
+    markDeleteabilityRefreshed?.();
+  });
+
+  await page.goto(`/categories?q=${encodeURIComponent(category.fqn)}`);
+  const row = page
+    .getByTestId("categories-tree-row")
+    .filter({ hasText: category.fqn })
+    .first();
+  await expect(row).toBeVisible({ timeout: 10_000 });
+  await row.getByRole("button", { name: "Edit category" }).click();
+
+  const panel = page.getByRole("dialog", { name: "Edit category" });
+  await expect(panel.getByLabel("FQN")).toHaveValue(category.fqn);
+  await panel.getByLabel("Hidden").click();
+  const deleteButton = panel.getByRole("button", {
+    exact: true,
+    name: "Delete",
+  });
+  await expect(deleteButton).not.toHaveAttribute("aria-disabled", "true");
+
+  const intentSelect = page.getByRole("combobox", { name: "Economic intent" });
+  const chooseExpenseIntent = async () => {
+    await intentSelect.click();
+    const intentResponse = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return (
+        response.request().method() === "GET" &&
+        url.pathname === "/api/categories" &&
+        url.searchParams.get("economic_intent") === "expense"
+      );
+    });
+    await page.getByRole("option", { exact: true, name: "Expense" }).click();
+    await intentResponse;
+  };
+  await chooseExpenseIntent();
+
+  await expect(row).toHaveCount(0);
+  await expect(panel.getByLabel("FQN")).toHaveValue(category.fqn);
+  await expect(panel.getByLabel("Hidden")).toBeChecked();
+  await page.getByLabel("Search").fill(expenseCategory.fqn);
+  const expenseRow = page
+    .getByTestId("categories-tree-row")
+    .filter({ hasText: expenseCategory.fqn });
+  await expect(expenseRow).toBeVisible();
+  const hideExpense = expenseRow.getByRole("button", {
+    name: "Hide category",
+  });
+  await hideExpense.focus();
+  await page.keyboard.press("Enter");
+  await deleteabilityRefreshed;
+  await expect(panel.getByLabel("Hidden")).toBeChecked();
+  await expect(deleteButton).toHaveAttribute("aria-disabled", "true");
+  const updateResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      response.request().method() === "PATCH" &&
+      url.pathname === `/api/categories/${category.category_id}`
+    );
+  });
+  await panel.getByRole("button", { name: "Save" }).click();
+  expect((await updateResponse).ok()).toBe(true);
+  await expect(panel).toBeHidden();
+});
+
+test("Escape closes the intent selector before a category editor", async ({
+  browserName,
+  page,
+}) => {
+  const category = await createCategory(page, {
+    fqn: `E2EIntentEscape:${browserName}${Date.now()}`,
+  });
+
+  await page.goto(`/categories?q=${encodeURIComponent(category.fqn)}`);
+  const row = page
+    .getByTestId("categories-tree-row")
+    .filter({ hasText: category.fqn })
+    .first();
+  await expect(row).toBeVisible({ timeout: 10_000 });
+  await row.getByRole("button", { name: "Edit category" }).click();
+
+  const panel = page.getByRole("dialog", { name: "Edit category" });
+  await panel.getByLabel("Hidden").click();
+  const intentSelect = page.locator("#categories-economic-intent");
+  await intentSelect.click();
+  await expect(intentSelect).toHaveAttribute("data-state", "open");
+
+  await page.keyboard.press("Escape");
+
+  await expect(intentSelect).toHaveAttribute("data-state", "closed");
+  await expect(panel).toBeVisible();
+  await expect(panel.getByLabel("Hidden")).toBeChecked();
+
+  await page.keyboard.press("Escape");
+  await expect(panel).toBeHidden();
+});
+
+test("Escape closes Categories help before a category editor", async ({
+  browserName,
+  page,
+}) => {
+  const category = await createCategory(page, {
+    fqn: `E2EHelpEscape:${browserName}${Date.now()}`,
+  });
+
+  await page.goto(`/categories?q=${encodeURIComponent(category.fqn)}`);
+  const row = page
+    .getByTestId("categories-tree-row")
+    .filter({ hasText: category.fqn })
+    .first();
+  await expect(row).toBeVisible({ timeout: 10_000 });
+  await row.getByRole("button", { name: "Edit category" }).click();
+
+  const panel = page.getByRole("dialog", { name: "Edit category" });
+  await panel.getByLabel("Hidden").click();
+  await page.getByRole("button", { name: "Categories help" }).click();
+  const help = page.locator("[data-page-help-content]");
+  await expect(help).toBeVisible();
+
+  await page.keyboard.press("Escape");
+
+  await expect(help).toBeHidden();
+  await expect(panel).toBeVisible();
+  await expect(panel.getByLabel("Hidden")).toBeChecked();
+
+  await page.keyboard.press("Escape");
+  await expect(panel).toBeHidden();
+});
+
+test("returning to cached categories supersedes the abandoned intent request", async ({
+  browserName,
+  page,
+}) => {
+  const category = await createCategory(page, {
+    fqn: `E2EIntentCache:${browserName}${Date.now()}`,
+  });
+  const startResolvers: (() => void)[] = [];
+  const releaseResolvers: (() => void)[] = [];
+  const starts = [0, 1].map(
+    () =>
+      new Promise<void>((resolve) => {
+        startResolvers.push(resolve);
+      }),
+  );
+  const releases = [0, 1].map(
+    () =>
+      new Promise<void>((resolve) => {
+        releaseResolvers.push(resolve);
+      }),
+  );
+  let incomeRequestCount = 0;
+  await page.route("**/api/categories?*", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.get("economic_intent") !== "income") {
+      await route.continue();
+      return;
+    }
+
+    const requestIndex = incomeRequestCount;
+    incomeRequestCount += 1;
+    startResolvers[requestIndex]?.();
+    await releases[requestIndex];
+    if (requestIndex === 0) {
+      await route.continue();
+    } else {
+      await route.fulfill({
+        body: JSON.stringify({
+          error: { code: "internal", message: "Abandoned intent failed." },
+        }),
+        contentType: "application/json",
+        status: 500,
+      });
+    }
+  });
+
+  await page.goto(`/categories?q=${encodeURIComponent(category.fqn)}`);
+  const row = page
+    .getByTestId("categories-tree-row")
+    .filter({ hasText: category.fqn });
+  await expect(row).toBeVisible({ timeout: 10_000 });
+  const intentSelect = page.getByRole("combobox", { name: "Economic intent" });
+  const chooseIntent = async (label: "All" | "Income") => {
+    await intentSelect.click();
+    await page.getByRole("option", { exact: true, name: label }).click();
+  };
+
+  await chooseIntent("Income");
+  await starts[0];
+  await chooseIntent("All");
+  const lateSuccess = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/categories" &&
+      url.searchParams.get("economic_intent") === "income"
+    );
+  });
+  releaseResolvers[0]?.();
+  await lateSuccess;
+  await expect(row).toBeVisible();
+
+  await chooseIntent("Income");
+  await starts[1];
+  await chooseIntent("All");
+  const lateFailure = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      response.status() === 500 &&
+      url.pathname === "/api/categories" &&
+      url.searchParams.get("economic_intent") === "income"
+    );
+  });
+  releaseResolvers[1]?.();
+  await lateFailure;
+  await expect(
+    page.getByText("Categories could not be refreshed."),
+  ).toHaveCount(0);
+  await expect(row).toBeVisible();
+});
+
+test("returning to cached categories cancels a delayed intent retry", async ({
+  browserName,
+  page,
+}) => {
+  const category = await createCategory(page, {
+    fqn: `E2EIntentRetry:${browserName}${Date.now()}`,
+  });
+  let incomeRequestCount = 0;
+  await page.route("**/api/categories?*", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.get("economic_intent") !== "income") {
+      await route.continue();
+      return;
+    }
+    incomeRequestCount += 1;
+    await route.fulfill({
+      body: JSON.stringify({
+        error: { code: "internal", message: "Retry this request." },
+      }),
+      contentType: "application/json",
+      status: 500,
+    });
+  });
+
+  await page.goto(`/categories?q=${encodeURIComponent(category.fqn)}`);
+  const row = page
+    .getByTestId("categories-tree-row")
+    .filter({ hasText: category.fqn });
+  await expect(row).toBeVisible({ timeout: 10_000 });
+  const intentSelect = page.getByRole("combobox", { name: "Economic intent" });
+
+  await intentSelect.click();
+  const firstFailure = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      response.status() === 500 &&
+      url.pathname === "/api/categories" &&
+      url.searchParams.get("economic_intent") === "income"
+    );
+  });
+  await page.getByRole("option", { exact: true, name: "Income" }).click();
+  await firstFailure;
+  await page.waitForTimeout(50);
+
+  await intentSelect.click();
+  await page.getByRole("option", { exact: true, name: "All" }).click();
+  await expect(row).toBeVisible();
+  await page.waitForTimeout(300);
+
+  expect(incomeRequestCount).toBe(1);
+});
+
+test("returning to an intent refetches a mutation-invalidated snapshot", async ({
+  browserName,
+  page,
+}) => {
+  const category = await createCategory(page, {
+    fqn: `E2EIntentMutation:${browserName}${Date.now()}`,
+  });
+  let allRequestCount = 0;
+  let markMutationRefreshStarted: (() => void) | undefined;
+  const mutationRefreshStarted = new Promise<void>((resolve) => {
+    markMutationRefreshStarted = resolve;
+  });
+  let releaseMutationRefresh: (() => void) | undefined;
+  const mutationRefreshReleased = new Promise<void>((resolve) => {
+    releaseMutationRefresh = resolve;
+  });
+  let markIncomeRefreshStarted: (() => void) | undefined;
+  const incomeRefreshStarted = new Promise<void>((resolve) => {
+    markIncomeRefreshStarted = resolve;
+  });
+  let releaseIncomeRefresh: (() => void) | undefined;
+  const incomeRefreshReleased = new Promise<void>((resolve) => {
+    releaseIncomeRefresh = resolve;
+  });
+  let markReplacementRefreshStarted: (() => void) | undefined;
+  const replacementRefreshStarted = new Promise<void>((resolve) => {
+    markReplacementRefreshStarted = resolve;
+  });
+  await page.route("**/api/categories?*", async (route) => {
+    const url = new URL(route.request().url());
+    const economicIntent = url.searchParams.get("economic_intent");
+    if (economicIntent === "income") {
+      markIncomeRefreshStarted?.();
+      await incomeRefreshReleased;
+      await route.continue();
+      return;
+    }
+    if (economicIntent !== null) {
+      await route.continue();
+      return;
+    }
+
+    allRequestCount += 1;
+    if (allRequestCount === 2) {
+      markMutationRefreshStarted?.();
+      await mutationRefreshReleased;
+    } else if (allRequestCount === 3) {
+      markReplacementRefreshStarted?.();
+    }
+    await route.continue();
+  });
+
+  await page.goto(
+    `/categories?hidden=true&q=${encodeURIComponent(category.fqn)}`,
+  );
+  const row = page
+    .getByTestId("categories-tree-row")
+    .filter({ hasText: category.fqn });
+  await expect(row).toBeVisible({ timeout: 10_000 });
+  await row.getByRole("button", { name: "Hide category" }).click();
+  await mutationRefreshStarted;
+
+  const intentSelect = page.getByRole("combobox", { name: "Economic intent" });
+  await intentSelect.click();
+  await page.getByRole("option", { exact: true, name: "Income" }).click();
+  await incomeRefreshStarted;
+
+  const replacementResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      response.request().method() === "GET" &&
+      url.pathname === "/api/categories" &&
+      url.searchParams.get("economic_intent") === null
+    );
+  });
+  await intentSelect.click();
+  await page.getByRole("option", { exact: true, name: "All" }).click();
+  await replacementRefreshStarted;
+  await replacementResponse;
+
+  await expect(row.getByLabel("Hidden item")).toBeVisible();
+
+  const abandonedResponses = Promise.all([
+    page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return (
+        response.request().method() === "GET" &&
+        url.pathname === "/api/categories" &&
+        url.searchParams.get("economic_intent") === null
+      );
+    }),
+    page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return (
+        response.request().method() === "GET" &&
+        url.pathname === "/api/categories" &&
+        url.searchParams.get("economic_intent") === "income"
+      );
+    }),
+  ]);
+  releaseMutationRefresh?.();
+  releaseIncomeRefresh?.();
+  await abandonedResponses;
+});
+
+test("changing category intent keeps previous rows while loading", async ({
+  browserName,
+  page,
+}) => {
+  const category = await createCategory(page, {
+    fqn: `E2EIntentLoading:${browserName}${Date.now()}`,
+  });
+  let markStarted: (() => void) | undefined;
+  const started = new Promise<void>((resolve) => {
+    markStarted = resolve;
+  });
+  let releaseRequest: (() => void) | undefined;
+  const released = new Promise<void>((resolve) => {
+    releaseRequest = resolve;
+  });
+  await page.route("**/api/categories?*", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.get("economic_intent") !== "income") {
+      await route.continue();
+      return;
+    }
+    markStarted?.();
+    await released;
+    await route.continue();
+  });
+
+  await page.goto(`/categories?q=${encodeURIComponent(category.fqn)}`);
+  const row = page
+    .getByTestId("categories-tree-row")
+    .filter({ hasText: category.fqn });
+  await expect(row).toBeVisible({ timeout: 10_000 });
+
+  const intentSelect = page.getByRole("combobox", { name: "Economic intent" });
+  await intentSelect.click();
+  await page.getByRole("option", { exact: true, name: "Income" }).click();
+  await started;
+
+  await expect(row).toBeVisible();
+  await expect(page.getByTestId("reference-tree-loading")).toHaveCount(0);
+  await expect(page.getByTestId("reference-table-frame")).toBeVisible();
+
+  const incomeResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/categories" &&
+      url.searchParams.get("economic_intent") === "income"
+    );
+  });
+  releaseRequest?.();
+  await incomeResponse;
+  await expect(row).toHaveCount(0);
+});
+
+test("an intent with no categories uses the filtered empty state", async ({
+  page,
+}) => {
+  await page.route("**/api/categories?*", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.get("economic_intent") !== "income") {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({
+      body: JSON.stringify({
+        categories: [],
+        limit: 500,
+        offset: 0,
+        total_count: 0,
+      }),
+      contentType: "application/json",
+      status: 200,
+    });
+  });
+
+  await page.goto("/categories?economic_intent=income");
+
+  await expect(page.getByText("No categories", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText(
+      "No categories match the current search and filters. The tree shows category paths, economic intent, and hidden state.",
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      "The category tree will show category paths, economic intent, and hidden state once categories exist.",
+    ),
+  ).toHaveCount(0);
+});
+
 test("categories row actions hide groups and move renamed paths into transaction filters", async ({
   browserName,
   page,
