@@ -1,3 +1,4 @@
+import type { Route } from "@playwright/test";
 import { test } from "@tests/e2e/test";
 import {
   type AccountFixture,
@@ -8,6 +9,7 @@ import {
   comparableRecords,
   createAccount,
   createCategory,
+  createMember,
   createSearchSpend,
   delayTransactionEntryDraftDeletion,
   expect,
@@ -803,6 +805,452 @@ test("the modal protects an in-flight edit from underlying saved-transaction act
   await expect(editPanel.getByLabel("Memo")).toHaveValue(changedMemo);
 });
 
+test("saving a transaction edit preserves the scrolled list viewport", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1600, height: 800 });
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const initialMemo = `E2E scrolled edit ${unique}`;
+  const updatedMemo = `${initialMemo} updated`;
+  const refreshedMemo = `${initialMemo} applied`;
+  const transaction = await createSearchSpend(page, initialMemo);
+
+  await page.goto("/transactions?page=1&pageSize=100");
+  const tableScroll = page.getByTestId("transactions-table-scroll");
+  const row = page.locator(
+    `[data-transaction-id="${transaction.transaction_id}"]`,
+  );
+  await expect(row).toBeVisible();
+  await expect
+    .poll(() =>
+      tableScroll.evaluate(
+        (element) => element.scrollHeight > element.clientHeight,
+      ),
+    )
+    .toBe(true);
+  await row.scrollIntoViewIfNeeded();
+  await tableScroll.evaluate((element) => {
+    element.scrollTop = Math.max(
+      element.scrollTop,
+      Math.min(24, element.scrollHeight - element.clientHeight),
+    );
+  });
+
+  const editButton = row
+    .locator(".row-actions-buttons")
+    .getByRole("button", { name: "Edit transaction" });
+  await expect(editButton).toBeVisible();
+  await editButton.click();
+  const editor = page.getByRole("dialog", { name: "Transaction editor" });
+  const editPanel = editor.getByRole("tabpanel", { name: "Spend" });
+  await expect(
+    editor.getByRole("heading", { name: "Edit spend" }),
+  ).toBeVisible();
+
+  const readViewport = () =>
+    tableScroll.evaluate((element) => {
+      const bounds = element.getBoundingClientRect();
+      return {
+        rows: Array.from(
+          element.querySelectorAll<HTMLElement>(
+            "[data-transaction-row='true']",
+          ),
+        )
+          .filter((candidate) => {
+            const candidateBounds = candidate.getBoundingClientRect();
+            return (
+              candidateBounds.top >= bounds.top &&
+              candidateBounds.bottom <= bounds.bottom
+            );
+          })
+          .map((candidate) => ({
+            id: candidate.dataset.transactionId ?? "",
+            top: candidate.getBoundingClientRect().top - bounds.top,
+          })),
+        scrollTop: element.scrollTop,
+      };
+    });
+  const viewportBefore = await readViewport();
+  await tableScroll.evaluate((element) => {
+    element.dataset.e2eScrollRetentionMarker = "entry-edit";
+  });
+  expect(viewportBefore.scrollTop).toBeGreaterThan(0);
+  expect(viewportBefore.rows.length).toBeGreaterThan(1);
+  expect(viewportBefore.rows.map(({ id }) => id)).toContain(
+    String(transaction.transaction_id),
+  );
+
+  let releaseRefresh = () => {};
+  let markRefreshStarted = () => {};
+  const refreshStarted = new Promise<void>((resolve) => {
+    markRefreshStarted = resolve;
+  });
+  const refreshReleased = new Promise<void>((resolve) => {
+    releaseRefresh = resolve;
+  });
+  const transactionListRoute = async (route: Route) => {
+    const url = new URL(route.request().url());
+    if (
+      route.request().method() !== "GET" ||
+      url.pathname !== "/api/transactions"
+    ) {
+      await route.continue();
+      return;
+    }
+    markRefreshStarted();
+    await refreshReleased;
+    const response = await route.fetch();
+    const body = (await response.json()) as {
+      readonly transactions: readonly TransactionDetailFixture[];
+    };
+    await route.fulfill({
+      response,
+      json: {
+        ...body,
+        transactions: body.transactions.map((listedTransaction) =>
+          listedTransaction.transaction_id === transaction.transaction_id
+            ? {
+                ...listedTransaction,
+                records: listedTransaction.records.map((record) => ({
+                  ...record,
+                  memo:
+                    record.memo === updatedMemo ? refreshedMemo : record.memo,
+                })),
+              }
+            : listedTransaction,
+        ),
+      },
+    });
+  };
+  await page.route("**/api/transactions?**", transactionListRoute);
+  const refreshResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      response.request().method() === "GET" &&
+      url.pathname === "/api/transactions"
+    );
+  });
+
+  try {
+    await fillAndExpectValue(editPanel.getByLabel("Memo"), updatedMemo);
+    await editor.getByRole("button", { name: "Update transaction" }).click();
+    await refreshStarted;
+    await expect(editor).toHaveCount(0);
+    await expect(row).toContainText(updatedMemo);
+    await expect(editButton).toBeFocused();
+    await expect(tableScroll).toHaveAttribute(
+      "data-e2e-scroll-retention-marker",
+      "entry-edit",
+    );
+    await expect.poll(readViewport).toEqual(viewportBefore);
+  } finally {
+    releaseRefresh();
+    await refreshResponse;
+    await page.unroute("**/api/transactions?**", transactionListRoute);
+  }
+
+  await expect(row).toContainText(refreshedMemo);
+  await expect(tableScroll).toHaveAttribute(
+    "data-e2e-scroll-retention-marker",
+    "entry-edit",
+  );
+  await expect.poll(readViewport).toEqual(viewportBefore);
+  await expect(page).toHaveURL("/transactions?page=1&pageSize=100");
+});
+
+test("a reordered entry edit keeps keyboard focus inside the retained viewport", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1600, height: 800 });
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const initialMemo = `E2E reordered focus ${unique}`;
+  const updatedMemo = `${initialMemo} updated`;
+  const transaction = await createSearchSpend(page, initialMemo);
+  let listRequestCount = 0;
+  let releaseRefresh = () => {};
+  let markRefreshCaptured = () => {};
+  const refreshGate = new Promise<void>((resolve) => {
+    releaseRefresh = resolve;
+  });
+  const refreshCaptured = new Promise<void>((resolve) => {
+    markRefreshCaptured = resolve;
+  });
+  const reorderTarget = async (route: Route) => {
+    const url = new URL(route.request().url());
+    if (
+      route.request().method() !== "GET" ||
+      url.pathname !== "/api/transactions"
+    ) {
+      await route.continue();
+      return;
+    }
+
+    listRequestCount += 1;
+    const response = await route.fetch();
+    const body = (await response.json()) as {
+      readonly transactions: readonly TransactionDetailFixture[];
+    };
+    const target = body.transactions.find(
+      (listedTransaction) =>
+        listedTransaction.transaction_id === transaction.transaction_id,
+    );
+    const transactions = body.transactions.filter(
+      (listedTransaction) =>
+        listedTransaction.transaction_id !== transaction.transaction_id,
+    );
+    if (target) {
+      transactions.splice(
+        listRequestCount === 1 ? Math.min(20, transactions.length) : 0,
+        0,
+        target,
+      );
+    }
+    if (listRequestCount === 2) {
+      markRefreshCaptured();
+      await refreshGate;
+    }
+    await route.fulfill({ response, json: { ...body, transactions } });
+  };
+  await page.route("**/api/transactions?**", reorderTarget);
+
+  try {
+    await page.goto(
+      "/transactions?page=1&pageSize=100&sort=updated_at&sortDir=desc",
+    );
+    const tableScroll = page.getByTestId("transactions-table-scroll");
+    const row = page.locator(
+      `[data-transaction-id="${transaction.transaction_id}"]`,
+    );
+    await expect(row).toBeVisible();
+    await row.evaluate((element) => {
+      element.scrollIntoView({ block: "center" });
+    });
+    await expect
+      .poll(() => tableScroll.evaluate((element) => element.scrollTop))
+      .toBeGreaterThan(0);
+
+    const editButton = row
+      .locator(".row-actions-buttons")
+      .getByRole("button", { name: "Edit transaction" });
+    await editButton.click();
+    const editor = page.getByRole("dialog", { name: "Transaction editor" });
+    const editPanel = editor.getByRole("tabpanel", { name: "Spend" });
+    await expect(
+      editor.getByRole("heading", { name: "Edit spend" }),
+    ).toBeVisible();
+    await fillAndExpectValue(editPanel.getByLabel("Memo"), updatedMemo);
+    await editor.getByRole("button", { name: "Update transaction" }).click();
+    await refreshCaptured;
+    await expect(editor).toHaveCount(0);
+    await expect(editButton).toBeFocused();
+
+    releaseRefresh();
+    await expect
+      .poll(() =>
+        tableScroll.evaluate((viewport, editedTransactionId) => {
+          const viewportBounds = viewport.getBoundingClientRect();
+          const headerBottom =
+            viewport.querySelector("thead")?.getBoundingClientRect().bottom ??
+            viewportBounds.top;
+          const visibleTop = Math.max(viewportBounds.top, headerBottom);
+          const activeRow = document.activeElement?.closest<HTMLElement>(
+            "[data-transaction-row='true']",
+          );
+          const activeBounds = activeRow?.getBoundingClientRect();
+          const editedRow = viewport.querySelector<HTMLElement>(
+            `[data-transaction-id="${editedTransactionId}"]`,
+          );
+          const editedBounds = editedRow?.getBoundingClientRect();
+          return {
+            editedRowOutsideViewport: Boolean(
+              editedBounds &&
+              (editedBounds.bottom <= visibleTop ||
+                editedBounds.top >= viewportBounds.bottom),
+            ),
+            focusInsideViewport: Boolean(
+              activeBounds &&
+              activeBounds.bottom > visibleTop &&
+              activeBounds.top < viewportBounds.bottom,
+            ),
+            focusMovedFromEditedRow:
+              activeRow?.dataset.transactionId !== String(editedTransactionId),
+          };
+        }, transaction.transaction_id),
+      )
+      .toEqual({
+        editedRowOutsideViewport: true,
+        focusInsideViewport: true,
+        focusMovedFromEditedRow: true,
+      });
+  } finally {
+    releaseRefresh();
+    await page.unroute("**/api/transactions?**", reorderTarget);
+  }
+});
+
+test("a newer Edit-mode refresh supersedes a delayed entry-edit refresh", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const initialMemo = `E2E ordered refresh ${unique}`;
+  const updatedMemo = `${initialMemo} updated`;
+  const member = await createMember(page, `ZQ${unique}`);
+  const transaction = await createSearchSpend(page, initialMemo);
+
+  await page.goto(
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(initialMemo)}`,
+  );
+  const row = page.locator(
+    `[data-transaction-id="${transaction.transaction_id}"]`,
+  );
+  await row
+    .locator(".row-actions-buttons")
+    .getByRole("button", { name: "Edit transaction" })
+    .click();
+  const editor = page.getByRole("dialog", { name: "Transaction editor" });
+  const editPanel = editor.getByRole("tabpanel", { name: "Spend" });
+  await expect(
+    editor.getByRole("heading", { name: "Edit spend" }),
+  ).toBeVisible();
+
+  let refreshCount = 0;
+  let releaseEntryRefresh = () => {};
+  let releaseEditModeRefresh = () => {};
+  let markEntryRefreshCaptured = () => {};
+  let markEditModeRefreshCaptured = () => {};
+  const entryRefreshGate = new Promise<void>((resolve) => {
+    releaseEntryRefresh = resolve;
+  });
+  const editModeRefreshGate = new Promise<void>((resolve) => {
+    releaseEditModeRefresh = resolve;
+  });
+  const entryRefreshCaptured = new Promise<void>((resolve) => {
+    markEntryRefreshCaptured = resolve;
+  });
+  const editModeRefreshCaptured = new Promise<void>((resolve) => {
+    markEditModeRefreshCaptured = resolve;
+  });
+  const holdOrderedRefreshes = async (route: Route) => {
+    const url = new URL(route.request().url());
+    if (
+      route.request().method() !== "GET" ||
+      url.pathname !== "/api/transactions"
+    ) {
+      await route.continue();
+      return;
+    }
+
+    refreshCount += 1;
+    const refreshNumber = refreshCount;
+    const response = await route.fetch();
+    if (refreshNumber === 1) {
+      markEntryRefreshCaptured();
+      await entryRefreshGate;
+    } else if (refreshNumber === 2) {
+      markEditModeRefreshCaptured();
+      await editModeRefreshGate;
+    }
+    await route.fulfill({ response });
+  };
+  await page.route("**/api/transactions?**", holdOrderedRefreshes);
+
+  try {
+    await fillAndExpectValue(editPanel.getByLabel("Memo"), updatedMemo);
+    await editor.getByRole("button", { name: "Update transaction" }).click();
+    await entryRefreshCaptured;
+    await expect(editor).toHaveCount(0);
+
+    await page.getByRole("button", { name: "Edit mode" }).click();
+    await row.click();
+    const dock = page.getByTestId("transaction-edit-dock");
+    await dock.getByRole("button", { name: "Set / clear" }).click();
+    const dockEditor = page.getByTestId("edit-dock-editor");
+    const memberInput = dockEditor.getByRole("combobox", { name: "Member" });
+    await memberInput.fill(member.name);
+    await memberInput.press("Enter");
+    await dockEditor.getByRole("button", { name: "Apply" }).click();
+    await editModeRefreshCaptured;
+
+    releaseEntryRefresh();
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) => {
+          window.requestAnimationFrame(() => resolve());
+        }),
+    );
+    releaseEditModeRefresh();
+    await expect(dockEditor).toHaveCount(0);
+    await page.getByRole("button", { name: "Done" }).click();
+    await expect(
+      row.getByText(member.name.slice(0, 2), { exact: true }),
+    ).toHaveCount(1);
+  } finally {
+    releaseEntryRefresh();
+    releaseEditModeRefresh();
+    await page.unroute("**/api/transactions?**", holdOrderedRefreshes);
+  }
+});
+
+test("an edit that leaves the filtered list restores focus within the list", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const initialMemo = `E2E filtered edit ${unique}`;
+  const updatedMemo = "No longer matches the active transaction filter";
+  const transaction = await createSearchSpend(page, initialMemo);
+
+  await page.goto(`/transactions?q=${encodeURIComponent(unique)}`);
+  const row = page.locator(
+    `[data-transaction-id="${transaction.transaction_id}"]`,
+  );
+  const editButton = row
+    .locator(".row-actions-buttons")
+    .getByRole("button", { name: "Edit transaction" });
+  await editButton.click();
+  const editor = page.getByRole("dialog", { name: "Transaction editor" });
+  const editPanel = editor.getByRole("tabpanel", { name: "Spend" });
+  await expect(
+    editor.getByRole("heading", { name: "Edit spend" }),
+  ).toBeVisible();
+
+  let releaseRefresh = () => {};
+  let markRefreshStarted = () => {};
+  const refreshStarted = new Promise<void>((resolve) => {
+    markRefreshStarted = resolve;
+  });
+  const refreshReleased = new Promise<void>((resolve) => {
+    releaseRefresh = resolve;
+  });
+  const transactionListRoute = async (route: Route) => {
+    markRefreshStarted();
+    await refreshReleased;
+    await route.continue();
+  };
+  await page.route("**/api/transactions?**", transactionListRoute);
+  const refreshResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      response.request().method() === "GET" &&
+      url.pathname === "/api/transactions"
+    );
+  });
+
+  try {
+    await fillAndExpectValue(editPanel.getByLabel("Memo"), updatedMemo);
+    await editor.getByRole("button", { name: "Update transaction" }).click();
+    await refreshStarted;
+    await expect(editor).toHaveCount(0);
+    await expect(editButton).toBeFocused();
+  } finally {
+    releaseRefresh();
+    await refreshResponse;
+    await page.unroute("**/api/transactions?**", transactionListRoute);
+  }
+
+  await expect(row).toHaveCount(0);
+  await expect(page.locator("[data-transaction-empty-action]")).toBeFocused();
+});
+
 test("spend entry escalates to matching journal records", async ({
   page,
 }, testInfo) => {
@@ -1218,6 +1666,71 @@ test("cold entry edit deep link composes over restored transaction detail", asyn
     q: missingSearch,
     transaction: String(transaction.transaction_id),
   });
+});
+
+test("an entry edit away from Transactions awaits its cached page refresh", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const initialMemo = `E2E off-page edit ${unique}`;
+  const updatedMemo = `${initialMemo} updated`;
+  const transaction = await createSearchSpend(page, initialMemo);
+  await page.goto(
+    `/transactions?page=1&pageSize=25&q=${encodeURIComponent(initialMemo)}`,
+  );
+  await expect(
+    page.locator(`[data-transaction-id="${transaction.transaction_id}"]`),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "Overview" }).click();
+  await expect(page).toHaveURL(/\/overview$/);
+
+  await page.evaluate((entry) => {
+    const url = new URL(window.location.href);
+    url.searchParams.set("entry", entry);
+    window.history.pushState({}, "", url);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  }, `edit:${transaction.transaction_id}`);
+  const editor = page.getByRole("dialog", { name: "Transaction editor" });
+  const editPanel = editor.getByRole("tabpanel", { name: "Spend" });
+  await expect(
+    editor.getByRole("heading", { name: "Edit spend" }),
+  ).toBeVisible();
+
+  let releaseRefresh = () => {};
+  let markRefreshStarted = () => {};
+  const refreshGate = new Promise<void>((resolve) => {
+    releaseRefresh = resolve;
+  });
+  const refreshStarted = new Promise<void>((resolve) => {
+    markRefreshStarted = resolve;
+  });
+  const holdCachedPageRefresh = async (route: Route) => {
+    const url = new URL(route.request().url());
+    if (
+      route.request().method() !== "GET" ||
+      url.pathname !== "/api/transactions"
+    ) {
+      await route.continue();
+      return;
+    }
+    markRefreshStarted();
+    await refreshGate;
+    await route.continue();
+  };
+  await page.route("**/api/transactions?**", holdCachedPageRefresh);
+
+  try {
+    await fillAndExpectValue(editPanel.getByLabel("Memo"), updatedMemo);
+    await editor.getByRole("button", { name: "Update transaction" }).click();
+    await refreshStarted;
+    await expect(editor).toBeVisible();
+
+    releaseRefresh();
+    await expect(editor).toHaveCount(0);
+  } finally {
+    releaseRefresh();
+    await page.unroute("**/api/transactions?**", holdCachedPageRefresh);
+  }
 });
 
 test("entry modal deep links compose with history and report missing transactions", async ({

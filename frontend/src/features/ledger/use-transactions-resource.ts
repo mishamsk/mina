@@ -56,6 +56,11 @@ interface LoadedTransactionPage {
 
 let ledgerLookupRequestEpoch = 0;
 const pendingPageRefreshCallbacks = new Map<string, Set<() => void>>();
+const backgroundPageRefreshes = new Map<
+  string,
+  Promise<readonly Transaction[] | undefined>
+>();
+const backgroundPageRefreshEpochs = new Map<string, number>();
 
 const queuePageRefreshCallback = (
   params: TransactionPageParams,
@@ -358,31 +363,57 @@ export const refreshTransactionPage = async (
   return [];
 };
 
-const refreshTransactionPageInBackground = async (
+const refreshTransactionPageInBackground = (
   params: TransactionPageParams,
 ): Promise<readonly Transaction[] | undefined> => {
   const key = transactionPageKey(params);
+  const refreshEpoch = (backgroundPageRefreshEpochs.get(key) ?? 0) + 1;
+  backgroundPageRefreshEpochs.set(key, refreshEpoch);
   const pageAtRefreshStart = getTransactionsSnapshot().pages[key];
-  const result = await fetchTransactionPage(params);
-  if (!result.data) {
-    markTransactionPageStale(
-      params,
-      pageAtRefreshStart,
-      apiErrorDetails(result.error),
-    );
-    return pageAtRefreshStart?.transactions;
-  }
+  const refresh = (async (): Promise<readonly Transaction[] | undefined> => {
+    const result = await fetchTransactionPage(params);
+    if (backgroundPageRefreshEpochs.get(key) !== refreshEpoch) {
+      return (
+        backgroundPageRefreshes.get(key) ??
+        getTransactionsSnapshot().pages[key]?.transactions
+      );
+    }
+    if (!result.data) {
+      markTransactionPageStale(
+        params,
+        pageAtRefreshStart,
+        apiErrorDetails(result.error),
+      );
+      return pageAtRefreshStart?.transactions;
+    }
 
-  const refreshed = setRefreshedTransactionPage(
-    effectivePageParams(params, result.data.offset),
-    result.data.total_count,
-    result.data.transactions,
-    pageAtRefreshStart,
+    const refreshed = setRefreshedTransactionPage(
+      effectivePageParams(params, result.data.offset),
+      result.data.total_count,
+      result.data.transactions,
+      pageAtRefreshStart,
+    );
+    if (refreshed) {
+      settlePageRefreshCallbacks(params);
+    }
+    return result.data.transactions;
+  })();
+  backgroundPageRefreshes.set(key, refresh);
+  void refresh.then(
+    () => {
+      if (backgroundPageRefreshEpochs.get(key) === refreshEpoch) {
+        backgroundPageRefreshes.delete(key);
+        backgroundPageRefreshEpochs.delete(key);
+      }
+    },
+    () => {
+      if (backgroundPageRefreshEpochs.get(key) === refreshEpoch) {
+        backgroundPageRefreshes.delete(key);
+        backgroundPageRefreshEpochs.delete(key);
+      }
+    },
   );
-  if (refreshed) {
-    settlePageRefreshCallbacks(params);
-  }
-  return result.data.transactions;
+  return refresh;
 };
 
 export const refreshLedgerLookups = async (): Promise<void> => {
@@ -471,7 +502,11 @@ export const refreshTransactionPageAfterSave = async (
 export const refreshViewsAfterEntrySave = async (
   transaction: Transaction,
   previousTransaction?: Transaction,
-  options: { readonly retainAccountTransactionSnapshot?: boolean } = {},
+  options: {
+    readonly onPageRefresh?: (rowRemainsVisible: boolean) => void;
+    readonly pageRefreshMode?: "background" | "blocking";
+    readonly retainAccountTransactionSnapshot?: boolean;
+  } = {},
 ): Promise<boolean> => {
   const retainAccountTransactionSnapshot = () => {
     if (!options.retainAccountTransactionSnapshot) {
@@ -489,7 +524,10 @@ export const refreshViewsAfterEntrySave = async (
       transaction.transaction_id,
       transaction,
       previousTransaction,
-      { pageRefreshMode: "blocking" },
+      {
+        onPageRefresh: options.onPageRefresh,
+        pageRefreshMode: options.pageRefreshMode ?? "blocking",
+      },
     );
     retainAccountTransactionSnapshot();
     return refresh;

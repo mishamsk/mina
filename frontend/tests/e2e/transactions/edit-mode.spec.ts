@@ -1,6 +1,7 @@
 import { test } from "@tests/e2e/test";
 import {
   type AccountFixture,
+  type CategoryFixture,
   createMember,
   createSearchSpend,
   createTag,
@@ -577,6 +578,124 @@ test("concurrent amount saves prune selected rows that leave the active filter",
   await Promise.all([
     deleteTransaction(page, firstTransaction),
     deleteTransaction(page, secondTransaction),
+  ]);
+});
+
+test("a winning amount refresh prunes a selection removed by an older dock save", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const memo = `E2E superseded selection ${unique}`;
+  const [accounts, categories, member] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+    createMember(page, `Superseded selection ${unique}`),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
+  const category = findByFqn(categories, "Entertainment:Books");
+  const createTransaction = async (suffix: string) => {
+    const response = await page.request.post("/api/transactions/spend", {
+      data: {
+        amount: "12.34",
+        category_id: category.category_id,
+        counterparty_account_id: merchantAccount.account_id,
+        currency: "USD",
+        funding_account_id: fundingAccount.account_id,
+        initiated_date: "2026-05-31",
+        member_id: member.member_id,
+        memo: `${memo} ${suffix}`,
+      },
+    });
+    expect(response.ok(), await response.text()).toBe(true);
+    return (await response.json()) as TransactionFixture;
+  };
+  const [dockTransaction, amountTransaction] = await Promise.all([
+    createTransaction("dock"),
+    createTransaction("amount"),
+  ]);
+
+  await page.goto(
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(memo)}` +
+      `&member=${member.member_id}`,
+  );
+  await page.getByRole("button", { name: "Edit mode" }).click();
+  const header = page.getByTestId("transaction-browser-edit-mode-header");
+  const dockRow = page.locator(
+    `[data-transaction-id="${dockTransaction.transaction_id}"]`,
+  );
+  const amountInput = page.getByTestId(
+    `transaction-${amountTransaction.transaction_id}-amount-input`,
+  );
+  await dockRow.click();
+  await expect(header).toContainText("1 selected");
+  const dock = page.getByTestId("transaction-edit-dock");
+  await dock.getByRole("button", { name: "Set / clear" }).click();
+  const editor = page.getByTestId("edit-dock-editor");
+  await editor.getByRole("button", { name: "Clear", exact: true }).click();
+
+  let refreshCount = 0;
+  let releaseDockRefresh = () => {};
+  let releaseAmountRefresh = () => {};
+  let markDockRefreshCaptured = () => {};
+  let markAmountRefreshCaptured = () => {};
+  const dockRefreshGate = new Promise<void>((resolve) => {
+    releaseDockRefresh = resolve;
+  });
+  const amountRefreshGate = new Promise<void>((resolve) => {
+    releaseAmountRefresh = resolve;
+  });
+  const dockRefreshCaptured = new Promise<void>((resolve) => {
+    markDockRefreshCaptured = resolve;
+  });
+  const amountRefreshCaptured = new Promise<void>((resolve) => {
+    markAmountRefreshCaptured = resolve;
+  });
+  const holdOrderedRefreshes = async (route: Route) => {
+    const url = new URL(route.request().url());
+    if (
+      route.request().method() !== "GET" ||
+      url.pathname !== "/api/transactions"
+    ) {
+      await route.continue();
+      return;
+    }
+    refreshCount += 1;
+    const response = await route.fetch();
+    if (refreshCount === 1) {
+      markDockRefreshCaptured();
+      await dockRefreshGate;
+    } else {
+      markAmountRefreshCaptured();
+      await amountRefreshGate;
+    }
+    await route.fulfill({ response });
+  };
+  await page.route("**/api/transactions?**", holdOrderedRefreshes);
+
+  try {
+    await editor.getByRole("button", { name: "Apply" }).click();
+    await dockRefreshCaptured;
+    await amountInput.fill("15.67");
+    await amountInput.press("Enter");
+    await amountRefreshCaptured;
+
+    releaseDockRefresh();
+    releaseAmountRefresh();
+    await expect(dockRow).toHaveCount(0);
+    await expect(header).toContainText("0 selected");
+    await expect(
+      dock.getByRole("button", { name: "Set / clear" }),
+    ).toBeDisabled();
+  } finally {
+    releaseDockRefresh();
+    releaseAmountRefresh();
+    await page.unroute("**/api/transactions?**", holdOrderedRefreshes);
+  }
+
+  await Promise.all([
+    deleteTransaction(page, dockTransaction),
+    deleteTransaction(page, amountTransaction),
   ]);
 });
 

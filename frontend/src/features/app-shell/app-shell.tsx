@@ -17,7 +17,7 @@ import {
 } from "pixelarticons/react";
 import type { ComponentType, ReactNode, Ref, SVGProps } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { NavLink, type To, useSearchParams } from "react-router";
+import { NavLink, type To, useLocation, useSearchParams } from "react-router";
 
 import { apiErrorMessage, fetchTransactionById } from "@/api";
 import { Toast } from "@/components/toast";
@@ -33,6 +33,7 @@ import {
   refreshLedgerLookups,
   refreshViewsAfterEntrySave,
   transactionEntrySavedEvent,
+  transactionRowFallback,
   useLedgerLookupsResource,
 } from "@/features/ledger";
 import {
@@ -90,6 +91,25 @@ const modalOverlaySelector =
 
 const isVisibleOverlay = (element: Element): boolean =>
   element instanceof HTMLElement && element.getClientRects().length > 0;
+
+const isTransactionRowWithinViewport = (row: HTMLElement): boolean => {
+  const viewport = row.closest<HTMLElement>(
+    "[data-testid='transactions-table-scroll']",
+  );
+  if (!viewport) {
+    return true;
+  }
+
+  const rowBounds = row.getBoundingClientRect();
+  const viewportBounds = viewport.getBoundingClientRect();
+  const headerBottom =
+    viewport.querySelector("thead")?.getBoundingClientRect().bottom ??
+    viewportBounds.top;
+  return (
+    rowBounds.bottom > Math.max(viewportBounds.top, headerBottom) &&
+    rowBounds.top < viewportBounds.bottom
+  );
+};
 
 const hasActiveOverlay = (): boolean =>
   Array.from(document.querySelectorAll(modalOverlaySelector)).some(
@@ -242,6 +262,7 @@ export const AppShell = ({ children }: AppShellProps) => {
   const lookups = useLedgerLookupsResource(
     entryModal.open || templateEditor.open,
   );
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const entryParam = searchParams.get("entry");
   const previousEntryParamRef = useRef(entryParam);
@@ -702,9 +723,37 @@ export const AppShell = ({ children }: AppShellProps) => {
           setEntrySaveNotice(undefined);
         }}
         onSaved={async (transaction, context) => {
+          const editedRow =
+            context.operation === "updated"
+              ? document.querySelector<HTMLElement>(
+                  `[data-transaction-row='true'][data-transaction-id="${transaction.transaction_id}"]`,
+                )
+              : null;
+          const restoreRowFocus = editedRow
+            ? transactionRowFallback(editedRow, transaction.transaction_id)
+            : undefined;
           await refreshViewsAfterEntrySave(
             transaction,
             context.previousTransaction,
+            {
+              onPageRefresh: (rowRemainsVisible) => {
+                window.requestAnimationFrame(() => {
+                  if (
+                    !rowRemainsVisible ||
+                    !editedRow?.isConnected ||
+                    !isTransactionRowWithinViewport(editedRow)
+                  ) {
+                    restoreRowFocus?.();
+                  }
+                });
+              },
+              pageRefreshMode:
+                context.operation === "updated" &&
+                location.pathname === "/transactions" &&
+                editedRow
+                  ? "background"
+                  : "blocking",
+            },
           );
           window.dispatchEvent(
             new CustomEvent(transactionEntrySavedEvent, {
