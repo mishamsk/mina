@@ -22,7 +22,6 @@ import {
 } from "@/features/ledger";
 import {
   emptyTransactionFilters,
-  transactionClasses,
   type TransactionFilters,
 } from "@/models/transaction-filters";
 import {
@@ -127,17 +126,14 @@ export const TransactionsPage = () => {
     },
     [browser, setSearchParams],
   );
-  const setTransactionClassFilter = useCallback(
-    (value: string) => {
-      const transactionClass = transactionClasses.find(
-        (candidate) => candidate === value,
-      );
+  const setTransactionClassFilters = useCallback(
+    (classes: TransactionFilters["classes"]) => {
       const currentFilters = readTransactionFiltersFromSearchParams(
         readLiveSearchParams(),
       );
       setTransactionFilters({
         ...currentFilters,
-        classes: transactionClass ? [transactionClass] : [],
+        classes,
       });
     },
     [setTransactionFilters],
@@ -236,7 +232,7 @@ export const TransactionsPage = () => {
             onSortChange={browser.setSort}
             onSortDirectionChange={browser.setSortDirection}
             onToggleAmountDisplayMode={browser.toggleAmountDisplayMode}
-            onTransactionClassChange={setTransactionClassFilter}
+            onTransactionClassesChange={setTransactionClassFilters}
             selectableCount={browser.selectableTransactionCount}
             selectedCount={browser.selectedTransactionIds.size}
             sort={browser.sort}

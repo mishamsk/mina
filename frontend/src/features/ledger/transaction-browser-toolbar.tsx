@@ -4,6 +4,7 @@ import {
   ArrowUp,
   Calendar,
   Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Close,
@@ -17,18 +18,12 @@ import {
   Tooltip as AppTooltip,
 } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   transactionClasses,
   type TransactionFilters,
@@ -67,7 +62,9 @@ interface TransactionBrowserToolbarProps {
   readonly onSortChange: (sort: TransactionSort) => void;
   readonly onSortDirectionChange: (direction: TransactionSortDirection) => void;
   readonly onToggleAmountDisplayMode: () => void;
-  readonly onTransactionClassChange: (value: string) => void;
+  readonly onTransactionClassesChange: (
+    classes: TransactionFilters["classes"],
+  ) => void;
   readonly selectableCount: number;
   readonly selectedCount: number;
   readonly sort: TransactionSort;
@@ -98,7 +95,7 @@ export const TransactionBrowserToolbar = ({
   onSortChange,
   onSortDirectionChange,
   onToggleAmountDisplayMode,
-  onTransactionClassChange,
+  onTransactionClassesChange,
   selectableCount,
   selectedCount,
   sort,
@@ -112,6 +109,10 @@ export const TransactionBrowserToolbar = ({
       : sort === "created_at"
         ? "Created"
         : "Updated";
+  const classFilterLabel =
+    filters.classes.length === 0
+      ? "All classes"
+      : filters.classes.map(transactionClassLabel).join(", ");
   const dateJumpDisabledReason = !dateJumpEnabled
     ? "Date jumping requires Date sorting with newest first"
     : dateJumpLoading
@@ -120,6 +121,7 @@ export const TransactionBrowserToolbar = ({
   const editModeButtonRef = useRef<HTMLButtonElement>(null);
   const doneButtonRef = useRef<HTMLButtonElement>(null);
   const selectPageButtonRef = useRef<HTMLButtonElement>(null);
+  const classTriggerRef = useRef<HTMLButtonElement>(null);
   const sortTriggerRef = useRef<HTMLButtonElement>(null);
   const sortOutsideFocusTargetRef = useRef<HTMLElement>(null);
   const restoreSortTriggerFocusRef = useRef(true);
@@ -355,24 +357,62 @@ export const TransactionBrowserToolbar = ({
             >
               Class
             </label>
-            <Select
-              value={filters.classes[0] ?? "all"}
-              onValueChange={(value) => {
-                onTransactionClassChange(value);
-              }}
-            >
-              <SelectTrigger id={`${idPrefix}-class`}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All classes</SelectItem>
-                {transactionClasses.map((transactionClass) => (
-                  <SelectItem key={transactionClass} value={transactionClass}>
-                    {transactionClassLabel(transactionClass)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Popover modal>
+              <AppTooltip label={classFilterLabel} asChild>
+                <PopoverTrigger asChild>
+                  <Button
+                    ref={classTriggerRef}
+                    id={`${idPrefix}-class`}
+                    type="button"
+                    variant="outline"
+                    size="lg"
+                    aria-label={`Class: ${classFilterLabel}`}
+                    className="min-w-32 justify-between"
+                  >
+                    <span className="max-w-48 truncate">
+                      {classFilterLabel}
+                    </span>
+                    <ChevronDown aria-hidden="true" data-icon="inline-end" />
+                  </Button>
+                </PopoverTrigger>
+              </AppTooltip>
+              <PopoverContent
+                aria-label="Transaction classes"
+                className="w-56 space-y-1 p-2"
+                onCloseAutoFocus={(event) => {
+                  event.preventDefault();
+                  focusWithoutTooltip(classTriggerRef.current);
+                }}
+              >
+                {transactionClasses.map((transactionClass) => {
+                  const selected = filters.classes.includes(transactionClass);
+                  return (
+                    <label
+                      key={transactionClass}
+                      className="flex min-h-8 cursor-pointer items-center gap-3 px-2 font-mono text-sm hover:bg-[var(--color-interactive-bright)]"
+                    >
+                      <Checkbox
+                        checked={selected}
+                        onCheckedChange={() => {
+                          const selectedClasses = new Set(filters.classes);
+                          if (selected) {
+                            selectedClasses.delete(transactionClass);
+                          } else {
+                            selectedClasses.add(transactionClass);
+                          }
+                          onTransactionClassesChange(
+                            transactionClasses.filter((candidate) =>
+                              selectedClasses.has(candidate),
+                            ),
+                          );
+                        }}
+                      />
+                      {transactionClassLabel(transactionClass)}
+                    </label>
+                  );
+                })}
+              </PopoverContent>
+            </Popover>
           </div>
           {extraControls}
           <div className="flex h-9 items-end gap-2">

@@ -343,6 +343,13 @@ test("categories economic intent filter is URL-backed and filters API requests",
   await expect(incomeRow).toBeVisible();
   await expect(expenseRow).toBeVisible();
   await expectNewCategoryIntent("Select intent");
+  await intentSelect.click();
+  await expect(page.getByRole("listbox").getByRole("option")).toHaveText([
+    "All",
+    "Expense",
+    "Income",
+  ]);
+  await page.keyboard.press("Escape");
 
   const incomeResponse = waitForCategories("income");
   await chooseIntent("Income");

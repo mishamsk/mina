@@ -1441,7 +1441,7 @@ test("multi-part transaction rows show one honest amount or only the indicator",
   );
 });
 
-test("transactions class toolbar filter owns class URL state", async ({
+test("transactions class toolbar popover selects and clears multiple classes", async ({
   page,
 }, testInfo) => {
   const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
@@ -1496,7 +1496,8 @@ test("transactions class toolbar filter owns class URL state", async ({
     page.getByRole("row").filter({ hasText: incomeMemo }),
   ).toBeVisible();
 
-  const classFilter = page.getByLabel("Class");
+  const classFilter = page.locator("#transactions-class");
+  await expect(classFilter).toHaveAccessibleName("Class: All classes");
   const spendRequest = page.waitForRequest((request) => {
     const url = new URL(request.url());
     return (
@@ -1508,62 +1509,24 @@ test("transactions class toolbar filter owns class URL state", async ({
     );
   });
   await classFilter.click();
-  const classListbox = page.getByRole("listbox");
-  await expect(classListbox).toBeVisible();
-  await expect(classListbox).toHaveClass(/border-\[var\(--border-ink\)\]/);
-  await expect(
-    classListbox.getByRole("option", { exact: true, name: "Spend" }),
-  ).toBeVisible();
-  await page.getByRole("option", { exact: true, name: "Spend" }).click();
+  const classPopover = page.getByRole("dialog", {
+    name: "Transaction classes",
+  });
+  await expect(classPopover).toBeVisible();
+  await expect(classPopover).toHaveClass(/border-\[var\(--border-ink\)\]/);
+  const spendCheckbox = classPopover.getByRole("checkbox", { name: "Spend" });
+  const incomeCheckbox = classPopover.getByRole("checkbox", {
+    name: "Income",
+  });
+  await spendCheckbox.click();
   await spendRequest;
   await expectTransactionFilterUrl(page, {
     classes: ["spend"],
     pageSize: "50",
     q: unique,
   });
-  await expect(
-    page.getByRole("row").filter({ hasText: spendMemo }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("row").filter({ hasText: incomeMemo }),
-  ).toBeHidden();
-
-  await classFilter.click();
-  await page.getByRole("option", { exact: true, name: "All classes" }).click();
-  await expectTransactionFilterUrl(page, { pageSize: "50", q: unique });
-  await expect(
-    page.getByRole("row").filter({ hasText: spendMemo }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("row").filter({ hasText: incomeMemo }),
-  ).toBeVisible();
-
-  await page.goto(
-    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(unique)}&class=income`,
-  );
-  await expect(classFilter).toHaveText("Income");
-  await expect(
-    page.getByRole("row").filter({ hasText: incomeMemo }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("row").filter({ hasText: spendMemo }),
-  ).toBeHidden();
-  await page.reload();
-  await expect(classFilter).toHaveText("Income");
-
-  await classFilter.click();
-  await page.getByRole("option", { exact: true, name: "Spend" }).click();
-  await expect(classFilter).toHaveText("Spend");
-  await page.goBack();
-  await expect(classFilter).toHaveText("Income");
-  await page.goForward();
-  await expect(classFilter).toHaveText("Spend");
-
-  await page.getByRole("button", { name: "Open filters" }).click();
-  await page.getByRole("button", { name: "Add filter" }).click();
-  await expect(
-    page.getByRole("button", { exact: true, name: "Transaction class" }),
-  ).toHaveCount(0);
+  await expect(spendCheckbox).toBeChecked();
+  await expect(incomeCheckbox).not.toBeChecked();
 
   const multiClassRequest = page.waitForRequest((request) => {
     const url = new URL(request.url());
@@ -1575,11 +1538,18 @@ test("transactions class toolbar filter owns class URL state", async ({
       })
     );
   });
-  await page.goto(
-    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(unique)}&class=spend&class=income`,
-  );
+  await incomeCheckbox.click();
   await multiClassRequest;
-  await expect(classFilter).toHaveText("Spend");
+  await expect(classPopover).toBeVisible();
+  await expectTransactionFilterUrl(page, {
+    classes: ["spend", "income"],
+    pageSize: "50",
+    q: unique,
+  });
+  await expect(spendCheckbox).toBeChecked();
+  await expect(incomeCheckbox).toBeChecked();
+  await page.keyboard.press("Escape");
+  await expect(classPopover).toBeHidden();
   await expect(
     page.getByRole("row").filter({ hasText: spendMemo }),
   ).toBeVisible();
@@ -1587,13 +1557,95 @@ test("transactions class toolbar filter owns class URL state", async ({
     page.getByRole("row").filter({ hasText: incomeMemo }),
   ).toBeVisible();
 
+  const reloadRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return (
+      url.pathname === "/api/transactions" &&
+      transactionRequestHasFilters(url, {
+        classes: ["spend", "income"],
+        limit: "50",
+      })
+    );
+  });
+  await page.reload();
+  await reloadRequest;
+  await expect(classFilter).toHaveAccessibleName("Class: Spend, Income");
   await classFilter.click();
-  await page.getByRole("option", { exact: true, name: "Income" }).click();
+  await expect(spendCheckbox).toBeChecked();
+  await expect(incomeCheckbox).toBeChecked();
+
+  const incomeOnlyRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return (
+      url.pathname === "/api/transactions" &&
+      transactionRequestHasFilters(url, {
+        classes: ["income"],
+        limit: "50",
+      })
+    );
+  });
+  await spendCheckbox.click();
+  await incomeOnlyRequest;
+  await expect(classFilter).toContainText("Income");
   await expectTransactionFilterUrl(page, {
     classes: ["income"],
     pageSize: "50",
     q: unique,
   });
+  await expect(spendCheckbox).not.toBeChecked();
+  await expect(incomeCheckbox).toBeChecked();
+
+  const allClassesRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return (
+      url.pathname === "/api/transactions" &&
+      transactionRequestHasFilters(url, { limit: "50" })
+    );
+  });
+  await incomeCheckbox.click();
+  await allClassesRequest;
+  await expect(classFilter).toContainText("All classes");
+  await expectTransactionFilterUrl(page, { pageSize: "50", q: unique });
+  await expect(spendCheckbox).not.toBeChecked();
+  await expect(incomeCheckbox).not.toBeChecked();
+  await page.keyboard.press("Escape");
+  await expect(classPopover).toBeHidden();
+  await expect(classFilter).toHaveAccessibleName("Class: All classes");
+  await expect(
+    page.getByRole("row").filter({ hasText: spendMemo }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("row").filter({ hasText: incomeMemo }),
+  ).toBeVisible();
+
+  await page.goBack();
+  await expect(classFilter).toHaveAccessibleName("Class: Income");
+  await expectTransactionFilterUrl(page, {
+    classes: ["income"],
+    pageSize: "50",
+    q: unique,
+  });
+  await expect(
+    page.getByRole("row").filter({ hasText: spendMemo }),
+  ).toBeHidden();
+  await expect(
+    page.getByRole("row").filter({ hasText: incomeMemo }),
+  ).toBeVisible();
+  await page.goForward();
+  await expect(classFilter).toHaveAccessibleName("Class: All classes");
+  await expectTransactionFilterUrl(page, { pageSize: "50", q: unique });
+  await expect(
+    page.getByRole("row").filter({ hasText: spendMemo }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("row").filter({ hasText: incomeMemo }),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "Open filters" }).click();
+  await page.getByRole("button", { name: "Add filter" }).click();
+  await expect(
+    page.getByRole("button", { exact: true, name: "Transaction class" }),
+  ).toHaveCount(0);
 });
 
 test("transactions filter toolbar keeps a stable inline trigger geometry", async ({
@@ -1716,6 +1768,9 @@ test("transactions filter toolbar suppresses open-control tooltips and supports 
   const sortTooltip = page
     .getByRole("tooltip")
     .filter({ hasText: "Sort transactions" });
+  const classTooltip = page
+    .getByRole("tooltip")
+    .filter({ hasText: "All classes" });
   const tabTo = async (target: Locator) => {
     await page.keyboard.press("Tab");
     await expect(target).toBeFocused();
@@ -1738,6 +1793,34 @@ test("transactions filter toolbar suppresses open-control tooltips and supports 
   await expect(sortPopover).toBeHidden();
   await expect(sortMenu).toBeFocused();
   await expect(sortTooltip).toBeHidden();
+
+  await classFilter.focus();
+  await page.keyboard.press("Enter");
+  const classPopover = page.getByRole("dialog", {
+    name: "Transaction classes",
+  });
+  await expect(classPopover).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(classPopover).toBeHidden();
+  await expect(classFilter).toBeFocused();
+  await expect(classTooltip).toBeHidden();
+
+  const transactionsHeadingBox = await page
+    .getByRole("heading", { name: "Transactions" })
+    .boundingBox();
+  expect(transactionsHeadingBox).not.toBeNull();
+  if (!transactionsHeadingBox) {
+    throw new Error("Transactions heading must be visible");
+  }
+  await page.keyboard.press("Enter");
+  await expect(classPopover).toBeVisible();
+  await page.mouse.click(
+    transactionsHeadingBox.x + transactionsHeadingBox.width / 2,
+    transactionsHeadingBox.y + transactionsHeadingBox.height / 2,
+  );
+  await expect(classPopover).toBeHidden();
+  await expect(classFilter).toBeFocused();
+  await expect(classTooltip).toBeHidden();
 
   await sortMenu.click();
   await expect(sortPopover).toBeVisible();

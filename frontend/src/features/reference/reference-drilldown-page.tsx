@@ -20,7 +20,6 @@ import {
 } from "@/features/ledger";
 import {
   emptyTransactionFilters,
-  transactionClasses,
   type TransactionFilters,
 } from "@/models/transaction-filters";
 import { openTransactionEntryLaunch } from "@/store";
@@ -237,17 +236,14 @@ export const ReferenceDrilldownPage = ({
     [browser, setSearchParams],
   );
 
-  const setTransactionClassFilter = useCallback(
-    (value: string) => {
-      const transactionClass = transactionClasses.find(
-        (candidate) => candidate === value,
-      );
+  const setTransactionClassFilters = useCallback(
+    (classes: TransactionFilters["classes"]) => {
       const currentFilters = stripMemberScope(
         readTransactionFiltersFromSearchParams(readLiveSearchParams()),
       );
       setTransactionFilters({
         ...currentFilters,
-        classes: transactionClass ? [transactionClass] : [],
+        classes,
       });
     },
     [setTransactionFilters],
@@ -295,7 +291,7 @@ export const ReferenceDrilldownPage = ({
         onSortChange={browser.setSort}
         onSortDirectionChange={browser.setSortDirection}
         onToggleAmountDisplayMode={browser.toggleAmountDisplayMode}
-        onTransactionClassChange={setTransactionClassFilter}
+        onTransactionClassesChange={setTransactionClassFilters}
         selectableCount={browser.selectableTransactionCount}
         selectedCount={browser.selectedTransactionIds.size}
         sort={browser.sort}

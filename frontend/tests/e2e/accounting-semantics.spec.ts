@@ -387,9 +387,11 @@ test("clawback is available in class and record-role filters", async ({
 
   const classFilter = page.getByLabel("Class");
   await classFilter.click();
-  await expect(
-    page.getByRole("option", { name: "Clawback", exact: true }),
-  ).toBeVisible();
+  const clawbackClass = page.getByRole("checkbox", {
+    name: "Clawback",
+    exact: true,
+  });
+  await expect(clawbackClass).toBeVisible();
 
   const classRequest = page.waitForRequest((request) => {
     const url = new URL(request.url());
@@ -398,8 +400,9 @@ test("clawback is available in class and record-role filters", async ({
       url.searchParams.getAll("transaction_class").includes("clawback")
     );
   });
-  await page.getByRole("option", { name: "Clawback", exact: true }).click();
+  await clawbackClass.click();
   await classRequest;
+  await page.keyboard.press("Escape");
 
   await page.getByRole("button", { name: "Open filters" }).click();
   await page.getByRole("button", { name: "Add filter" }).click();
