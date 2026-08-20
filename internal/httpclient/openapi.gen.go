@@ -2213,9 +2213,12 @@ type GroupStateListResponse struct {
 // HealthResponse defines model for HealthResponse.
 type HealthResponse struct {
 	// DatabaseEncrypted Whether the selected accounting database is encrypted at rest.
-	DatabaseEncrypted bool                 `json:"database_encrypted"`
-	SchemaVersion     int64                `json:"schema_version"`
-	Status            HealthResponseStatus `json:"status"`
+	DatabaseEncrypted bool `json:"database_encrypted"`
+
+	// DatabaseFileSizeBytes On-disk size of the selected accounting database file in bytes; null for in-memory accounting state or when the file size cannot be read. An unavailable size does not make the health check fail.
+	DatabaseFileSizeBytes *int64               `json:"database_file_size_bytes"`
+	SchemaVersion         int64                `json:"schema_version"`
+	Status                HealthResponseStatus `json:"status"`
 }
 
 // HealthResponseStatus defines model for HealthResponse.Status.

@@ -302,7 +302,8 @@ Each screen below defines its purpose, layout, behavior, and primary data source
 
 ### Status and Settings
 
-- Status keeps backend health, schema, server-time, and database-encryption cards above URL-addressable Background operations and Audit log tabs; there is no Details preference or backend-route disclosure.
+- Status keeps backend health, schema, server-time, database-file-size, and database-encryption cards above URL-addressable Background operations and Audit log tabs; there is no Details preference or backend-route disclosure.
+- Database file size renders in human-readable binary units, or as `Unavailable` when no size is reported.
 - Operation navigation: an operation selector drills into a shared runs table showing the common run envelope — paged, newest first; columns: started, finished/duration, outcome, trigger. Selecting a run opens its detail.
 - Shared building blocks (selector, envelope runs table, run-detail frame) are common to all operations; each operation type ships a dedicated frontend module owning its run-detail rendering and operation-specific controls through that operation's named concrete APIs. There are no generic fallback renderers.
 - Module completeness is enforced statically: the module registry is keyed by the generated operation-id union, so a newly added operation type fails typecheck until its module exists.

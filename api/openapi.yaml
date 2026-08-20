@@ -6473,12 +6473,19 @@ components:
       additionalProperties: false
       required:
         - database_encrypted
+        - database_file_size_bytes
         - status
         - schema_version
       properties:
         database_encrypted:
           type: boolean
           description: Whether the selected accounting database is encrypted at rest.
+        database_file_size_bytes:
+          type: integer
+          format: int64
+          minimum: 0
+          nullable: true
+          description: On-disk size of the selected accounting database file in bytes; null for in-memory accounting state or when the file size cannot be read. An unavailable size does not make the health check fail.
         status:
           type: string
           enum:

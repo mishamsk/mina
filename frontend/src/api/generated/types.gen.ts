@@ -1260,6 +1260,10 @@ export type HealthResponse = {
      * Whether the selected accounting database is encrypted at rest.
      */
     database_encrypted: boolean;
+    /**
+     * On-disk size of the selected accounting database file in bytes; null for in-memory accounting state or when the file size cannot be read. An unavailable size does not make the health check fail.
+     */
+    database_file_size_bytes: number | null;
     status: 'ok';
     schema_version: number;
 };

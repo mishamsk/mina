@@ -133,6 +133,12 @@ const chooseOptionByKeyboard = async (
   await expect.poll(async () => picker.inputValue()).toContain(searchText);
 };
 
+const databaseFileSizeValue = (page: Page) =>
+  page
+    .getByText("Database file size", { exact: true })
+    .locator("../..")
+    .locator('[data-slot="card-content"] > p');
+
 test("status page reports backend health", async ({ page }) => {
   await page.goto("/status");
 
@@ -141,6 +147,9 @@ test("status page reports backend health", async ({ page }) => {
   await expect(page.getByText("ok")).toBeVisible();
   await expect(page.getByText("Schema version")).toBeVisible();
   await expect(page.getByText("Server time")).toBeVisible();
+  await expect(databaseFileSizeValue(page)).toHaveText(
+    /^\d+(?:\.\d)? (?:KiB|MiB|GiB|TiB)$/,
+  );
   await expect(page.getByText("Database encryption")).toBeVisible();
   await expect(page.getByText("Not encrypted")).toBeVisible();
   await expect(page.getByText("GMT")).toHaveCount(0);
@@ -169,6 +178,7 @@ test("status page reports an encrypted database", async ({ page }) => {
     await route.fulfill({
       body: JSON.stringify({
         database_encrypted: true,
+        database_file_size_bytes: 1048575,
         schema_version: 1,
         status: "ok",
       }),
@@ -182,6 +192,29 @@ test("status page reports an encrypted database", async ({ page }) => {
   await expect(page.getByText("Database encryption")).toBeVisible();
   await expect(page.getByText("Encrypted", { exact: true })).toBeVisible();
   await expect(page.getByText("Not encrypted")).toHaveCount(0);
+  await expect(databaseFileSizeValue(page)).toHaveText("1 MiB");
+});
+
+test("status page reports an unavailable database file size", async ({
+  page,
+}) => {
+  await page.route("**/api/health", async (route) => {
+    await route.fulfill({
+      body: JSON.stringify({
+        database_encrypted: false,
+        database_file_size_bytes: null,
+        schema_version: 1,
+        status: "ok",
+      }),
+      contentType: "application/json",
+      status: 200,
+    });
+  });
+
+  await page.goto("/status");
+
+  await expect(databaseFileSizeValue(page)).toHaveText("Unavailable");
+  await expect(page.getByText("ok", { exact: true })).toBeVisible();
 });
 
 test("status page navigates operations and inspects a web UI audit mutation", async ({

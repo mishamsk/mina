@@ -18,12 +18,13 @@ type AppDBOpenRequest struct {
 
 // AppDB represents the DuckDB handle and selected accounting location.
 type AppDB struct {
-	db            *sql.DB
-	tx            *sql.Tx
-	location      AccountingLocation
-	runtimeSchema string
-	encryptionKey string
-	close         func() error
+	db             *sql.DB
+	tx             *sql.Tx
+	location       AccountingLocation
+	accountingPath string
+	runtimeSchema  string
+	encryptionKey  string
+	close          func() error
 }
 
 // OpenAppDB opens the process DuckDB handle and prepares the accounting location.
@@ -101,10 +102,11 @@ func openAppDB(
 		return nil, err
 	}
 	appDB := &AppDB{
-		db:            db,
-		location:      location,
-		runtimeSchema: runtimeSchema,
-		encryptionKey: request.EncryptionKey,
+		db:             db,
+		location:       location,
+		accountingPath: request.Path,
+		runtimeSchema:  runtimeSchema,
+		encryptionKey:  request.EncryptionKey,
 	}
 	appDB.close = func() error {
 		return close(appDB)

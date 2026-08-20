@@ -63,6 +63,30 @@ const formatServerTime = (value: string | undefined): string => {
   }).format(parsed);
 };
 
+const formatDatabaseFileSize = (bytes: number | null): string => {
+  if (bytes === null) {
+    return "Unavailable";
+  }
+
+  const units = ["B", "KiB", "MiB", "GiB", "TiB"] as const;
+  let exponent = Math.min(
+    Math.floor(Math.log(Math.max(bytes, 1)) / Math.log(1024)),
+    units.length - 1,
+  );
+  let value = bytes / 1024 ** exponent;
+  if (
+    exponent > 0 &&
+    exponent < units.length - 1 &&
+    Math.round(value * 10) / 10 >= 1024
+  ) {
+    exponent += 1;
+    value = bytes / 1024 ** exponent;
+  }
+  return `${new Intl.NumberFormat(undefined, {
+    maximumFractionDigits: exponent === 0 ? 0 : 1,
+  }).format(value)} ${units[exponent]}`;
+};
+
 export const StatusPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [health, setHealth] = useState<HealthState>(initialHealthState);
@@ -147,9 +171,10 @@ export const StatusPage = () => {
 
       {health.loading ? (
         <div
-          className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"
+          className="grid gap-3 md:grid-cols-2 xl:grid-cols-5"
           aria-label="Loading status"
         >
+          <Skeleton className="h-28" />
           <Skeleton className="h-28" />
           <Skeleton className="h-28" />
           <Skeleton className="h-28" />
@@ -174,7 +199,7 @@ export const StatusPage = () => {
       ) : null}
 
       {health.data ? (
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           <Card size="sm">
             <CardHeader>
               <p className="text-muted-foreground text-sm">API status</p>
@@ -202,6 +227,18 @@ export const StatusPage = () => {
             <CardContent>
               <p className="text-lg font-semibold break-words">
                 {formatServerTime(health.serverTime)}
+              </p>
+            </CardContent>
+          </Card>
+          <Card size="sm">
+            <CardHeader>
+              <p className="text-muted-foreground text-sm">
+                Database file size
+              </p>
+            </CardHeader>
+            <CardContent>
+              <p className="text-lg font-semibold">
+                {formatDatabaseFileSize(health.data.database_file_size_bytes)}
               </p>
             </CardContent>
           </Card>

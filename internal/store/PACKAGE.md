@@ -6,8 +6,9 @@
 
 ## Implicit Contracts
 
-- `AppDB` owns the selected accounting location and an app-unique `memory` runtime schema. Runtime objects are never portable accounting state; transaction-scoped copies retain that schema, and `Close` drops it before releasing resources.
+- `AppDB` owns the selected accounting location, optional file path, and an app-unique `memory` runtime schema. Runtime objects are never portable accounting state; transaction-scoped copies retain the accounting location, optional file path, and runtime schema, and `Close` drops the runtime schema before releasing resources.
 - Accounting names must be qualified through `AppDB`; it resolves and safely renders database and schema identifiers when opened.
+- Database file-size reads stat the selected accounting path; in-memory databases return no size without error, while filesystem stat failures return an error.
 - Repository SQL must use `AppDB` query and transaction helpers. Active transaction-scoped handles route queries to that transaction, and nested `WithTx` calls reuse it.
 - Store transactions keep their physical connection until explicit commit or rollback; statements still honor caller cancellation. Connection-scoped operations cannot run inside a transaction and must not retain their callback queryer.
 - Embedded migrations and database validation are coupled: changing migration SQL requires reviewing reference registration or waivers and re-pinning `PinnedMigrationContentHash`.
@@ -29,5 +30,5 @@
 
 ## Boundaries
 
-- Owns: DuckDB SQL, migrations, transaction and connection mechanics, DB-facing row/type conversion, runtime-schema state, and database-copy mechanics.
+- Owns: DuckDB SQL, migrations, transaction and connection mechanics, DB-facing row/type conversion, runtime-schema state, database-copy mechanics, and accounting-file metadata reads.
 - Does not own: database lifecycle policy, domain or reference-integrity decisions, process configuration, or transport behavior. See [architecture](../../docs/architecture.md).

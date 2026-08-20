@@ -13,8 +13,9 @@ func (s *strictServer) GetHealth(ctx context.Context, _ openapi.GetHealthRequest
 	}
 
 	return openapi.GetHealth200JSONResponse{
-		DatabaseEncrypted: health.DatabaseEncrypted,
-		Status:            openapi.HealthResponseStatus(health.Status),
-		SchemaVersion:     health.SchemaVersion,
+		DatabaseEncrypted:     health.DatabaseEncrypted,
+		DatabaseFileSizeBytes: health.DatabaseFileSizeBytes,
+		Status:                openapi.HealthResponseStatus(health.Status),
+		SchemaVersion:         health.SchemaVersion,
 	}, nil
 }

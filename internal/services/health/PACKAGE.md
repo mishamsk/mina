@@ -6,8 +6,9 @@
 
 ## Implicit Contracts
 
-- `Check` reads the schema version before encryption state; it reports `ok` only when both reads succeed.
-- Repository errors propagate unchanged and return no partial health report.
+- `Check` reports `ok` only when the required schema-version and encryption reads succeed.
+- `Check` reads schema version, encryption, then file size; either required-read error propagates unchanged with no partial report and prevents later reads.
+- Database file size is best-effort operational metadata: in-memory state and read failures report no size without failing health.
 
 ## Boundaries
 

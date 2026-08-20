@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"os"
 )
 
 // HealthStore reads health-related database state.
@@ -40,4 +41,18 @@ func (s *HealthStore) DatabaseEncrypted(ctx context.Context) (bool, error) {
 	}
 
 	return encrypted, nil
+}
+
+// DatabaseFileSizeBytes returns the selected accounting database file's on-disk size.
+func (s *HealthStore) DatabaseFileSizeBytes(context.Context) (*int64, error) {
+	if s.db.accountingPath == "" {
+		return nil, nil
+	}
+
+	info, err := os.Stat(s.db.accountingPath)
+	if err != nil {
+		return nil, fmt.Errorf("read database file size: %w", err)
+	}
+	size := info.Size()
+	return &size, nil
 }
