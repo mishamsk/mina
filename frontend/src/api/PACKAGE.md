@@ -9,6 +9,7 @@
 - Configure the generated client from the current browser origin; do not introduce a separate frontend API origin or handwritten endpoint/DTO contract.
 - A request captures the authentication generation at dispatch. Only a `401` for that same generation may signal authentication loss, so a stale response cannot log out a newer session.
 - Every configured browser request declares the `web-ui` client surface in the same interceptor that preserves authentication-generation handling.
+- Handwritten API modules import generated runtime operations through `generated-access`, whose dependency on the configured client prevents import-order bypasses; generated types may be imported directly.
 - Every completed non-`GET` browser request emits one process-local mutation event so mounted resource views can refresh after any REST outcome.
 - Normalize failures with no HTTP response as `NetworkFailure`; preserve HTTP error payloads for the shared error-message helpers.
 - Helpers that return a complete lookup or management set must follow backend pagination and preserve typed filters on every page request; paged record browsers stay backend-paginated.
@@ -20,5 +21,5 @@
 
 ## Boundaries
 
-- Owns: generated-client configuration, transport interception and normalization, and request shaping/composition needed by ledger consumers.
+- Owns: generated-client configuration, the sole handwritten runtime accessor for generated operations, transport interception and normalization, and request shaping/composition needed by ledger consumers.
 - Does not own: generated client output, authentication state, URL or resource-cache lifecycle, page behavior, or domain validation.

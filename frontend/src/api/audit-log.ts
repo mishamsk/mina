@@ -3,7 +3,7 @@ import {
   type ApiAuditEntryListResponse,
   listApiAuditEntries as listGeneratedApiAuditEntries,
   type ListApiAuditEntriesData,
-} from "./generated";
+} from "./generated-access";
 
 export interface ApiAuditEntryForDisplay extends ApiAuditEntry {
   readonly request_json_source: string;

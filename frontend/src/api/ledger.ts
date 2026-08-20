@@ -41,7 +41,7 @@ import type {
   UpdateMemberRequest,
   UpdateTagRequest,
   UpdateTransactionRequest,
-} from "./generated";
+} from "./generated-access";
 import {
   bulkCategorizeJournalRecords,
   bulkSetJournalRecordMember,
@@ -110,7 +110,7 @@ import {
   updateMember as updateGeneratedMember,
   updateMemberHidden as updateGeneratedMemberHidden,
   updateTag as updateGeneratedTag,
-} from "./generated";
+} from "./generated-access";
 
 export interface TransactionPageParams {
   readonly anchorDate?: string;

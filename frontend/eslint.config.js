@@ -24,6 +24,23 @@ const generatedGroup = {
   message:
     "Import generated REST code only through src/api entry points; elsewhere type-only imports are allowed (docs/frontend-architecture.md REST Data Access).",
 };
+const configuredGeneratedImportMessage =
+  "Import generated REST runtime code through generated-access so the configured browser client is installed first.";
+const configuredApiEntryPointMessage =
+  "Use configured API entry points from src/api for browser REST requests.";
+const generatedDynamicImportSelector =
+  "ImportExpression[source.value=/^(?:@\\/api\\/generated|(?:\\.\\.?\\/)+api\\/generated)(?:\\/|$)/]";
+const generatedDynamicTemplateImportSelector =
+  "ImportExpression > TemplateLiteral[expressions.length=0] > TemplateElement[value.cooked=/^(?:@\\/api\\/generated|(?:\\.\\.?\\/)+api\\/generated)(?:\\/|$)/]";
+const apiGeneratedDynamicImportSelector =
+  "ImportExpression[source.value=/^(?:@\\/api\\/generated|(?:\\.\\.?\\/)+(?:api\\/)?generated)(?:\\/|$)/]";
+const apiGeneratedDynamicTemplateImportSelector =
+  "ImportExpression > TemplateLiteral[expressions.length=0] > TemplateElement[value.cooked=/^(?:@\\/api\\/generated|(?:\\.\\.?\\/)+(?:api\\/)?generated)(?:\\/|$)/]";
+const apiBoundaryGroup = {
+  group: pkgs(["features", "pages", "components", "store", "hooks"]),
+  message:
+    "api/ owns generated-client setup and entry points: no imports from features, pages, components, store, or hooks (docs/frontend-architecture.md Package Boundaries).",
+};
 
 export default tseslint.config(
   {
@@ -298,19 +315,130 @@ export default tseslint.config(
       "@typescript-eslint/no-restricted-imports": [
         "error",
         {
+          patterns: [apiBoundaryGroup],
+        },
+      ],
+    },
+  },
+  {
+    files: ["src/api/**/*.{ts,tsx}"],
+    ignores: ["src/api/client.ts", "src/api/generated-access.ts"],
+    rules: {
+      "@typescript-eslint/no-restricted-imports": [
+        "error",
+        {
           patterns: [
+            apiBoundaryGroup,
             {
-              group: pkgs([
-                "features",
-                "pages",
-                "components",
-                "store",
-                "hooks",
-              ]),
-              message:
-                "api/ owns generated-client setup and entry points: no imports from features, pages, components, store, or hooks (docs/frontend-architecture.md Package Boundaries).",
+              group: [
+                "./generated",
+                "./generated/**",
+                "@/api/generated",
+                "@/api/generated/**",
+                "**/api/generated",
+                "**/api/generated/**",
+                "**/generated",
+                "**/generated/**",
+              ],
+              allowTypeImports: true,
+              message: configuredGeneratedImportMessage,
             },
           ],
+        },
+      ],
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: apiGeneratedDynamicImportSelector,
+          message: configuredGeneratedImportMessage,
+        },
+        {
+          selector: apiGeneratedDynamicTemplateImportSelector,
+          message: configuredGeneratedImportMessage,
+        },
+      ],
+    },
+  },
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: ["src/api/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: generatedDynamicImportSelector,
+          message:
+            "Import generated REST code only through src/api entry points (docs/frontend-architecture.md REST Data Access).",
+        },
+        {
+          selector: generatedDynamicTemplateImportSelector,
+          message:
+            "Import generated REST code only through src/api entry points (docs/frontend-architecture.md REST Data Access).",
+        },
+      ],
+    },
+  },
+  {
+    files: ["src/**/*.{js,mjs}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: [
+                "@/api/generated",
+                "@/api/generated/**",
+                "**/api/generated",
+                "**/api/generated/**",
+                "**/generated",
+                "**/generated/**",
+              ],
+              message: configuredGeneratedImportMessage,
+            },
+          ],
+        },
+      ],
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: apiGeneratedDynamicImportSelector,
+          message: configuredGeneratedImportMessage,
+        },
+        {
+          selector: apiGeneratedDynamicTemplateImportSelector,
+          message: configuredGeneratedImportMessage,
+        },
+      ],
+    },
+  },
+  {
+    files: ["src/**/*.{js,mjs,ts,tsx}"],
+    rules: {
+      "no-restricted-globals": [
+        "error",
+        {
+          name: "fetch",
+          message: configuredApiEntryPointMessage,
+        },
+        {
+          name: "XMLHttpRequest",
+          message: configuredApiEntryPointMessage,
+        },
+      ],
+      "no-restricted-properties": [
+        "error",
+        {
+          property: "fetch",
+          message: configuredApiEntryPointMessage,
+        },
+        {
+          property: "XMLHttpRequest",
+          message: configuredApiEntryPointMessage,
+        },
+        {
+          property: "sendBeacon",
+          message: configuredApiEntryPointMessage,
         },
       ],
     },
