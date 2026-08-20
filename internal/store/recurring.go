@@ -51,10 +51,8 @@ RETURNING recurring_definition_id, fqn, CAST(schedule_rule AS VARCHAR), anchor_d
 		}
 		definition = created
 
-		for _, record := range input.Records {
-			if err := insertRecurringDefinitionRecord(ctx, tx, s.db, definition.ID, record); err != nil {
-				return err
-			}
+		if err := insertRecurringDefinitionRecords(ctx, tx, s.db, definition.ID, input.Records); err != nil {
+			return err
 		}
 		records, err := recurringDefinitionRecordsByDefinitionIDs(ctx, tx, s.db, []int64{definition.ID})
 		if err != nil {
@@ -245,10 +243,8 @@ WHERE recurring_definition_id = ? AND tombstoned_at IS NULL`,
 			return fmt.Errorf("tombstone replaced recurring definition records: %w", err)
 		}
 
-		for _, record := range input.Records {
-			if err := insertRecurringDefinitionRecord(ctx, tx, s.db, definition.ID, record); err != nil {
-				return err
-			}
+		if err := insertRecurringDefinitionRecords(ctx, tx, s.db, definition.ID, input.Records); err != nil {
+			return err
 		}
 		records, err := recurringDefinitionRecordsByDefinitionIDs(ctx, tx, s.db, []int64{definition.ID})
 		if err != nil {
@@ -350,23 +346,131 @@ func (s *RecurringStore) CreateExpectedOccurrences(ctx context.Context, inputs [
 				return services.ErrConflict
 			}
 			seenSlots[key] = struct{}{}
-			if _, err := createOccurrenceWithTransactionTx(
-				ctx,
-				tx,
-				s.db,
-				input.Definition,
-				input.ScheduledDate,
-				input.ScheduledDate,
-				recurring.OccurrenceStatusExpected,
-				input.Records,
-				nil,
-			); err != nil {
-				return err
-			}
 		}
 
-		return nil
+		return createExpectedOccurrences(ctx, tx, s.db, inputs)
 	})
+}
+
+func createExpectedOccurrences(ctx context.Context, tx *sql.Tx, db *AppDB, inputs []recurring.ExpectedOccurrenceInput) error {
+	if len(inputs) == 0 {
+		return nil
+	}
+
+	occurrenceRows := make([]string, 0, len(inputs))
+	occurrenceArgs := make([]any, 0, len(inputs)*4)
+	recordCount := 0
+	for index, input := range inputs {
+		occurrenceRows = append(occurrenceRows, "(CAST(? AS INTEGER), CAST(? AS INTEGER), CAST(? AS DATE), CAST(? AS INTEGER))")
+		occurrenceArgs = append(occurrenceArgs, index, input.Definition.ID, civilDateArg(input.ScheduledDate), input.Definition.DefinitionVersion)
+		recordCount += len(input.Records)
+	}
+	occurrenceValuesSQL := "VALUES " + strings.Join(occurrenceRows, ", ")
+
+	var inputIssue string
+	err := tx.QueryRowContext(ctx, `SELECT issue
+FROM (
+	SELECT input.input_index,
+		CASE
+			WHEN occurrence.recurring_occurrence_id IS NOT NULL THEN 'conflict'
+			WHEN definition.recurring_definition_id IS NULL THEN 'not_found'
+		END AS issue
+	FROM (`+occurrenceValuesSQL+`) AS input(input_index, recurring_definition_id, scheduled_date, definition_version)
+	LEFT JOIN `+db.accountingName("recurring_occurrence")+` AS occurrence
+	  ON occurrence.recurring_definition_id = input.recurring_definition_id
+	 AND occurrence.scheduled_date = input.scheduled_date
+	LEFT JOIN `+db.accountingName("recurring_definition")+` AS definition
+	  ON definition.recurring_definition_id = input.recurring_definition_id
+	 AND definition.tombstoned_at IS NULL
+	 AND definition.paused_at IS NULL
+) AS checked
+WHERE issue IS NOT NULL
+ORDER BY input_index
+LIMIT 1`, occurrenceArgs...).Scan(&inputIssue)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("validate expected recurring occurrences: %w", err)
+	}
+	if inputIssue == "conflict" {
+		return services.ErrConflict
+	}
+	if inputIssue == "not_found" {
+		return services.ErrNotFound
+	}
+
+	if _, err := tx.ExecContext(ctx, `INSERT INTO `+db.accountingName("recurring_occurrence")+` (
+	recurring_definition_id, scheduled_date, status, materialized_definition_version
+)
+SELECT recurring_definition_id, scheduled_date, CAST('EXPECTED' AS `+db.accountingName("recurring_occurrence_status")+`), definition_version
+FROM (`+occurrenceValuesSQL+`) AS input(input_index, recurring_definition_id, scheduled_date, definition_version)`, occurrenceArgs...); err != nil {
+		return fmt.Errorf("insert expected recurring occurrences: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO `+db.accountingName("transaction")+` (
+	initiated_date, recurring_occurrence_id, lifecycle_status
+)
+SELECT input.scheduled_date, occurrence.recurring_occurrence_id, CAST('EXPECTED' AS `+db.accountingName("transaction_lifecycle_status")+`)
+FROM (`+occurrenceValuesSQL+`) AS input(input_index, recurring_definition_id, scheduled_date, definition_version)
+JOIN `+db.accountingName("recurring_occurrence")+` AS occurrence
+	ON occurrence.recurring_definition_id = input.recurring_definition_id
+	AND occurrence.scheduled_date = input.scheduled_date`, occurrenceArgs...); err != nil {
+		return fmt.Errorf("insert expected recurring transactions: %w", err)
+	}
+
+	if recordCount == 0 {
+		return nil
+	}
+	recordRows := make([]string, 0, recordCount)
+	recordArgs := []any{}
+	for inputIndex, input := range inputs {
+		for recordIndex, record := range input.Records {
+			tagListExpr, tagListArgs := tagListExpression(record.TagIDs)
+			recordRows = append(recordRows, "(CAST(? AS INTEGER), CAST(? AS INTEGER), CAST(? AS INTEGER), CAST(? AS DATE), CAST(? AS INTEGER), CAST(? AS INTEGER), CAST(? AS VARCHAR), CAST(? AS DECIMAL(18,8)), CAST(? AS DECIMAL(18,8)), CAST(? AS INTEGER), "+tagListExpr+", CAST(? AS VARCHAR), CAST(? AS TIMESTAMP), CAST(? AS TIMESTAMP), CAST(? AS VARCHAR), CAST(? AS VARCHAR), CAST(? AS VARCHAR), CAST(? AS VARCHAR))")
+			recordArgs = append(recordArgs,
+				inputIndex,
+				recordIndex,
+				input.Definition.ID,
+				civilDateArg(input.ScheduledDate),
+				record.AccountID,
+				record.MemberID,
+				record.Currency,
+				record.Amount.LibraryDecimal(),
+				nullableDecimalArg(record.AmountUSD),
+				record.CategoryID,
+			)
+			recordArgs = append(recordArgs, tagListArgs...)
+			recordArgs = append(recordArgs,
+				record.Memo,
+				nullableTimestampArg(record.PendingDate),
+				nullableTimestampArg(record.PostedDate),
+				enumValue(record.ReconciliationStatus),
+				enumValue(record.Source),
+				record.ExternalID,
+				record.ExternalSystem,
+			)
+		}
+	}
+	recordValuesSQL := "VALUES " + strings.Join(recordRows, ", ")
+
+	if _, err := tx.ExecContext(ctx, `INSERT INTO `+db.accountingName("journal_record")+` (
+	transaction_id, account_id, member_id, currency, amount, amount_usd, category_id, tag_ids, memo,
+	pending_date, posted_date, reconciliation_status, source, external_id, external_system
+)
+SELECT generated.transaction_id, record.account_id, record.member_id, record.currency, record.amount, record.amount_usd,
+	record.category_id, record.tag_ids, record.memo, record.pending_date, record.posted_date,
+	CAST(record.reconciliation_status AS `+db.accountingName("reconciliation_status")+`),
+	CAST(record.source AS `+db.accountingName("source")+`), record.external_id, record.external_system
+FROM (`+recordValuesSQL+`) AS record(
+	input_index, record_index, recurring_definition_id, scheduled_date, account_id, member_id, currency, amount, amount_usd, category_id,
+	tag_ids, memo, pending_date, posted_date, reconciliation_status, source, external_id, external_system
+)
+JOIN `+db.accountingName("recurring_occurrence")+` AS occurrence
+	ON occurrence.recurring_definition_id = record.recurring_definition_id
+	AND occurrence.scheduled_date = record.scheduled_date
+JOIN `+db.accountingName("transaction")+` AS generated ON generated.recurring_occurrence_id = occurrence.recurring_occurrence_id
+ORDER BY record.input_index, record.record_index`, recordArgs...); err != nil {
+		return fmt.Errorf("insert expected recurring journal records: %w", err)
+	}
+
+	return nil
 }
 
 // CreateConfirmedOccurrence atomically inserts a CONFIRMED occurrence and generated posted transaction.
@@ -815,10 +919,8 @@ WHERE recurring_definition_id = ? AND tombstoned_at IS NULL`,
 		if affected == 0 {
 			return services.ErrNotFound
 		}
-		for _, slot := range skippedSlots {
-			if _, err := insertDeferredOccurrence(ctx, tx, s.db, definition.ID, definition.FQN, slot, definition.DefinitionVersion); err != nil {
-				return err
-			}
+		if err := insertDeferredOccurrences(ctx, tx, s.db, definition.ID, skippedSlots, definition.DefinitionVersion); err != nil {
+			return err
 		}
 
 		return nil
@@ -918,10 +1020,8 @@ RETURNING transaction_id, initiated_date, recurring_occurrence_id, CAST(lifecycl
 	if err != nil {
 		return transactions.Transaction{}, fmt.Errorf("insert recurring generated transaction: %w", err)
 	}
-	for _, record := range records {
-		if err := insertJournalRecord(ctx, tx, db, transaction.ID, record); err != nil {
-			return transactions.Transaction{}, err
-		}
+	if err := insertJournalRecords(ctx, tx, db, transaction.ID, records); err != nil {
+		return transactions.Transaction{}, err
 	}
 
 	return transaction, nil
@@ -956,6 +1056,56 @@ RETURNING recurring_occurrence_id, recurring_definition_id, scheduled_date, CAST
 	}
 
 	return occurrence, nil
+}
+
+func insertDeferredOccurrences(
+	ctx context.Context,
+	tx *sql.Tx,
+	db *AppDB,
+	definitionID int64,
+	scheduledDates []values.CivilDate,
+	definitionVersion int64,
+) error {
+	if len(scheduledDates) == 0 {
+		return nil
+	}
+
+	valuesSQL, args := civilDateInputValues(scheduledDates)
+	var occupied bool
+	if err := tx.QueryRowContext(ctx, `SELECT EXISTS (
+	SELECT 1
+	FROM (`+valuesSQL+`) AS input(scheduled_date)
+	JOIN `+db.accountingName("recurring_occurrence")+` AS occurrence
+	  ON occurrence.recurring_definition_id = ?
+	 AND occurrence.scheduled_date = input.scheduled_date
+)`, append(args, definitionID)...).Scan(&occupied); err != nil {
+		return fmt.Errorf("check recurring occurrence slots: %w", err)
+	}
+	if occupied {
+		return services.ErrConflict
+	}
+
+	insertArgs := []any{definitionID, definitionVersion}
+	insertArgs = append(insertArgs, args...)
+	if _, err := tx.ExecContext(ctx, `INSERT INTO `+db.accountingName("recurring_occurrence")+` (
+	recurring_definition_id, scheduled_date, status, materialized_definition_version, reviewed_at
+)
+SELECT ?, input.scheduled_date, CAST('DEFERRED' AS `+db.accountingName("recurring_occurrence_status")+`), ?, CURRENT_TIMESTAMP
+FROM (`+valuesSQL+`) AS input(scheduled_date)`, insertArgs...); err != nil {
+		return fmt.Errorf("insert deferred recurring occurrences: %w", err)
+	}
+
+	return nil
+}
+
+func civilDateInputValues(dates []values.CivilDate) (string, []any) {
+	rows := make([]string, 0, len(dates))
+	args := make([]any, 0, len(dates))
+	for _, date := range dates {
+		rows = append(rows, "(CAST(? AS DATE))")
+		args = append(args, civilDateArg(date))
+	}
+	return "VALUES " + strings.Join(rows, ", "), args
 }
 
 func ensureRecurringOccurrenceSlotAvailable(
@@ -1062,34 +1212,43 @@ WHERE o.recurring_occurrence_id = ?`,
 	return occurrence, nil
 }
 
-func insertRecurringDefinitionRecord(
+func insertRecurringDefinitionRecords(
 	ctx context.Context,
 	tx *sql.Tx,
 	db *AppDB,
 	definitionID int64,
-	record recurring.DefinitionRecordInput,
+	records []recurring.DefinitionRecordInput,
 ) error {
-	tagListExpr, tagListArgs := tagListExpression(record.TagIDs)
-	args := []any{
-		definitionID,
-		record.AccountID,
-		record.MemberID,
-		record.Currency,
-		record.Amount.LibraryDecimal(),
-		record.CategoryID,
+	if len(records) == 0 {
+		return nil
 	}
-	args = append(args, tagListArgs...)
-	args = append(args, record.Memo)
+
+	rows := make([]string, 0, len(records))
+	args := make([]any, 0, len(records)*8)
+	for _, record := range records {
+		tagListExpr, tagListArgs := tagListExpression(record.TagIDs)
+		rows = append(rows, "(?, ?, ?, ?, ?, ?, "+tagListExpr+", ?)")
+		args = append(args,
+			definitionID,
+			record.AccountID,
+			record.MemberID,
+			record.Currency,
+			record.Amount.LibraryDecimal(),
+			record.CategoryID,
+		)
+		args = append(args, tagListArgs...)
+		args = append(args, record.Memo)
+	}
 
 	if _, err := tx.ExecContext(
 		ctx,
 		`INSERT INTO `+db.accountingName("recurring_definition_record")+` (
 	recurring_definition_id, account_id, member_id, currency, amount, category_id, tag_ids, memo
 )
-VALUES (?, ?, ?, ?, ?, ?, `+tagListExpr+`, ?)`,
+VALUES `+strings.Join(rows, ", "),
 		args...,
 	); err != nil {
-		return fmt.Errorf("insert recurring definition record: %w", err)
+		return fmt.Errorf("insert recurring definition records: %w", err)
 	}
 
 	return nil

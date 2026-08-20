@@ -48,10 +48,8 @@ RETURNING transaction_id, initiated_date, recurring_occurrence_id, CAST(lifecycl
 			return fmt.Errorf("insert transaction: %w", err)
 		}
 
-		for _, recordReq := range req.Records {
-			if err := insertJournalRecord(ctx, tx, s.db, transaction.ID, recordReq); err != nil {
-				return err
-			}
+		if err := insertJournalRecords(ctx, tx, s.db, transaction.ID, req.Records); err != nil {
+			return err
 		}
 		records, err := recordsByTransactionIDs(ctx, tx, s.db, []int64{transaction.ID})
 		if err != nil {
@@ -104,13 +102,13 @@ WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 			currentByID[record.ID] = record
 		}
 		retained := make(map[int64]struct{}, len(req.Records))
+		createdRecords := make([]transactions.PersistJournalRecordInput, 0, len(req.Records))
+		updatedRecords := make([]journalRecordUpdate, 0, len(req.Records))
 		material := transaction.InitiatedDate != req.InitiatedDate || transaction.LifecycleStatus != req.LifecycleStatus
 
 		for _, recordReq := range req.Records {
 			if recordReq.RecordID == nil {
-				if err := insertJournalRecord(ctx, tx, s.db, transaction.ID, recordReq); err != nil {
-					return err
-				}
+				createdRecords = append(createdRecords, recordReq)
 				material = true
 				continue
 			}
@@ -122,10 +120,14 @@ WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 			if journalRecordMatchesPersist(current, recordReq) {
 				continue
 			}
-			if err := updateJournalRecord(ctx, tx, s.db, current.ID, recordReq); err != nil {
-				return err
-			}
+			updatedRecords = append(updatedRecords, journalRecordUpdate{recordID: current.ID, input: recordReq})
 			material = true
+		}
+		if err := insertJournalRecords(ctx, tx, s.db, transaction.ID, createdRecords); err != nil {
+			return err
+		}
+		if err := updateJournalRecords(ctx, tx, s.db, updatedRecords); err != nil {
+			return err
 		}
 
 		omitted := make([]int64, 0, len(currentRecords))
@@ -1278,29 +1280,35 @@ func (s *TransactionStore) BulkUpdateTags(ctx context.Context, recordIDs []int64
 			return err
 		}
 
-		changedRecordIDs := make([]int64, 0, len(recordIDs))
-		for _, recordID := range recordIDs {
-			tagIDs, err := tagIDsByRecordID(ctx, tx, s.db, recordID)
-			if err != nil {
-				return err
-			}
-			updated := updatedTagIDs(tagIDs, addTagIDs, removeTagIDs)
-			if slices.Equal(tagIDs, updated) {
-				continue
-			}
-			tagListExpr, tagListArgs := tagListExpression(updated)
-			args := append(tagListArgs, recordID)
-			if _, err := tx.ExecContext(
-				ctx,
-				`UPDATE `+s.db.accountingName("journal_record")+`
-SET tag_ids = `+tagListExpr+`,
+		inputSQL, args := int64InputValues(recordIDs)
+		addTagsSQL, addTagsArgs := tagListExpression(addTagIDs)
+		removeTagsSQL, removeTagsArgs := tagListExpression(removeTagIDs)
+		args = append(args, addTagsArgs...)
+		args = append(args, removeTagsArgs...)
+		changedRecordIDs, err := queryChangedRecordIDs(ctx, tx, `WITH input AS (
+	SELECT record_id
+	FROM (`+inputSQL+`) AS requested(record_id)
+), tag_changes AS (
+	SELECT `+addTagsSQL+` AS add_tag_ids, `+removeTagsSQL+` AS remove_tag_ids
+), changes AS (
+	SELECT input.record_id,
+		list_sort(list_distinct(list_concat(
+			list_filter(jr.tag_ids, lambda tag_id: NOT list_contains(tag_changes.remove_tag_ids, tag_id)),
+			tag_changes.add_tag_ids
+		))) AS tag_ids
+	FROM input
+	JOIN `+s.db.accountingName("journal_record")+` AS jr ON jr.record_id = input.record_id
+	CROSS JOIN tag_changes
+)
+UPDATE `+s.db.accountingName("journal_record")+` AS target
+SET tag_ids = changes.tag_ids,
     updated_at = CURRENT_TIMESTAMP
-WHERE record_id = ?`,
-				args...,
-			); err != nil {
-				return fmt.Errorf("bulk update journal record tags: %w", err)
-			}
-			changedRecordIDs = append(changedRecordIDs, recordID)
+FROM changes
+WHERE target.record_id = changes.record_id
+  AND list_sort(target.tag_ids) IS DISTINCT FROM changes.tag_ids
+RETURNING target.record_id`, args...)
+		if err != nil {
+			return fmt.Errorf("bulk update journal record tags: %w", err)
 		}
 		updatedCount = len(changedRecordIDs)
 
@@ -1616,33 +1624,58 @@ func optionalDecimalEqual(left *values.Decimal, right *values.Decimal) bool {
 	return left == nil && right == nil || left != nil && right != nil && left.Cmp(*right) == 0
 }
 
-func updateJournalRecord(ctx context.Context, tx *sql.Tx, db *AppDB, recordID int64, req transactions.PersistJournalRecordInput) error {
-	tagListExpr, tagListArgs := tagListExpression(req.TagIDs)
-	args := []any{
-		req.AccountID,
-		req.MemberID,
-		req.Currency,
-		req.Amount.LibraryDecimal(),
-		nullableDecimalArg(req.AmountUSD),
-		req.CategoryID,
+type journalRecordUpdate struct {
+	recordID int64
+	input    transactions.PersistJournalRecordInput
+}
+
+func updateJournalRecords(ctx context.Context, tx *sql.Tx, db *AppDB, updates []journalRecordUpdate) error {
+	if len(updates) == 0 {
+		return nil
 	}
-	args = append(args, tagListArgs...)
-	args = append(args, req.Memo, nullableTimestampArg(req.PendingDate), nullableTimestampArg(req.PostedDate), enumValue(req.ReconciliationStatus), recordID)
-	if _, err := tx.ExecContext(ctx, `UPDATE `+db.accountingName("journal_record")+`
-SET account_id = ?,
-    member_id = ?,
-    currency = ?,
-    amount = ?,
-    amount_usd = ?,
-    category_id = ?,
-    tag_ids = `+tagListExpr+`,
-    memo = ?,
-    pending_date = ?,
-    posted_date = ?,
-    reconciliation_status = CAST(? AS `+db.accountingName("reconciliation_status")+`),
+
+	rows := make([]string, 0, len(updates))
+	args := []any{}
+	for _, update := range updates {
+		tagListExpr, tagListArgs := tagListExpression(update.input.TagIDs)
+		rows = append(rows, "(?, ?, ?, ?, ?, ?, ?, "+tagListExpr+", ?, ?, ?, ?)")
+		args = append(args,
+			update.recordID,
+			update.input.AccountID,
+			update.input.MemberID,
+			update.input.Currency,
+			update.input.Amount.LibraryDecimal(),
+			nullableDecimalArg(update.input.AmountUSD),
+			update.input.CategoryID,
+		)
+		args = append(args, tagListArgs...)
+		args = append(args,
+			update.input.Memo,
+			nullableTimestampArg(update.input.PendingDate),
+			nullableTimestampArg(update.input.PostedDate),
+			enumValue(update.input.ReconciliationStatus),
+		)
+	}
+
+	if _, err := tx.ExecContext(ctx, `UPDATE `+db.accountingName("journal_record")+` AS target
+SET account_id = input.account_id,
+    member_id = input.member_id,
+    currency = input.currency,
+    amount = input.amount,
+    amount_usd = input.amount_usd,
+    category_id = input.category_id,
+    tag_ids = input.tag_ids,
+    memo = input.memo,
+    pending_date = input.pending_date,
+    posted_date = input.posted_date,
+    reconciliation_status = CAST(input.reconciliation_status AS `+db.accountingName("reconciliation_status")+`),
     updated_at = CURRENT_TIMESTAMP
-WHERE record_id = ? AND tombstoned_at IS NULL`, args...); err != nil {
-		return fmt.Errorf("update retained journal record: %w", err)
+FROM (VALUES `+strings.Join(rows, ", ")+`) AS input(
+	record_id, account_id, member_id, currency, amount, amount_usd, category_id, tag_ids, memo,
+	pending_date, posted_date, reconciliation_status
+)
+WHERE target.record_id = input.record_id AND target.tombstoned_at IS NULL`, args...); err != nil {
+		return fmt.Errorf("update retained journal records: %w", err)
 	}
 	return nil
 }
@@ -1685,27 +1718,36 @@ LIMIT 1`, args...).Scan(&blocker)
 	return transactions.ErrLinkedRecordRemoval
 }
 
-func insertJournalRecord(ctx context.Context, tx *sql.Tx, db *AppDB, transactionID int64, req transactions.PersistJournalRecordInput) error {
-	tagListExpr, tagListArgs := tagListExpression(req.TagIDs)
-	args := []any{
-		transactionID,
-		req.AccountID,
-		req.MemberID,
-		req.Currency,
-		req.Amount.LibraryDecimal(),
-		nullableDecimalArg(req.AmountUSD),
-		req.CategoryID,
+func insertJournalRecords(ctx context.Context, tx *sql.Tx, db *AppDB, transactionID int64, records []transactions.PersistJournalRecordInput) error {
+	if len(records) == 0 {
+		return nil
 	}
-	args = append(args, tagListArgs...)
-	args = append(args,
-		req.Memo,
-		nullableTimestampArg(req.PendingDate),
-		nullableTimestampArg(req.PostedDate),
-		enumValue(req.ReconciliationStatus),
-		enumValue(req.Source),
-		req.ExternalID,
-		req.ExternalSystem,
-	)
+
+	rows := make([]string, 0, len(records))
+	args := []any{}
+	for _, record := range records {
+		tagListExpr, tagListArgs := tagListExpression(record.TagIDs)
+		rows = append(rows, "(?, ?, ?, ?, ?, ?, ?, "+tagListExpr+", ?, ?, ?, CAST(? AS "+db.accountingName("reconciliation_status")+"), CAST(? AS "+db.accountingName("source")+"), ?, ?)")
+		args = append(args,
+			transactionID,
+			record.AccountID,
+			record.MemberID,
+			record.Currency,
+			record.Amount.LibraryDecimal(),
+			nullableDecimalArg(record.AmountUSD),
+			record.CategoryID,
+		)
+		args = append(args, tagListArgs...)
+		args = append(args,
+			record.Memo,
+			nullableTimestampArg(record.PendingDate),
+			nullableTimestampArg(record.PostedDate),
+			enumValue(record.ReconciliationStatus),
+			enumValue(record.Source),
+			record.ExternalID,
+			record.ExternalSystem,
+		)
+	}
 
 	if _, err := tx.ExecContext(
 		ctx,
@@ -1713,10 +1755,10 @@ func insertJournalRecord(ctx context.Context, tx *sql.Tx, db *AppDB, transaction
 	transaction_id, account_id, member_id, currency, amount, amount_usd, category_id, tag_ids, memo,
 	pending_date, posted_date, reconciliation_status, source, external_id, external_system
 )
-VALUES (?, ?, ?, ?, ?, ?, ?, `+tagListExpr+`, ?, ?, ?, CAST(? AS `+db.accountingName("reconciliation_status")+`), CAST(? AS `+db.accountingName("source")+`), ?, ?)`,
+VALUES `+strings.Join(rows, ", "),
 		args...,
 	); err != nil {
-		return fmt.Errorf("insert journal record: %w", err)
+		return fmt.Errorf("insert journal records: %w", err)
 	}
 
 	return nil
@@ -1894,40 +1936,6 @@ func (s *TransactionStore) recordsByTransactionIDs(ctx context.Context, transact
 
 type rowsQuerier interface {
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
-}
-
-func tagIDsByRecordID(ctx context.Context, queryer rowsQuerier, db *AppDB, recordID int64) ([]int64, error) {
-	rows, err := queryer.QueryContext(
-		ctx,
-		`SELECT unnest(tag_ids) AS tag_id
-FROM `+db.accountingName("journal_record")+`
-WHERE record_id = ?
-ORDER BY tag_id ASC`,
-		recordID,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("list journal record tags: %w", err)
-	}
-
-	tagIDs := []int64{}
-	for rows.Next() {
-		var tagID int64
-		if err := rows.Scan(&tagID); err != nil {
-			return nil, fmt.Errorf("scan journal record tag: %w", err)
-		}
-		tagIDs = append(tagIDs, tagID)
-	}
-	if err := rows.Err(); err != nil {
-		if closeErr := rows.Close(); closeErr != nil {
-			return nil, fmt.Errorf("iterate journal record tags: %w; close journal record tag rows: %w", err, closeErr)
-		}
-		return nil, fmt.Errorf("iterate journal record tags: %w", err)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, fmt.Errorf("close journal record tag rows: %w", err)
-	}
-
-	return tagIDs, nil
 }
 
 func transactionsByRecordIDs(ctx context.Context, queryer rowsQuerier, db *AppDB, recordIDs []int64) ([]transactions.Transaction, error) {
@@ -2173,27 +2181,6 @@ func tagListExpression(tagIDs []int64) (string, []any) {
 	}
 
 	return "CAST([" + placeholders(len(tagIDs)) + "] AS INTEGER[])", int64Args(tagIDs)
-}
-
-func updatedTagIDs(current []int64, add []int64, remove []int64) []int64 {
-	selected := map[int64]struct{}{}
-	for _, tagID := range current {
-		selected[tagID] = struct{}{}
-	}
-	for _, tagID := range add {
-		selected[tagID] = struct{}{}
-	}
-	for _, tagID := range remove {
-		delete(selected, tagID)
-	}
-
-	next := make([]int64, 0, len(selected))
-	for tagID := range selected {
-		next = append(next, tagID)
-	}
-	slices.Sort(next)
-
-	return next
 }
 
 func enumValue(value any) string {

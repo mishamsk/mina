@@ -510,6 +510,9 @@ func TestRecurringOccurrenceMaterializationReviewQueueBoundary(t *testing.T) {
 		if transaction.RecurringOccurrenceId == nil {
 			t.Fatalf("transaction %d recurring_occurrence_id = nil", transaction.TransactionId)
 		}
+		if len(transaction.Records) != 2 {
+			t.Fatalf("transaction %d record count = %d, want 2", transaction.TransactionId, len(transaction.Records))
+		}
 		for _, record := range transaction.Records {
 			if record.LifecycleStatus != httpclient.TransactionLifecycleStatusExpected || record.Source != httpclient.RecurringTemplate || record.Settlement != nil {
 				t.Fatalf("generated record lifecycle/source/settlement = %q/%q/%v, want expected/recurring_template/nil", record.LifecycleStatus, record.Source, record.Settlement)
@@ -555,6 +558,125 @@ func TestRecurringOccurrenceMaterializationReviewQueueBoundary(t *testing.T) {
 	assertReviewedOccurrence(t, *confirmed.JSON200, httpclient.RecurringOccurrenceStatusConfirmed)
 	if confirmed.JSON200.RecurringDefinitionFqn != definition.JSON201.Fqn {
 		t.Fatalf("confirmed cancelled-definition occurrence fqn = %q, want %q", confirmed.JSON200.RecurringDefinitionFqn, definition.JSON201.Fqn)
+	}
+}
+
+func TestRecurringCatchUpPreservesDefinitionRecordOrderBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	now := client.Now()
+	firstRefs := createRecurringDefinitionRefs(t, client, "RecurringRecordOrderFirst")
+	secondRefs := createRecurringDefinitionRefs(t, client, "RecurringRecordOrderSecond")
+	const occurrencesPerDefinition = 1000
+	anchor := formatDate(civilDateOnly(now).AddDate(0, 0, -(occurrencesPerDefinition - 1)))
+	firstRequest := recurringDefinitionRequest(
+		"RecurringRecordOrder:First",
+		firstRefs,
+		"-10.00000000",
+		"6.00000000",
+		intervalRule(1, "DAY"),
+		anchor,
+	)
+	firstRecords := append([]httpclient.RecurringDefinitionRecordRequest{}, (*firstRequest.Records)...)
+	firstRecords[0].Memo = nullable.NewNullableWithValue("first debit")
+	firstRecords[1].Memo = nullable.NewNullableWithValue("first credit")
+	third := firstRecords[1]
+	third.Amount = recurringStringPtr("4.00000000")
+	third.Memo = nullable.NewNullableWithValue("first split")
+	firstRecords = append(firstRecords, third)
+	firstRequest.Records = &firstRecords
+	firstDefinition := createRecurringDefinition(t, client, firstRequest)
+
+	secondRequest := recurringDefinitionRequest(
+		"RecurringRecordOrder:Second",
+		secondRefs,
+		"-20.00000000",
+		"20.00000000",
+		intervalRule(1, "DAY"),
+		anchor,
+	)
+	secondRecords := append([]httpclient.RecurringDefinitionRecordRequest{}, (*secondRequest.Records)...)
+	secondRecords[0].Memo = nullable.NewNullableWithValue("second debit")
+	secondRecords[1].Memo = nullable.NewNullableWithValue("second credit")
+	secondRequest.Records = &secondRecords
+	secondDefinition := createRecurringDefinition(t, client, secondRequest)
+
+	listRecurringOccurrences(t, client, nil)
+	type recordShape struct {
+		accountID int64
+		amount    string
+		memo      string
+	}
+	definitions := []struct {
+		id      int64
+		records []recordShape
+	}{
+		{
+			id: firstDefinition.JSON201.RecurringDefinitionId,
+			records: []recordShape{
+				{accountID: firstRefs.CheckingAccountID, amount: "-10.00000000", memo: "first debit"},
+				{accountID: firstRefs.MerchantAccountID, amount: "6.00000000", memo: "first credit"},
+				{accountID: firstRefs.MerchantAccountID, amount: "4.00000000", memo: "first split"},
+			},
+		},
+		{
+			id: secondDefinition.JSON201.RecurringDefinitionId,
+			records: []recordShape{
+				{accountID: secondRefs.CheckingAccountID, amount: "-20.00000000", memo: "second debit"},
+				{accountID: secondRefs.MerchantAccountID, amount: "20.00000000", memo: "second credit"},
+			},
+		},
+	}
+
+	const pageSize = 500
+	wantRecordsByTransactionID := make(map[int64][]recordShape, occurrencesPerDefinition*len(definitions))
+	for _, definition := range definitions {
+		for offset := 0; offset < occurrencesPerDefinition; offset += pageSize {
+			response := listRecurringOccurrences(t, client, &httpclient.ListRecurringOccurrencesParams{
+				RecurringDefinitionId: &definition.id,
+				Limit:                 ptrTo(pageSize),
+				Offset:                ptrTo(offset),
+			})
+			if response.JSON200.TotalCount != occurrencesPerDefinition {
+				t.Fatalf("recurring definition %d occurrence count = %d, want %d", definition.id, response.JSON200.TotalCount, occurrencesPerDefinition)
+			}
+			for _, occurrence := range response.JSON200.RecurringOccurrences {
+				if occurrence.GeneratedTransactionId == nil {
+					t.Fatalf("occurrence %d generated_transaction_id = nil", occurrence.RecurringOccurrenceId)
+				}
+				wantRecordsByTransactionID[*occurrence.GeneratedTransactionId] = definition.records
+			}
+		}
+	}
+
+	expectedStatuses := []httpclient.TransactionLifecycleStatus{httpclient.TransactionLifecycleStatusExpected}
+	for offset := 0; offset < len(wantRecordsByTransactionID); offset += pageSize {
+		response, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+			LifecycleStatus: &expectedStatuses,
+			Limit:           ptrTo(pageSize),
+			Offset:          ptrTo(offset),
+		})
+		requireNoTransportError(t, "list ordered recurring transactions", err)
+		if response.StatusCode() != http.StatusOK {
+			t.Fatalf("list ordered recurring transactions status = %d, want %d; body %s", response.StatusCode(), http.StatusOK, response.Body)
+		}
+		if response.JSON200.TotalCount != int64(len(wantRecordsByTransactionID)) {
+			t.Fatalf("ordered recurring transaction count = %d, want %d", response.JSON200.TotalCount, len(wantRecordsByTransactionID))
+		}
+		for _, transaction := range response.JSON200.Transactions {
+			wantRecords, ok := wantRecordsByTransactionID[transaction.TransactionId]
+			if !ok {
+				t.Fatalf("unexpected recurring transaction %d", transaction.TransactionId)
+			}
+			if len(transaction.Records) != len(wantRecords) {
+				t.Fatalf("transaction %d record count = %d, want %d", transaction.TransactionId, len(transaction.Records), len(wantRecords))
+			}
+			for index, wantRecord := range wantRecords {
+				got := transaction.Records[index]
+				if got.AccountId != wantRecord.accountID || got.Amount != wantRecord.amount || got.Memo == nil || *got.Memo != wantRecord.memo {
+					t.Fatalf("transaction %d record at %d = %+v, want account %d amount %q memo %q in definition order", transaction.TransactionId, index, got, wantRecord.accountID, wantRecord.amount, wantRecord.memo)
+				}
+			}
+		}
 	}
 }
 

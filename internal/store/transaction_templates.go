@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	duckdb "github.com/duckdb/duckdb-go/v2"
@@ -45,10 +46,8 @@ RETURNING transaction_template_id, fqn, parent_fqn, name, level, created_at, upd
 		}
 		template = created
 
-		for _, record := range input.Records {
-			if err := insertTransactionTemplateRecord(ctx, tx, s.db, template.ID, record); err != nil {
-				return err
-			}
+		if err := insertTransactionTemplateRecords(ctx, tx, s.db, template.ID, input.Records); err != nil {
+			return err
 		}
 		records, err := transactionTemplateRecordsByTemplateIDs(ctx, tx, s.db, []int64{template.ID})
 		if err != nil {
@@ -219,10 +218,8 @@ WHERE transaction_template_id = ? AND tombstoned_at IS NULL`,
 			return fmt.Errorf("tombstone replaced transaction template records: %w", err)
 		}
 
-		for _, record := range input.Records {
-			if err := insertTransactionTemplateRecord(ctx, tx, s.db, template.ID, record); err != nil {
-				return err
-			}
+		if err := insertTransactionTemplateRecords(ctx, tx, s.db, template.ID, input.Records); err != nil {
+			return err
 		}
 		records, err := transactionTemplateRecordsByTemplateIDs(ctx, tx, s.db, []int64{template.ID})
 		if err != nil {
@@ -338,36 +335,43 @@ func scanTransactionTemplate(scanner transactionTemplateScanner) (transactiontem
 	return template, nil
 }
 
-func insertTransactionTemplateRecord(
+func insertTransactionTemplateRecords(
 	ctx context.Context,
 	tx *sql.Tx,
 	db *AppDB,
 	templateID int64,
-	record transactiontemplates.TemplateRecordInput,
+	records []transactiontemplates.TemplateRecordInput,
 ) error {
-	tagListExpr, tagListArgs := tagListExpression(record.TagIDs)
-	args := []any{
-		templateID,
-		record.CategoryID,
-		record.AccountID,
-		record.MemberID,
-		record.Currency,
-		nullableDecimalArg(record.Amount),
+	if len(records) == 0 {
+		return nil
 	}
-	args = append(args, tagListArgs...)
-	args = append(args,
-		record.Memo,
-	)
+
+	rows := make([]string, 0, len(records))
+	args := make([]any, 0, len(records)*8)
+	for _, record := range records {
+		tagListExpr, tagListArgs := tagListExpression(record.TagIDs)
+		rows = append(rows, "(?, ?, ?, ?, ?, ?, "+tagListExpr+", ?)")
+		args = append(args,
+			templateID,
+			record.CategoryID,
+			record.AccountID,
+			record.MemberID,
+			record.Currency,
+			nullableDecimalArg(record.Amount),
+		)
+		args = append(args, tagListArgs...)
+		args = append(args, record.Memo)
+	}
 
 	if _, err := tx.ExecContext(
 		ctx,
 		`INSERT INTO `+db.accountingName("transaction_template_record")+` (
 	transaction_template_id, category_id, account_id, member_id, currency, amount, tag_ids, memo
 )
-VALUES (?, ?, ?, ?, ?, ?, `+tagListExpr+`, ?)`,
+VALUES `+strings.Join(rows, ", "),
 		args...,
 	); err != nil {
-		return fmt.Errorf("insert transaction template record: %w", err)
+		return fmt.Errorf("insert transaction template records: %w", err)
 	}
 
 	return nil

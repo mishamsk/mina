@@ -222,6 +222,36 @@ func TestRecordBulkTransactionETagMaterialAndNoOpBoundary(t *testing.T) {
 	})
 }
 
+func TestRecordBulkTagsMixedMaterialAndNoOpParentsBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	refs := createSearchRefs(t, client)
+	unchangedRequest := balancedTransactionRequest(refs.transactionRefs)
+	unchangedRequest.Records[0].TagIds = apptest.Int64SlicePtr(refs.SecondTagId, refs.TagId)
+	unchangedBefore := createTransaction(t, client, unchangedRequest).JSON201
+	changedBefore := createTransaction(t, client, balancedTransactionRequest(refs.transactionRefs)).JSON201
+
+	response, err := client.REST().BulkUpdateJournalRecordTagsWithResponse(context.Background(), httpclient.BulkTagRecordsRequest{
+		RecordIds: []int64{unchangedBefore.Records[0].RecordId, changedBefore.Records[0].RecordId},
+		AddTagIds: apptest.Int64SlicePtr(refs.SecondTagId),
+	})
+	requireNoTransportError(t, "bulk add mixed existing and new tag", err)
+	if response.StatusCode() != http.StatusOK {
+		t.Fatalf("bulk add mixed existing and new tag status = %d, want %d; body %s", response.StatusCode(), http.StatusOK, response.Body)
+	}
+	if response.JSON200.UpdatedCount != 1 {
+		t.Fatalf("bulk add mixed existing and new tag updated_count = %d, want 1", response.JSON200.UpdatedCount)
+	}
+
+	unchangedAfter := getTransaction(t, client, unchangedBefore.TransactionId).JSON200
+	if unchangedAfter.Etag != unchangedBefore.Etag || !unchangedAfter.UpdatedAt.Equal(unchangedBefore.UpdatedAt) {
+		t.Fatalf("unchanged transaction etag/updated_at = %q/%s, want %q/%s", unchangedAfter.Etag, unchangedAfter.UpdatedAt, unchangedBefore.Etag, unchangedBefore.UpdatedAt)
+	}
+	changedAfter := getTransaction(t, client, changedBefore.TransactionId).JSON200
+	if changedAfter.Etag == changedBefore.Etag || !changedBefore.UpdatedAt.Before(changedAfter.UpdatedAt) {
+		t.Fatalf("changed transaction etag/updated_at = %q/%s, want after %q/%s", changedAfter.Etag, changedAfter.UpdatedAt, changedBefore.Etag, changedBefore.UpdatedAt)
+	}
+}
+
 func assertMaterialThenNoOpTransactionETag(t *testing.T, client *apptest.Client, transactionID int64, operation string, changedRecordIDs []int64, mutate func() (int, int, error)) {
 	t.Helper()
 	before := getTransaction(t, client, transactionID).JSON200
