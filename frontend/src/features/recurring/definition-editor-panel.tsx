@@ -167,7 +167,7 @@ export const DefinitionEditorPanel = ({
     onClose();
     window.requestAnimationFrame(() => {
       if (returnFocusTo?.isConnected) {
-        focusWithoutTooltip(returnFocusTo, { preventScroll: true });
+        focusWithoutTooltip(returnFocusTo);
       }
     });
   }, [onClose, returnFocusTo]);

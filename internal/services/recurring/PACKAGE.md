@@ -15,6 +15,7 @@
 - Definition records are a copied, complete per-currency-balanced shape, including when seeded from a transaction template. Existing occurrences retain that snapshot when a definition changes or is cancelled.
 - Account-reference validation rechecks saved definition currencies during every materialization, so an account mode change cannot authorize incompatible generated records. Display enrichment intentionally resolves active account metadata without that currency revalidation.
 - Generated transactions derive signed USD amounts for the scheduled date during catch-up and for the initiated date during early confirmation. Successful materialization and confirmation signal runtime currency-usage cache invalidation.
+- Next-due-date definition lists compute and sort the complete active set before applying pagination; missing next dates stay last, and equal dates use ascending FQN and definition ID tie-breakers.
 
 ## Boundaries
 

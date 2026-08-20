@@ -359,12 +359,23 @@ func (s *Service) List(ctx context.Context, opts services.ListOptions) (services
 		return services.PaginatedList[Definition]{}, err
 	}
 
-	list, err := s.repo.List(ctx, opts)
+	repoOpts := opts
+	if opts.SortKey == services.SortKeyNextDueDate {
+		repoOpts.SortKey = services.SortKeyFQN
+		repoOpts.SortDirection = services.SortDirectionAsc
+		repoOpts.Limit = nil
+		repoOpts.Offset = 0
+	}
+	list, err := s.repo.List(ctx, repoOpts)
 	if err != nil {
 		return services.PaginatedList[Definition]{}, err
 	}
 	for index := range list.Items {
 		list.Items[index] = withNextDueDate(list.Items[index])
+	}
+	if opts.SortKey == services.SortKeyNextDueDate {
+		sortDefinitionsByNextDueDate(list.Items, opts.SortDirection)
+		list.Items = paginateDefinitions(list.Items, opts.Limit, opts.Offset)
 	}
 	if err := s.withListDisplayAmounts(ctx, list.Items); err != nil {
 		return services.PaginatedList[Definition]{}, err
@@ -1289,6 +1300,45 @@ func withNextDueDate(definition Definition) Definition {
 	return definition
 }
 
+func sortDefinitionsByNextDueDate(definitions []Definition, direction services.SortDirection) {
+	slices.SortFunc(definitions, func(left Definition, right Definition) int {
+		if left.NextDueDate == nil {
+			if right.NextDueDate != nil {
+				return 1
+			}
+		} else if right.NextDueDate == nil {
+			return -1
+		} else if dateOrder := left.NextDueDate.Time().Compare(right.NextDueDate.Time()); dateOrder != 0 {
+			if direction == services.SortDirectionDesc {
+				return -dateOrder
+			}
+			return dateOrder
+		}
+		if fqnOrder := strings.Compare(left.FQN, right.FQN); fqnOrder != 0 {
+			return fqnOrder
+		}
+		switch {
+		case left.ID < right.ID:
+			return -1
+		case left.ID > right.ID:
+			return 1
+		default:
+			return 0
+		}
+	})
+}
+
+func paginateDefinitions(definitions []Definition, limit *int, offset int) []Definition {
+	if offset >= len(definitions) {
+		return definitions[:0]
+	}
+	end := len(definitions)
+	if limit != nil && *limit < end-offset {
+		end = offset + *limit
+	}
+	return definitions[offset:end]
+}
+
 // NextDueDateAfter returns the next schedule slot strictly after lastOccurrence, or on or after anchor when no occurrence exists.
 func NextDueDateAfter(raw json.RawMessage, anchor values.CivilDate, lastOccurrence *values.CivilDate) (values.CivilDate, error) {
 	if lastOccurrence == nil {
@@ -1527,9 +1577,9 @@ func validateFQN(fqn string) error {
 
 func validateListOptions(opts services.ListOptions) error {
 	switch opts.SortKey {
-	case "", services.SortKeyFQN, services.SortKeyCreatedAt, services.SortKeyUpdatedAt:
+	case "", services.SortKeyFQN, services.SortKeyNextDueDate, services.SortKeyCreatedAt, services.SortKeyUpdatedAt:
 	default:
-		return services.InvalidRequest("sort must be fqn, created_at, or updated_at")
+		return services.InvalidRequest("sort must be fqn, next_due_date, created_at, or updated_at")
 	}
 	switch opts.SortDirection {
 	case "", services.SortDirectionAsc, services.SortDirectionDesc:

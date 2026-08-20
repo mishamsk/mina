@@ -2638,9 +2638,9 @@ func Operations() []Operation {
 					{
 						Name:        "sort",
 						Type:        "string",
-						Description: "Field used to sort matching results; defaults to `fqn`.",
+						Description: "Field used to sort matching results; defaults to `fqn`. `next_due_date` keeps missing dates last and uses ascending FQN and definition ID tie-breakers.",
 						Required:    false,
-						Enum:        []string{"fqn", "created_at", "updated_at"},
+						Enum:        []string{"fqn", "next_due_date", "created_at", "updated_at"},
 					},
 					{
 						Name:        "sort_dir",

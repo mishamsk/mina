@@ -116,6 +116,94 @@ func TestRecurringDefinitionAndOccurrenceListQueryBoundary(t *testing.T) {
 	assertRecurringOccurrences(t, occurrences.JSON200.RecurringOccurrences, alpha.JSON201.RecurringDefinitionId, []string{"2024-04-08"})
 }
 
+func TestRecurringDefinitionNextDueDateSortBoundary(t *testing.T) {
+	base := time.Date(2024, 4, 15, 12, 0, 0, 0, time.FixedZone("local", -4*60*60))
+	client := newSharedClient(t, apptest.WithClock(apptest.NewFakeClock(base)))
+	refs := createRecurringDefinitionRefs(t, client, "RecurringNextDueSort")
+
+	history := createRecurringDefinition(t, client, recurringDefinitionRequest("RecurringNextDueSort:CHistory", refs, "-9.00000000", "9.00000000", intervalRule(1, "MONTH"), "2024-03-01"))
+	listRecurringOccurrences(t, client, &httpclient.ListRecurringOccurrencesParams{
+		RecurringDefinitionId: &history.JSON201.RecurringDefinitionId,
+	})
+	historyAfterCatchUp := getRecurringDefinition(t, client, history.JSON201.RecurringDefinitionId)
+	assertDatePtr(t, historyAfterCatchUp.JSON200.NextDueDate, "2024-05-01")
+
+	overdue := createRecurringDefinition(t, client, recurringDefinitionRequest("RecurringNextDueSort:ZOverdue", refs, "-10.00000000", "10.00000000", intervalRule(1, "MONTH"), "2024-04-01"))
+	nearTerm := createRecurringDefinition(t, client, recurringDefinitionRequest("RecurringNextDueSort:YNearTerm", refs, "-11.00000000", "11.00000000", intervalRule(1, "MONTH"), "2024-04-15"))
+	tiedSecond := createRecurringDefinition(t, client, recurringDefinitionRequest("RecurringNextDueSort:BTied", refs, "-12.00000000", "12.00000000", intervalRule(1, "MONTH"), "2024-04-16"))
+	tiedFirst := createRecurringDefinition(t, client, recurringDefinitionRequest("RecurringNextDueSort:ATied", refs, "-13.00000000", "13.00000000", intervalRule(1, "MONTH"), "2024-04-16"))
+	later := createRecurringDefinition(t, client, recurringDefinitionRequest("RecurringNextDueSort:ALater", refs, "-14.00000000", "14.00000000", intervalRule(1, "MONTH"), "2024-04-30"))
+	undated := createRecurringDefinition(t, client, recurringDefinitionRequest("RecurringNextDueSort:AUndated", refs, "-15.00000000", "15.00000000", intervalRule(1, "MONTH"), "2024-04-10"))
+	undatedSecond := createRecurringDefinition(t, client, recurringDefinitionRequest("RecurringNextDueSort:ZUndated", refs, "-16.00000000", "16.00000000", intervalRule(1, "MONTH"), "2024-04-11"))
+	pauseRecurringDefinition(t, client, undated.JSON201.RecurringDefinitionId)
+	pauseRecurringDefinition(t, client, undatedSecond.JSON201.RecurringDefinitionId)
+
+	sort := httpclient.ListRecurringDefinitionsParamsSortNextDueDate
+	sortDir := httpclient.ListRecurringDefinitionsParamsSortDirAsc
+	definitions, err := client.REST().ListRecurringDefinitionsWithResponse(context.Background(), &httpclient.ListRecurringDefinitionsParams{
+		Sort:    &sort,
+		SortDir: &sortDir,
+	})
+	requireNoTransportError(t, "list recurring definitions by next due date", err)
+	if definitions.StatusCode() != http.StatusOK {
+		t.Fatalf("next-due sorted definitions status = %d, want %d; body %s", definitions.StatusCode(), http.StatusOK, definitions.Body)
+	}
+	assertRecurringDefinitionIDs(t, definitions.JSON200.RecurringDefinitions, []int64{
+		overdue.JSON201.RecurringDefinitionId,
+		nearTerm.JSON201.RecurringDefinitionId,
+		tiedFirst.JSON201.RecurringDefinitionId,
+		tiedSecond.JSON201.RecurringDefinitionId,
+		later.JSON201.RecurringDefinitionId,
+		history.JSON201.RecurringDefinitionId,
+		undated.JSON201.RecurringDefinitionId,
+		undatedSecond.JSON201.RecurringDefinitionId,
+	})
+	if definitions.JSON200.TotalCount != 8 {
+		t.Fatalf("next-due sorted definition total_count = %d, want 8", definitions.JSON200.TotalCount)
+	}
+
+	sortDir = httpclient.ListRecurringDefinitionsParamsSortDirDesc
+	descending, err := client.REST().ListRecurringDefinitionsWithResponse(context.Background(), &httpclient.ListRecurringDefinitionsParams{
+		Sort:    &sort,
+		SortDir: &sortDir,
+	})
+	requireNoTransportError(t, "list recurring definitions by next due date descending", err)
+	if descending.StatusCode() != http.StatusOK {
+		t.Fatalf("descending next-due definitions status = %d, want %d; body %s", descending.StatusCode(), http.StatusOK, descending.Body)
+	}
+	assertRecurringDefinitionIDs(t, descending.JSON200.RecurringDefinitions, []int64{
+		history.JSON201.RecurringDefinitionId,
+		later.JSON201.RecurringDefinitionId,
+		tiedFirst.JSON201.RecurringDefinitionId,
+		tiedSecond.JSON201.RecurringDefinitionId,
+		nearTerm.JSON201.RecurringDefinitionId,
+		overdue.JSON201.RecurringDefinitionId,
+		undated.JSON201.RecurringDefinitionId,
+		undatedSecond.JSON201.RecurringDefinitionId,
+	})
+
+	limit := 2
+	offset := 2
+	sortDir = httpclient.ListRecurringDefinitionsParamsSortDirAsc
+	page, err := client.REST().ListRecurringDefinitionsWithResponse(context.Background(), &httpclient.ListRecurringDefinitionsParams{
+		Sort:    &sort,
+		SortDir: &sortDir,
+		Limit:   &limit,
+		Offset:  &offset,
+	})
+	requireNoTransportError(t, "list paginated recurring definitions by next due date", err)
+	if page.StatusCode() != http.StatusOK {
+		t.Fatalf("paginated next-due definitions status = %d, want %d; body %s", page.StatusCode(), http.StatusOK, page.Body)
+	}
+	assertRecurringDefinitionIDs(t, page.JSON200.RecurringDefinitions, []int64{
+		tiedFirst.JSON201.RecurringDefinitionId,
+		tiedSecond.JSON201.RecurringDefinitionId,
+	})
+	if page.JSON200.TotalCount != 8 {
+		t.Fatalf("paginated next-due definition total_count = %d, want 8", page.JSON200.TotalCount)
+	}
+}
+
 func TestRecurringDefinitionValidationAndConflicts(t *testing.T) {
 	client := newSharedClient(t)
 	refs := createRecurringDefinitionRefs(t, client, "RecurringValidation")

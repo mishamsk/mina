@@ -1163,9 +1163,10 @@ func (e SearchJournalRecordsParamsSortDir) Valid() bool {
 
 // Defines values for ListRecurringDefinitionsParamsSort.
 const (
-	ListRecurringDefinitionsParamsSortCreatedAt ListRecurringDefinitionsParamsSort = "created_at"
-	ListRecurringDefinitionsParamsSortFqn       ListRecurringDefinitionsParamsSort = "fqn"
-	ListRecurringDefinitionsParamsSortUpdatedAt ListRecurringDefinitionsParamsSort = "updated_at"
+	ListRecurringDefinitionsParamsSortCreatedAt   ListRecurringDefinitionsParamsSort = "created_at"
+	ListRecurringDefinitionsParamsSortFqn         ListRecurringDefinitionsParamsSort = "fqn"
+	ListRecurringDefinitionsParamsSortNextDueDate ListRecurringDefinitionsParamsSort = "next_due_date"
+	ListRecurringDefinitionsParamsSortUpdatedAt   ListRecurringDefinitionsParamsSort = "updated_at"
 )
 
 // Valid indicates whether the value is a known member of the ListRecurringDefinitionsParamsSort enum.
@@ -1174,6 +1175,8 @@ func (e ListRecurringDefinitionsParamsSort) Valid() bool {
 	case ListRecurringDefinitionsParamsSortCreatedAt:
 		return true
 	case ListRecurringDefinitionsParamsSortFqn:
+		return true
+	case ListRecurringDefinitionsParamsSortNextDueDate:
 		return true
 	case ListRecurringDefinitionsParamsSortUpdatedAt:
 		return true
@@ -3536,7 +3539,7 @@ type SearchJournalRecordsParamsSortDir string
 
 // ListRecurringDefinitionsParams defines parameters for ListRecurringDefinitions.
 type ListRecurringDefinitionsParams struct {
-	// Sort Field used to sort matching results; defaults to `fqn`.
+	// Sort Field used to sort matching results; defaults to `fqn`. `next_due_date` keeps missing dates last and uses ascending FQN and definition ID tie-breakers.
 	Sort *ListRecurringDefinitionsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
 
 	// SortDir Sort direction for matching results; defaults to `asc`.

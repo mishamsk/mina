@@ -181,6 +181,28 @@ const isInteractiveTarget = (
   return interactiveTarget !== null && interactiveTarget !== currentTarget;
 };
 
+const revealActionRow = (opener: HTMLElement) => {
+  const row = opener.closest("tr");
+  row?.scrollIntoView({ block: "nearest" });
+
+  const table = row?.closest("table");
+  const scrollContainer = table?.parentElement;
+  const header = table?.querySelector("thead");
+  if (!row || !scrollContainer || !header) {
+    return;
+  }
+
+  const rowBounds = row.getBoundingClientRect();
+  const containerBounds = scrollContainer.getBoundingClientRect();
+  const headerBounds = header.getBoundingClientRect();
+  const visibleTop = Math.max(containerBounds.top, headerBounds.bottom);
+  if (rowBounds.top < visibleTop) {
+    scrollContainer.scrollTop += rowBounds.top - visibleTop;
+  } else if (rowBounds.bottom > containerBounds.bottom) {
+    scrollContainer.scrollTop += rowBounds.bottom - containerBounds.bottom;
+  }
+};
+
 const RecurringDefinitionsSkeleton = () => (
   <div
     className="bg-card border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]"
@@ -235,6 +257,7 @@ export const RecurringPageContent = ({
   const restoreFocus = useCallback((opener: HTMLElement | undefined) => {
     window.requestAnimationFrame(() => {
       if (opener?.isConnected) {
+        revealActionRow(opener);
         focusWithoutTooltip(opener, { preventScroll: true });
         return;
       }
@@ -453,6 +476,7 @@ export const RecurringPageContent = ({
                         : rowBusy
                           ? "Definition action in progress."
                           : "Another definition action is in progress.",
+                      id: "confirm-next",
                       icon: <Check aria-hidden="true" />,
                       label:
                         rowAction === "confirm" ? "Confirming" : "Confirm next",
@@ -479,6 +503,7 @@ export const RecurringPageContent = ({
                       disabledReason: rowBusy
                         ? "Definition action in progress."
                         : "Another definition action is in progress.",
+                      id: "pause-resume",
                       icon: definition.paused_at ? (
                         <Play aria-hidden="true" />
                       ) : (

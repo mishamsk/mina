@@ -4805,9 +4805,9 @@ export type ListRecurringDefinitionsData = {
     path?: never;
     query?: {
         /**
-         * Field used to sort matching results; defaults to `fqn`.
+         * Field used to sort matching results; defaults to `fqn`. `next_due_date` keeps missing dates last and uses ascending FQN and definition ID tie-breakers.
          */
-        sort?: 'fqn' | 'created_at' | 'updated_at';
+        sort?: 'fqn' | 'next_due_date' | 'created_at' | 'updated_at';
         /**
          * Sort direction for matching results; defaults to `asc`.
          */

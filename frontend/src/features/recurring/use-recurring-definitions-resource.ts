@@ -17,6 +17,7 @@ interface RecurringDefinitionsState {
 }
 
 const definitionsPageSize = 500;
+const definitionsLoadAttemptLimit = 3;
 
 let definitionsLoadGeneration = 0;
 
@@ -26,48 +27,67 @@ const nextDefinitionsLoadGeneration = (): number => {
 };
 
 const fetchAllRecurringDefinitions = async () => {
-  const firstPage = await listRecurringDefinitions({
-    query: {
-      limit: definitionsPageSize,
-      offset: 0,
-      sort: "fqn",
-      sort_dir: "asc",
-    },
-  });
-  if (
-    !firstPage.data ||
-    firstPage.data.recurring_definitions.length >= firstPage.data.total_count
-  ) {
-    return firstPage;
-  }
-
-  const definitions = [...firstPage.data.recurring_definitions];
-  for (
-    let offset = definitionsPageSize;
-    offset < firstPage.data.total_count;
-    offset += definitionsPageSize
-  ) {
-    const page = await listRecurringDefinitions({
+  for (let attempt = 0; attempt < definitionsLoadAttemptLimit; attempt += 1) {
+    const firstPage = await listRecurringDefinitions({
       query: {
         limit: definitionsPageSize,
-        offset,
-        sort: "fqn",
+        offset: 0,
+        sort: "next_due_date",
         sort_dir: "asc",
       },
     });
-    if (!page.data) {
-      return page;
+    if (
+      !firstPage.data ||
+      firstPage.data.recurring_definitions.length >= firstPage.data.total_count
+    ) {
+      return firstPage;
     }
-    definitions.push(...page.data.recurring_definitions);
+
+    const totalCount = firstPage.data.total_count;
+    const definitions = [...firstPage.data.recurring_definitions];
+    let consistentTotal = true;
+    for (
+      let offset = definitionsPageSize;
+      offset < totalCount;
+      offset += definitionsPageSize
+    ) {
+      const page = await listRecurringDefinitions({
+        query: {
+          limit: definitionsPageSize,
+          offset,
+          sort: "next_due_date",
+          sort_dir: "asc",
+        },
+      });
+      if (!page.data) {
+        return page;
+      }
+      if (page.data.total_count !== totalCount) {
+        consistentTotal = false;
+        break;
+      }
+      definitions.push(...page.data.recurring_definitions);
+    }
+
+    const uniqueDefinitionCount = new Set(
+      definitions.map((definition) => definition.recurring_definition_id),
+    ).size;
+    if (
+      consistentTotal &&
+      definitions.length === totalCount &&
+      uniqueDefinitionCount === totalCount
+    ) {
+      return {
+        ...firstPage,
+        data: {
+          ...firstPage.data,
+          recurring_definitions: definitions,
+        },
+      };
+    }
   }
 
-  return {
-    ...firstPage,
-    data: {
-      ...firstPage.data,
-      recurring_definitions: definitions,
-    },
-  };
+  throw new Error("Recurring definitions changed while loading.");
 };
 
 const loadRecurringDefinitions = async (

@@ -18,6 +18,8 @@ const (
 	SortKeyInitiatedDate SortKey = "initiated_date"
 	// SortKeyName sorts by display name.
 	SortKeyName SortKey = "name"
+	// SortKeyNextDueDate sorts by a recurring definition's computed next due date.
+	SortKeyNextDueDate SortKey = "next_due_date"
 	// SortKeyScheduledDate sorts by recurring occurrence scheduled date.
 	SortKeyScheduledDate SortKey = "scheduled_date"
 	// SortKeyToCurrency sorts by target currency.

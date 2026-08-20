@@ -2884,20 +2884,20 @@ func Operations() []Operation {
 			Method:      "GET",
 			Path:        "/api/recurring-definitions",
 			Summary:     "List recurring definitions.",
-			Description: "Use to discover scheduled complete transaction definitions or resolve definition IDs. Supply limit (1-500) and offset; defaults sort by FQN ascending. Use transaction_templates_list for unscheduled partial defaults.",
+			Description: "Use to discover scheduled complete transaction definitions or resolve definition IDs. Supply limit (1-500) and offset; sort by next_due_date ascending for the nearest active schedules, with definitions that have no next date last. Defaults sort by FQN ascending. Use transaction_templates_list for unscheduled partial defaults.",
 			MCP: MCPOperation{
 				Group: "recurring", Name: "list_definitions",
 				ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false,
-				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"limit\":{\"description\":\"Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.\",\"maximum\":500,\"minimum\":1,\"type\":\"integer\"},\"offset\":{\"description\":\"Zero-based number of matching results to skip.\",\"minimum\":0,\"type\":\"integer\"},\"sort\":{\"default\":\"fqn\",\"description\":\"Field used to sort matching results; defaults to `fqn`.\",\"enum\":[\"fqn\",\"created_at\",\"updated_at\"],\"type\":\"string\"},\"sort_dir\":{\"default\":\"asc\",\"description\":\"Sort direction for matching results; defaults to `asc`.\",\"enum\":[\"asc\",\"desc\"],\"type\":\"string\"}},\"type\":\"object\"}"),
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"limit\":{\"description\":\"Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.\",\"maximum\":500,\"minimum\":1,\"type\":\"integer\"},\"offset\":{\"description\":\"Zero-based number of matching results to skip.\",\"minimum\":0,\"type\":\"integer\"},\"sort\":{\"default\":\"fqn\",\"description\":\"Field used to sort matching results; defaults to `fqn`. `next_due_date` keeps missing dates last and uses ascending FQN and definition ID tie-breakers.\",\"enum\":[\"fqn\",\"next_due_date\",\"created_at\",\"updated_at\"],\"type\":\"string\"},\"sort_dir\":{\"default\":\"asc\",\"description\":\"Sort direction for matching results; defaults to `asc`.\",\"enum\":[\"asc\",\"desc\"],\"type\":\"string\"}},\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Query: []ParameterDescriptor{
 					{
 						Name:        "sort",
 						Type:        "string",
-						Description: "Field used to sort matching results; defaults to `fqn`.",
+						Description: "Field used to sort matching results; defaults to `fqn`. `next_due_date` keeps missing dates last and uses ascending FQN and definition ID tie-breakers.",
 						Required:    false,
-						Enum:        []string{"fqn", "created_at", "updated_at"},
+						Enum:        []string{"fqn", "next_due_date", "created_at", "updated_at"},
 					},
 					{
 						Name:        "sort_dir",

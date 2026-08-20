@@ -2315,7 +2315,7 @@ paths:
       summary: List recurring definitions.
       parameters:
         - name: sort
-          description: "Field used to sort matching results; defaults to `fqn`."
+          description: "Field used to sort matching results; defaults to `fqn`. `next_due_date` keeps missing dates last and uses ascending FQN and definition ID tie-breakers."
           in: query
           required: false
           schema:
@@ -2323,10 +2323,12 @@ paths:
             default: fqn
             enum:
               - fqn
+              - next_due_date
               - created_at
               - updated_at
             x-enum-varnames:
               - Fqn
+              - NextDueDate
               - CreatedAt
               - UpdatedAt
         - name: sort_dir

@@ -100,12 +100,30 @@ const completeEditor = async (page: Page, fqn: string) => {
 test("recurring definitions table renders seeded definitions and schedule details", async ({
   page,
 }) => {
+  const definitionsRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return (
+      url.pathname === "/api/recurring-definitions" &&
+      request.method() === "GET"
+    );
+  });
   await page.goto("/recurring");
+  const definitionsURL = new URL((await definitionsRequest).url());
+  expect(definitionsURL.searchParams.get("sort")).toBe("next_due_date");
+  expect(definitionsURL.searchParams.get("sort_dir")).toBe("asc");
   await expect(page.getByRole("heading", { name: "Recurring" })).toBeVisible();
   const table = page.getByTestId("recurring-definitions-table");
   await expect(table).toBeVisible();
-  await expect(table.getByTestId("recurring-definition-row")).toHaveCount(4);
-  await expect(table).toContainText("Household:Mortgage");
+  const rows = table.getByTestId("recurring-definition-row");
+  await expect(rows).toHaveCount(4);
+  for (const [index, fqn] of [
+    "Household:Mortgage",
+    "Savings:WeeklyTransfer",
+    "Subscriptions:Netflix",
+    "Debt:CreditCardPayment",
+  ].entries()) {
+    await expect(rows.nth(index)).toContainText(fqn);
+  }
   await expect(table).toContainText("Every 1 month");
   await expect(table).toContainText("Active");
   await expect(table.getByRole("columnheader", { name: "Next" })).toBeVisible();
@@ -159,6 +177,122 @@ test("recurring definition row actions unfold at desktop width and fold when con
       overflowMenu.getByRole("button", { name: label }),
     ).toBeVisible();
   }
+});
+
+test("pausing a reordered definition restores its visible toggle focus", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/recurring");
+  const definition = await definitionByFqn(page, "Household:Mortgage");
+  const row = definitionRow(page, definition);
+  const scrollContainer = page
+    .getByTestId("recurring-definitions-table")
+    .locator("table")
+    .locator("..");
+  const tableHeader = scrollContainer.locator("thead");
+  await scrollContainer.evaluate((element) => {
+    element.style.flex = "none";
+    element.style.height = "120px";
+    element.scrollTop = 0;
+  });
+
+  const pause = row.getByRole("button", { name: "Pause" });
+  await pause.focus();
+  await pause.press("Enter");
+  await expect(page.getByText("Definition paused.")).toBeVisible();
+
+  const resume = row.getByRole("button", { name: "Resume" });
+  await expect(resume).toBeFocused();
+  await expect
+    .poll(async () => {
+      const [rowBounds, containerBounds, headerBounds] = await Promise.all([
+        row.boundingBox(),
+        scrollContainer.boundingBox(),
+        tableHeader.boundingBox(),
+      ]);
+      return Boolean(
+        containerBounds &&
+        headerBounds &&
+        rowBounds &&
+        rowBounds.y >= headerBounds.y + headerBounds.height &&
+        rowBounds.y + rowBounds.height <=
+          containerBounds.y + containerBounds.height,
+      );
+    })
+    .toBe(true);
+
+  await scrollContainer.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await resume.press("Enter");
+  await expect(page.getByText("Definition resumed.")).toBeVisible();
+
+  const pauseAgain = row.getByRole("button", { name: "Pause" });
+  await expect(pauseAgain).toBeFocused();
+  await expect
+    .poll(async () => {
+      const [rowBounds, containerBounds, headerBounds] = await Promise.all([
+        row.boundingBox(),
+        scrollContainer.boundingBox(),
+        tableHeader.boundingBox(),
+      ]);
+      return Boolean(
+        containerBounds &&
+        headerBounds &&
+        rowBounds &&
+        rowBounds.y >= headerBounds.y + headerBounds.height &&
+        rowBounds.y + rowBounds.height <=
+          containerBounds.y + containerBounds.height,
+      );
+    })
+    .toBe(true);
+});
+
+test("saving a reordered definition restores its visible row focus", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/recurring");
+  const definition = await definitionByFqn(page, "Household:Mortgage");
+  const row = definitionRow(page, definition);
+  const scrollContainer = page
+    .getByTestId("recurring-definitions-table")
+    .locator("table")
+    .locator("..");
+  const tableHeader = scrollContainer.locator("thead");
+  await scrollContainer.evaluate((element) => {
+    element.style.flex = "none";
+    element.style.height = "120px";
+    element.scrollTop = 0;
+  });
+
+  await row.click();
+  const editor = page.getByRole("complementary", {
+    name: "Edit recurring definition",
+  });
+  await editor.getByLabel("Anchor date").fill("2099-01-01");
+  await editor.getByRole("button", { name: "Save definition" }).click();
+  await expect(page.getByText("Definition updated.")).toBeVisible();
+
+  await expect(row).toBeFocused();
+  await expect
+    .poll(async () => {
+      const [rowBounds, containerBounds, headerBounds] = await Promise.all([
+        row.boundingBox(),
+        scrollContainer.boundingBox(),
+        tableHeader.boundingBox(),
+      ]);
+      return Boolean(
+        containerBounds &&
+        headerBounds &&
+        rowBounds &&
+        rowBounds.y >= headerBounds.y + headerBounds.height &&
+        rowBounds.y + rowBounds.height <=
+          containerBounds.y + containerBounds.height,
+      );
+    })
+    .toBe(true);
 });
 
 test("recurring definitions create, edit, pause, defer, resume, and cancel", async ({

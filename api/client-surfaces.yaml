@@ -538,7 +538,7 @@ operations:
     mcp:
       state: exposed
       name: list_definitions
-      description: Use to discover scheduled complete transaction definitions or resolve definition IDs. Supply limit (1-500) and offset; defaults sort by FQN ascending. Use transaction_templates_list for unscheduled partial defaults.
+      description: Use to discover scheduled complete transaction definitions or resolve definition IDs. Supply limit (1-500) and offset; sort by next_due_date ascending for the nearest active schedules, with definitions that have no next date last. Defaults sort by FQN ascending. Use transaction_templates_list for unscheduled partial defaults.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   createRecurringDefinition:
     cli: {state: exposed, name: create-definition}
