@@ -172,7 +172,11 @@ export const useTransactionBrowserPage = ({
       cancelDateJump();
     }
   }, [cancelDateJump, dateJumpEnabled]);
-  const { lookups, page: pageResource } = useTransactionsResource(params);
+  const {
+    lookups,
+    page: pageResource,
+    retryPage,
+  } = useTransactionsResource(params);
   const displayedSnapshot = pageResource.displayedSnapshot;
   const displayedPageParams = displayedSnapshot?.params ?? params;
   const transactions = displayedSnapshot?.transactions;
@@ -1028,6 +1032,8 @@ export const useTransactionBrowserPage = ({
     pendingAmountSave,
     postTransaction,
     refreshErrorMessage,
+    retryPageLoad: !lookups.errorMessage ? retryPage : undefined,
+    pageStale: pageResource.stale,
     selectPageTransactions,
     selectTransactionRange,
     selectedTransactionIds,

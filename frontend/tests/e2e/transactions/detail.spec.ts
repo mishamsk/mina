@@ -26,6 +26,7 @@ import {
   listFixtures,
   type Locator,
   openAccountTransactionDetail,
+  openRowActionsMenu,
   openUrlTransactionDetail,
   type Page,
   readStoredTransactionEntryDraft,
@@ -1284,9 +1285,14 @@ test("detail lifecycle and dateless records match across transaction surfaces", 
   await expect(
     cancelledRow.getByRole("button", { name: "Split transaction" }),
   ).toHaveCount(0);
+  const cancelledRowActions = await openRowActionsMenu(page, cancelledRow);
   await expect(
-    cancelledRow.getByRole("button", { name: "Create template" }),
-  ).toHaveCount(1);
+    cancelledRowActions.getByRole("button", { name: "Create template" }),
+  ).toBeVisible();
+  await expect(
+    cancelledRowActions.getByRole("button", { name: "Create recurring" }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
   const mixedIndicators = mixedRow.getByTestId("transaction-status-indicators");
   await expect(mixedIndicators).toHaveAttribute("data-display-status", "mixed");
   await expect(

@@ -79,6 +79,7 @@ export {
 export {
   invalidateAccountRegistersForTransaction,
   invalidateReferencePagesAfterTransactionMutation,
+  invalidateTransactionsForRecurringDefinitionMutation,
   jumpToTransactionDatePage,
   refreshLedgerLookups,
   refreshTransactionPage,

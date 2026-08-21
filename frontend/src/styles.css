@@ -258,6 +258,10 @@
     display: none !important;
   }
 
+  .row-actions .row-actions-overflow--persistent {
+    display: inline-flex !important;
+  }
+
   .row-actions--foldable {
     container: row-actions / inline-size;
   }
@@ -271,7 +275,7 @@
   }
 
   .transactions-table .transactions-date-column {
-    width: 8%;
+    width: 7.75%;
   }
 
   .transactions-table :is(th, td).transactions-date-column {
@@ -304,7 +308,7 @@
   }
 
   .transactions-table .transactions-actions-column {
-    width: 20%;
+    width: 11.25rem;
   }
 
   .transactions-table--edit-mode .transactions-actions-column {
@@ -355,19 +359,19 @@
     .transactions-table .transactions-amount-column {
       width: 23%;
     }
-
-    .transactions-table .transactions-actions-column {
-      width: 20%;
-    }
   }
 
   @container transactions-table (max-width: 940px) {
+    .transactions-table .transactions-actions-column {
+      width: 3.25rem;
+    }
+
     .transactions-table .transactions-date-column {
       width: 9%;
     }
 
     .transactions-table .transactions-description-column {
-      width: 27%;
+      width: calc(37% - 3.25rem);
     }
 
     .transactions-table--edit-mode .transactions-description-column {
@@ -384,10 +388,6 @@
 
     .transactions-table .transactions-amount-column {
       width: 24%;
-    }
-
-    .transactions-table .transactions-actions-column {
-      width: 9%;
     }
   }
 
@@ -429,10 +429,6 @@
 
     .transactions-table .transactions-amount-column {
       width: 37%;
-    }
-
-    .transactions-table .transactions-actions-column {
-      width: 8%;
     }
   }
 
@@ -483,10 +479,6 @@
 
     .transactions-table--edit-mode .transactions-amount-column {
       width: 56%;
-    }
-
-    .transactions-table .transactions-actions-column {
-      width: 10%;
     }
 
     .transactions-table :is(th, td).transactions-description-column,

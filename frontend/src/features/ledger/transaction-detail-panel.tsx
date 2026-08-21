@@ -5,6 +5,7 @@ import {
   Copy,
   MagicEdit,
   Reload,
+  Repeat,
   Scissors,
   Trash,
 } from "pixelarticons/react";
@@ -24,10 +25,15 @@ import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { recurringDefinitionRecordsFromTransaction } from "@/features/recurring";
 import { transactionTemplateRecordsFromTransaction } from "@/features/templates";
 import { useOutsidePointerClose } from "@/hooks/use-outside-pointer-close";
 import { cn } from "@/lib/utils";
-import { type LedgerLookupsSnapshot, openNewTemplateEditor } from "@/store";
+import {
+  type LedgerLookupsSnapshot,
+  openNewRecurringDefinitionEditor,
+  openNewTemplateEditor,
+} from "@/store";
 import { formatInstantTimestamp, localCivilDate } from "@/utils/date";
 
 import { AccountDisplayLabel } from "./account-display-label";
@@ -35,13 +41,10 @@ import { AmountText, UnavailableUsdAmountChip } from "./amount-text";
 import { ClassBadge } from "./class-badge";
 import {
   buildLookupMaps,
-  canSplitTransaction,
   detailDisplayAmounts,
   displayAmountKey,
   displayStatusLabel,
   formatInitiatedDate,
-  isActiveWhollyPendingTransaction,
-  isExpectedRecurringOccurrence,
   lineMemo,
   lineStatus,
   type LookupMaps,
@@ -57,6 +60,7 @@ import {
   settlementDateTimeToISO,
 } from "./settlement-date";
 import { TagChip } from "./tag-chip";
+import { transactionActionApplicability } from "./transaction-action-applicability";
 import { TransactionDeleteDescription } from "./transaction-delete-description";
 import { TransactionPostDialog } from "./transaction-post-dialog";
 
@@ -95,6 +99,7 @@ interface TransactionDetailPanelProps {
 const floatingOverlaySelectors = [
   "[data-slot='confirmation-dialog-content']",
   "[data-page-help-content]",
+  "[data-recurring-definition-editor]",
   "[data-slot='select-content']",
 ] as const;
 
@@ -1136,8 +1141,10 @@ export const TransactionDetailPanel = ({
     }
   };
 
-  const expectedOccurrence =
-    transaction !== undefined && isExpectedRecurringOccurrence(transaction);
+  const actionApplicability = transaction
+    ? transactionActionApplicability(transaction)
+    : undefined;
+  const expectedOccurrence = Boolean(actionApplicability?.confirmOccurrence);
   const expectedOccurrenceActionsAvailable =
     expectedOccurrence &&
     onConfirmOccurrence !== undefined &&
@@ -1195,6 +1202,7 @@ export const TransactionDetailPanel = ({
       role="dialog"
       aria-labelledby="transaction-detail-title"
       className="bg-card fixed top-4 right-4 bottom-4 z-50 flex w-[min(760px,calc(100vw-2rem))] max-w-full flex-col border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]"
+      data-source-transaction-id={transaction?.transaction_id}
       data-testid="transaction-detail-panel"
       tabIndex={-1}
     >
@@ -1317,7 +1325,7 @@ export const TransactionDetailPanel = ({
             ) : null
           ) : (
             <>
-              {transaction.lifecycle_status === "active" && onEdit ? (
+              {actionApplicability?.edit && onEdit ? (
                 <Tooltip
                   disabled={!posting}
                   focusable={posting}
@@ -1336,20 +1344,38 @@ export const TransactionDetailPanel = ({
                   </Button>
                 </Tooltip>
               ) : null}
-              <Button
-                type="button"
-                variant="outline"
-                onClick={(event) => {
-                  openNewTemplateEditor(
-                    event.currentTarget,
-                    transactionTemplateRecordsFromTransaction(transaction),
-                  );
-                }}
-              >
-                <CardText aria-hidden="true" />
-                Create template
-              </Button>
-              {onDuplicate ? (
+              {actionApplicability?.createTemplate ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={(event) => {
+                    openNewTemplateEditor(
+                      event.currentTarget,
+                      transactionTemplateRecordsFromTransaction(transaction),
+                    );
+                  }}
+                >
+                  <CardText aria-hidden="true" />
+                  Create template
+                </Button>
+              ) : null}
+              {actionApplicability?.createRecurring ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  aria-label="Create recurring"
+                  onClick={(event) => {
+                    openNewRecurringDefinitionEditor(
+                      event.currentTarget,
+                      recurringDefinitionRecordsFromTransaction(transaction),
+                    );
+                  }}
+                >
+                  <Repeat aria-hidden="true" />
+                  Create recurring
+                </Button>
+              ) : null}
+              {actionApplicability?.duplicate && onDuplicate ? (
                 <Button
                   type="button"
                   variant="outline"
@@ -1361,7 +1387,7 @@ export const TransactionDetailPanel = ({
                   Duplicate
                 </Button>
               ) : null}
-              {canSplitTransaction(transaction) && onSplit ? (
+              {actionApplicability?.split && onSplit ? (
                 <Tooltip
                   disabled={!posting}
                   focusable={posting}
@@ -1380,7 +1406,7 @@ export const TransactionDetailPanel = ({
                   </Button>
                 </Tooltip>
               ) : null}
-              {isActiveWhollyPendingTransaction(transaction) ? (
+              {actionApplicability?.post ? (
                 <div className="flex shrink-0 flex-nowrap gap-2">
                   <Tooltip
                     disabled={!lifecycleActionsDisabledReason}
@@ -1398,7 +1424,7 @@ export const TransactionDetailPanel = ({
                   </Tooltip>
                 </div>
               ) : null}
-              {transaction.lifecycle_status === "cancelled" ? (
+              {actionApplicability?.restore ? (
                 <Button
                   ref={lifecycleButtonRef}
                   type="button"
@@ -1410,22 +1436,24 @@ export const TransactionDetailPanel = ({
                   Restore
                 </Button>
               ) : null}
-              <Tooltip
-                disabled={!posting}
-                focusable={posting}
-                label="Posting transaction."
-              >
-                <Button
-                  ref={deleteButtonRef}
-                  type="button"
-                  variant="destructive"
-                  disabled={posting}
-                  onClick={openDeleteConfirmation}
+              {actionApplicability?.delete ? (
+                <Tooltip
+                  disabled={!posting}
+                  focusable={posting}
+                  label="Posting transaction."
                 >
-                  <Trash aria-hidden="true" />
-                  Delete
-                </Button>
-              </Tooltip>
+                  <Button
+                    ref={deleteButtonRef}
+                    type="button"
+                    variant="destructive"
+                    disabled={posting}
+                    onClick={openDeleteConfirmation}
+                  >
+                    <Trash aria-hidden="true" />
+                    Delete
+                  </Button>
+                </Tooltip>
+              ) : null}
             </>
           )}
           {lifecycleErrorMessage ? (

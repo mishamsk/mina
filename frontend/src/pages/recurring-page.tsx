@@ -1,5 +1,5 @@
 import { Plus } from "pixelarticons/react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import type { RecurringDefinition } from "@/api";
 import { PageHelp } from "@/components/page-help";
@@ -10,6 +10,7 @@ import {
   DefinitionEditorPanel,
   RecurringPageContent,
   refreshAfterRecurringDefinitionMutation,
+  revealRecurringDefinitionActionRow,
   useRecurringDefinitionsResource,
 } from "@/features/recurring";
 
@@ -28,6 +29,7 @@ export const RecurringPage = () => {
   const recurringDefinitions = useRecurringDefinitionsResource();
   const [notice, setNotice] = useState<Notice | undefined>();
   const [editorTarget, setEditorTarget] = useState<EditorTarget>();
+  const newDefinitionButtonRef = useRef<HTMLButtonElement>(null);
 
   const showNotice = (message: string) => {
     setNotice((current) => ({
@@ -47,6 +49,7 @@ export const RecurringPage = () => {
         eyebrow="Ledger"
         actions={
           <Button
+            ref={newDefinitionButtonRef}
             type="button"
             onClick={(event) =>
               setEditorTarget({
@@ -104,7 +107,20 @@ export const RecurringPage = () => {
             )
           }
           open
-          returnFocusTo={editorTarget.opener}
+          resolveReturnFocusTo={() => {
+            const liveOpener = editorTarget.opener?.isConnected
+              ? editorTarget.opener
+              : editorTarget.definition
+                ? document.querySelector<HTMLElement>(
+                    `[data-recurring-definition-id="${editorTarget.definition.recurring_definition_id}"]`,
+                  )
+                : undefined;
+            const target = liveOpener ?? newDefinitionButtonRef.current;
+            if (target) {
+              revealRecurringDefinitionActionRow(target);
+            }
+            return target ?? undefined;
+          }}
         />
       ) : null}
     </section>

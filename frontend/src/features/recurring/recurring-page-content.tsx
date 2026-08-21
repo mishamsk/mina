@@ -31,6 +31,7 @@ import {
   AmountText,
   displayAmountKey,
   FqnPath,
+  invalidateTransactionsForRecurringDefinitionMutation,
   MixedAmounts,
 } from "@/features/ledger";
 import { refreshOverview } from "@/features/overview";
@@ -40,7 +41,6 @@ import {
   invalidateAllAccountRegisterPages,
   invalidateAllAccountTransactionCache,
   invalidateGroupRegisterPages,
-  invalidateTransactionPages,
 } from "@/store";
 import { formatLocalCivilDate } from "@/utils/date";
 
@@ -150,8 +150,8 @@ const ordinalSuffix = (day: number): string => {
   }
 };
 
-const invalidateRecurringDefinitionMutationCaches = () => {
-  invalidateTransactionPages();
+export const invalidateRecurringDefinitionMutationCaches = () => {
+  invalidateTransactionsForRecurringDefinitionMutation();
   invalidateAllAccountRegisterPages();
   invalidateAllAccountTransactionCache();
   invalidateGroupRegisterPages();
@@ -181,7 +181,7 @@ const isInteractiveTarget = (
   return interactiveTarget !== null && interactiveTarget !== currentTarget;
 };
 
-const revealActionRow = (opener: HTMLElement) => {
+export const revealRecurringDefinitionActionRow = (opener: HTMLElement) => {
   const row = opener.closest("tr");
   row?.scrollIntoView({ block: "nearest" });
 
@@ -256,8 +256,17 @@ export const RecurringPageContent = ({
   const definitions = snapshot?.definitions ?? [];
   const restoreFocus = useCallback((opener: HTMLElement | undefined) => {
     window.requestAnimationFrame(() => {
+      const activeElement = document.activeElement;
+      if (
+        activeElement instanceof HTMLElement &&
+        activeElement !== document.body &&
+        activeElement !== document.documentElement &&
+        !opener?.contains(activeElement)
+      ) {
+        return;
+      }
       if (opener?.isConnected) {
-        revealActionRow(opener);
+        revealRecurringDefinitionActionRow(opener);
         focusWithoutTooltip(opener, { preventScroll: true });
         return;
       }

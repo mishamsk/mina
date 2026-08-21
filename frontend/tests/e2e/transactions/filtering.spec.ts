@@ -341,7 +341,7 @@ test("debounced search preserves unsaved split editor input", async ({
     page.getByRole("searchbox", { name: "Search" }),
     unique,
   );
-  await row.getByRole("button", { name: "Split transaction" }).click();
+  await clickRowAction(page, row, "Split transaction");
   await expectTransactionsPageUrl(page, 1, 50, {
     entry: `split:${transaction.transaction_id}`,
   });

@@ -6,6 +6,7 @@ import {
   Pencil,
   Plus,
   Reload,
+  Repeat,
   Scissors,
   Trash,
   WarningDiamond,
@@ -36,11 +37,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { recurringDefinitionRecordsFromTransaction } from "@/features/recurring";
 import { transactionTemplateRecordsFromTransaction } from "@/features/templates";
 import { useElementOverflow } from "@/hooks/use-element-overflow";
 import { cn } from "@/lib/utils";
 import type { LedgerLookupsSnapshot } from "@/store";
 import {
+  openNewRecurringDefinitionEditor,
   openNewTemplateEditor,
   setTransactionAmountDraftInvalid,
   setTransactionAmountSavePending,
@@ -55,12 +58,9 @@ import {
 } from "./edit-mode-prediction";
 import {
   buildLookupMaps,
-  canSplitTransaction,
   displayAmountKey,
   formatInitiatedDate,
   formatInitiatedDateParts,
-  isActiveWhollyPendingTransaction,
-  isExpectedRecurringOccurrence,
   lineCategory,
   lineDisplayAmounts,
   lineMember,
@@ -80,6 +80,7 @@ import {
   settlementDateTimeToISO,
 } from "./settlement-date";
 import { TagChip, tagChipMicroHeightClass } from "./tag-chip";
+import { transactionActionApplicability } from "./transaction-action-applicability";
 import { TransactionAmountInput } from "./transaction-amount-input";
 import type { AmountSavePageRefresh } from "./transaction-amount-update";
 import { TransactionDeleteDescription } from "./transaction-delete-description";
@@ -180,6 +181,7 @@ interface TransactionBrowserProps {
       | { readonly kind: "settlement"; readonly value: "pending" | "posted" },
   ) => Promise<void>;
   readonly page: number;
+  readonly pageStale?: boolean;
   readonly pageSize: number;
   readonly refreshErrorMessage: string | undefined;
   readonly selectedTransactionIds: ReadonlySet<number>;
@@ -531,6 +533,7 @@ export const TransactionBrowser = ({
   onUpdateTransactionsEditReferences,
   onUpdateTransactionsEditRecordState,
   page,
+  pageStale = false,
   pageSize,
   refreshErrorMessage,
   selectedTransactionIds,
@@ -967,30 +970,44 @@ export const TransactionBrowser = ({
   const restorePostFocus = useCallback(
     (transaction: Transaction, rowIndex: number, opener: HTMLElement) => {
       window.requestAnimationFrame(() => {
-        const activeElement = document.activeElement;
-        if (
-          activeElement instanceof HTMLElement &&
-          activeElement !== opener &&
-          activeElement !== document.body &&
-          activeElement.matches(
-            "a, button, input, select, textarea, [contenteditable='true'], " +
-              "[tabindex]:not([tabindex='-1'])",
-          )
-        ) {
-          return;
-        }
-        if (opener.isConnected && opener.getClientRects().length > 0) {
-          focusWithoutTooltip(opener, { preventScroll: true });
-          return;
-        }
-        const row = rootRef.current?.querySelector<HTMLElement>(
-          `[data-transaction-id="${transaction.transaction_id}"]`,
-        );
-        if (row) {
-          row.focus({ preventScroll: true });
-        } else {
-          focusTransactionRowFallback(rootRef.current, rowIndex);
-        }
+        window.requestAnimationFrame(() => {
+          const activeElement = document.activeElement;
+          const activeElementIsClosingDialog =
+            activeElement instanceof HTMLElement &&
+            activeElement.closest(
+              "[data-slot='confirmation-dialog-content']",
+            ) !== null;
+          if (
+            activeElement instanceof HTMLElement &&
+            activeElement !== opener &&
+            activeElement !== document.body &&
+            !activeElementIsClosingDialog &&
+            activeElement.matches(
+              "a, button, input, select, textarea, [contenteditable='true'], " +
+                "[tabindex]:not([tabindex='-1'])",
+            )
+          ) {
+            return;
+          }
+          const row = rootRef.current?.querySelector<HTMLElement>(
+            `[data-transaction-id="${transaction.transaction_id}"]`,
+          );
+          const liveOpener = opener.classList.contains("row-actions-overflow")
+            ? row?.querySelector<HTMLElement>(".row-actions-overflow")
+            : opener;
+          if (
+            liveOpener?.isConnected &&
+            liveOpener.getClientRects().length > 0
+          ) {
+            focusWithoutTooltip(liveOpener, { preventScroll: true });
+            return;
+          }
+          if (row) {
+            row.focus({ preventScroll: true });
+          } else {
+            focusTransactionRowFallback(rootRef.current, rowIndex);
+          }
+        });
       });
     },
     [],
@@ -1193,6 +1210,7 @@ export const TransactionBrowser = ({
           <TransactionErrorCard
             heading="Transactions could not be loaded."
             message={errorMessage}
+            onRetry={onRetryRefresh}
             summary="API error"
           />
         </div>
@@ -1250,6 +1268,9 @@ export const TransactionBrowser = ({
       className={cn("flex min-h-0 flex-col gap-3", !preview && "h-full")}
       aria-busy={loading ? "true" : undefined}
       data-transaction-browser="true"
+      data-transaction-refresh-pending={
+        pageStale && !refreshErrorMessage ? "true" : undefined
+      }
     >
       <div
         className={cn(
@@ -1366,10 +1387,11 @@ export const TransactionBrowser = ({
                   const overdueExpected =
                     displayStatus === "expected" &&
                     transaction.initiated_date < today;
+                  const actionApplicability =
+                    transactionActionApplicability(transaction);
                   const expectedOccurrence =
-                    isExpectedRecurringOccurrence(transaction);
-                  const whollyPending =
-                    isActiveWhollyPendingTransaction(transaction);
+                    actionApplicability.confirmOccurrence;
+                  const whollyPending = actionApplicability.post;
                   const lifecycleBusyAction = lifecycleActionsBusy.get(
                     transaction.transaction_id,
                   );
@@ -1899,8 +1921,8 @@ export const TransactionBrowser = ({
                                     },
                                   ]
                                 : [
-                                    ...(transaction.lifecycle_status ===
-                                      "active" && onEditTransaction
+                                    ...(actionApplicability.edit &&
+                                    onEditTransaction
                                       ? [
                                           {
                                             disabled:
@@ -1920,7 +1942,8 @@ export const TransactionBrowser = ({
                                           },
                                         ]
                                       : []),
-                                    ...(onDuplicateTransaction
+                                    ...(actionApplicability.duplicate &&
+                                    onDuplicateTransaction
                                       ? [
                                           {
                                             icon: <Copy aria-hidden="true" />,
@@ -1934,22 +1957,49 @@ export const TransactionBrowser = ({
                                           },
                                         ]
                                       : []),
-                                    {
-                                      icon: <CardText aria-hidden="true" />,
-                                      label: "Create template",
-                                      onSelect: (opener) => {
-                                        openNewTemplateEditor(
-                                          opener,
-                                          transactionTemplateRecordsFromTransaction(
-                                            transaction,
-                                          ),
-                                        );
-                                      },
-                                    },
-                                    ...(canSplitTransaction(transaction) &&
+                                    ...(actionApplicability.createTemplate
+                                      ? [
+                                          {
+                                            alwaysOverflow: true,
+                                            icon: (
+                                              <CardText aria-hidden="true" />
+                                            ),
+                                            label: "Create template",
+                                            onSelect: (opener: HTMLElement) => {
+                                              openNewTemplateEditor(
+                                                opener,
+                                                transactionTemplateRecordsFromTransaction(
+                                                  transaction,
+                                                ),
+                                              );
+                                            },
+                                          },
+                                        ]
+                                      : []),
+                                    ...(actionApplicability.createRecurring
+                                      ? [
+                                          {
+                                            alwaysOverflow: true,
+                                            icon: <Repeat aria-hidden="true" />,
+                                            label: "Create recurring",
+                                            onSelect: (opener: HTMLElement) => {
+                                              window.setTimeout(() => {
+                                                openNewRecurringDefinitionEditor(
+                                                  opener,
+                                                  recurringDefinitionRecordsFromTransaction(
+                                                    transaction,
+                                                  ),
+                                                );
+                                              }, 0);
+                                            },
+                                          },
+                                        ]
+                                      : []),
+                                    ...(actionApplicability.split &&
                                     onSplitTransaction
                                       ? [
                                           {
+                                            alwaysOverflow: true,
                                             disabled:
                                               lifecycleBusyAction === "post",
                                             disabledReason:
@@ -2039,8 +2089,7 @@ export const TransactionBrowser = ({
                                           },
                                         ]
                                       : []),
-                                    ...(transaction.lifecycle_status ===
-                                    "cancelled"
+                                    ...(actionApplicability.restore
                                       ? [
                                           {
                                             disabled:
@@ -2061,23 +2110,29 @@ export const TransactionBrowser = ({
                                           },
                                         ]
                                       : []),
-                                    {
-                                      disabled: lifecycleBusyAction === "post",
-                                      disabledReason:
-                                        lifecycleBusyAction === "post"
-                                          ? "Posting transaction."
-                                          : undefined,
-                                      icon: <Trash aria-hidden="true" />,
-                                      label: "Delete transaction",
-                                      onSelect: (opener) => {
-                                        setDeleteErrorMessage(undefined);
-                                        setDeleteDialog({
-                                          opener,
-                                          rowIndex: transactionIndex,
-                                          transaction,
-                                        });
-                                      },
-                                    },
+                                    ...(actionApplicability.delete
+                                      ? [
+                                          {
+                                            alwaysOverflow: true,
+                                            disabled:
+                                              lifecycleBusyAction === "post",
+                                            disabledReason:
+                                              lifecycleBusyAction === "post"
+                                                ? "Posting transaction."
+                                                : undefined,
+                                            icon: <Trash aria-hidden="true" />,
+                                            label: "Delete transaction",
+                                            onSelect: (opener: HTMLElement) => {
+                                              setDeleteErrorMessage(undefined);
+                                              setDeleteDialog({
+                                                opener,
+                                                rowIndex: transactionIndex,
+                                                transaction,
+                                              });
+                                            },
+                                          },
+                                        ]
+                                      : []),
                                   ]
                             }
                           />

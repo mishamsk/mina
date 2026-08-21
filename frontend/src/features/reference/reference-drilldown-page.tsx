@@ -397,6 +397,7 @@ export const ReferenceDrilldownPage = ({
             browser.updateTransactionsEditRecordState
           }
           page={browser.page}
+          pageStale={browser.pageStale}
           pageSize={browser.pageSize}
           refreshErrorMessage={browser.refreshErrorMessage}
           selectedTransactionIds={browser.selectedTransactionIds}

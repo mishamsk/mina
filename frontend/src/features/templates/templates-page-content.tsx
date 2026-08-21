@@ -3,6 +3,7 @@ import {
   Pencil,
   Play,
   Plus,
+  Repeat,
   Trash,
 } from "pixelarticons/react";
 import { useRef, useState } from "react";
@@ -15,8 +16,10 @@ import type { RowAction } from "@/components/row-actions";
 import { focusWithoutTooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import { captureTransactionEntryLaunchContext } from "@/features/ledger";
+import { recurringDefinitionRecordsFromTemplate } from "@/features/recurring";
 import { ReferenceTree, type ReferenceTreeRow } from "@/features/reference";
 import {
+  openNewRecurringDefinitionEditor,
   openTransactionEntryTemplate,
   removeTransactionTemplate,
 } from "@/store";
@@ -190,6 +193,16 @@ export const TemplatesPageContent = ({
           onEditTemplate(row.leaf!, opener);
         },
       },
+      {
+        icon: <Repeat aria-hidden="true" />,
+        label: "Create recurring",
+        onSelect: (opener) => {
+          openNewRecurringDefinitionEditor(
+            opener.closest<HTMLElement>("tr") ?? opener,
+            recurringDefinitionRecordsFromTemplate(row.leaf!),
+          );
+        },
+      },
       moveAction,
       {
         icon: <Trash aria-hidden="true" />,
@@ -253,7 +266,7 @@ export const TemplatesPageContent = ({
       ) : null}
       <div className="min-h-0 flex-1">
         <ReferenceTree
-          actionsColumnWidthClassName="sm:[--reference-tree-actions-width:13.25rem]"
+          actionsColumnWidthClassName="sm:[--reference-tree-actions-width:15.25rem]"
           badgeHeader="Defaults"
           emptyDescription="Reusable transaction shapes will appear here once templates exist."
           emptyFilteredDescription="No templates match the current full-path search."

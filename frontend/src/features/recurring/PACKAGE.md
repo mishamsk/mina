@@ -7,12 +7,15 @@
 ## Implicit Contracts
 
 - Load every definition page using backend next-due-date ordering; retry page sets affected by concurrent reordering, and never let stale or unmounted loads replace the current snapshot.
-- Every definition mutation refreshes definitions and invalidates transaction/register views; confirm-next also refreshes account headers, featured balances, and Overview because it posts a transaction.
+- Every definition mutation refreshes the `/recurring` route's sole mounted definition snapshot when present and invalidates transaction/register views with a fresh occurrence catch-up; confirm-next also refreshes account headers, featured balances, and Overview because it posts a transaction.
 - Confirm and defer stay unavailable while a definition is paused; defer is available only for interval schedules.
-- The editor writes a complete balanced record set and exposes categories only for `flow` records. If its follow-up pause/resume request fails after the write, keep the editor open and report the partial result.
-- Definition actions and editor closure restore focus to their opener, with reordered action rows revealed below the sticky table header and the feature restore target as fallback; the editor lets an open confirmation dialog handle Escape first.
+- The editor writes a complete balanced record set and exposes categories only for `flow` records; a template-seeded category on a non-flow record remains visible with its full path available as a tooltip only as a clearable invalid default. If its follow-up pause/resume request fails after the write, keep the editor open and report the partial result.
+- New-definition drafts may be seeded from complete transaction records or partial template defaults; missing template values remain blank and ordinary inline completeness and balance validation blocks save.
+- Seeded active hidden references remain labeled and removable but stay unavailable as fresh picker choices.
+- Definition records normalize fiat codes and the `C::` prefix to uppercase while preserving the case-sensitive crypto token suffix.
+- Definition actions and editor closure resolve and restore their live focus target after closing without overriding newer user focus; reordered action rows are revealed below the sticky table header, the feature restore target remains the fallback, and the editor is an outside-close safe overlay for its source detail panel that lets an open confirmation dialog handle Escape first.
 
 ## Boundaries
 
-- Owns definition table/editor behavior, action state, and refresh coordination.
+- Owns definition table/editor behavior, source-record draft mapping, action state, and refresh coordination.
 - Does not own recurring-occurrence review or actions, which belong to Transactions; REST endpoint generation, schedule semantics, accounting validation, and lookup persistence belong elsewhere.

@@ -108,6 +108,13 @@ export {
   usePreferencesView,
 } from "./preferences";
 export {
+  closeRecurringDefinitionEditor,
+  openNewRecurringDefinitionEditor,
+  type RecurringDefinitionEditorLaunch,
+  useRecurringDefinitionEditorStore,
+  useRecurringDefinitionEditorView,
+} from "./recurring-definition-editor";
+export {
   clearTagsPageLoading,
   getTagsSnapshot,
   invalidateTagsPage,
@@ -189,6 +196,7 @@ export {
   getTransactionsSnapshot,
   invalidateCategoryPickerCategories,
   invalidateTransactionPages,
+  invalidateTransactionPagesPreservingSnapshots,
   markOtherTransactionPagesStale,
   markTransactionPageStale,
   normalizedCategoryPickerIntents,

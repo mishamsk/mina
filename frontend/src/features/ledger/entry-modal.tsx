@@ -50,6 +50,7 @@ interface EntryModalProps {
   readonly open: boolean;
   readonly recentTransactions?: readonly Transaction[];
   readonly requestCloseRef?: MutableRefObject<(() => void) | null>;
+  readonly returnFocusTo?: HTMLElement;
 }
 
 const listRestoreSelector = "[data-transaction-detail-restore-target]";
@@ -146,6 +147,7 @@ export const EntryModal = ({
   open,
   recentTransactions,
   requestCloseRef,
+  returnFocusTo,
 }: EntryModalProps) => {
   const [attentionFlash, setAttentionFlash] = useState(false);
   const [clearDraftError, setClearDraftError] = useState<string>();
@@ -409,6 +411,7 @@ export const EntryModal = ({
                 ? pointerLaunchTargetRef.current
                 : null;
             restoreFocusTargetRef.current =
+              (returnFocusTo?.isConnected ? returnFocusTo : null) ??
               recentPointerTarget ??
               (activeElement instanceof HTMLElement &&
               activeElement !== document.body &&

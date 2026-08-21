@@ -98,9 +98,9 @@ export const TransactionsPage = () => {
   };
 
   const splitTransaction = useCallback(
-    (transaction: Transaction) => {
+    (transaction: Transaction, opener?: HTMLElement) => {
       openTransactionEntryLaunch(
-        { transaction, type: "split" },
+        { opener, transaction, type: "split" },
         captureTransactionEntryLaunchContext(),
       );
       browser.dismissNotice();
@@ -309,6 +309,7 @@ export const TransactionsPage = () => {
                 Math.max(defaultTransactionPage, browser.page - 1),
               );
             }}
+            onRetryRefresh={browser.retryPageLoad}
             onPostTransaction={browser.postTransaction}
             onRecoverTransactionAmountConflict={
               recoverTransactionAmountConflict
@@ -326,6 +327,7 @@ export const TransactionsPage = () => {
               browser.updateTransactionsEditRecordState
             }
             page={browser.page}
+            pageStale={browser.pageStale}
             pageSize={browser.pageSize}
             refreshErrorMessage={browser.refreshErrorMessage}
             selectedTransactionIds={browser.selectedTransactionIds}

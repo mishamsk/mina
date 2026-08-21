@@ -11,7 +11,7 @@ import {
   replaceRecurringDefinition,
   resumeRecurringDefinition,
 } from "@/api";
-import { focusWithoutTooltip } from "@/components/tooltip";
+import { focusWithoutTooltip, Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import {
   EntityMultiPicker,
@@ -49,11 +49,12 @@ interface DefinitionDraft {
 
 interface DefinitionEditorPanelProps {
   readonly definition: RecurringDefinition | undefined;
+  readonly initialRecords?: readonly RecurringDefinitionRecordRequest[];
   readonly onClose: () => void;
   readonly onNotice: (message: string, tone?: "error" | "success") => void;
-  readonly onSaved: () => Promise<boolean>;
+  readonly onSaved: () => unknown;
   readonly open: boolean;
-  readonly returnFocusTo: HTMLElement | undefined;
+  readonly resolveReturnFocusTo: () => HTMLElement | undefined;
 }
 
 let nextDraftRecordId = 0;
@@ -79,6 +80,7 @@ const intervalUnit = (value: unknown): IntervalUnit =>
 
 const definitionDraft = (
   definition: RecurringDefinition | undefined,
+  initialRecords: readonly RecurringDefinitionRecordRequest[] = [],
 ): DefinitionDraft => {
   const kind = definition ? scheduleValue(definition, "kind") : "interval";
   const day = definition ? scheduleValue(definition, "day") : undefined;
@@ -91,16 +93,29 @@ const definitionDraft = (
     every: typeof every === "number" ? every : 1,
     fqn: definition?.fqn ?? "",
     paused: Boolean(definition?.paused_at),
-    records: definition?.records.map((record) => ({
-      accountId: record.account_id,
-      amount: record.amount,
-      categoryId: record.category_id ?? undefined,
-      currency: record.currency,
-      id: nextDraftRecordId++,
-      memberId: record.member_id ?? undefined,
-      memo: record.memo ?? "",
-      tagIds: record.tag_ids,
-    })) ?? [newRecord(), newRecord()],
+    records:
+      definition?.records.map((record) => ({
+        accountId: record.account_id,
+        amount: record.amount,
+        categoryId: record.category_id ?? undefined,
+        currency: record.currency,
+        id: nextDraftRecordId++,
+        memberId: record.member_id ?? undefined,
+        memo: record.memo ?? "",
+        tagIds: record.tag_ids,
+      })) ??
+      (initialRecords.length > 0
+        ? initialRecords.map((record) => ({
+            accountId: record.account_id ?? undefined,
+            amount: record.amount ?? "",
+            categoryId: record.category_id ?? undefined,
+            currency: record.currency ?? "",
+            id: nextDraftRecordId++,
+            memberId: record.member_id ?? undefined,
+            memo: record.memo ?? "",
+            tagIds: record.tag_ids ?? [],
+          }))
+        : [newRecord(), newRecord()]),
     scheduleKind,
     unit: intervalUnit(
       definition ? scheduleValue(definition, "unit") : undefined,
@@ -131,46 +146,156 @@ const normalizedAmount = (value: string): string | undefined => {
   return `${negative ? "-" : ""}${whole}.${fraction}`;
 };
 
+const normalizedCurrency = (value: string): string => {
+  const trimmed = value.trim();
+  return trimmed.slice(0, 3).toUpperCase() === "C::"
+    ? `C::${trimmed.slice(3)}`
+    : trimmed.toUpperCase();
+};
+
+const normalizedCurrencyInput = (value: string): string =>
+  value.slice(0, 3).toUpperCase() === "C::"
+    ? `C::${value.slice(3)}`
+    : value.toUpperCase();
+
 const recordErrorKey = (row: number, field: string) =>
   `records.${row}.${field}`;
 
 const option = (
-  entity: { readonly fqn?: string; readonly name?: string },
+  entity: {
+    readonly fqn?: string;
+    readonly is_hidden?: boolean;
+    readonly name?: string;
+  },
   id: number,
 ): EntityOption => ({
+  hidden: entity.is_hidden,
   id,
   label: entity.name ?? entity.fqn ?? "Unknown",
   searchLabel: entity.fqn ?? entity.name ?? "Unknown",
 });
+
+const retainSelectedOptions = (
+  available: readonly EntityOption[],
+  allById: ReadonlyMap<number, EntityOption>,
+  selectedIds: readonly number[],
+): readonly EntityOption[] => {
+  const includedIds = new Set(available.map((item) => item.id));
+  const retained: EntityOption[] = [];
+  for (const id of selectedIds) {
+    const selected = allById.get(id);
+    if (selected && !includedIds.has(id)) {
+      retained.push(selected);
+      includedIds.add(id);
+    }
+  }
+  return retained.length > 0 ? [...available, ...retained] : available;
+};
 
 const FieldError = ({ message }: { readonly message: string | undefined }) =>
   message ? <p className="text-destructive mt-1 text-xs">{message}</p> : null;
 
 export const DefinitionEditorPanel = ({
   definition,
+  initialRecords = [],
   onClose,
   onNotice,
   onSaved,
   open,
-  returnFocusTo,
+  resolveReturnFocusTo,
 }: DefinitionEditorPanelProps) => {
   const lookups = useLedgerLookupsResource();
   const panelRef = useRef<HTMLElement | null>(null);
   const [draft, setDraft] = useState<DefinitionDraft>(() =>
-    definitionDraft(definition),
+    definitionDraft(definition, initialRecords),
   );
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [generalError, setGeneralError] = useState<string>();
   const [saving, setSaving] = useState(false);
 
-  const closeEditor = useCallback(() => {
-    onClose();
-    window.requestAnimationFrame(() => {
-      if (returnFocusTo?.isConnected) {
-        focusWithoutTooltip(returnFocusTo);
-      }
-    });
-  }, [onClose, returnFocusTo]);
+  const closeEditor = useCallback(
+    (monitorSavedTransaction = false) => {
+      onClose();
+      window.requestAnimationFrame(() => {
+        let restoredTarget: HTMLElement | undefined;
+        function stopMonitoring() {
+          observer.disconnect();
+          window.removeEventListener("focusin", stopAfterFocusMoves, true);
+        }
+        function stopAfterFocusMoves() {
+          if (
+            document.activeElement !== document.body &&
+            document.activeElement !== restoredTarget
+          ) {
+            stopMonitoring();
+          }
+        }
+        const restoreFocus = (): boolean => {
+          if (
+            document.activeElement !== document.body &&
+            document.activeElement !== restoredTarget
+          ) {
+            return false;
+          }
+          if (restoredTarget?.isConnected) {
+            return true;
+          }
+          const target = resolveReturnFocusTo();
+          if (!target?.isConnected) {
+            return true;
+          }
+          restoredTarget = target;
+          focusWithoutTooltip(target, { preventScroll: true });
+          return true;
+        };
+        const initialTarget = resolveReturnFocusTo();
+        if (!initialTarget) {
+          return;
+        }
+        const monitorTransactionTarget = Boolean(
+          initialTarget.closest(
+            "[data-transaction-row='true'], [data-testid='transaction-detail-panel']",
+          ),
+        );
+        if (initialTarget.isConnected && !monitorTransactionTarget) {
+          restoreFocus();
+          return;
+        }
+        const observer = new MutationObserver(() => {
+          const transactionRefreshPending = Boolean(
+            document.querySelector("[data-transaction-refresh-pending='true']"),
+          );
+          if (
+            !restoreFocus() ||
+            (restoredTarget?.isConnected &&
+              document.activeElement === restoredTarget &&
+              (!monitorSavedTransaction || !transactionRefreshPending))
+          ) {
+            stopMonitoring();
+          }
+        });
+        observer.observe(document.body, {
+          attributeFilter: ["data-transaction-refresh-pending"],
+          attributes: true,
+          childList: true,
+          subtree: true,
+        });
+        window.addEventListener("focusin", stopAfterFocusMoves, true);
+        const transactionRefreshPending = Boolean(
+          document.querySelector("[data-transaction-refresh-pending='true']"),
+        );
+        if (
+          !restoreFocus() ||
+          (restoredTarget?.isConnected &&
+            document.activeElement === restoredTarget &&
+            (!monitorSavedTransaction || !transactionRefreshPending))
+        ) {
+          stopMonitoring();
+        }
+      });
+    },
+    [onClose, resolveReturnFocusTo],
+  );
 
   useEffect(() => {
     if (!open) {
@@ -190,7 +315,7 @@ export const DefinitionEditorPanel = ({
         return;
       }
       const openModal = document.querySelector<HTMLElement>(
-        "[role='alertdialog']",
+        "[role='alertdialog'], [role='dialog'][aria-modal='true']",
       );
       if (openModal) {
         return;
@@ -209,30 +334,32 @@ export const DefinitionEditorPanel = ({
   }, [closeEditor, open, saving]);
 
   const options = useMemo(() => {
-    const visible = <
-      T extends {
-        readonly is_hidden: boolean;
-        readonly tombstoned_at?: string | null;
-      },
-    >(
-      values: readonly T[],
-    ) => values.filter((value) => !value.is_hidden && !value.tombstoned_at);
-    return {
-      accounts: visible(lookups.snapshot?.accounts ?? []).map((account) => ({
+    const accounts = (lookups.snapshot?.accounts ?? [])
+      .filter((account) => !account.tombstoned_at)
+      .map((account) => ({
         ...option(account, account.account_id),
         detail: account.currency
           ? `${account.currency} · Single-currency`
           : "Multi-currency",
-      })),
-      categories: visible(lookups.snapshot?.categories ?? []).map((category) =>
-        option(category, category.category_id),
-      ),
-      members: visible(lookups.snapshot?.members ?? []).map((member) =>
-        option(member, member.member_id),
-      ),
-      tags: visible(lookups.snapshot?.tags ?? []).map((tag) =>
-        option(tag, tag.tag_id),
-      ),
+      }));
+    const categories = (lookups.snapshot?.categories ?? [])
+      .filter((category) => !category.tombstoned_at)
+      .map((category) => option(category, category.category_id));
+    const members = (lookups.snapshot?.members ?? [])
+      .filter((member) => !member.tombstoned_at)
+      .map((member) => option(member, member.member_id));
+    const tags = (lookups.snapshot?.tags ?? [])
+      .filter((tag) => !tag.tombstoned_at)
+      .map((tag) => option(tag, tag.tag_id));
+    return {
+      accountById: new Map(accounts.map((item) => [item.id, item])),
+      accounts: accounts.filter((item) => !item.hidden),
+      categories: categories.filter((item) => !item.hidden),
+      categoryById: new Map(categories.map((item) => [item.id, item])),
+      memberById: new Map(members.map((item) => [item.id, item])),
+      members: members.filter((item) => !item.hidden),
+      tagById: new Map(tags.map((item) => [item.id, item])),
+      tags: tags.filter((item) => !item.hidden),
     };
   }, [lookups.snapshot]);
 
@@ -240,7 +367,7 @@ export const DefinitionEditorPanel = ({
     const values = new Map<string, bigint>();
     for (const row of draft.records) {
       const mantissa = signedAmountMantissa(row.amount);
-      const currency = row.currency.trim().toUpperCase();
+      const currency = normalizedCurrency(row.currency);
       if (mantissa !== undefined && /^([A-Z]{3}|C::.+)$/.test(currency)) {
         values.set(currency, (values.get(currency) ?? 0n) + mantissa);
       }
@@ -282,7 +409,7 @@ export const DefinitionEditorPanel = ({
       if (!normalizedAmount(row.amount))
         next[recordErrorKey(index, "amount")] =
           "Enter a signed non-zero amount with up to 8 decimals.";
-      if (!/^([A-Z]{3}|C::.+)$/.test(row.currency.trim().toUpperCase()))
+      if (!/^([A-Z]{3}|C::.+)$/.test(normalizedCurrency(row.currency)))
         next[recordErrorKey(index, "currency")] =
           "Use a 3-letter code or C:: crypto code.";
     });
@@ -320,7 +447,7 @@ export const DefinitionEditorPanel = ({
         account_id: row.accountId!,
         amount: normalizedAmount(row.amount)!,
         category_id: row.categoryId ?? null,
-        currency: row.currency.trim().toUpperCase(),
+        currency: normalizedCurrency(row.currency),
         member_id: row.memberId ?? null,
         memo: row.memo.trim() || null,
         tag_ids: [...row.tagIds],
@@ -390,7 +517,7 @@ export const DefinitionEditorPanel = ({
     await onSaved();
     onNotice(definition ? "Definition updated." : "Definition created.");
     setSaving(false);
-    closeEditor();
+    closeEditor(true);
   };
 
   if (!open) return null;
@@ -398,6 +525,7 @@ export const DefinitionEditorPanel = ({
     <aside
       ref={panelRef}
       className="bg-card fixed top-0 right-0 z-50 flex h-svh w-[min(44rem,calc(100vw-1rem))] flex-col border-l-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]"
+      data-recurring-definition-editor
       aria-label={
         definition ? "Edit recurring definition" : "New recurring definition"
       }
@@ -417,7 +545,7 @@ export const DefinitionEditorPanel = ({
           variant="outline"
           size="icon-sm"
           aria-label="Close definition editor"
-          onClick={closeEditor}
+          onClick={() => closeEditor()}
         >
           <Close aria-hidden="true" />
         </Button>
@@ -574,7 +702,11 @@ export const DefinitionEditorPanel = ({
                       <EntityPicker
                         id={`recurring-record-${row.id}-account`}
                         label="Account"
-                        options={options.accounts}
+                        options={retainSelectedOptions(
+                          options.accounts,
+                          options.accountById,
+                          row.accountId === undefined ? [] : [row.accountId],
+                        )}
                         value={row.accountId}
                         onChange={(accountId) => {
                           const account = lookups.snapshot?.accounts.find(
@@ -612,7 +744,9 @@ export const DefinitionEditorPanel = ({
                         value={row.currency}
                         onChange={(event) =>
                           patchRow(index, {
-                            currency: event.target.value.toUpperCase(),
+                            currency: normalizedCurrencyInput(
+                              event.target.value,
+                            ),
                           })
                         }
                       />
@@ -624,12 +758,48 @@ export const DefinitionEditorPanel = ({
                         <EntityPicker
                           id={`recurring-record-${row.id}-category`}
                           label="Category"
-                          options={options.categories}
+                          options={retainSelectedOptions(
+                            options.categories,
+                            options.categoryById,
+                            row.categoryId === undefined
+                              ? []
+                              : [row.categoryId],
+                          )}
                           value={row.categoryId}
                           onChange={(categoryId) =>
                             patchRow(index, { categoryId })
                           }
                         />
+                      ) : row.categoryId !== undefined ? (
+                        <div className="grid gap-1 font-mono text-xs">
+                          <span>Category</span>
+                          <div className="border-input flex min-h-9 items-center justify-between gap-2 border px-2">
+                            <Tooltip
+                              className="min-w-0"
+                              label={
+                                options.categoryById.get(row.categoryId)
+                                  ?.searchLabel ?? `Category ${row.categoryId}`
+                              }
+                              triggerLabel="Show full category path"
+                            >
+                              <span className="block min-w-0 truncate">
+                                {options.categoryById.get(row.categoryId)
+                                  ?.searchLabel ?? `Category ${row.categoryId}`}
+                              </span>
+                            </Tooltip>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                patchRow(index, { categoryId: undefined })
+                              }
+                            >
+                              <Close aria-hidden="true" />
+                              Clear category
+                            </Button>
+                          </div>
+                        </div>
                       ) : (
                         <span className="inline-flex h-9" aria-hidden />
                       )}
@@ -641,7 +811,11 @@ export const DefinitionEditorPanel = ({
                       <EntityMultiPicker
                         id={`recurring-record-${row.id}-tags`}
                         label="Tags"
-                        options={options.tags}
+                        options={retainSelectedOptions(
+                          options.tags,
+                          options.tagById,
+                          row.tagIds,
+                        )}
                         value={row.tagIds}
                         onChange={(tagIds) => patchRow(index, { tagIds })}
                       />
@@ -650,7 +824,11 @@ export const DefinitionEditorPanel = ({
                       hierarchical={false}
                       id={`recurring-record-${row.id}-member`}
                       label="Member"
-                      options={options.members}
+                      options={retainSelectedOptions(
+                        options.members,
+                        options.memberById,
+                        row.memberId === undefined ? [] : [row.memberId],
+                      )}
                       placeholder="Whole household"
                       value={row.memberId}
                       onChange={(memberId) => patchRow(index, { memberId })}
@@ -710,7 +888,7 @@ export const DefinitionEditorPanel = ({
         </div>
       </div>
       <footer className="flex justify-end gap-2 border-t-2 border-[var(--border-ink)] p-4">
-        <Button type="button" variant="outline" onClick={closeEditor}>
+        <Button type="button" variant="outline" onClick={() => closeEditor()}>
           Cancel
         </Button>
         <Button

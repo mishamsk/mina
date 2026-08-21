@@ -349,7 +349,7 @@ test("transactions contain long amount chips and align the pagination footer", a
     ),
   ).toBeLessThanOrEqual(1);
 
-  for (const width of [1600, 1000, 700, 390]) {
+  for (const width of [1600, 1100, 1000, 700, 390]) {
     await page.setViewportSize({ width, height: 720 });
     const longAmountRow = page.getByRole("row").filter({ hasText: memo });
     await expect(longAmountRow).toBeVisible();
@@ -382,6 +382,35 @@ test("transactions contain long amount chips and align the pagination footer", a
       ),
     ).toBe(false);
   }
+
+  await page.setViewportSize({ width: 1100, height: 720 });
+  const mediumWidthGeometry = await page
+    .getByRole("row")
+    .filter({ hasText: memo })
+    .evaluate((row) => {
+      const table = row.closest("table");
+      const amountCell = row.querySelector<HTMLElement>(
+        ".transactions-amount-column",
+      );
+      const amountNumber = amountCell?.querySelector<HTMLElement>(
+        "[data-testid='amount-chip'] > span:first-child",
+      );
+      const actionsCell = row.querySelector<HTMLElement>(
+        ".transactions-actions-column",
+      );
+      return {
+        actionsWidth: actionsCell?.getBoundingClientRect().width ?? 0,
+        amountCellLeft: amountCell?.getBoundingClientRect().left ?? 0,
+        amountNumberLeft: amountNumber?.getBoundingClientRect().left ?? 0,
+        tableWidth: table?.getBoundingClientRect().width ?? 0,
+      };
+    });
+  expect(mediumWidthGeometry.tableWidth).toBeGreaterThan(760);
+  expect(mediumWidthGeometry.tableWidth).toBeLessThanOrEqual(940);
+  expect(mediumWidthGeometry.actionsWidth).toBeLessThanOrEqual(53);
+  expect(mediumWidthGeometry.amountNumberLeft).toBeGreaterThanOrEqual(
+    mediumWidthGeometry.amountCellLeft,
+  );
 
   await page.setViewportSize({ width: 1000, height: 720 });
   const fullAmountLabel = "-9,999,999,999.12 $";
@@ -842,11 +871,38 @@ test("transactions page help and leaf category chips", async ({
     directRowActions.getByRole("button", { name: "Open transaction detail" }),
   ).toHaveCount(0);
   await expect(
-    directRowActions.getByRole("button", { name: "Delete transaction" }),
+    directRowActions.getByRole("button", { name: "Duplicate transaction" }),
   ).toBeVisible();
   await expect(
     simpleSpendRow.getByRole("button", { name: "More row actions" }),
-  ).toBeHidden();
+  ).toBeVisible();
+  await simpleSpendRow
+    .getByRole("button", { name: "More row actions" })
+    .click();
+  const overflowMenu = page.locator(".row-actions-menu:visible");
+  await expect(
+    overflowMenu.getByRole("button", { name: "Delete transaction" }),
+  ).toBeVisible();
+  await expect(
+    overflowMenu.getByRole("button", { name: "Duplicate transaction" }),
+  ).toHaveCount(0);
+
+  await page.setViewportSize({ width: 700, height: 900 });
+  await expect(
+    overflowMenu.getByRole("button", { name: "Edit transaction" }),
+  ).toBeVisible();
+  await expect(
+    overflowMenu.getByRole("button", { name: "Duplicate transaction" }),
+  ).toBeVisible();
+  await overflowMenu.getByRole("button", { name: "Edit transaction" }).focus();
+
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await expect(
+    overflowMenu.getByRole("button", { name: "Duplicate transaction" }),
+  ).toHaveCount(0);
+  await expect(
+    overflowMenu.getByRole("button", { name: "Create template" }),
+  ).toBeFocused();
 });
 
 test("record role indicators preserve density across accounting shapes", async ({

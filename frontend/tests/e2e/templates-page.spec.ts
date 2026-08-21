@@ -115,7 +115,7 @@ test("templates navigation manages hierarchy and refreshes consumers", async ({
   await expect(gasRow).toContainText("2 records · 0 accounts · 1 amount");
   await expect(electricityRow.locator(".row-actions")).toHaveAttribute(
     "data-row-actions-count",
-    "6",
+    "7",
   );
   await expect(
     electricityRow.locator(".row-actions-buttons > span[aria-hidden='true']"),
@@ -158,6 +158,48 @@ test("templates navigation manages hierarchy and refreshes consumers", async ({
     .click();
   await expect(entryModal).toHaveCount(0);
   await expect(useElectricity).toBeFocused();
+
+  const createRecurring = electricityRow.getByRole("button", {
+    name: "Create recurring",
+  });
+  await createRecurring.click();
+  const recurringEditor = page.getByRole("complementary", {
+    name: "New recurring definition",
+  });
+  await expect(recurringEditor).toBeVisible();
+  const recurringRecords = recurringEditor
+    .getByLabel("Definition records")
+    .locator("section");
+  await expect(recurringRecords).toHaveCount(1);
+  await expect(recurringRecords.getByLabel("Account")).toHaveValue("");
+  await expect(recurringRecords.getByLabel("Amount")).toHaveValue(
+    "42.50000000",
+  );
+  await expect(recurringRecords.getByLabel("Currency")).toHaveValue("USD");
+  await expect(recurringRecords.getByLabel("Memo")).toHaveValue(
+    `Electricity ${unique}`,
+  );
+  await recurringEditor
+    .getByLabel("Definition FQN")
+    .fill(`E2E:${unique}:Recurring`);
+  const saveDefinition = recurringEditor.getByRole("button", {
+    name: "Save definition",
+  });
+  await expect(saveDefinition).toBeEnabled();
+  await saveDefinition.click();
+  await expect(recurringEditor).toContainText(
+    "At least two records are required.",
+  );
+  await expect(recurringEditor).toContainText("Account is required.");
+  await page.setViewportSize({ height: 900, width: 600 });
+  await expect(createRecurring).toBeHidden();
+  await recurringEditor
+    .getByRole("button", { name: "Close definition editor" })
+    .click();
+  await expect(
+    electricityRow.getByRole("button", { name: "More row actions" }),
+  ).toBeFocused();
+  await page.setViewportSize({ height: 720, width: 1280 });
 
   const groupRow = page
     .getByTestId("templates-tree-row")
@@ -212,6 +254,161 @@ test("templates navigation manages hierarchy and refreshes consumers", async ({
   await page.keyboard.press("Escape");
 
   await deleteTemplate(page, gas.transaction_template_id);
+});
+
+test("template recurring focus follows responsive action placement", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const fqn = `E2E:${unique}:Responsive recurring focus`;
+  const template = await createTemplate(page, fqn, [
+    { amount: "1.00", currency: "USD", tag_ids: [] },
+  ]);
+  await page.setViewportSize({ height: 900, width: 600 });
+  await page.goto("/templates");
+  const row = page.getByTestId("templates-tree-row").filter({ hasText: fqn });
+  await row.getByRole("button", { name: "More row actions" }).click();
+  await page
+    .locator(".row-actions-menu:visible")
+    .getByRole("button", { exact: true, name: "Create recurring" })
+    .click();
+  const editor = page.getByRole("complementary", {
+    name: "New recurring definition",
+  });
+  await expect(editor).toBeVisible();
+
+  await page.setViewportSize({ height: 720, width: 1280 });
+  const directAction = row.getByRole("button", { name: "Create recurring" });
+  await expect(directAction).toBeVisible();
+  await editor.getByRole("button", { name: "Close definition editor" }).click();
+
+  await expect(editor).toBeHidden();
+  await expect(directAction).toBeFocused();
+  await deleteTemplate(page, template.transaction_template_id);
+});
+
+test("cold recurring launch reveals seeded references after lookups load", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const accountFqn = `e2e:${unique}:Cold recurring account`;
+  const memberName = `E2E Cold Recurring ${unique}`;
+  const account = await postFixture<{ account_id: number }>(
+    page,
+    "/api/accounts",
+    {
+      account_type: "owned",
+      currency: "USD",
+      fqn: accountFqn,
+      is_hidden: false,
+    },
+  );
+  const member = await postFixture<{ member_id: number }>(
+    page,
+    "/api/members",
+    { name: memberName },
+  );
+  const template = await createTemplate(
+    page,
+    `E2E:${unique}:Cold recurring template`,
+    [
+      {
+        account_id: account.account_id,
+        member_id: member.member_id,
+        tag_ids: [],
+      },
+    ],
+  );
+  let releaseAccounts!: () => void;
+  const accountsReleased = new Promise<void>((resolve) => {
+    releaseAccounts = resolve;
+  });
+  await page.route("**/api/accounts?*", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.get("include_tombstoned") === "true") {
+      await accountsReleased;
+    }
+    await route.continue();
+  });
+
+  await page.goto("/templates");
+  const row = page
+    .getByTestId("templates-tree-row")
+    .filter({ hasText: `E2E:${unique}:Cold recurring template` });
+  await row.getByRole("button", { name: "Create recurring" }).click();
+  const editor = page.getByRole("complementary", {
+    name: "New recurring definition",
+  });
+  const accountPicker = editor.getByLabel("Account");
+  await expect(accountPicker).toHaveValue("");
+  await expect(editor.getByLabel("Member")).toHaveValue("");
+  await accountPicker.focus();
+  releaseAccounts();
+  await expect(accountPicker).toHaveValue(accountFqn);
+  await expect(editor.getByLabel("Member")).toHaveValue(memberName);
+  await accountPicker.press("Enter");
+  await expect(accountPicker).toHaveValue(accountFqn);
+
+  await deleteTemplate(page, template.transaction_template_id);
+});
+
+test("recurring drafts can clear invalid non-flow template categories", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const account = await postFixture<{ account_id: number }>(
+    page,
+    "/api/accounts",
+    {
+      account_type: "owned",
+      currency: "USD",
+      fqn: `e2e:${unique}:Non-flow account`,
+      is_hidden: false,
+    },
+  );
+  const categoryFqn = `E2E:${unique}:Invalid category default`;
+  const category = await postFixture<{ category_id: number }>(
+    page,
+    "/api/categories",
+    { economic_intent: "expense", fqn: categoryFqn },
+  );
+  const templateFqn = `E2E:${unique}:Invalid recurring defaults`;
+  const template = await createTemplate(page, templateFqn, [
+    {
+      account_id: account.account_id,
+      amount: "1.00",
+      category_id: category.category_id,
+      currency: "USD",
+      tag_ids: [],
+    },
+  ]);
+
+  await page.goto("/templates");
+  const row = page
+    .getByTestId("templates-tree-row")
+    .filter({ hasText: templateFqn });
+  await row.getByRole("button", { name: "Create recurring" }).click();
+  const editor = page.getByRole("complementary", {
+    name: "New recurring definition",
+  });
+  await expect(editor.getByText(categoryFqn, { exact: true })).toBeVisible();
+  await editor.getByLabel("Show full category path").hover();
+  await expect(page.getByRole("tooltip")).toHaveText(categoryFqn);
+  await page.mouse.move(0, 0);
+  await editor.getByRole("button", { name: "Save definition" }).click();
+  await expect(
+    editor.getByText("Only flow records can have a category."),
+  ).toBeVisible();
+
+  await editor.getByRole("button", { name: "Clear category" }).click();
+  await expect(editor.getByText(categoryFqn, { exact: true })).toBeHidden();
+  await editor.getByRole("button", { name: "Save definition" }).click();
+  await expect(
+    editor.getByText("Only flow records can have a category."),
+  ).toBeHidden();
+
+  await editor.getByRole("button", { name: "Close definition editor" }).click();
+  await deleteTemplate(page, template.transaction_template_id);
 });
 
 test("template editor creates and replaces partial defaults without balance validation", async ({

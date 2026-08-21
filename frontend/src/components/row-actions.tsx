@@ -1,4 +1,10 @@
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 import { focusWithoutTooltip, Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
@@ -10,6 +16,7 @@ import {
 import { cn } from "@/lib/utils";
 
 export interface RowActionButton {
+  readonly alwaysOverflow?: boolean;
   readonly disabled?: boolean;
   readonly disabledReason?: string;
   readonly id?: string;
@@ -79,6 +86,9 @@ const isActionable = (action: RowAction): action is ActionableRowAction =>
 const isActionDisabled = (action: ActionableRowAction): boolean =>
   Boolean(action.disabled);
 
+const isAlwaysOverflowAction = (action: ActionableRowAction): boolean =>
+  isButtonAction(action) && Boolean(action.alwaysOverflow);
+
 const primaryActionKey = (action: ActionableRowAction): string =>
   action.id ??
   (action.kind === "toggle" && action.slot
@@ -146,11 +156,23 @@ export const RowActions = ({
       ]
     : primaryActions;
   const orderedActions = primaryActions.filter(isActionable);
-  const actionClusterCount = alignedPrimaryActions.length;
+  const alwaysOverflowActions = orderedActions.filter(isAlwaysOverflowAction);
+  const hasAlwaysOverflowActions = alwaysOverflowActions.length > 0;
+  const alignedDirectActions = alignedPrimaryActions.filter(
+    (action) =>
+      !action || !isActionable(action) || !isAlwaysOverflowAction(action),
+  );
+  const actionClusterCount =
+    alignedDirectActions.length + (hasAlwaysOverflowActions ? 1 : 0);
+  const [directActionsFolded, setDirectActionsFolded] = useState(false);
+  const directActionsFoldedRef = useRef(false);
+  const restoreOverflowFocusAfterUnfoldRef = useRef(false);
   const overflowOpenRef = useRef(false);
   const onOverflowOpenChangeRef = useRef(onOverflowOpenChange);
   const overflowMenuRef = useRef<HTMLDivElement | null>(null);
   const overflowTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const directActionsRef = useRef<HTMLDivElement | null>(null);
+  const rowActionsRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     onOverflowOpenChangeRef.current = onOverflowOpenChange;
@@ -165,29 +187,95 @@ export const RowActions = ({
     [],
   );
 
+  useEffect(() => {
+    const rowActions = rowActionsRef.current;
+    if (!overflowOpen || !hasAlwaysOverflowActions || !rowActions) {
+      return;
+    }
+    const updateDirectActionsFolded = () => {
+      const nextFolded =
+        directActionsRef.current !== null &&
+        window.getComputedStyle(directActionsRef.current).display === "none";
+      const focusedAction =
+        document.activeElement instanceof HTMLButtonElement &&
+        overflowMenuRef.current?.contains(document.activeElement)
+          ? document.activeElement
+          : undefined;
+      if (
+        directActionsFoldedRef.current &&
+        !nextFolded &&
+        focusedAction &&
+        focusedAction.dataset.permanentOverflow !== "true"
+      ) {
+        restoreOverflowFocusAfterUnfoldRef.current = true;
+      }
+      directActionsFoldedRef.current = nextFolded;
+      setDirectActionsFolded(nextFolded);
+    };
+    updateDirectActionsFolded();
+    const observer = new ResizeObserver(updateDirectActionsFolded);
+    observer.observe(rowActions);
+    return () => {
+      observer.disconnect();
+    };
+  }, [hasAlwaysOverflowActions, overflowOpen]);
+
   const setNextOverflowOpen = (open: boolean) => {
+    if (open && hasAlwaysOverflowActions) {
+      const nextFolded =
+        directActionsRef.current !== null &&
+        window.getComputedStyle(directActionsRef.current).display === "none";
+      directActionsFoldedRef.current = nextFolded;
+      setDirectActionsFolded(nextFolded);
+    }
     overflowOpenRef.current = open;
+    if (!open) {
+      restoreOverflowFocusAfterUnfoldRef.current = false;
+    }
     setOverflowOpen(open);
     onOverflowOpenChange?.(open);
   };
 
-  const overflowActionButtons = () =>
-    Array.from(
-      overflowMenuRef.current?.querySelectorAll<HTMLButtonElement>(
-        "button:not([aria-disabled='true'])",
-      ) ?? [],
-    );
+  const overflowActionButtons = useCallback(
+    () =>
+      Array.from(
+        overflowMenuRef.current?.querySelectorAll<HTMLButtonElement>(
+          "button:not([aria-disabled='true'])",
+        ) ?? [],
+      ),
+    [],
+  );
 
-  const focusFirstOverflowAction = () => {
+  const focusFirstOverflowAction = useCallback(() => {
     const firstEnabledAction = overflowActionButtons()[0];
     const firstAction =
       firstEnabledAction ??
       overflowMenuRef.current?.querySelector<HTMLButtonElement>("button");
     firstAction?.focus();
-  };
+  }, [overflowActionButtons]);
+
+  useEffect(() => {
+    if (
+      !overflowOpen ||
+      directActionsFolded ||
+      !restoreOverflowFocusAfterUnfoldRef.current
+    ) {
+      return;
+    }
+    restoreOverflowFocusAfterUnfoldRef.current = false;
+    const frame = window.requestAnimationFrame(() => {
+      if (overflowOpenRef.current) {
+        focusFirstOverflowAction();
+      }
+    });
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [directActionsFolded, focusFirstOverflowAction, overflowOpen]);
 
   return (
     <div
+      ref={rowActionsRef}
       className={cn(
         "row-actions inline-flex min-w-0 items-center justify-end gap-1",
         foldable && "row-actions--foldable w-full",
@@ -195,8 +283,11 @@ export const RowActions = ({
       )}
       data-row-actions-count={actionClusterCount}
     >
-      <div className="row-actions-buttons inline-flex items-center justify-end gap-1">
-        {alignedPrimaryActions.map((action, index) => {
+      <div
+        ref={directActionsRef}
+        className="row-actions-buttons inline-flex items-center justify-end gap-1"
+      >
+        {alignedDirectActions.map((action, index) => {
           if (!action || isPlaceholderAction(action)) {
             return (
               <span
@@ -279,7 +370,12 @@ export const RowActions = ({
                 type="button"
                 variant="outline"
                 size="icon-sm"
-                className={cn(actionButtonClassName, "row-actions-overflow")}
+                className={cn(
+                  actionButtonClassName,
+                  "row-actions-overflow",
+                  hasAlwaysOverflowActions &&
+                    "row-actions-overflow--persistent",
+                )}
                 aria-label="More row actions"
                 onClick={(event) => {
                   event.stopPropagation();
@@ -296,6 +392,14 @@ export const RowActions = ({
             className="row-actions-menu w-56 p-1"
             onCloseAutoFocus={(event) => {
               event.preventDefault();
+              const activeElement = document.activeElement;
+              if (
+                activeElement !== document.body &&
+                activeElement !== overflowTriggerRef.current &&
+                !overflowMenuRef.current?.contains(activeElement)
+              ) {
+                return;
+              }
               focusWithoutTooltip(overflowTriggerRef.current, {
                 preventScroll: true,
               });
@@ -330,7 +434,10 @@ export const RowActions = ({
             }}
           >
             <div ref={overflowMenuRef} className="flex flex-col gap-1">
-              {orderedActions.map((action) => {
+              {(hasAlwaysOverflowActions && !directActionsFolded
+                ? alwaysOverflowActions
+                : orderedActions
+              ).map((action) => {
                 const disabled = isActionDisabled(action);
                 const button = (
                   <Button
@@ -339,6 +446,9 @@ export const RowActions = ({
                     variant="ghost"
                     size="sm"
                     className="justify-start"
+                    data-permanent-overflow={
+                      isAlwaysOverflowAction(action) ? "true" : undefined
+                    }
                     aria-disabled={disabled ? "true" : undefined}
                     aria-pressed={
                       isButtonAction(action) ? undefined : action.pressed

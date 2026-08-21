@@ -38,12 +38,18 @@ import {
   useLedgerLookupsResource,
 } from "@/features/ledger";
 import {
+  DefinitionEditorPanel,
+  refreshAfterRecurringDefinitionMutation,
+  refreshMountedRecurringDefinitions,
+} from "@/features/recurring";
+import {
   refreshTransactionTemplates,
   TemplateEditorModal,
 } from "@/features/templates";
 import { cn } from "@/lib/utils";
 import type { TransactionEntryType } from "@/models/ui-state";
 import {
+  closeRecurringDefinitionEditor,
   closeTemplateEditor,
   closeTransactionEntryPanel,
   failTransactionEntryRoute,
@@ -62,6 +68,7 @@ import {
   useCommandPaletteOpen,
   useLastTransactionsPageSearch,
   usePreferencesView,
+  useRecurringDefinitionEditorView,
   useTemplateEditorView,
   useTransactionEntryPanelView,
 } from "@/store";
@@ -88,7 +95,7 @@ const utilityNavItems: readonly NavItem[] = [
 ];
 
 const modalOverlaySelector =
-  "[role='alertdialog'], [role='dialog'][aria-modal='true'], [data-global-shortcut-blocking-overlay], [data-page-help-content], [data-slot='popover-content'], [data-slot='select-content'][data-state='open']";
+  "[role='alertdialog'], [role='dialog'][aria-modal='true'], [data-global-shortcut-blocking-overlay], [data-recurring-definition-editor], [data-page-help-content], [data-slot='popover-content'], [data-slot='select-content'][data-state='open']";
 
 const isVisibleOverlay = (element: Element): boolean =>
   element instanceof HTMLElement && element.getClientRects().length > 0;
@@ -116,6 +123,113 @@ const hasActiveOverlay = (): boolean =>
   Array.from(document.querySelectorAll(modalOverlaySelector)).some(
     isVisibleOverlay,
   );
+
+const resolveRecurringDefinitionFocusTarget = (
+  opener: HTMLElement | undefined,
+): HTMLElement | undefined => {
+  const openerTransactionRow = opener?.closest<HTMLElement>(
+    "[data-transaction-row='true']",
+  );
+  if (
+    !opener ||
+    (opener.isConnected &&
+      opener.getClientRects().length > 0 &&
+      (!openerTransactionRow ||
+        isTransactionRowWithinViewport(openerTransactionRow)) &&
+      !opener.matches("tr"))
+  ) {
+    return opener;
+  }
+  const overflowTrigger = opener
+    .closest<HTMLElement>(".row-actions")
+    ?.querySelector<HTMLElement>(".row-actions-overflow");
+  if (
+    overflowTrigger?.isConnected &&
+    overflowTrigger.getClientRects().length > 0 &&
+    (!openerTransactionRow ||
+      isTransactionRowWithinViewport(openerTransactionRow))
+  ) {
+    return overflowTrigger;
+  }
+  const routeFallback =
+    document.querySelector<HTMLElement>("main h1") ?? undefined;
+  const transactionSurfaceMounted = Boolean(
+    document.querySelector("[data-testid='transaction-browser-layout']"),
+  );
+  const transactionRouteMounted = window.location.pathname === "/transactions";
+  const transactionPageLoading = Boolean(
+    document.querySelector("[data-testid='transactions-page-busy']"),
+  );
+  const transactionRouteSettledWithoutRows = Boolean(
+    document.querySelector(
+      "[data-transaction-empty-action], main [role='alert']",
+    ),
+  );
+  const transactionId =
+    opener.closest<HTMLElement>(
+      "[data-transaction-row='true'][data-transaction-id]",
+    )?.dataset.transactionId ??
+    opener.closest<HTMLElement>("[data-source-transaction-id]")?.dataset
+      .sourceTransactionId;
+  if (!transactionId) {
+    const sourceRow = opener.closest<HTMLElement>("tr");
+    if (sourceRow?.isConnected && sourceRow.getClientRects().length > 0) {
+      const recurringAction = Array.from(
+        sourceRow.querySelectorAll<HTMLElement>(
+          "[aria-label='Create recurring']",
+        ),
+      ).find((action) => action.getClientRects().length > 0);
+      if (recurringAction) {
+        return recurringAction;
+      }
+      const rowOverflowTrigger = sourceRow.querySelector<HTMLElement>(
+        ".row-actions-overflow",
+      );
+      if (
+        rowOverflowTrigger &&
+        rowOverflowTrigger.getClientRects().length > 0
+      ) {
+        return rowOverflowTrigger;
+      }
+      return sourceRow;
+    }
+    return routeFallback ?? opener;
+  }
+  const liveRow = document.querySelector<HTMLElement>(
+    `[data-transaction-row='true'][data-transaction-id='${transactionId}']`,
+  );
+  const visibleTransactionFallback = () =>
+    Array.from(
+      document.querySelectorAll<HTMLElement>("[data-transaction-row='true']"),
+    ).find(isTransactionRowWithinViewport) ??
+    document.querySelector<HTMLElement>(
+      "[data-testid='transactions-pagination-footer']",
+    ) ??
+    routeFallback ??
+    opener;
+  if (!liveRow) {
+    if (!transactionSurfaceMounted && !transactionRouteMounted) {
+      return routeFallback ?? opener;
+    }
+    if (
+      transactionRouteMounted &&
+      !transactionSurfaceMounted &&
+      !transactionRouteSettledWithoutRows
+    ) {
+      return opener;
+    }
+    if (transactionPageLoading) {
+      return opener;
+    }
+    return visibleTransactionFallback();
+  }
+  if (!isTransactionRowWithinViewport(liveRow)) {
+    return visibleTransactionFallback();
+  }
+  return opener.classList.contains("row-actions-overflow")
+    ? (liveRow.querySelector<HTMLElement>(".row-actions-overflow") ?? opener)
+    : liveRow;
+};
 
 const createEntryTypes: Readonly<Record<string, TransactionEntryType>> = {
   exchange: "exchange",
@@ -246,6 +360,7 @@ export const AppShell = ({ children }: AppShellProps) => {
   const authentication = useAuthenticationView();
   const commandPaletteOpen = useCommandPaletteOpen();
   const entryModal = useTransactionEntryPanelView();
+  const recurringDefinitionEditor = useRecurringDefinitionEditorView();
   const templateEditor = useTemplateEditorView();
   const [logoutPending, setLogoutPending] = useState(false);
   const [logoutError, setLogoutError] = useState<string>();
@@ -660,6 +775,10 @@ export const AppShell = ({ children }: AppShellProps) => {
       </aside>
 
       <main
+        inert={
+          location.pathname === "/recurring" &&
+          recurringDefinitionEditor.launch !== undefined
+        }
         className={cn(
           "min-h-svh bg-[var(--ground)] bg-[linear-gradient(90deg,rgb(237_234_247_/_4%)_1px,transparent_1px),linear-gradient(180deg,rgb(237_234_247_/_4%)_1px,transparent_1px)] bg-[size:16px_16px] px-5 pt-7 pb-3 transition-[margin] duration-150 ease-[steps(2)] sm:px-8",
           sidebarCollapsed ? "ml-[76px]" : "ml-64",
@@ -670,6 +789,34 @@ export const AppShell = ({ children }: AppShellProps) => {
         </div>
       </main>
       <CommandPalette />
+      {recurringDefinitionEditor.launch ? (
+        <DefinitionEditorPanel
+          key={recurringDefinitionEditor.launch.key}
+          definition={undefined}
+          initialRecords={recurringDefinitionEditor.launch.initialRecords}
+          onClose={closeRecurringDefinitionEditor}
+          onNotice={(message, tone = "success") => {
+            entrySaveNoticeIdRef.current += 1;
+            setEntrySaveNotice({
+              avoidDetailActions: searchParams.has("transaction"),
+              id: entrySaveNoticeIdRef.current,
+              message,
+              tone,
+            });
+          }}
+          onSaved={() =>
+            refreshAfterRecurringDefinitionMutation(
+              refreshMountedRecurringDefinitions,
+            )
+          }
+          open={recurringDefinitionEditor.open}
+          resolveReturnFocusTo={() =>
+            resolveRecurringDefinitionFocusTarget(
+              recurringDefinitionEditor.launch?.opener,
+            )
+          }
+        />
+      ) : null}
       {templateEditor.launch ? (
         <TemplateEditorModal
           key={templateEditor.launch.key}
@@ -718,6 +865,7 @@ export const AppShell = ({ children }: AppShellProps) => {
         open={entryModal.open}
         recentTransactions={entryModal.recentTransactions}
         requestCloseRef={entryCloseRequestRef}
+        returnFocusTo={entryModal.launch?.opener}
         onClose={closeEntryModal}
         onGlobalNoticeDismiss={() => {
           setLogoutError(undefined);

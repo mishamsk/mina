@@ -14,6 +14,7 @@
 - Deferred initial focus yields to a control already used in the editor; lookup retries preserve that latest control across recovery.
 - Template records are partial defaults: every field is independently optional, active hidden references already selected on a record remain resolvable, fresh choices exclude hidden references, and tombstoned references are unavailable.
 - Transaction capture maps active records in response order and copies only account, category, member, currency, native amount, tags, and memo; dates and transaction-only metadata never enter the draft.
+- Create recurring copies each active template record's supplied defaults into a new definition draft without filling absent partial values.
 - Edit preserves the FQN; hierarchy changes remain owned by restructure.
 
 ## Boundaries

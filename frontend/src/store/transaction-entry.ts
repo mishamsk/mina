@@ -22,6 +22,7 @@ export interface TransactionEntryLaunch {
     readonly amount: string;
     readonly recordIds: readonly [number, number];
   };
+  readonly opener?: HTMLElement;
   readonly transaction: Transaction;
   readonly type: TransactionEntryLaunchType;
 }

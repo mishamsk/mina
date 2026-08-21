@@ -249,6 +249,39 @@ test("pausing a reordered definition restores its visible toggle focus", async (
     .toBe(true);
 });
 
+test("definition actions preserve newer user focus", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/recurring");
+  const definition = await definitionByFqn(page, "Household:Mortgage");
+  const row = definitionRow(page, definition);
+  let markPauseStarted!: () => void;
+  const pauseStarted = new Promise<void>((resolve) => {
+    markPauseStarted = resolve;
+  });
+  let releasePause!: () => void;
+  const pauseReleased = new Promise<void>((resolve) => {
+    releasePause = resolve;
+  });
+  await page.route("**/api/recurring-definitions/*/pause", async (route) => {
+    markPauseStarted();
+    await pauseReleased;
+    await route.continue();
+  });
+
+  const pause = row.getByRole("button", { name: "Pause" });
+  await pause.focus();
+  await pause.press("Enter");
+  await pauseStarted;
+  const newerFocusTarget = page.getByRole("button", {
+    name: "New definition",
+  });
+  await newerFocusTarget.focus();
+  releasePause();
+
+  await expect(page.getByText("Definition paused.")).toBeVisible();
+  await expect(newerFocusTarget).toBeFocused();
+});
+
 test("saving a reordered definition restores its visible row focus", async ({
   page,
 }) => {

@@ -1,4 +1,11 @@
-import { useEffect, useEffectEvent, useMemo, useRef } from "react";
+import {
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import {
   apiErrorDetails,
@@ -26,6 +33,7 @@ import {
   invalidateMembersPage,
   invalidateTagsPage,
   invalidateTransactionPages,
+  invalidateTransactionPagesPreservingSnapshots,
   markOtherTransactionPagesStale,
   markTransactionPageStale,
   normalizedCategoryPickerIntents,
@@ -60,6 +68,14 @@ interface BackgroundPageRefresh {
 }
 
 let ledgerLookupRequestEpoch = 0;
+let recurringOccurrenceCatchupGeneration = 0;
+let recurringOccurrenceCatchupRequired = true;
+let activeRecurringOccurrenceCatchup:
+  | {
+      readonly generation: number;
+      readonly promise: Promise<void>;
+    }
+  | undefined;
 const pendingPageRefreshCallbacks = new Map<string, Set<() => void>>();
 const backgroundPageRefreshes = new Map<
   string,
@@ -109,6 +125,57 @@ const effectivePageParams = (
   sortDirection: params.sortDirection,
 });
 
+const catchUpRecurringOccurrences = async (): Promise<void> => {
+  const result = await triggerRecurringOccurrenceCatchup();
+  if (!result.data) {
+    throw new Error(apiErrorMessage(result.error));
+  }
+};
+
+const startRecurringOccurrenceCatchup = () => {
+  if (
+    activeRecurringOccurrenceCatchup?.generation ===
+    recurringOccurrenceCatchupGeneration
+  ) {
+    return activeRecurringOccurrenceCatchup;
+  }
+  const generation = recurringOccurrenceCatchupGeneration;
+  const previousCatchup = activeRecurringOccurrenceCatchup?.promise;
+  const request = {
+    generation,
+    promise: previousCatchup
+      ? previousCatchup.catch(() => undefined).then(catchUpRecurringOccurrences)
+      : catchUpRecurringOccurrences(),
+  };
+  activeRecurringOccurrenceCatchup = request;
+  void request.promise.then(
+    () => {
+      if (generation === recurringOccurrenceCatchupGeneration) {
+        recurringOccurrenceCatchupRequired = false;
+      }
+      if (activeRecurringOccurrenceCatchup === request) {
+        activeRecurringOccurrenceCatchup = undefined;
+      }
+    },
+    () => {
+      if (activeRecurringOccurrenceCatchup === request) {
+        activeRecurringOccurrenceCatchup = undefined;
+      }
+    },
+  );
+  return request;
+};
+
+const waitForCurrentRecurringOccurrenceCatchup = async (): Promise<void> => {
+  while (
+    recurringOccurrenceCatchupRequired ||
+    activeRecurringOccurrenceCatchup
+  ) {
+    const request = startRecurringOccurrenceCatchup();
+    await request.promise;
+  }
+};
+
 const loadLedgerLookups = async (
   shouldCommit: () => boolean = () => true,
 ): Promise<void> => {
@@ -150,7 +217,14 @@ export const useTransactionsResource = (params: TransactionPageParams) => {
   const requestKey = transactionPageRequestKey(params);
   const page = useTransactionPageView(params);
   const lookups = useLedgerLookupsView();
-  const catchupPromiseRef = useRef<Promise<unknown> | undefined>(undefined);
+  const [pageRetryToken, setPageRetryToken] = useState(0);
+  const catchupPromiseRef = useRef<
+    | {
+        readonly generation: number;
+        readonly promise: Promise<void>;
+      }
+    | undefined
+  >(undefined);
 
   useEffect(
     () => () => {
@@ -180,11 +254,14 @@ export const useTransactionsResource = (params: TransactionPageParams) => {
       setTransactionPageLoading(requestParams);
     }
 
-    catchupPromiseRef.current ??= triggerRecurringOccurrenceCatchup().catch(
-      () => undefined,
-    );
-
-    void catchupPromiseRef.current
+    if (
+      catchupPromiseRef.current?.generation !==
+      recurringOccurrenceCatchupGeneration
+    ) {
+      catchupPromiseRef.current = startRecurringOccurrenceCatchup();
+    }
+    const catchupRequest = catchupPromiseRef.current;
+    void catchupRequest.promise
       .then(() => fetchTransactionPage(requestParams))
       .then((result) => {
         if (!isActive()) {
@@ -246,6 +323,39 @@ export const useTransactionsResource = (params: TransactionPageParams) => {
         } else {
           setTransactionPageError(requestParams, apiErrorMessage(result.error));
         }
+      })
+      .catch((error: unknown) => {
+        const errorMessage =
+          error instanceof Error ? error.message : apiErrorMessage(error);
+        const errorDetails =
+          error instanceof Error ? error.message : apiErrorDetails(error);
+        if (catchupPromiseRef.current === catchupRequest) {
+          catchupPromiseRef.current = undefined;
+        }
+        if (
+          !isActive() ||
+          getTransactionsSnapshot().pageGeneration !== pageGenerationAtLoadStart
+        ) {
+          if (!pageAtLoadStart) {
+            clearTransactionPageLoading(
+              requestParams,
+              pageGenerationAtLoadStart,
+            );
+          }
+          return;
+        }
+        if (pageAtLoadStart) {
+          const repeatedFailure = markTransactionPageStale(
+            requestParams,
+            pageAtLoadStart,
+            errorDetails,
+          );
+          if (repeatedFailure) {
+            settlePageRefreshCallbacks(requestParams);
+          }
+        } else {
+          setTransactionPageError(requestParams, errorMessage);
+        }
       });
   });
 
@@ -260,6 +370,7 @@ export const useTransactionsResource = (params: TransactionPageParams) => {
     page.refreshFailed,
     page.snapshot,
     page.stale,
+    pageRetryToken,
     requestKey,
   ]);
 
@@ -269,15 +380,14 @@ export const useTransactionsResource = (params: TransactionPageParams) => {
       return;
     }
 
-    let active = true;
-    void loadLedgerLookups(() => active);
-
-    return () => {
-      active = false;
-    };
+    void loadLedgerLookups();
   }, []);
 
-  return { lookups, page };
+  const retryPage = useCallback(() => {
+    setPageRetryToken((current) => current + 1);
+  }, []);
+
+  return { lookups, page, retryPage };
 };
 
 export const useLedgerLookupsResource = (enabled = true) => {
@@ -349,6 +459,14 @@ export const useCategoryPickerCategoriesResource = (
 export const refreshTransactionPage = async (
   params: TransactionPageParams,
 ): Promise<readonly Transaction[]> => {
+  try {
+    await waitForCurrentRecurringOccurrenceCatchup();
+  } catch {
+    return (
+      getTransactionsSnapshot().pages[transactionPageKey(params)]
+        ?.transactions ?? []
+    );
+  }
   cancelAllPageRefreshCallbacks();
   invalidateTransactionPages();
   setTransactionPageLoading(params);
@@ -438,6 +556,13 @@ export const refreshLedgerLookups = async (): Promise<void> => {
   await loadLedgerLookups();
 };
 
+export const invalidateTransactionsForRecurringDefinitionMutation =
+  (): void => {
+    recurringOccurrenceCatchupGeneration += 1;
+    recurringOccurrenceCatchupRequired = true;
+    invalidateTransactionPagesPreservingSnapshots();
+  };
+
 export const invalidateReferencePagesAfterTransactionMutation = (): void => {
   invalidateAccountsPage();
   invalidateCategoriesPage();
@@ -480,6 +605,9 @@ export const refreshTransactionPageAfterSave = async (
   }
 
   if (options.pageRefreshMode !== "blocking") {
+    const pageStale = Boolean(
+      getTransactionsSnapshot().stalePageKeys[transactionPageKey(params)],
+    );
     if (transaction) {
       updateDisplayedTransactionPage(params, transaction);
     }
@@ -496,7 +624,9 @@ export const refreshTransactionPageAfterSave = async (
         );
       });
     }
-    void refreshTransactionPageInBackground(params);
+    if (!pageStale) {
+      void refreshTransactionPageInBackground(params);
+    }
     void Promise.all([refreshFeaturedBalances(), refreshOverview()]);
     return Boolean(
       getTransactionsSnapshot().pages[

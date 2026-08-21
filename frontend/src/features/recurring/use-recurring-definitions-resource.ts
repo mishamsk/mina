@@ -20,6 +20,7 @@ const definitionsPageSize = 500;
 const definitionsLoadAttemptLimit = 3;
 
 let definitionsLoadGeneration = 0;
+let mountedRefresh: (() => Promise<boolean>) | undefined;
 
 const nextDefinitionsLoadGeneration = (): number => {
   definitionsLoadGeneration += 1;
@@ -154,5 +155,19 @@ export const useRecurringDefinitionsResource = () => {
     };
   }, []);
 
+  useEffect(() => {
+    mountedRefresh = refresh;
+    return () => {
+      if (mountedRefresh === refresh) {
+        mountedRefresh = undefined;
+      }
+    };
+  }, [refresh]);
+
   return { ...state, refresh };
 };
+
+export const refreshMountedRecurringDefinitions =
+  async (): Promise<boolean> => {
+    return mountedRefresh ? mountedRefresh() : true;
+  };

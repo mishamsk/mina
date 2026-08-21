@@ -341,6 +341,7 @@ export const updateDisplayedTransactionPage = (
       }
 
       const pageErrorMessage = state.pageErrorMessages[key];
+      const pageStale = state.stalePageKeys[key];
       const transactionDisplayed = page.transactions.some(
         (current) => current.transaction_id === transaction.transaction_id,
       );
@@ -362,7 +363,7 @@ export const updateDisplayedTransactionPage = (
         },
         pageErrorMessages: pageErrorMessage ? { [key]: pageErrorMessage } : {},
         refreshFailedPageKeys: {},
-        stalePageKeys: {},
+        stalePageKeys: pageStale ? { [key]: true } : {},
       };
     },
     false,
@@ -802,5 +803,26 @@ export const invalidateTransactionPages = (): void => {
     }),
     false,
     "TransactionsStore/invalidateTransactionPages",
+  );
+};
+
+export const invalidateTransactionPagesPreservingSnapshots = (): void => {
+  useTransactionsStore.setState(
+    (state) => ({
+      errorMessage: undefined,
+      loadingPageGeneration: undefined,
+      loadingPageKey: undefined,
+      pageErrorMessages: {},
+      pageGeneration: state.pageGeneration + 1,
+      pages: Object.fromEntries(
+        Object.entries(state.pages).map(([key, page]) => [key, { ...page }]),
+      ),
+      refreshFailedPageKeys: {},
+      stalePageKeys: Object.fromEntries(
+        Object.keys(state.pages).map((key) => [key, true]),
+      ),
+    }),
+    false,
+    "TransactionsStore/invalidateTransactionPagesPreservingSnapshots",
   );
 };

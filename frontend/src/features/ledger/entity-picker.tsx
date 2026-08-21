@@ -279,6 +279,8 @@ export const EntityPicker = ({
   );
   const selected = effectiveOptions.find((option) => option.id === value);
   const [query, setQuery] = useState(selected?.searchLabel ?? "");
+  const displayQuery =
+    query || (value === undefined ? "" : (selected?.searchLabel ?? ""));
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [announcement, setAnnouncement] = useState("");
@@ -317,6 +319,23 @@ export const EntityPicker = ({
     [groupFqns, query],
   );
   const retainedPrefixRef = useRef(model.committedPrefix);
+  useEffect(() => {
+    if (!selected || query || typedThisSessionRef.current) {
+      return;
+    }
+    const selectedModel = deriveQueryModel(selected.searchLabel, groupFqns);
+    const selectedRows = rowsForQuery(effectiveOptions, groups, selectedModel);
+    retainedPrefixRef.current = selectedModel.committedPrefix;
+    setQuery(selected.searchLabel);
+    setActiveIndex(
+      Math.max(
+        0,
+        selectedRows.findIndex(
+          (row) => row.kind === "leaf" && row.option.id === selected.id,
+        ),
+      ),
+    );
+  }, [effectiveOptions, groupFqns, groups, query, selected]);
   const optionRows = useMemo(
     () => rowsForQuery(effectiveOptions, groups, model),
     [effectiveOptions, groups, model],
@@ -521,7 +540,7 @@ export const EntityPicker = ({
             )}
             disabled={disabled}
             placeholder={placeholder}
-            value={query}
+            value={displayQuery}
             onChange={(event) => {
               interactionVersionRef.current += 1;
               const nextQuery = event.target.value;
