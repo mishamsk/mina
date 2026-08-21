@@ -33,7 +33,7 @@ func nullableTimestampArg(value *time.Time) any {
 }
 
 func timestampArg(value time.Time) any {
-	return duckdb.Typed(value.UTC(), duckdb.TYPE_TIMESTAMP)
+	return duckdb.Typed(value.UTC(), duckdb.TYPE_TIMESTAMP_TZ)
 }
 
 func nullableDecimalArg(value *values.Decimal) any {

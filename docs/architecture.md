@@ -72,6 +72,7 @@ Rules:
 
 - `values.Decimal` and DuckDB `DECIMAL(18,8)` are the system-wide application and database precision limit, including aggregates and percentages.
 - Out-of-range arithmetic fails instead of rounding, clamping, widening, or switching to internal string-backed decimals. Decimal text is allowed only at explicit parsing and rendering boundaries such as JSON transport.
+- Mina-owned instants use timezone-aware database types and canonical UTC transport; client surfaces own local-time presentation. Civil dates remain `DATE` values without timezone conversion.
 - DuckDB is the required database engine. Store should use DuckDB specific terms and SQL dialect. There are no plans to support alternative database engines.
 - User-provided values in SQL must use parameter binding.
 - The app opens an in-memory DuckDB database first.

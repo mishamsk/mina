@@ -7,6 +7,7 @@
 ## Implicit Contracts
 
 - The returned DDL is immutable process-wide inspection output generated from a pristine migrated database; it never describes a configured database's live state.
+- The artifact records Mina-owned instants as timezone-aware values while retaining Goose's plain `TIMESTAMP` schema ledger shape.
 
 ## Boundaries
 

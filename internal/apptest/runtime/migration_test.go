@@ -53,6 +53,59 @@ func TestMigrationV13BackfillsTransactionUpdatedAt(t *testing.T) {
 	})
 }
 
+func TestMigrationV17PreservesUTCInstantsAndCivilDates(t *testing.T) {
+	client := apptest.NewFromMigrationFixture(t, 16)
+	ctx := context.Background()
+
+	account, err := client.REST().GetAccountWithResponse(ctx, 5, nil)
+	requireClientResponse(t, "get migrated account", err, account.StatusCode(), http.StatusOK, account.Body)
+	if got, want := account.JSON200.CreatedAt, apptest.Timestamp("2026-08-21T09:46:06.619705Z"); !got.Equal(want) {
+		t.Fatalf("migrated account created_at = %s, want %s", got, want)
+	}
+	if !account.JSON200.UpdatedAt.Equal(account.JSON200.CreatedAt) {
+		t.Fatalf("migrated account updated_at = %s, want created_at %s", account.JSON200.UpdatedAt, account.JSON200.CreatedAt)
+	}
+
+	rates, err := client.REST().ListExchangeRatesWithResponse(ctx, nil)
+	requireClientResponse(t, "list migrated exchange rates", err, rates.StatusCode(), http.StatusOK, rates.Body)
+	if rates.JSON200.TotalCount != 1 || len(rates.JSON200.ExchangeRates) != 1 {
+		t.Fatalf("migrated exchange rates = total %d rows %d, want 1", rates.JSON200.TotalCount, len(rates.JSON200.ExchangeRates))
+	}
+	rate := rates.JSON200.ExchangeRates[0]
+	if got, want := rate.EffectiveDate, apptest.Timestamp("2026-08-21T03:45:12.345678Z"); !got.Equal(want) {
+		t.Fatalf("migrated exchange rate effective_date = %s, want %s", got, want)
+	}
+	if got, want := rate.CreatedAt, apptest.Timestamp("2026-08-21T09:46:18.579682Z"); !got.Equal(want) {
+		t.Fatalf("migrated exchange rate created_at = %s, want %s", got, want)
+	}
+
+	transaction, err := client.REST().GetTransactionWithResponse(ctx, 8)
+	requireClientResponse(t, "get migrated transaction", err, transaction.StatusCode(), http.StatusOK, transaction.Body)
+	if got := transaction.JSON200.InitiatedDate.String(); got != "2026-08-20" {
+		t.Fatalf("migrated transaction initiated_date = %s, want 2026-08-20", got)
+	}
+	if got, want := transaction.JSON200.CreatedAt, apptest.Timestamp("2026-08-21T09:46:18.794472Z"); !got.Equal(want) {
+		t.Fatalf("migrated transaction created_at = %s, want %s", got, want)
+	}
+	if len(transaction.JSON200.Records) != 2 {
+		t.Fatalf("migrated transaction record count = %d, want 2", len(transaction.JSON200.Records))
+	}
+	for _, record := range transaction.JSON200.Records {
+		if record.PendingDate == nil || !record.PendingDate.Equal(apptest.Timestamp("2026-08-20T22:30:00.123456Z")) {
+			t.Fatalf("migrated record %d pending_date = %v, want 2026-08-20T22:30:00.123456Z", record.RecordId, record.PendingDate)
+		}
+		if record.PostedDate == nil || !record.PostedDate.Equal(apptest.Timestamp("2026-08-20T23:45:00.654321Z")) {
+			t.Fatalf("migrated record %d posted_date = %v, want 2026-08-20T23:45:00.654321Z", record.RecordId, record.PostedDate)
+		}
+	}
+
+	creditLimit, err := client.REST().GetCreditLimitHistoryWithResponse(ctx, 11, nil)
+	requireClientResponse(t, "get migrated credit limit", err, creditLimit.StatusCode(), http.StatusOK, creditLimit.Body)
+	if got := creditLimit.JSON200.EffectiveDate.String(); got != "2026-08-20" {
+		t.Fatalf("migrated credit limit effective_date = %s, want 2026-08-20", got)
+	}
+}
+
 func TestV15FixtureRESTDataPreserved(t *testing.T) {
 	const fixtureVersion = 15
 	client := apptest.NewFromMigrationFixture(t, fixtureVersion)

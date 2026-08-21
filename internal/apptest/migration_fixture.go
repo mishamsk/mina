@@ -21,7 +21,6 @@ func NewFromMigrationFixture(t *testing.T, schemaVersion int) *Client {
 	if schemaVersion < 1 {
 		t.Fatalf("migration fixture schema version must be positive, got %d", schemaVersion)
 	}
-
 	databasePath, err := extractMigrationFixture(t.TempDir(), schemaVersion)
 	if err != nil {
 		t.Fatalf("extract migration fixture for schema version %d: %v", schemaVersion, err)
@@ -32,7 +31,7 @@ func NewFromMigrationFixture(t *testing.T, schemaVersion int) *Client {
 		opts.config.AccountingSchema = runtime.AttachedAccountingSchema
 		opts.config.StartupValidation = "full"
 		opts.runtimeOptions.ExecutionProfile = runtime.ExecutionProfileMigration
-	})
+	}, WithDuckDBTimeZone("America/New_York"))
 }
 
 func extractMigrationFixture(directory string, schemaVersion int) (string, error) {

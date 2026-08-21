@@ -71,6 +71,11 @@ duckdbexec $WORK/schema_retype_enum.db schema_retype_enum.sql
 ! exec mina db validate --db $WORK/schema_retype_enum.db --schema demo
 stderr 'error: schema: column transaction.lifecycle_status type mismatch'
 
+duckdbclone $WORK/demo.db $WORK/schema_retype_instant.db
+duckdbexec $WORK/schema_retype_instant.db schema_retype_instant.sql
+! exec mina db validate --shallow --db $WORK/schema_retype_instant.db --schema demo
+stderr '^error: schema: column transaction.created_at type mismatch: expected TIMESTAMP WITH TIME ZONE got TIMESTAMP$'
+
 duckdbclone $WORK/demo.db $WORK/schema_unknown_table.db
 duckdbexec $WORK/schema_unknown_table.db schema_unknown_table.sql
 exec mina db validate --db $WORK/schema_unknown_table.db --schema demo

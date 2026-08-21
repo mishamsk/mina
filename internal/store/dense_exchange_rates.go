@@ -68,7 +68,7 @@ func (s *DenseExchangeRateStore) Rebuild(ctx context.Context) (err error) {
 WITH source_rate AS MATERIALIZED (
 	SELECT
 		to_currency,
-		CAST(effective_date AS DATE) AS effective_date,
+		CAST(effective_date AT TIME ZONE 'UTC' AS DATE) AS effective_date,
 		effective_date AS effective_timestamp,
 		exchange_rate_id,
 		rate

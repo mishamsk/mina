@@ -423,7 +423,7 @@ JOIN `+db.accountingName("recurring_occurrence")+` AS occurrence
 	for inputIndex, input := range inputs {
 		for recordIndex, record := range input.Records {
 			tagListExpr, tagListArgs := tagListExpression(record.TagIDs)
-			recordRows = append(recordRows, "(CAST(? AS INTEGER), CAST(? AS INTEGER), CAST(? AS INTEGER), CAST(? AS DATE), CAST(? AS INTEGER), CAST(? AS INTEGER), CAST(? AS VARCHAR), CAST(? AS DECIMAL(18,8)), CAST(? AS DECIMAL(18,8)), CAST(? AS INTEGER), "+tagListExpr+", CAST(? AS VARCHAR), CAST(? AS TIMESTAMP), CAST(? AS TIMESTAMP), CAST(? AS VARCHAR), CAST(? AS VARCHAR), CAST(? AS VARCHAR), CAST(? AS VARCHAR))")
+			recordRows = append(recordRows, "(CAST(? AS INTEGER), CAST(? AS INTEGER), CAST(? AS INTEGER), CAST(? AS DATE), CAST(? AS INTEGER), CAST(? AS INTEGER), CAST(? AS VARCHAR), CAST(? AS DECIMAL(18,8)), CAST(? AS DECIMAL(18,8)), CAST(? AS INTEGER), "+tagListExpr+", CAST(? AS VARCHAR), CAST(? AS TIMESTAMP WITH TIME ZONE), CAST(? AS TIMESTAMP WITH TIME ZONE), CAST(? AS VARCHAR), CAST(? AS VARCHAR), CAST(? AS VARCHAR), CAST(? AS VARCHAR))")
 			recordArgs = append(recordArgs,
 				inputIndex,
 				recordIndex,

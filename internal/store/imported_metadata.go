@@ -242,7 +242,7 @@ func importedMetadataInputValues(inputs []ImportedRecordMetadataCreateInput) (st
 	for index, input := range inputs {
 		rows = append(rows, `(CAST(? AS BIGINT), CAST(? AS BIGINT), CAST(? AS VARCHAR), CAST(? AS VARCHAR), CAST(? AS VARCHAR),
 	CAST(? AS VARCHAR), CAST(? AS VARCHAR), CAST(? AS VARCHAR), CAST(? AS VARCHAR), CAST(? AS VARCHAR),
-	CAST(? AS TIMESTAMP), CAST(? AS TIMESTAMP), CAST(? AS JSON))`)
+	CAST(? AS TIMESTAMP WITH TIME ZONE), CAST(? AS TIMESTAMP WITH TIME ZONE), CAST(? AS JSON))`)
 		args = append(args,
 			int64(index),
 			input.RecordID,

@@ -211,8 +211,8 @@ func (r *operationRunRepository) prepare(ctx context.Context) error {
 	operation_id TEXT NOT NULL,
 	status `+r.db.runtimeName(operationRunStatusTypeName)+` NOT NULL,
 	trigger TEXT NOT NULL,
-	started_at TIMESTAMP NOT NULL,
-	completed_at TIMESTAMP,
+	started_at TIMESTAMP WITH TIME ZONE NOT NULL,
+	completed_at TIMESTAMP WITH TIME ZONE,
 	error TEXT,
 	PRIMARY KEY (operation_run_id)
 )`,

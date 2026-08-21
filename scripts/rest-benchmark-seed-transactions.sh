@@ -179,8 +179,8 @@ SELECT
   NULL,
   [tag_id],
   printf('benchmark transaction %06d', i),
-  CAST(initiated_date AS TIMESTAMP),
-  CAST(initiated_date AS TIMESTAMP),
+  CAST(initiated_date AS TIMESTAMP) AT TIME ZONE 'UTC',
+  CAST(initiated_date AS TIMESTAMP) AT TIME ZONE 'UTC',
   CAST('RECONCILED' AS reconciliation_status),
   CAST('MANUAL' AS source)
 FROM seed_transaction_rows

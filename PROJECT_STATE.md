@@ -49,7 +49,7 @@
 
 ## Storage and process boundaries
 
-- Accounting state is DuckDB in a selected schema, either attached from one portable database file or held in the process in-memory database. Upgrade-only migrations and schema-version tracking apply to that accounting location; multi-row ledger changes persist atomically.
+- Accounting state is DuckDB in a selected schema, either attached from one portable database file or held in the process in-memory database. Upgrade-only migrations and schema-version tracking apply to that accounting location; multi-row ledger changes persist atomically. Mina instants retain their represented UTC time across host timezones, while civil dates remain timezone-free.
 - File-backed databases are plaintext unless `MINA_DATABASE_ENCRYPTION_KEY` is supplied, when DuckDB AES-256-GCM is used. The key is environment-only; Status reports encryption state without revealing it.
 - Each app also owns an opaque in-memory runtime schema for disposable operation runs and dense exchange-rate data. It is outside portable accounting state, migrations, backups, and database validation.
 - Store code owns DuckDB lifecycle mechanics, qualified SQL, migrations, transactions, repository conversion, dynamic query allowlists, and database-error mapping. Accounting semantics, validation, and transport mappings remain outside the store.

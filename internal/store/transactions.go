@@ -264,7 +264,7 @@ func (s *TransactionStore) BackfillMissingAmountUSD(ctx context.Context) error {
 	LEFT JOIN `+s.db.runtimeName(denseExchangeRateTableName)+` AS dense
 	  ON dense.from_currency = 'USD'
 	 AND dense.to_currency = jr.currency
-	 AND dense.effective_date = COALESCE(CAST(jr.posted_date AS DATE), t.initiated_date)
+	 AND dense.effective_date = COALESCE(CAST(jr.posted_date AT TIME ZONE 'UTC' AS DATE), t.initiated_date)
 	WHERE jr.tombstoned_at IS NULL
 	  AND t.tombstoned_at IS NULL
 	  AND jr.amount_usd IS NULL
@@ -1506,7 +1506,7 @@ func explicitRecordDateValues(recordIDs []int64, pendingDates []*time.Time, post
 	rows := make([]string, 0, len(recordIDs))
 	args := make([]any, 0, len(recordIDs)*3)
 	for index, recordID := range recordIDs {
-		rows = append(rows, "(CAST(? AS BIGINT), CAST(? AS TIMESTAMP), CAST(? AS TIMESTAMP))")
+		rows = append(rows, "(CAST(? AS BIGINT), CAST(? AS TIMESTAMP WITH TIME ZONE), CAST(? AS TIMESTAMP WITH TIME ZONE))")
 		args = append(args, recordID, nullableTimestampArg(pendingDates[index]), nullableTimestampArg(postedDates[index]))
 	}
 	return "VALUES " + strings.Join(rows, ", "), args
@@ -2153,7 +2153,7 @@ func bulkAccountReplaceTargetValues(targets []transactions.BulkAccountReplaceTar
 	rows := make([]string, 0, len(targets))
 	args := make([]any, 0, len(targets)*2)
 	for _, target := range targets {
-		rows = append(rows, "(CAST(? AS BIGINT), CAST(? AS TIMESTAMP))")
+		rows = append(rows, "(CAST(? AS BIGINT), CAST(? AS TIMESTAMP WITH TIME ZONE))")
 		args = append(args, target.TransactionID, timestampArg(target.UpdatedAt))
 	}
 	return "VALUES " + strings.Join(rows, ", "), args

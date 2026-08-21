@@ -172,6 +172,7 @@ type clientOptions struct {
 	databaseEncryptionKey     *string
 	runtimeOptions            runtime.Options
 	processDB                 *ProcessDB
+	duckDBTimeZone            string
 }
 
 // ProcessDB is a reusable in-memory DuckDB process handle for app tests.
@@ -369,6 +370,19 @@ func (db *ProcessDB) Close() error {
 	return db.db.Close()
 }
 
+func (db *ProcessDB) setTimeZone(ctx context.Context, timezone string) error {
+	if db == nil || db.db == nil {
+		return fmt.Errorf("set DuckDB timezone on closed process database")
+	}
+
+	literal := strings.ReplaceAll(timezone, "'", "''")
+	if _, err := db.db.ExecContext(ctx, "SET TimeZone = '"+literal+"'"); err != nil {
+		return fmt.Errorf("set DuckDB timezone to %q: %w", timezone, err)
+	}
+
+	return nil
+}
+
 // WithDatabasePath uses an attached DuckDB file as the app accounting database.
 func WithDatabasePath(path string) Option {
 	return func(opts *clientOptions) {
@@ -409,6 +423,13 @@ func WithAuthenticationFile(path string) Option {
 func WithProcessDB(db *ProcessDB) Option {
 	return func(opts *clientOptions) {
 		opts.processDB = db
+	}
+}
+
+// WithDuckDBTimeZone sets the DuckDB session timezone before the test app opens its accounting database.
+func WithDuckDBTimeZone(timezone string) Option {
+	return func(opts *clientOptions) {
+		opts.duckDBTimeZone = timezone
 	}
 }
 
@@ -561,10 +582,29 @@ func NewResult(t *testing.T, options ...Option) (*Client, error) {
 		opts.config.AccountingSchema = schema
 	}
 
+	processDB := opts.processDB
+	if opts.duckDBTimeZone != "" {
+		if processDB == nil {
+			var err error
+			processDB, err = OpenProcessDB(ctx)
+			if err != nil {
+				return nil, err
+			}
+			t.Cleanup(func() {
+				if err := processDB.Close(); err != nil {
+					t.Errorf("close test DuckDB process: %v", err)
+				}
+			})
+		}
+		if err := processDB.setTimeZone(ctx, opts.duckDBTimeZone); err != nil {
+			return nil, err
+		}
+	}
+
 	var appInstance *runtime.App
 	var err error
-	if opts.processDB != nil {
-		appInstance, err = runtime.NewWithProcessDB(ctx, opts.processDB.db, opts.config, opts.runtimeOptions)
+	if processDB != nil {
+		appInstance, err = runtime.NewWithProcessDB(ctx, processDB.db, opts.config, opts.runtimeOptions)
 	} else {
 		appInstance, err = runtime.New(ctx, opts.config, opts.runtimeOptions)
 	}

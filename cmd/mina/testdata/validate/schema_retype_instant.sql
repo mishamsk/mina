@@ -1,0 +1,3 @@
+ALTER TABLE demo.transaction
+ALTER COLUMN created_at SET DATA TYPE TIMESTAMP
+USING created_at AT TIME ZONE 'UTC';

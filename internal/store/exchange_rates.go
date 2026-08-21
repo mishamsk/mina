@@ -75,7 +75,7 @@ func (s *ExchangeRateStore) LatestActiveUSDRateDates(ctx context.Context, curren
 		return result, nil
 	}
 
-	query := `SELECT to_currency, MAX(CAST(effective_date AS DATE))
+	query := `SELECT to_currency, MAX(CAST(effective_date AT TIME ZONE 'UTC' AS DATE))
 FROM ` + s.db.accountingName("exchange_rate") + `
 WHERE tombstoned_at IS NULL
   AND from_currency = 'USD'
@@ -122,7 +122,7 @@ func (s *ExchangeRateStore) EarliestMissingActiveUSDRateDates(
 	}
 
 	query := `WITH needed_record AS (
-	SELECT jr.currency, COALESCE(CAST(jr.posted_date AS DATE), t.initiated_date) AS needed_date
+	SELECT jr.currency, COALESCE(CAST(jr.posted_date AT TIME ZONE 'UTC' AS DATE), t.initiated_date) AS needed_date
 	FROM ` + s.db.accountingName("journal_record") + ` AS jr
 	JOIN ` + s.db.accountingName("transaction") + ` AS t
 	  ON t.transaction_id = jr.transaction_id
@@ -138,7 +138,7 @@ LEFT JOIN ` + s.db.accountingName("exchange_rate") + ` AS er
   ON er.tombstoned_at IS NULL
  AND er.from_currency = 'USD'
  AND er.to_currency = needed_record.currency
- AND CAST(er.effective_date AS DATE) = needed_record.needed_date
+ AND CAST(er.effective_date AT TIME ZONE 'UTC' AS DATE) = needed_record.needed_date
 WHERE er.exchange_rate_id IS NULL
 GROUP BY needed_record.currency`
 	args := make([]any, 0, len(currencies))
@@ -236,8 +236,8 @@ FROM `+s.db.accountingName("exchange_rate")+`
 WHERE tombstoned_at IS NULL
   AND from_currency = 'USD'
   AND to_currency = ?
-  AND CAST(effective_date AS DATE) `+operator+` ?
-ORDER BY CAST(effective_date AS DATE) `+direction+`, effective_date `+direction+`, exchange_rate_id `+direction+`
+  AND CAST(effective_date AT TIME ZONE 'UTC' AS DATE) `+operator+` ?
+ORDER BY CAST(effective_date AT TIME ZONE 'UTC' AS DATE) `+direction+`, effective_date `+direction+`, exchange_rate_id `+direction+`
 LIMIT 1`,
 		currency,
 		civilDateArg(date),
