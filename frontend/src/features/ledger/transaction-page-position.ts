@@ -146,6 +146,11 @@ const readTextParam = (
   return value ? value : undefined;
 };
 
+export const readTransactionAnchorDateFromSearchParams = (
+  searchParams: URLSearchParams,
+): string | undefined =>
+  readPatternParam(searchParams, "anchor_date", isoDatePattern);
+
 export const readTransactionFiltersFromSearchParams = (
   searchParams: URLSearchParams,
 ): TransactionFilters =>

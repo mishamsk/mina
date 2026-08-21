@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"slices"
 	"strconv"
 	"strings"
@@ -21,6 +22,8 @@ import (
 	"github.com/mishamsk/mina/internal/services/values"
 	"github.com/mishamsk/mina/internal/x/lease"
 )
+
+const maxFutureProjectionSlots = 10_000
 
 // ScheduleClass identifies the recurring schedule class derived from schedule_rule.kind.
 type ScheduleClass string
@@ -396,6 +399,264 @@ func (s *Service) ListOccurrences(ctx context.Context, opts OccurrenceListOption
 	return s.repo.ListOccurrences(ctx, opts)
 }
 
+// WithProjectedTransactions supplies read-only future recurring rows while preventing occurrence changes during use.
+func (s *Service) WithProjectedTransactions(ctx context.Context, through values.CivilDate, opts transactions.ListOptions, use func(context.Context, []transactions.Transaction) error) error {
+	return lease.Combine(ctx, []lease.Func{
+		s.refs.WithSharedLease,
+		s.occurrences.WithExclusiveLease,
+	}, func(ctx context.Context) error {
+		projected, err := s.projectTransactionsWithReferences(ctx, through, opts)
+		if err != nil {
+			return err
+		}
+		return use(ctx, projected)
+	})
+}
+
+func (s *Service) projectTransactionsWithReferences(ctx context.Context, through values.CivilDate, opts transactions.ListOptions) ([]transactions.Transaction, error) {
+	today := values.LocalCivilDateFromTime(s.clock.Now())
+	if !through.Time().After(today.Time()) {
+		return []transactions.Transaction{}, nil
+	}
+	definitions, err := s.repo.ListMaterializationDefinitions(ctx, through)
+	if err != nil {
+		return nil, err
+	}
+	projected := []transactions.Transaction{}
+	projectionSlots := 0
+	for _, materialization := range definitions {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		definition := materialization.Definition
+		refs, err := s.projectionReferences(ctx, definition)
+		if err != nil {
+			return nil, err
+		}
+		existing := civilDateSet(materialization.OccurrenceDates)
+		err = visitDueSlotsUntil(ctx, definition.ScheduleRule, definition.AnchorDate, through, func(slot values.CivilDate) error {
+			if !slot.Time().After(today.Time()) {
+				return nil
+			}
+			projectionSlots++
+			if projectionSlots > maxFutureProjectionSlots {
+				return services.InvalidRequest("future recurring projection exceeds the 10000-slot request limit")
+			}
+			if _, ok := existing[slot.String()]; ok {
+				return nil
+			}
+			transaction, err := projectedTransaction(definition, slot, refs)
+			if err != nil {
+				return err
+			}
+			if projectedTransactionMatches(transaction, opts, refs) {
+				projected = append(projected, transaction)
+			}
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+	return projected, nil
+}
+
+type transactionProjectionReferences struct {
+	accounts   map[int64]accounts.Reference
+	categories map[int64]categories.Reference
+	tags       map[int64]tags.Reference
+	members    map[int64]members.Reference
+}
+
+func (s *Service) projectionReferences(ctx context.Context, definition Definition) (transactionProjectionReferences, error) {
+	accountRefs, err := s.validateDefinitionAccountReferences(ctx, definition)
+	if err != nil {
+		return transactionProjectionReferences{}, err
+	}
+	categoryIDs := []int64{}
+	tagIDs := []int64{}
+	memberIDs := []int64{}
+	for _, record := range definition.Records {
+		if record.CategoryID != nil {
+			categoryIDs = append(categoryIDs, *record.CategoryID)
+		}
+		if record.MemberID != nil {
+			memberIDs = append(memberIDs, *record.MemberID)
+		}
+		tagIDs = append(tagIDs, record.TagIDs...)
+	}
+	categoryRefs, err := s.categories.ValidateActiveReferences(ctx, categoryIDs, categories.ReferenceOptions{AllowHidden: true})
+	if err != nil {
+		return transactionProjectionReferences{}, err
+	}
+	tagRefs, err := s.tags.ValidateActiveReferences(ctx, tagIDs, tags.ReferenceOptions{AllowHidden: true})
+	if err != nil {
+		return transactionProjectionReferences{}, err
+	}
+	memberRefs, err := s.members.ValidateActiveReferences(ctx, memberIDs, members.ReferenceOptions{AllowHidden: true})
+	if err != nil {
+		return transactionProjectionReferences{}, err
+	}
+	return transactionProjectionReferences{
+		accounts:   accountRefs,
+		categories: categoryRefs,
+		tags:       tagRefs,
+		members:    memberRefs,
+	}, nil
+}
+
+func projectedTransaction(definition Definition, slot values.CivilDate, refs transactionProjectionReferences) (transactions.Transaction, error) {
+	id := recurringProjectionID("transaction", definition.ID, slot, 0)
+	recurringDefinitionID := definition.ID
+	records := make([]transactions.JournalRecord, 0, len(definition.Records))
+	for index, definitionRecord := range definition.Records {
+		accountRef := refs.accounts[definitionRecord.AccountID]
+		var economicIntent categories.CategoryEconomicIntent
+		if definitionRecord.CategoryID != nil {
+			economicIntent = refs.categories[*definitionRecord.CategoryID].EconomicIntent
+		}
+		records = append(records, transactions.JournalRecord{
+			ID:                          recurringProjectionID("record", definition.ID, slot, index),
+			TransactionID:               id,
+			InitiatedDate:               slot,
+			AccountID:                   definitionRecord.AccountID,
+			AccountDisplayLabelOverride: accountRef.DisplayLabelOverride,
+			AccountFQN:                  accountRef.FQN,
+			AccountType:                 accountRef.AccountType,
+			MemberID:                    definitionRecord.MemberID,
+			Currency:                    definitionRecord.Currency,
+			Amount:                      definitionRecord.Amount,
+			CategoryID:                  definitionRecord.CategoryID,
+			EconomicIntent:              economicIntent,
+			TagIDs:                      slices.Clone(definitionRecord.TagIDs),
+			Memo:                        definitionRecord.Memo,
+			ReconciliationStatus:        transactions.ReconciliationStatusUnreconciled,
+			Source:                      transactions.SourceRecurringTemplate,
+			CreatedAt:                   slot.Time(),
+			UpdatedAt:                   slot.Time(),
+		})
+	}
+	return transactions.ClassifyTransaction(transactions.Transaction{
+		ID:                              id,
+		InitiatedDate:                   slot,
+		RecurringProjectionDefinitionID: &recurringDefinitionID,
+		LifecycleStatus:                 transactions.LifecycleStatusExpected,
+		CreatedAt:                       slot.Time(),
+		UpdatedAt:                       slot.Time(),
+		Records:                         records,
+	})
+}
+
+func recurringProjectionID(kind string, definitionID int64, slot values.CivilDate, index int) int64 {
+	hash := fnv.New64a()
+	_, _ = fmt.Fprintf(hash, "%s:%d:%s:%d", kind, definitionID, slot.String(), index)
+	id := int64(hash.Sum64() & uint64(^uint64(0)>>1))
+	if id == 0 {
+		id = 1
+	}
+	return -id
+}
+
+func projectedTransactionMatches(transaction transactions.Transaction, opts transactions.ListOptions, refs transactionProjectionReferences) bool {
+	if opts.InitiatedDateFrom != nil && transaction.InitiatedDate.Time().Before(opts.InitiatedDateFrom.Time()) {
+		return false
+	}
+	if opts.InitiatedDateTo != nil && transaction.InitiatedDate.Time().After(opts.InitiatedDateTo.Time()) {
+		return false
+	}
+	if len(opts.Settlements) > 0 && !slices.Contains(opts.Settlements, transaction.Settlement) {
+		return false
+	}
+	if len(opts.TransactionClasses) > 0 && !slices.Contains(opts.TransactionClasses, transaction.Class) {
+		return false
+	}
+	if len(opts.TransactionShapes) > 0 && !projectedHasShape(transaction, opts.TransactionShapes) {
+		return false
+	}
+	if len(opts.RecordRoles) > 0 && !projectedHasRole(transaction, opts.RecordRoles) {
+		return false
+	}
+	if opts.PendingDateFrom != nil || opts.PendingDateTo != nil || opts.PostedDateFrom != nil || opts.PostedDateTo != nil {
+		return false
+	}
+	if !projectedRecordFiltersMatch(transaction.Records, opts, refs) {
+		return false
+	}
+	return opts.Search == nil || projectedSearchMatches(transaction.Records, strings.ToLower(*opts.Search), refs)
+}
+
+func projectedRecordFiltersMatch(records []transactions.JournalRecord, opts transactions.ListOptions, refs transactionProjectionReferences) bool {
+	checks := []func(transactions.JournalRecord) bool{
+		func(record transactions.JournalRecord) bool {
+			return len(opts.AccountIDs) == 0 || slices.Contains(opts.AccountIDs, record.AccountID)
+		},
+		func(record transactions.JournalRecord) bool {
+			return len(opts.CategoryIDs) == 0 || record.CategoryID != nil && slices.Contains(opts.CategoryIDs, *record.CategoryID)
+		},
+		func(record transactions.JournalRecord) bool {
+			return opts.CategoryFQNPrefix == nil || record.CategoryID != nil && services.FQNAtOrUnder(refs.categories[*record.CategoryID].FQN, *opts.CategoryFQNPrefix)
+		},
+		func(record transactions.JournalRecord) bool {
+			return len(opts.TagIDs) == 0 || slices.ContainsFunc(record.TagIDs, func(id int64) bool { return slices.Contains(opts.TagIDs, id) })
+		},
+		func(record transactions.JournalRecord) bool {
+			return opts.TagFQNPrefix == nil || slices.ContainsFunc(record.TagIDs, func(id int64) bool { return services.FQNAtOrUnder(refs.tags[id].FQN, *opts.TagFQNPrefix) })
+		},
+		func(record transactions.JournalRecord) bool {
+			return len(opts.MemberIDs) == 0 || record.MemberID != nil && slices.Contains(opts.MemberIDs, *record.MemberID)
+		},
+		func(record transactions.JournalRecord) bool {
+			return len(opts.Currencies) == 0 || slices.Contains(opts.Currencies, record.Currency)
+		},
+		func(record transactions.JournalRecord) bool {
+			return decimalRangeMatches(record.Amount, opts.AmountMin, opts.AmountMax)
+		},
+		func(record transactions.JournalRecord) bool {
+			return record.AmountUSD != nil && decimalRangeMatches(*record.AmountUSD, opts.AmountUSDMin, opts.AmountUSDMax)
+		},
+	}
+	for index, check := range checks {
+		if index == 7 && opts.AmountMin == nil && opts.AmountMax == nil {
+			continue
+		}
+		if index == 8 && opts.AmountUSDMin == nil && opts.AmountUSDMax == nil {
+			continue
+		}
+		if !slices.ContainsFunc(records, check) {
+			return false
+		}
+	}
+	return true
+}
+
+func decimalRangeMatches(value values.Decimal, minimum *values.Decimal, maximum *values.Decimal) bool {
+	return (minimum == nil || value.Cmp(*minimum) >= 0) && (maximum == nil || value.Cmp(*maximum) <= 0)
+}
+
+func projectedHasShape(transaction transactions.Transaction, shapes []transactions.TransactionShapeType) bool {
+	return slices.ContainsFunc(transaction.Shapes, func(shape transactions.TransactionShape) bool { return slices.Contains(shapes, shape.Shape) })
+}
+
+func projectedHasRole(transaction transactions.Transaction, roles []transactions.RecordRole) bool {
+	return slices.ContainsFunc(transaction.Records, func(record transactions.JournalRecord) bool { return slices.Contains(roles, record.Role) })
+}
+
+func projectedSearchMatches(records []transactions.JournalRecord, term string, refs transactionProjectionReferences) bool {
+	return slices.ContainsFunc(records, func(record transactions.JournalRecord) bool {
+		accountRef := refs.accounts[record.AccountID]
+		if strings.EqualFold(record.Currency, term) || strings.Contains(strings.ToLower(accountRef.FQN), term) || accountRef.ExternalID != nil && strings.Contains(strings.ToLower(*accountRef.ExternalID), term) || record.Memo != nil && strings.Contains(strings.ToLower(*record.Memo), term) {
+			return true
+		}
+		if record.CategoryID != nil && strings.Contains(strings.ToLower(refs.categories[*record.CategoryID].FQN), term) {
+			return true
+		}
+		if record.MemberID != nil && strings.Contains(strings.ToLower(refs.members[*record.MemberID].Name), term) {
+			return true
+		}
+		return slices.ContainsFunc(record.TagIDs, func(id int64) bool { return strings.Contains(strings.ToLower(refs.tags[id].FQN), term) })
+	})
+}
+
 // ConfirmOccurrence posts an EXPECTED occurrence's generated transaction records.
 func (s *Service) ConfirmOccurrence(ctx context.Context, id int64, settlement transactions.SettlementIntent) (Occurrence, error) {
 	if id <= 0 {
@@ -725,7 +986,7 @@ func (s *Service) materializeDueOccurrencesSerialized(ctx context.Context, today
 	occurrences := []ExpectedOccurrenceInput{}
 	for _, definition := range definitions {
 		existing := civilDateSet(definition.OccurrenceDates)
-		slots, err := DueSlotsUntil(definition.ScheduleRule, definition.AnchorDate, today)
+		slots, err := DueSlotsUntil(ctx, definition.ScheduleRule, definition.AnchorDate, today)
 		if err != nil {
 			return err
 		}
@@ -934,7 +1195,7 @@ func (s *Service) validateDefinitionAccountReferences(
 }
 
 func (s *Service) skippedDateRuleSlots(ctx context.Context, definition Definition, today values.CivilDate) ([]values.CivilDate, error) {
-	dueSlots, err := DueSlotsUntil(definition.ScheduleRule, definition.AnchorDate, today)
+	dueSlots, err := DueSlotsUntil(ctx, definition.ScheduleRule, definition.AnchorDate, today)
 	if err != nil {
 		return nil, err
 	}
@@ -1348,21 +1609,33 @@ func NextDueDateAfter(raw json.RawMessage, anchor values.CivilDate, lastOccurren
 }
 
 // DueSlotsUntil returns every schedule slot between anchor and today inclusive.
-func DueSlotsUntil(raw json.RawMessage, anchor values.CivilDate, today values.CivilDate) ([]values.CivilDate, error) {
+func DueSlotsUntil(ctx context.Context, raw json.RawMessage, anchor values.CivilDate, today values.CivilDate) ([]values.CivilDate, error) {
 	slots := []values.CivilDate{}
+	err := visitDueSlotsUntil(ctx, raw, anchor, today, func(slot values.CivilDate) error {
+		slots = append(slots, slot)
+		return nil
+	})
+	return slots, err
+}
+
+func visitDueSlotsUntil(ctx context.Context, raw json.RawMessage, anchor values.CivilDate, today values.CivilDate, visit func(values.CivilDate) error) error {
 	next, err := firstScheduleSlot(raw, anchor)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	for !next.Time().After(today.Time()) {
-		slots = append(slots, next)
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err := visit(next); err != nil {
+			return err
+		}
 		next, err = firstScheduleSlotAfter(raw, anchor, next)
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
-
-	return slots, nil
+	return nil
 }
 
 func deferOffset(input DeferInput, raw json.RawMessage) (int, string, error) {
@@ -1458,11 +1731,39 @@ func firstIntervalDueAfter(payload map[string]any, anchor values.CivilDate, afte
 		return values.CivilDate{}, err
 	}
 	unit, _ := payload["unit"].(string)
-	for step := 0; ; step++ {
-		candidate := IntervalDueDate(anchor, step*every, unit)
-		if candidate.Time().After(after.Time()) {
-			return candidate, nil
+	if after.Time().Before(anchor.Time()) {
+		return anchor, nil
+	}
+	step := intervalStepAtOrBefore(anchor, after, every, unit) + 1
+	candidate := IntervalDueDate(anchor, step*every, unit)
+	for !candidate.Time().After(after.Time()) {
+		step++
+		candidate = IntervalDueDate(anchor, step*every, unit)
+	}
+	return candidate, nil
+}
+
+func intervalStepAtOrBefore(anchor values.CivilDate, target values.CivilDate, every int, unit string) int {
+	switch unit {
+	case "DAY":
+		return int(target.Time().Sub(anchor.Time()).Hours()/24) / every
+	case "WEEK":
+		return int(target.Time().Sub(anchor.Time()).Hours()/24) / (every * 7)
+	case "MONTH", "YEAR":
+		anchorYear, anchorMonth, _ := anchor.Time().Date()
+		targetYear, targetMonth, _ := target.Time().Date()
+		months := (targetYear-anchorYear)*12 + int(targetMonth-anchorMonth)
+		cadenceMonths := every
+		if unit == "YEAR" {
+			cadenceMonths *= 12
 		}
+		step := months / cadenceMonths
+		for step > 0 && IntervalDueDate(anchor, step*every, unit).Time().After(target.Time()) {
+			step--
+		}
+		return step
+	default:
+		return 0
 	}
 }
 

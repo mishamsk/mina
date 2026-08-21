@@ -285,8 +285,8 @@ WHERE recurring_definition_id = ? AND tombstoned_at IS NULL`,
 	return nil
 }
 
-// ListMaterializationDefinitions returns active non-paused definitions with their existing occurrence slots through today.
-func (s *RecurringStore) ListMaterializationDefinitions(ctx context.Context, today values.CivilDate) ([]recurring.MaterializationDefinition, error) {
+// ListMaterializationDefinitions returns active non-paused definitions with their existing occurrence slots through the supplied date.
+func (s *RecurringStore) ListMaterializationDefinitions(ctx context.Context, through values.CivilDate) ([]recurring.MaterializationDefinition, error) {
 	rows, err := s.db.query().QueryContext(
 		ctx,
 		`SELECT recurring_definition_id, fqn, CAST(schedule_rule AS VARCHAR), anchor_date, definition_version, paused_at,
@@ -324,7 +324,7 @@ ORDER BY recurring_definition_id ASC`,
 	if err != nil {
 		return nil, err
 	}
-	occurrences, err := recurringOccurrenceDatesByDefinitionIDs(ctx, s.db.query(), s.db, definitionIDs, today)
+	occurrences, err := recurringOccurrenceDatesByDefinitionIDs(ctx, s.db.query(), s.db, definitionIDs, through)
 	if err != nil {
 		return nil, err
 	}

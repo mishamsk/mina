@@ -369,16 +369,9 @@ func (s *TransactionStore) List(ctx context.Context, opts transactions.ListOptio
 	predicate := s.transactionListPredicate(opts)
 	query := `SELECT tx.transaction_id, tx.initiated_date, tx.recurring_occurrence_id, CAST(tx.lifecycle_status AS VARCHAR), tx.created_at, tx.updated_at, tx.tombstoned_at
 ` + predicate.query
-	totalCount, err := countMatchingRows(ctx, s.db.query(), "SELECT COUNT(*) "+predicate.query, predicate.args, "transactions", opts.IncludeTotalCount)
+	position, err := s.transactionListPosition(ctx, opts, predicate)
 	if err != nil {
 		return transactions.ListResult{}, err
-	}
-	effectiveOffset := opts.Offset
-	if opts.AnchorDate != nil {
-		effectiveOffset, err = s.transactionAnchorOffset(ctx, *opts.AnchorDate, opts.Limit, predicate)
-		if err != nil {
-			return transactions.ListResult{}, err
-		}
 	}
 	sortColumns, ok := transactionSortColumns[opts.SortKey]
 	if !ok {
@@ -393,7 +386,7 @@ func (s *TransactionStore) List(ctx context.Context, opts transactions.ListOptio
 		query += column + " " + direction
 	}
 	query += ", transaction_id " + direction
-	query, args := appendLimitOffset(query, slices.Clone(predicate.args), opts.Limit, effectiveOffset)
+	query, args := appendLimitOffset(query, slices.Clone(predicate.args), opts.Limit, position.Offset)
 
 	rows, err := s.db.query().QueryContext(
 		ctx,
@@ -434,9 +427,29 @@ func (s *TransactionStore) List(ctx context.Context, opts transactions.ListOptio
 
 	return transactions.ListResult{
 		Items:      transactionItems,
-		Offset:     effectiveOffset,
-		TotalCount: totalCount,
+		Offset:     position.Offset,
+		TotalCount: position.TotalCount,
 	}, nil
+}
+
+// ListPosition returns an anchored transaction page's effective offset and total without hydrating rows.
+func (s *TransactionStore) ListPosition(ctx context.Context, opts transactions.ListOptions) (transactions.PagePosition, error) {
+	return s.transactionListPosition(ctx, opts, s.transactionListPredicate(opts))
+}
+
+func (s *TransactionStore) transactionListPosition(ctx context.Context, opts transactions.ListOptions, predicate transactionListPredicate) (transactions.PagePosition, error) {
+	totalCount, err := countMatchingRows(ctx, s.db.query(), "SELECT COUNT(*) "+predicate.query, predicate.args, "transactions", opts.IncludeTotalCount)
+	if err != nil {
+		return transactions.PagePosition{}, err
+	}
+	effectiveOffset := opts.Offset
+	if opts.AnchorDate != nil {
+		effectiveOffset, err = s.transactionAnchorOffset(ctx, *opts.AnchorDate, opts.Limit, predicate)
+		if err != nil {
+			return transactions.PagePosition{}, err
+		}
+	}
+	return transactions.PagePosition{Offset: effectiveOffset, TotalCount: totalCount}, nil
 }
 
 type transactionListPredicate struct {

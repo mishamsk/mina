@@ -7,7 +7,7 @@
 ## Implicit Contracts
 
 - Each service instance keeps a process-local reference snapshot for hierarchy and reference checks. Category mutations hold the app-wide exclusive reference lease through persistence and cache publication; dependent writes use the corresponding shared lease, and direct persistence changes must invalidate the snapshot.
-- References must be active; hidden categories require an explicit allowance.
+- References must be active; hidden categories require an explicit allowance, and returned references retain FQN plus economic intent for dependent projections.
 - Groups derive state from active leaves. Path hide/unhide changes only existing active leaves and invalidates the reference snapshot.
 - Group intent inspection includes every active descendant, including hidden leaves, independently of transaction activity.
 - Restructure rewrites active category leaves and active budget paths in one transaction; a budget-path collision rejects both changes.

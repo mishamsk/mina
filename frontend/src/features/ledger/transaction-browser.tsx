@@ -61,6 +61,7 @@ import {
   displayAmountKey,
   formatInitiatedDate,
   formatInitiatedDateParts,
+  isProjectedRecurringTransaction,
   lineCategory,
   lineDisplayAmounts,
   lineMember,
@@ -1392,6 +1393,8 @@ export const TransactionBrowser = ({
                   const expectedOccurrence =
                     actionApplicability.confirmOccurrence;
                   const whollyPending = actionApplicability.post;
+                  const projectedOccurrence =
+                    isProjectedRecurringTransaction(transaction);
                   const lifecycleBusyAction = lifecycleActionsBusy.get(
                     transaction.transaction_id,
                   );
@@ -1495,6 +1498,9 @@ export const TransactionBrowser = ({
                           : undefined
                       }
                       data-transaction-id={transaction.transaction_id}
+                      data-recurring-projection={
+                        projectedOccurrence ? "true" : undefined
+                      }
                       data-transaction-row="true"
                       tabIndex={0}
                       onClick={(event) => {
@@ -1878,7 +1884,7 @@ export const TransactionBrowser = ({
                         </div>
                       </td>
                       <td className="transactions-actions-column px-3 py-2 text-right align-middle">
-                        {editMode ? null : (
+                        {editMode || projectedOccurrence ? null : (
                           <RowActions
                             foldable
                             actions={

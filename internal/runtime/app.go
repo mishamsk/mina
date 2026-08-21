@@ -474,7 +474,21 @@ func newAccountingServices(
 		memberService,
 		leases.references,
 	)
+	recurringService := recurring.NewService(
+		store.NewRecurringStore(appDB),
+		accountService,
+		categoryService,
+		tagService,
+		memberService,
+		templateService,
+		exchangeRates,
+		leases.references,
+		leases.occurrences,
+		opts.clock(),
+		currencyUsageChanged,
+	)
 	accountService.SetTypeChangeValidator(transactionService)
+	transactionService.SetFutureProjectionProvider(recurringService)
 	return appServices{
 		Dependencies: httpapi.Dependencies{
 			AccountingSchema: accountingschema.NewService(),
@@ -490,20 +504,8 @@ func newAccountingServices(
 			Transactions:     transactionService,
 			DataAggregates:   dataAggregateService,
 			Templates:        templateService,
-			Recurring: recurring.NewService(
-				store.NewRecurringStore(appDB),
-				accountService,
-				categoryService,
-				tagService,
-				memberService,
-				templateService,
-				exchangeRates,
-				leases.references,
-				leases.occurrences,
-				opts.clock(),
-				currencyUsageChanged,
-			),
-			Clock: opts.clock(),
+			Recurring:        recurringService,
+			Clock:            opts.clock(),
 		},
 		Backup:                     backupService,
 		ExchangeRateLoading:        exchangeRateLoading,

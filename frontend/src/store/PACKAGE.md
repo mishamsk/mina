@@ -9,9 +9,10 @@
 - Bootstrap installs protected-request invalidation before loading authentication, then settles UI persistence before the app shell replaces its splash state; failure becomes bootstrap state rather than preventing the shell from mounting.
 - Authentication generation rejects late status and logout completions so an older request cannot restore a superseded session state.
 - Preference writes update memory first; an IndexedDB failure leaves that value active and records the persistence error.
-- A background transaction-page refresh replaces its snapshot only when it still matches the snapshot captured at refresh start; other loaded pages remain stale until their owner refetches them.
+- A background transaction-page refresh replaces its snapshot only when it still matches the snapshot captured at refresh start and clears only the page error captured with that snapshot; other loaded pages remain stale until their owner refetches them.
 - Recurring-definition invalidation replaces loaded page identities and marks them stale without discarding their transaction snapshots; inline snapshot updates preserve that staleness until the owning resource refreshes after catch-up.
-- Transaction-page cache identity includes server sort field and direction so differently ordered pages never share snapshots.
+- Transaction-page request failures attach to the visible page key even when an anchored request has a distinct loading identity, so retained rows cannot hide navigation errors; Retry marks a retained page stale before reloading it, and successful anchored loads clear that source-page error even when they land on another page.
+- Transaction-page cache identity includes the server sort and future date anchor so ordinary and projected sequences never share snapshots.
 - Category-page snapshot identity and request state include normalized economic intent; restoring its loaded key clears another key's transient request state.
 - Account transaction fetches write only while their entry remains loading; mutation responses seed the cache independently so invalidation rejects older fetches.
 - Transaction-entry route results apply only to their exact requested entry. An entry launch waits for Edit-mode amount saves to succeed, and cancellation or any failed save discards the deferred launch; its optional opener is transient focus-restoration state, and a shape-changing inline conflict may carry its transient amount and matching record IDs into an Advanced edit launch.

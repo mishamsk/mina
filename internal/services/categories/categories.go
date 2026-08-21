@@ -78,6 +78,7 @@ type ReferenceOptions struct {
 // Reference is the category data needed to validate write references and classify transactions.
 type Reference struct {
 	ID             int64
+	FQN            string
 	EconomicIntent CategoryEconomicIntent
 	IsHidden       bool
 }
@@ -534,6 +535,7 @@ func categoryReferenceStateFromCategory(category Category) categoryReferenceStat
 	return categoryReferenceState{
 		reference: Reference{
 			ID:             category.ID,
+			FQN:            category.FQN,
 			EconomicIntent: category.EconomicIntent,
 			IsHidden:       category.IsHidden,
 		},

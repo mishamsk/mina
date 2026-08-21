@@ -30,6 +30,7 @@ func (s *strictServer) ListTransactions(ctx context.Context, request openapi.Lis
 	transactionList, err := s.deps.Transactions.List(ctx, transactions.ListOptions{
 		ListOptions:        listOptions,
 		AnchorDate:         nullableCivilDateFromOpenAPI(request.Params.AnchorDate),
+		OffsetSpecified:    request.Params.Offset != nil,
 		AccountIDs:         cloneOptionalInt64Slice(request.Params.AccountId),
 		CategoryIDs:        cloneOptionalInt64Slice(request.Params.CategoryId),
 		CategoryFQNPrefix:  request.Params.CategoryFqnPrefix,
@@ -668,20 +669,21 @@ func updateJournalRecordAPIInputs(records []openapi.UpdateTransactionRequest_Rec
 
 func transactionAPIResponse(transaction transactions.Transaction) openapi.Transaction {
 	return openapi.Transaction{
-		TransactionId:         transaction.ID,
-		Etag:                  transactions.ETag(transaction.UpdatedAt),
-		InitiatedDate:         openAPIDate(transaction.InitiatedDate),
-		TransactionClass:      openapi.TransactionClass(transaction.Class),
-		DisplayTitle:          transaction.DisplayTitle,
-		PrimaryAmounts:        displayAmountAPIResponses(transaction.PrimaryAmounts),
-		Shapes:                transactionShapeAPIResponses(transaction.Shapes),
-		RecurringOccurrenceId: transaction.RecurringOccurrenceID,
-		LifecycleStatus:       openapi.TransactionLifecycleStatus(transaction.LifecycleStatus),
-		Settlement:            openapi.TransactionSettlement(transaction.Settlement),
-		CreatedAt:             transaction.CreatedAt.UTC(),
-		UpdatedAt:             transaction.UpdatedAt.UTC(),
-		TombstonedAt:          nullableTimestampTime(transaction.TombstonedAt),
-		Records:               journalRecordAPIResponses(transaction.Records),
+		TransactionId:                   transaction.ID,
+		Etag:                            transactions.ETag(transaction.UpdatedAt),
+		InitiatedDate:                   openAPIDate(transaction.InitiatedDate),
+		TransactionClass:                openapi.TransactionClass(transaction.Class),
+		DisplayTitle:                    transaction.DisplayTitle,
+		PrimaryAmounts:                  displayAmountAPIResponses(transaction.PrimaryAmounts),
+		Shapes:                          transactionShapeAPIResponses(transaction.Shapes),
+		RecurringOccurrenceId:           transaction.RecurringOccurrenceID,
+		RecurringProjectionDefinitionId: transaction.RecurringProjectionDefinitionID,
+		LifecycleStatus:                 openapi.TransactionLifecycleStatus(transaction.LifecycleStatus),
+		Settlement:                      openapi.TransactionSettlement(transaction.Settlement),
+		CreatedAt:                       transaction.CreatedAt.UTC(),
+		UpdatedAt:                       transaction.UpdatedAt.UTC(),
+		TombstonedAt:                    nullableTimestampTime(transaction.TombstonedAt),
+		Records:                         journalRecordAPIResponses(transaction.Records),
 	}
 }
 

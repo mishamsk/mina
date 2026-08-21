@@ -3,6 +3,7 @@ package transactions
 import (
 	"context"
 	"errors"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -84,19 +85,20 @@ var (
 
 // Transaction is a double-entry transaction with nested journal records.
 type Transaction struct {
-	ID                    int64
-	InitiatedDate         values.CivilDate
-	RecurringOccurrenceID *int64
-	LifecycleStatus       LifecycleStatus
-	Settlement            SettlementSummary
-	Class                 TransactionClass
-	DisplayTitle          string
-	PrimaryAmounts        []DisplayAmount
-	Shapes                []TransactionShape
-	CreatedAt             time.Time
-	UpdatedAt             time.Time
-	TombstonedAt          *time.Time
-	Records               []JournalRecord
+	ID                              int64
+	InitiatedDate                   values.CivilDate
+	RecurringOccurrenceID           *int64
+	RecurringProjectionDefinitionID *int64
+	LifecycleStatus                 LifecycleStatus
+	Settlement                      SettlementSummary
+	Class                           TransactionClass
+	DisplayTitle                    string
+	PrimaryAmounts                  []DisplayAmount
+	Shapes                          []TransactionShape
+	CreatedAt                       time.Time
+	UpdatedAt                       time.Time
+	TombstonedAt                    *time.Time
+	Records                         []JournalRecord
 }
 
 // JournalRecord is one debit or credit entry inside a transaction.
@@ -240,7 +242,9 @@ type RecordSearchOptions struct {
 // ListOptions controls transaction list sort, pagination, and date anchoring.
 type ListOptions struct {
 	services.ListOptions
-	AnchorDate         *values.CivilDate
+	AnchorDate *values.CivilDate
+	// OffsetSpecified distinguishes an explicit absolute merged-sequence offset from an omitted landing offset.
+	OffsetSpecified    bool
 	AccountIDs         []int64
 	CategoryIDs        []int64
 	CategoryFQNPrefix  *string
@@ -268,6 +272,12 @@ type ListOptions struct {
 	PostedDateFrom     *time.Time
 	PostedDateTo       *time.Time
 	Search             *string
+}
+
+// PagePosition contains a transaction page's effective offset and matching total without its rows.
+type PagePosition struct {
+	Offset     int
+	TotalCount int64
 }
 
 // ListResult carries a transaction page plus transaction-list-specific metadata.
@@ -406,6 +416,7 @@ type Repository interface {
 	Cancel(context.Context, int64) (Transaction, error)
 	Restore(context.Context, int64) (Transaction, error)
 	List(context.Context, ListOptions) (ListResult, error)
+	ListPosition(context.Context, ListOptions) (PagePosition, error)
 	MonthTotals(context.Context, MonthTotalsRange) (MonthActivityTotals, error)
 	Tombstone(context.Context, int64) error
 	SearchRecords(context.Context, RecordSearchOptions) (services.PaginatedList[JournalRecord], error)
@@ -455,6 +466,11 @@ type ReferenceCoordinator interface {
 	WithSharedLease(context.Context, func(context.Context) error) error
 }
 
+// FutureProjectionProvider supplies non-persisted recurring rows within a coherent occurrence snapshot.
+type FutureProjectionProvider interface {
+	WithProjectedTransactions(context.Context, values.CivilDate, ListOptions, func(context.Context, []Transaction) error) error
+}
+
 // Service owns transaction, journal record, and bulk record use cases.
 type Service struct {
 	repo                 Repository
@@ -466,6 +482,12 @@ type Service struct {
 	refs                 ReferenceCoordinator
 	clock                Clock
 	currencyUsageChanged func()
+	futureProjections    FutureProjectionProvider
+}
+
+// SetFutureProjectionProvider connects future-positioned transaction reads to recurring projections.
+func (s *Service) SetFutureProjectionProvider(provider FutureProjectionProvider) {
+	s.futureProjections = provider
 }
 
 // Clock supplies operation timestamps at the service boundary.
@@ -603,7 +625,7 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (Transaction, e
 		if err != nil {
 			return err
 		}
-		classified, err := classifyTransaction(created)
+		classified, err := ClassifyTransaction(created)
 		if err != nil {
 			return err
 		}
@@ -691,7 +713,7 @@ func (s *Service) Replace(ctx context.Context, id int64, input UpdateInput) (Tra
 		if err != nil {
 			return err
 		}
-		classified, err := classifyTransaction(replaced)
+		classified, err := ClassifyTransaction(replaced)
 		if err != nil {
 			return err
 		}
@@ -873,7 +895,7 @@ func (s *Service) Get(ctx context.Context, id int64) (Transaction, error) {
 		return Transaction{}, err
 	}
 
-	return classifyTransaction(transaction)
+	return ClassifyTransaction(transaction)
 }
 
 // Cancel changes a wholly pending active transaction to cancelled without changing records.
@@ -912,7 +934,7 @@ func (s *Service) Cancel(ctx context.Context, id int64) (Transaction, error) {
 		return Transaction{}, err
 	}
 
-	return classifyTransaction(transaction)
+	return ClassifyTransaction(transaction)
 }
 
 // Restore changes a cancelled transaction back to active without changing records.
@@ -945,7 +967,7 @@ func (s *Service) Restore(ctx context.Context, id int64) (Transaction, error) {
 		return Transaction{}, err
 	}
 
-	return classifyTransaction(transaction)
+	return ClassifyTransaction(transaction)
 }
 
 // List returns transactions with nested journal records.
@@ -957,19 +979,99 @@ func (s *Service) List(ctx context.Context, opts ListOptions) (ListResult, error
 	if err := s.validateTransactionListFilterReferences(ctx, validatedOpts); err != nil {
 		return ListResult{}, err
 	}
-	transactions, err := s.repo.List(ctx, validatedOpts)
+	if !s.shouldProjectFutureTransactions(validatedOpts) {
+		return s.listPersistedTransactions(ctx, validatedOpts)
+	}
+
+	var result ListResult
+	err = s.futureProjections.WithProjectedTransactions(ctx, *validatedOpts.AnchorDate, validatedOpts, func(ctx context.Context, projected []Transaction) error {
+		position, err := s.repo.ListPosition(ctx, validatedOpts)
+		if err != nil {
+			return err
+		}
+		result, err = s.mergeFutureTransactionPage(ctx, validatedOpts, position, projected)
+		return err
+	})
+	return result, err
+}
+
+func (s *Service) listPersistedTransactions(ctx context.Context, opts ListOptions) (ListResult, error) {
+	transactions, err := s.repo.List(ctx, opts)
 	if err != nil {
 		return ListResult{}, err
 	}
 	for index := range transactions.Items {
-		classified, err := classifyTransaction(transactions.Items[index])
+		classified, err := ClassifyTransaction(transactions.Items[index])
 		if err != nil {
 			return ListResult{}, err
 		}
 		transactions.Items[index] = classified
 	}
-
 	return transactions, nil
+}
+
+func (s *Service) shouldProjectFutureTransactions(opts ListOptions) bool {
+	if s.futureProjections == nil || opts.AnchorDate == nil || !opts.AnchorDate.Time().After(values.LocalCivilDateFromTime(s.clock.Now()).Time()) {
+		return false
+	}
+	if len(opts.Settlements) > 0 && !slices.Contains(opts.Settlements, SettlementSummaryNotApplicable) {
+		return false
+	}
+	return slices.Contains(opts.LifecycleStatuses, LifecycleStatusExpected)
+}
+
+func (s *Service) mergeFutureTransactionPage(ctx context.Context, opts ListOptions, position PagePosition, projected []Transaction) (ListResult, error) {
+	pageOffset := position.Offset
+	if opts.OffsetSpecified {
+		pageOffset = opts.Offset
+	}
+	prefixOpts := opts
+	prefixOpts.AnchorDate = nil
+	prefixOpts.Offset = 0
+	prefixOpts.IncludeTotalCount = false
+	if opts.Limit == nil {
+		prefixOpts.Limit = nil
+	} else {
+		prefixLimit := pageOffset + *opts.Limit
+		prefixOpts.Limit = &prefixLimit
+	}
+	persistedPrefix, err := s.repo.List(ctx, prefixOpts)
+	if err != nil {
+		return ListResult{}, err
+	}
+	for index := range persistedPrefix.Items {
+		classified, err := ClassifyTransaction(persistedPrefix.Items[index])
+		if err != nil {
+			return ListResult{}, err
+		}
+		persistedPrefix.Items[index] = classified
+	}
+
+	combined := append(persistedPrefix.Items, projected...)
+	slices.SortFunc(combined, func(left Transaction, right Transaction) int {
+		if dateOrder := right.InitiatedDate.Time().Compare(left.InitiatedDate.Time()); dateOrder != 0 {
+			return dateOrder
+		}
+		switch {
+		case left.ID > right.ID:
+			return -1
+		case left.ID < right.ID:
+			return 1
+		default:
+			return 0
+		}
+	})
+	start := min(pageOffset, len(combined))
+	end := len(combined)
+	if opts.Limit != nil {
+		end = min(start+*opts.Limit, end)
+	}
+
+	return ListResult{
+		Items:      combined[start:end],
+		Offset:     pageOffset,
+		TotalCount: position.TotalCount + int64(len(projected)),
+	}, nil
 }
 
 // MonthTotals returns server-computed spend and income totals for a YYYY-MM civil month.

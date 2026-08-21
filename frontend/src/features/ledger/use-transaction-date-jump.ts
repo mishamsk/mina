@@ -34,6 +34,7 @@ const shiftLocalDate = (anchorDate: string, days: -1 | 1): string => {
 };
 
 interface UseTransactionDateJumpOptions {
+  readonly anchorDate?: string;
   readonly page: number;
   readonly pageSize: number;
   readonly params: TransactionPageParams;
@@ -49,23 +50,44 @@ export interface TransactionDateJumpAnchor {
 }
 
 export const useTransactionDateJump = ({
+  anchorDate,
   page,
   pageSize,
   params,
   readFiltersFromSearchParams = readTransactionFiltersFromSearchParams,
   setSearchParams,
 }: UseTransactionDateJumpOptions) => {
-  const [dateJumpValue, setDateJumpValue] = useState("");
+  const [dateJumpValue, setDateJumpValue] = useState(anchorDate ?? "");
   const [dateJumpLoading, setDateJumpLoading] = useState(false);
-  const [dateJumpAnchor, setDateJumpAnchor] =
-    useState<TransactionDateJumpAnchor>();
+  const [renderedAnchorDate, setRenderedAnchorDate] = useState(anchorDate);
+  const [dateJumpAnchor, setDateJumpAnchor] = useState<
+    TransactionDateJumpAnchor | undefined
+  >(() => (anchorDate ? { date: anchorDate, page } : undefined));
   const activeDateJumpIdRef = useRef(0);
+
+  if (renderedAnchorDate !== anchorDate) {
+    setRenderedAnchorDate(anchorDate);
+    setDateJumpValue(anchorDate ?? "");
+    setDateJumpAnchor((current) => {
+      if (!anchorDate) {
+        return undefined;
+      }
+      return current?.date === anchorDate
+        ? current
+        : { date: anchorDate, page };
+    });
+  }
 
   const cancelDateJump = useCallback(() => {
     activeDateJumpIdRef.current += 1;
     setDateJumpLoading(false);
     setDateJumpAnchor(undefined);
-  }, []);
+    const current = new URLSearchParams(window.location.search);
+    if (current.has("anchor_date")) {
+      current.delete("anchor_date");
+      setSearchParams(current, { replace: true });
+    }
+  }, [setSearchParams]);
 
   const jumpToDate = useCallback(
     async (anchorDate: string) => {
@@ -87,7 +109,7 @@ export const useTransactionDateJump = ({
             anchorDate,
             filters: params.filters,
             limit: pageSize,
-            offset: params.offset,
+            offset: 0,
             sort: params.sort,
             sortDirection: params.sortDirection,
           },
@@ -116,6 +138,7 @@ export const useTransactionDateJump = ({
           const next = new URLSearchParams(current);
           next.set("page", String(landedPage));
           next.set("pageSize", String(pageSize));
+          next.set("anchor_date", anchorDate);
           applied = true;
           return next;
         });
@@ -132,7 +155,6 @@ export const useTransactionDateJump = ({
       page,
       pageSize,
       params.filters,
-      params.offset,
       params.sort,
       params.sortDirection,
       readFiltersFromSearchParams,

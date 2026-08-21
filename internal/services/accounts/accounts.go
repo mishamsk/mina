@@ -115,11 +115,13 @@ type ReferenceOptions struct {
 
 // Reference is the account data needed to validate write references and classify transactions.
 type Reference struct {
-	ID          int64
-	FQN         string
-	AccountType AccountType
-	IsHidden    bool
-	Currency    *string
+	ID                   int64
+	FQN                  string
+	DisplayLabelOverride *string
+	AccountType          AccountType
+	IsHidden             bool
+	Currency             *string
+	ExternalID           *string
 }
 
 // RecordReference identifies the account and currency of a record write.
@@ -748,11 +750,13 @@ func (s *Service) cacheActiveReference(account Account) {
 func accountReferenceStateFromAccount(account Account) accountReferenceState {
 	return accountReferenceState{
 		reference: Reference{
-			ID:          account.ID,
-			FQN:         account.FQN,
-			AccountType: account.AccountType,
-			IsHidden:    account.IsHidden,
-			Currency:    account.Currency,
+			ID:                   account.ID,
+			FQN:                  account.FQN,
+			DisplayLabelOverride: account.DisplayLabelOverride,
+			AccountType:          account.AccountType,
+			IsHidden:             account.IsHidden,
+			Currency:             account.Currency,
+			ExternalID:           account.ExternalID,
 		},
 		active: account.TombstonedAt == nil,
 	}

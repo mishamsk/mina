@@ -1232,7 +1232,7 @@ export const dismissRecurringOccurrence = <ThrowOnError extends boolean = false>
 /**
  * List transactions with journal records.
  *
- * Defaults to `initiated_date` descending. Every sort uses `transaction_id` in the same direction as the stable tiebreaker.
+ * Defaults to `initiated_date` descending. Every sort uses `transaction_id` in the same direction as the stable tiebreaker. A future anchor_date also merges read-only recurring projections through that date when lifecycle_status explicitly includes expected; projections do not create recurring occurrences or transactions.
  */
 export const listTransactions = <ThrowOnError extends boolean = false>(options?: Options<ListTransactionsData, ThrowOnError>): RequestResult<ListTransactionsResponses, ListTransactionsErrors, ThrowOnError> => (options?.client ?? client).get<ListTransactionsResponses, ListTransactionsErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }, {

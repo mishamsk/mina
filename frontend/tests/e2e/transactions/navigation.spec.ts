@@ -1,11 +1,321 @@
 import { test } from "@tests/e2e/test";
 import {
+  createAccount,
+  createCategory,
   expect,
   expectTransactionsPageUrl,
   formatLocalDate,
   shiftLocalDate,
   type TransactionListFixture,
 } from "@tests/e2e/transactions/support";
+
+test("future date navigation displays future active and expected transactions", async ({
+  page,
+}, testInfo) => {
+  const unique = `44a1-${testInfo.workerIndex}-${Date.now()}`;
+  const futureDate = shiftLocalDate(formatLocalDate(new Date()), 730);
+  const futureActiveDate = shiftLocalDate(futureDate, -1);
+  const activeMemo = `Future active ${unique}`;
+  const oldestActiveMemo = `${activeMemo} 0`;
+  const expectedMemo = `Future expected ${unique}`;
+  const checking = await createAccount(
+    page,
+    `e2e:FuturePosition:${unique}:Checking`,
+    "owned",
+    "USD",
+  );
+  const merchant = await createAccount(
+    page,
+    `e2e:FuturePosition:${unique}:Merchant`,
+    "flow",
+  );
+  const category = await createCategory(
+    page,
+    `e2e:FuturePosition:${unique}:Category`,
+    "expense",
+  );
+
+  for (let index = 0; index < 25; index += 1) {
+    const futureTransaction = await page.request.post(
+      "/api/transactions/spend",
+      {
+        data: {
+          amount: "17.25000000",
+          category_id: category.category_id,
+          counterparty_account_id: merchant.account_id,
+          currency: "USD",
+          funding_account_id: checking.account_id,
+          initiated_date: futureActiveDate,
+          memo: `${activeMemo} ${String(index)}`,
+        },
+      },
+    );
+    expect(futureTransaction.ok(), await futureTransaction.text()).toBe(true);
+  }
+
+  const recurringDefinition = await page.request.post(
+    "/api/recurring-definitions",
+    {
+      data: {
+        anchor_date: futureDate,
+        fqn: `E2E:FuturePosition:${unique}`,
+        schedule_rule: {
+          every: 1,
+          kind: "interval",
+          unit: "YEAR",
+          version: 1,
+        },
+        records: [
+          {
+            account_id: checking.account_id,
+            amount: "-23.45000000",
+            category_id: null,
+            currency: "USD",
+            memo: expectedMemo,
+            tag_ids: [],
+          },
+          {
+            account_id: merchant.account_id,
+            amount: "23.45000000",
+            category_id: category.category_id,
+            currency: "USD",
+            memo: expectedMemo,
+            tag_ids: [],
+          },
+          {
+            account_id: checking.account_id,
+            amount: "-11.00000000",
+            category_id: null,
+            currency: "USD",
+            memo: expectedMemo,
+            tag_ids: [],
+          },
+          {
+            account_id: merchant.account_id,
+            amount: "11.00000000",
+            category_id: category.category_id,
+            currency: "USD",
+            memo: expectedMemo,
+            tag_ids: [],
+          },
+        ],
+      },
+    },
+  );
+  expect(recurringDefinition.ok(), await recurringDefinition.text()).toBe(true);
+  const recurringDefinitionBody = (await recurringDefinition.json()) as {
+    recurring_definition_id: number;
+  };
+
+  const filteredTransactionsURL = `/transactions?page=1&pageSize=25&category=${String(category.category_id)}`;
+  await page.goto(filteredTransactionsURL);
+  await expect(
+    page.locator("tbody > tr[data-transaction-id]").first(),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "Add filter" }).click();
+  await page.getByRole("button", { exact: true, name: "Lifecycle" }).click();
+  const initialExpectedRequest = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/transactions" &&
+      url.searchParams.getAll("lifecycle_status").includes("expected")
+    );
+  });
+  await page.getByText("Expected", { exact: true }).click();
+  await initialExpectedRequest;
+  await expect(page.getByText(expectedMemo)).toHaveCount(0);
+  await page.getByRole("button", { name: "Remove Lifecycle Expected" }).click();
+  await expect(
+    page.getByRole("button", { name: "Remove Lifecycle Expected" }),
+  ).toHaveCount(0);
+  await page.goto(filteredTransactionsURL);
+  await expect(
+    page.locator("tbody > tr[data-transaction-id]").first(),
+  ).toBeVisible();
+
+  const anchorResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/transactions" &&
+      url.searchParams.get("anchor_date") === futureDate
+    );
+  });
+  await page.getByLabel("Go to day").fill(futureDate);
+  expect((await anchorResponse).ok()).toBe(true);
+
+  const transactionRows = page.locator("tbody > tr[data-transaction-id]");
+  const expectedRow = transactionRows.filter({ hasText: expectedMemo });
+  await expect(expectedRow).toBeVisible();
+  await expect(
+    expectedRow.getByRole("img", { name: "Expected" }),
+  ).toBeVisible();
+  await expect(expectedRow).toHaveAttribute(
+    "data-recurring-projection",
+    "true",
+  );
+  await expect(expectedRow).not.toHaveAttribute("aria-disabled");
+  await expect(
+    expectedRow.locator(".transactions-actions-column button"),
+  ).toHaveCount(0);
+  await expect(page).toHaveURL(
+    new RegExp(`[?&]anchor_date=${futureDate}(?:&|$)`),
+  );
+  const reloadAnchorResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/transactions" &&
+      url.searchParams.get("anchor_date") === futureDate
+    );
+  });
+  await page.reload();
+  expect((await reloadAnchorResponse).ok()).toBe(true);
+  await expect(expectedRow).toBeVisible();
+  await expect(page.getByLabel("Go to day")).toHaveValue(futureDate);
+  await expectedRow.click();
+  const projectedDetail = page.getByTestId("transaction-detail-panel");
+  await expect(projectedDetail).toBeVisible();
+  await expect(
+    projectedDetail
+      .getByTestId("transaction-detail-records-table")
+      .locator("tbody > tr"),
+  ).toHaveCount(4);
+  await expect(projectedDetail).toContainText("23.45");
+  await expect(projectedDetail).toContainText("11.00");
+  await expect(
+    projectedDetail.getByRole("button", { name: "Confirm occurrence" }),
+  ).toHaveCount(0);
+  await page.goBack();
+  await expect(projectedDetail).toBeHidden();
+
+  await expectedRow.click();
+  await expect(projectedDetail).toContainText(expectedMemo);
+  await page.keyboard.press("Control+K");
+  const commandPalette = page.getByRole("dialog", { name: "Command Palette" });
+  await expect(commandPalette).toBeVisible();
+  const transactionSearchRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return (
+      url.pathname === "/api/transactions" &&
+      url.searchParams.get("search") === oldestActiveMemo
+    );
+  });
+  await commandPalette
+    .getByRole("combobox", { name: "Command search" })
+    .fill(`'${oldestActiveMemo}`);
+  await transactionSearchRequest;
+  await commandPalette
+    .getByRole("option")
+    .filter({ hasText: oldestActiveMemo })
+    .click();
+  await expect(projectedDetail).toContainText(oldestActiveMemo);
+  await expect(projectedDetail).not.toContainText(expectedMemo);
+  await expect(page).toHaveURL(/[?&]transaction=\d+(?:&|$)/);
+  await projectedDetail.getByRole("button", { name: "Close" }).click();
+
+  let failNextPage = true;
+  await page.route("**/api/transactions**", async (route) => {
+    const url = new URL(route.request().url());
+    if (
+      failNextPage &&
+      url.searchParams.get("anchor_date") === futureDate &&
+      url.searchParams.get("offset") === "25"
+    ) {
+      await route.fulfill({
+        body: JSON.stringify({
+          error: { code: "internal_error", message: "Anchored page failed." },
+        }),
+        contentType: "application/json",
+        status: 500,
+      });
+      return;
+    }
+    await route.continue();
+  });
+  const failedNextPageResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/transactions" &&
+      url.searchParams.get("anchor_date") === futureDate &&
+      url.searchParams.get("offset") === "25" &&
+      response.status() === 500
+    );
+  });
+  await page.getByRole("button", { exact: true, name: "Next" }).click();
+  await failedNextPageResponse;
+  const anchoredPageError = page.getByRole("alert").filter({
+    hasText: "Anchored page failed.",
+  });
+  await expect(anchoredPageError).toBeVisible();
+
+  failNextPage = false;
+  const nextPageResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/transactions" &&
+      url.searchParams.get("anchor_date") === futureDate &&
+      url.searchParams.get("offset") === "25"
+    );
+  });
+  await anchoredPageError.getByRole("button", { name: "Retry" }).click();
+  expect((await nextPageResponse).ok()).toBe(true);
+  await page.unroute("**/api/transactions**");
+  await expect(
+    transactionRows.filter({ hasText: oldestActiveMemo }),
+  ).toBeVisible();
+
+  const occurrences = await page.request.get(
+    `/api/recurring-occurrences?recurring_definition_id=${String(recurringDefinitionBody.recurring_definition_id)}`,
+  );
+  expect(occurrences.ok(), await occurrences.text()).toBe(true);
+  const occurrencesBody = (await occurrences.json()) as {
+    recurring_occurrences: unknown[];
+  };
+  expect(occurrencesBody.recurring_occurrences).toEqual([]);
+});
+
+test("failed future date navigation can retry the retained page", async ({
+  page,
+}) => {
+  const failedDate = shiftLocalDate(formatLocalDate(new Date()), 365);
+  await page.goto("/transactions?page=1&pageSize=25");
+  await expect(
+    page.locator("tbody > tr[data-transaction-id]").first(),
+  ).toBeVisible();
+
+  await page.route("**/api/transactions**", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.get("anchor_date") === failedDate) {
+      await route.fulfill({
+        body: JSON.stringify({
+          error: { code: "internal_error", message: "Date jump failed." },
+        }),
+        contentType: "application/json",
+        status: 500,
+      });
+      return;
+    }
+    await route.continue();
+  });
+
+  await page.getByLabel("Go to day").fill(failedDate);
+  const staleAlert = page.getByRole("alert").filter({
+    hasText: "Transactions may be stale.",
+  });
+  await expect(staleAlert).toBeVisible();
+
+  const retryResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/transactions" &&
+      url.searchParams.get("anchor_date") === null &&
+      url.searchParams.get("offset") === "0"
+    );
+  });
+  await staleAlert.getByRole("button", { name: "Retry" }).click();
+  expect((await retryResponse).ok()).toBe(true);
+  await expect(staleAlert).toHaveCount(0);
+});
 
 test("transactions page jumps to a date-anchored page", async ({ page }) => {
   const initialResponse = await page.request.get(
@@ -114,7 +424,9 @@ test("transactions page jumps to a date-anchored page", async ({ page }) => {
   expect(cancelledDateJumpBody.offset).toBe(dateJumpBody.offset);
   expect(dateJumpBody.total_count).toBeGreaterThan(landedPage * 25);
   const landedTransaction = dateJumpBody.transactions[0]!;
-  await expectTransactionsPageUrl(page, landedPage, 25);
+  await expectTransactionsPageUrl(page, landedPage, 25, {
+    anchorDate: jumpDate,
+  });
   await expect(
     page.getByText(new RegExp(`Page ${landedPage} of \\d+`)),
   ).toBeVisible();
@@ -137,7 +449,9 @@ test("transactions page jumps to a date-anchored page", async ({ page }) => {
   await expect(page.getByLabel("Go to day")).toHaveValue(jumpDate);
 
   await page.getByRole("button", { exact: true, name: "Next" }).click();
-  await expectTransactionsPageUrl(page, landedPage + 1, 25);
+  await expectTransactionsPageUrl(page, landedPage + 1, 25, {
+    anchorDate: jumpDate,
+  });
   await expect(
     page.getByText(new RegExp(`Page ${landedPage + 1} of \\d+`)),
   ).toBeVisible();
@@ -154,7 +468,9 @@ test("transactions page jumps to a date-anchored page", async ({ page }) => {
     await oldDateJumpResponse
   ).json()) as TransactionListFixture;
   const oldAnchorPage = Math.floor(oldDateJumpBody.offset / 25) + 1;
-  await expectTransactionsPageUrl(page, oldAnchorPage, 25);
+  await expectTransactionsPageUrl(page, oldAnchorPage, 25, {
+    anchorDate: olderThanEverything,
+  });
   await expect(
     page.getByText(new RegExp(`Page ${oldAnchorPage} of \\d+`)),
   ).toBeVisible();
@@ -199,7 +515,9 @@ test("transactions page steps adjacent date anchors", async ({ page }) => {
   ).json()) as TransactionListFixture;
   const previousLandedPage = Math.floor(previousPage.offset / 25) + 1;
   await expect(dateJump).toHaveValue(previousDate);
-  await expectTransactionsPageUrl(page, previousLandedPage, 25);
+  await expectTransactionsPageUrl(page, previousLandedPage, 25, {
+    anchorDate: previousDate,
+  });
   await expect(
     page.getByText(previousPage.transactions[0]!.display_title).first(),
   ).toBeVisible();
@@ -221,6 +539,7 @@ test("transactions page steps adjacent date anchors", async ({ page }) => {
     page,
     Math.floor(nextPage.offset / 25) + 1,
     25,
+    { anchorDate },
   );
 
   await page.goto("/transactions?page=1&pageSize=25");
@@ -242,6 +561,7 @@ test("transactions page steps adjacent date anchors", async ({ page }) => {
     page,
     Math.floor(noAnchorPage.offset / 25) + 1,
     25,
+    { anchorDate: yesterday },
   );
 
   const todayResponse = page.waitForResponse((response) => {
@@ -497,6 +817,7 @@ test("transactions page repositions a same-page day jump, then keeps stepping an
     page,
     Math.floor(todayPage.offset / 50) + 1,
     50,
+    { anchorDate: today },
   );
   await expect(
     page.locator(`[data-date-jump-anchor="${today}"]`),

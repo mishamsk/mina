@@ -349,6 +349,10 @@ export const TransactionsPage = () => {
         />
         {!browser.editMode && browser.detail.selectedTransactionId ? (
           <TransactionDetailPanel
+            readOnly={
+              browser.detail.transaction?.recurring_projection_definition_id !=
+              null
+            }
             errorMessage={browser.detail.errorMessage}
             loading={browser.detail.loading}
             lookups={browser.lookups.snapshot}

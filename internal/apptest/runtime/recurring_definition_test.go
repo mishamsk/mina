@@ -2,6 +2,7 @@ package runtime_test
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"testing"
 	"time"
@@ -558,6 +559,340 @@ func TestRecurringOccurrenceMaterializationReviewQueueBoundary(t *testing.T) {
 	assertReviewedOccurrence(t, *confirmed.JSON200, httpclient.RecurringOccurrenceStatusConfirmed)
 	if confirmed.JSON200.RecurringDefinitionFqn != definition.JSON201.Fqn {
 		t.Fatalf("confirmed cancelled-definition occurrence fqn = %q, want %q", confirmed.JSON200.RecurringDefinitionFqn, definition.JSON201.Fqn)
+	}
+}
+
+func TestFutureTransactionPositionProjectsExpectedOccurrencesWithoutMaterializingBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	today := civilDateOnly(client.Now())
+	futureDate := formatDate(today.AddDate(2, 0, 0))
+	anchorDate := apptest.Date(futureDate)
+
+	transactionRefs := createTransactionRefs(t, client)
+	futureTransaction := createTransactionForDate(t, client, transactionRefs, futureDate, "Future active transaction")
+	recurringRefs := createRecurringDefinitionRefs(t, client, "RecurringFuturePosition")
+	definition := createRecurringDefinition(t, client, recurringDefinitionRequest(
+		"RecurringFuturePosition:Monthly",
+		recurringRefs,
+		"-10.00000000",
+		"10.00000000",
+		intervalRule(1, "MONTH"),
+		futureDate,
+	))
+
+	beforeFuturePosition := listRecurringOccurrences(t, client, &httpclient.ListRecurringOccurrencesParams{
+		RecurringDefinitionId: &definition.JSON201.RecurringDefinitionId,
+	})
+	assertRecurringOccurrences(t, beforeFuturePosition.JSON200.RecurringOccurrences, definition.JSON201.RecurringDefinitionId, nil)
+
+	limit := 50
+	allLifecycles := []httpclient.TransactionLifecycleStatus{
+		httpclient.TransactionLifecycleStatusActive,
+		httpclient.TransactionLifecycleStatusExpected,
+		httpclient.TransactionLifecycleStatusCancelled,
+	}
+	anchored, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+		AnchorDate:      &anchorDate,
+		LifecycleStatus: &allLifecycles,
+		Limit:           &limit,
+	})
+	requireNoTransportError(t, "future-position transaction list", err)
+	if anchored.StatusCode() != http.StatusOK {
+		t.Fatalf("future-position transaction list status = %d, want %d; body %s", anchored.StatusCode(), http.StatusOK, anchored.Body)
+	}
+	if len(anchored.JSON200.Transactions) != 2 {
+		t.Fatalf("future-position transactions = %+v, want active and projected rows", anchored.JSON200.Transactions)
+	}
+	if anchored.JSON200.Offset != 0 || anchored.JSON200.TotalCount != 2 {
+		t.Fatalf("future-position transaction position = %d/%d, want 0/2", anchored.JSON200.Offset, anchored.JSON200.TotalCount)
+	}
+	if anchored.JSON200.Transactions[0].TransactionId != futureTransaction.JSON201.TransactionId || anchored.JSON200.Transactions[1].RecurringProjectionDefinitionId == nil {
+		t.Fatalf("future-position transaction order = %+v, want persisted row before same-date projection", anchored.JSON200.Transactions)
+	}
+	var projection *httpclient.Transaction
+	var active *httpclient.Transaction
+	for index := range anchored.JSON200.Transactions {
+		transaction := &anchored.JSON200.Transactions[index]
+		if transaction.RecurringProjectionDefinitionId != nil {
+			projection = transaction
+		} else if transaction.TransactionId == futureTransaction.JSON201.TransactionId {
+			active = transaction
+		}
+	}
+	if active == nil || projection == nil {
+		t.Fatalf("future-position transactions = %+v, want active transaction %d and recurring projection", anchored.JSON200.Transactions, futureTransaction.JSON201.TransactionId)
+	}
+	if projection.TransactionId >= 0 || projection.RecurringOccurrenceId != nil || projection.RecurringProjectionDefinitionId == nil || *projection.RecurringProjectionDefinitionId != definition.JSON201.RecurringDefinitionId || projection.LifecycleStatus != httpclient.TransactionLifecycleStatusExpected {
+		t.Fatalf("recurring projection = %+v, want read-only expected projection for definition %d", projection, definition.JSON201.RecurringDefinitionId)
+	}
+	for _, record := range projection.Records {
+		if record.AmountUsd != nil {
+			t.Fatalf("projected record amount_usd = %v, want nil for unknowable future rate", record.AmountUsd)
+		}
+	}
+
+	pageLimit := 1
+	projectionOffset := 1
+	projectionPage, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+		AnchorDate:      &anchorDate,
+		LifecycleStatus: &allLifecycles,
+		Limit:           &pageLimit,
+		Offset:          &projectionOffset,
+	})
+	requireNoTransportError(t, "future-position projection page", err)
+	if projectionPage.StatusCode() != http.StatusOK {
+		t.Fatalf("future-position projection page status = %d, want %d; body %s", projectionPage.StatusCode(), http.StatusOK, projectionPage.Body)
+	}
+	if projectionPage.JSON200.Offset != projectionOffset || projectionPage.JSON200.TotalCount != 2 || len(projectionPage.JSON200.Transactions) != 1 || projectionPage.JSON200.Transactions[0].RecurringProjectionDefinitionId == nil {
+		t.Fatalf("future-position projection page = %+v, want offset 1 of 2 with projection", projectionPage.JSON200)
+	}
+
+	expectedLifecycle := []httpclient.TransactionLifecycleStatus{httpclient.TransactionLifecycleStatusExpected}
+	expectedOnly, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+		AnchorDate:      &anchorDate,
+		LifecycleStatus: &expectedLifecycle,
+		Limit:           &limit,
+	})
+	requireNoTransportError(t, "future-position expected transaction list", err)
+	if expectedOnly.StatusCode() != http.StatusOK {
+		t.Fatalf("future-position expected transaction list status = %d, want %d; body %s", expectedOnly.StatusCode(), http.StatusOK, expectedOnly.Body)
+	}
+	if len(expectedOnly.JSON200.Transactions) != 1 || expectedOnly.JSON200.Transactions[0].RecurringProjectionDefinitionId == nil {
+		t.Fatalf("future-position expected transactions = %+v, want only recurring projection", expectedOnly.JSON200.Transactions)
+	}
+
+	withoutLifecycle, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+		AnchorDate: &anchorDate,
+		Limit:      &limit,
+	})
+	requireNoTransportError(t, "future-position transaction list without lifecycle", err)
+	if withoutLifecycle.StatusCode() != http.StatusOK || len(withoutLifecycle.JSON200.Transactions) != 1 || withoutLifecycle.JSON200.Transactions[0].TransactionId != futureTransaction.JSON201.TransactionId || withoutLifecycle.JSON200.Transactions[0].RecurringProjectionDefinitionId != nil {
+		t.Fatalf("future-position transactions without lifecycle = %d/%+v, want only active transaction %d", withoutLifecycle.StatusCode(), withoutLifecycle.JSON200, futureTransaction.JSON201.TransactionId)
+	}
+
+	activeLifecycle := []httpclient.TransactionLifecycleStatus{httpclient.TransactionLifecycleStatusActive}
+	activeOnly, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+		AnchorDate:      &anchorDate,
+		LifecycleStatus: &activeLifecycle,
+		Limit:           &limit,
+	})
+	requireNoTransportError(t, "future-position active transaction list", err)
+	if activeOnly.StatusCode() != http.StatusOK || len(activeOnly.JSON200.Transactions) != 1 || activeOnly.JSON200.Transactions[0].TransactionId != futureTransaction.JSON201.TransactionId || activeOnly.JSON200.Transactions[0].RecurringProjectionDefinitionId != nil {
+		t.Fatalf("future-position active transactions = %d/%+v, want only active transaction %d", activeOnly.StatusCode(), activeOnly.JSON200, futureTransaction.JSON201.TransactionId)
+	}
+
+	afterFuturePosition := listRecurringOccurrences(t, client, &httpclient.ListRecurringOccurrencesParams{
+		RecurringDefinitionId: &definition.JSON201.RecurringDefinitionId,
+	})
+	assertRecurringOccurrences(t, afterFuturePosition.JSON200.RecurringOccurrences, definition.JSON201.RecurringDefinitionId, nil)
+
+	posted := []httpclient.TransactionSettlement{httpclient.TransactionSettlementPosted}
+	postedOnly, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+		AnchorDate:      &anchorDate,
+		LifecycleStatus: &allLifecycles,
+		Settlement:      &posted,
+		Limit:           &limit,
+	})
+	requireNoTransportError(t, "future-position posted transaction list", err)
+	if postedOnly.StatusCode() != http.StatusOK || len(postedOnly.JSON200.Transactions) != 1 || postedOnly.JSON200.Transactions[0].TransactionId != futureTransaction.JSON201.TransactionId {
+		t.Fatalf("future-position posted transactions = %d/%+v, want only active transaction %d", postedOnly.StatusCode(), postedOnly.JSON200, futureTransaction.JSON201.TransactionId)
+	}
+
+	dedupRefs := createRecurringDefinitionRefs(t, client, "RecurringProjectionDedup")
+	dedupDefinition := createRecurringDefinition(t, client, recurringDefinitionRequest(
+		"RecurringProjectionDedup:Daily",
+		dedupRefs,
+		"-12.00000000",
+		"12.00000000",
+		intervalRule(1, "DAY"),
+		formatDate(today.AddDate(0, 0, -2)),
+	))
+	dueOccurrences := listRecurringOccurrences(t, client, &httpclient.ListRecurringOccurrencesParams{
+		RecurringDefinitionId: &dedupDefinition.JSON201.RecurringDefinitionId,
+	})
+	if len(dueOccurrences.JSON200.RecurringOccurrences) != 3 {
+		t.Fatalf("past-anchored due occurrences = %+v, want three slots through today", dueOccurrences.JSON200.RecurringOccurrences)
+	}
+	confirmedFuture := confirmNextRecurringDefinition(t, client, dedupDefinition.JSON201.RecurringDefinitionId)
+	tomorrow := today.AddDate(0, 0, 1)
+	if got := confirmedFuture.JSON200.ScheduledDate.Time; !got.Equal(tomorrow) {
+		t.Fatalf("confirmed future occurrence date = %s, want %s", formatDate(got), formatDate(tomorrow))
+	}
+
+	through := apptest.Date(formatDate(today.AddDate(0, 0, 2)))
+	categoryIDs := []int64{dedupRefs.CategoryID}
+	deduplicated, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+		AnchorDate:      &through,
+		CategoryId:      &categoryIDs,
+		LifecycleStatus: &allLifecycles,
+		Limit:           &limit,
+	})
+	requireNoTransportError(t, "past-anchored deduplicated projection list", err)
+	if deduplicated.StatusCode() != http.StatusOK {
+		t.Fatalf("past-anchored deduplicated projection list status = %d, want %d; body %s", deduplicated.StatusCode(), http.StatusOK, deduplicated.Body)
+	}
+	projectionCount := 0
+	confirmedCount := 0
+	for _, transaction := range deduplicated.JSON200.Transactions {
+		if transaction.TransactionId == *confirmedFuture.JSON200.GeneratedTransactionId {
+			confirmedCount++
+		}
+		if transaction.RecurringProjectionDefinitionId == nil {
+			continue
+		}
+		projectionCount++
+		if got := transaction.InitiatedDate.Time; !got.Equal(today.AddDate(0, 0, 2)) {
+			t.Fatalf("projected initiated date = %s, want only unoccupied day after confirmed future slot", formatDate(got))
+		}
+	}
+	if projectionCount != 1 || confirmedCount != 1 {
+		t.Fatalf("past-anchored projection counts = projection:%d confirmed:%d, want 1/1; transactions = %+v", projectionCount, confirmedCount, deduplicated.JSON200.Transactions)
+	}
+	afterDeduplicatedRead := listRecurringOccurrences(t, client, &httpclient.ListRecurringOccurrencesParams{
+		RecurringDefinitionId: &dedupDefinition.JSON201.RecurringDefinitionId,
+	})
+	if len(afterDeduplicatedRead.JSON200.RecurringOccurrences) != 4 {
+		t.Fatalf("occurrences after deduplicated projection read = %+v, want three due and one confirmed future slot", afterDeduplicatedRead.JSON200.RecurringOccurrences)
+	}
+}
+
+func TestFutureTransactionPositionPagesPersistedRowsWithoutMatchingProjectionsBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	futureDate := formatDate(civilDateOnly(client.Now()).AddDate(2, 0, 0))
+	anchorDate := apptest.Date(futureDate)
+	refs := createTransactionRefs(t, client)
+	transactionIDs := make([]int64, 0, 26)
+	for index := range 26 {
+		created := createTransactionForDate(t, client, refs, futureDate, fmt.Sprintf("Future persisted page %d", index))
+		transactionIDs = append(transactionIDs, created.JSON201.TransactionId)
+	}
+
+	limit := 25
+	offset := 25
+	allLifecycles := []httpclient.TransactionLifecycleStatus{
+		httpclient.TransactionLifecycleStatusActive,
+		httpclient.TransactionLifecycleStatusExpected,
+		httpclient.TransactionLifecycleStatusCancelled,
+	}
+	categoryIDs := []int64{refs.CategoryId}
+	secondPage, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+		AnchorDate:      &anchorDate,
+		CategoryId:      &categoryIDs,
+		LifecycleStatus: &allLifecycles,
+		Limit:           &limit,
+		Offset:          &offset,
+	})
+	requireNoTransportError(t, "second future persisted page", err)
+	if secondPage.StatusCode() != http.StatusOK {
+		t.Fatalf("second future persisted page status = %d, want %d; body %s", secondPage.StatusCode(), http.StatusOK, secondPage.Body)
+	}
+	if secondPage.JSON200.Offset != offset || secondPage.JSON200.TotalCount != int64(len(transactionIDs)) {
+		t.Fatalf("second future persisted page position = %d/%d, want %d/%d", secondPage.JSON200.Offset, secondPage.JSON200.TotalCount, offset, len(transactionIDs))
+	}
+	if len(secondPage.JSON200.Transactions) != 1 || secondPage.JSON200.Transactions[0].TransactionId != transactionIDs[0] {
+		t.Fatalf("second future persisted page = %+v, want oldest transaction %d", secondPage.JSON200.Transactions, transactionIDs[0])
+	}
+}
+
+func TestFutureTransactionPositionAcceptsEarlierAbsoluteOffsetsBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	today := civilDateOnly(client.Now())
+	anchor := today.AddDate(2, 0, 0)
+	anchorDate := apptest.Date(formatDate(anchor))
+	refs := createRecurringDefinitionRefs(t, client, "RecurringProjectionPreviousPage")
+	createRecurringDefinition(t, client, recurringDefinitionRequest(
+		"RecurringProjectionPreviousPage:Yearly",
+		refs,
+		"-10.00000000",
+		"10.00000000",
+		intervalRule(1, "YEAR"),
+		formatDate(anchor),
+	))
+	transactionRefs := transactionRefs{
+		CheckingAccountId: refs.CheckingAccountID,
+		MerchantAccountId: refs.MerchantAccountID,
+		CategoryId:        refs.CategoryID,
+		TagId:             refs.TagID,
+		MemberId:          refs.MemberID,
+	}
+	newerDate := formatDate(anchor.AddDate(0, 0, 1))
+	newerTransactionIDs := make([]int64, 0, 26)
+	for index := range 26 {
+		created := createTransactionForDate(t, client, transactionRefs, newerDate, fmt.Sprintf("Future newer transaction %d", index))
+		newerTransactionIDs = append(newerTransactionIDs, created.JSON201.TransactionId)
+	}
+
+	limit := 25
+	allLifecycles := []httpclient.TransactionLifecycleStatus{
+		httpclient.TransactionLifecycleStatusActive,
+		httpclient.TransactionLifecycleStatusExpected,
+		httpclient.TransactionLifecycleStatusCancelled,
+	}
+	categoryIDs := []int64{refs.CategoryID}
+	landingPage, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+		AnchorDate:      &anchorDate,
+		CategoryId:      &categoryIDs,
+		LifecycleStatus: &allLifecycles,
+		Limit:           &limit,
+	})
+	requireNoTransportError(t, "future projection landing page", err)
+	if landingPage.StatusCode() != http.StatusOK || landingPage.JSON200.Offset != 25 {
+		t.Fatalf("future projection landing page = %d/%+v, want offset 25", landingPage.StatusCode(), landingPage.JSON200)
+	}
+
+	offset := 0
+	previousPage, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+		AnchorDate:      &anchorDate,
+		CategoryId:      &categoryIDs,
+		LifecycleStatus: &allLifecycles,
+		Limit:           &limit,
+		Offset:          &offset,
+	})
+	requireNoTransportError(t, "future projection previous page", err)
+	if previousPage.StatusCode() != http.StatusOK {
+		t.Fatalf("future projection previous page status = %d, want %d; body %s", previousPage.StatusCode(), http.StatusOK, previousPage.Body)
+	}
+	if previousPage.JSON200.Offset != 0 || len(previousPage.JSON200.Transactions) != limit {
+		t.Fatalf("future projection previous page = %+v, want offset 0 with %d rows", previousPage.JSON200, limit)
+	}
+	if previousPage.JSON200.Transactions[0].TransactionId != newerTransactionIDs[len(newerTransactionIDs)-1] {
+		t.Fatalf("future projection previous page first transaction = %d, want %d", previousPage.JSON200.Transactions[0].TransactionId, newerTransactionIDs[len(newerTransactionIDs)-1])
+	}
+}
+
+func TestFutureTransactionPositionRejectsUnboundedProjectionBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	refs := createRecurringDefinitionRefs(t, client, "RecurringProjectionLimit")
+	today := formatDate(civilDateOnly(client.Now()))
+	createRecurringDefinition(t, client, recurringDefinitionRequest(
+		"RecurringProjectionLimit:Daily",
+		refs,
+		"-10.00000000",
+		"10.00000000",
+		intervalRule(1, "DAY"),
+		today,
+	))
+
+	farFuture := apptest.Date("9999-12-31")
+	expected := []httpclient.TransactionLifecycleStatus{httpclient.TransactionLifecycleStatusExpected}
+	response, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+		AnchorDate:      &farFuture,
+		LifecycleStatus: &expected,
+	})
+	requireNoTransportError(t, "unbounded future transaction projection", err)
+	if response.StatusCode() != http.StatusBadRequest || response.JSON400 == nil || response.JSON400.Error.Code != httpclient.APIErrorCodeInvalidRequest {
+		t.Fatalf("unbounded future transaction projection = %d/%+v, want invalid-request response", response.StatusCode(), response.JSON400)
+	}
+
+	posted := []httpclient.TransactionSettlement{httpclient.TransactionSettlementPosted}
+	response, err = client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+		AnchorDate:      &farFuture,
+		LifecycleStatus: &expected,
+		Settlement:      &posted,
+	})
+	requireNoTransportError(t, "unbounded excluded future transaction projection", err)
+	if response.StatusCode() != http.StatusOK || len(response.JSON200.Transactions) != 0 || response.JSON200.TotalCount != 0 {
+		t.Fatalf("unbounded excluded future transaction projection = %d/%+v, want empty transaction page", response.StatusCode(), response.JSON200)
 	}
 }
 

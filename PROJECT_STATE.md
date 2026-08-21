@@ -19,7 +19,7 @@
 ## Reusable and scheduled transactions
 
 - Transaction templates are hierarchical, versioned through full replacement, and stored as active/tombstoned templates with partial journal-record defaults. Template moves preserve the template FQN.
-- Recurring definitions support schedule creation/replacement, pause/resume, defer, confirmation, cancellation, and occurrence review. Materialized occurrences are permanent, create linked EXPECTED transactions, and can be confirmed or dismissed.
+- Recurring definitions support schedule creation/replacement, pause/resume, defer, confirmation, cancellation, and occurrence review. Due occurrences materialize as permanent linked EXPECTED transactions that can be confirmed or dismissed; future transaction-list positions show read-only recurring projections without creating durable state.
 
 ## REST and client surfaces
 

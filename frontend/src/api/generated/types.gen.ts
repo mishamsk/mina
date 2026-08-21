@@ -1612,6 +1612,9 @@ export type RecurringOccurrenceListResponse = {
 };
 
 export type Transaction = {
+    /**
+     * Durable positive identifier, or a response-local negative row identity when recurring_projection_definition_id is non-null.
+     */
     transaction_id: number;
     /**
      * Strong ETag derived directly from updated_at; send this exact value in If-Match for complete replacement.
@@ -1622,6 +1625,10 @@ export type Transaction = {
      * Occurrence this transaction was generated from; null for non-recurring transactions; the definition is reached via the occurrence.
      */
     recurring_occurrence_id: number | null;
+    /**
+     * Recurring definition for a read-only future row computed by transaction-list date navigation; null or omitted when the transaction is persisted.
+     */
+    recurring_projection_definition_id?: number | null;
     lifecycle_status: TransactionLifecycleStatus;
     settlement: TransactionSettlement;
     transaction_class: TransactionClass;
@@ -5377,7 +5384,7 @@ export type ListTransactionsData = {
          */
         offset?: number;
         /**
-         * Date-only anchor that returns the page containing the first transaction at or before this initiated date. If the anchor is older than every transaction, the page clamps to the oldest transaction page. Valid only with initiated_date descending ordering and overrides offset when present.
+         * Date-only anchor that returns the page containing the first transaction at or before this initiated date. If the anchor is older than every transaction, the page clamps to the oldest transaction page. Valid only with initiated_date descending ordering. When future recurring projections participate, omit offset to land at the anchor; an explicit offset then addresses the absolute merged sequence. Without projections, the anchor determines the persisted page regardless of offset.
          */
         anchor_date?: string;
         /**

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { SetURLSearchParams } from "react-router";
+import { type SetURLSearchParams, useLocation } from "react-router";
 
 import type { Transaction } from "@/api";
 import { apiErrorMessage, fetchTransactionById } from "@/api";
@@ -26,6 +26,12 @@ interface FetchedTransactionDetail {
   readonly transactionId: number;
 }
 
+interface ResponseLocalDetail {
+  readonly locationKey: string;
+  readonly navigationPending: boolean;
+  readonly transaction: Transaction;
+}
+
 interface UseTransactionDetailOptions {
   readonly lookupsLoaded: boolean;
   readonly onFetchedTransaction?: (transaction: Transaction) => void;
@@ -41,6 +47,7 @@ export const useTransactionDetail = ({
   setSearchParams,
   transactions,
 }: UseTransactionDetailOptions) => {
+  const locationKey = useLocation().key;
   const [autoFocusOnTransactionChange, setAutoFocusOnTransactionChange] =
     useState(
       () =>
@@ -49,14 +56,39 @@ export const useTransactionDetail = ({
     );
   const [fetchedDetail, setFetchedDetail] =
     useState<FetchedTransactionDetail>();
+  const [responseLocalDetail, setResponseLocalDetail] =
+    useState<ResponseLocalDetail>();
   const [suppressedDetailFetchId, setSuppressedDetailFetchId] = useState<
     number | undefined
   >();
   const detailRestoreFocusRef = useRef<HTMLElement | null>(null);
   const rowOpenedTransactionIdRef = useRef<number | undefined>(undefined);
-  const selectedTransactionId = parseOptionalPositiveInteger(
+  const selectedPersistedTransactionId = parseOptionalPositiveInteger(
     searchParams.get("transaction"),
   );
+  let currentResponseLocalDetail = responseLocalDetail;
+  if (
+    currentResponseLocalDetail &&
+    currentResponseLocalDetail.locationKey !== locationKey
+  ) {
+    if (currentResponseLocalDetail.navigationPending) {
+      currentResponseLocalDetail = {
+        ...currentResponseLocalDetail,
+        locationKey,
+        navigationPending: false,
+      };
+      setResponseLocalDetail(currentResponseLocalDetail);
+    } else {
+      currentResponseLocalDetail = undefined;
+      setResponseLocalDetail(undefined);
+    }
+  }
+  const selectedResponseLocalDetail = selectedPersistedTransactionId
+    ? undefined
+    : currentResponseLocalDetail?.transaction;
+  const selectedTransactionId =
+    selectedResponseLocalDetail?.transaction_id ??
+    selectedPersistedTransactionId;
   const selectedTransactionFromSnapshot = transactions?.find(
     (transaction) => transaction.transaction_id === selectedTransactionId,
   );
@@ -65,13 +97,15 @@ export const useTransactionDetail = ({
       ? fetchedDetail
       : undefined;
   const transaction =
-    selectedFetchedDetail?.transaction ?? selectedTransactionFromSnapshot;
+    selectedResponseLocalDetail ??
+    selectedFetchedDetail?.transaction ??
+    selectedTransactionFromSnapshot;
   const errorMessage = transaction
     ? undefined
     : selectedFetchedDetail?.errorMessage;
   const detailNeedsFetch = Boolean(
-    selectedTransactionId &&
-    selectedTransactionId !== suppressedDetailFetchId &&
+    selectedPersistedTransactionId &&
+    selectedPersistedTransactionId !== suppressedDetailFetchId &&
     !selectedTransactionFromSnapshot &&
     !selectedFetchedDetail,
   );
@@ -80,9 +114,10 @@ export const useTransactionDetail = ({
   const closeTransactionDetail = useCallback(
     (options: { readonly suppressFetch?: boolean } = {}) => {
       setSuppressedDetailFetchId(
-        options.suppressFetch ? selectedTransactionId : undefined,
+        options.suppressFetch ? selectedPersistedTransactionId : undefined,
       );
       setFetchedDetail(undefined);
+      setResponseLocalDetail(undefined);
       setSearchParams(
         (current) => {
           const next = new URLSearchParams(current);
@@ -92,7 +127,7 @@ export const useTransactionDetail = ({
         { replace: true },
       );
     },
-    [selectedTransactionId, setSearchParams],
+    [selectedPersistedTransactionId, setSearchParams],
   );
 
   const openTransactionDetail = useCallback(
@@ -123,6 +158,21 @@ export const useTransactionDetail = ({
       setAutoFocusOnTransactionChange(false);
       rowOpenedTransactionIdRef.current = nextTransactionId;
       detailRestoreFocusRef.current = opener ?? null;
+      if (
+        typeof nextTransaction !== "number" &&
+        nextTransaction.recurring_projection_definition_id != null
+      ) {
+        setFetchedDetail(undefined);
+        setResponseLocalDetail({
+          locationKey,
+          navigationPending: true,
+          transaction: nextTransaction,
+        });
+        const next = readLiveSearchParams();
+        next.delete("transaction");
+        setSearchParams(next, { replace: selectedTransactionId !== undefined });
+        return;
+      }
       if (selectedTransactionId === nextTransactionId) {
         const liveSearchParams = readLiveSearchParams();
         if (
@@ -134,6 +184,7 @@ export const useTransactionDetail = ({
       }
 
       setSuppressedDetailFetchId(undefined);
+      setResponseLocalDetail(undefined);
       const activeElement = document.activeElement;
       detailRestoreFocusRef.current =
         opener ?? (activeElement instanceof HTMLElement ? activeElement : null);
@@ -141,7 +192,12 @@ export const useTransactionDetail = ({
       next.set("transaction", String(nextTransactionId));
       setSearchParams(next, { replace: selectedTransactionId !== undefined });
     },
-    [closeTransactionDetail, selectedTransactionId, setSearchParams],
+    [
+      closeTransactionDetail,
+      locationKey,
+      selectedTransactionId,
+      setSearchParams,
+    ],
   );
 
   const refreshSelectedTransactionDetail = useCallback(
@@ -197,8 +253,8 @@ export const useTransactionDetail = ({
 
   useEffect(() => {
     if (
-      !selectedTransactionId ||
-      selectedTransactionId === suppressedDetailFetchId ||
+      !selectedPersistedTransactionId ||
+      selectedPersistedTransactionId === suppressedDetailFetchId ||
       selectedTransactionFromSnapshot ||
       selectedFetchedDetail
     ) {
@@ -207,7 +263,7 @@ export const useTransactionDetail = ({
 
     let active = true;
 
-    void fetchTransactionById(selectedTransactionId).then((result) => {
+    void fetchTransactionById(selectedPersistedTransactionId).then((result) => {
       if (!active) {
         return;
       }
@@ -217,7 +273,7 @@ export const useTransactionDetail = ({
         setFetchedDetail({
           errorMessage: undefined,
           transaction: result.data,
-          transactionId: selectedTransactionId,
+          transactionId: selectedPersistedTransactionId,
         });
         return;
       }
@@ -225,7 +281,7 @@ export const useTransactionDetail = ({
       setFetchedDetail({
         errorMessage: apiErrorMessage(result.error),
         transaction: undefined,
-        transactionId: selectedTransactionId,
+        transactionId: selectedPersistedTransactionId,
       });
     });
 
@@ -235,7 +291,7 @@ export const useTransactionDetail = ({
   }, [
     selectedFetchedDetail,
     selectedTransactionFromSnapshot,
-    selectedTransactionId,
+    selectedPersistedTransactionId,
     suppressedDetailFetchId,
     onFetchedTransaction,
   ]);

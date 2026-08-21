@@ -601,7 +601,7 @@ operations:
     mcp:
       state: exposed
       name: list_occurrences
-      description: Use as the recurring review queue; it materializes due occurrences through the current civil date before returning them. Supply limit (1-500), offset, definition/status filters; defaults sort scheduled date ascending.
+      description: Use as the recurring review queue; it materializes due occurrences through the current civil date. Supply limit (1-500), offset, definition/status filters; defaults sort scheduled date ascending.
       annotations: {read_only: false, destructive: false, idempotent: true, open_world: false}
   confirmRecurringOccurrence:
     cli: {state: exposed, name: confirm-occurrence}

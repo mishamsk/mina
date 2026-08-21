@@ -355,6 +355,10 @@ export const isExpectedRecurringOccurrence = (
   transaction.lifecycle_status === "expected" &&
   transaction.recurring_occurrence_id !== null;
 
+export const isProjectedRecurringTransaction = (
+  transaction: Transaction,
+): boolean => transaction.recurring_projection_definition_id != null;
+
 export const canSplitTransaction = (transaction: Transaction): boolean => {
   const splitRole =
     transaction.transaction_class === "spend"

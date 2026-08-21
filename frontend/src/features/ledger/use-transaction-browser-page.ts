@@ -59,6 +59,7 @@ import type { EditDockUpdate } from "./transaction-edit-dock";
 import {
   defaultTransactionPage,
   readLiveSearchParams,
+  readTransactionAnchorDateFromSearchParams,
   readTransactionPageFromSearchParams,
   transactionOffsetFromPage,
 } from "./transaction-page-position";
@@ -140,7 +141,8 @@ export const useTransactionBrowserPage = ({
   const dateJumpFocusRestoreRef = useRef<HTMLButtonElement | null>(null);
   const { page, pageSize, sort, sortDirection } =
     readTransactionPageFromSearchParams(searchParams);
-  const params: TransactionPageParams = useMemo(
+  const anchorDate = readTransactionAnchorDateFromSearchParams(searchParams);
+  const unanchoredParams: TransactionPageParams = useMemo(
     () => ({
       filters,
       limit: pageSize,
@@ -160,9 +162,10 @@ export const useTransactionBrowserPage = ({
     jumpToToday,
     setDateJumpValue,
   } = useTransactionDateJump({
+    anchorDate,
     page,
     pageSize,
-    params,
+    params: unanchoredParams,
     readFiltersFromSearchParams,
     setSearchParams,
   });
@@ -172,6 +175,13 @@ export const useTransactionBrowserPage = ({
       cancelDateJump();
     }
   }, [cancelDateJump, dateJumpEnabled]);
+  const params: TransactionPageParams = useMemo(
+    () => ({
+      ...unanchoredParams,
+      anchorDate,
+    }),
+    [anchorDate, unanchoredParams],
+  );
   const {
     lookups,
     page: pageResource,
@@ -888,7 +898,6 @@ export const useTransactionBrowserPage = ({
 
   const setPage = useCallback(
     (nextPage: number) => {
-      cancelDateJump();
       clearTransactionSelection();
       setSearchParams((current) => {
         const next = new URLSearchParams(current);
@@ -897,7 +906,7 @@ export const useTransactionBrowserPage = ({
         return next;
       });
     },
-    [cancelDateJump, clearTransactionSelection, pageSize, setSearchParams],
+    [clearTransactionSelection, pageSize, setSearchParams],
   );
 
   const setPageSize = useCallback(
@@ -906,6 +915,7 @@ export const useTransactionBrowserPage = ({
       clearTransactionSelection();
       setSearchParams((current) => {
         const next = new URLSearchParams(current);
+        next.delete("anchor_date");
         next.set("page", String(defaultTransactionPage));
         next.set("pageSize", String(nextPageSize));
         return next;
@@ -923,6 +933,7 @@ export const useTransactionBrowserPage = ({
       clearTransactionSelection();
       const current = readLiveSearchParams();
       const next = new URLSearchParams(current);
+      next.delete("anchor_date");
       next.set("page", String(defaultTransactionPage));
       next.set("sort", nextSort);
       next.set("sortDir", sortDirection);
@@ -951,6 +962,7 @@ export const useTransactionBrowserPage = ({
       clearTransactionSelection();
       const current = readLiveSearchParams();
       const next = new URLSearchParams(current);
+      next.delete("anchor_date");
       next.set("page", String(defaultTransactionPage));
       next.set("sort", sort);
       next.set("sortDir", nextSortDirection);

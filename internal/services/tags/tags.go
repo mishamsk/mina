@@ -57,6 +57,7 @@ type ReferenceOptions struct {
 // Reference is the tag data needed to validate write references.
 type Reference struct {
 	ID       int64
+	FQN      string
 	IsHidden bool
 }
 
@@ -486,6 +487,7 @@ func tagReferenceStateFromTag(tag Tag) tagReferenceState {
 	return tagReferenceState{
 		reference: Reference{
 			ID:       tag.ID,
+			FQN:      tag.FQN,
 			IsHidden: tag.IsHidden,
 		},
 		fqn:    tag.FQN,

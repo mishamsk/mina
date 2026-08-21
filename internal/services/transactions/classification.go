@@ -15,7 +15,7 @@ import (
 
 // ValidateTransactionClassification validates and derives a persisted transaction.
 func ValidateTransactionClassification(transaction Transaction) error {
-	_, err := classifyTransaction(transaction)
+	_, err := ClassifyTransaction(transaction)
 	return err
 }
 
@@ -53,7 +53,8 @@ func LineDisplayAmountsForSemanticRecords(records []SemanticRecord) (Transaction
 	return classified.Class, amounts, nil
 }
 
-func classifyTransaction(transaction Transaction) (Transaction, error) {
+// ClassifyTransaction validates and derives transaction presentation fields.
+func ClassifyTransaction(transaction Transaction) (Transaction, error) {
 	records := make([]SemanticRecord, 0, len(transaction.Records))
 	for index := range transaction.Records {
 		record := &transaction.Records[index]

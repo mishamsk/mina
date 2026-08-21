@@ -16,12 +16,13 @@ This document defines the business semantics of recurring transactions: the recu
 - The semantics must extend to richer calendar rules (e.g. weekday-of-month) later without redesign.
 - **Fixed anchor**: due dates always advance from scheduled dates, never from actual confirmation dates. Confirming early or late does not move the schedule.
 - The two classes differ in affordances: interval schedules can be deferred and re-anchored; date-rule schedules cannot be deferred and always continue on the next natural rule date.
-- Future occurrences must be **computable** arbitrarily far ahead without being materialized (needed for budget forecasting).
+- Future occurrences must be **computable** without materialization (needed for budget forecasting and future-positioned ledger reads). One future-positioned transaction-list request may visit at most 10,000 schedule slots.
 
 ## Occurrence Lifecycle
 
 - Occurrences **auto-materialize when due** as `EXPECTED` transactions. Their owned and party records have no settlement dates, and flow and system records are always date-free. Expected transactions are excluded from balances, aggregates, reports, and default API transaction listings. Whether a view shows them is a presentation choice owned by the web UI design doc; showing them never changes their aggregate exclusion.
-- Materialization is a catch-up computation triggered by occurrence-facing reads and lifecycle actions; there is no background scheduler. Any workflow that consumes the occurrence queue — including future automated ingestion and imported-transaction matching — must run catch-up materialization first, so matching always sees fully backfilled occurrences.
+- Materialization is a catch-up computation through the server's current civil date triggered by occurrence-facing reads and lifecycle actions; there is no background scheduler. Any workflow that consumes the occurrence queue — including future automated ingestion and imported-transaction matching — must run catch-up materialization first, so matching always sees fully backfilled due occurrences.
+- A future-positioned transaction-list read computes scheduled rows ephemerally through the selected date. These rows use the current active definition, remain read-only until due, and never create occurrence or transaction state; the explicit EXPECTED lifecycle filter controls whether they appear.
 - The next or due occurrence can be **confirmed early** from the UI. An early manual confirm sets the transaction initiated date to the current date, as that is almost certainly the intent.
 - Occurrences that came due while unattended (app not running, user inaction) each become **individually reviewable**. Nothing is silently created and nothing is silently skipped.
 - **Dismissals are durable**: a dismissed occurrence is materialized with a dismissed status and never reappears. This holds for manual dismissal and for automatic dismissal (e.g. LLM helpers, external-source sync).
@@ -40,7 +41,7 @@ Expected transaction lifecycle, confirmed active lifecycle, and dismissed tombst
 - While paused, no occurrences accrue and no backlog forms. On resume, interval schedules re-anchor at the resume date; date-rule schedules resume on the next natural rule date.
 - **Cancel tombstones the definition** (standard soft-delete pattern). Generated transaction history remains untouched.
 - Pause and cancel leave already-materialized unreviewed occurrences in the review queue; the user still confirms or dismisses them individually.
-- **Edits affect future materialization only.** Already-materialized occurrences, reviewed or not, keep the shape they were generated with.
+- **Edits affect future projections and materialization only.** Already-materialized occurrences, reviewed or not, keep the shape they were generated with.
 
 ## Integrity and Provenance
 

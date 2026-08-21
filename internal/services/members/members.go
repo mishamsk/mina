@@ -47,6 +47,7 @@ type ReferenceOptions struct {
 // Reference is the household member data needed to validate write references.
 type Reference struct {
 	ID       int64
+	Name     string
 	IsHidden bool
 }
 
@@ -347,6 +348,7 @@ func memberReferenceStateFromMember(member Member) memberReferenceState {
 	return memberReferenceState{
 		reference: Reference{
 			ID:       member.ID,
+			Name:     member.Name,
 			IsHidden: member.IsHidden,
 		},
 		active: member.TombstonedAt == nil,

@@ -118,6 +118,7 @@ const effectivePageParams = (
   params: TransactionPageParams,
   offset: number,
 ): TransactionPageParams => ({
+  anchorDate: params.anchorDate,
   filters: params.filters,
   limit: params.limit,
   offset,
@@ -296,6 +297,7 @@ export const useTransactionsResource = (params: TransactionPageParams) => {
               result.data.total_count,
               result.data.transactions,
               pageAtLoadStart,
+              snapshot.pageErrors[key],
             );
             if (refreshed) {
               settlePageRefreshCallbacks(requestParams);
@@ -306,6 +308,7 @@ export const useTransactionsResource = (params: TransactionPageParams) => {
               result.data.total_count,
               result.data.transactions,
               requestParams,
+              snapshot.pageErrors,
             );
           }
           return;
@@ -384,8 +387,13 @@ export const useTransactionsResource = (params: TransactionPageParams) => {
   }, []);
 
   const retryPage = useCallback(() => {
+    const snapshot = getTransactionsSnapshot();
+    const currentPage = snapshot.pages[pageKey];
+    if (currentPage && !snapshot.stalePageKeys[pageKey]) {
+      markTransactionPageStale(params, currentPage);
+    }
     setPageRetryToken((current) => current + 1);
-  }, []);
+  }, [pageKey, params]);
 
   return { lookups, page, retryPage };
 };
@@ -471,6 +479,7 @@ export const refreshTransactionPage = async (
   invalidateTransactionPages();
   setTransactionPageLoading(params);
 
+  const snapshotAtRequestStart = getTransactionsSnapshot();
   const result = await fetchTransactionPage(params);
   if (result.data) {
     setTransactionPage(
@@ -478,6 +487,7 @@ export const refreshTransactionPage = async (
       result.data.total_count,
       result.data.transactions,
       params,
+      snapshotAtRequestStart.pageErrors,
     );
     return result.data.transactions;
   }
@@ -492,7 +502,8 @@ const refreshTransactionPageInBackground = (
   const key = transactionPageKey(params);
   const refreshEpoch = (backgroundPageRefreshEpochs.get(key) ?? 0) + 1;
   backgroundPageRefreshEpochs.set(key, refreshEpoch);
-  const pageAtRefreshStart = getTransactionsSnapshot().pages[key];
+  const snapshotAtRefreshStart = getTransactionsSnapshot();
+  const pageAtRefreshStart = snapshotAtRefreshStart.pages[key];
   const refresh = (async (): Promise<BackgroundPageRefresh> => {
     const result = await fetchTransactionPage(params);
     if (backgroundPageRefreshEpochs.get(key) !== refreshEpoch) {
@@ -520,6 +531,7 @@ const refreshTransactionPageInBackground = (
       result.data.total_count,
       result.data.transactions,
       pageAtRefreshStart,
+      snapshotAtRefreshStart.pageErrors[key],
     );
     if (refreshed) {
       settlePageRefreshCallbacks(params);
@@ -748,6 +760,7 @@ export const jumpToTransactionDatePage = async (
 ): Promise<LoadedTransactionPage | undefined> => {
   setTransactionPageLoading(params);
 
+  const snapshotAtRequestStart = getTransactionsSnapshot();
   const result = await fetchTransactionPage(params);
   if (!isActive()) {
     clearTransactionPageLoading(params);
@@ -766,10 +779,15 @@ export const jumpToTransactionDatePage = async (
       result.data.total_count,
       result.data.transactions,
       params,
+      snapshotAtRequestStart.pageErrors,
     );
     return loadedPage;
   }
 
-  setTransactionPageError(params, apiErrorMessage(result.error));
+  clearTransactionPageLoading(params);
+  setTransactionPageError(
+    { ...params, anchorDate: undefined },
+    apiErrorMessage(result.error),
+  );
   return undefined;
 };

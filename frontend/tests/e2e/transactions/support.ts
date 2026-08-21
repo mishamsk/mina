@@ -169,6 +169,7 @@ const expectTransactionsPageUrl = async (
   expectedPage: number,
   expectedPageSize: number,
   expectedFilters: {
+    readonly anchorDate?: string;
     readonly entry?: string;
     readonly q?: string;
     readonly transaction?: string;
@@ -187,7 +188,7 @@ const expectTransactionsPageUrl = async (
       };
     })
     .toEqual({
-      anchorDate: null,
+      anchorDate: expectedFilters.anchorDate ?? null,
       entry: expectedFilters.entry ?? null,
       page: String(expectedPage),
       pageSize: String(expectedPageSize),

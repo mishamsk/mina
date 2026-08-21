@@ -318,11 +318,11 @@ Each screen below defines its purpose, layout, behavior, and primary data source
 ### Recurring occurrences and definitions
 
 - Recurring occurrences — confirmed, overdue, and upcoming EXPECTED — render inline in the Transactions page by default. The browser explicitly includes every lifecycle even though API listings omit expected by default; per `docs/recurring-transactions-semantics.md`, showing them never changes their exclusion from balances, aggregates, account registers, and reports.
-- Loading a transactions view runs the occurrence API's lazy catch-up materialization so the list always reflects occurrences through today.
-- Expected rows carry a distinct visual treatment inline; overdue occurrences (scheduled before today) additionally carry the warning-treatment missed marker per the theme.
+- Loading a transactions view runs the occurrence API's lazy catch-up materialization through today. Future date navigation merges read-only recurring projections through the selected date when Expected is included by the lifecycle filter; navigation never materializes occurrences beyond today.
+- Expected rows carry a distinct visual treatment inline; overdue materialized occurrences (scheduled before today) additionally carry the warning-treatment missed marker per the theme.
 - Transaction lifecycle is an ordinary filter dimension. Selecting Expected isolates the occurrence review queue; selecting Active or Cancelled exposes the corresponding lifecycle without a separate include/hide toggle.
-- Confirm and Dismiss are row actions on expected rows, per the affordance-class rules: Confirm materializes the transaction immediately with posted balance records and the standard toast; Dismiss sits behind the standard named confirmation dialog. Both surface API errors per the standard feedback rules.
-- Confirmed occurrences are ordinary transactions and edit through the transaction editor modal; expected occurrences stay read-only — Confirm and Dismiss are their only actions.
+- Confirm and Dismiss are row actions on materialized expected occurrences, per the affordance-class rules: Confirm activates the transaction immediately with posted balance records and the standard toast; Dismiss sits behind the standard named confirmation dialog. Both surface API errors per the standard feedback rules.
+- Confirmed occurrences are ordinary transactions and edit through the transaction editor modal; materialized expected occurrences stay read-only with Confirm and Dismiss as their only actions, while future projections open read-only detail and expose no actions.
 - The `/recurring` page hosts recurring definitions management — the configuration surface for recurring transactions; occurrence review lives inline in Transactions per the rules above.
 
 Definitions management screen:
