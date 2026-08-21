@@ -9,7 +9,7 @@
 - Tooltip Escape dismisses the tooltip, then forwards one Escape to the original target so the active overlay's Escape ladder can continue.
 - Focusable tooltip wrapper triggers must supply an accessible trigger label.
 - Use `focusWithoutTooltip` for programmatic focus recovery when a focus tooltip must not flash.
-- Confirmation dialogs close on Escape only while idle; pending actions keep the dialog open. They suppress automatic close-focus restoration, so callers recover focus.
+- Confirmation dialogs close on Escape only while idle; pending actions keep the dialog open. They suppress automatic close-focus restoration, so callers recover focus, and keep their title and action row visible while oversized body content scrolls.
 - Preserve `[data-slot='confirmation-dialog-content']` and `[data-page-help-content]`; overlays use them as outside-pointer dismissal exclusions.
 
 ## Boundaries

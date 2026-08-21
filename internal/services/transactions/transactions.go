@@ -303,6 +303,21 @@ type BulkRecordOperationResponse struct {
 	UpdatedCount int
 }
 
+// BulkAccountReplaceResponse reports a completed account substitution across selected transactions.
+type BulkAccountReplaceResponse struct {
+	TransactionIDs          []int64
+	SourceAccountID         int64
+	ReplacementAccountID    int64
+	UpdatedRecordCount      int
+	UpdatedTransactionCount int
+}
+
+// BulkAccountReplaceTarget identifies one selected transaction revision for atomic account substitution.
+type BulkAccountReplaceTarget struct {
+	TransactionID int64
+	UpdatedAt     time.Time
+}
+
 // TransactionClass is the derived user-facing transaction class.
 type TransactionClass string
 
@@ -400,6 +415,7 @@ type Repository interface {
 	BulkUpdateTags(context.Context, []int64, []int64, []int64) (int, error)
 	BulkSetMember(context.Context, []int64, *int64) (int, error)
 	BulkReassignAccount(context.Context, []int64, int64, []*time.Time, []*time.Time) (int, error)
+	BulkReplaceAccount(context.Context, []BulkAccountReplaceTarget, int64, int64) (int, error)
 	BulkSetSettlement(context.Context, []int64, []*time.Time, []*time.Time) (int, error)
 	BulkSetReconciliation(context.Context, []int64, ReconciliationStatus) (int, error)
 	BackfillMissingAmountUSD(context.Context) error
@@ -1400,6 +1416,126 @@ func (s *Service) BulkReassignAccount(ctx context.Context, recordIDs []int64, ac
 	return bulkRecordOperationResponse(recordIDs, count), nil
 }
 
+// BulkReplaceAccount replaces one common non-system account across selected active transactions.
+func (s *Service) BulkReplaceAccount(ctx context.Context, transactionIDs []int64, sourceAccountID int64, replacementAccountID int64) (BulkAccountReplaceResponse, error) {
+	if err := validatePositiveUniqueIDs("transaction_ids", transactionIDs); err != nil {
+		return BulkAccountReplaceResponse{}, err
+	}
+	if len(transactionIDs) == 0 {
+		return BulkAccountReplaceResponse{}, services.InvalidRequest("transaction_ids is required")
+	}
+	if sourceAccountID <= 0 {
+		return BulkAccountReplaceResponse{}, services.InvalidRequest("source_account_id must be positive")
+	}
+	if replacementAccountID <= 0 {
+		return BulkAccountReplaceResponse{}, services.InvalidRequest("replacement_account_id must be positive")
+	}
+	if sourceAccountID == replacementAccountID {
+		return BulkAccountReplaceResponse{}, services.InvalidRequest("source_account_id and replacement_account_id must differ")
+	}
+
+	response := BulkAccountReplaceResponse{
+		TransactionIDs:       append([]int64{}, transactionIDs...),
+		SourceAccountID:      sourceAccountID,
+		ReplacementAccountID: replacementAccountID,
+	}
+	if err := s.refs.WithSharedLease(ctx, func(ctx context.Context) error {
+		source, err := s.accounts.ValidateActiveReference(ctx, sourceAccountID, accounts.ReferenceOptions{AllowHidden: true})
+		if errors.Is(err, services.ErrInvalidReference) {
+			return services.InvalidRequest("source account missing or inactive resource")
+		}
+		if err != nil {
+			return err
+		}
+		replacement, err := s.accounts.ValidateActiveReference(ctx, replacementAccountID, accounts.ReferenceOptions{AllowHidden: true})
+		if errors.Is(err, services.ErrInvalidReference) {
+			return services.InvalidRequest("replacement account missing or inactive resource")
+		}
+		if err != nil {
+			return err
+		}
+		if source.AccountType == accounts.AccountTypeSystem || replacement.AccountType == accounts.AccountTypeSystem {
+			return services.InvalidRequest("source and replacement accounts must be non-system accounts")
+		}
+		if !accountReplaceTypesCompatible(source.AccountType, replacement.AccountType) {
+			return services.InvalidRequest("source and replacement accounts must both be balance accounts or both be flow accounts")
+		}
+
+		recordReferences := make([]accounts.RecordReference, 0)
+		seenCurrencies := map[string]struct{}{}
+		targets := make([]BulkAccountReplaceTarget, 0, len(transactionIDs))
+		for _, transactionID := range transactionIDs {
+			transaction, err := s.repo.Get(ctx, transactionID)
+			if errors.Is(err, services.ErrNotFound) {
+				return services.InvalidRequest("transactions missing or inactive resource")
+			}
+			if err != nil {
+				return err
+			}
+			if transaction.LifecycleStatus == LifecycleStatusExpected {
+				return expectedRecurringMutationError()
+			}
+			if transaction.LifecycleStatus != LifecycleStatusActive {
+				return services.InvalidRequest("accounts can only change on active transactions")
+			}
+			targets = append(targets, BulkAccountReplaceTarget{
+				TransactionID: transaction.ID,
+				UpdatedAt:     transaction.UpdatedAt,
+			})
+
+			matched := false
+			for recordIndex := range transaction.Records {
+				record := &transaction.Records[recordIndex]
+				if record.AccountID != sourceAccountID {
+					continue
+				}
+				matched = true
+				if _, ok := seenCurrencies[record.Currency]; !ok {
+					seenCurrencies[record.Currency] = struct{}{}
+					recordReferences = append(recordReferences, accounts.RecordReference{
+						AccountID: replacementAccountID,
+						Currency:  record.Currency,
+					})
+				}
+				record.AccountID = replacementAccountID
+				record.AccountFQN = replacement.FQN
+				record.AccountType = replacement.AccountType
+			}
+			if !matched {
+				return accountReplaceSourceNotCommonError()
+			}
+			if err := ValidateTransactionSemantics(transaction); err != nil {
+				return err
+			}
+		}
+
+		if _, err := s.accounts.ValidateActiveRecordReferences(ctx, recordReferences, accounts.ReferenceOptions{AllowHidden: true}); err != nil {
+			if errors.Is(err, services.ErrInvalidReference) {
+				return services.InvalidRequest("replacement account is incompatible with one or more source record currencies")
+			}
+			return err
+		}
+
+		updatedRecords, err := s.repo.BulkReplaceAccount(ctx, targets, sourceAccountID, replacementAccountID)
+		switch {
+		case errors.Is(err, ErrExpectedRecurringMutation),
+			errors.Is(err, ErrInactiveTransactionMutation),
+			errors.Is(err, services.ErrInvalidReference),
+			errors.Is(err, services.ErrConflict):
+			return concurrentTransactionMutationError()
+		case err != nil:
+			return err
+		}
+		response.UpdatedRecordCount = updatedRecords
+		response.UpdatedTransactionCount = len(targets)
+		return nil
+	}); err != nil {
+		return BulkAccountReplaceResponse{}, err
+	}
+
+	return response, nil
+}
+
 // BulkSetSettlement changes settlement on selected active balance records.
 func (s *Service) BulkSetSettlement(ctx context.Context, recordIDs []int64, settlement SettlementIntent) (BulkRecordOperationResponse, error) {
 	if err := validateRecordSelection(recordIDs); err != nil {
@@ -1697,6 +1833,20 @@ func (s *Service) validateBulkReassignAccountClassification(ctx context.Context,
 
 func expectedRecurringMutationError() error {
 	return services.InvalidRequest("expected recurring transactions must be changed through recurring occurrence endpoints")
+}
+
+func accountReplaceSourceNotCommonError() error {
+	return services.InvalidRequest("source account must occur in every selected transaction")
+}
+
+func accountReplaceTypesCompatible(source accounts.AccountType, replacement accounts.AccountType) bool {
+	if source == accounts.AccountTypeFlow {
+		return replacement == accounts.AccountTypeFlow
+	}
+	if source == accounts.AccountTypeOwned || source == accounts.AccountTypeParty {
+		return replacement == accounts.AccountTypeOwned || replacement == accounts.AccountTypeParty
+	}
+	return false
 }
 
 func concurrentTransactionMutationError() error {

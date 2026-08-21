@@ -763,6 +763,89 @@ func TestConcurrentBulkMutationsOfOneTransactionAvoidInternalErrors(t *testing.T
 	}
 }
 
+func TestConcurrentBulkAccountReplacementConflictRollsBackSelection(t *testing.T) {
+	client := apptest.New(t)
+	scenario := client.Scenario()
+	source := scenario.AccountWithCurrency("checking:ConcurrentAccountReplace:Source", "USD")
+	replacement := scenario.AccountWithType("people:ConcurrentAccountReplace:Replacement", httpclient.WritableAccountTypeParty)
+	merchant := scenario.Account("merchant:ConcurrentAccountReplace")
+	category := scenario.Category("ConcurrentAccountReplace:Expense")
+
+	const (
+		maxAttempts      = 5
+		transactionCount = 20
+	)
+	for range maxAttempts {
+		transactionIDs := make([]int64, 0, transactionCount)
+		sourceRecordIDs := make([]int64, 0, transactionCount)
+		for range transactionCount {
+			created := createTransaction(t, client, classificationRequest(
+				semanticRecord(source.AccountId, "-1.00", "USD", nil),
+				semanticRecord(merchant.AccountId, "1.00", "USD", &category.CategoryId),
+			)).JSON201
+			transactionIDs = append(transactionIDs, created.TransactionId)
+			sourceRecordIDs = append(sourceRecordIDs, created.Records[0].RecordId)
+		}
+
+		requests := make([]func(httpclient.RequestEditorFn) concurrentHTTPResult, 0, transactionCount+1)
+		requests = append(requests, func(editor httpclient.RequestEditorFn) concurrentHTTPResult {
+			response, err := client.REST().BulkReplaceTransactionAccountWithResponse(context.Background(), httpclient.BulkReplaceTransactionAccountRequest{
+				TransactionIds:       transactionIDs,
+				SourceAccountId:      source.AccountId,
+				ReplacementAccountId: replacement.AccountId,
+			}, editor)
+			if err != nil {
+				return concurrentHTTPResult{err: err}
+			}
+			return concurrentHTTPResult{status: response.StatusCode(), body: response.Body}
+		})
+		for _, recordID := range sourceRecordIDs {
+			requests = append(requests, func(editor httpclient.RequestEditorFn) concurrentHTTPResult {
+				response, err := client.REST().BulkSetJournalRecordReconciliationWithResponse(context.Background(), httpclient.BulkSetRecordReconciliationRequest{
+					RecordIds:            []int64{recordID},
+					ReconciliationStatus: httpclient.Unreconciled,
+				}, editor)
+				if err != nil {
+					return concurrentHTTPResult{err: err}
+				}
+				return concurrentHTTPResult{status: response.StatusCode(), body: response.Body}
+			})
+		}
+
+		results := apptest.RunConcurrentRequests(t, requests...)
+		if results[0].err != nil {
+			t.Fatalf("concurrent account replacement request: %v", results[0].err)
+		}
+		if results[0].status != http.StatusOK && results[0].status != http.StatusConflict {
+			t.Fatalf("concurrent account replacement status = %d, want 200 or 409; body %s", results[0].status, results[0].body)
+		}
+		competingMutationSucceeded := false
+		for _, result := range results[1:] {
+			if result.err != nil {
+				t.Fatalf("concurrent reconciliation request: %v", result.err)
+			}
+			if result.status != http.StatusOK && result.status != http.StatusConflict {
+				t.Fatalf("concurrent reconciliation status = %d, want 200 or 409; body %s", result.status, result.body)
+			}
+			competingMutationSucceeded = competingMutationSucceeded || result.status == http.StatusOK
+		}
+		if results[0].status == http.StatusOK {
+			continue
+		}
+		if !competingMutationSucceeded {
+			t.Fatal("conflicting account replacement had no committed competing mutation")
+		}
+		for _, transactionID := range transactionIDs {
+			transaction := getTransaction(t, client, transactionID).JSON200
+			if transaction.Records[0].AccountId != source.AccountId {
+				t.Fatalf("transaction %d source account = %d after conflict, want %d", transactionID, transaction.Records[0].AccountId, source.AccountId)
+			}
+		}
+		return
+	}
+	t.Fatalf("account replacement committed before competing mutations in all %d attempts", maxAttempts)
+}
+
 func TestConcurrentDuplicateCreditLimitCreation(t *testing.T) {
 	client := apptest.New(t)
 	account := client.Scenario().AccountWithCurrency("credit:ConcurrentDuplicate", "USD")

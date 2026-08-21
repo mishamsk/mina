@@ -1614,6 +1614,18 @@ type BulkRecordOperationResponse struct {
 	UpdatedCount int `json:"updated_count"`
 }
 
+// BulkReplaceTransactionAccountRequest defines model for BulkReplaceTransactionAccountRequest.
+type BulkReplaceTransactionAccountRequest struct {
+	// ReplacementAccountId Distinct non-system account compatible with the source account.
+	ReplacementAccountId int64 `json:"replacement_account_id"`
+
+	// SourceAccountId Non-system account that must occur in at least one active journal record on every selected transaction.
+	SourceAccountId int64 `json:"source_account_id"`
+
+	// TransactionIds Active transaction identifiers whose matching source-account records will change.
+	TransactionIds []int64 `json:"transaction_ids"`
+}
+
 // BulkSetRecordMemberRequest defines model for BulkSetRecordMemberRequest.
 type BulkSetRecordMemberRequest struct {
 	// MemberId Active household-member identifier to set, or null to clear attribution.
@@ -1657,6 +1669,19 @@ type BulkTagRecordsRequest struct {
 
 	// RemoveTagIds Tag identifiers to remove from every selected journal record.
 	RemoveTagIds *[]int64 `json:"remove_tag_ids,omitempty"`
+}
+
+// BulkTransactionAccountReplaceResult defines model for BulkTransactionAccountReplaceResult.
+type BulkTransactionAccountReplaceResult struct {
+	ReplacementAccountId int64   `json:"replacement_account_id"`
+	SourceAccountId      int64   `json:"source_account_id"`
+	TransactionIds       []int64 `json:"transaction_ids"`
+
+	// UpdatedRecordCount Number of active source-account journal records changed.
+	UpdatedRecordCount int `json:"updated_record_count"`
+
+	// UpdatedTransactionCount Number of selected transactions completed.
+	UpdatedTransactionCount int `json:"updated_transaction_count"`
 }
 
 // Category defines model for Category.
@@ -3909,6 +3934,9 @@ type ReplaceTransactionTemplateJSONRequestBody = TransactionTemplateWriteRequest
 // CreateTransactionJSONRequestBody defines body for CreateTransaction for application/json ContentType.
 type CreateTransactionJSONRequestBody = CreateTransactionRequest
 
+// BulkReplaceTransactionAccountJSONRequestBody defines body for BulkReplaceTransactionAccount for application/json ContentType.
+type BulkReplaceTransactionAccountJSONRequestBody = BulkReplaceTransactionAccountRequest
+
 // ClassifyTransactionJSONRequestBody defines body for ClassifyTransaction for application/json ContentType.
 type ClassifyTransactionJSONRequestBody = ClassifyTransactionRequest
 
@@ -4414,6 +4442,11 @@ type ClientInterface interface {
 	CreateTransactionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	CreateTransaction(ctx context.Context, body CreateTransactionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// BulkReplaceTransactionAccountWithBody request with any body
+	BulkReplaceTransactionAccountWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	BulkReplaceTransactionAccount(ctx context.Context, body BulkReplaceTransactionAccountJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ClassifyTransactionWithBody request with any body
 	ClassifyTransactionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -5992,6 +6025,30 @@ func (c *Client) CreateTransactionWithBody(ctx context.Context, contentType stri
 
 func (c *Client) CreateTransaction(ctx context.Context, body CreateTransactionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCreateTransactionRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) BulkReplaceTransactionAccountWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewBulkReplaceTransactionAccountRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) BulkReplaceTransactionAccount(ctx context.Context, body BulkReplaceTransactionAccountJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewBulkReplaceTransactionAccountRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -12249,6 +12306,46 @@ func NewCreateTransactionRequestWithBody(server string, contentType string, body
 	return req, nil
 }
 
+// NewBulkReplaceTransactionAccountRequest calls the generic BulkReplaceTransactionAccount builder with application/json body
+func NewBulkReplaceTransactionAccountRequest(server string, body BulkReplaceTransactionAccountJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewBulkReplaceTransactionAccountRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewBulkReplaceTransactionAccountRequestWithBody generates requests for BulkReplaceTransactionAccount with any type of body
+func NewBulkReplaceTransactionAccountRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/transactions/bulk/account-replace")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewClassifyTransactionRequest calls the generic ClassifyTransaction builder with application/json body
 func NewClassifyTransactionRequest(server string, body ClassifyTransactionJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -13127,6 +13224,11 @@ type ClientWithResponsesInterface interface {
 	CreateTransactionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateTransactionResponse, error)
 
 	CreateTransactionWithResponse(ctx context.Context, body CreateTransactionJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateTransactionResponse, error)
+
+	// BulkReplaceTransactionAccountWithBodyWithResponse request with any body
+	BulkReplaceTransactionAccountWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*BulkReplaceTransactionAccountResponse, error)
+
+	BulkReplaceTransactionAccountWithResponse(ctx context.Context, body BulkReplaceTransactionAccountJSONRequestBody, reqEditors ...RequestEditorFn) (*BulkReplaceTransactionAccountResponse, error)
 
 	// ClassifyTransactionWithBodyWithResponse request with any body
 	ClassifyTransactionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ClassifyTransactionResponse, error)
@@ -16303,6 +16405,40 @@ func (r CreateTransactionResponse) ContentType() string {
 	return ""
 }
 
+type BulkReplaceTransactionAccountResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *BulkTransactionAccountReplaceResult
+	JSON400      *InvalidRequest
+	JSON401      *Unauthenticated
+	JSON403      *Forbidden
+	JSON409      *Conflict
+}
+
+// Status returns HTTPResponse.Status
+func (r BulkReplaceTransactionAccountResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r BulkReplaceTransactionAccountResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r BulkReplaceTransactionAccountResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type ClassifyTransactionResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -17820,6 +17956,23 @@ func (c *ClientWithResponses) CreateTransactionWithResponse(ctx context.Context,
 		return nil, err
 	}
 	return ParseCreateTransactionResponse(rsp)
+}
+
+// BulkReplaceTransactionAccountWithBodyWithResponse request with arbitrary body returning *BulkReplaceTransactionAccountResponse
+func (c *ClientWithResponses) BulkReplaceTransactionAccountWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*BulkReplaceTransactionAccountResponse, error) {
+	rsp, err := c.BulkReplaceTransactionAccountWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseBulkReplaceTransactionAccountResponse(rsp)
+}
+
+func (c *ClientWithResponses) BulkReplaceTransactionAccountWithResponse(ctx context.Context, body BulkReplaceTransactionAccountJSONRequestBody, reqEditors ...RequestEditorFn) (*BulkReplaceTransactionAccountResponse, error) {
+	rsp, err := c.BulkReplaceTransactionAccount(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseBulkReplaceTransactionAccountResponse(rsp)
 }
 
 // ClassifyTransactionWithBodyWithResponse request with arbitrary body returning *ClassifyTransactionResponse
@@ -22552,6 +22705,60 @@ func ParseCreateTransactionResponse(rsp *http.Response) (*CreateTransactionRespo
 			return nil, err
 		}
 		response.JSON403 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseBulkReplaceTransactionAccountResponse parses an HTTP response from a BulkReplaceTransactionAccountWithResponse call
+func ParseBulkReplaceTransactionAccountResponse(rsp *http.Response) (*BulkReplaceTransactionAccountResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &BulkReplaceTransactionAccountResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest BulkTransactionAccountReplaceResult
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
 
 	}
 

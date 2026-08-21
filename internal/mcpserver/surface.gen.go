@@ -103,6 +103,50 @@ func Operations() []Operation {
 			Invoke: invokeBulkReassignJournalRecordAccount,
 		},
 		{
+			ID:          "bulkReplaceTransactionAccount",
+			Method:      "POST",
+			Path:        "/api/transactions/bulk/account-replace",
+			Summary:     "Replace one common account across selected transactions.",
+			Description: "Replace one non-system account on every matching active record across selected active transactions. Inspect all selected transactions first and require explicit user confirmation; the source must be common to all selections, balance/flow compatibility is enforced, and a single-currency replacement must match every affected source-record currency.",
+			MCP: MCPOperation{
+				Group: "transactions", Name: "account_replace",
+				ReadOnly: false, Destructive: true, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"replacement_account_id\":{\"description\":\"Distinct non-system account compatible with the source account.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"source_account_id\":{\"description\":\"Non-system account that must occur in at least one active journal record on every selected transaction.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"transaction_ids\":{\"description\":\"Active transaction identifiers whose matching source-account records will change.\",\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"minItems\":1,\"type\":\"array\",\"uniqueItems\":true}},\"required\":[\"replacement_account_id\",\"source_account_id\",\"transaction_ids\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
+			},
+			Input: InputDescriptor{
+				Body: BodyDescriptor{
+					Present:  true,
+					Required: true,
+					Type:     "object",
+					Properties: []BodyPropertyDescriptor{
+						{
+							Name:        "replacement_account_id",
+							Type:        "integer",
+							Description: "Distinct non-system account compatible with the source account.",
+							Required:    true,
+						},
+						{
+							Name:        "source_account_id",
+							Type:        "integer",
+							Description: "Non-system account that must occur in at least one active journal record on every selected transaction.",
+							Required:    true,
+						},
+						{
+							Name:        "transaction_ids",
+							Type:        "array",
+							Description: "Active transaction identifiers whose matching source-account records will change.",
+							Required:    true,
+							Array:       true,
+							ItemType:    "integer",
+						},
+					},
+					RequiredProperties: []string{"replacement_account_id", "source_account_id", "transaction_ids"},
+					Simple:             true,
+				},
+			},
+			Invoke: invokeBulkReplaceTransactionAccount,
+		},
+		{
 			ID:          "bulkSetJournalRecordMember",
 			Method:      "POST",
 			Path:        "/api/records/bulk/member",
@@ -4552,6 +4596,20 @@ func invokeBulkReassignJournalRecordAccount(ctx context.Context, client httpclie
 		return InvocationResult{}, err
 	}
 	response, err := client.BulkReassignJournalRecordAccountWithBodyWithResponse(ctx, "application/json", bytes.NewReader(input.Body))
+	if err != nil {
+		return InvocationResult{}, err
+	}
+	if response == nil {
+		return InvocationResult{}, errors.New("generated client returned no operation response")
+	}
+	return normalizeInvocationResult(response.Body, response.HTTPResponse)
+}
+
+func invokeBulkReplaceTransactionAccount(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
+	if err := validateInvocationInput(input, nil, nil, nil, true, true); err != nil {
+		return InvocationResult{}, err
+	}
+	response, err := client.BulkReplaceTransactionAccountWithBodyWithResponse(ctx, "application/json", bytes.NewReader(input.Body))
 	if err != nil {
 		return InvocationResult{}, err
 	}

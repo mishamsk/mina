@@ -1,10 +1,13 @@
 import { Bookmark, Check, Clock, Close, User } from "pixelarticons/react";
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 
+import type { Account, Transaction } from "@/api";
+import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { focusWithoutTooltip, Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 
+import { AccountDisplayLabel } from "./account-display-label";
 import {
   type EditModeSkipSummary,
   formatEditModeSkipReasons,
@@ -17,9 +20,16 @@ import {
 import type { LookupMaps } from "./format";
 import { focusTransactionRowFallback } from "./transaction-row-focus";
 
-export type EditDockAction = "category" | "member" | "tags";
+export type EditDockAction = "account" | "category" | "member" | "tags";
+
+type ReferenceEditDockAction = Exclude<EditDockAction, "account">;
 
 export type EditDockUpdate =
+  | {
+      readonly kind: "account";
+      readonly replacementAccountId: number;
+      readonly sourceAccountId: number;
+    }
   | { readonly categoryId: number; readonly kind: "category" }
   | { readonly kind: "member"; readonly memberId: number | null }
   | {
@@ -29,7 +39,7 @@ export type EditDockUpdate =
     };
 
 interface EditDockEditorProps {
-  readonly action: EditDockAction;
+  readonly action: ReferenceEditDockAction;
   readonly blocked: boolean;
   readonly maps: LookupMaps;
   readonly onApply: (update: EditDockUpdate) => Promise<void>;
@@ -39,10 +49,25 @@ interface EditDockEditorProps {
 }
 
 const actionTitle: Record<EditDockAction, string> = {
+  account: "Account Replace",
   category: "Category",
   member: "Member",
   tags: "Tags",
 };
+
+const isBalanceAccountType = (accountType: string): boolean =>
+  accountType === "owned" || accountType === "party";
+
+const accountReplaceOption = (account: Account): EntityOption => ({
+  detail: account.fqn,
+  hidden: account.is_hidden,
+  id: account.account_id,
+  label: account.name,
+  metadata: account.currency
+    ? `${account.currency} · Single-currency`
+    : "Multi-currency",
+  searchLabel: account.fqn,
+});
 
 const categoryOptions = (
   maps: LookupMaps,
@@ -347,7 +372,341 @@ const EditDockEditor = ({
   );
 };
 
+interface AccountReplaceEditorProps {
+  readonly blocked: boolean;
+  readonly maps: LookupMaps;
+  readonly onApply: (update: EditDockUpdate) => Promise<void>;
+  readonly onCancel: () => void;
+  readonly selectedTransactions: readonly Transaction[];
+}
+
+const AccountReplaceEditor = ({
+  blocked,
+  maps,
+  onApply,
+  onCancel,
+  selectedTransactions,
+}: AccountReplaceEditorProps) => {
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string>();
+  const [includeHidden, setIncludeHidden] = useState(false);
+  const [replacementAccountId, setReplacementAccountId] = useState<number>();
+  const [saving, setSaving] = useState(false);
+  const [sourceAccountId, setSourceAccountId] = useState<number>();
+  const [pickerResetVersion, setPickerResetVersion] = useState(0);
+  const reviewButtonRef = useRef<HTMLButtonElement>(null);
+
+  const commonSourceIds = selectedTransactions.reduce<Set<number>>(
+    (common, transaction, index) => {
+      const transactionAccountIds = new Set(
+        transaction.records.flatMap((record) => {
+          const account = maps.accountsById.get(record.account_id);
+          return account &&
+            !account.tombstoned_at &&
+            account.account_type !== "system"
+            ? [record.account_id]
+            : [];
+        }),
+      );
+      if (index === 0) {
+        return transactionAccountIds;
+      }
+      return new Set(
+        Array.from(common).filter((accountId) =>
+          transactionAccountIds.has(accountId),
+        ),
+      );
+    },
+    new Set<number>(),
+  );
+  const sourceAccount =
+    sourceAccountId === undefined
+      ? undefined
+      : maps.accountsById.get(sourceAccountId);
+  const sourceIsCommon =
+    sourceAccount !== undefined &&
+    commonSourceIds.has(sourceAccount.account_id);
+  const validSourceAccount = sourceIsCommon ? sourceAccount : undefined;
+  const replacementAccount =
+    replacementAccountId === undefined
+      ? undefined
+      : maps.accountsById.get(replacementAccountId);
+  const sourceOptions = Array.from(commonSourceIds).flatMap((accountId) => {
+    const account = maps.accountsById.get(accountId);
+    return account &&
+      (includeHidden || !account.is_hidden || accountId === sourceAccountId)
+      ? [accountReplaceOption(account)]
+      : [];
+  });
+  const affectedCurrencies = new Set(
+    validSourceAccount
+      ? selectedTransactions.flatMap((transaction) =>
+          transaction.records.flatMap((record) =>
+            record.account_id === validSourceAccount.account_id
+              ? [record.currency]
+              : [],
+          ),
+        )
+      : [],
+  );
+  const replacementOptions = validSourceAccount
+    ? Array.from(maps.accountsById.values())
+        .filter(
+          (account) =>
+            !account.tombstoned_at &&
+            account.account_type !== "system" &&
+            account.account_id !== validSourceAccount.account_id &&
+            (includeHidden ||
+              !account.is_hidden ||
+              account.account_id === replacementAccountId) &&
+            (validSourceAccount.account_type === "flow"
+              ? account.account_type === "flow"
+              : isBalanceAccountType(validSourceAccount.account_type) &&
+                isBalanceAccountType(account.account_type)) &&
+            (!account.currency ||
+              Array.from(affectedCurrencies).every(
+                (currency) => currency === account.currency,
+              )),
+        )
+        .map(accountReplaceOption)
+    : [];
+  const replacementIsCompatible =
+    replacementAccount !== undefined &&
+    replacementOptions.some(
+      (option) => option.id === replacementAccount.account_id,
+    );
+  const affectedRecordCount =
+    validSourceAccount === undefined
+      ? 0
+      : selectedTransactions.reduce(
+          (count, transaction) =>
+            count +
+            transaction.records.filter(
+              (record) => record.account_id === validSourceAccount.account_id,
+            ).length,
+          0,
+        );
+  const canReview =
+    !blocked &&
+    !saving &&
+    validSourceAccount !== undefined &&
+    replacementIsCompatible;
+
+  const sourceChoiceInvalid = sourceAccountId !== undefined && !sourceIsCommon;
+  const replacementChoiceInvalid =
+    replacementAccountId !== undefined && !replacementIsCompatible;
+  if (sourceChoiceInvalid || replacementChoiceInvalid) {
+    if (sourceChoiceInvalid) {
+      setSourceAccountId(undefined);
+    }
+    setReplacementAccountId(undefined);
+    setConfirmOpen(false);
+    setErrorMessage(undefined);
+    setPickerResetVersion((current) => current + 1);
+  }
+
+  const confirm = async () => {
+    if (
+      !canReview ||
+      sourceAccountId === undefined ||
+      replacementAccountId === undefined
+    ) {
+      return;
+    }
+    setSaving(true);
+    setErrorMessage(undefined);
+    try {
+      await onApply({
+        kind: "account",
+        replacementAccountId,
+        sourceAccountId,
+      });
+      setConfirmOpen(false);
+      onCancel();
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : "The API request failed.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <section
+      aria-label="Account Replace editor"
+      className="border-t-2 border-[var(--border-ink)] bg-[var(--band)] p-3"
+      data-testid="edit-dock-editor"
+      onKeyDown={(event) => {
+        if (event.defaultPrevented) {
+          return;
+        }
+        if (
+          event.key === "Enter" &&
+          (event.metaKey || event.ctrlKey) &&
+          !event.altKey &&
+          !confirmOpen
+        ) {
+          event.preventDefault();
+          if (canReview) {
+            setErrorMessage(undefined);
+            setConfirmOpen(true);
+          }
+          return;
+        }
+        if (event.key === "Escape" && !saving && !confirmOpen) {
+          event.preventDefault();
+          event.stopPropagation();
+          onCancel();
+        }
+      }}
+    >
+      <h3 className="font-heading text-sm font-semibold uppercase">
+        Account Replace
+      </h3>
+      <p className="font-body mt-1 text-sm">
+        Choose an account present on every selected transaction, then a
+        compatible replacement.
+      </p>
+      <div className="mt-3 space-y-3">
+        <label className="flex items-center gap-2">
+          <Checkbox
+            checked={includeHidden}
+            disabled={saving || blocked}
+            onCheckedChange={(checked) => setIncludeHidden(checked === true)}
+          />
+          <span className="font-mono text-sm">Include hidden</span>
+        </label>
+        <EntityPicker
+          key={`source-${pickerResetVersion}`}
+          autoFocus
+          disabled={saving || blocked}
+          id="edit-dock-account-source"
+          label="Common source account"
+          options={sourceOptions}
+          value={sourceAccountId}
+          onChange={(accountId) => {
+            setSourceAccountId(accountId);
+            setReplacementAccountId(undefined);
+          }}
+        />
+        <EntityPicker
+          key={`replacement-${sourceAccountId}-${pickerResetVersion}`}
+          disabled={saving || blocked || validSourceAccount === undefined}
+          id="edit-dock-account-replacement"
+          label="Compatible replacement account"
+          options={replacementOptions}
+          value={replacementAccountId}
+          onChange={setReplacementAccountId}
+        />
+        {validSourceAccount === undefined ? (
+          <p className="font-mono text-xs">
+            {sourceOptions.length} common non-system account
+            {sourceOptions.length === 1 ? "" : "s"} available.
+          </p>
+        ) : (
+          <p
+            className="font-mono text-xs"
+            data-testid="account-replace-prediction"
+          >
+            {affectedRecordCount} record{affectedRecordCount === 1 ? "" : "s"}
+            {" across "}
+            {selectedTransactions.length} transaction
+            {selectedTransactions.length === 1 ? "" : "s"} will change.
+          </p>
+        )}
+      </div>
+      <div className="mt-3 flex gap-2">
+        <Tooltip
+          label={
+            blocked || saving
+              ? "Wait for the update to finish"
+              : validSourceAccount === undefined
+                ? "Choose an account common to every selected transaction"
+                : "Choose a replacement compatible with every affected record"
+          }
+          disabled={canReview}
+          focusable={!canReview}
+        >
+          <Button
+            ref={reviewButtonRef}
+            type="button"
+            size="sm"
+            disabled={!canReview}
+            onClick={() => {
+              setErrorMessage(undefined);
+              setConfirmOpen(true);
+            }}
+          >
+            <Check aria-hidden="true" />
+            Review replacement
+          </Button>
+        </Tooltip>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={saving}
+          onClick={onCancel}
+        >
+          Cancel
+        </Button>
+      </div>
+      <ConfirmationDialog
+        cancelPendingTooltip="Wait for account replacement to finish"
+        confirmIcon={<Check aria-hidden="true" />}
+        confirmLabel="Replace account"
+        confirmPendingTooltip="Wait for account replacement to finish"
+        confirmVariant="default"
+        errorMessage={errorMessage}
+        onConfirm={() => void confirm()}
+        onOpenChange={(open) => {
+          if (!saving) {
+            setConfirmOpen(open);
+            if (!open) {
+              window.requestAnimationFrame(() =>
+                focusWithoutTooltip(reviewButtonRef.current, {
+                  preventScroll: true,
+                }),
+              );
+            }
+          }
+        }}
+        open={confirmOpen}
+        pending={saving}
+        pendingLabel="Replacing"
+        title="Replace account?"
+      >
+        <p>
+          Replace{" "}
+          {sourceAccount ? (
+            <AccountDisplayLabel
+              account={sourceAccount}
+              className="max-w-full align-bottom font-bold"
+            />
+          ) : null}{" "}
+          with{" "}
+          {replacementAccount ? (
+            <AccountDisplayLabel
+              account={replacementAccount}
+              className="max-w-full align-bottom font-bold"
+            />
+          ) : null}{" "}
+          on every matching active record.
+        </p>
+        <p>
+          {affectedRecordCount} record{affectedRecordCount === 1 ? "" : "s"}
+          {" across "}
+          {selectedTransactions.length} transaction
+          {selectedTransactions.length === 1 ? "" : "s"} will change.
+        </p>
+      </ConfirmationDialog>
+    </section>
+  );
+};
+
 interface TransactionEditDockProps {
+  readonly accountReplaceBlocked: boolean;
   readonly activeEditor: EditDockAction | undefined;
   readonly blocked: boolean;
   readonly maps: LookupMaps;
@@ -358,12 +717,16 @@ interface TransactionEditDockProps {
   ) => Promise<void>;
   readonly onSetSettlement: (value: "pending" | "posted") => Promise<void>;
   readonly selectedCount: number;
+  readonly selectedTransactions: readonly Transaction[];
   readonly selectedRowIndex: number;
   readonly restoreFocusToRow: boolean;
-  readonly skipSummary: Readonly<Record<EditDockAction, EditModeSkipSummary>>;
+  readonly skipSummary: Readonly<
+    Record<ReferenceEditDockAction, EditModeSkipSummary>
+  >;
 }
 
 export const TransactionEditDock = ({
+  accountReplaceBlocked,
   activeEditor,
   blocked,
   maps,
@@ -372,10 +735,12 @@ export const TransactionEditDock = ({
   onSetReconciliation,
   onSetSettlement,
   selectedCount,
+  selectedTransactions,
   selectedRowIndex,
   restoreFocusToRow,
   skipSummary,
 }: TransactionEditDockProps) => {
+  const accountButtonRef = useRef<HTMLButtonElement>(null);
   const categoryButtonRef = useRef<HTMLButtonElement>(null);
   const dockRef = useRef<HTMLElement>(null);
   const memberButtonRef = useRef<HTMLButtonElement>(null);
@@ -396,11 +761,13 @@ export const TransactionEditDock = ({
     window.setTimeout(() => {
       const browser = dockRef.current?.parentElement ?? null;
       const target =
-        closing === "category"
-          ? categoryButtonRef.current
-          : closing === "tags"
-            ? tagsButtonRef.current
-            : memberButtonRef.current;
+        closing === "account"
+          ? accountButtonRef.current
+          : closing === "category"
+            ? categoryButtonRef.current
+            : closing === "tags"
+              ? tagsButtonRef.current
+              : memberButtonRef.current;
       if (
         !restoreFocusToRow &&
         target?.isConnected &&
@@ -448,29 +815,35 @@ export const TransactionEditDock = ({
       data-testid="transaction-edit-dock"
     >
       <div className="grid gap-3 p-3">
-        {(["category", "tags", "member"] as const).map((action) => {
+        {(["account", "category", "tags", "member"] as const).map((action) => {
+          const actionDisabledReason =
+            action === "account" && accountReplaceBlocked
+              ? "Resolve or discard the inline amount conflict before replacing accounts"
+              : disabledReason;
           const ref =
-            action === "category"
-              ? categoryButtonRef
-              : action === "tags"
-                ? tagsButtonRef
-                : memberButtonRef;
+            action === "account"
+              ? accountButtonRef
+              : action === "category"
+                ? categoryButtonRef
+                : action === "tags"
+                  ? tagsButtonRef
+                  : memberButtonRef;
           return (
             <div key={action} className="flex flex-col gap-1">
               <span className="font-heading text-xs font-semibold uppercase">
                 {actionTitle[action]}
               </span>
               <Tooltip
-                label={disabledReason ?? ""}
-                disabled={!disabledReason}
-                focusable={Boolean(disabledReason)}
+                label={actionDisabledReason ?? ""}
+                disabled={!actionDisabledReason}
+                focusable={Boolean(actionDisabledReason)}
               >
                 <Button
                   ref={ref}
                   type="button"
                   variant="outline"
                   aria-expanded={activeEditor === action}
-                  disabled={Boolean(disabledReason)}
+                  disabled={Boolean(actionDisabledReason)}
                   onClick={() => openEditor(action)}
                 >
                   {action === "member" ? (
@@ -478,11 +851,13 @@ export const TransactionEditDock = ({
                   ) : (
                     <Bookmark aria-hidden="true" />
                   )}
-                  {action === "category"
-                    ? "Choose category"
-                    : action === "tags"
-                      ? "Add / remove"
-                      : "Set / clear"}
+                  {action === "account"
+                    ? "Replace account"
+                    : action === "category"
+                      ? "Choose category"
+                      : action === "tags"
+                        ? "Add / remove"
+                        : "Set / clear"}
                 </Button>
               </Tooltip>
             </div>
@@ -538,7 +913,15 @@ export const TransactionEditDock = ({
           </div>
         </div>
       </div>
-      {activeEditor ? (
+      {activeEditor === "account" ? (
+        <AccountReplaceEditor
+          blocked={blocked || accountReplaceBlocked}
+          maps={maps}
+          onApply={onApply}
+          onCancel={closeEditor}
+          selectedTransactions={selectedTransactions}
+        />
+      ) : activeEditor ? (
         <EditDockEditor
           key={activeEditor}
           action={activeEditor}

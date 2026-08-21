@@ -3716,6 +3716,34 @@ paths:
                 $ref: "#/components/schemas/BulkRecordOperationResponse"
         "400":
           $ref: "#/components/responses/InvalidRequest"
+  /api/transactions/bulk/account-replace:
+    post:
+      operationId: bulkReplaceTransactionAccount
+      tags:
+        - transactions
+      summary: Replace one common account across selected transactions.
+      description: "Replaces every active journal record using the source account across all selected active transactions. Source and replacement accounts must be non-system and compatible: owned and party accounts are mutually compatible, while flow accounts replace only flow accounts. A single-currency replacement account must match every affected source record's currency."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkReplaceTransactionAccountRequest"
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "200":
+          description: The common account was replaced across every selected transaction.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkTransactionAccountReplaceResult"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
   /api/records/bulk/settlement:
     post:
       operationId: bulkSetJournalRecordSettlement
@@ -5039,6 +5067,62 @@ components:
           format: int64
           minimum: 1
           nullable: true
+    BulkReplaceTransactionAccountRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - transaction_ids
+        - source_account_id
+        - replacement_account_id
+      properties:
+        transaction_ids:
+          description: Active transaction identifiers whose matching source-account records will change.
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: integer
+            format: int64
+            minimum: 1
+        source_account_id:
+          description: Non-system account that must occur in at least one active journal record on every selected transaction.
+          type: integer
+          format: int64
+          minimum: 1
+        replacement_account_id:
+          description: Distinct non-system account compatible with the source account.
+          type: integer
+          format: int64
+          minimum: 1
+    BulkTransactionAccountReplaceResult:
+      type: object
+      additionalProperties: false
+      required:
+        - transaction_ids
+        - source_account_id
+        - replacement_account_id
+        - updated_record_count
+        - updated_transaction_count
+      properties:
+        transaction_ids:
+          type: array
+          items:
+            type: integer
+            format: int64
+        source_account_id:
+          type: integer
+          format: int64
+        replacement_account_id:
+          type: integer
+          format: int64
+        updated_record_count:
+          type: integer
+          minimum: 0
+          description: Number of active source-account journal records changed.
+        updated_transaction_count:
+          type: integer
+          minimum: 0
+          description: Number of selected transactions completed.
     BulkSetRecordSettlementRequest:
       type: object
       additionalProperties: false

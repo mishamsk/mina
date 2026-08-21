@@ -527,6 +527,35 @@ export type BulkSetRecordMemberRequest = {
     member_id: number | null;
 };
 
+export type BulkReplaceTransactionAccountRequest = {
+    /**
+     * Active transaction identifiers whose matching source-account records will change.
+     */
+    transaction_ids: Array<number>;
+    /**
+     * Non-system account that must occur in at least one active journal record on every selected transaction.
+     */
+    source_account_id: number;
+    /**
+     * Distinct non-system account compatible with the source account.
+     */
+    replacement_account_id: number;
+};
+
+export type BulkTransactionAccountReplaceResult = {
+    transaction_ids: Array<number>;
+    source_account_id: number;
+    replacement_account_id: number;
+    /**
+     * Number of active source-account journal records changed.
+     */
+    updated_record_count: number;
+    /**
+     * Number of selected transactions completed.
+     */
+    updated_transaction_count: number;
+};
+
 export type BulkSetRecordSettlementRequest = {
     /**
      * Journal-record identifiers to update.
@@ -6118,6 +6147,43 @@ export type BulkReassignJournalRecordAccountResponses = {
 };
 
 export type BulkReassignJournalRecordAccountResponse = BulkReassignJournalRecordAccountResponses[keyof BulkReassignJournalRecordAccountResponses];
+
+export type BulkReplaceTransactionAccountData = {
+    body: BulkReplaceTransactionAccountRequest;
+    path?: never;
+    query?: never;
+    url: '/api/transactions/bulk/account-replace';
+};
+
+export type BulkReplaceTransactionAccountErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
+    /**
+     * The request conflicts with existing state.
+     */
+    409: ErrorResponse;
+};
+
+export type BulkReplaceTransactionAccountError = BulkReplaceTransactionAccountErrors[keyof BulkReplaceTransactionAccountErrors];
+
+export type BulkReplaceTransactionAccountResponses = {
+    /**
+     * The common account was replaced across every selected transaction.
+     */
+    200: BulkTransactionAccountReplaceResult;
+};
+
+export type BulkReplaceTransactionAccountResponse = BulkReplaceTransactionAccountResponses[keyof BulkReplaceTransactionAccountResponses];
 
 export type BulkSetJournalRecordSettlementData = {
     body: BulkSetRecordSettlementRequest;

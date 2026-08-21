@@ -3,6 +3,7 @@ package runtime_test
 import (
 	"context"
 	"net/http"
+	"reflect"
 	"testing"
 	"time"
 
@@ -137,6 +138,308 @@ func TestRecordBulkOperationsBoundary(t *testing.T) {
 		t.Fatalf("status search status = %d, want %d; body %s", statusRecords.StatusCode(), http.StatusOK, statusRecords.Body)
 	}
 	assertRecordIDs(t, statusRecords.JSON200.Records, []int64{firstRecordID, secondRecordID})
+}
+
+func TestBulkReplaceTransactionAccountAcrossMixedShapesBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	scenario := client.Scenario()
+	source := scenario.AccountWithCurrency("checking:AccountReplace:Source", "USD")
+	replacement := scenario.AccountWithType("people:AccountReplace:Party", httpclient.WritableAccountTypeParty)
+	merchant := scenario.Account("merchant:AccountReplace:Merchant")
+	fees := scenario.Account("expense:AccountReplace:Fees")
+	category := scenario.Category("AccountReplace:Expense")
+	member := scenario.Member("Account Replace Member")
+	tag := scenario.Tag("AccountReplace:Preserved")
+
+	simple := createTransaction(t, client, classificationRequest(
+		accountReplacementRecord(source.AccountId, "-10.00", "USD", nil, member.MemberId, tag.TagId, "simple"),
+		semanticRecord(merchant.AccountId, "10.00", "USD", &category.CategoryId),
+	)).JSON201
+	multi := createTransaction(t, client, classificationRequest(
+		accountReplacementRecord(source.AccountId, "-4.00", "USD", nil, member.MemberId, tag.TagId, "multi-first"),
+		accountReplacementRecord(source.AccountId, "-6.00", "USD", nil, member.MemberId, tag.TagId, "multi-second"),
+		semanticRecord(merchant.AccountId, "7.00", "USD", &category.CategoryId),
+		semanticRecord(fees.AccountId, "3.00", "USD", &category.CategoryId),
+	)).JSON201
+
+	response, err := client.REST().BulkReplaceTransactionAccountWithResponse(context.Background(), httpclient.BulkReplaceTransactionAccountRequest{
+		TransactionIds:       []int64{simple.TransactionId, multi.TransactionId},
+		SourceAccountId:      source.AccountId,
+		ReplacementAccountId: replacement.AccountId,
+	})
+	requireNoTransportError(t, "replace common balance account", err)
+	if response.StatusCode() != http.StatusOK {
+		t.Fatalf("replace common balance account status = %d, want %d; body %s", response.StatusCode(), http.StatusOK, response.Body)
+	}
+	if response.JSON200.UpdatedRecordCount != 3 || response.JSON200.UpdatedTransactionCount != 2 {
+		t.Fatalf("replace counts = %d records/%d transactions, want 3/2", response.JSON200.UpdatedRecordCount, response.JSON200.UpdatedTransactionCount)
+	}
+	if got, want := response.JSON200.TransactionIds, []int64{simple.TransactionId, multi.TransactionId}; len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("transaction_ids = %v, want %v", got, want)
+	}
+
+	assertAccountReplacement(t, client, simple, source.AccountId, replacement.AccountId, 1)
+	assertAccountReplacement(t, client, multi, source.AccountId, replacement.AccountId, 2)
+}
+
+func TestBulkReplaceTransactionFlowAccountBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	scenario := client.Scenario()
+	balance := scenario.AccountWithCurrency("checking:FlowAccountReplace", "USD")
+	source := scenario.Account("merchant:FlowAccountReplace:Source")
+	replacement := scenario.Account("merchant:FlowAccountReplace:Replacement")
+	category := scenario.Category("FlowAccountReplace:Expense")
+	member := scenario.Member("Flow Account Replace Member")
+	tag := scenario.Tag("FlowAccountReplace:Preserved")
+
+	first := createTransaction(t, client, classificationRequest(
+		semanticRecord(balance.AccountId, "-8.00", "USD", nil),
+		accountReplacementRecord(source.AccountId, "8.00", "USD", &category.CategoryId, member.MemberId, tag.TagId, "first"),
+	)).JSON201
+	second := createTransaction(t, client, classificationRequest(
+		semanticRecord(balance.AccountId, "-9.00", "USD", nil),
+		accountReplacementRecord(source.AccountId, "4.00", "USD", &category.CategoryId, member.MemberId, tag.TagId, "second-first"),
+		accountReplacementRecord(source.AccountId, "5.00", "USD", &category.CategoryId, member.MemberId, tag.TagId, "second-second"),
+	)).JSON201
+
+	response, err := client.REST().BulkReplaceTransactionAccountWithResponse(context.Background(), httpclient.BulkReplaceTransactionAccountRequest{
+		TransactionIds:       []int64{first.TransactionId, second.TransactionId},
+		SourceAccountId:      source.AccountId,
+		ReplacementAccountId: replacement.AccountId,
+	})
+	requireNoTransportError(t, "replace common flow account", err)
+	if response.StatusCode() != http.StatusOK {
+		t.Fatalf("replace common flow account status = %d, want %d; body %s", response.StatusCode(), http.StatusOK, response.Body)
+	}
+	if response.JSON200.UpdatedRecordCount != 3 || response.JSON200.UpdatedTransactionCount != 2 {
+		t.Fatalf("flow replace counts = %d records/%d transactions, want 3/2", response.JSON200.UpdatedRecordCount, response.JSON200.UpdatedTransactionCount)
+	}
+	assertAccountReplacement(t, client, first, source.AccountId, replacement.AccountId, 1)
+	assertAccountReplacement(t, client, second, source.AccountId, replacement.AccountId, 2)
+}
+
+func TestBulkReplaceTransactionAccountAcrossMixedCurrenciesBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	scenario := client.Scenario()
+	source := scenario.AccountWithType("people:MixedCurrencyAccountReplace:Source", httpclient.WritableAccountTypeParty)
+	replacement := scenario.AccountWithType("people:MixedCurrencyAccountReplace:Replacement", httpclient.WritableAccountTypeParty)
+	merchant := scenario.Account("merchant:MixedCurrencyAccountReplace")
+	category := scenario.Category("MixedCurrencyAccountReplace:Expense")
+
+	usd := createTransaction(t, client, classificationRequest(
+		semanticRecord(source.AccountId, "-8.00", "USD", nil),
+		semanticRecord(merchant.AccountId, "8.00", "USD", &category.CategoryId),
+	)).JSON201
+	eur := createTransaction(t, client, classificationRequest(
+		semanticRecord(source.AccountId, "-9.00", "EUR", nil),
+		semanticRecord(merchant.AccountId, "9.00", "EUR", &category.CategoryId),
+	)).JSON201
+
+	response, err := client.REST().BulkReplaceTransactionAccountWithResponse(context.Background(), httpclient.BulkReplaceTransactionAccountRequest{
+		TransactionIds:       []int64{usd.TransactionId, eur.TransactionId},
+		SourceAccountId:      source.AccountId,
+		ReplacementAccountId: replacement.AccountId,
+	})
+	requireNoTransportError(t, "replace common mixed-currency account", err)
+	if response.StatusCode() != http.StatusOK {
+		t.Fatalf("replace common mixed-currency account status = %d, want %d; body %s", response.StatusCode(), http.StatusOK, response.Body)
+	}
+	if response.JSON200.UpdatedRecordCount != 2 || response.JSON200.UpdatedTransactionCount != 2 {
+		t.Fatalf("mixed-currency replace counts = %d records/%d transactions, want 2/2", response.JSON200.UpdatedRecordCount, response.JSON200.UpdatedTransactionCount)
+	}
+	assertAccountReplacement(t, client, usd, source.AccountId, replacement.AccountId, 1)
+	assertAccountReplacement(t, client, eur, source.AccountId, replacement.AccountId, 1)
+}
+
+func TestBulkReplaceTransactionAccountRejectsInvalidChoicesAtomicallyBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	scenario := client.Scenario()
+	source := scenario.AccountWithCurrency("checking:AccountReplaceValidation:Source", "USD")
+	replacement := scenario.AccountWithCurrency("checking:AccountReplaceValidation:Replacement", "USD")
+	currencyMismatch := scenario.AccountWithCurrency("checking:AccountReplaceValidation:EUR", "EUR")
+	otherBalance := scenario.AccountWithCurrency("checking:AccountReplaceValidation:Other", "USD")
+	flow := scenario.Account("merchant:AccountReplaceValidation:Flow")
+	category := scenario.Category("AccountReplaceValidation:Expense")
+	systemAccounts := fixedSystemAccounts(t, client)
+
+	withSource := createTransaction(t, client, classificationRequest(
+		semanticRecord(source.AccountId, "-10.00", "USD", nil),
+		semanticRecord(flow.AccountId, "10.00", "USD", &category.CategoryId),
+	)).JSON201
+	withoutSource := createTransaction(t, client, classificationRequest(
+		semanticRecord(otherBalance.AccountId, "-11.00", "USD", nil),
+		semanticRecord(flow.AccountId, "11.00", "USD", &category.CategoryId),
+	)).JSON201
+
+	for name, request := range map[string]httpclient.BulkReplaceTransactionAccountRequest{
+		"non-common source": {
+			TransactionIds:       []int64{withSource.TransactionId, withoutSource.TransactionId},
+			SourceAccountId:      source.AccountId,
+			ReplacementAccountId: replacement.AccountId,
+		},
+		"cross-kind replacement": {
+			TransactionIds:       []int64{withSource.TransactionId},
+			SourceAccountId:      source.AccountId,
+			ReplacementAccountId: flow.AccountId,
+		},
+		"currency-incompatible replacement": {
+			TransactionIds:       []int64{withSource.TransactionId},
+			SourceAccountId:      source.AccountId,
+			ReplacementAccountId: currencyMismatch.AccountId,
+		},
+		"system replacement": {
+			TransactionIds:       []int64{withSource.TransactionId},
+			SourceAccountId:      source.AccountId,
+			ReplacementAccountId: systemAccounts["system:opening_balance"].AccountId,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			response, err := client.REST().BulkReplaceTransactionAccountWithResponse(context.Background(), request)
+			requireNoTransportError(t, name, err)
+			if response.StatusCode() != http.StatusBadRequest {
+				t.Fatalf("status = %d, want %d; body %s", response.StatusCode(), http.StatusBadRequest, response.Body)
+			}
+			read := getTransaction(t, client, withSource.TransactionId).JSON200
+			if read.Records[0].AccountId != source.AccountId {
+				t.Fatalf("source account after rejected replacement = %d, want %d", read.Records[0].AccountId, source.AccountId)
+			}
+		})
+	}
+
+	mixedCurrencySource := scenario.AccountWithType("people:AccountReplaceValidation:MixedCurrencySource", httpclient.WritableAccountTypeParty)
+	mixedCurrencyUSD := createTransaction(t, client, classificationRequest(
+		semanticRecord(mixedCurrencySource.AccountId, "-12.00", "USD", nil),
+		semanticRecord(flow.AccountId, "12.00", "USD", &category.CategoryId),
+	)).JSON201
+	mixedCurrencyEUR := createTransaction(t, client, classificationRequest(
+		semanticRecord(mixedCurrencySource.AccountId, "-13.00", "EUR", nil),
+		semanticRecord(flow.AccountId, "13.00", "EUR", &category.CategoryId),
+	)).JSON201
+	t.Run("mixed-currency selection", func(t *testing.T) {
+		response, err := client.REST().BulkReplaceTransactionAccountWithResponse(context.Background(), httpclient.BulkReplaceTransactionAccountRequest{
+			TransactionIds:       []int64{mixedCurrencyUSD.TransactionId, mixedCurrencyEUR.TransactionId},
+			SourceAccountId:      mixedCurrencySource.AccountId,
+			ReplacementAccountId: replacement.AccountId,
+		})
+		requireNoTransportError(t, "mixed-currency selection", err)
+		if response.StatusCode() != http.StatusBadRequest {
+			t.Fatalf("status = %d, want %d; body %s", response.StatusCode(), http.StatusBadRequest, response.Body)
+		}
+		for _, transactionID := range []int64{mixedCurrencyUSD.TransactionId, mixedCurrencyEUR.TransactionId} {
+			read := getTransaction(t, client, transactionID).JSON200
+			if read.Records[0].AccountId != mixedCurrencySource.AccountId {
+				t.Fatalf("transaction %d source account after rejected replacement = %d, want %d", transactionID, read.Records[0].AccountId, mixedCurrencySource.AccountId)
+			}
+		}
+	})
+
+	systemSourceTransaction := createTransaction(t, client, classificationRequest(
+		semanticRecordWithoutSettlement(systemAccounts["system:correction"].AccountId, "-5.00", "USD", nil),
+		semanticRecord(otherBalance.AccountId, "5.00", "USD", nil),
+	)).JSON201
+	systemSource, err := client.REST().BulkReplaceTransactionAccountWithResponse(context.Background(), httpclient.BulkReplaceTransactionAccountRequest{
+		TransactionIds:       []int64{systemSourceTransaction.TransactionId},
+		SourceAccountId:      systemAccounts["system:correction"].AccountId,
+		ReplacementAccountId: flow.AccountId,
+	})
+	requireNoTransportError(t, "system source", err)
+	if systemSource.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("system source status = %d, want %d; body %s", systemSource.StatusCode(), http.StatusBadRequest, systemSource.Body)
+	}
+}
+
+func TestBulkReplaceTransactionAccountRejectsMixedLifecycleSelectionAtomicallyBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	scenario := client.Scenario()
+	source := scenario.AccountWithCurrency("checking:AccountReplaceLifecycle:Source", "USD")
+	replacement := scenario.AccountWithType("people:AccountReplaceLifecycle:Replacement", httpclient.WritableAccountTypeParty)
+	merchant := scenario.Account("merchant:AccountReplaceLifecycle")
+	category := scenario.Category("AccountReplaceLifecycle:Expense")
+
+	active := createTransaction(t, client, classificationRequest(
+		semanticRecord(source.AccountId, "-10.00", "USD", nil),
+		semanticRecord(merchant.AccountId, "10.00", "USD", &category.CategoryId),
+	)).JSON201
+	cancelledRequest := classificationRequest(
+		semanticRecord(source.AccountId, "-11.00", "USD", nil),
+		semanticRecord(merchant.AccountId, "11.00", "USD", &category.CategoryId),
+	)
+	cancelledRequest.Records[0].Settlement = apptest.PendingSettlement()
+	cancelled := createTransaction(t, client, cancelledRequest).JSON201
+	cancelResponse, err := client.REST().CancelTransactionWithResponse(context.Background(), cancelled.TransactionId)
+	requireNoTransportError(t, "cancel account replacement fixture", err)
+	if cancelResponse.StatusCode() != http.StatusOK {
+		t.Fatalf("cancel account replacement fixture status = %d, want %d; body %s", cancelResponse.StatusCode(), http.StatusOK, cancelResponse.Body)
+	}
+
+	response, err := client.REST().BulkReplaceTransactionAccountWithResponse(context.Background(), httpclient.BulkReplaceTransactionAccountRequest{
+		TransactionIds:       []int64{active.TransactionId, cancelled.TransactionId},
+		SourceAccountId:      source.AccountId,
+		ReplacementAccountId: replacement.AccountId,
+	})
+	requireNoTransportError(t, "replace account across mixed lifecycle selection", err)
+	if response.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("mixed lifecycle replacement status = %d, want %d; body %s", response.StatusCode(), http.StatusBadRequest, response.Body)
+	}
+
+	for _, transactionID := range []int64{active.TransactionId, cancelled.TransactionId} {
+		transaction := getTransaction(t, client, transactionID).JSON200
+		if transaction.Records[0].AccountId != source.AccountId {
+			t.Fatalf("transaction %d source account after rejected replacement = %d, want %d", transactionID, transaction.Records[0].AccountId, source.AccountId)
+		}
+	}
+}
+
+func assertAccountReplacement(t *testing.T, client *apptest.Client, before *httpclient.Transaction, sourceAccountID int64, replacementAccountID int64, wantReplaced int) {
+	t.Helper()
+	after := getTransaction(t, client, before.TransactionId).JSON200
+	if len(after.Records) != len(before.Records) {
+		t.Fatalf("records after replacement = %d, want %d", len(after.Records), len(before.Records))
+	}
+	if after.Etag == before.Etag || !before.UpdatedAt.Before(after.UpdatedAt) {
+		t.Fatalf("replacement transaction etag/updated_at = %q/%s, want after %q/%s", after.Etag, after.UpdatedAt, before.Etag, before.UpdatedAt)
+	}
+	beforeByID := journalRecordsByID(before.Records)
+	replaced := 0
+	for _, record := range after.Records {
+		prior, ok := beforeByID[record.RecordId]
+		if !ok {
+			t.Fatalf("unexpected record %d after replacement", record.RecordId)
+		}
+		if prior.AccountId == sourceAccountID {
+			replaced++
+			if record.AccountId != replacementAccountID {
+				t.Fatalf("record %d account_id = %d, want replacement %d", record.RecordId, record.AccountId, replacementAccountID)
+			}
+			if !prior.UpdatedAt.Before(record.UpdatedAt) {
+				t.Fatalf("replaced record %d updated_at = %s, want after %s", record.RecordId, record.UpdatedAt, prior.UpdatedAt)
+			}
+			preserved := record
+			preserved.AccountId = prior.AccountId
+			preserved.UpdatedAt = prior.UpdatedAt
+			if !reflect.DeepEqual(preserved, prior) {
+				t.Fatalf("record %d changed fields beyond account substitution", record.RecordId)
+			}
+		} else if !reflect.DeepEqual(record, prior) {
+			t.Fatalf("untouched record %d changed", record.RecordId)
+		}
+	}
+	if replaced != wantReplaced {
+		t.Fatalf("replaced records = %d, want %d", replaced, wantReplaced)
+	}
+}
+
+func accountReplacementRecord(accountID int64, amount string, currency string, categoryID *int64, memberID int64, tagID int64, suffix string) httpclient.CreateJournalRecordRequest {
+	record := semanticRecord(accountID, amount, currency, categoryID)
+	externalID := "account-replace-" + suffix
+	externalSystem := "preservation-test"
+	memo := "Preserve account replacement metadata " + suffix
+	record.ExternalId = &externalID
+	record.ExternalSystem = &externalSystem
+	record.MemberId = &memberID
+	record.Memo = &memo
+	record.TagIds = apptest.Int64SlicePtr(tagID)
+	return record
 }
 
 func TestRecordBulkTransactionETagMaterialAndNoOpBoundary(t *testing.T) {

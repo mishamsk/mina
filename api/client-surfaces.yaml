@@ -759,6 +759,13 @@ operations:
       name: bulk_reassign_account
       description: Assign one account to selected record IDs. This can alter balances and transaction semantic validity; require explicit user intent and inspect records first.
       annotations: {read_only: false, destructive: true, idempotent: true, open_world: false}
+  bulkReplaceTransactionAccount:
+    cli: {state: exposed, name: account-replace}
+    mcp:
+      state: exposed
+      name: account_replace
+      description: Replace one non-system account on every matching active record across selected active transactions. Inspect all selected transactions first and require explicit user confirmation; the source must be common to all selections, balance/flow compatibility is enforced, and a single-currency replacement must match every affected source-record currency.
+      annotations: {read_only: false, destructive: true, idempotent: true, open_world: false}
   bulkSetJournalRecordSettlement:
     cli: {state: exposed, name: bulk-set-settlement}
     mcp:

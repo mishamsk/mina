@@ -21,6 +21,7 @@ import {
   dismissRecurringOccurrenceById,
   fetchTransactionById,
   replaceLedgerTransaction,
+  replaceTransactionAccount,
   restoreTransactionById,
   type Transaction,
   type TransactionPageParams,
@@ -185,6 +186,36 @@ export const useTransactionBrowserPage = ({
       clearTransactionSelection();
     }
   }, [clearTransactionSelection, displayedPageKey]);
+  useLayoutEffect(() => {
+    if (!transactions) {
+      return;
+    }
+    const refreshedById = new Map(
+      transactions.map((transaction) => [
+        transaction.transaction_id,
+        transaction,
+      ]),
+    );
+    const frame = window.requestAnimationFrame(() => {
+      setSelectedTransactionsById((current) => {
+        const refreshed = new Map<number, Transaction>();
+        let changed = false;
+        for (const [transactionId, transaction] of current) {
+          const next = refreshedById.get(transactionId);
+          if (!next) {
+            changed = true;
+            continue;
+          }
+          refreshed.set(transactionId, next);
+          changed = changed || next !== transaction;
+        }
+        return changed ? refreshed : current;
+      });
+    });
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [transactions]);
   const selectedTransactions = useMemo(
     () => Array.from(selectedTransactionsById.values()),
     [selectedTransactionsById],
@@ -610,6 +641,74 @@ export const useTransactionBrowserPage = ({
 
   const updateTransactionsEditReferences = useCallback(
     async (transactions: readonly Transaction[], update: EditDockUpdate) => {
+      if (update.kind === "account") {
+        const result = await replaceTransactionAccount(
+          transactions.map((transaction) => transaction.transaction_id),
+          update.sourceAccountId,
+          update.replacementAccountId,
+        );
+        if (!result.data) {
+          throw new Error(apiErrorMessage(result.error));
+        }
+
+        const pageRefresh = await refreshTransactionPageAfterEditModeSave(
+          displayedPageParams,
+          transactions,
+          [update.replacementAccountId],
+        );
+        if (!pageRefresh.refreshed) {
+          const replacedTransactionIds = new Set(
+            transactions.map((transaction) => transaction.transaction_id),
+          );
+          setSelectedTransactionsById(
+            (current) =>
+              new Map(
+                Array.from(current).filter(
+                  ([transactionId]) =>
+                    !replacedTransactionIds.has(transactionId),
+                ),
+              ),
+          );
+          showNotice(
+            `${result.data.updated_transaction_count} transaction${result.data.updated_transaction_count === 1 ? "" : "s"} updated · ${result.data.updated_record_count} record${result.data.updated_record_count === 1 ? "" : "s"} replaced`,
+          );
+          return;
+        }
+        const visibleTransactions = pageRefresh.transactions ?? [];
+        const visibleIds = new Set(
+          visibleTransactions.map((transaction) => transaction.transaction_id),
+        );
+        const updatedById = new Map(
+          visibleTransactions.map((transaction) => [
+            transaction.transaction_id,
+            transaction,
+          ]),
+        );
+        setSelectedTransactionsById(
+          (current) =>
+            new Map(
+              Array.from(current).flatMap(([transactionId, transaction]) => {
+                if (!visibleIds.has(transactionId)) {
+                  return [];
+                }
+                return [
+                  [
+                    transactionId,
+                    updatedById.get(transactionId) ?? transaction,
+                  ],
+                ];
+              }),
+            ),
+        );
+        const noLongerVisibleCount = transactions.filter(
+          (transaction) => !visibleIds.has(transaction.transaction_id),
+        ).length;
+        showNotice(
+          `${result.data.updated_transaction_count} transaction${result.data.updated_transaction_count === 1 ? "" : "s"} updated · ${result.data.updated_record_count} record${result.data.updated_record_count === 1 ? "" : "s"} replaced${noLongerVisibleCount > 0 ? ` · ${noLongerVisibleCount} no longer match this view` : ""}`,
+        );
+        return;
+      }
+
       const accountsById = new Map(
         (lookups.snapshot?.accounts ?? []).map((account) => [
           account.account_id,
@@ -650,11 +749,11 @@ export const useTransactionBrowserPage = ({
 
       let noLongerVisibleCount = 0;
       if (qualifyingTransactions.length > 0) {
-        const visibleTransactions =
-          await refreshTransactionPageAfterEditModeSave(
-            displayedPageParams,
-            qualifyingTransactions,
-          );
+        const pageRefresh = await refreshTransactionPageAfterEditModeSave(
+          displayedPageParams,
+          qualifyingTransactions,
+        );
+        const visibleTransactions = pageRefresh.transactions ?? [];
         const visibleIds = new Set(
           visibleTransactions.map((transaction) => transaction.transaction_id),
         );
@@ -750,10 +849,11 @@ export const useTransactionBrowserPage = ({
           return refreshed.data;
         }),
       );
-      const visibleTransactions = await refreshTransactionPageAfterEditModeSave(
+      const pageRefresh = await refreshTransactionPageAfterEditModeSave(
         displayedPageParams,
         updatedTransactions,
       );
+      const visibleTransactions = pageRefresh.transactions ?? [];
       const visibleIds = new Set(
         visibleTransactions.map((transaction) => transaction.transaction_id),
       );

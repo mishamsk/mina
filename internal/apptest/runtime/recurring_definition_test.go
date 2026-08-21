@@ -764,6 +764,15 @@ func TestRecurringExpectedTransactionsRejectGenericMutationsBoundary(t *testing.
 	requireNoTransportError(t, "bulk account generated expected transaction", err)
 	assertInvalidRequestStatus(t, "bulk account generated expected transaction", reassigned.StatusCode(), reassigned.JSON400, reassigned.Body)
 
+	replacement := client.Scenario().AccountWithType("people:RecurringGenericGuard:Replacement", httpclient.WritableAccountTypeParty)
+	accountReplaced, err := client.REST().BulkReplaceTransactionAccountWithResponse(context.Background(), httpclient.BulkReplaceTransactionAccountRequest{
+		TransactionIds:       []int64{transactionID},
+		SourceAccountId:      refs.CheckingAccountID,
+		ReplacementAccountId: replacement.AccountId,
+	})
+	requireNoTransportError(t, "replace account on generated expected transaction", err)
+	assertInvalidRequestStatus(t, "replace account on generated expected transaction", accountReplaced.StatusCode(), accountReplaced.JSON400, accountReplaced.Body)
+
 	afterOccurrences := listRecurringOccurrences(t, client, &httpclient.ListRecurringOccurrencesParams{RecurringDefinitionId: &definition.JSON201.RecurringDefinitionId})
 	assertRecurringOccurrenceIDs(t, afterOccurrences.JSON200.RecurringOccurrences, []int64{occurrence.RecurringOccurrenceId})
 	afterOccurrence := afterOccurrences.JSON200.RecurringOccurrences[0]

@@ -95,6 +95,46 @@ func Operations() []Operation {
 			Invoke: invokeBulkReassignJournalRecordAccount,
 		},
 		{
+			ID:          "bulkReplaceTransactionAccount",
+			Method:      "POST",
+			Path:        "/api/transactions/bulk/account-replace",
+			Summary:     "Replace one common account across selected transactions.",
+			Description: "Replaces every active journal record using the source account across all selected active transactions. Source and replacement accounts must be non-system and compatible: owned and party accounts are mutually compatible, while flow accounts replace only flow accounts. A single-currency replacement account must match every affected source record's currency.",
+			CLI:         CLIOperation{Area: "transactions", Name: "account-replace"},
+			Input: InputDescriptor{
+				Body: BodyDescriptor{
+					Present:  true,
+					Required: true,
+					Type:     "object",
+					Properties: []BodyPropertyDescriptor{
+						{
+							Name:        "replacement_account_id",
+							Type:        "integer",
+							Description: "Distinct non-system account compatible with the source account.",
+							Required:    true,
+						},
+						{
+							Name:        "source_account_id",
+							Type:        "integer",
+							Description: "Non-system account that must occur in at least one active journal record on every selected transaction.",
+							Required:    true,
+						},
+						{
+							Name:        "transaction_ids",
+							Type:        "array",
+							Description: "Active transaction identifiers whose matching source-account records will change.",
+							Required:    true,
+							Array:       true,
+							ItemType:    "integer",
+						},
+					},
+					RequiredProperties: []string{"replacement_account_id", "source_account_id", "transaction_ids"},
+					Simple:             true,
+				},
+			},
+			Invoke: invokeBulkReplaceTransactionAccount,
+		},
+		{
 			ID:          "bulkSetJournalRecordMember",
 			Method:      "POST",
 			Path:        "/api/records/bulk/member",
@@ -4234,6 +4274,20 @@ func invokeBulkReassignJournalRecordAccount(ctx context.Context, client httpclie
 		return InvocationResult{}, err
 	}
 	response, err := client.BulkReassignJournalRecordAccountWithBodyWithResponse(ctx, "application/json", bytes.NewReader(input.Body))
+	if err != nil {
+		return InvocationResult{}, err
+	}
+	if response == nil {
+		return InvocationResult{}, errors.New("generated client returned no operation response")
+	}
+	return normalizeInvocationResult(response.Body, response.HTTPResponse)
+}
+
+func invokeBulkReplaceTransactionAccount(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
+	if err := validateInvocationInput(input, nil, nil, nil, true, true); err != nil {
+		return InvocationResult{}, err
+	}
+	response, err := client.BulkReplaceTransactionAccountWithBodyWithResponse(ctx, "application/json", bytes.NewReader(input.Body))
 	if err != nil {
 		return InvocationResult{}, err
 	}

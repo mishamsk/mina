@@ -44,6 +44,7 @@ import type {
 } from "./generated-access";
 import {
   bulkCategorizeJournalRecords,
+  bulkReplaceTransactionAccount,
   bulkSetJournalRecordMember,
   bulkSetJournalRecordReconciliation,
   bulkSetJournalRecordSettlement,
@@ -1219,6 +1220,19 @@ export const updateJournalRecordsMember = (
     body: {
       member_id: memberId,
       record_ids: [...recordIds],
+    },
+  });
+
+export const replaceTransactionAccount = (
+  transactionIds: readonly number[],
+  sourceAccountId: number,
+  replacementAccountId: number,
+) =>
+  bulkReplaceTransactionAccount({
+    body: {
+      replacement_account_id: replacementAccountId,
+      source_account_id: sourceAccountId,
+      transaction_ids: [...transactionIds],
     },
   });
 

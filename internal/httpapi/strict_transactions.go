@@ -416,6 +416,20 @@ func (s *strictServer) BulkReassignJournalRecordAccount(ctx context.Context, req
 	return openapi.BulkReassignJournalRecordAccount200JSONResponse(bulkRecordOperationAPIResponse(response)), nil
 }
 
+func (s *strictServer) BulkReplaceTransactionAccount(ctx context.Context, request openapi.BulkReplaceTransactionAccountRequestObject) (openapi.BulkReplaceTransactionAccountResponseObject, error) {
+	response, err := s.deps.Transactions.BulkReplaceAccount(
+		ctx,
+		request.Body.TransactionIds,
+		request.Body.SourceAccountId,
+		request.Body.ReplacementAccountId,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return openapi.BulkReplaceTransactionAccount200JSONResponse(bulkAccountReplaceAPIResponse(response)), nil
+}
+
 func (s *strictServer) BulkSetJournalRecordSettlement(ctx context.Context, request openapi.BulkSetJournalRecordSettlementRequestObject) (openapi.BulkSetJournalRecordSettlementResponseObject, error) {
 	response, err := s.deps.Transactions.BulkSetSettlement(ctx, request.Body.RecordIds, transactions.SettlementIntent{
 		Status:      transactions.SettlementStatus(request.Body.Settlement),
@@ -758,6 +772,16 @@ func bulkRecordOperationAPIResponse(response transactions.BulkRecordOperationRes
 	return openapi.BulkRecordOperationResponse{
 		RecordIds:    cloneInt64Slice(response.RecordIDs),
 		UpdatedCount: response.UpdatedCount,
+	}
+}
+
+func bulkAccountReplaceAPIResponse(response transactions.BulkAccountReplaceResponse) openapi.BulkTransactionAccountReplaceResult {
+	return openapi.BulkTransactionAccountReplaceResult{
+		TransactionIds:          cloneInt64Slice(response.TransactionIDs),
+		SourceAccountId:         response.SourceAccountID,
+		ReplacementAccountId:    response.ReplacementAccountID,
+		UpdatedRecordCount:      response.UpdatedRecordCount,
+		UpdatedTransactionCount: response.UpdatedTransactionCount,
 	}
 }
 

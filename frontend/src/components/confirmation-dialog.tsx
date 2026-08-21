@@ -102,7 +102,7 @@ export const ConfirmationDialog = ({
         <AlertDialog.Overlay className="fixed inset-0 z-[80] bg-[color-mix(in_srgb,var(--frame),transparent_18%)]" />
         <AlertDialog.Content
           data-slot="confirmation-dialog-content"
-          className="bg-card fixed top-1/2 left-1/2 z-[80] w-[min(480px,calc(100%-2rem))] -translate-x-1/2 -translate-y-1/2 border-2 border-[var(--border-ink)] p-4 shadow-[var(--shadow-pixel)]"
+          className="bg-card fixed top-1/2 left-1/2 z-[80] flex max-h-[calc(100dvh-2rem)] w-[min(480px,calc(100%-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col border-2 border-[var(--border-ink)] p-4 shadow-[var(--shadow-pixel)]"
           onOpenAutoFocus={(event) => {
             if (initialFocusRef) {
               event.preventDefault();
@@ -119,20 +119,22 @@ export const ConfirmationDialog = ({
           <AlertDialog.Title className="font-heading text-base font-bold uppercase">
             {title}
           </AlertDialog.Title>
-          <AlertDialog.Description asChild>
-            <div className="font-body text-muted-foreground mt-3 space-y-2 text-sm">
-              {children}
-            </div>
-          </AlertDialog.Description>
-          {errorMessage ? (
-            <p
-              className="border-destructive text-destructive mt-3 border-2 p-2 text-sm"
-              role="alert"
-            >
-              {errorMessage}
-            </p>
-          ) : null}
-          <div className="mt-4 flex justify-end gap-2">
+          <div className="min-h-0 overflow-y-auto">
+            <AlertDialog.Description asChild>
+              <div className="font-body text-muted-foreground mt-3 space-y-2 text-sm">
+                {children}
+              </div>
+            </AlertDialog.Description>
+            {errorMessage ? (
+              <p
+                className="border-destructive text-destructive mt-3 border-2 p-2 text-sm"
+                role="alert"
+              >
+                {errorMessage}
+              </p>
+            ) : null}
+          </div>
+          <div className="mt-4 flex shrink-0 justify-end gap-2">
             {cancelPendingTooltip ? (
               <Tooltip
                 className={pending ? "cursor-not-allowed" : undefined}

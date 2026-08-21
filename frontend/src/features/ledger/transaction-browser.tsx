@@ -659,7 +659,7 @@ export const TransactionBrowser = ({
     setActiveEditDock(action);
   };
   const skipSummaryByAction = useMemo<
-    Record<EditDockAction, EditModeSkipSummary>
+    Record<Exclude<EditDockAction, "account">, EditModeSkipSummary>
   >(() => {
     return {
       category: summarizeEditModeSkips(
@@ -1136,6 +1136,7 @@ export const TransactionBrowser = ({
   const editDockSurface = editMode ? (
     <TransactionEditDock
       activeEditor={activeEditDock}
+      accountReplaceBlocked={amountDraftRetained}
       blocked={amountSaveBlocksDock || pendingDockTransactionIds.size > 0}
       maps={maps}
       onApply={applyEditDockUpdate}
@@ -1157,6 +1158,7 @@ export const TransactionBrowser = ({
         )
       }
       selectedCount={selectedCount}
+      selectedTransactions={selectedTransactions}
       selectedRowIndex={selectedRowFocusIndex}
       restoreFocusToRow={editDockOpenedFromRow}
       skipSummary={skipSummaryByAction}
@@ -1500,6 +1502,7 @@ export const TransactionBrowser = ({
                         }
 
                         const editShortcut = {
+                          a: "account",
                           c: "category",
                           m: "member",
                           t: "tags",

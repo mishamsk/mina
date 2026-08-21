@@ -1272,6 +1272,48 @@ FROM (`+valuesSQL+`) AS changes(record_id, pending_date, posted_date)
 	return updatedCount, nil
 }
 
+// BulkReplaceAccount substitutes one common account across selected active transactions atomically.
+func (s *TransactionStore) BulkReplaceAccount(ctx context.Context, targets []transactions.BulkAccountReplaceTarget, sourceAccountID int64, replacementAccountID int64) (int, error) {
+	updatedRecordCount := 0
+	err := s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
+		if err := validateBulkAccountReplaceRevisions(ctx, tx, s.db, targets); err != nil {
+			return err
+		}
+
+		transactionIDs := make([]int64, 0, len(targets))
+		for _, target := range targets {
+			transactionIDs = append(transactionIDs, target.TransactionID)
+		}
+		inputSQL, args := int64InputValues(transactionIDs)
+		args = append(args, replacementAccountID, sourceAccountID)
+		changedRecordIDs, err := queryChangedRecordIDs(ctx, tx,
+			`UPDATE `+s.db.accountingName("journal_record")+` AS jr
+SET account_id = ?,
+    updated_at = CURRENT_TIMESTAMP
+FROM (`+inputSQL+`) AS input(transaction_id)
+WHERE jr.transaction_id = input.transaction_id
+  AND jr.account_id = ?
+  AND jr.tombstoned_at IS NULL
+RETURNING jr.record_id`,
+			args...,
+		)
+		if err != nil {
+			return fmt.Errorf("bulk replace transaction account: %w", err)
+		}
+		updatedRecordCount = len(changedRecordIDs)
+
+		return touchTransactionsByIDs(ctx, tx, s.db, transactionIDs)
+	})
+	if err != nil {
+		if isDuckDBTransactionConflictError(err) {
+			return 0, services.ErrConflict
+		}
+		return 0, err
+	}
+
+	return updatedRecordCount, nil
+}
+
 // BulkUpdateTags adds and removes active tags on active journal records atomically.
 func (s *TransactionStore) BulkUpdateTags(ctx context.Context, recordIDs []int64, addTagIDs []int64, removeTagIDs []int64) (int, error) {
 	updatedCount := 0
@@ -2072,6 +2114,36 @@ func validateMutableJournalRecords(ctx context.Context, queryer rowQuerier, db *
 
 func validateActiveJournalRecords(ctx context.Context, queryer rowQuerier, db *AppDB, recordIDs []int64) error {
 	return validateJournalRecordsForMutation(ctx, queryer, db, recordIDs, true)
+}
+
+func validateBulkAccountReplaceRevisions(ctx context.Context, queryer rowQuerier, db *AppDB, targets []transactions.BulkAccountReplaceTarget) error {
+	if len(targets) == 0 {
+		return services.ErrInvalidReference
+	}
+	valuesSQL, args := bulkAccountReplaceTargetValues(targets)
+	var matching int
+	if err := queryer.QueryRowContext(ctx, `SELECT COUNT(*)
+FROM (`+valuesSQL+`) AS input(transaction_id, updated_at)
+JOIN `+db.accountingName("transaction")+` AS tr
+  ON tr.transaction_id = input.transaction_id
+ AND tr.updated_at = input.updated_at
+ AND tr.tombstoned_at IS NULL`, args...).Scan(&matching); err != nil {
+		return fmt.Errorf("validate bulk account replace revisions: %w", err)
+	}
+	if matching != len(targets) {
+		return services.ErrConflict
+	}
+	return nil
+}
+
+func bulkAccountReplaceTargetValues(targets []transactions.BulkAccountReplaceTarget) (string, []any) {
+	rows := make([]string, 0, len(targets))
+	args := make([]any, 0, len(targets)*2)
+	for _, target := range targets {
+		rows = append(rows, "(CAST(? AS BIGINT), CAST(? AS TIMESTAMP))")
+		args = append(args, target.TransactionID, timestampArg(target.UpdatedAt))
+	}
+	return "VALUES " + strings.Join(rows, ", "), args
 }
 
 func validateJournalRecordsForMutation(ctx context.Context, queryer rowQuerier, db *AppDB, recordIDs []int64, requireActiveTransaction bool) error {
