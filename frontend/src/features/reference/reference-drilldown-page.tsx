@@ -432,9 +432,6 @@ export const ReferenceDrilldownPage = ({
           onDeferProjection={browser.deferRecurringProjection}
           onDelete={browser.deleteSelectedTransaction}
           onDismissOccurrence={browser.dismissRecurringOccurrenceFromRow}
-          onLoadRecurringDefinitionForProjection={
-            browser.loadRecurringDefinitionForProjection
-          }
           onDuplicate={(transaction) => {
             openTransactionEntryLaunch(
               { transaction, type: "duplicate" },

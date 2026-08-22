@@ -11,6 +11,7 @@
 - Categories retains an edited category independently of filtered resource snapshots so toolbar changes cannot invalidate an open editor, while intent-scoped management reads reconcile refreshed API deleteability without replacing its draft.
 - Transaction-filter changes keep an open transaction or entry overlay visible: synchronously replace its background URL before writing the overlay URL, so the browser never renders an overlay-less intermediate state.
 - The Transactions route composes ledger's recurring projection load/defer adapters; applicability and dialog behavior remain feature-owned.
+- The Recurring route resolves definition fragments from its loaded snapshot and hands linked edits to the app-shell editor; user-visible resolution, overlay ordering, close, and focus behavior follow [Definitions management](../../../docs/webui-design.md#recurring-occurrences-and-definitions).
 - A page that coordinates a local panel or restructure dialog retains its opener and restores focus on close; use the page's primary action as the fallback when that opener no longer exists.
 - Category and Tag group routes use canonical `/categories/group?prefix=FQN` and `/tags/group?prefix=FQN` forms; leaf routes retain numeric IDs.
 - Status owns the `tab` query parameter and keeps health cards mounted above its Background operations and Audit log feature views.

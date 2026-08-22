@@ -17,7 +17,13 @@ import {
 } from "pixelarticons/react";
 import type { ComponentType, ReactNode, Ref, SVGProps } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { NavLink, type To, useLocation, useSearchParams } from "react-router";
+import {
+  NavLink,
+  type To,
+  useLocation,
+  useNavigate,
+  useSearchParams,
+} from "react-router";
 
 import { apiErrorMessage, fetchTransactionById } from "@/api";
 import { Toast } from "@/components/toast";
@@ -41,6 +47,7 @@ import {
   DefinitionEditorPanel,
   refreshAfterRecurringDefinitionMutation,
   refreshMountedRecurringDefinitions,
+  revealRecurringDefinitionActionRow,
 } from "@/features/recurring";
 import {
   refreshTransactionTemplates,
@@ -52,6 +59,7 @@ import {
   closeRecurringDefinitionEditor,
   closeTemplateEditor,
   closeTransactionEntryPanel,
+  consumeRecurringDefinitionFragmentNavigation,
   failTransactionEntryRoute,
   getCommandPaletteSnapshot,
   loadTransactionEntryRoute,
@@ -124,9 +132,32 @@ const hasActiveOverlay = (): boolean =>
     isVisibleOverlay,
   );
 
+const currentHistoryKey = (): string | undefined => {
+  const state: unknown = window.history.state;
+  if (typeof state !== "object" || state === null || !("key" in state)) {
+    return undefined;
+  }
+  return typeof state.key === "string" ? state.key : undefined;
+};
+
 const resolveRecurringDefinitionFocusTarget = (
   opener: HTMLElement | undefined,
 ): HTMLElement | undefined => {
+  const routeFallback =
+    document.querySelector<HTMLElement>("main h1") ?? undefined;
+  const recurringDefinitionId = opener?.closest<HTMLElement>(
+    "[data-recurring-definition-id]",
+  )?.dataset.recurringDefinitionId;
+  if (recurringDefinitionId) {
+    const liveRow = document.querySelector<HTMLElement>(
+      `[data-recurring-definition-id="${recurringDefinitionId}"]`,
+    );
+    if (liveRow) {
+      revealRecurringDefinitionActionRow(liveRow);
+      return liveRow;
+    }
+    return routeFallback ?? opener;
+  }
   const openerTransactionRow = opener?.closest<HTMLElement>(
     "[data-transaction-row='true']",
   );
@@ -151,8 +182,6 @@ const resolveRecurringDefinitionFocusTarget = (
   ) {
     return overflowTrigger;
   }
-  const routeFallback =
-    document.querySelector<HTMLElement>("main h1") ?? undefined;
   const transactionSurfaceMounted = Boolean(
     document.querySelector("[data-testid='transaction-browser-layout']"),
   );
@@ -379,6 +408,7 @@ export const AppShell = ({ children }: AppShellProps) => {
     entryModal.open || templateEditor.open,
   );
   const location = useLocation();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const entryParam = searchParams.get("entry");
   const previousEntryParamRef = useRef(entryParam);
@@ -792,9 +822,32 @@ export const AppShell = ({ children }: AppShellProps) => {
       {recurringDefinitionEditor.launch ? (
         <DefinitionEditorPanel
           key={recurringDefinitionEditor.launch.key}
-          definition={undefined}
+          definition={recurringDefinitionEditor.launch.definition}
           initialRecords={recurringDefinitionEditor.launch.initialRecords}
-          onClose={closeRecurringDefinitionEditor}
+          onClose={() => {
+            const fragmentNavigation =
+              recurringDefinitionEditor.launch?.fragmentNavigation;
+            if (fragmentNavigation) {
+              const currentLocation = new URL(window.location.href);
+              if (
+                fragmentNavigation ===
+                `${currentHistoryKey()}:${currentLocation.hash}`
+              ) {
+                void navigate(
+                  {
+                    pathname: currentLocation.pathname,
+                    search: currentLocation.search,
+                  },
+                  { replace: true },
+                );
+              } else {
+                consumeRecurringDefinitionFragmentNavigation(
+                  fragmentNavigation,
+                );
+              }
+            }
+            closeRecurringDefinitionEditor();
+          }}
           onNotice={(message, tone = "success") => {
             entrySaveNoticeIdRef.current += 1;
             setEntrySaveNotice({

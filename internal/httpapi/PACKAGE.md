@@ -18,7 +18,7 @@
 - The adapter receives only the state-read-only online authentication service; credential administration is not in its dependency graph.
 - Account balances, and account-register records when running balances are requested, load current credit limits separately to derive `remaining_credit` from the reported balance. This presentation mapping must not change service balance semantics.
 - Household, Category, and Tag flow operations map the shared anchor/window configuration, presentation-ready period stacks, filtered totals, and selected trend without transport-side aggregation; the accounting-history range remains a separate read, and required response collections encode as arrays, including when empty.
-- Recurring-occurrence reads materialize only through the server's current civil date; future-positioned transaction responses mark non-persisted recurring projections explicitly.
+- Recurring-occurrence lists materialize only through the server's current civil date, while exact reads return permanent provenance and definition availability without catch-up; future-positioned transaction responses mark non-persisted recurring projections explicitly.
 - Accounting-schema inspection maps the embedded service artifact directly and never reads the opened database or its catalog.
 - Background-operation discovery maps every closed-registry ID to concrete status, start, typed-run, and filtered-history links.
 - Audit response mapping preserves stored JSON number text instead of converting it through binary floating-point values.

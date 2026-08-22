@@ -2592,17 +2592,20 @@ type RecurringDefinitionWriteRequest struct {
 
 // RecurringOccurrence defines model for RecurringOccurrence.
 type RecurringOccurrence struct {
-	CreatedAt                     time.Time                 `json:"created_at"`
-	GeneratedTransactionId        *int64                    `json:"generated_transaction_id"`
-	MaterializedAt                time.Time                 `json:"materialized_at"`
-	MaterializedDefinitionVersion int64                     `json:"materialized_definition_version"`
-	RecurringDefinitionFqn        string                    `json:"recurring_definition_fqn"`
-	RecurringDefinitionId         int64                     `json:"recurring_definition_id"`
-	RecurringOccurrenceId         int64                     `json:"recurring_occurrence_id"`
-	ReviewedAt                    *time.Time                `json:"reviewed_at"`
-	ScheduledDate                 openapi_types.Date        `json:"scheduled_date"`
-	Status                        RecurringOccurrenceStatus `json:"status"`
-	UpdatedAt                     time.Time                 `json:"updated_at"`
+	CreatedAt                     time.Time `json:"created_at"`
+	GeneratedTransactionId        *int64    `json:"generated_transaction_id"`
+	MaterializedAt                time.Time `json:"materialized_at"`
+	MaterializedDefinitionVersion int64     `json:"materialized_definition_version"`
+
+	// RecurringDefinitionActive Whether the definition has not been cancelled (tombstoned); paused definitions remain true.
+	RecurringDefinitionActive bool                      `json:"recurring_definition_active"`
+	RecurringDefinitionFqn    string                    `json:"recurring_definition_fqn"`
+	RecurringDefinitionId     int64                     `json:"recurring_definition_id"`
+	RecurringOccurrenceId     int64                     `json:"recurring_occurrence_id"`
+	ReviewedAt                *time.Time                `json:"reviewed_at"`
+	ScheduledDate             openapi_types.Date        `json:"scheduled_date"`
+	Status                    RecurringOccurrenceStatus `json:"status"`
+	UpdatedAt                 time.Time                 `json:"updated_at"`
 }
 
 // RecurringOccurrenceConfirmRequest defines model for RecurringOccurrenceConfirmRequest.
@@ -4385,6 +4388,9 @@ type ClientInterface interface {
 	// ListRecurringOccurrences request
 	ListRecurringOccurrences(ctx context.Context, params *ListRecurringOccurrencesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetRecurringOccurrence request
+	GetRecurringOccurrence(ctx context.Context, recurringOccurrenceId int64, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ConfirmRecurringOccurrenceWithBody request with any body
 	ConfirmRecurringOccurrenceWithBody(ctx context.Context, recurringOccurrenceId int64, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -5688,6 +5694,18 @@ func (c *Client) ResumeRecurringDefinition(ctx context.Context, recurringDefinit
 
 func (c *Client) ListRecurringOccurrences(ctx context.Context, params *ListRecurringOccurrencesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListRecurringOccurrencesRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetRecurringOccurrence(ctx context.Context, recurringOccurrenceId int64, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetRecurringOccurrenceRequest(c.Server, recurringOccurrenceId)
 	if err != nil {
 		return nil, err
 	}
@@ -10809,6 +10827,40 @@ func NewListRecurringOccurrencesRequest(server string, params *ListRecurringOccu
 	return req, nil
 }
 
+// NewGetRecurringOccurrenceRequest generates requests for GetRecurringOccurrence
+func NewGetRecurringOccurrenceRequest(server string, recurringOccurrenceId int64) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "recurring_occurrence_id", recurringOccurrenceId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "integer", Format: "int64"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/recurring-occurrences/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewConfirmRecurringOccurrenceRequest calls the generic ConfirmRecurringOccurrence builder with application/json body
 func NewConfirmRecurringOccurrenceRequest(server string, recurringOccurrenceId int64, body ConfirmRecurringOccurrenceJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -13166,6 +13218,9 @@ type ClientWithResponsesInterface interface {
 
 	// ListRecurringOccurrencesWithResponse request
 	ListRecurringOccurrencesWithResponse(ctx context.Context, params *ListRecurringOccurrencesParams, reqEditors ...RequestEditorFn) (*ListRecurringOccurrencesResponse, error)
+
+	// GetRecurringOccurrenceWithResponse request
+	GetRecurringOccurrenceWithResponse(ctx context.Context, recurringOccurrenceId int64, reqEditors ...RequestEditorFn) (*GetRecurringOccurrenceResponse, error)
 
 	// ConfirmRecurringOccurrenceWithBodyWithResponse request with any body
 	ConfirmRecurringOccurrenceWithBodyWithResponse(ctx context.Context, recurringOccurrenceId int64, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ConfirmRecurringOccurrenceResponse, error)
@@ -15728,6 +15783,39 @@ func (r ListRecurringOccurrencesResponse) ContentType() string {
 	return ""
 }
 
+type GetRecurringOccurrenceResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RecurringOccurrence
+	JSON400      *InvalidRequest
+	JSON401      *Unauthenticated
+	JSON404      *NotFound
+}
+
+// Status returns HTTPResponse.Status
+func (r GetRecurringOccurrenceResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetRecurringOccurrenceResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetRecurringOccurrenceResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type ConfirmRecurringOccurrenceResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -17718,6 +17806,15 @@ func (c *ClientWithResponses) ListRecurringOccurrencesWithResponse(ctx context.C
 		return nil, err
 	}
 	return ParseListRecurringOccurrencesResponse(rsp)
+}
+
+// GetRecurringOccurrenceWithResponse request returning *GetRecurringOccurrenceResponse
+func (c *ClientWithResponses) GetRecurringOccurrenceWithResponse(ctx context.Context, recurringOccurrenceId int64, reqEditors ...RequestEditorFn) (*GetRecurringOccurrenceResponse, error) {
+	rsp, err := c.GetRecurringOccurrence(ctx, recurringOccurrenceId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetRecurringOccurrenceResponse(rsp)
 }
 
 // ConfirmRecurringOccurrenceWithBodyWithResponse request with arbitrary body returning *ConfirmRecurringOccurrenceResponse
@@ -21692,6 +21789,53 @@ func ParseListRecurringOccurrencesResponse(rsp *http.Response) (*ListRecurringOc
 			return nil, err
 		}
 		response.JSON401 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetRecurringOccurrenceResponse parses an HTTP response from a GetRecurringOccurrenceWithResponse call
+func ParseGetRecurringOccurrenceResponse(rsp *http.Response) (*GetRecurringOccurrenceResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetRecurringOccurrenceResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RecurringOccurrence
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
 
 	}
 

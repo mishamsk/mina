@@ -597,7 +597,7 @@ WHERE 1 = 1`
 		return services.PaginatedList[recurring.Occurrence]{}, err
 	}
 
-	query := `SELECT o.recurring_occurrence_id, o.recurring_definition_id, d.fqn, o.scheduled_date, CAST(o.status AS VARCHAR), o.materialized_definition_version,
+	query := `SELECT o.recurring_occurrence_id, o.recurring_definition_id, d.fqn, d.tombstoned_at, o.scheduled_date, CAST(o.status AS VARCHAR), o.materialized_definition_version,
 	o.materialized_at, o.reviewed_at, t.transaction_id, o.created_at, o.updated_at
 ` + filterQuery
 	query, args = appendServiceListOrderAndPage(query, args, opts.ListOptions, recurringOccurrenceSortColumns, services.SortKeyScheduledDate, "o.recurring_occurrence_id")
@@ -628,6 +628,11 @@ WHERE 1 = 1`
 		Items:      occurrences,
 		TotalCount: totalCount,
 	}, nil
+}
+
+// GetOccurrence returns one permanent recurring occurrence by ID.
+func (s *RecurringStore) GetOccurrence(ctx context.Context, id int64) (recurring.Occurrence, error) {
+	return selectRecurringOccurrenceByID(ctx, s.db.query(), s.db, id)
 }
 
 // GetOccurrenceConfirmation returns an occurrence with the generated records needed for actual-date valuation.
@@ -1223,6 +1228,7 @@ func scanRecurringOccurrence(scanner recurringOccurrenceScanner) (recurring.Occu
 
 func scanRecurringOccurrenceFields(scanner recurringOccurrenceScanner, includesDefinitionFQN bool) (recurring.Occurrence, error) {
 	var occurrence recurring.Occurrence
+	var definitionTombstonedAt sql.NullTime
 	var scheduledDate time.Time
 	var status string
 	var reviewedAt sql.NullTime
@@ -1235,7 +1241,7 @@ func scanRecurringOccurrenceFields(scanner recurringOccurrenceScanner, includesD
 		&occurrence.RecurringDefinitionID,
 	}
 	if includesDefinitionFQN {
-		dest = append(dest, &occurrence.RecurringDefinitionFQN)
+		dest = append(dest, &occurrence.RecurringDefinitionFQN, &definitionTombstonedAt)
 	}
 	dest = append(dest,
 		&scheduledDate,
@@ -1251,6 +1257,7 @@ func scanRecurringOccurrenceFields(scanner recurringOccurrenceScanner, includesD
 		return recurring.Occurrence{}, err
 	}
 	occurrence.ScheduledDate = values.CivilDateFromTime(scheduledDate)
+	occurrence.RecurringDefinitionActive = !definitionTombstonedAt.Valid
 	occurrence.Status = recurring.OccurrenceStatus(strings.ToLower(status))
 	occurrence.MaterializedAt = materializedAt.UTC()
 	occurrence.ReviewedAt = nullableTimeFromSQL(reviewedAt)
@@ -1266,7 +1273,7 @@ func scanRecurringOccurrenceFields(scanner recurringOccurrenceScanner, includesD
 func selectRecurringOccurrenceByID(ctx context.Context, queryer rowQuerier, db *AppDB, id int64) (recurring.Occurrence, error) {
 	occurrence, err := scanRecurringOccurrence(queryer.QueryRowContext(
 		ctx,
-		`SELECT o.recurring_occurrence_id, o.recurring_definition_id, d.fqn, o.scheduled_date, CAST(o.status AS VARCHAR), o.materialized_definition_version,
+		`SELECT o.recurring_occurrence_id, o.recurring_definition_id, d.fqn, d.tombstoned_at, o.scheduled_date, CAST(o.status AS VARCHAR), o.materialized_definition_version,
 	o.materialized_at, o.reviewed_at, t.transaction_id, o.created_at, o.updated_at
 FROM `+db.accountingName("recurring_occurrence")+` AS o
 JOIN `+db.accountingName("recurring_definition")+` AS d

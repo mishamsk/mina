@@ -362,9 +362,6 @@ export const TransactionsPage = () => {
             onDeferProjection={browser.deferRecurringProjection}
             onDelete={browser.deleteSelectedTransaction}
             onDismissOccurrence={browser.dismissRecurringOccurrenceFromRow}
-            onLoadRecurringDefinitionForProjection={
-              browser.loadRecurringDefinitionForProjection
-            }
             onDuplicate={duplicateTransaction}
             onEdit={editTransaction}
             onPost={browser.postTransaction}

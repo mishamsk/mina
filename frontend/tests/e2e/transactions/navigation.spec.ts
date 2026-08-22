@@ -388,33 +388,54 @@ test("only the next recurring projection can be deferred", async ({
     await expect(row.getByRole("button", { name: "Defer" })).toHaveCount(0);
   }
 
+  const definitionPath = `/api/recurring-definitions/${String(definition.recurring_definition_id)}`;
+  let definitionRequestCount = 0;
+  let releaseDefinitionLoad: (() => void) | undefined;
+  const definitionLoadHeld = new Promise<void>((resolve) => {
+    releaseDefinitionLoad = resolve;
+  });
+  await page.route(`**${definitionPath}`, async (route) => {
+    definitionRequestCount += 1;
+    if (definitionRequestCount === 1) {
+      await route.fulfill({
+        contentType: "application/json",
+        json: {
+          error: {
+            code: "temporary_failure",
+            message: "Definition temporarily unavailable.",
+          },
+        },
+        status: 503,
+      });
+      return;
+    }
+    await definitionLoadHeld;
+    try {
+      await route.continue();
+    } catch (error) {
+      if (
+        !(error instanceof Error) ||
+        !error.message.includes("already handled")
+      ) {
+        throw error;
+      }
+    }
+  });
   await nextRow.click();
   const nextProjectionDetail = page.getByTestId("transaction-detail-panel");
   const detailDeferButton = nextProjectionDetail.getByRole("button", {
     exact: true,
     name: "Defer",
   });
-  const definitionPath = `/api/recurring-definitions/${String(definition.recurring_definition_id)}`;
-  let releaseDefinitionLoad: (() => void) | undefined;
-  const definitionLoadHeld = new Promise<void>((resolve) => {
-    releaseDefinitionLoad = resolve;
-  });
-  await page.route(
-    `**${definitionPath}`,
-    async (route) => {
-      await definitionLoadHeld;
-      try {
-        await route.continue();
-      } catch (error) {
-        if (
-          !(error instanceof Error) ||
-          !error.message.includes("already handled")
-        ) {
-          throw error;
-        }
-      }
-    },
-    { times: 1 },
+  const failedProvenance = nextProjectionDetail.getByTestId(
+    "transaction-recurring-definition",
+  );
+  await expect(failedProvenance).toContainText(
+    "Definition temporarily unavailable.",
+  );
+  await failedProvenance.getByText("API error").click();
+  await expect(failedProvenance.locator("pre")).toContainText(
+    '"code": "temporary_failure"',
   );
   await detailDeferButton.click();
   const loadingDeferDialog = page.getByRole("alertdialog", {
@@ -436,6 +457,8 @@ test("only the next recurring projection can be deferred", async ({
   const loadingDialogBounds = await loadingDeferDialog.boundingBox();
   releaseDefinitionLoad?.();
   await expect(loadingDeferDialog.getByLabel("Offset")).toBeVisible();
+  expect(definitionRequestCount).toBe(2);
+  await page.unroute(`**${definitionPath}`);
   await expect(loadingCancel).toBeFocused();
   expect(await loadingDeferDialog.boundingBox()).toEqual(loadingDialogBounds);
   await expect(

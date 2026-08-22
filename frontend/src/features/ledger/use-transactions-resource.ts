@@ -580,11 +580,15 @@ export const refreshLedgerLookups = async (): Promise<void> => {
   await loadLedgerLookups();
 };
 
+export const recurringDefinitionMutationEvent =
+  "mina:recurring-definition-mutated";
+
 export const invalidateTransactionsForRecurringDefinitionMutation =
   (): void => {
     recurringOccurrenceCatchupGeneration += 1;
     recurringOccurrenceCatchupRequired = true;
     invalidateTransactionPagesPreservingSnapshots();
+    window.dispatchEvent(new Event(recurringDefinitionMutationEvent));
   };
 
 export const invalidateReferencePagesAfterTransactionMutation = (): void => {

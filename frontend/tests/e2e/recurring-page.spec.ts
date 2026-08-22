@@ -184,6 +184,64 @@ test("recurring definition row actions unfold at desktop width and fold when con
   }
 });
 
+test("definition fragment opens its editor without adding a source marker", async ({
+  page,
+}) => {
+  const definition = await definitionByFqn(page, "Household:Mortgage");
+  await page.goto("/recurring");
+  const row = definitionRow(page, definition);
+  const definitionCell = row.locator("td").first();
+  await expect(definitionCell).toHaveText(definition.fqn);
+  const plainRowScreenshot = await row.screenshot({ animations: "disabled" });
+
+  await page.evaluate((definitionId) => {
+    window.history.pushState({}, "", `/recurring#definition-${definitionId}`);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  }, definition.recurring_definition_id);
+  const editor = page.getByRole("complementary", {
+    name: "Edit recurring definition",
+  });
+  await expect(editor).toBeFocused();
+  await expect(editor.getByLabel("Definition FQN")).toHaveValue(definition.fqn);
+  await expect(definitionCell).toHaveText(definition.fqn);
+  await editor.evaluate((element) => {
+    element.style.visibility = "hidden";
+  });
+  expect(await row.screenshot({ animations: "disabled" })).toEqual(
+    plainRowScreenshot,
+  );
+  await page
+    .locator("[data-recurring-definition-editor]")
+    .evaluate((element) => {
+      element.style.visibility = "";
+    });
+
+  await editor.getByRole("button", { name: "Close definition editor" }).click();
+  await expect(editor).toHaveCount(0);
+  await expect(page).toHaveURL(/\/recurring$/);
+  await expect(row).toBeFocused();
+});
+
+test("missing definition fragments clear with feedback", async ({ page }) => {
+  const definition = await definitionByFqn(page, "Household:Mortgage");
+  const cancelled = await page.request.delete(
+    `/api/recurring-definitions/${definition.recurring_definition_id}`,
+  );
+  expect(cancelled.ok(), await cancelled.text()).toBe(true);
+
+  await page.goto(
+    `/recurring#definition-${definition.recurring_definition_id}`,
+  );
+
+  await expect(page).toHaveURL(/\/recurring$/);
+  await expect(
+    page.getByText("Recurring definition is no longer available."),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("complementary", { name: "Edit recurring definition" }),
+  ).toHaveCount(0);
+});
+
 test("pausing a reordered definition restores its visible button focus", async ({
   page,
 }) => {
@@ -341,7 +399,7 @@ test("definition editor blocks past anchors and maps server errors", async ({
   expect(replaceRequests).toBe(1);
 });
 
-test("definition actions preserve newer user focus", async ({ page }) => {
+test("definition actions preserve newer row focus", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/recurring");
   const definition = await definitionByFqn(page, "Household:Mortgage");
@@ -364,14 +422,348 @@ test("definition actions preserve newer user focus", async ({ page }) => {
   await pause.focus();
   await pause.press("Enter");
   await pauseStarted;
+  await row.focus();
+  releasePause();
+
+  await expect(page.getByText("Definition paused.")).toBeVisible();
+  await expect(row).toBeFocused();
+});
+
+test("a local editor consumes a definition fragment before loading finishes", async ({
+  page,
+}) => {
+  const definition = await definitionByFqn(page, "Household:Mortgage");
+  let releaseDefinitions!: () => void;
+  const definitionsReleased = new Promise<void>((resolve) => {
+    releaseDefinitions = resolve;
+  });
+  await page.route("**/api/recurring-definitions?**", async (route) => {
+    await definitionsReleased;
+    await route.continue();
+  });
+
+  await page.goto(
+    `/recurring#definition-${definition.recurring_definition_id}`,
+  );
+  await page.getByRole("button", { name: "New definition" }).click();
+  const editor = page.getByRole("complementary", {
+    name: "New recurring definition",
+  });
+  await expect(editor).toBeFocused();
+
+  releaseDefinitions();
+  await expect(page.getByTestId("recurring-definitions-table")).toBeVisible();
+  await expect(page).toHaveURL(/\/recurring$/);
+  await expect(editor).toBeFocused();
+});
+
+test("an open local editor consumes a later definition fragment", async ({
+  page,
+}) => {
+  const definition = await definitionByFqn(page, "Household:Mortgage");
+  await page.goto("/recurring");
+  await page.getByRole("button", { name: "New definition" }).click();
+  const editor = page.getByRole("complementary", {
+    name: "New recurring definition",
+  });
+  await expect(editor).toBeFocused();
+
+  await page.evaluate((definitionId) => {
+    window.history.pushState({}, "", `/recurring#definition-${definitionId}`);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  }, definition.recurring_definition_id);
+
+  await expect(page).toHaveURL(/\/recurring$/);
+  await expect(editor).toBeFocused();
+  await editor.getByRole("button", { name: "Close definition editor" }).click();
+  await expect(editor).toHaveCount(0);
+  await expect(page).toHaveURL(/\/recurring$/);
+});
+
+test("a delayed definition fragment opens its editor", async ({ page }) => {
+  const definition = await definitionByFqn(page, "Household:Mortgage");
+  let releaseDefinitions!: () => void;
+  const definitionsReleased = new Promise<void>((resolve) => {
+    releaseDefinitions = resolve;
+  });
+  await page.route("**/api/recurring-definitions?**", async (route) => {
+    await definitionsReleased;
+    await route.continue();
+  });
+
+  await page.goto(
+    `/recurring#definition-${definition.recurring_definition_id}`,
+  );
   const newerFocusTarget = page.getByRole("button", {
     name: "New definition",
   });
   await newerFocusTarget.focus();
-  releasePause();
 
-  await expect(page.getByText("Definition paused.")).toBeVisible();
-  await expect(newerFocusTarget).toBeFocused();
+  releaseDefinitions();
+  await expect(page.getByTestId("recurring-definitions-table")).toBeVisible();
+  const editor = page.getByRole("complementary", {
+    name: "Edit recurring definition",
+  });
+  await expect(editor).toBeFocused();
+  await expect(editor.getByLabel("Definition FQN")).toHaveValue(definition.fqn);
+});
+
+test("a delayed definition fragment waits for the command palette", async ({
+  page,
+}) => {
+  const definition = await definitionByFqn(page, "Household:Mortgage");
+  let releaseDefinitions!: () => void;
+  const definitionsReleased = new Promise<void>((resolve) => {
+    releaseDefinitions = resolve;
+  });
+  await page.route("**/api/recurring-definitions?**", async (route) => {
+    await definitionsReleased;
+    await route.continue();
+  });
+
+  await page.goto(
+    `/recurring#definition-${definition.recurring_definition_id}`,
+  );
+  await page.keyboard.press("Control+K");
+  const palette = page.getByRole("dialog", { name: "Command Palette" });
+  const commandSearch = palette.getByRole("combobox", {
+    name: "Command search",
+  });
+  await expect(commandSearch).toBeFocused();
+
+  releaseDefinitions();
+  await expect(page.getByTestId("recurring-definitions-table")).toBeVisible();
+  await expect(commandSearch).toBeFocused();
+  await expect(
+    page.getByRole("complementary", { name: "Edit recurring definition" }),
+  ).toHaveCount(0);
+
+  await page.keyboard.press("Escape");
+  await expect(palette).toHaveCount(0);
+  const editor = page.getByRole("complementary", {
+    name: "Edit recurring definition",
+  });
+  await expect(editor).toBeFocused();
+  await expect(editor.getByLabel("Definition FQN")).toHaveValue(definition.fqn);
+});
+
+test("a definition fragment supersedes persistent navigation focus", async ({
+  page,
+}) => {
+  const definition = await definitionByFqn(page, "Household:Mortgage");
+  let releaseDefinitions!: () => void;
+  const definitionsReleased = new Promise<void>((resolve) => {
+    releaseDefinitions = resolve;
+  });
+  await page.route("**/api/recurring-definitions?**", async (route) => {
+    await definitionsReleased;
+    await route.continue();
+  });
+
+  await page.goto(
+    `/recurring#definition-${definition.recurring_definition_id}`,
+  );
+  const accountsLink = page.getByRole("link", { name: "Accounts" });
+  await accountsLink.focus();
+
+  releaseDefinitions();
+  await expect(page.getByTestId("recurring-definitions-table")).toBeVisible();
+  const editor = page.getByRole("complementary", {
+    name: "Edit recurring definition",
+  });
+  await expect(editor).toBeFocused();
+});
+
+test("cold definition fragment opens its editor after loading", async ({
+  page,
+}) => {
+  const definition = await definitionByFqn(page, "Household:Mortgage");
+  let releaseDefinitions!: () => void;
+  const definitionsReleased = new Promise<void>((resolve) => {
+    releaseDefinitions = resolve;
+  });
+  await page.route("**/api/recurring-definitions?**", async (route) => {
+    await definitionsReleased;
+    await route.continue();
+  });
+
+  await page.goto(
+    `/recurring#definition-${definition.recurring_definition_id}`,
+  );
+  await expect(page.getByRole("heading", { name: "Recurring" })).toBeFocused();
+
+  releaseDefinitions();
+  const editor = page.getByRole("complementary", {
+    name: "Edit recurring definition",
+  });
+  await expect(editor).toBeFocused();
+  await expect(editor.getByLabel("Definition FQN")).toHaveValue(definition.fqn);
+});
+
+test("fragment editor drafts survive route navigation", async ({ page }) => {
+  const definition = await definitionByFqn(page, "Household:Mortgage");
+  await page.goto(
+    `/recurring#definition-${definition.recurring_definition_id}`,
+  );
+  const editor = page.getByRole("complementary", {
+    name: "Edit recurring definition",
+  });
+  await expect(editor).toBeFocused();
+  const fqn = editor.getByLabel("Definition FQN");
+  await fqn.fill("Household:UnsavedMortgage");
+
+  await page.getByRole("link", { name: "Accounts" }).click();
+  await expect(page).toHaveURL(/\/accounts$/);
+  await expect(editor).toBeVisible();
+  await expect(fqn).toHaveValue("Household:UnsavedMortgage");
+
+  await page.goBack();
+  await expect(page).toHaveURL(
+    new RegExp(`/recurring#definition-${definition.recurring_definition_id}$`),
+  );
+  await expect(fqn).toHaveValue("Household:UnsavedMortgage");
+  await editor.getByRole("button", { name: "Close definition editor" }).click();
+  await expect(editor).toHaveCount(0);
+  await expect(page).toHaveURL(/\/recurring$/);
+  await expect(definitionRow(page, definition)).toBeFocused();
+});
+
+test("a fresh definition fragment reopens its editor after close", async ({
+  page,
+}) => {
+  const definition = await definitionByFqn(page, "Household:Mortgage");
+  await page.goto(
+    `/recurring#definition-${definition.recurring_definition_id}`,
+  );
+  const editor = page.getByRole("complementary", {
+    name: "Edit recurring definition",
+  });
+  await expect(editor).toBeFocused();
+  await editor.getByRole("button", { name: "Close definition editor" }).click();
+  await expect(page).toHaveURL(/\/recurring$/);
+  await expect(editor).toHaveCount(0);
+
+  await page.goto("/overview");
+  await page.goto(
+    `/recurring#definition-${definition.recurring_definition_id}`,
+  );
+  await expect(editor).toBeFocused();
+});
+
+test("definition fragment opens its editor after a failed load retry", async ({
+  page,
+}) => {
+  const definition = await definitionByFqn(page, "Household:Mortgage");
+  let failNextList = true;
+  await page.route("**/api/recurring-definitions?**", async (route) => {
+    if (!failNextList) {
+      await route.continue();
+      return;
+    }
+    failNextList = false;
+    await route.fulfill({
+      contentType: "application/json",
+      json: {
+        error: {
+          code: "temporary_failure",
+          message: "Definition list temporarily unavailable.",
+        },
+      },
+      status: 503,
+    });
+  });
+  await page.goto(
+    `/recurring#definition-${definition.recurring_definition_id}`,
+  );
+  await expect(
+    page.getByText("Recurring definitions could not be loaded."),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "Retry" }).click();
+  const editor = page.getByRole("complementary", {
+    name: "Edit recurring definition",
+  });
+  await expect(editor).toBeFocused();
+  await expect(editor.getByLabel("Definition FQN")).toHaveValue(definition.fqn);
+});
+
+test("definition fragment waits for the global recurring editor to close", async ({
+  page,
+}, testInfo) => {
+  const definition = await definitionByFqn(page, "Household:Mortgage");
+  const templateFqn = `E2E:${testInfo.project.name.replace(/[^A-Za-z0-9]/g, "")}:${Date.now()}:Fragment editor`;
+  const createTemplateResponse = await page.request.post(
+    "/api/transaction-templates",
+    {
+      data: { fqn: templateFqn, records: [{}] },
+    },
+  );
+  expect(createTemplateResponse.ok(), await createTemplateResponse.text()).toBe(
+    true,
+  );
+  const template = (await createTemplateResponse.json()) as {
+    readonly transaction_template_id: number;
+  };
+  await page.goto("/templates");
+  const createRecurring = page
+    .getByTestId("templates-tree-row")
+    .filter({ hasText: templateFqn })
+    .getByRole("button", { exact: true, name: "Create recurring" });
+  await expect(createRecurring).toBeVisible();
+  await createRecurring.click();
+  const editor = page.getByRole("complementary", {
+    name: "New recurring definition",
+  });
+  await expect(editor).toBeFocused();
+
+  await page.evaluate((definitionId) => {
+    window.history.pushState({}, "", `/recurring#definition-${definitionId}`);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  }, definition.recurring_definition_id);
+  await expect(page).toHaveURL(
+    new RegExp(`/recurring#definition-${definition.recurring_definition_id}$`),
+  );
+  await editor.getByRole("button", { name: "Close definition editor" }).click();
+  await expect(editor).toHaveCount(0);
+  const linkedEditor = page.getByRole("complementary", {
+    name: "Edit recurring definition",
+  });
+  await expect(linkedEditor).toBeFocused();
+  await expect(linkedEditor.getByLabel("Definition FQN")).toHaveValue(
+    definition.fqn,
+  );
+
+  const deleteTemplateResponse = await page.request.delete(
+    `/api/transaction-templates/${template.transaction_template_id}`,
+  );
+  expect(deleteTemplateResponse.ok(), await deleteTemplateResponse.text()).toBe(
+    true,
+  );
+});
+
+test("definition fragment waits for the global template editor to close", async ({
+  page,
+}) => {
+  const definition = await definitionByFqn(page, "Household:Mortgage");
+  await page.goto("/templates");
+  await page.getByRole("button", { name: "New template" }).first().click();
+  const editor = page.getByRole("dialog", { name: "New template" });
+  const fqnInput = editor.getByLabel("Template FQN");
+  await expect(fqnInput).toBeFocused();
+
+  await page.evaluate((definitionId) => {
+    window.history.pushState({}, "", `/recurring#definition-${definitionId}`);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  }, definition.recurring_definition_id);
+  await editor.getByRole("button", { name: "Close template editor" }).click();
+  await expect(editor).toHaveCount(0);
+  const linkedEditor = page.getByRole("complementary", {
+    name: "Edit recurring definition",
+  });
+  await expect(linkedEditor).toBeFocused();
+  await expect(linkedEditor.getByLabel("Definition FQN")).toHaveValue(
+    definition.fqn,
+  );
 });
 
 test("saving a reordered definition restores its visible row focus", async ({

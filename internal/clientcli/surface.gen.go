@@ -1954,6 +1954,25 @@ func Operations() []Operation {
 			Invoke: invokeGetRecurringDefinition,
 		},
 		{
+			ID:          "getRecurringOccurrence",
+			Method:      "GET",
+			Path:        "/api/recurring-occurrences/{recurring_occurrence_id}",
+			Summary:     "Get a recurring occurrence.",
+			Description: "Returns only the existing occurrence with this ID; it does not run catch-up materialization or create due occurrences. Use the occurrence list endpoint when catch-up through the current civil date is required.",
+			CLI:         CLIOperation{Area: "recurring", Name: "get-occurrence"},
+			Input: InputDescriptor{
+				Path: []ParameterDescriptor{
+					{
+						Name:        "recurring_occurrence_id",
+						Type:        "integer",
+						Description: "Numeric identifier of the recurring occurrence.",
+						Required:    true,
+					},
+				},
+			},
+			Invoke: invokeGetRecurringOccurrence,
+		},
+		{
 			ID:          "getSettings",
 			Method:      "GET",
 			Path:        "/api/settings",
@@ -5780,6 +5799,29 @@ func invokeGetRecurringDefinition(ctx context.Context, client httpclient.ClientW
 		}
 	}
 	response, err := client.GetRecurringDefinitionWithResponse(ctx, pathValue0)
+	if err != nil {
+		return InvocationResult{}, err
+	}
+	if response == nil {
+		return InvocationResult{}, errors.New("generated client returned no operation response")
+	}
+	return normalizeInvocationResult(response.Body, response.HTTPResponse)
+}
+
+func invokeGetRecurringOccurrence(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
+	if err := validateInvocationInput(input, []string{"recurring_occurrence_id"}, nil, nil, false, false); err != nil {
+		return InvocationResult{}, err
+	}
+	var pathValue0 int64
+	if err := parseInvocationValue(input.Path[0], false, &pathValue0); err != nil {
+		return InvocationResult{}, &InvocationInputError{
+			Location: "path",
+			Name:     "recurring_occurrence_id",
+			Value:    input.Path[0],
+			Err:      err,
+		}
+	}
+	response, err := client.GetRecurringOccurrenceWithResponse(ctx, pathValue0)
 	if err != nil {
 		return InvocationResult{}, err
 	}

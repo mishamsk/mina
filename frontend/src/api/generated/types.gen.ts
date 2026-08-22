@@ -1609,6 +1609,10 @@ export type RecurringOccurrence = {
     recurring_occurrence_id: number;
     recurring_definition_id: number;
     recurring_definition_fqn: string;
+    /**
+     * Whether the definition has not been cancelled (tombstoned); paused definitions remain true.
+     */
+    recurring_definition_active: boolean;
     scheduled_date: string;
     status: RecurringOccurrenceStatus;
     materialized_definition_version: number;
@@ -5298,6 +5302,44 @@ export type ListRecurringOccurrencesResponses = {
 };
 
 export type ListRecurringOccurrencesResponse = ListRecurringOccurrencesResponses[keyof ListRecurringOccurrencesResponses];
+
+export type GetRecurringOccurrenceData = {
+    body?: never;
+    path: {
+        /**
+         * Numeric identifier of the recurring occurrence.
+         */
+        recurring_occurrence_id: number;
+    };
+    query?: never;
+    url: '/api/recurring-occurrences/{recurring_occurrence_id}';
+};
+
+export type GetRecurringOccurrenceErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The requested resource was not found.
+     */
+    404: ErrorResponse;
+};
+
+export type GetRecurringOccurrenceError = GetRecurringOccurrenceErrors[keyof GetRecurringOccurrenceErrors];
+
+export type GetRecurringOccurrenceResponses = {
+    /**
+     * Recurring occurrence found.
+     */
+    200: RecurringOccurrence;
+};
+
+export type GetRecurringOccurrenceResponse = GetRecurringOccurrenceResponses[keyof GetRecurringOccurrenceResponses];
 
 export type ConfirmRecurringOccurrenceData = {
     body: RecurringOccurrenceConfirmRequest;

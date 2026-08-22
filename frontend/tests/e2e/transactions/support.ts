@@ -106,6 +106,7 @@ interface StoredTransactionEntryDraftSeedEnvelopeFixture {
 }
 
 interface RecurringDefinitionFixture {
+  readonly fqn: string;
   readonly recurring_definition_id: number;
 }
 
@@ -378,6 +379,8 @@ const createExpectedRecurringFixture = async (
   readonly merchant: AccountFixture;
   readonly merchantFqn: string;
   readonly memo: string;
+  readonly recurringDefinitionFqn: string;
+  readonly recurringDefinitionId: number;
   readonly transactionId: number;
 }> => {
   const anchorDate = options.anchorDate ?? formatLocalDate(new Date());
@@ -458,6 +461,8 @@ const createExpectedRecurringFixture = async (
     merchant,
     merchantFqn: merchant.fqn,
     memo,
+    recurringDefinitionFqn: created.fqn,
+    recurringDefinitionId: created.recurring_definition_id,
     transactionId,
   };
 };

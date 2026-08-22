@@ -95,6 +95,181 @@ test("cold transaction detail deep link restores outside the list snapshot", asy
   await expectTransactionsPageUrl(page, 1, 25, { q: missingSearch });
 });
 
+test("recurring transaction detail links back to its definition", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const expected = await createExpectedRecurringFixture(
+    page,
+    `${slug}${Date.now()}Backlink${"LongSegment".repeat(8)}`,
+  );
+
+  await page.goto(
+    `/transactions?page=1&pageSize=50&transaction=${expected.transactionId}`,
+  );
+  const panel = page.getByTestId("transaction-detail-panel");
+  const definitionLink = panel.getByRole("link", {
+    name: expected.recurringDefinitionFqn,
+  });
+  await expect(definitionLink).toBeVisible();
+  await expect(
+    panel.getByTestId("transaction-recurring-definition"),
+  ).toContainText(expected.recurringDefinitionFqn);
+  expect(
+    (await definitionLink.locator(":scope > span").allTextContents()).join(""),
+  ).toBe(expected.recurringDefinitionFqn);
+  await page.setViewportSize({ width: 343, height: 900 });
+  await expect
+    .poll(() =>
+      panel.evaluate(
+        (element) => element.scrollWidth <= element.clientWidth + 1,
+      ),
+    )
+    .toBe(true);
+  await page.setViewportSize({ width: 1440, height: 900 });
+
+  await definitionLink.click();
+
+  await expect(page).toHaveURL(
+    new RegExp(`/recurring#definition-${expected.recurringDefinitionId}$`),
+  );
+  const definitionRow = page.locator(
+    `#definition-${expected.recurringDefinitionId}`,
+  );
+  await expect(definitionRow).toContainText(expected.recurringDefinitionFqn);
+  await expect(
+    definitionRow.getByTestId("recurring-transaction-source-marker"),
+  ).toHaveCount(0);
+  const editor = page.getByRole("complementary", {
+    name: "Edit recurring definition",
+  });
+  await expect(editor).toBeFocused();
+  await expect(editor.getByLabel("Definition FQN")).toHaveValue(
+    expected.recurringDefinitionFqn,
+  );
+
+  await editor.getByRole("button", { name: "Close definition editor" }).click();
+  await expect(editor).toHaveCount(0);
+  await expect(page).toHaveURL(/\/recurring$/);
+  await expect(definitionRow).toBeFocused();
+
+  const pause = definitionRow.getByRole("button", { name: "Pause" });
+  await pause.focus();
+  await pause.press("Enter");
+  const resume = definitionRow.getByRole("button", { name: "Resume" });
+  await expect(page.getByText("Definition paused.")).toBeVisible();
+  await expect(resume).toBeFocused();
+
+  const cancelled = await page.request.delete(
+    `/api/recurring-definitions/${expected.recurringDefinitionId}`,
+  );
+  expect(cancelled.ok(), await cancelled.text()).toBe(true);
+  await page.goto(
+    `/transactions?page=1&pageSize=50&transaction=${expected.transactionId}`,
+  );
+  const cancelledProvenance = page.getByTestId(
+    "transaction-recurring-definition",
+  );
+  await expect(cancelledProvenance).toContainText(
+    expected.recurringDefinitionFqn,
+  );
+  await expect(cancelledProvenance.getByRole("link")).toHaveCount(0);
+});
+
+test("definition saves refresh mounted provenance and consume the backlink", async ({
+  page,
+}, testInfo) => {
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const expected = await createExpectedRecurringFixture(
+    page,
+    `${slug}${Date.now()}BacklinkRefresh`,
+  );
+  await page.goto(
+    `/transactions?page=1&pageSize=50&transaction=${expected.transactionId}`,
+  );
+  const panel = page.getByTestId("transaction-detail-panel");
+  await panel
+    .getByRole("link", { name: expected.recurringDefinitionFqn })
+    .click();
+  const editor = page.getByRole("complementary", {
+    name: "Edit recurring definition",
+  });
+  await expect(editor).toBeFocused();
+
+  await page.goBack();
+  await expectTransactionsPageUrl(page, 1, 50, {
+    transaction: String(expected.transactionId),
+  });
+  await expect(editor).toBeVisible();
+  const renamedFqn = `${expected.recurringDefinitionFqn}:Renamed`;
+  await editor.getByLabel("Definition FQN").fill(renamedFqn);
+  await editor.getByRole("button", { name: "Save definition" }).click();
+
+  await expect(editor).toHaveCount(0);
+  await expect(panel.getByRole("link", { name: renamedFqn })).toBeVisible();
+
+  await page.goForward();
+  await expect(page).toHaveURL(/\/recurring$/);
+  await expect(editor).toHaveCount(0);
+});
+
+test("definition save completion preserves newer route navigation", async ({
+  page,
+}, testInfo) => {
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const expected = await createExpectedRecurringFixture(
+    page,
+    `${slug}${Date.now()}BacklinkSaveNavigation`,
+  );
+  await page.goto(
+    `/transactions?page=1&pageSize=50&transaction=${expected.transactionId}`,
+  );
+  const panel = page.getByTestId("transaction-detail-panel");
+  await panel
+    .getByRole("link", { name: expected.recurringDefinitionFqn })
+    .click();
+  const editor = page.getByRole("complementary", {
+    name: "Edit recurring definition",
+  });
+  await expect(editor).toBeFocused();
+
+  let releaseSave = () => {};
+  const saveGate = new Promise<void>((resolve) => {
+    releaseSave = resolve;
+  });
+  let markSaveStarted = () => {};
+  const saveStarted = new Promise<void>((resolve) => {
+    markSaveStarted = resolve;
+  });
+  const definitionPath = `/api/recurring-definitions/${expected.recurringDefinitionId}`;
+  await page.route(`**${definitionPath}`, async (route) => {
+    if (route.request().method() !== "PUT") {
+      await route.continue();
+      return;
+    }
+    markSaveStarted();
+    await saveGate;
+    await route.continue();
+  });
+
+  await editor
+    .getByLabel("Definition FQN")
+    .fill(`${expected.recurringDefinitionFqn}:Renamed`);
+  await editor.getByRole("button", { name: "Save definition" }).click();
+  await saveStarted;
+  await page.getByRole("link", { name: "Accounts", exact: true }).click();
+  await expect(page).toHaveURL(/\/accounts$/);
+
+  releaseSave();
+  await expect(editor).toHaveCount(0);
+  await expect(page).toHaveURL(/\/accounts$/);
+
+  await page.goBack();
+  await expect(page).toHaveURL(/\/recurring$/);
+  await expect(editor).toHaveCount(0);
+});
+
 test("a captured BlueCash Target spend without amounts is offered for Spend and Refund", async ({
   page,
 }, testInfo) => {

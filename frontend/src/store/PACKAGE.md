@@ -16,7 +16,7 @@
 - Category-page snapshot identity and request state include normalized economic intent; restoring its loaded key clears another key's transient request state.
 - Account transaction fetches write only while their entry remains loading; mutation responses seed the cache independently so invalidation rejects older fetches.
 - Transaction-entry route results apply only to their exact requested entry. An entry launch waits for Edit-mode amount saves to succeed, and cancellation or any failed save discards the deferred launch; its optional opener is transient focus-restoration state, and a shape-changing inline conflict may carry its transient amount and matching record IDs into an Advanced edit launch.
-- Route-independent template and recurring-definition editor launches retain their opener and source defaults only in transient memory; an open recurring editor rejects replacement launches, and closing it clears its one-use payload.
+- Route-independent template and recurring-definition editor launches retain their opener, source defaults or edited definition, and backlink navigation identity only in transient memory; an open recurring editor rejects replacement launches, and closing it clears its one-use payload while retaining an off-route backlink identity until the route consumes it.
 - Overview snapshots keep the backend household flow dataset and its recoverable section error beside balance, pulse, and recent-activity data.
 - Shareable Status state stays in the route URL and has no Zustand persistence lifecycle.
 

@@ -167,6 +167,7 @@ type Occurrence struct {
 	ID                            int64
 	RecurringDefinitionID         int64
 	RecurringDefinitionFQN        string
+	RecurringDefinitionActive     bool
 	ScheduledDate                 values.CivilDate
 	Status                        OccurrenceStatus
 	MaterializedDefinitionVersion int64
@@ -228,6 +229,7 @@ type Repository interface {
 	ListMaterializationDefinitions(context.Context, values.CivilDate) ([]MaterializationDefinition, error)
 	CreateExpectedOccurrences(context.Context, []ExpectedOccurrenceInput) error
 	CreateConfirmedOccurrence(context.Context, Definition, values.CivilDate, values.CivilDate, []transactions.PersistJournalRecordInput, time.Time) (Occurrence, error)
+	GetOccurrence(context.Context, int64) (Occurrence, error)
 	ListOccurrences(context.Context, OccurrenceListOptions) (services.PaginatedList[Occurrence], error)
 	ListOccurrenceDates(context.Context, int64, values.CivilDate) ([]values.CivilDate, error)
 	ListOccurrenceDatesByDefinitionIDs(context.Context, []int64, values.CivilDate) (map[int64][]values.CivilDate, error)
@@ -433,6 +435,23 @@ func (s *Service) List(ctx context.Context, opts services.ListOptions) (services
 	}
 
 	return result, nil
+}
+
+// GetOccurrence returns one permanent recurring occurrence by ID.
+func (s *Service) GetOccurrence(ctx context.Context, id int64) (Occurrence, error) {
+	if id <= 0 {
+		return Occurrence{}, services.InvalidRequest("recurring_occurrence_id must be positive")
+	}
+
+	occurrence, err := s.repo.GetOccurrence(ctx, id)
+	if errors.Is(err, services.ErrNotFound) {
+		return Occurrence{}, services.NotFound("recurring occurrence not found")
+	}
+	if err != nil {
+		return Occurrence{}, err
+	}
+
+	return occurrence, nil
 }
 
 // ListOccurrences materializes due slots through today, then returns matching occurrences.

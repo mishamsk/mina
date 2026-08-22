@@ -2135,6 +2135,29 @@ func Operations() []Operation {
 			Invoke: invokeGetRecurringDefinition,
 		},
 		{
+			ID:          "getRecurringOccurrence",
+			Method:      "GET",
+			Path:        "/api/recurring-occurrences/{recurring_occurrence_id}",
+			Summary:     "Get a recurring occurrence.",
+			Description: "Use when you already have an exact recurring-occurrence ID and need its definition provenance, scheduled date, review status, or generated transaction ID. This reads only that stored occurrence and does not run catch-up or create due occurrences; use recurring_list_occurrences to discover IDs and materialize catch-up through today.",
+			MCP: MCPOperation{
+				Group: "recurring", Name: "get_occurrence",
+				ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"recurring_occurrence_id\":{\"description\":\"Numeric identifier of the recurring occurrence.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"recurring_occurrence_id\"],\"type\":\"object\"}"),
+			},
+			Input: InputDescriptor{
+				Path: []ParameterDescriptor{
+					{
+						Name:        "recurring_occurrence_id",
+						Type:        "integer",
+						Description: "Numeric identifier of the recurring occurrence.",
+						Required:    true,
+					},
+				},
+			},
+			Invoke: invokeGetRecurringOccurrence,
+		},
+		{
 			ID:          "getSettings",
 			Method:      "GET",
 			Path:        "/api/settings",
@@ -6058,6 +6081,29 @@ func invokeGetRecurringDefinition(ctx context.Context, client httpclient.ClientW
 		}
 	}
 	response, err := client.GetRecurringDefinitionWithResponse(ctx, pathValue0)
+	if err != nil {
+		return InvocationResult{}, err
+	}
+	if response == nil {
+		return InvocationResult{}, errors.New("generated client returned no operation response")
+	}
+	return normalizeInvocationResult(response.Body, response.HTTPResponse)
+}
+
+func invokeGetRecurringOccurrence(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
+	if err := validateInvocationInput(input, []string{"recurring_occurrence_id"}, nil, nil, false, false); err != nil {
+		return InvocationResult{}, err
+	}
+	var pathValue0 int64
+	if err := parseInvocationValue(input.Path[0], false, &pathValue0); err != nil {
+		return InvocationResult{}, &InvocationInputError{
+			Location: "path",
+			Name:     "recurring_occurrence_id",
+			Value:    input.Path[0],
+			Err:      err,
+		}
+	}
+	response, err := client.GetRecurringOccurrenceWithResponse(ctx, pathValue0)
 	if err != nil {
 		return InvocationResult{}, err
 	}

@@ -15,6 +15,7 @@
 - Seeded active hidden references remain labeled and removable but stay unavailable as fresh picker choices.
 - Definition records normalize fiat codes and the `C::` prefix to uppercase while preserving the case-sensitive crypto token suffix.
 - Definition actions and editor closure resolve and restore their live focus target after closing without overriding newer user focus; reordered action rows are revealed below the sticky table header, the feature restore target remains the fallback, and the editor is an outside-close safe overlay for its source detail panel that lets an open confirmation dialog handle Escape first.
+- Definition rows expose `id="definition-<id>"` for route-owned deep links and `data-recurring-definition-id="<id>"` for app-shell focus restoration.
 
 ## Boundaries
 

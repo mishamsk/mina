@@ -182,6 +182,7 @@ export const FqnPath = ({
     return (
       <Tooltip label={value} asChild>
         <Link
+          aria-label={value}
           className={cn(
             pathClassName,
             "focus-visible:outline-ring group cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2",

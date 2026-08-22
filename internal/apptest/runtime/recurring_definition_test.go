@@ -115,6 +115,46 @@ func TestRecurringDefinitionAndOccurrenceListQueryBoundary(t *testing.T) {
 		t.Fatalf("occurrence total_count = %d, want 3", occurrences.JSON200.TotalCount)
 	}
 	assertRecurringOccurrences(t, occurrences.JSON200.RecurringOccurrences, alpha.JSON201.RecurringDefinitionId, []string{"2024-04-08"})
+
+	provenance := createRecurringDefinition(t, client, recurringDefinitionRequest("RecurringListQuery:Provenance", refs, "-13.00000000", "13.00000000", intervalRule(1, "WEEK"), "2024-04-22"))
+	confirmed := confirmNextRecurringDefinition(t, client, provenance.JSON201.RecurringDefinitionId)
+	occurrenceID := confirmed.JSON200.RecurringOccurrenceId
+	client.SetTime(base.AddDate(0, 0, 21))
+	assertDatePtr(t, getRecurringDefinition(t, client, provenance.JSON201.RecurringDefinitionId).JSON200.NextDueDate, "2024-04-29")
+
+	occurrence, err := client.REST().GetRecurringOccurrenceWithResponse(context.Background(), occurrenceID)
+	requireNoTransportError(t, "get recurring occurrence", err)
+	if occurrence.StatusCode() != http.StatusOK {
+		t.Fatalf("get recurring occurrence status = %d, want %d; body %s", occurrence.StatusCode(), http.StatusOK, occurrence.Body)
+	}
+	if occurrence.JSON200.RecurringOccurrenceId != occurrenceID || occurrence.JSON200.RecurringDefinitionId != provenance.JSON201.RecurringDefinitionId || occurrence.JSON200.RecurringDefinitionFqn != provenance.JSON201.Fqn || !occurrence.JSON200.RecurringDefinitionActive {
+		t.Fatalf("get recurring occurrence = %+v, want occurrence %d from definition %+v", occurrence.JSON200, occurrenceID, provenance.JSON201)
+	}
+	assertDatePtr(t, getRecurringDefinition(t, client, provenance.JSON201.RecurringDefinitionId).JSON200.NextDueDate, "2024-04-29")
+
+	pauseRecurringDefinition(t, client, provenance.JSON201.RecurringDefinitionId)
+	pausedOccurrence, err := client.REST().GetRecurringOccurrenceWithResponse(context.Background(), occurrenceID)
+	requireNoTransportError(t, "get occurrence from paused definition", err)
+	if pausedOccurrence.StatusCode() != http.StatusOK || pausedOccurrence.JSON200.RecurringDefinitionId != provenance.JSON201.RecurringDefinitionId || pausedOccurrence.JSON200.RecurringDefinitionFqn != provenance.JSON201.Fqn || !pausedOccurrence.JSON200.RecurringDefinitionActive {
+		t.Fatalf("get occurrence from paused definition = %+v, want occurrence %d from available definition %+v", pausedOccurrence.JSON200, occurrenceID, provenance.JSON201)
+	}
+
+	deleted, err := client.REST().DeleteRecurringDefinitionWithResponse(context.Background(), provenance.JSON201.RecurringDefinitionId)
+	requireNoTransportError(t, "cancel recurring definition", err)
+	if deleted.StatusCode() != http.StatusNoContent {
+		t.Fatalf("cancel recurring definition status = %d, want %d; body %s", deleted.StatusCode(), http.StatusNoContent, deleted.Body)
+	}
+	cancelledOccurrence, err := client.REST().GetRecurringOccurrenceWithResponse(context.Background(), occurrenceID)
+	requireNoTransportError(t, "get occurrence from cancelled definition", err)
+	if cancelledOccurrence.StatusCode() != http.StatusOK || cancelledOccurrence.JSON200.RecurringDefinitionId != provenance.JSON201.RecurringDefinitionId || cancelledOccurrence.JSON200.RecurringDefinitionFqn != provenance.JSON201.Fqn || cancelledOccurrence.JSON200.RecurringDefinitionActive {
+		t.Fatalf("get occurrence from cancelled definition = %+v, want occurrence %d from unavailable definition %+v", cancelledOccurrence.JSON200, occurrenceID, provenance.JSON201)
+	}
+
+	missingOccurrence, err := client.REST().GetRecurringOccurrenceWithResponse(context.Background(), 999_999_999)
+	requireNoTransportError(t, "get missing recurring occurrence", err)
+	if missingOccurrence.StatusCode() != http.StatusNotFound {
+		t.Fatalf("get missing recurring occurrence status = %d, want %d; body %s", missingOccurrence.StatusCode(), http.StatusNotFound, missingOccurrence.Body)
+	}
 }
 
 func TestRecurringDefinitionNextDueDateSortBoundary(t *testing.T) {
@@ -553,6 +593,9 @@ func TestRecurringOccurrenceMaterializationReviewQueueBoundary(t *testing.T) {
 	for _, occurrence := range afterCancel.JSON200.RecurringOccurrences {
 		if occurrence.RecurringDefinitionFqn != definition.JSON201.Fqn {
 			t.Fatalf("cancelled-definition occurrence fqn = %q, want %q", occurrence.RecurringDefinitionFqn, definition.JSON201.Fqn)
+		}
+		if occurrence.RecurringDefinitionActive {
+			t.Fatalf("cancelled-definition occurrence active = true, want false")
 		}
 	}
 	confirmed := confirmRecurringOccurrence(t, client, afterCancel.JSON200.RecurringOccurrences[0].RecurringOccurrenceId)

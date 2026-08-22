@@ -603,6 +603,13 @@ operations:
       name: list_occurrences
       description: Use as the recurring review queue; it materializes due occurrences through the current civil date. Supply limit (1-500), offset, definition/status filters; defaults sort scheduled date ascending.
       annotations: {read_only: false, destructive: false, idempotent: true, open_world: false}
+  getRecurringOccurrence:
+    cli: {state: exposed, name: get-occurrence}
+    mcp:
+      state: exposed
+      name: get_occurrence
+      description: Use when you already have an exact recurring-occurrence ID and need its definition provenance, scheduled date, review status, or generated transaction ID. This reads only that stored occurrence and does not run catch-up or create due occurrences; use recurring_list_occurrences to discover IDs and materialize catch-up through today.
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   confirmRecurringOccurrence:
     cli: {state: exposed, name: confirm-occurrence}
     mcp:

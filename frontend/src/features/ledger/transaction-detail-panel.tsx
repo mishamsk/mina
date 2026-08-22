@@ -23,7 +23,6 @@ import {
 
 import type {
   JournalRecord,
-  RecurringDefinition,
   RecurringDefinitionDeferRequest,
   Transaction,
 } from "@/api";
@@ -73,6 +72,10 @@ import { TagChip } from "./tag-chip";
 import { transactionActionApplicability } from "./transaction-action-applicability";
 import { TransactionDeleteDescription } from "./transaction-delete-description";
 import { TransactionPostDialog } from "./transaction-post-dialog";
+import {
+  type RecurringDefinitionProvenanceView,
+  useRecurringDefinitionProvenance,
+} from "./use-recurring-definition-provenance";
 
 interface TransactionDetailPanelProps {
   readonly autoFocusOnTransactionChange?: boolean;
@@ -95,9 +98,6 @@ interface TransactionDetailPanelProps {
   ) => Promise<void>;
   readonly onDelete: (transaction: Transaction) => Promise<void>;
   readonly onDismissOccurrence?: (transaction: Transaction) => Promise<void>;
-  readonly onLoadRecurringDefinitionForProjection?: (
-    transaction: Transaction,
-  ) => Promise<RecurringDefinition>;
   readonly onDuplicate?: (
     transaction: Transaction,
     opener?: HTMLElement,
@@ -686,6 +686,7 @@ export const TransactionDetailContent = ({
   onFilterMember,
   onFilterTag,
   recordTableVariant = "full",
+  recurringDefinitionProvenance,
   showUSDDisplayAmounts = false,
   transaction,
 }: {
@@ -694,6 +695,7 @@ export const TransactionDetailContent = ({
   readonly onFilterMember?: (memberId: number) => void;
   readonly onFilterTag?: (tagId: number) => void;
   readonly recordTableVariant?: "decluttered" | "full";
+  readonly recurringDefinitionProvenance: RecurringDefinitionProvenanceView;
   readonly showUSDDisplayAmounts?: boolean;
   readonly transaction: Transaction;
 }) => {
@@ -762,6 +764,56 @@ export const TransactionDetailContent = ({
             Source
           </dt>
           <dd>{uniqueRecordSources(transaction)}</dd>
+          {recurringDefinitionProvenance.applicable ? (
+            <>
+              <dt className="font-heading text-muted-foreground uppercase">
+                Recurring definition
+              </dt>
+              <dd
+                className="min-w-0"
+                data-testid="transaction-recurring-definition"
+              >
+                {recurringDefinitionProvenance.loading ? (
+                  <>
+                    <Skeleton className="h-5 w-48 max-w-full" />
+                    <span className="sr-only" role="status">
+                      Loading recurring definition.
+                    </span>
+                  </>
+                ) : recurringDefinitionProvenance.provenance
+                    ?.definitionActive ? (
+                  <FqnPath
+                    collapseAncestors={false}
+                    to={`/recurring#definition-${recurringDefinitionProvenance.provenance.definitionId}`}
+                    value={
+                      recurringDefinitionProvenance.provenance.definitionFqn
+                    }
+                  />
+                ) : recurringDefinitionProvenance.provenance ? (
+                  <FqnPath
+                    collapseAncestors={false}
+                    value={
+                      recurringDefinitionProvenance.provenance.definitionFqn
+                    }
+                  />
+                ) : (
+                  <div className="min-w-0">
+                    <p className="text-destructive font-body">
+                      {recurringDefinitionProvenance.errorMessage}
+                    </p>
+                    <details className="text-muted-foreground mt-2 text-sm">
+                      <summary className="text-foreground cursor-pointer">
+                        API error
+                      </summary>
+                      <pre className="mt-2 overflow-auto font-mono text-xs whitespace-pre-wrap">
+                        {recurringDefinitionProvenance.errorDetails}
+                      </pre>
+                    </details>
+                  </div>
+                )}
+              </dd>
+            </>
+          ) : null}
           <dt className="font-heading text-muted-foreground uppercase">
             Created
           </dt>
@@ -795,7 +847,6 @@ export const TransactionDetailPanel = ({
   onDuplicate,
   onEdit,
   onPost,
-  onLoadRecurringDefinitionForProjection,
   onSplit,
   onFilterCategory,
   onFilterMember,
@@ -820,6 +871,8 @@ export const TransactionDetailPanel = ({
   const restoreLifecycleFocusRef = useRef(false);
   const restoreFocusOnCloseRef = useRef(true);
   const maps = useMemo(() => buildLookupMaps(lookups), [lookups]);
+  const recurringDefinitionProvenance =
+    useRecurringDefinitionProvenance(transaction);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [confirmOccurrenceOpen, setConfirmOccurrenceOpen] = useState(false);
   const [confirmDismissOpen, setConfirmDismissOpen] = useState(false);
@@ -833,9 +886,9 @@ export const TransactionDetailPanel = ({
   const [dismissErrorMessage, setDismissErrorMessage] = useState<
     string | undefined
   >();
-  const [deferDefinition, setDeferDefinition] = useState<RecurringDefinition>();
-  const [deferErrorMessage, setDeferErrorMessage] = useState<string>();
-  const [deferLoading, setDeferLoading] = useState(false);
+  const [deferActionErrorMessage, setDeferActionErrorMessage] = useState<
+    string | undefined
+  >();
   const [deferOpen, setDeferOpen] = useState(false);
   const [deferring, setDeferring] = useState(false);
   const [postErrorMessage, setPostErrorMessage] = useState<
@@ -866,13 +919,10 @@ export const TransactionDetailPanel = ({
   >();
   const [renderedPostTransactionId, setRenderedPostTransactionId] =
     useState(transactionId);
-  const deferLoadGenerationRef = useRef(0);
   if (renderedPostTransactionId !== transactionId) {
     setRenderedPostTransactionId(transactionId);
     setConfirmOccurrenceOpen(false);
-    setDeferDefinition(undefined);
-    setDeferErrorMessage(undefined);
-    setDeferLoading(false);
+    setDeferActionErrorMessage(undefined);
     setDeferOpen(false);
     setConfirmPostOpen(false);
     setPostDialogTransaction(undefined);
@@ -1094,10 +1144,7 @@ export const TransactionDetailPanel = ({
     if (deferring) {
       return;
     }
-    deferLoadGenerationRef.current += 1;
-    setDeferDefinition(undefined);
-    setDeferErrorMessage(undefined);
-    setDeferLoading(false);
+    setDeferActionErrorMessage(undefined);
     setDeferOpen(false);
     window.requestAnimationFrame(() => {
       deferButtonRef.current?.focus({ preventScroll: true });
@@ -1105,33 +1152,17 @@ export const TransactionDetailPanel = ({
   };
 
   const openDeferProjection = () => {
-    if (!transaction || !onLoadRecurringDefinitionForProjection) {
+    if (!transaction) {
       return;
     }
-    const generation = deferLoadGenerationRef.current + 1;
-    deferLoadGenerationRef.current = generation;
-    setDeferDefinition(undefined);
-    setDeferErrorMessage(undefined);
-    setDeferLoading(true);
+    if (
+      !recurringDefinitionProvenance.loading &&
+      !recurringDefinitionProvenance.projectionDefinition
+    ) {
+      recurringDefinitionProvenance.retry();
+    }
+    setDeferActionErrorMessage(undefined);
     setDeferOpen(true);
-    void onLoadRecurringDefinitionForProjection(transaction)
-      .then((definition) => {
-        if (deferLoadGenerationRef.current === generation) {
-          setDeferDefinition(definition);
-        }
-      })
-      .catch((error: unknown) => {
-        if (deferLoadGenerationRef.current === generation) {
-          setDeferErrorMessage(
-            error instanceof Error ? error.message : "The API request failed.",
-          );
-        }
-      })
-      .finally(() => {
-        if (deferLoadGenerationRef.current === generation) {
-          setDeferLoading(false);
-        }
-      });
   };
 
   const confirmDeferProjection = async (
@@ -1141,16 +1172,15 @@ export const TransactionDetailPanel = ({
       return;
     }
     setDeferring(true);
-    setDeferErrorMessage(undefined);
+    setDeferActionErrorMessage(undefined);
     try {
       await onDeferProjection(transaction, request);
       setDeferOpen(false);
-      setDeferDefinition(undefined);
       window.requestAnimationFrame(() => {
         deferButtonRef.current?.focus({ preventScroll: true });
       });
     } catch (error) {
-      setDeferErrorMessage(
+      setDeferActionErrorMessage(
         error instanceof Error ? error.message : "The API request failed.",
       );
     } finally {
@@ -1273,8 +1303,7 @@ export const TransactionDetailPanel = ({
     onDismissOccurrence !== undefined;
   const projectionDeferAvailable =
     actionApplicability?.deferProjection === true &&
-    onDeferProjection !== undefined &&
-    onLoadRecurringDefinitionForProjection !== undefined;
+    onDeferProjection !== undefined;
   const detailActionsApplicable =
     actionApplicability !== undefined &&
     Object.values(actionApplicability).some(Boolean);
@@ -1396,6 +1425,7 @@ export const TransactionDetailPanel = ({
             onFilterMember={onFilterMember}
             onFilterTag={onFilterTag}
             recordTableVariant="decluttered"
+            recurringDefinitionProvenance={recurringDefinitionProvenance}
             showUSDDisplayAmounts
             transaction={transaction}
           />
@@ -1672,9 +1702,11 @@ export const TransactionDetailPanel = ({
         transaction={transaction}
       />
       <RecurringDefinitionDeferDialog
-        definition={deferDefinition}
-        errorMessage={deferErrorMessage}
-        loading={deferLoading}
+        definition={recurringDefinitionProvenance.projectionDefinition}
+        errorMessage={
+          deferActionErrorMessage ?? recurringDefinitionProvenance.errorMessage
+        }
+        loading={recurringDefinitionProvenance.loading}
         onConfirm={(request) => {
           void confirmDeferProjection(request);
         }}

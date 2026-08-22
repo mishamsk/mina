@@ -582,6 +582,7 @@ export const RecurringPageContent = ({
                         definition.recurring_definition_id
                       }
                       data-testid="recurring-definition-row"
+                      id={`definition-${definition.recurring_definition_id}`}
                       tabIndex={0}
                       onClick={(event) =>
                         onEdit(definition, event.currentTarget)

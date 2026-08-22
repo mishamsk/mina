@@ -109,8 +109,11 @@ export {
 } from "./preferences";
 export {
   closeRecurringDefinitionEditor,
+  consumeRecurringDefinitionFragmentNavigation,
+  openEditRecurringDefinitionEditor,
   openNewRecurringDefinitionEditor,
   type RecurringDefinitionEditorLaunch,
+  takeConsumedRecurringDefinitionFragmentNavigation,
   useRecurringDefinitionEditorStore,
   useRecurringDefinitionEditorView,
 } from "./recurring-definition-editor";

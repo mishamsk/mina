@@ -143,6 +143,15 @@ func (s *strictServer) DismissRecurringOccurrence(ctx context.Context, request o
 	return openapi.DismissRecurringOccurrence200JSONResponse(recurringOccurrenceAPIResponse(occurrence)), nil
 }
 
+func (s *strictServer) GetRecurringOccurrence(ctx context.Context, request openapi.GetRecurringOccurrenceRequestObject) (openapi.GetRecurringOccurrenceResponseObject, error) {
+	occurrence, err := s.deps.Recurring.GetOccurrence(ctx, request.RecurringOccurrenceId)
+	if err != nil {
+		return nil, err
+	}
+
+	return openapi.GetRecurringOccurrence200JSONResponse(recurringOccurrenceAPIResponse(occurrence)), nil
+}
+
 func (s *strictServer) ListRecurringOccurrences(ctx context.Context, request openapi.ListRecurringOccurrencesRequestObject) (openapi.ListRecurringOccurrencesResponseObject, error) {
 	params := request.Params
 	occurrences, err := s.deps.Recurring.ListOccurrences(ctx, recurring.OccurrenceListOptions{
@@ -331,6 +340,7 @@ func recurringOccurrenceAPIResponse(occurrence recurring.Occurrence) openapi.Rec
 		RecurringOccurrenceId:         occurrence.ID,
 		RecurringDefinitionId:         occurrence.RecurringDefinitionID,
 		RecurringDefinitionFqn:        occurrence.RecurringDefinitionFQN,
+		RecurringDefinitionActive:     occurrence.RecurringDefinitionActive,
 		ScheduledDate:                 openAPIDate(occurrence.ScheduledDate),
 		Status:                        openapi.RecurringOccurrenceStatus(occurrence.Status),
 		MaterializedDefinitionVersion: occurrence.MaterializedDefinitionVersion,
