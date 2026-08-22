@@ -1142,7 +1142,7 @@ export const confirmNextRecurringDefinition = <ThrowOnError extends boolean = fa
 });
 
 /**
- * Defer the next non-materialized interval occurrence.
+ * Defer the next non-materialized recurring occurrence.
  */
 export const deferRecurringDefinition = <ThrowOnError extends boolean = false>(options: Options<DeferRecurringDefinitionData, ThrowOnError>): RequestResult<DeferRecurringDefinitionResponses, DeferRecurringDefinitionErrors, ThrowOnError> => (options.client ?? client).post<DeferRecurringDefinitionResponses, DeferRecurringDefinitionErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }, {

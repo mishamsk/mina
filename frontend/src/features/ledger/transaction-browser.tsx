@@ -1,4 +1,5 @@
 import {
+  Calendar,
   CardText,
   Check,
   Close,
@@ -23,7 +24,13 @@ import {
   useState,
 } from "react";
 
-import type { JournalRecord, Tag, Transaction } from "@/api";
+import type {
+  JournalRecord,
+  RecurringDefinition,
+  RecurringDefinitionDeferRequest,
+  Tag,
+  Transaction,
+} from "@/api";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { RowActions } from "@/components/row-actions";
 import { focusWithoutTooltip, Tooltip } from "@/components/tooltip";
@@ -37,7 +44,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { recurringDefinitionRecordsFromTransaction } from "@/features/recurring";
+import {
+  RecurringDefinitionDeferDialog,
+  recurringDefinitionRecordsFromTransaction,
+} from "@/features/recurring";
 import { transactionTemplateRecordsFromTransaction } from "@/features/templates";
 import { useElementOverflow } from "@/hooks/use-element-overflow";
 import { cn } from "@/lib/utils";
@@ -76,6 +86,7 @@ import { FqnPath } from "./fqn-path";
 import { ClassIcon, StatusIcon } from "./line-icons";
 import { MemberChip } from "./member-chip";
 import { MixedSentinel, MorePartsIndicator } from "./mixed-sentinel";
+import { RecurringOccurrenceConfirmDialog } from "./recurring-occurrence-confirm-dialog";
 import {
   defaultPostSettlementDateTimeValue,
   settlementDateTimeToISO,
@@ -112,6 +123,11 @@ interface TransactionBrowserProps {
   readonly lookups: LedgerLookupsSnapshot | undefined;
   readonly onConfirmRecurringOccurrence: (
     transaction: Transaction,
+    actualDate: string,
+  ) => Promise<void>;
+  readonly onDeferRecurringProjection?: (
+    transaction: Transaction,
+    request: RecurringDefinitionDeferRequest,
   ) => Promise<void>;
   readonly onChangeTransactionLifecycle: (
     transaction: Transaction,
@@ -126,6 +142,9 @@ interface TransactionBrowserProps {
   readonly onDismissRecurringOccurrence: (
     transaction: Transaction,
   ) => Promise<void>;
+  readonly onLoadRecurringDefinitionForProjection?: (
+    transaction: Transaction,
+  ) => Promise<RecurringDefinition>;
   readonly onDuplicateTransaction?: (
     transaction: Transaction,
     opener?: HTMLElement,
@@ -507,6 +526,7 @@ export const TransactionBrowser = ({
   loading,
   lookups,
   onConfirmRecurringOccurrence,
+  onDeferRecurringProjection,
   onChangeTransactionLifecycle,
   onClearSelection,
   onFilterCategory,
@@ -524,6 +544,7 @@ export const TransactionBrowser = ({
   onPreviousPage,
   onRetryRefresh,
   onPostTransaction,
+  onLoadRecurringDefinitionForProjection,
   onRecoverTransactionAmountConflict,
   onSetEditMode,
   onSplitTransaction,
@@ -565,6 +586,20 @@ export const TransactionBrowser = ({
     readonly rowIndex: number;
     readonly transaction: Transaction;
   }>();
+  const [confirmDialog, setConfirmDialog] = useState<{
+    readonly opener: HTMLElement;
+    readonly rowIndex: number;
+    readonly transaction: Transaction;
+  }>();
+  const [deferDialog, setDeferDialog] = useState<{
+    readonly opener: HTMLElement;
+    readonly rowIndex: number;
+    readonly transaction: Transaction;
+  }>();
+  const [deferDefinition, setDeferDefinition] = useState<RecurringDefinition>();
+  const [deferErrorMessage, setDeferErrorMessage] = useState<string>();
+  const [deferLoading, setDeferLoading] = useState(false);
+  const [deferring, setDeferring] = useState(false);
   const [dismissErrorMessage, setDismissErrorMessage] = useState<
     string | undefined
   >();
@@ -602,8 +637,12 @@ export const TransactionBrowser = ({
   const rootRef = useRef<HTMLDivElement | null>(null);
   const selectionAnchorIdRef = useRef<number | null>(null);
   const deletedRowFocusIndexRef = useRef<number | undefined>(undefined);
+  const retainedRowFocusTransactionIdRef = useRef<number | undefined>(
+    undefined,
+  );
   const consumedDateJumpAnchorRef =
     useRef<TransactionBrowserProps["dateJumpAnchor"]>(undefined);
+  const deferLoadGenerationRef = useRef(0);
 
   const maps = useMemo(() => buildLookupMaps(lookups), [lookups]);
   const amountDraftRetained = amountEditorRecords.size > 0;
@@ -917,8 +956,24 @@ export const TransactionBrowser = ({
     });
   };
 
+  const closeConfirmOccurrence = () => {
+    if (confirmingOccurrenceId !== undefined) {
+      return;
+    }
+    const opener = confirmDialog?.opener;
+    setOccurrenceActionErrorMessage(undefined);
+    setConfirmDialog(undefined);
+    window.requestAnimationFrame(() => {
+      focusWithoutTooltip(opener, { preventScroll: true });
+    });
+  };
+
   const confirmOccurrence = useCallback(
-    async (transaction: Transaction, rowIndex: number) => {
+    async (actualDate: string) => {
+      if (!confirmDialog) {
+        return;
+      }
+      const { rowIndex, transaction } = confirmDialog;
       if (transaction.recurring_occurrence_id === null) {
         return;
       }
@@ -926,10 +981,13 @@ export const TransactionBrowser = ({
       setConfirmingOccurrenceId(transaction.recurring_occurrence_id);
       setOccurrenceActionErrorMessage(undefined);
       deletedRowFocusIndexRef.current = rowIndex;
+      retainedRowFocusTransactionIdRef.current = transaction.transaction_id;
       try {
-        await onConfirmRecurringOccurrence(transaction);
+        await onConfirmRecurringOccurrence(transaction, actualDate);
+        setConfirmDialog(undefined);
       } catch (error) {
         deletedRowFocusIndexRef.current = undefined;
+        retainedRowFocusTransactionIdRef.current = undefined;
         setOccurrenceActionErrorMessage(
           error instanceof Error ? error.message : "The API request failed.",
         );
@@ -937,8 +995,80 @@ export const TransactionBrowser = ({
         setConfirmingOccurrenceId(undefined);
       }
     },
-    [onConfirmRecurringOccurrence],
+    [confirmDialog, onConfirmRecurringOccurrence],
   );
+
+  const closeDeferProjection = () => {
+    if (deferring) {
+      return;
+    }
+    deferLoadGenerationRef.current += 1;
+    const opener = deferDialog?.opener;
+    setDeferDialog(undefined);
+    setDeferDefinition(undefined);
+    setDeferErrorMessage(undefined);
+    setDeferLoading(false);
+    window.requestAnimationFrame(() => {
+      focusWithoutTooltip(opener, { preventScroll: true });
+    });
+  };
+
+  const openDeferProjection = (
+    transaction: Transaction,
+    rowIndex: number,
+    opener: HTMLElement,
+  ) => {
+    if (!onLoadRecurringDefinitionForProjection) {
+      return;
+    }
+    const generation = deferLoadGenerationRef.current + 1;
+    deferLoadGenerationRef.current = generation;
+    setDeferDefinition(undefined);
+    setDeferErrorMessage(undefined);
+    setDeferLoading(true);
+    setDeferDialog({ opener, rowIndex, transaction });
+    void onLoadRecurringDefinitionForProjection(transaction)
+      .then((definition) => {
+        if (deferLoadGenerationRef.current === generation) {
+          setDeferDefinition(definition);
+        }
+      })
+      .catch((error: unknown) => {
+        if (deferLoadGenerationRef.current === generation) {
+          setDeferErrorMessage(
+            error instanceof Error ? error.message : "The API request failed.",
+          );
+        }
+      })
+      .finally(() => {
+        if (deferLoadGenerationRef.current === generation) {
+          setDeferLoading(false);
+        }
+      });
+  };
+
+  const confirmDeferProjection = async (
+    request: RecurringDefinitionDeferRequest,
+  ) => {
+    if (!deferDialog || !onDeferRecurringProjection) {
+      return;
+    }
+    setDeferring(true);
+    setDeferErrorMessage(undefined);
+    deletedRowFocusIndexRef.current = deferDialog.rowIndex;
+    try {
+      await onDeferRecurringProjection(deferDialog.transaction, request);
+      setDeferDialog(undefined);
+      setDeferDefinition(undefined);
+    } catch (error) {
+      deletedRowFocusIndexRef.current = undefined;
+      setDeferErrorMessage(
+        error instanceof Error ? error.message : "The API request failed.",
+      );
+    } finally {
+      setDeferring(false);
+    }
+  };
 
   const changeLifecycle = useCallback(
     async (
@@ -1088,6 +1218,8 @@ export const TransactionBrowser = ({
   useLayoutEffect(() => {
     if (
       deleteDialog ||
+      confirmDialog ||
+      deferDialog ||
       dismissDialog ||
       deletedRowFocusIndexRef.current === undefined
     ) {
@@ -1095,9 +1227,16 @@ export const TransactionBrowser = ({
     }
 
     const rowIndex = deletedRowFocusIndexRef.current;
+    const transactionId = retainedRowFocusTransactionIdRef.current;
     deletedRowFocusIndexRef.current = undefined;
-    focusTransactionRowFallback(rootRef.current, rowIndex);
-  }, [deleteDialog, dismissDialog, transactions]);
+    retainedRowFocusTransactionIdRef.current = undefined;
+    focusTransactionRowFallback(
+      rootRef.current,
+      rowIndex,
+      undefined,
+      transactionId,
+    );
+  }, [confirmDialog, deferDialog, deleteDialog, dismissDialog, transactions]);
 
   useEffect(() => {
     if (!dateJumpAnchor) {
@@ -1395,6 +1534,10 @@ export const TransactionBrowser = ({
                   const whollyPending = actionApplicability.post;
                   const projectedOccurrence =
                     isProjectedRecurringTransaction(transaction);
+                  const projectionDeferAvailable =
+                    actionApplicability.deferProjection &&
+                    onDeferRecurringProjection !== undefined &&
+                    onLoadRecurringDefinitionForProjection !== undefined;
                   const lifecycleBusyAction = lifecycleActionsBusy.get(
                     transaction.transaction_id,
                   );
@@ -1884,7 +2027,9 @@ export const TransactionBrowser = ({
                         </div>
                       </td>
                       <td className="transactions-actions-column px-3 py-2 text-right align-middle">
-                        {editMode || projectedOccurrence ? null : (
+                        {editMode ||
+                        (projectedOccurrence &&
+                          !projectionDeferAvailable) ? null : (
                           <RowActions
                             foldable
                             actions={
@@ -1899,11 +2044,15 @@ export const TransactionBrowser = ({
                                       label: occurrenceActionBusy
                                         ? "Confirming"
                                         : "Confirm occurrence",
-                                      onSelect: () => {
-                                        void confirmOccurrence(
-                                          transaction,
-                                          transactionIndex,
+                                      onSelect: (opener) => {
+                                        setOccurrenceActionErrorMessage(
+                                          undefined,
                                         );
+                                        setConfirmDialog({
+                                          opener,
+                                          rowIndex: transactionIndex,
+                                          transaction,
+                                        });
                                       },
                                     },
                                     {
@@ -1926,220 +2075,267 @@ export const TransactionBrowser = ({
                                       },
                                     },
                                   ]
-                                : [
-                                    ...(actionApplicability.edit &&
-                                    onEditTransaction
-                                      ? [
-                                          {
-                                            disabled:
-                                              lifecycleBusyAction === "post",
-                                            disabledReason:
-                                              lifecycleBusyAction === "post"
-                                                ? "Posting transaction."
-                                                : undefined,
-                                            icon: <Pencil aria-hidden="true" />,
-                                            label: "Edit transaction",
-                                            onSelect: (opener: HTMLElement) => {
-                                              onEditTransaction(
-                                                transaction,
-                                                opener,
-                                              );
-                                            },
-                                          },
-                                        ]
-                                      : []),
-                                    ...(actionApplicability.duplicate &&
-                                    onDuplicateTransaction
-                                      ? [
-                                          {
-                                            icon: <Copy aria-hidden="true" />,
-                                            label: "Duplicate transaction",
-                                            onSelect: (opener: HTMLElement) => {
-                                              onDuplicateTransaction(
-                                                transaction,
-                                                opener,
-                                              );
-                                            },
-                                          },
-                                        ]
-                                      : []),
-                                    ...(actionApplicability.createTemplate
-                                      ? [
-                                          {
-                                            alwaysOverflow: true,
-                                            icon: (
-                                              <CardText aria-hidden="true" />
-                                            ),
-                                            label: "Create template",
-                                            onSelect: (opener: HTMLElement) => {
-                                              openNewTemplateEditor(
-                                                opener,
-                                                transactionTemplateRecordsFromTransaction(
+                                : projectionDeferAvailable
+                                  ? [
+                                      {
+                                        icon: <Calendar aria-hidden="true" />,
+                                        label: "Defer",
+                                        onSelect: (opener: HTMLElement) => {
+                                          openDeferProjection(
+                                            transaction,
+                                            transactionIndex,
+                                            opener,
+                                          );
+                                        },
+                                      },
+                                    ]
+                                  : [
+                                      ...(actionApplicability.edit &&
+                                      onEditTransaction
+                                        ? [
+                                            {
+                                              disabled:
+                                                lifecycleBusyAction === "post",
+                                              disabledReason:
+                                                lifecycleBusyAction === "post"
+                                                  ? "Posting transaction."
+                                                  : undefined,
+                                              icon: (
+                                                <Pencil aria-hidden="true" />
+                                              ),
+                                              label: "Edit transaction",
+                                              onSelect: (
+                                                opener: HTMLElement,
+                                              ) => {
+                                                onEditTransaction(
                                                   transaction,
-                                                ),
-                                              );
-                                            },
-                                          },
-                                        ]
-                                      : []),
-                                    ...(actionApplicability.createRecurring
-                                      ? [
-                                          {
-                                            alwaysOverflow: true,
-                                            icon: <Repeat aria-hidden="true" />,
-                                            label: "Create recurring",
-                                            onSelect: (opener: HTMLElement) => {
-                                              window.setTimeout(() => {
-                                                openNewRecurringDefinitionEditor(
                                                   opener,
-                                                  recurringDefinitionRecordsFromTransaction(
+                                                );
+                                              },
+                                            },
+                                          ]
+                                        : []),
+                                      ...(actionApplicability.duplicate &&
+                                      onDuplicateTransaction
+                                        ? [
+                                            {
+                                              icon: <Copy aria-hidden="true" />,
+                                              label: "Duplicate transaction",
+                                              onSelect: (
+                                                opener: HTMLElement,
+                                              ) => {
+                                                onDuplicateTransaction(
+                                                  transaction,
+                                                  opener,
+                                                );
+                                              },
+                                            },
+                                          ]
+                                        : []),
+                                      ...(actionApplicability.createTemplate
+                                        ? [
+                                            {
+                                              alwaysOverflow: true,
+                                              icon: (
+                                                <CardText aria-hidden="true" />
+                                              ),
+                                              label: "Create template",
+                                              onSelect: (
+                                                opener: HTMLElement,
+                                              ) => {
+                                                openNewTemplateEditor(
+                                                  opener,
+                                                  transactionTemplateRecordsFromTransaction(
                                                     transaction,
                                                   ),
                                                 );
-                                              }, 0);
+                                              },
                                             },
-                                          },
-                                        ]
-                                      : []),
-                                    ...(actionApplicability.split &&
-                                    onSplitTransaction
-                                      ? [
-                                          {
-                                            alwaysOverflow: true,
-                                            disabled:
-                                              lifecycleBusyAction === "post",
-                                            disabledReason:
-                                              lifecycleBusyAction === "post"
-                                                ? "Posting transaction."
-                                                : undefined,
-                                            icon: (
-                                              <Scissors aria-hidden="true" />
-                                            ),
-                                            label: "Split transaction",
-                                            onSelect: (opener: HTMLElement) => {
-                                              onSplitTransaction(
-                                                transaction,
-                                                opener,
-                                              );
+                                          ]
+                                        : []),
+                                      ...(actionApplicability.createRecurring
+                                        ? [
+                                            {
+                                              alwaysOverflow: true,
+                                              icon: (
+                                                <Repeat aria-hidden="true" />
+                                              ),
+                                              label: "Create recurring",
+                                              onSelect: (
+                                                opener: HTMLElement,
+                                              ) => {
+                                                window.setTimeout(() => {
+                                                  openNewRecurringDefinitionEditor(
+                                                    opener,
+                                                    recurringDefinitionRecordsFromTransaction(
+                                                      transaction,
+                                                    ),
+                                                  );
+                                                }, 0);
+                                              },
                                             },
-                                          },
-                                        ]
-                                      : []),
-                                    ...(whollyPending
-                                      ? [
-                                          {
-                                            disabled:
-                                              Boolean(lifecycleBusyAction),
-                                            disabledReason:
-                                              lifecycleBusyAction === "cancel"
-                                                ? "Cancelling transaction."
-                                                : lifecycleBusyAction ===
-                                                    "restore"
-                                                  ? "Restoring transaction."
+                                          ]
+                                        : []),
+                                      ...(actionApplicability.split &&
+                                      onSplitTransaction
+                                        ? [
+                                            {
+                                              alwaysOverflow: true,
+                                              disabled:
+                                                lifecycleBusyAction === "post",
+                                              disabledReason:
+                                                lifecycleBusyAction === "post"
+                                                  ? "Posting transaction."
                                                   : undefined,
-                                            id: "post-transaction",
-                                            icon: <Check aria-hidden="true" />,
-                                            label:
-                                              lifecycleBusyAction === "post"
-                                                ? "Posting transaction"
-                                                : "Post transaction",
-                                            onSelect: (opener: HTMLElement) => {
-                                              setPostErrorMessage(undefined);
-                                              const postedDate =
-                                                defaultPostSettlementDateTimeValue();
-                                              const openPostDialog = () => {
-                                                setPostDialog({
+                                              icon: (
+                                                <Scissors aria-hidden="true" />
+                                              ),
+                                              label: "Split transaction",
+                                              onSelect: (
+                                                opener: HTMLElement,
+                                              ) => {
+                                                onSplitTransaction(
+                                                  transaction,
                                                   opener,
-                                                  postedDateTime:
-                                                    postedDate.dateTime,
+                                                );
+                                              },
+                                            },
+                                          ]
+                                        : []),
+                                      ...(whollyPending
+                                        ? [
+                                            {
+                                              disabled:
+                                                Boolean(lifecycleBusyAction),
+                                              disabledReason:
+                                                lifecycleBusyAction === "cancel"
+                                                  ? "Cancelling transaction."
+                                                  : lifecycleBusyAction ===
+                                                      "restore"
+                                                    ? "Restoring transaction."
+                                                    : undefined,
+                                              id: "post-transaction",
+                                              icon: (
+                                                <Check aria-hidden="true" />
+                                              ),
+                                              label:
+                                                lifecycleBusyAction === "post"
+                                                  ? "Posting transaction"
+                                                  : "Post transaction",
+                                              onSelect: (
+                                                opener: HTMLElement,
+                                              ) => {
+                                                setPostErrorMessage(undefined);
+                                                const postedDate =
+                                                  defaultPostSettlementDateTimeValue();
+                                                const openPostDialog = () => {
+                                                  setPostDialog({
+                                                    opener,
+                                                    postedDateTime:
+                                                      postedDate.dateTime,
+                                                    rowIndex: transactionIndex,
+                                                    sourcePostedDate:
+                                                      postedDate.sourceDate,
+                                                    transaction,
+                                                  });
+                                                };
+                                                if (
+                                                  opener.classList.contains(
+                                                    "row-actions-overflow",
+                                                  )
+                                                ) {
+                                                  window.setTimeout(
+                                                    openPostDialog,
+                                                    0,
+                                                  );
+                                                } else {
+                                                  openPostDialog();
+                                                }
+                                              },
+                                            },
+                                            {
+                                              disabled:
+                                                Boolean(lifecycleBusyAction),
+                                              disabledReason:
+                                                lifecycleBusyAction === "post"
+                                                  ? "Posting transaction."
+                                                  : undefined,
+                                              id: "cancel-transaction",
+                                              icon: (
+                                                <Close aria-hidden="true" />
+                                              ),
+                                              label:
+                                                lifecycleBusyAction === "cancel"
+                                                  ? "Cancelling transaction"
+                                                  : "Cancel transaction",
+                                              onSelect: (
+                                                opener: HTMLElement,
+                                              ) => {
+                                                void changeLifecycle(
+                                                  transaction,
+                                                  "cancel",
+                                                  opener,
+                                                );
+                                              },
+                                            },
+                                          ]
+                                        : []),
+                                      ...(actionApplicability.restore
+                                        ? [
+                                            {
+                                              disabled:
+                                                Boolean(lifecycleBusyAction),
+                                              id: "restore-transaction",
+                                              icon: (
+                                                <Reload aria-hidden="true" />
+                                              ),
+                                              label:
+                                                lifecycleBusyAction ===
+                                                "restore"
+                                                  ? "Restoring transaction"
+                                                  : "Restore transaction",
+                                              onSelect: (
+                                                opener: HTMLElement,
+                                              ) => {
+                                                void changeLifecycle(
+                                                  transaction,
+                                                  "restore",
+                                                  opener,
+                                                );
+                                              },
+                                            },
+                                          ]
+                                        : []),
+                                      ...(actionApplicability.delete
+                                        ? [
+                                            {
+                                              alwaysOverflow: true,
+                                              disabled:
+                                                lifecycleBusyAction === "post",
+                                              disabledReason:
+                                                lifecycleBusyAction === "post"
+                                                  ? "Posting transaction."
+                                                  : undefined,
+                                              icon: (
+                                                <Trash aria-hidden="true" />
+                                              ),
+                                              label: "Delete transaction",
+                                              onSelect: (
+                                                opener: HTMLElement,
+                                              ) => {
+                                                setDeleteErrorMessage(
+                                                  undefined,
+                                                );
+                                                setDeleteDialog({
+                                                  opener,
                                                   rowIndex: transactionIndex,
-                                                  sourcePostedDate:
-                                                    postedDate.sourceDate,
                                                   transaction,
                                                 });
-                                              };
-                                              if (
-                                                opener.classList.contains(
-                                                  "row-actions-overflow",
-                                                )
-                                              ) {
-                                                window.setTimeout(
-                                                  openPostDialog,
-                                                  0,
-                                                );
-                                              } else {
-                                                openPostDialog();
-                                              }
+                                              },
                                             },
-                                          },
-                                          {
-                                            disabled:
-                                              Boolean(lifecycleBusyAction),
-                                            disabledReason:
-                                              lifecycleBusyAction === "post"
-                                                ? "Posting transaction."
-                                                : undefined,
-                                            id: "cancel-transaction",
-                                            icon: <Close aria-hidden="true" />,
-                                            label:
-                                              lifecycleBusyAction === "cancel"
-                                                ? "Cancelling transaction"
-                                                : "Cancel transaction",
-                                            onSelect: (opener: HTMLElement) => {
-                                              void changeLifecycle(
-                                                transaction,
-                                                "cancel",
-                                                opener,
-                                              );
-                                            },
-                                          },
-                                        ]
-                                      : []),
-                                    ...(actionApplicability.restore
-                                      ? [
-                                          {
-                                            disabled:
-                                              Boolean(lifecycleBusyAction),
-                                            id: "restore-transaction",
-                                            icon: <Reload aria-hidden="true" />,
-                                            label:
-                                              lifecycleBusyAction === "restore"
-                                                ? "Restoring transaction"
-                                                : "Restore transaction",
-                                            onSelect: (opener: HTMLElement) => {
-                                              void changeLifecycle(
-                                                transaction,
-                                                "restore",
-                                                opener,
-                                              );
-                                            },
-                                          },
-                                        ]
-                                      : []),
-                                    ...(actionApplicability.delete
-                                      ? [
-                                          {
-                                            alwaysOverflow: true,
-                                            disabled:
-                                              lifecycleBusyAction === "post",
-                                            disabledReason:
-                                              lifecycleBusyAction === "post"
-                                                ? "Posting transaction."
-                                                : undefined,
-                                            icon: <Trash aria-hidden="true" />,
-                                            label: "Delete transaction",
-                                            onSelect: (opener: HTMLElement) => {
-                                              setDeleteErrorMessage(undefined);
-                                              setDeleteDialog({
-                                                opener,
-                                                rowIndex: transactionIndex,
-                                                transaction,
-                                              });
-                                            },
-                                          },
-                                        ]
-                                      : []),
-                                  ]
+                                          ]
+                                        : []),
+                                    ]
                             }
                           />
                         )}
@@ -2150,7 +2346,7 @@ export const TransactionBrowser = ({
               </tbody>
             </table>
           </div>
-          {occurrenceActionErrorMessage ? (
+          {occurrenceActionErrorMessage && !confirmDialog ? (
             <div
               className="border-destructive bg-card border-2 p-3 text-sm shadow-[var(--shadow-pixel)]"
               role="alert"
@@ -2310,6 +2506,31 @@ export const TransactionBrowser = ({
           />
         ) : null}
       </ConfirmationDialog>
+      <RecurringOccurrenceConfirmDialog
+        errorMessage={occurrenceActionErrorMessage}
+        onConfirm={(actualDate) => {
+          void confirmOccurrence(actualDate);
+        }}
+        onOpenChange={(open) => {
+          if (!open) closeConfirmOccurrence();
+        }}
+        open={Boolean(confirmDialog)}
+        pending={confirmingOccurrenceId !== undefined}
+        transaction={confirmDialog?.transaction}
+      />
+      <RecurringDefinitionDeferDialog
+        definition={deferDefinition}
+        errorMessage={deferErrorMessage}
+        loading={deferLoading}
+        onConfirm={(request) => {
+          void confirmDeferProjection(request);
+        }}
+        onOpenChange={(open) => {
+          if (!open) closeDeferProjection();
+        }}
+        open={Boolean(deferDialog)}
+        pending={deferring}
+      />
       <ConfirmationDialog
         confirmIcon={<Close aria-hidden="true" />}
         confirmLabel="Dismiss occurrence"

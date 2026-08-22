@@ -22,7 +22,7 @@ type recurringDefinitionRefs struct {
 }
 
 func TestRecurringDefinitionCreateReadListUpdateCancelBoundary(t *testing.T) {
-	client := newSharedClient(t)
+	client := newSharedClient(t, apptest.WithClock(apptest.NewFakeClock(apptest.Timestamp("2024-01-01T12:00:00Z"))))
 	refs := createRecurringDefinitionRefs(t, client, "RecurringCRUD")
 
 	created := createRecurringDefinition(t, client, recurringDefinitionRequest("RecurringCRUD:Subscriptions:Video", refs, "-10.00000000", "10.00000000", intervalRule(2, "WEEK"), "2024-01-15"))
@@ -222,7 +222,7 @@ func TestRecurringDefinitionValidationAndConflicts(t *testing.T) {
 	(*invalidCategory.Records)[0].CategoryId = nullable.NewNullableWithValue(refs.CategoryID)
 	assertRecurringDefinitionCreateStatus(t, client, "category on owned record", invalidCategory, http.StatusBadRequest, httpclient.APIErrorCodeInvalidRequest)
 	createRecurringDefinition(t, client, recurringDefinitionRequest("RecurringValidation:InvalidCategory", refs, "-10.00000000", "10.00000000", intervalRule(1, "MONTH"), "2024-01-31"))
-	unbalancedReplace := recurringDefinitionRequest("RecurringValidation:Replaced", refs, "-10.00000000", "9.00000000", intervalRule(1, "WEEK"), "2024-02-01")
+	unbalancedReplace := recurringDefinitionRequest("RecurringValidation:Replaced", refs, "-10.00000000", "9.00000000", intervalRule(1, "WEEK"), "2024-01-31")
 	rejectedReplace, err := client.REST().ReplaceRecurringDefinitionWithResponse(context.Background(), created.JSON201.RecurringDefinitionId, unbalancedReplace)
 	requireNoTransportError(t, "replace recurring definition with unbalanced records", err)
 	if rejectedReplace.StatusCode() != http.StatusBadRequest {
@@ -239,7 +239,7 @@ func TestRecurringDefinitionValidationAndConflicts(t *testing.T) {
 	conflictingReplace, err := client.REST().ReplaceRecurringDefinitionWithResponse(
 		context.Background(),
 		created.JSON201.RecurringDefinitionId,
-		recurringDefinitionRequest("RecurringValidation:Occupied", refs, "-12.00000000", "12.00000000", intervalRule(1, "WEEK"), "2024-02-01"),
+		recurringDefinitionRequest("RecurringValidation:Occupied", refs, "-12.00000000", "12.00000000", intervalRule(1, "WEEK"), "2024-01-31"),
 	)
 	requireNoTransportError(t, "replace recurring definition onto active fqn", err)
 	if conflictingReplace.StatusCode() != http.StatusConflict {
@@ -253,7 +253,7 @@ func TestRecurringDefinitionValidationAndConflicts(t *testing.T) {
 	prefixReplace, err := client.REST().ReplaceRecurringDefinitionWithResponse(
 		context.Background(),
 		created.JSON201.RecurringDefinitionId,
-		recurringDefinitionRequest("RecurringValidation:Tree", refs, "-12.00000000", "12.00000000", intervalRule(1, "WEEK"), "2024-02-01"),
+		recurringDefinitionRequest("RecurringValidation:Tree", refs, "-12.00000000", "12.00000000", intervalRule(1, "WEEK"), "2024-01-31"),
 	)
 	requireNoTransportError(t, "replace recurring definition onto hierarchy prefix", err)
 	if prefixReplace.StatusCode() != http.StatusConflict {
@@ -1420,7 +1420,7 @@ func TestRecurringPendingConfirmationBoundary(t *testing.T) {
 	confirmed, err := client.REST().ConfirmRecurringOccurrenceWithResponse(
 		context.Background(),
 		occurrences.JSON200.RecurringOccurrences[0].RecurringOccurrenceId,
-		*apptest.PendingSettlement(),
+		recurringOccurrenceConfirmRequest(*apptest.PendingSettlement(), nil),
 	)
 	requireNoTransportError(t, "confirm recurring occurrence pending", err)
 	if confirmed.StatusCode() != http.StatusOK {
@@ -1446,6 +1446,128 @@ func TestRecurringPendingConfirmationBoundary(t *testing.T) {
 		t.Fatalf("confirm next pending status = %d, want %d; body %s", confirmedNext.StatusCode(), http.StatusOK, confirmedNext.Body)
 	}
 	assertPendingRecurringTransaction(t, getTransaction(t, client, *confirmedNext.JSON200.GeneratedTransactionId), now)
+}
+
+func TestRecurringOccurrenceActualDateConfirmationBoundary(t *testing.T) {
+	now := apptest.Timestamp("2026-08-14T12:00:00Z")
+	client := newSharedClient(t, apptest.WithClock(apptest.NewFakeClock(now)))
+	today := civilDateOnly(now)
+	refs := createRecurringDefinitionRefs(t, client, "RecurringActualDate")
+	eur := "EUR"
+	client.SetAccountCurrency(refs.CheckingAccountID, &eur)
+	var actualDateRateID int64
+	for _, rate := range []struct {
+		value string
+		date  string
+	}{
+		{value: "1.00000000", date: "2026-08-01T00:00:00Z"},
+		{value: "2.00000000", date: "2026-08-10T00:00:00Z"},
+	} {
+		created, err := client.REST().CreateExchangeRateWithResponse(context.Background(), httpclient.CreateExchangeRateRequest{
+			FromCurrency:  "USD",
+			ToCurrency:    "EUR",
+			Rate:          rate.value,
+			EffectiveDate: apptest.Timestamp(rate.date),
+		})
+		requireNoTransportError(t, "create actual-date exchange rate", err)
+		if created.StatusCode() != http.StatusCreated {
+			t.Fatalf("create actual-date exchange rate status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
+		}
+		if rate.date == "2026-08-10T00:00:00Z" {
+			actualDateRateID = created.JSON201.ExchangeRateId
+		}
+	}
+
+	actualDefinitionRequest := recurringDefinitionRequest(
+		"RecurringActualDate:Dated",
+		refs,
+		"-10.00000000",
+		"10.00000000",
+		intervalRule(1, "MONTH"),
+		"2026-08-01",
+	)
+	for index := range *actualDefinitionRequest.Records {
+		(*actualDefinitionRequest.Records)[index].Currency = recurringStringPtr("EUR")
+	}
+	actualDefinition := createRecurringDefinition(t, client, actualDefinitionRequest)
+	actualOccurrences := listRecurringOccurrences(t, client, &httpclient.ListRecurringOccurrencesParams{RecurringDefinitionId: &actualDefinition.JSON201.RecurringDefinitionId})
+	actualDate := apptest.Date("2026-08-10")
+	confirmed, err := client.REST().ConfirmRecurringOccurrenceWithResponse(
+		context.Background(),
+		actualOccurrences.JSON200.RecurringOccurrences[0].RecurringOccurrenceId,
+		recurringOccurrenceConfirmRequest(*apptest.PostedSettlement(), &actualDate),
+	)
+	requireNoTransportError(t, "confirm recurring occurrence with actual date", err)
+	if confirmed.StatusCode() != http.StatusOK {
+		t.Fatalf("actual-date confirmation status = %d, want %d; body %s", confirmed.StatusCode(), http.StatusOK, confirmed.Body)
+	}
+	actualTransaction := getTransaction(t, client, *confirmed.JSON200.GeneratedTransactionId)
+	if got := actualTransaction.JSON200.InitiatedDate.Format("2006-01-02"); got != "2026-08-10" {
+		t.Fatalf("actual-date confirmed initiated_date = %s, want 2026-08-10", got)
+	}
+	assertRecordLifecycleDates(t, "actual-date confirmed transaction", actualTransaction.JSON200.Records, nil, apptest.TimestampPtr("2026-08-10T23:59:59Z"))
+	assertTransactionCheckingAmountUSD(t, actualTransaction.JSON200.Records, refs.CheckingAccountID, "-5.00000000")
+	actualDefinitionAfter := getRecurringDefinition(t, client, actualDefinition.JSON201.RecurringDefinitionId)
+	assertDatePtr(t, actualDefinitionAfter.JSON200.NextDueDate, "2026-09-01")
+
+	preservedRequest := recurringDefinitionRequest(
+		"RecurringActualDate:DefaultValuation",
+		refs,
+		"-10.00000000",
+		"10.00000000",
+		intervalRule(1, "MONTH"),
+		"2026-08-10",
+	)
+	for index := range *preservedRequest.Records {
+		(*preservedRequest.Records)[index].Currency = recurringStringPtr("EUR")
+	}
+	preservedDefinition := createRecurringDefinition(t, client, preservedRequest)
+	preservedOccurrences := listRecurringOccurrences(t, client, &httpclient.ListRecurringOccurrencesParams{RecurringDefinitionId: &preservedDefinition.JSON201.RecurringDefinitionId})
+	preservedTransactionID := *preservedOccurrences.JSON200.RecurringOccurrences[0].GeneratedTransactionId
+	assertTransactionCheckingAmountUSD(t, getTransaction(t, client, preservedTransactionID).JSON200.Records, refs.CheckingAccountID, "-5.00000000")
+	deletedRate, err := client.REST().DeleteExchangeRateWithResponse(context.Background(), actualDateRateID)
+	requireNoTransportError(t, "delete materialization exchange rate", err)
+	if deletedRate.StatusCode() != http.StatusNoContent {
+		t.Fatalf("delete materialization exchange rate status = %d, want %d; body %s", deletedRate.StatusCode(), http.StatusNoContent, deletedRate.Body)
+	}
+	confirmRecurringOccurrence(t, client, preservedOccurrences.JSON200.RecurringOccurrences[0].RecurringOccurrenceId)
+	assertTransactionCheckingAmountUSD(t, getTransaction(t, client, preservedTransactionID).JSON200.Records, refs.CheckingAccountID, "-5.00000000")
+
+	defaultRefs := createRecurringDefinitionRefs(t, client, "RecurringActualDateDefaults")
+	defaultDefinition := createRecurringDefinition(t, client, recurringDefinitionRequest(
+		"RecurringActualDate:Default",
+		defaultRefs,
+		"-11.00000000",
+		"11.00000000",
+		intervalRule(1, "MONTH"),
+		"2026-08-02",
+	))
+	defaultOccurrences := listRecurringOccurrences(t, client, &httpclient.ListRecurringOccurrencesParams{RecurringDefinitionId: &defaultDefinition.JSON201.RecurringDefinitionId})
+	defaultConfirmed := confirmRecurringOccurrence(t, client, defaultOccurrences.JSON200.RecurringOccurrences[0].RecurringOccurrenceId)
+	defaultTransaction := getTransaction(t, client, *defaultConfirmed.JSON200.GeneratedTransactionId)
+	if got := defaultTransaction.JSON200.InitiatedDate.Format("2006-01-02"); got != "2026-08-02" {
+		t.Fatalf("default confirmed initiated_date = %s, want scheduled date 2026-08-02", got)
+	}
+
+	futureDefinition := createRecurringDefinition(t, client, recurringDefinitionRequest(
+		"RecurringActualDate:FutureRejected",
+		defaultRefs,
+		"-12.00000000",
+		"12.00000000",
+		intervalRule(1, "MONTH"),
+		formatDate(today),
+	))
+	futureOccurrences := listRecurringOccurrences(t, client, &httpclient.ListRecurringOccurrencesParams{RecurringDefinitionId: &futureDefinition.JSON201.RecurringDefinitionId})
+	futureDate := apptest.Date(formatDate(today.AddDate(0, 0, 1)))
+	rejected, err := client.REST().ConfirmRecurringOccurrenceWithResponse(
+		context.Background(),
+		futureOccurrences.JSON200.RecurringOccurrences[0].RecurringOccurrenceId,
+		recurringOccurrenceConfirmRequest(*apptest.PostedSettlement(), &futureDate),
+	)
+	requireNoTransportError(t, "confirm recurring occurrence with future actual date", err)
+	if rejected.StatusCode() != http.StatusBadRequest || rejected.JSON400 == nil || rejected.JSON400.Error.Code != httpclient.APIErrorCodeInvalidRequest {
+		t.Fatalf("future actual-date confirmation = status:%d error:%+v, want 400 invalid_request; body %s", rejected.StatusCode(), rejected.JSON400, rejected.Body)
+	}
 }
 
 func assertPendingRecurringTransaction(t *testing.T, transaction *httpclient.GetTransactionResponse, wantPendingDate time.Time) {
@@ -1561,19 +1683,187 @@ func TestRecurringDefinitionDeferBoundary(t *testing.T) {
 		t.Fatalf("custom defer anchor = %s, want %s", customShifted.JSON200.AnchorDate.Format("2006-01-02"), formatDate(today.AddDate(0, 0, 4)))
 	}
 
-	dateRule := createRecurringDefinition(t, client, recurringDefinitionRequest(
-		"RecurringDefer:DateRule",
+}
+
+func TestRecurringDefinitionDateRuleDeferBoundary(t *testing.T) {
+	clock := apptest.NewFakeClock(apptest.Timestamp("2026-01-15T12:00:00Z"))
+	client := newSharedClient(t, apptest.WithClock(clock))
+	refs := createRecurringDefinitionRefs(t, client, "RecurringDateRuleDefer")
+
+	dayOfMonth := createRecurringDefinition(t, client, recurringDefinitionRequest(
+		"RecurringDateRuleDefer:DayOfMonth",
 		refs,
 		"-8.00000000",
 		"8.00000000",
-		dayOfMonthRule(today.Day()),
-		formatDate(today),
+		dayOfMonthRule(31),
+		"2026-01-31",
 	))
-	rejected, err := client.REST().DeferRecurringDefinitionWithResponse(context.Background(), dateRule.JSON201.RecurringDefinitionId, httpclient.RecurringDefinitionDeferRequest{})
-	requireNoTransportError(t, "defer date-rule recurring definition", err)
-	if rejected.StatusCode() != http.StatusBadRequest {
-		t.Fatalf("defer date-rule status = %d, want %d; body %s", rejected.StatusCode(), http.StatusBadRequest, rejected.Body)
+	deferredDay := deferRecurringDefinition(t, client, dayOfMonth.JSON201.RecurringDefinitionId, httpclient.RecurringDefinitionDeferRequest{})
+	assertDeferredOccurrence(t, *deferredDay.JSON200, "2026-01-31")
+	shiftedDay := getRecurringDefinition(t, client, dayOfMonth.JSON201.RecurringDefinitionId)
+	if shiftedDay.JSON200.AnchorDate.Format("2006-01-02") != "2026-02-28" {
+		t.Fatalf("day-of-month default defer anchor = %s, want 2026-02-28", shiftedDay.JSON200.AnchorDate.Format("2006-01-02"))
 	}
+	assertDatePtr(t, shiftedDay.JSON200.NextDueDate, "2026-02-28")
+
+	dayOfMonthN := createRecurringDefinition(t, client, recurringDefinitionRequest(
+		"RecurringDateRuleDefer:DayOfMonthN",
+		refs,
+		"-9.00000000",
+		"9.00000000",
+		dayOfMonthRule(31),
+		"2026-01-31",
+	))
+	periods := int64(2)
+	deferRecurringDefinition(t, client, dayOfMonthN.JSON201.RecurringDefinitionId, httpclient.RecurringDefinitionDeferRequest{Every: &periods})
+	shiftedDayN := getRecurringDefinition(t, client, dayOfMonthN.JSON201.RecurringDefinitionId)
+	if shiftedDayN.JSON200.AnchorDate.Format("2006-01-02") != "2026-03-31" {
+		t.Fatalf("day-of-month two-period defer anchor = %s, want 2026-03-31", shiftedDayN.JSON200.AnchorDate.Format("2006-01-02"))
+	}
+	assertDatePtr(t, shiftedDayN.JSON200.NextDueDate, "2026-03-31")
+
+	lastDay := createRecurringDefinition(t, client, recurringDefinitionRequest(
+		"RecurringDateRuleDefer:LastDay",
+		refs,
+		"-10.00000000",
+		"10.00000000",
+		lastDayOfMonthRule(),
+		"2026-01-31",
+	))
+	deferRecurringDefinition(t, client, lastDay.JSON201.RecurringDefinitionId, httpclient.RecurringDefinitionDeferRequest{})
+	shiftedLastDay := getRecurringDefinition(t, client, lastDay.JSON201.RecurringDefinitionId)
+	if shiftedLastDay.JSON200.AnchorDate.Format("2006-01-02") != "2026-02-28" {
+		t.Fatalf("last-day default defer anchor = %s, want 2026-02-28", shiftedLastDay.JSON200.AnchorDate.Format("2006-01-02"))
+	}
+
+	unit := httpclient.MONTH
+	rejectedUnit, err := client.REST().DeferRecurringDefinitionWithResponse(context.Background(), shiftedLastDay.JSON200.RecurringDefinitionId, httpclient.RecurringDefinitionDeferRequest{Unit: &unit})
+	requireNoTransportError(t, "defer date-rule recurring definition with unit", err)
+	if rejectedUnit.StatusCode() != http.StatusBadRequest || rejectedUnit.JSON400 == nil || rejectedUnit.JSON400.Error.Code != httpclient.APIErrorCodeInvalidRequest {
+		t.Fatalf("date-rule defer with unit = status:%d error:%+v, want 400 invalid_request; body %s", rejectedUnit.StatusCode(), rejectedUnit.JSON400, rejectedUnit.Body)
+	}
+
+	tooManyPeriods := int64(100_000_000)
+	rejectedRange, err := client.REST().DeferRecurringDefinitionWithResponse(context.Background(), shiftedLastDay.JSON200.RecurringDefinitionId, httpclient.RecurringDefinitionDeferRequest{Every: &tooManyPeriods})
+	requireNoTransportError(t, "defer date-rule recurring definition outside supported date range", err)
+	if rejectedRange.StatusCode() != http.StatusBadRequest || rejectedRange.JSON400 == nil || rejectedRange.JSON400.Error.Code != httpclient.APIErrorCodeInvalidRequest {
+		t.Fatalf("out-of-range date-rule defer = status:%d error:%+v, want 400 invalid_request; body %s", rejectedRange.StatusCode(), rejectedRange.JSON400, rejectedRange.Body)
+	}
+	readableAfterRejectedRange := getRecurringDefinition(t, client, shiftedLastDay.JSON200.RecurringDefinitionId)
+	if readableAfterRejectedRange.JSON200.AnchorDate.Format("2006-01-02") != "2026-02-28" {
+		t.Fatalf("anchor after rejected out-of-range defer = %s, want 2026-02-28", readableAfterRejectedRange.JSON200.AnchorDate.Format("2006-01-02"))
+	}
+	listAfterRejectedRange, err := client.REST().ListRecurringDefinitionsWithResponse(context.Background(), nil)
+	requireNoTransportError(t, "list recurring definitions after rejected out-of-range defer", err)
+	if listAfterRejectedRange.StatusCode() != http.StatusOK || listAfterRejectedRange.JSON200 == nil {
+		t.Fatalf("list after rejected out-of-range defer = status:%d, want 200; body %s", listAfterRejectedRange.StatusCode(), listAfterRejectedRange.Body)
+	}
+
+	overdue := createRecurringDefinition(t, client, recurringDefinitionRequest(
+		"RecurringDateRuleDefer:Overdue",
+		refs,
+		"-12.00000000",
+		"12.00000000",
+		dayOfMonthRule(31),
+		"2025-12-31",
+	))
+	materializedOverdue := listRecurringOccurrences(t, client, &httpclient.ListRecurringOccurrencesParams{
+		RecurringDefinitionId: &overdue.JSON201.RecurringDefinitionId,
+	})
+	assertRecurringOccurrences(t, materializedOverdue.JSON200.RecurringOccurrences, overdue.JSON201.RecurringDefinitionId, []string{"2025-12-31"})
+	deferredOverdue := deferRecurringDefinition(t, client, overdue.JSON201.RecurringDefinitionId, httpclient.RecurringDefinitionDeferRequest{})
+	assertDeferredOccurrence(t, *deferredOverdue.JSON200, "2026-01-31")
+	shiftedOverdue := getRecurringDefinition(t, client, overdue.JSON201.RecurringDefinitionId)
+	if shiftedOverdue.JSON200.AnchorDate.Format("2006-01-02") != "2026-02-28" {
+		t.Fatalf("overdue date-rule defer anchor = %s, want 2026-02-28", shiftedOverdue.JSON200.AnchorDate.Format("2006-01-02"))
+	}
+	assertDatePtr(t, shiftedOverdue.JSON200.NextDueDate, "2026-02-28")
+
+	paused := createRecurringDefinition(t, client, recurringDefinitionRequest(
+		"RecurringDateRuleDefer:Paused",
+		refs,
+		"-11.00000000",
+		"11.00000000",
+		lastDayOfMonthRule(),
+		"2026-01-31",
+	))
+	pauseRecurringDefinition(t, client, paused.JSON201.RecurringDefinitionId)
+	rejectedPaused, err := client.REST().DeferRecurringDefinitionWithResponse(context.Background(), paused.JSON201.RecurringDefinitionId, httpclient.RecurringDefinitionDeferRequest{})
+	requireNoTransportError(t, "defer paused date-rule recurring definition", err)
+	if rejectedPaused.StatusCode() != http.StatusBadRequest || rejectedPaused.JSON400 == nil || rejectedPaused.JSON400.Error.Code != httpclient.APIErrorCodeInvalidRequest {
+		t.Fatalf("paused date-rule defer = status:%d error:%+v, want 400 invalid_request; body %s", rejectedPaused.StatusCode(), rejectedPaused.JSON400, rejectedPaused.Body)
+	}
+}
+
+func TestFutureTransactionProjectionMarksNextOccurrenceBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	today := civilDateOnly(client.Now())
+	refs := createRecurringDefinitionRefs(t, client, "RecurringProjectionNext")
+	firstSlot := today.AddDate(0, 0, 1)
+	definition := createRecurringDefinition(t, client, recurringDefinitionRequest(
+		"RecurringProjectionNext:Daily",
+		refs,
+		"-12.00000000",
+		"12.00000000",
+		intervalRule(1, "DAY"),
+		formatDate(firstSlot),
+	))
+	secondDefinition := createRecurringDefinition(t, client, recurringDefinitionRequest(
+		"RecurringProjectionNext:SecondDaily",
+		refs,
+		"-13.00000000",
+		"13.00000000",
+		intervalRule(1, "DAY"),
+		formatDate(firstSlot),
+	))
+	through := firstSlot.AddDate(0, 0, 2)
+
+	assertNextProjectionDates := func(label string, wants map[int64]string) {
+		t.Helper()
+		anchorDate := apptest.Date(formatDate(through))
+		expected := []httpclient.TransactionLifecycleStatus{httpclient.TransactionLifecycleStatusExpected}
+		limit := 50
+		response, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+			AnchorDate:      &anchorDate,
+			LifecycleStatus: &expected,
+			Limit:           &limit,
+		})
+		requireNoTransportError(t, label, err)
+		if response.StatusCode() != http.StatusOK {
+			t.Fatalf("%s status = %d, want %d; body %s", label, response.StatusCode(), http.StatusOK, response.Body)
+		}
+		markedByDefinitionID := map[int64][]string{}
+		projectionCountByDefinitionID := map[int64]int{}
+		for _, transaction := range response.JSON200.Transactions {
+			if transaction.RecurringProjectionDefinitionId == nil {
+				continue
+			}
+			definitionID := *transaction.RecurringProjectionDefinitionId
+			if _, ok := wants[definitionID]; !ok {
+				continue
+			}
+			projectionCountByDefinitionID[definitionID]++
+			if transaction.RecurringProjectionIsNext != nil && *transaction.RecurringProjectionIsNext {
+				markedByDefinitionID[definitionID] = append(markedByDefinitionID[definitionID], transaction.InitiatedDate.Format("2006-01-02"))
+			}
+		}
+		for definitionID, want := range wants {
+			marked := markedByDefinitionID[definitionID]
+			if projectionCountByDefinitionID[definitionID] < 2 || len(marked) != 1 || marked[0] != want {
+				t.Fatalf("%s definition %d projections = count:%d marked:%v, want multiple projections with only %s marked next", label, definitionID, projectionCountByDefinitionID[definitionID], marked, want)
+			}
+		}
+	}
+
+	assertNextProjectionDates("list initial next recurring projections", map[int64]string{
+		definition.JSON201.RecurringDefinitionId:       formatDate(firstSlot),
+		secondDefinition.JSON201.RecurringDefinitionId: formatDate(firstSlot),
+	})
+	deferRecurringDefinition(t, client, definition.JSON201.RecurringDefinitionId, httpclient.RecurringDefinitionDeferRequest{})
+	assertNextProjectionDates("list next recurring projections after defer", map[int64]string{
+		definition.JSON201.RecurringDefinitionId:       formatDate(firstSlot.AddDate(0, 0, 1)),
+		secondDefinition.JSON201.RecurringDefinitionId: formatDate(firstSlot),
+	})
 }
 
 func TestRecurringDefinitionReviewActionsCatchUpOverdueSlots(t *testing.T) {
@@ -1760,6 +2050,147 @@ func TestRecurringDefinitionEditFutureOnlyBoundary(t *testing.T) {
 	assertTransactionCheckingAmount(t, firstTransaction.JSON200.Records, refs.CheckingAccountID, "-10.00000000")
 	assertTransactionCheckingAmount(t, firstTransactionAfterEdit.JSON200.Records, refs.CheckingAccountID, "-10.00000000")
 	assertTransactionCheckingAmount(t, secondTransaction.JSON200.Records, refs.CheckingAccountID, "-20.00000000")
+}
+
+func TestRecurringDefinitionEditedAnchorBecomesScheduleFloorBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	today := civilDateOnly(client.Now())
+	refs := createRecurringDefinitionRefs(t, client, "RecurringReanchor")
+	definition := createRecurringDefinition(t, client, recurringDefinitionRequest(
+		"RecurringReanchor:Monthly",
+		refs,
+		"-10.00000000",
+		"10.00000000",
+		intervalRule(1, "MONTH"),
+		formatDate(today),
+	))
+
+	materialized := listRecurringOccurrences(t, client, &httpclient.ListRecurringOccurrencesParams{
+		RecurringDefinitionId: &definition.JSON201.RecurringDefinitionId,
+	})
+	confirmedFuture := confirmNextRecurringDefinition(t, client, definition.JSON201.RecurringDefinitionId)
+	before := listRecurringOccurrences(t, client, &httpclient.ListRecurringOccurrencesParams{
+		RecurringDefinitionId: &definition.JSON201.RecurringDefinitionId,
+	})
+	wantOccurrenceIDs := recurringOccurrenceIDs(before.JSON200.RecurringOccurrences)
+	wantTransactionIDs := generatedTransactionIDs(t, before.JSON200.RecurringOccurrences)
+	if len(materialized.JSON200.RecurringOccurrences) != 1 || len(before.JSON200.RecurringOccurrences) != 2 {
+		t.Fatalf("pre-reanchor occurrences = materialized:%+v all:%+v, want one due and one early-confirmed future occurrence", materialized.JSON200.RecurringOccurrences, before.JSON200.RecurringOccurrences)
+	}
+
+	newAnchor := time.Date(today.Year(), today.Month()+1, 1, 0, 0, 0, 0, today.Location())
+	replaced, err := client.REST().ReplaceRecurringDefinitionWithResponse(
+		context.Background(),
+		definition.JSON201.RecurringDefinitionId,
+		recurringDefinitionRequest(
+			"RecurringReanchor:Monthly",
+			refs,
+			"-20.00000000",
+			"20.00000000",
+			intervalRule(1, "MONTH"),
+			formatDate(newAnchor),
+		),
+	)
+	requireNoTransportError(t, "replace recurring definition anchor", err)
+	if replaced.StatusCode() != http.StatusOK {
+		t.Fatalf("replace recurring definition anchor status = %d, want %d; body %s", replaced.StatusCode(), http.StatusOK, replaced.Body)
+	}
+	assertDatePtr(t, replaced.JSON200.NextDueDate, formatDate(newAnchor))
+	listed, err := client.REST().ListRecurringDefinitionsWithResponse(context.Background(), nil)
+	requireNoTransportError(t, "list re-anchored recurring definitions", err)
+	if listed.StatusCode() != http.StatusOK {
+		t.Fatalf("list re-anchored recurring definitions status = %d, want %d; body %s", listed.StatusCode(), http.StatusOK, listed.Body)
+	}
+	if len(listed.JSON200.RecurringDefinitions) != 1 || listed.JSON200.RecurringDefinitions[0].RecurringDefinitionId != definition.JSON201.RecurringDefinitionId {
+		t.Fatalf("listed re-anchored definitions = %+v, want definition %d", listed.JSON200.RecurringDefinitions, definition.JSON201.RecurringDefinitionId)
+	}
+	assertDatePtr(t, listed.JSON200.RecurringDefinitions[0].NextDueDate, formatDate(newAnchor))
+
+	after := listRecurringOccurrences(t, client, &httpclient.ListRecurringOccurrencesParams{
+		RecurringDefinitionId: &definition.JSON201.RecurringDefinitionId,
+	})
+	assertRecurringOccurrenceIDs(t, after.JSON200.RecurringOccurrences, wantOccurrenceIDs)
+	assertSameInt64Set(t, generatedTransactionIDs(t, after.JSON200.RecurringOccurrences), wantTransactionIDs)
+	for _, transactionID := range wantTransactionIDs {
+		transaction := getTransaction(t, client, transactionID)
+		assertTransactionCheckingAmount(t, transaction.JSON200.Records, refs.CheckingAccountID, "-10.00000000")
+	}
+	if confirmedFuture.JSON200.ScheduledDate.Format("2006-01-02") == formatDate(newAnchor) {
+		t.Fatalf("future recorded slot unexpectedly equals edited anchor %s; test requires an off-grid future slot", formatDate(newAnchor))
+	}
+
+	through := newAnchor.AddDate(0, 1, 0)
+	anchorDate := apptest.Date(formatDate(through))
+	expected := []httpclient.TransactionLifecycleStatus{httpclient.TransactionLifecycleStatusExpected}
+	limit := 50
+	projected, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+		AnchorDate:      &anchorDate,
+		LifecycleStatus: &expected,
+		Limit:           &limit,
+	})
+	requireNoTransportError(t, "list re-anchored recurring projections", err)
+	if projected.StatusCode() != http.StatusOK {
+		t.Fatalf("re-anchored projection status = %d, want %d; body %s", projected.StatusCode(), http.StatusOK, projected.Body)
+	}
+	projectionDates := []string{}
+	for _, transaction := range projected.JSON200.Transactions {
+		if transaction.RecurringProjectionDefinitionId != nil && *transaction.RecurringProjectionDefinitionId == definition.JSON201.RecurringDefinitionId {
+			projectionDates = append(projectionDates, transaction.InitiatedDate.Format("2006-01-02"))
+		}
+	}
+	if len(projectionDates) != 2 || projectionDates[0] != formatDate(through) || projectionDates[1] != formatDate(newAnchor) {
+		t.Fatalf("re-anchored projection dates = %v, want [%s %s]", projectionDates, formatDate(through), formatDate(newAnchor))
+	}
+}
+
+func TestRecurringDefinitionEditedAnchorValidationBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	today := civilDateOnly(client.Now())
+	refs := createRecurringDefinitionRefs(t, client, "RecurringAnchorValidation")
+	pastAnchor := today.AddDate(0, -1, 0)
+	definition := createRecurringDefinition(t, client, recurringDefinitionRequest(
+		"RecurringAnchorValidation:Monthly",
+		refs,
+		"-10.00000000",
+		"10.00000000",
+		intervalRule(1, "MONTH"),
+		formatDate(pastAnchor),
+	))
+
+	unchanged, err := client.REST().ReplaceRecurringDefinitionWithResponse(
+		context.Background(),
+		definition.JSON201.RecurringDefinitionId,
+		recurringDefinitionRequest(
+			"RecurringAnchorValidation:Renamed",
+			refs,
+			"-11.00000000",
+			"11.00000000",
+			intervalRule(1, "MONTH"),
+			formatDate(pastAnchor),
+		),
+	)
+	requireNoTransportError(t, "replace recurring definition with unchanged past anchor", err)
+	if unchanged.StatusCode() != http.StatusOK {
+		t.Fatalf("unchanged past anchor replace status = %d, want %d; body %s", unchanged.StatusCode(), http.StatusOK, unchanged.Body)
+	}
+
+	changedPastAnchor := today.AddDate(0, 0, -1)
+	rejected, err := client.REST().ReplaceRecurringDefinitionWithResponse(
+		context.Background(),
+		definition.JSON201.RecurringDefinitionId,
+		recurringDefinitionRequest(
+			"RecurringAnchorValidation:Renamed",
+			refs,
+			"-11.00000000",
+			"11.00000000",
+			intervalRule(1, "MONTH"),
+			formatDate(changedPastAnchor),
+		),
+	)
+	requireNoTransportError(t, "replace recurring definition with changed past anchor", err)
+	if rejected.StatusCode() != http.StatusBadRequest || rejected.JSON400 == nil || rejected.JSON400.Error.Code != httpclient.APIErrorCodeInvalidRequest {
+		t.Fatalf("changed past anchor replace = status:%d error:%+v, want 400 invalid_request; body %s", rejected.StatusCode(), rejected.JSON400, rejected.Body)
+	}
 }
 
 func createRecurringDefinitionRefs(t *testing.T, client *apptest.Client, prefix string) recurringDefinitionRefs {
@@ -1989,13 +2420,22 @@ func listRecurringOccurrences(t *testing.T, client *apptest.Client, params *http
 func confirmRecurringOccurrence(t *testing.T, client *apptest.Client, id int64) *httpclient.ConfirmRecurringOccurrenceResponse {
 	t.Helper()
 
-	response, err := client.REST().ConfirmRecurringOccurrenceWithResponse(context.Background(), id, *apptest.PostedSettlement())
+	response, err := client.REST().ConfirmRecurringOccurrenceWithResponse(context.Background(), id, recurringOccurrenceConfirmRequest(*apptest.PostedSettlement(), nil))
 	requireNoTransportError(t, "confirm recurring occurrence", err)
 	if response.StatusCode() != http.StatusOK {
 		t.Fatalf("confirm recurring occurrence status = %d, want %d; body %s", response.StatusCode(), http.StatusOK, response.Body)
 	}
 
 	return response
+}
+
+func recurringOccurrenceConfirmRequest(settlement httpclient.SettlementIntent, actualDate *openapi_types.Date) httpclient.RecurringOccurrenceConfirmRequest {
+	return httpclient.RecurringOccurrenceConfirmRequest{
+		ActualDate:  actualDate,
+		Status:      settlement.Status,
+		PendingDate: settlement.PendingDate,
+		PostedDate:  settlement.PostedDate,
+	}
 }
 
 func dismissRecurringOccurrence(t *testing.T, client *apptest.Client, id int64) *httpclient.DismissRecurringOccurrenceResponse {
@@ -2061,7 +2501,7 @@ func resumeRecurringDefinition(t *testing.T, client *apptest.Client, id int64) *
 func confirmAgain(t *testing.T, client *apptest.Client, id int64) int {
 	t.Helper()
 
-	response, err := client.REST().ConfirmRecurringOccurrenceWithResponse(context.Background(), id, *apptest.PostedSettlement())
+	response, err := client.REST().ConfirmRecurringOccurrenceWithResponse(context.Background(), id, recurringOccurrenceConfirmRequest(*apptest.PostedSettlement(), nil))
 	requireNoTransportError(t, "confirm recurring occurrence again", err)
 
 	return response.StatusCode()
@@ -2141,6 +2581,20 @@ func assertTransactionCheckingAmount(t *testing.T, records []httpclient.JournalR
 		if record.AccountId == accountID {
 			if record.Amount != want {
 				t.Fatalf("checking record amount = %q, want %q; records = %+v", record.Amount, want, records)
+			}
+			return
+		}
+	}
+	t.Fatalf("checking account %d not found in records %+v", accountID, records)
+}
+
+func assertTransactionCheckingAmountUSD(t *testing.T, records []httpclient.JournalRecord, accountID int64, want string) {
+	t.Helper()
+
+	for _, record := range records {
+		if record.AccountId == accountID {
+			if record.AmountUsd == nil || *record.AmountUsd != want {
+				t.Fatalf("checking record amount_usd = %v, want %q; records = %+v", record.AmountUsd, want, records)
 			}
 			return
 		}

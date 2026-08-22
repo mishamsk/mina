@@ -155,9 +155,13 @@ test("future date navigation displays future active and expected transactions", 
     "true",
   );
   await expect(expectedRow).not.toHaveAttribute("aria-disabled");
+  await expect(expectedRow.locator(".row-actions")).toHaveAttribute(
+    "data-row-actions-count",
+    "1",
+  );
   await expect(
-    expectedRow.locator(".transactions-actions-column button"),
-  ).toHaveCount(0);
+    expectedRow.getByRole("button", { name: "Defer" }),
+  ).toBeVisible();
   await expect(page).toHaveURL(
     new RegExp(`[?&]anchor_date=${futureDate}(?:&|$)`),
   );
@@ -185,6 +189,9 @@ test("future date navigation displays future active and expected transactions", 
   await expect(
     projectedDetail.getByRole("button", { name: "Confirm occurrence" }),
   ).toHaveCount(0);
+  await expect(
+    projectedDetail.getByRole("button", { name: "Defer" }),
+  ).toBeVisible();
   await page.goBack();
   await expect(projectedDetail).toBeHidden();
 
@@ -272,6 +279,262 @@ test("future date navigation displays future active and expected transactions", 
     recurring_occurrences: unknown[];
   };
   expect(occurrencesBody.recurring_occurrences).toEqual([]);
+});
+
+test("only the next recurring projection can be deferred", async ({
+  page,
+}, testInfo) => {
+  const unique = `next-projection-${testInfo.workerIndex}-${Date.now()}`;
+  const tomorrow = shiftLocalDate(formatLocalDate(new Date()), 1);
+  const futureDate = shiftLocalDate(tomorrow, 9);
+  const checking = await createAccount(
+    page,
+    `e2e:ProjectionDefer:${unique}:Checking`,
+    "owned",
+    "USD",
+  );
+  const merchant = await createAccount(
+    page,
+    `e2e:ProjectionDefer:${unique}:Merchant`,
+    "flow",
+  );
+  const category = await createCategory(
+    page,
+    `e2e:ProjectionDefer:${unique}:Category`,
+    "expense",
+  );
+  const definitionResponse = await page.request.post(
+    "/api/recurring-definitions",
+    {
+      data: {
+        anchor_date: tomorrow,
+        fqn: `E2E:ProjectionDefer:${unique}`,
+        schedule_rule: {
+          every: 1,
+          kind: "interval",
+          unit: "DAY",
+          version: 1,
+        },
+        records: [
+          {
+            account_id: checking.account_id,
+            amount: "-8.75000000",
+            category_id: null,
+            currency: "USD",
+            memo: `Projection defer funding ${unique}`,
+            tag_ids: [],
+          },
+          {
+            account_id: merchant.account_id,
+            amount: "8.75000000",
+            category_id: category.category_id,
+            currency: "USD",
+            memo: `Projection defer merchant ${unique}`,
+            tag_ids: [],
+          },
+        ],
+      },
+    },
+  );
+  expect(definitionResponse.ok(), await definitionResponse.text()).toBe(true);
+  const definition = (await definitionResponse.json()) as {
+    recurring_definition_id: number;
+  };
+
+  await page.goto(
+    `/transactions?page=1&pageSize=25&category=${String(category.category_id)}`,
+  );
+  const anchoredResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/transactions" &&
+      url.searchParams.get("anchor_date") === futureDate &&
+      response.ok()
+    );
+  });
+  await page.getByLabel("Go to day").fill(futureDate);
+  const anchoredBody = (await (
+    await anchoredResponse
+  ).json()) as TransactionListFixture;
+  const projections = anchoredBody.transactions.filter(
+    (transaction) =>
+      transaction.recurring_projection_definition_id ===
+      definition.recurring_definition_id,
+  );
+  const nextProjections = projections.filter(
+    (transaction) => transaction.recurring_projection_is_next === true,
+  );
+  const laterProjections = projections.filter(
+    (transaction) => transaction.recurring_projection_is_next === false,
+  );
+  expect(nextProjections).toHaveLength(1);
+  expect(laterProjections.length).toBeGreaterThan(0);
+  const nextProjection = nextProjections[0];
+  if (!nextProjection) throw new Error("Expected a next projection");
+  const nextRow = page.locator(
+    `tbody > tr[data-transaction-id="${String(nextProjection.transaction_id)}"]`,
+  );
+  await expect(nextRow).toBeVisible();
+  await expect(nextRow.locator(".row-actions")).toHaveAttribute(
+    "data-row-actions-count",
+    "1",
+  );
+  await expect(nextRow.getByRole("button", { name: "Defer" })).toBeVisible();
+
+  for (const projection of laterProjections) {
+    const row = page.locator(
+      `tbody > tr[data-transaction-id="${String(projection.transaction_id)}"]`,
+    );
+    await expect(row.getByRole("button", { name: "Defer" })).toHaveCount(0);
+  }
+
+  await nextRow.click();
+  const nextProjectionDetail = page.getByTestId("transaction-detail-panel");
+  const detailDeferButton = nextProjectionDetail.getByRole("button", {
+    exact: true,
+    name: "Defer",
+  });
+  const definitionPath = `/api/recurring-definitions/${String(definition.recurring_definition_id)}`;
+  let releaseDefinitionLoad: (() => void) | undefined;
+  const definitionLoadHeld = new Promise<void>((resolve) => {
+    releaseDefinitionLoad = resolve;
+  });
+  await page.route(
+    `**${definitionPath}`,
+    async (route) => {
+      await definitionLoadHeld;
+      try {
+        await route.continue();
+      } catch (error) {
+        if (
+          !(error instanceof Error) ||
+          !error.message.includes("already handled")
+        ) {
+          throw error;
+        }
+      }
+    },
+    { times: 1 },
+  );
+  await detailDeferButton.click();
+  const loadingDeferDialog = page.getByRole("alertdialog", {
+    name: "Defer next occurrence",
+  });
+  const loadingCancel = loadingDeferDialog.getByRole("button", {
+    name: "Cancel",
+  });
+  await expect(loadingCancel).toBeEnabled();
+  await loadingCancel.focus();
+  await loadingDeferDialog
+    .getByRole("button", { name: "Defer definition" })
+    .locator("..")
+    .hover();
+  await expect(page.getByRole("tooltip")).toHaveText(
+    "Wait for the recurring definition to load.",
+  );
+  await page.mouse.move(0, 0);
+  const loadingDialogBounds = await loadingDeferDialog.boundingBox();
+  releaseDefinitionLoad?.();
+  await expect(loadingDeferDialog.getByLabel("Offset")).toBeVisible();
+  await expect(loadingCancel).toBeFocused();
+  expect(await loadingDeferDialog.boundingBox()).toEqual(loadingDialogBounds);
+  await expect(
+    loadingDeferDialog.getByRole("button", { name: "Defer definition" }),
+  ).toBeEnabled();
+  await page.keyboard.press("Escape");
+  await expect(detailDeferButton).toBeFocused();
+
+  const removedProjection = laterProjections.find(
+    (projection) => projection.initiated_date === shiftLocalDate(tomorrow, 1),
+  );
+  if (!removedProjection) throw new Error("Expected the D+2 projection");
+  const removedRow = page.locator(
+    `tbody > tr[data-transaction-id="${String(removedProjection.transaction_id)}"]`,
+  );
+  await removedRow.evaluate((row: HTMLTableRowElement) => row.click());
+  const removedDetail = page.getByTestId("transaction-detail-panel");
+  await expect(removedDetail).toHaveAttribute(
+    "data-source-transaction-id",
+    String(removedProjection.transaction_id),
+  );
+
+  await nextRow
+    .getByRole("button", { name: "Defer" })
+    .evaluate((button: HTMLButtonElement) => button.click());
+  const deferDialog = page.getByRole("alertdialog", {
+    name: "Defer next occurrence",
+  });
+  await expect(deferDialog).toBeVisible();
+  await expect(deferDialog.getByLabel("Offset")).toHaveValue("1");
+  await deferDialog.getByLabel("Offset").fill("2");
+  const deferResponse = page.waitForResponse((response) =>
+    new URL(response.url()).pathname.endsWith(
+      `/api/recurring-definitions/${String(definition.recurring_definition_id)}/defer`,
+    ),
+  );
+  const refreshedResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/transactions" &&
+      url.searchParams.get("anchor_date") === futureDate &&
+      response.ok()
+    );
+  });
+  let markProjectionRefreshStarted!: () => void;
+  const projectionRefreshStarted = new Promise<void>((resolve) => {
+    markProjectionRefreshStarted = resolve;
+  });
+  let releaseProjectionRefresh!: () => void;
+  const projectionRefreshReleased = new Promise<void>((resolve) => {
+    releaseProjectionRefresh = resolve;
+  });
+  await page.route("**/api/transactions?*", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.get("anchor_date") !== futureDate) {
+      await route.continue();
+      return;
+    }
+    markProjectionRefreshStarted();
+    await projectionRefreshReleased;
+    await route.continue();
+  });
+  await deferDialog.getByRole("button", { name: "Defer definition" }).click();
+  expect((await deferResponse).ok()).toBe(true);
+  await projectionRefreshStarted;
+  await expect(deferDialog).toBeVisible();
+  await expect(
+    deferDialog.getByRole("button", { name: "Deferring" }),
+  ).toBeVisible();
+  await expect(nextRow).toBeVisible();
+  releaseProjectionRefresh();
+  const refreshedBody = (await (
+    await refreshedResponse
+  ).json()) as TransactionListFixture;
+  const refreshedNext = refreshedBody.transactions.filter(
+    (transaction) =>
+      transaction.recurring_projection_definition_id ===
+        definition.recurring_definition_id &&
+      transaction.recurring_projection_is_next === true,
+  );
+  expect(refreshedNext).toHaveLength(1);
+  expect(refreshedNext[0]?.initiated_date).toBe(shiftLocalDate(tomorrow, 2));
+  expect(
+    refreshedBody.transactions.some(
+      (transaction) =>
+        transaction.transaction_id === removedProjection.transaction_id,
+    ),
+  ).toBe(false);
+  await expect(
+    page.getByRole("status").filter({ hasText: "Next occurrence deferred." }),
+  ).toBeVisible();
+  await expect(removedDetail).toHaveCount(0);
+  const refreshedNextRow = page.locator(
+    `tbody > tr[data-transaction-id="${String(refreshedNext[0]?.transaction_id)}"]`,
+  );
+  await expect(
+    refreshedNextRow.getByRole("button", { name: "Defer" }),
+  ).toBeVisible();
+  await expect(refreshedNextRow).toBeFocused();
 });
 
 test("failed future date navigation can retry the retained page", async ({

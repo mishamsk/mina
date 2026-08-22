@@ -278,6 +278,7 @@ export const TransactionsPage = () => {
             onConfirmRecurringOccurrence={
               browser.confirmRecurringOccurrenceFromRow
             }
+            onDeferRecurringProjection={browser.deferRecurringProjection}
             onChangeTransactionLifecycle={browser.changeTransactionLifecycle}
             onClearSelection={browser.clearTransactionSelection}
             onFilterCategory={(categoryId) => {
@@ -296,6 +297,9 @@ export const TransactionsPage = () => {
             }
             onDismissRecurringOccurrence={
               browser.dismissRecurringOccurrenceFromRow
+            }
+            onLoadRecurringDefinitionForProjection={
+              browser.loadRecurringDefinitionForProjection
             }
             onDuplicateTransaction={duplicateTransaction}
             onEditTransaction={editTransaction}
@@ -349,18 +353,18 @@ export const TransactionsPage = () => {
         />
         {!browser.editMode && browser.detail.selectedTransactionId ? (
           <TransactionDetailPanel
-            readOnly={
-              browser.detail.transaction?.recurring_projection_definition_id !=
-              null
-            }
             errorMessage={browser.detail.errorMessage}
             loading={browser.detail.loading}
             lookups={browser.lookups.snapshot}
             onChangeLifecycle={browser.changeTransactionLifecycle}
             onClose={browser.detail.closeTransactionDetail}
             onConfirmOccurrence={browser.confirmRecurringOccurrenceFromRow}
+            onDeferProjection={browser.deferRecurringProjection}
             onDelete={browser.deleteSelectedTransaction}
             onDismissOccurrence={browser.dismissRecurringOccurrenceFromRow}
+            onLoadRecurringDefinitionForProjection={
+              browser.loadRecurringDefinitionForProjection
+            }
             onDuplicate={duplicateTransaction}
             onEdit={editTransaction}
             onPost={browser.postTransaction}

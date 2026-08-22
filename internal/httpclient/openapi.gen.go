@@ -2510,14 +2510,14 @@ type RecurringDefinition struct {
 
 // RecurringDefinitionDeferRequest defines model for RecurringDefinitionDeferRequest.
 type RecurringDefinitionDeferRequest struct {
-	// Every Positive number of cadence units by which to re-anchor the interval schedule.
+	// Every Positive defer distance. For interval schedules this counts cadence units and defaults to the schedule's cadence; for date-rule schedules it counts natural schedule periods and defaults to 1.
 	Every *int64 `json:"every,omitempty"`
 
-	// Unit Cadence unit used for the defer offset.
+	// Unit Cadence unit used for an interval-schedule offset. Must be omitted for date-rule schedules.
 	Unit *RecurringDefinitionDeferRequestUnit `json:"unit,omitempty"`
 }
 
-// RecurringDefinitionDeferRequestUnit Cadence unit used for the defer offset.
+// RecurringDefinitionDeferRequestUnit Cadence unit used for an interval-schedule offset. Must be omitted for date-rule schedules.
 type RecurringDefinitionDeferRequestUnit string
 
 // RecurringDefinitionListResponse defines model for RecurringDefinitionListResponse.
@@ -2574,7 +2574,7 @@ type RecurringDefinitionRecordRequest struct {
 
 // RecurringDefinitionWriteRequest defines model for RecurringDefinitionWriteRequest.
 type RecurringDefinitionWriteRequest struct {
-	// AnchorDate Schedule anchor date in YYYY-MM-DD format.
+	// AnchorDate Schedule floor in YYYY-MM-DD format. The next occurrence is the first unoccupied schedule slot on or after this date. Creation accepts historical anchors for backfill; replacement accepts a changed anchor only on or after the server's current civil date, while an unchanged historical anchor remains valid.
 	AnchorDate openapi_types.Date `json:"anchor_date"`
 
 	// Fqn Colon-separated hierarchical FQN for the recurring definition leaf.
@@ -2603,6 +2603,21 @@ type RecurringOccurrence struct {
 	ScheduledDate                 openapi_types.Date        `json:"scheduled_date"`
 	Status                        RecurringOccurrenceStatus `json:"status"`
 	UpdatedAt                     time.Time                 `json:"updated_at"`
+}
+
+// RecurringOccurrenceConfirmRequest defines model for RecurringOccurrenceConfirmRequest.
+type RecurringOccurrenceConfirmRequest struct {
+	// ActualDate Actual transaction date; defaults to the occurrence's scheduled date and must not be after the server's current civil date.
+	ActualDate *openapi_types.Date `json:"actual_date,omitempty"`
+
+	// PendingDate Exact UTC time the balance record entered pending; omitted manual values are derived by the service.
+	PendingDate *time.Time `json:"pending_date,omitempty"`
+
+	// PostedDate Exact UTC time the balance record posted; omitted manual values are derived by the service.
+	PostedDate *time.Time `json:"posted_date,omitempty"`
+
+	// Status Server-derived balance-record settlement.
+	Status SettlementStatus `json:"status"`
 }
 
 // RecurringOccurrenceListResponse defines model for RecurringOccurrenceListResponse.
@@ -2755,6 +2770,9 @@ type Transaction struct {
 
 	// RecurringProjectionDefinitionId Recurring definition for a read-only future row computed by transaction-list date navigation; null or omitted when the transaction is persisted.
 	RecurringProjectionDefinitionId *int64 `json:"recurring_projection_definition_id,omitempty"`
+
+	// RecurringProjectionIsNext True only for the definition's next non-materialized projected occurrence; false for its later projections and null or omitted when the transaction is persisted.
+	RecurringProjectionIsNext *bool `json:"recurring_projection_is_next,omitempty"`
 
 	// Settlement Server-derived settlement summary across a transaction's balance records.
 	Settlement       TransactionSettlement `json:"settlement"`
@@ -3913,7 +3931,7 @@ type ConfirmNextRecurringDefinitionJSONRequestBody = SettlementIntent
 type DeferRecurringDefinitionJSONRequestBody = RecurringDefinitionDeferRequest
 
 // ConfirmRecurringOccurrenceJSONRequestBody defines body for ConfirmRecurringOccurrence for application/json ContentType.
-type ConfirmRecurringOccurrenceJSONRequestBody = SettlementIntent
+type ConfirmRecurringOccurrenceJSONRequestBody = RecurringOccurrenceConfirmRequest
 
 // CreateTagJSONRequestBody defines body for CreateTag for application/json ContentType.
 type CreateTagJSONRequestBody = CreateTagRequest

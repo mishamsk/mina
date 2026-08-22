@@ -678,6 +678,7 @@ func transactionAPIResponse(transaction transactions.Transaction) openapi.Transa
 		Shapes:                          transactionShapeAPIResponses(transaction.Shapes),
 		RecurringOccurrenceId:           transaction.RecurringOccurrenceID,
 		RecurringProjectionDefinitionId: transaction.RecurringProjectionDefinitionID,
+		RecurringProjectionIsNext:       transaction.RecurringProjectionIsNext,
 		LifecycleStatus:                 openapi.TransactionLifecycleStatus(transaction.LifecycleStatus),
 		Settlement:                      openapi.TransactionSettlement(transaction.Settlement),
 		CreatedAt:                       transaction.CreatedAt.UTC(),

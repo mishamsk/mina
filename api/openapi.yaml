@@ -2521,7 +2521,7 @@ paths:
       operationId: deferRecurringDefinition
       tags:
         - recurring
-      summary: Defer the next non-materialized interval occurrence.
+      summary: Defer the next non-materialized recurring occurrence.
       requestBody:
         required: false
         content:
@@ -2534,7 +2534,7 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
         "200":
-          description: Next interval occurrence deferred.
+          description: Next recurring occurrence deferred.
           content:
             application/json:
               schema:
@@ -2705,7 +2705,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/SettlementIntent"
+              $ref: "#/components/schemas/RecurringOccurrenceConfirmRequest"
       responses:
         "401":
           $ref: "#/components/responses/Unauthenticated"
@@ -6105,7 +6105,7 @@ components:
         schedule_rule:
           $ref: "#/components/schemas/RecurringScheduleRule"
         anchor_date:
-          description: "Schedule anchor date in YYYY-MM-DD format."
+          description: "Schedule floor in YYYY-MM-DD format. The next occurrence is the first unoccupied schedule slot on or after this date. Creation accepts historical anchors for backfill; replacement accepts a changed anchor only on or after the server's current civil date, while an unchanged historical anchor remains valid."
           type: string
           pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
           format: date
@@ -6125,12 +6125,12 @@ components:
       additionalProperties: false
       properties:
         every:
-          description: "Positive number of cadence units by which to re-anchor the interval schedule."
+          description: "Positive defer distance. For interval schedules this counts cadence units and defaults to the schedule's cadence; for date-rule schedules it counts natural schedule periods and defaults to 1."
           type: integer
           format: int64
           minimum: 1
         unit:
-          description: "Cadence unit used for the defer offset."
+          description: "Cadence unit used for an interval-schedule offset. Must be omitted for date-rule schedules."
           type: string
           enum:
             - DAY
@@ -6887,6 +6887,29 @@ components:
           description: Exact UTC time the balance record posted; omitted manual values are derived by the service.
           nullable: true
           format: date-time
+    RecurringOccurrenceConfirmRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+      properties:
+        actual_date:
+          type: string
+          pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+          format: date
+          description: Actual transaction date; defaults to the occurrence's scheduled date and must not be after the server's current civil date.
+        status:
+          $ref: "#/components/schemas/SettlementStatus"
+        pending_date:
+          type: string
+          description: Exact UTC time the balance record entered pending; omitted manual values are derived by the service.
+          nullable: true
+          format: date-time
+        posted_date:
+          type: string
+          description: Exact UTC time the balance record posted; omitted manual values are derived by the service.
+          nullable: true
+          format: date-time
     ReconciliationStatus:
       description: "Whether a journal record has been reconciled with its external or expected source."
       type: string
@@ -7370,6 +7393,10 @@ components:
           minimum: 1
           nullable: true
           description: Recurring definition for a read-only future row computed by transaction-list date navigation; null or omitted when the transaction is persisted.
+        recurring_projection_is_next:
+          type: boolean
+          nullable: true
+          description: True only for the definition's next non-materialized projected occurrence; false for its later projections and null or omitted when the transaction is persisted.
         lifecycle_status:
           $ref: "#/components/schemas/TransactionLifecycleStatus"
         settlement:

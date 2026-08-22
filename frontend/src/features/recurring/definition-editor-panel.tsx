@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   apiErrorMessage,
   createRecurringDefinition,
+  fetchAccountingHistoryRange,
   pauseRecurringDefinition,
   type RecurringDefinition,
   type RecurringDefinitionRecordRequest,
@@ -212,9 +213,31 @@ export const DefinitionEditorPanel = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [generalError, setGeneralError] = useState<string>();
   const [saving, setSaving] = useState(false);
+  const [serverToday, setServerToday] = useState<string>();
+  const [serverTodayLoading, setServerTodayLoading] = useState(
+    Boolean(definition),
+  );
+
+  useEffect(() => {
+    if (!definition) {
+      return;
+    }
+    let active = true;
+    void fetchAccountingHistoryRange().then((result) => {
+      if (!active) {
+        return;
+      }
+      setServerToday(result.data?.end_date);
+      setServerTodayLoading(false);
+    });
+    return () => {
+      active = false;
+    };
+  }, [definition]);
 
   const closeEditor = useCallback(
     (monitorSavedTransaction = false) => {
+      const closingPanel = panelRef.current;
       onClose();
       window.requestAnimationFrame(() => {
         let restoredTarget: HTMLElement | undefined;
@@ -233,7 +256,8 @@ export const DefinitionEditorPanel = ({
         const restoreFocus = (): boolean => {
           if (
             document.activeElement !== document.body &&
-            document.activeElement !== restoredTarget
+            document.activeElement !== restoredTarget &&
+            !closingPanel?.contains(document.activeElement)
           ) {
             return false;
           }
@@ -382,6 +406,13 @@ export const DefinitionEditorPanel = ({
     if (!candidate.fqn.trim()) next.fqn = "Definition name is required.";
     if (!candidate.anchorDate) next.anchorDate = "Anchor date is required.";
     if (
+      definition &&
+      serverToday &&
+      candidate.anchorDate !== definition.anchor_date &&
+      candidate.anchorDate < serverToday
+    )
+      next.anchorDate = "A changed anchor date cannot be in the past.";
+    if (
       candidate.scheduleKind === "interval" &&
       (!Number.isInteger(candidate.every) || candidate.every < 1)
     )
@@ -475,6 +506,7 @@ export const DefinitionEditorPanel = ({
       const rowMatch = message.match(
         /records?\[(\d+)\].*?(account|category|amount|currency|member|tag)/i,
       );
+      const anchorError = /anchor[_ ]date|anchor/i.test(message);
       setErrors(
         rowMatch
           ? {
@@ -483,7 +515,9 @@ export const DefinitionEditorPanel = ({
                 (rowMatch[2] ?? "amount").toLowerCase(),
               )]: message,
             }
-          : {},
+          : anchorError
+            ? { anchorDate: message }
+            : {},
       );
       setGeneralError(message);
       setSaving(false);
@@ -893,11 +927,15 @@ export const DefinitionEditorPanel = ({
         </Button>
         <Button
           type="button"
-          disabled={saving || lookups.loading}
+          disabled={saving || lookups.loading || serverTodayLoading}
           onClick={() => void save()}
         >
           <Check aria-hidden="true" />
-          {saving ? "Saving" : "Save definition"}
+          {saving
+            ? "Saving"
+            : serverTodayLoading
+              ? "Checking date"
+              : "Save definition"}
         </Button>
       </footer>
     </aside>

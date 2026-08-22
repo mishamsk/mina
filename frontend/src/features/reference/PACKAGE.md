@@ -11,6 +11,7 @@
 - Trees activate leaf rows; Category and Tag indexes also activate groups to canonical FQN-prefix overview routes. Embedded controls must not activate the row, and the supplied opener is returned to the owner for focus recovery.
 - Member drill-down callers supply the resolved scoped IDs. The shell strips that dimension from browser-controlled URL filters and reapplies it, so its entity filter cannot be cleared or broadened by the transaction toolbar.
 - Drill-down transaction sorting uses the shared URL-backed ledger controls and keeps the scoped entity filter intact.
+- Drill-down transaction browsers pass through ledger's next-projection Defer operation and refresh coordination without interpreting recurring applicability.
 - When a drill-down search changes with a transaction or entry overlay open, update the background and overlay URL states synchronously; do not briefly render the overlay-less background.
 - Selecting a member from a transaction routes to that member's drill-down and replaces the scoped filter; selecting another entity kind adds an ordinary transaction filter.
 - The member drill-down route owns the identity header; Category and Tag leaf/group routes use the household-flow report feature.

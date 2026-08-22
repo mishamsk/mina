@@ -17,9 +17,13 @@ import {
   apiErrorMessage,
   cancelTransactionById,
   confirmRecurringOccurrenceById,
+  deferRecurringDefinition,
   deleteTransactionById,
   dismissRecurringOccurrenceById,
   fetchTransactionById,
+  getRecurringDefinition,
+  type RecurringDefinition,
+  type RecurringDefinitionDeferRequest,
   replaceLedgerTransaction,
   replaceTransactionAccount,
   restoreTransactionById,
@@ -31,12 +35,17 @@ import {
   updateJournalRecordsSettlement,
   updateJournalRecordsTagsOperation,
 } from "@/api";
+import {
+  invalidateRecurringDefinitionMutationCaches,
+  refreshMountedRecurringDefinitions,
+} from "@/features/recurring";
 import type { TransactionFilters } from "@/models/transaction-filters";
 import type {
   TransactionSort,
   TransactionSortDirection,
 } from "@/models/transaction-sorting";
 import {
+  invalidateTransactionPages,
   setTransactionEditModeAvailable,
   setTransactionEditModeEnabled,
   transactionPageKey,
@@ -70,6 +79,7 @@ import {
   publishTransactionConflictWinner,
   refreshTransactionPageAfterEditModeSave,
   refreshTransactionPageAfterSave,
+  refreshTransactionPagePreservingSnapshot,
   useTransactionsResource,
 } from "./use-transactions-resource";
 
@@ -504,12 +514,13 @@ export const useTransactionBrowserPage = ({
   );
 
   const confirmRecurringOccurrenceFromRow = useCallback(
-    async (transaction: Transaction) => {
+    async (transaction: Transaction, actualDate: string) => {
       if (transaction.recurring_occurrence_id === null) {
         throw new Error("This transaction is not a recurring occurrence.");
       }
 
       const result = await confirmRecurringOccurrenceById({
+        actual_date: actualDate,
         recurring_occurrence_id: transaction.recurring_occurrence_id,
       });
       if (result.error) {
@@ -518,15 +529,100 @@ export const useTransactionBrowserPage = ({
         );
       }
 
-      await refreshTransactionPageAfterSave(
-        displayedPageParams,
-        transaction.transaction_id,
-        transaction,
-        [],
-        { pageRefreshMode: "blocking" },
-      );
+      try {
+        await refreshTransactionPageAfterSave(
+          displayedPageParams,
+          transaction.transaction_id,
+          transaction,
+          [],
+          { pageRefreshMode: "blocking-preserving" },
+        );
+      } catch {
+        invalidateTransactionPages();
+        showNotice(
+          "Occurrence confirmed, but transactions could not be refreshed.",
+          "warning",
+        );
+        return;
+      }
       await detail.refreshSelectedTransactionDetail(transaction.transaction_id);
       showNotice("Occurrence confirmed.");
+    },
+    [detail, displayedPageParams, showNotice],
+  );
+
+  const loadRecurringDefinitionForProjection = useCallback(
+    async (transaction: Transaction): Promise<RecurringDefinition> => {
+      const definitionId = transaction.recurring_projection_definition_id;
+      if (definitionId == null) {
+        throw new Error("This transaction is not a recurring projection.");
+      }
+      const result = await getRecurringDefinition({
+        path: { recurring_definition_id: definitionId },
+      });
+      if (!result.data) {
+        throw new Error(
+          apiErrorMessage(
+            result.error,
+            "Recurring definition could not be loaded.",
+          ),
+        );
+      }
+      return result.data;
+    },
+    [],
+  );
+
+  const deferRecurringProjection = useCallback(
+    async (
+      transaction: Transaction,
+      request: RecurringDefinitionDeferRequest,
+    ) => {
+      const definitionId = transaction.recurring_projection_definition_id;
+      if (
+        definitionId == null ||
+        transaction.recurring_projection_is_next !== true
+      ) {
+        throw new Error(
+          "This transaction is not the next recurring projection.",
+        );
+      }
+      const result = await deferRecurringDefinition({
+        body: request,
+        path: { recurring_definition_id: definitionId },
+      });
+      if (!result.data) {
+        throw new Error(
+          apiErrorMessage(result.error, "Projection could not be deferred."),
+        );
+      }
+
+      invalidateRecurringDefinitionMutationCaches();
+      let refreshedTransactions: readonly Transaction[];
+      try {
+        [, refreshedTransactions] = await Promise.all([
+          refreshMountedRecurringDefinitions(),
+          refreshTransactionPagePreservingSnapshot(displayedPageParams),
+        ]);
+      } catch {
+        invalidateTransactionPages();
+        detail.refreshSelectedProjectedTransactionDetail(
+          transaction.transaction_id,
+          definitionId,
+          [],
+        );
+        showNotice(
+          "Next occurrence deferred, but transactions could not be refreshed.",
+          "warning",
+        );
+        return;
+      }
+      detail.refreshSelectedProjectedTransactionDetail(
+        transaction.transaction_id,
+        definitionId,
+        refreshedTransactions,
+      );
+      showNotice("Next occurrence deferred.");
     },
     [detail, displayedPageParams, showNotice],
   );
@@ -1022,6 +1118,7 @@ export const useTransactionBrowserPage = ({
     changeTransactionLifecycle,
     clearTransactionSelection,
     confirmRecurringOccurrenceFromRow,
+    deferRecurringProjection,
     dateJumpAnchor,
     dateJumpEnabled,
     dateJumpLoading,
@@ -1029,6 +1126,7 @@ export const useTransactionBrowserPage = ({
     deleteSelectedTransaction,
     deleteTransactionFromRow,
     dismissRecurringOccurrenceFromRow,
+    loadRecurringDefinitionForProjection,
     detail,
     dismissNotice,
     errorMessage,

@@ -41,6 +41,7 @@ export {
   moreTransactionPartsLabel,
   transactionPartsLabel,
 } from "./mixed-sentinel";
+export { RecurringOccurrenceConfirmDialog } from "./recurring-occurrence-confirm-dialog";
 export { TagChip } from "./tag-chip";
 export { TransactionBrowser } from "./transaction-browser";
 export { TransactionBrowserToolbar } from "./transaction-browser-toolbar";
@@ -85,6 +86,7 @@ export {
   refreshTransactionPage,
   refreshTransactionPageAfterEditModeSave,
   refreshTransactionPageAfterSave,
+  refreshTransactionPagePreservingSnapshot,
   refreshViewsAfterEntrySave,
   useLedgerLookupsResource,
   useTransactionsResource,

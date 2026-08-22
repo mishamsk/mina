@@ -14,6 +14,8 @@ interface ConfirmationDialogProps {
   readonly cancelPendingTooltip?: string;
   readonly children: ReactNode;
   readonly confirmIcon?: ReactNode;
+  readonly confirmDisabled?: boolean;
+  readonly confirmDisabledTooltip?: string;
   readonly confirmLabel: string;
   readonly confirmPendingTooltip?: string;
   readonly confirmVariant?: ComponentProps<typeof Button>["variant"];
@@ -32,6 +34,8 @@ export const ConfirmationDialog = ({
   cancelPendingTooltip,
   children,
   confirmIcon,
+  confirmDisabled = false,
+  confirmDisabledTooltip,
   confirmLabel,
   confirmPendingTooltip,
   confirmVariant = "destructive",
@@ -84,9 +88,9 @@ export const ConfirmationDialog = ({
       type="button"
       variant={confirmVariant}
       aria-disabled={pending && confirmPendingTooltip ? true : undefined}
-      disabled={pending && !confirmPendingTooltip}
+      disabled={confirmDisabled || (pending && !confirmPendingTooltip)}
       onClick={() => {
-        if (!pending) {
+        if (!pending && !confirmDisabled) {
           onConfirm();
         }
       }}
@@ -95,6 +99,13 @@ export const ConfirmationDialog = ({
       {pending ? pendingLabel : confirmLabel}
     </Button>
   );
+  const confirmTooltip = pending
+    ? confirmPendingTooltip
+    : confirmDisabled
+      ? confirmDisabledTooltip
+      : undefined;
+  const configuredConfirmTooltip =
+    confirmPendingTooltip ?? confirmDisabledTooltip;
 
   return (
     <AlertDialog.Root open={open} onOpenChange={onOpenChange}>
@@ -104,9 +115,9 @@ export const ConfirmationDialog = ({
           data-slot="confirmation-dialog-content"
           className="bg-card fixed top-1/2 left-1/2 z-[80] flex max-h-[calc(100dvh-2rem)] w-[min(480px,calc(100%-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col border-2 border-[var(--border-ink)] p-4 shadow-[var(--shadow-pixel)]"
           onOpenAutoFocus={(event) => {
-            if (initialFocusRef) {
+            if (initialFocusRef?.current) {
               event.preventDefault();
-              initialFocusRef.current?.focus({ preventScroll: true });
+              initialFocusRef.current.focus({ preventScroll: true });
             }
           }}
           onCloseAutoFocus={(event) => {
@@ -137,8 +148,10 @@ export const ConfirmationDialog = ({
           <div className="mt-4 flex shrink-0 justify-end gap-2">
             {cancelPendingTooltip ? (
               <Tooltip
-                className={pending ? "cursor-not-allowed" : undefined}
-                disabled={!pending}
+                className={
+                  pending || confirmDisabled ? "cursor-not-allowed" : undefined
+                }
+                disabled={!pending && !confirmDisabled}
                 label={cancelPendingTooltip}
               >
                 {cancelControl}
@@ -146,11 +159,11 @@ export const ConfirmationDialog = ({
             ) : (
               cancelControl
             )}
-            {confirmPendingTooltip ? (
+            {configuredConfirmTooltip ? (
               <Tooltip
-                className={pending ? "cursor-not-allowed" : undefined}
-                disabled={!pending}
-                label={confirmPendingTooltip}
+                className={confirmTooltip ? "cursor-not-allowed" : undefined}
+                disabled={!confirmTooltip}
+                label={confirmTooltip ?? configuredConfirmTooltip}
               >
                 {confirmControl}
               </Tooltip>

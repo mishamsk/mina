@@ -119,11 +119,15 @@ export const useAccountRegisterTransactionDetail = ({
     await refreshViewsAfterEntrySave(transaction, [transaction]);
   };
 
-  const confirmRecurringOccurrence = async (transaction: Transaction) => {
+  const confirmRecurringOccurrence = async (
+    transaction: Transaction,
+    actualDate: string,
+  ) => {
     if (transaction.recurring_occurrence_id === null) {
       throw new Error("This transaction is not a recurring occurrence.");
     }
     const result = await confirmRecurringOccurrenceById({
+      actual_date: actualDate,
       recurring_occurrence_id: transaction.recurring_occurrence_id,
     });
     if (result.error) {

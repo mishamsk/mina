@@ -1447,9 +1447,19 @@ test("detail lifecycle and dateless records match across transaction surfaces", 
   await expect(
     expectedDetail.getByRole("button", { name: "Create template" }),
   ).toHaveCount(0);
-  await expect(
-    expectedDetail.getByRole("button", { name: "Confirm occurrence" }),
-  ).toBeVisible();
+  const confirmOccurrenceButton = expectedDetail.getByRole("button", {
+    name: "Confirm occurrence",
+  });
+  await expect(confirmOccurrenceButton).toBeVisible();
+  await confirmOccurrenceButton.click();
+  const confirmOccurrenceDialog = page.getByRole("alertdialog", {
+    name: "Confirm occurrence",
+  });
+  await confirmOccurrenceDialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(confirmOccurrenceButton).toBeFocused();
+  await confirmOccurrenceButton.click();
+  await page.keyboard.press("Escape");
+  await expect(confirmOccurrenceButton).toBeFocused();
   await expect(
     expectedDetail.getByRole("button", { name: "Dismiss occurrence" }),
   ).toBeVisible();

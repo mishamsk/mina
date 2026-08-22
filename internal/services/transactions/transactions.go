@@ -89,6 +89,7 @@ type Transaction struct {
 	InitiatedDate                   values.CivilDate
 	RecurringOccurrenceID           *int64
 	RecurringProjectionDefinitionID *int64
+	RecurringProjectionIsNext       *bool
 	LifecycleStatus                 LifecycleStatus
 	Settlement                      SettlementSummary
 	Class                           TransactionClass

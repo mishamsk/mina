@@ -8,6 +8,7 @@ export const focusTransactionRowFallback = (
   browser: HTMLElement | null,
   rowIndex: number,
   source?: HTMLElement | null,
+  preferredTransactionId?: number,
 ): void => {
   window.requestAnimationFrame(() => {
     const activeElement = document.activeElement;
@@ -29,6 +30,9 @@ export const focusTransactionRowFallback = (
     const neighborIndex =
       rowIndex < 0 ? -1 : Math.min(rowIndex, Math.max(0, rows.length - 1));
     const target =
+      liveBrowser?.querySelector<HTMLElement>(
+        `[data-transaction-id="${String(preferredTransactionId)}"]`,
+      ) ??
       rows[neighborIndex] ??
       liveBrowser?.querySelector<HTMLElement>(
         "[data-testid='transactions-pagination-footer'] button:not(:disabled)",

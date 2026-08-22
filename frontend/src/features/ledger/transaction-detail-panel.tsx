@@ -1,4 +1,5 @@
 import {
+  Calendar,
   CardText,
   Check,
   Close,
@@ -20,12 +21,20 @@ import {
   useState,
 } from "react";
 
-import type { JournalRecord, Transaction } from "@/api";
+import type {
+  JournalRecord,
+  RecurringDefinition,
+  RecurringDefinitionDeferRequest,
+  Transaction,
+} from "@/api";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { recurringDefinitionRecordsFromTransaction } from "@/features/recurring";
+import {
+  RecurringDefinitionDeferDialog,
+  recurringDefinitionRecordsFromTransaction,
+} from "@/features/recurring";
 import { transactionTemplateRecordsFromTransaction } from "@/features/templates";
 import { useOutsidePointerClose } from "@/hooks/use-outside-pointer-close";
 import { cn } from "@/lib/utils";
@@ -55,6 +64,7 @@ import {
 import { FqnPath } from "./fqn-path";
 import { RecordRoleIcon, StatusIcon } from "./line-icons";
 import { MemberChip } from "./member-chip";
+import { RecurringOccurrenceConfirmDialog } from "./recurring-occurrence-confirm-dialog";
 import {
   defaultPostSettlementDateTimeValue,
   settlementDateTimeToISO,
@@ -75,9 +85,19 @@ interface TransactionDetailPanelProps {
     transaction: Transaction,
     action: "cancel" | "restore",
   ) => Promise<void>;
-  readonly onConfirmOccurrence?: (transaction: Transaction) => Promise<void>;
+  readonly onConfirmOccurrence?: (
+    transaction: Transaction,
+    actualDate: string,
+  ) => Promise<void>;
+  readonly onDeferProjection?: (
+    transaction: Transaction,
+    request: RecurringDefinitionDeferRequest,
+  ) => Promise<void>;
   readonly onDelete: (transaction: Transaction) => Promise<void>;
   readonly onDismissOccurrence?: (transaction: Transaction) => Promise<void>;
+  readonly onLoadRecurringDefinitionForProjection?: (
+    transaction: Transaction,
+  ) => Promise<RecurringDefinition>;
   readonly onDuplicate?: (
     transaction: Transaction,
     opener?: HTMLElement,
@@ -101,6 +121,7 @@ const floatingOverlaySelectors = [
   "[data-page-help-content]",
   "[data-recurring-definition-editor]",
   "[data-slot='select-content']",
+  "[data-transaction-row='true']",
 ] as const;
 
 const formatFullCivilDate = (value: string): string =>
@@ -768,11 +789,13 @@ export const TransactionDetailPanel = ({
   onClose,
   onChangeLifecycle,
   onConfirmOccurrence,
+  onDeferProjection,
   onDelete,
   onDismissOccurrence,
   onDuplicate,
   onEdit,
   onPost,
+  onLoadRecurringDefinitionForProjection,
   onSplit,
   onFilterCategory,
   onFilterMember,
@@ -782,6 +805,8 @@ export const TransactionDetailPanel = ({
   transactionId,
 }: TransactionDetailPanelProps) => {
   const panelRef = useRef<HTMLElement | null>(null);
+  const confirmOccurrenceButtonRef = useRef<HTMLButtonElement | null>(null);
+  const deferButtonRef = useRef<HTMLButtonElement | null>(null);
   const deleteButtonRef = useRef<HTMLButtonElement | null>(null);
   const dismissButtonRef = useRef<HTMLButtonElement | null>(null);
   const lifecycleButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -796,6 +821,7 @@ export const TransactionDetailPanel = ({
   const restoreFocusOnCloseRef = useRef(true);
   const maps = useMemo(() => buildLookupMaps(lookups), [lookups]);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [confirmOccurrenceOpen, setConfirmOccurrenceOpen] = useState(false);
   const [confirmDismissOpen, setConfirmDismissOpen] = useState(false);
   const [confirmPostOpen, setConfirmPostOpen] = useState(false);
   const [postDialogTransaction, setPostDialogTransaction] = useState<
@@ -807,6 +833,11 @@ export const TransactionDetailPanel = ({
   const [dismissErrorMessage, setDismissErrorMessage] = useState<
     string | undefined
   >();
+  const [deferDefinition, setDeferDefinition] = useState<RecurringDefinition>();
+  const [deferErrorMessage, setDeferErrorMessage] = useState<string>();
+  const [deferLoading, setDeferLoading] = useState(false);
+  const [deferOpen, setDeferOpen] = useState(false);
+  const [deferring, setDeferring] = useState(false);
   const [postErrorMessage, setPostErrorMessage] = useState<
     string | undefined
   >();
@@ -835,8 +866,14 @@ export const TransactionDetailPanel = ({
   >();
   const [renderedPostTransactionId, setRenderedPostTransactionId] =
     useState(transactionId);
+  const deferLoadGenerationRef = useRef(0);
   if (renderedPostTransactionId !== transactionId) {
     setRenderedPostTransactionId(transactionId);
+    setConfirmOccurrenceOpen(false);
+    setDeferDefinition(undefined);
+    setDeferErrorMessage(undefined);
+    setDeferLoading(false);
+    setDeferOpen(false);
     setConfirmPostOpen(false);
     setPostDialogTransaction(undefined);
     setPostErrorMessage(undefined);
@@ -849,7 +886,12 @@ export const TransactionDetailPanel = ({
   }, [onClose]);
 
   useOutsidePointerClose({
-    enabled: !confirmDeleteOpen && !confirmDismissOpen && !confirmPostOpen,
+    enabled:
+      !confirmDeleteOpen &&
+      !confirmDismissOpen &&
+      !confirmOccurrenceOpen &&
+      !confirmPostOpen &&
+      !deferOpen,
     floatingOverlaySelectors,
     onOutsideClose: () => {
       restoreFocusOnCloseRef.current = false;
@@ -879,6 +921,17 @@ export const TransactionDetailPanel = ({
       dismissButtonRef.current?.focus({ preventScroll: true });
     });
   }, [dismissing]);
+
+  const closeOccurrenceConfirmation = useCallback(() => {
+    if (confirming) {
+      return;
+    }
+    setOccurrenceActionError(undefined);
+    setConfirmOccurrenceOpen(false);
+    window.requestAnimationFrame(() => {
+      confirmOccurrenceButtonRef.current?.focus({ preventScroll: true });
+    });
+  }, [confirming]);
 
   useEffect(() => {
     transactionIdRef.current = transaction?.transaction_id;
@@ -1016,7 +1069,7 @@ export const TransactionDetailPanel = ({
     }
   };
 
-  const confirmOccurrence = async () => {
+  const confirmOccurrence = async (actualDate: string) => {
     if (!transaction || !onConfirmOccurrence) {
       return;
     }
@@ -1024,7 +1077,8 @@ export const TransactionDetailPanel = ({
     setConfirming(true);
     setOccurrenceActionError(undefined);
     try {
-      await onConfirmOccurrence(transaction);
+      await onConfirmOccurrence(transaction, actualDate);
+      setConfirmOccurrenceOpen(false);
     } catch (error) {
       setOccurrenceActionError({
         message:
@@ -1033,6 +1087,74 @@ export const TransactionDetailPanel = ({
       });
     } finally {
       setConfirming(false);
+    }
+  };
+
+  const closeDeferProjection = () => {
+    if (deferring) {
+      return;
+    }
+    deferLoadGenerationRef.current += 1;
+    setDeferDefinition(undefined);
+    setDeferErrorMessage(undefined);
+    setDeferLoading(false);
+    setDeferOpen(false);
+    window.requestAnimationFrame(() => {
+      deferButtonRef.current?.focus({ preventScroll: true });
+    });
+  };
+
+  const openDeferProjection = () => {
+    if (!transaction || !onLoadRecurringDefinitionForProjection) {
+      return;
+    }
+    const generation = deferLoadGenerationRef.current + 1;
+    deferLoadGenerationRef.current = generation;
+    setDeferDefinition(undefined);
+    setDeferErrorMessage(undefined);
+    setDeferLoading(true);
+    setDeferOpen(true);
+    void onLoadRecurringDefinitionForProjection(transaction)
+      .then((definition) => {
+        if (deferLoadGenerationRef.current === generation) {
+          setDeferDefinition(definition);
+        }
+      })
+      .catch((error: unknown) => {
+        if (deferLoadGenerationRef.current === generation) {
+          setDeferErrorMessage(
+            error instanceof Error ? error.message : "The API request failed.",
+          );
+        }
+      })
+      .finally(() => {
+        if (deferLoadGenerationRef.current === generation) {
+          setDeferLoading(false);
+        }
+      });
+  };
+
+  const confirmDeferProjection = async (
+    request: RecurringDefinitionDeferRequest,
+  ) => {
+    if (!transaction || !onDeferProjection) {
+      return;
+    }
+    setDeferring(true);
+    setDeferErrorMessage(undefined);
+    try {
+      await onDeferProjection(transaction, request);
+      setDeferOpen(false);
+      setDeferDefinition(undefined);
+      window.requestAnimationFrame(() => {
+        deferButtonRef.current?.focus({ preventScroll: true });
+      });
+    } catch (error) {
+      setDeferErrorMessage(
+        error instanceof Error ? error.message : "The API request failed.",
+      );
+    } finally {
+      setDeferring(false);
     }
   };
 
@@ -1149,6 +1271,13 @@ export const TransactionDetailPanel = ({
     expectedOccurrence &&
     onConfirmOccurrence !== undefined &&
     onDismissOccurrence !== undefined;
+  const projectionDeferAvailable =
+    actionApplicability?.deferProjection === true &&
+    onDeferProjection !== undefined &&
+    onLoadRecurringDefinitionForProjection !== undefined;
+  const detailActionsApplicable =
+    actionApplicability !== undefined &&
+    Object.values(actionApplicability).some(Boolean);
   const occurrenceActionsDisabled = confirming || dismissing;
   const occurrenceActionsDisabledReason = occurrenceActionsDisabled
     ? "Occurrence action in progress."
@@ -1272,23 +1401,33 @@ export const TransactionDetailPanel = ({
           />
         ) : null}
       </div>
-      {!readOnly && transaction && !loading && !errorMessage ? (
+      {!readOnly &&
+      detailActionsApplicable &&
+      transaction &&
+      !loading &&
+      !errorMessage ? (
         <div className="bg-card flex flex-wrap justify-end gap-2 border-t-2 border-[var(--border-ink)] p-4">
           {expectedOccurrence ? (
             expectedOccurrenceActionsAvailable ? (
               <>
                 {occurrenceActionsDisabledReason ? (
                   <Tooltip label={occurrenceActionsDisabledReason}>
-                    <Button type="button" disabled>
+                    <Button
+                      ref={confirmOccurrenceButtonRef}
+                      type="button"
+                      disabled
+                    >
                       <Check aria-hidden="true" />
                       {confirming ? "Confirming" : "Confirm occurrence"}
                     </Button>
                   </Tooltip>
                 ) : (
                   <Button
+                    ref={confirmOccurrenceButtonRef}
                     type="button"
                     onClick={() => {
-                      void confirmOccurrence();
+                      setOccurrenceActionError(undefined);
+                      setConfirmOccurrenceOpen(true);
                     }}
                   >
                     <Check aria-hidden="true" />
@@ -1323,6 +1462,15 @@ export const TransactionDetailPanel = ({
                 )}
               </>
             ) : null
+          ) : projectionDeferAvailable ? (
+            <Button
+              ref={deferButtonRef}
+              type="button"
+              onClick={openDeferProjection}
+            >
+              <Calendar aria-hidden="true" />
+              Defer
+            </Button>
           ) : (
             <>
               {actionApplicability?.edit && onEdit ? (
@@ -1463,7 +1611,7 @@ export const TransactionDetailPanel = ({
           ) : null}
         </div>
       ) : null}
-      {occurrenceActionErrorMessage ? (
+      {occurrenceActionErrorMessage && !confirmOccurrenceOpen ? (
         <p className="text-destructive px-4 pb-4 text-sm" role="alert">
           {occurrenceActionErrorMessage}
         </p>
@@ -1509,6 +1657,33 @@ export const TransactionDetailPanel = ({
           <TransactionDeleteDescription transaction={transaction} />
         ) : null}
       </ConfirmationDialog>
+      <RecurringOccurrenceConfirmDialog
+        errorMessage={occurrenceActionErrorMessage}
+        onConfirm={(actualDate) => {
+          void confirmOccurrence(actualDate);
+        }}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeOccurrenceConfirmation();
+          }
+        }}
+        open={confirmOccurrenceOpen}
+        pending={confirming}
+        transaction={transaction}
+      />
+      <RecurringDefinitionDeferDialog
+        definition={deferDefinition}
+        errorMessage={deferErrorMessage}
+        loading={deferLoading}
+        onConfirm={(request) => {
+          void confirmDeferProjection(request);
+        }}
+        onOpenChange={(open) => {
+          if (!open) closeDeferProjection();
+        }}
+        open={deferOpen}
+        pending={deferring}
+      />
       <ConfirmationDialog
         confirmIcon={<Close aria-hidden="true" />}
         confirmLabel="Dismiss occurrence"

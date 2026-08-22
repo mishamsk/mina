@@ -496,6 +496,51 @@ func TestExchangeRateLoadingExpectedBehavior(t *testing.T) {
 		assertRecordAmountUSDNil(t, *read.JSON200, created.Records[1].AccountId)
 	})
 
+	t.Run("recurring actual date aligns default posted date", func(t *testing.T) {
+		provider := apptest.NewFakeExchangeRateProvider()
+		provider.Set("EUR", "2026-08-10", "2.00000000")
+		provider.Set("EUR", "2026-08-14", "4.00000000")
+		client := newSharedClient(
+			t,
+			apptest.WithClock(apptest.NewFakeClock(apptest.Timestamp("2026-08-14T12:00:00Z"))),
+			apptest.WithExchangeRateLoading(false),
+			apptest.WithExchangeRateProviderFactory(provider),
+		)
+		refs := createRecurringDefinitionRefs(t, client, "RecurringBackfillActualDate")
+		eur := "EUR"
+		client.SetAccountCurrency(refs.CheckingAccountID, &eur)
+		request := recurringDefinitionRequest(
+			"RecurringBackfillActualDate:Monthly",
+			refs,
+			"-10.00000000",
+			"10.00000000",
+			intervalRule(1, "MONTH"),
+			"2026-08-09",
+		)
+		for index := range *request.Records {
+			(*request.Records)[index].Currency = recurringStringPtr("EUR")
+		}
+		definition := createRecurringDefinition(t, client, request)
+		occurrences := listRecurringOccurrences(t, client, &httpclient.ListRecurringOccurrencesParams{RecurringDefinitionId: &definition.JSON201.RecurringDefinitionId})
+		occurrence := occurrences.JSON200.RecurringOccurrences[0]
+		transactionID := *occurrence.GeneratedTransactionId
+		assertRecordAmountUSDNil(t, *getTransaction(t, client, transactionID).JSON200, refs.CheckingAccountID)
+
+		actualDate := apptest.Date("2026-08-10")
+		confirmed, err := client.REST().ConfirmRecurringOccurrenceWithResponse(
+			context.Background(),
+			occurrence.RecurringOccurrenceId,
+			recurringOccurrenceConfirmRequest(*apptest.PostedSettlement(), &actualDate),
+		)
+		requireClientResponse(t, "confirm unresolved recurring occurrence", err, confirmed.StatusCode(), http.StatusOK, confirmed.Body)
+		assertRecordAmountUSDNil(t, *getTransaction(t, client, transactionID).JSON200, refs.CheckingAccountID)
+
+		triggerAndWaitForExchangeRateLoad(t, client)
+
+		read := getTransaction(t, client, transactionID)
+		assertRecordAmountUSD(t, *read.JSON200, refs.CheckingAccountID, "-5.00000000")
+	})
+
 	t.Run("null posted date uses initiated date", func(t *testing.T) {
 		provider := apptest.NewFakeExchangeRateProvider()
 		provider.Set("EUR", "2026-03-31", "1.00000000")

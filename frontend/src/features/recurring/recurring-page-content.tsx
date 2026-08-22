@@ -3,8 +3,8 @@ import {
   Check,
   Close,
   MagicEdit,
-  Minus,
   Play,
+  Power,
   Reload,
   Repeat,
 } from "pixelarticons/react";
@@ -17,7 +17,6 @@ import {
   deleteRecurringDefinition,
   pauseRecurringDefinition,
   type RecurringDefinition,
-  type RecurringDefinitionDeferRequest,
   type RecurringScheduleRule,
   resumeRecurringDefinition,
 } from "@/api";
@@ -44,6 +43,11 @@ import {
 } from "@/store";
 import { formatLocalCivilDate } from "@/utils/date";
 
+import {
+  RecurringDefinitionDeferDialog,
+  type RecurringDefinitionIntervalCadence,
+  recurringDefinitionIntervalCadence,
+} from "./recurring-definition-defer-dialog";
 import type { RecurringDefinitionsSnapshot } from "./use-recurring-definitions-resource";
 
 interface RecurringPageContentProps {
@@ -77,11 +81,6 @@ type DefinitionActionResult = Promise<{
 
 type RefreshDefinitions = () => Promise<boolean>;
 
-interface IntervalCadence {
-  readonly every: number;
-  readonly unit: "DAY" | "WEEK" | "MONTH" | "YEAR";
-}
-
 const ruleValue = (rule: RecurringScheduleRule, key: string): unknown =>
   rule[key];
 
@@ -90,26 +89,10 @@ const scheduleKind = (rule: RecurringScheduleRule): string | undefined => {
   return typeof kind === "string" ? kind : undefined;
 };
 
-const intervalCadence = (
-  definition: RecurringDefinition,
-): IntervalCadence | undefined => {
-  if (definition.schedule_class !== "interval") {
-    return undefined;
-  }
-  const every = ruleValue(definition.schedule_rule, "every");
-  const unit = ruleValue(definition.schedule_rule, "unit");
-  if (
-    typeof every !== "number" ||
-    !Number.isInteger(every) ||
-    every < 1 ||
-    (unit !== "DAY" && unit !== "WEEK" && unit !== "MONTH" && unit !== "YEAR")
-  ) {
-    return undefined;
-  }
-  return { every, unit };
-};
-
-const pluralUnit = (unit: IntervalCadence["unit"], every: number): string => {
+const pluralUnit = (
+  unit: RecurringDefinitionIntervalCadence["unit"],
+  every: number,
+): string => {
   const label = unit.toLowerCase();
   return every === 1 ? label : `${label}s`;
 };
@@ -117,7 +100,7 @@ const pluralUnit = (unit: IntervalCadence["unit"], every: number): string => {
 const scheduleSummary = (definition: RecurringDefinition): string => {
   const rule = definition.schedule_rule;
   if (definition.schedule_class === "interval") {
-    const cadence = intervalCadence(definition);
+    const cadence = recurringDefinitionIntervalCadence(definition);
     return cadence
       ? `Every ${cadence.every} ${pluralUnit(cadence.unit, cadence.every)}`
       : "Interval schedule";
@@ -192,15 +175,23 @@ export const revealRecurringDefinitionActionRow = (opener: HTMLElement) => {
     return;
   }
 
-  const rowBounds = row.getBoundingClientRect();
-  const containerBounds = scrollContainer.getBoundingClientRect();
-  const headerBounds = header.getBoundingClientRect();
-  const visibleTop = Math.max(containerBounds.top, headerBounds.bottom);
-  if (rowBounds.top < visibleTop) {
-    scrollContainer.scrollTop += rowBounds.top - visibleTop;
-  } else if (rowBounds.bottom > containerBounds.bottom) {
-    scrollContainer.scrollTop += rowBounds.bottom - containerBounds.bottom;
-  }
+  const revealBelowStickyHeader = () => {
+    if (!row.isConnected) {
+      return;
+    }
+    const rowBounds = row.getBoundingClientRect();
+    const containerBounds = scrollContainer.getBoundingClientRect();
+    const headerBounds = header.getBoundingClientRect();
+    const visibleTop = Math.max(containerBounds.top, headerBounds.bottom);
+    if (rowBounds.top < visibleTop) {
+      scrollContainer.scrollTop += Math.floor(rowBounds.top - visibleTop) - 1;
+    } else if (rowBounds.bottom > containerBounds.bottom) {
+      scrollContainer.scrollTop +=
+        Math.ceil(rowBounds.bottom - containerBounds.bottom) + 1;
+    }
+  };
+  revealBelowStickyHeader();
+  window.requestAnimationFrame(revealBelowStickyHeader);
 };
 
 const RecurringDefinitionsSkeleton = () => (
@@ -244,8 +235,6 @@ export const RecurringPageContent = ({
   const [actionErrorMessage, setActionErrorMessage] = useState<string>();
   const [cancelTarget, setCancelTarget] = useState<CancelTarget>();
   const [deferTarget, setDeferTarget] = useState<DeferTarget>();
-  const [deferEvery, setDeferEvery] = useState(1);
-  const [deferUnit, setDeferUnit] = useState<IntervalCadence["unit"]>("MONTH");
   const [inFlight, setInFlight] = useState<{
     readonly action: DefinitionAction;
     readonly definitionId: number;
@@ -268,6 +257,11 @@ export const RecurringPageContent = ({
       if (opener?.isConnected) {
         revealRecurringDefinitionActionRow(opener);
         focusWithoutTooltip(opener, { preventScroll: true });
+        window.requestAnimationFrame(() => {
+          if (opener.isConnected && document.activeElement === opener) {
+            revealRecurringDefinitionActionRow(opener);
+          }
+        });
         return;
       }
       focusFallbackRef.current?.focus({ preventScroll: true });
@@ -457,7 +451,6 @@ export const RecurringPageContent = ({
               </thead>
               <tbody>
                 {definitions.map((definition, index) => {
-                  const cadence = intervalCadence(definition);
                   const rowAction = actionByDefinition.get(
                     definition.recurring_definition_id,
                   );
@@ -516,11 +509,10 @@ export const RecurringPageContent = ({
                       icon: definition.paused_at ? (
                         <Play aria-hidden="true" />
                       ) : (
-                        <Minus aria-hidden="true" />
+                        <Power aria-hidden="true" />
                       ),
                       label: definition.paused_at ? "Resume" : "Pause",
-                      kind: "toggle",
-                      onToggle: (opener) => {
+                      onSelect: (opener) => {
                         const action = definition.paused_at
                           ? "resume"
                           : "pause";
@@ -547,31 +539,24 @@ export const RecurringPageContent = ({
                             : "Definition paused.",
                         );
                       },
-                      pressed: Boolean(definition.paused_at),
                     },
-                    ...(cadence
-                      ? [
-                          {
-                            disabled:
-                              actionDisabled ||
-                              rowBusy ||
-                              Boolean(definition.paused_at),
-                            disabledReason: definition.paused_at
-                              ? "Resume the definition before deferring it."
-                              : rowBusy
-                                ? "Definition action in progress."
-                                : "Another definition action is in progress.",
-                            icon: <Calendar aria-hidden="true" />,
-                            label: "Defer",
-                            onSelect: (opener: HTMLElement) => {
-                              setActionErrorMessage(undefined);
-                              setDeferEvery(cadence.every);
-                              setDeferUnit(cadence.unit);
-                              setDeferTarget({ definition, opener });
-                            },
-                          },
-                        ]
-                      : [{ kind: "placeholder" as const }]),
+                    {
+                      disabled:
+                        actionDisabled ||
+                        rowBusy ||
+                        Boolean(definition.paused_at),
+                      disabledReason: definition.paused_at
+                        ? "Resume the definition before deferring it."
+                        : rowBusy
+                          ? "Definition action in progress."
+                          : "Another definition action is in progress.",
+                      icon: <Calendar aria-hidden="true" />,
+                      label: "Defer",
+                      onSelect: (opener: HTMLElement) => {
+                        setActionErrorMessage(undefined);
+                        setDeferTarget({ definition, opener });
+                      },
+                    },
                     {
                       disabled: actionDisabled || rowBusy,
                       disabledReason: rowBusy
@@ -715,16 +700,11 @@ export const RecurringPageContent = ({
           unchanged.
         </p>
       </ConfirmationDialog>
-      <ConfirmationDialog
-        confirmIcon={<Calendar aria-hidden="true" />}
-        confirmLabel="Defer definition"
+      <RecurringDefinitionDeferDialog
+        definition={deferTarget?.definition}
         errorMessage={deferTarget && !inFlight ? actionErrorMessage : undefined}
-        onConfirm={() => {
+        onConfirm={(body) => {
           if (!deferTarget) return;
-          const body: RecurringDefinitionDeferRequest = {
-            every: deferEvery,
-            unit: deferUnit,
-          };
           void runAction(
             "defer",
             deferTarget.definition,
@@ -747,46 +727,7 @@ export const RecurringPageContent = ({
         }}
         open={Boolean(deferTarget)}
         pending={inFlight?.action === "defer"}
-        pendingLabel="Deferring"
-        title="Defer next occurrence"
-      >
-        <p>{deferTarget?.definition.fqn ?? ""}</p>
-        <label
-          className="text-foreground grid gap-1 font-mono"
-          htmlFor="recurring-defer-every"
-        >
-          Offset
-          <span className="flex gap-2">
-            <input
-              id="recurring-defer-every"
-              className="border-input bg-card h-9 w-20 border px-2 font-mono"
-              min={1}
-              onChange={(event) =>
-                setDeferEvery(Math.max(1, Number(event.target.value) || 1))
-              }
-              type="number"
-              value={deferEvery}
-            />
-            <select
-              aria-label="Defer unit"
-              className="border-input bg-card h-9 border px-2 font-mono"
-              onChange={(event) =>
-                setDeferUnit(event.target.value as IntervalCadence["unit"])
-              }
-              value={deferUnit}
-            >
-              <option value="DAY">day</option>
-              <option value="WEEK">week</option>
-              <option value="MONTH">month</option>
-              <option value="YEAR">year</option>
-            </select>
-          </span>
-        </label>
-        <p>
-          This re-anchors future non-materialized occurrences. Existing
-          occurrences stay unchanged.
-        </p>
-      </ConfirmationDialog>
+      />
     </>
   );
 };

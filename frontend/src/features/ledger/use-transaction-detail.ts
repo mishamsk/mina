@@ -62,6 +62,7 @@ export const useTransactionDetail = ({
     number | undefined
   >();
   const detailRestoreFocusRef = useRef<HTMLElement | null>(null);
+  const suppressNextRestoreFocusRef = useRef(false);
   const rowOpenedTransactionIdRef = useRef<number | undefined>(undefined);
   const selectedPersistedTransactionId = parseOptionalPositiveInteger(
     searchParams.get("transaction"),
@@ -239,7 +240,51 @@ export const useTransactionDetail = ({
     [onFetchedTransaction, selectedTransactionId],
   );
 
+  const refreshSelectedProjectedTransactionDetail = useCallback(
+    (
+      deferredTransactionId: Transaction["transaction_id"],
+      recurringDefinitionId: NonNullable<
+        Transaction["recurring_projection_definition_id"]
+      >,
+      refreshedTransactions: readonly Transaction[],
+    ) => {
+      setResponseLocalDetail((current) => {
+        if (
+          !current ||
+          current.transaction.recurring_projection_definition_id !==
+            recurringDefinitionId
+        ) {
+          return current;
+        }
+
+        const nextTransaction =
+          current.transaction.transaction_id === deferredTransactionId
+            ? refreshedTransactions.find(
+                (candidate) =>
+                  candidate.recurring_projection_definition_id ===
+                    recurringDefinitionId &&
+                  candidate.recurring_projection_is_next === true,
+              )
+            : refreshedTransactions.find(
+                (candidate) =>
+                  candidate.transaction_id ===
+                  current.transaction.transaction_id,
+              );
+        if (!nextTransaction) {
+          suppressNextRestoreFocusRef.current = true;
+          return undefined;
+        }
+        return { ...current, transaction: nextTransaction };
+      });
+    },
+    [],
+  );
+
   const restoreDetailFocus = useCallback(() => {
+    if (suppressNextRestoreFocusRef.current) {
+      suppressNextRestoreFocusRef.current = false;
+      return;
+    }
     const fallback = document.querySelector<HTMLElement>(
       restoreFallbackSelector,
     );
@@ -332,6 +377,7 @@ export const useTransactionDetail = ({
     errorMessage,
     loading,
     openTransactionDetail,
+    refreshSelectedProjectedTransactionDetail,
     refreshSelectedTransactionDetail,
     restoreDetailFocus,
     selectedTransactionId,

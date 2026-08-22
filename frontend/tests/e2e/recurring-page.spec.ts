@@ -2,6 +2,7 @@ import { expect, type Locator, type Page } from "@playwright/test";
 import { test } from "@tests/e2e/test";
 
 interface DefinitionFixture {
+  readonly anchor_date: string;
   readonly definition_version: number;
   readonly fqn: string;
   readonly next_due_date: string | null;
@@ -150,6 +151,10 @@ test("recurring definition row actions unfold at desktop width and fold when con
     await expect(row.getByRole("button", { name: label })).toBeVisible();
   }
   await expect(
+    rowActions.locator(".row-actions-buttons > .row-actions-button"),
+  ).toHaveCount(5);
+  await expect(rowActions.locator(".row-actions-toggle")).toHaveCount(0);
+  await expect(
     row.getByRole("button", { name: "More row actions" }),
   ).toBeHidden();
   let fit = await rowActionFitState(rowActions);
@@ -179,7 +184,7 @@ test("recurring definition row actions unfold at desktop width and fold when con
   }
 });
 
-test("pausing a reordered definition restores its visible toggle focus", async ({
+test("pausing a reordered definition restores its visible button focus", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -247,6 +252,93 @@ test("pausing a reordered definition restores its visible toggle focus", async (
       );
     })
     .toBe(true);
+});
+
+test("date-rule definitions defer by schedule periods", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/recurring");
+  const fqn = uniqueName(`${testInfo.project.name}DateRule`);
+  const editor = await completeEditor(page, fqn);
+  await editor.getByLabel("Schedule").selectOption("day_of_month");
+  await editor.getByRole("spinbutton", { name: "Day of month" }).fill("15");
+  await editor.getByRole("button", { name: "Save definition" }).click();
+  await expect(page.getByText("Definition created.")).toBeVisible();
+
+  let definition = await definitionByFqn(page, fqn);
+  const beforeDefer = definition.next_due_date;
+  await selectDefinitionAction(page, definitionRow(page, definition), "Defer");
+  const dialog = page.getByRole("alertdialog", {
+    name: "Defer next occurrence",
+  });
+  await expect(dialog.getByLabel("Periods")).toHaveValue("1");
+  await expect(dialog.getByLabel("Defer unit")).toHaveCount(0);
+  const periodInputStyle = await dialog
+    .getByLabel("Periods")
+    .evaluate((input) => {
+      const style = window.getComputedStyle(input);
+      return { borderWidth: style.borderTopWidth, boxShadow: style.boxShadow };
+    });
+  expect(periodInputStyle.borderWidth).toBe("2px");
+  expect(periodInputStyle.boxShadow).not.toBe("none");
+  await dialog.getByLabel("Periods").fill("2");
+  const deferRequest = page.waitForRequest(
+    (request) =>
+      request.method() === "POST" &&
+      new URL(request.url()).pathname ===
+        `/api/recurring-definitions/${definition.recurring_definition_id}/defer`,
+  );
+  await dialog.getByRole("button", { name: "Defer definition" }).click();
+  expect((await deferRequest).postDataJSON()).toEqual({ every: 2 });
+  await expect(page.getByText("Next occurrence deferred.")).toBeVisible();
+  definition = await definitionByFqn(page, fqn);
+  expect(definition.next_due_date).not.toBe(beforeDefer);
+});
+
+test("definition editor blocks past anchors and maps server errors", async ({
+  page,
+}) => {
+  await page.goto("/recurring");
+  const definition = await definitionByFqn(page, "Household:Mortgage");
+  const row = definitionRow(page, definition);
+  await row.click();
+  const editor = page.getByRole("complementary", {
+    name: "Edit recurring definition",
+  });
+  const anchor = editor.getByLabel("Anchor date");
+  let replaceRequests = 0;
+  await page.route(
+    `**/api/recurring-definitions/${definition.recurring_definition_id}`,
+    async (route) => {
+      if (route.request().method() !== "PUT") return route.continue();
+      replaceRequests += 1;
+      await route.fulfill({
+        body: JSON.stringify({
+          error: {
+            code: "invalid_request",
+            message: "anchor_date must be today or later when changed",
+          },
+        }),
+        contentType: "application/json",
+        status: 400,
+      });
+    },
+  );
+  const save = editor.getByRole("button", { name: "Save definition" });
+  await expect(save).toBeEnabled();
+  await anchor.fill("2000-01-01");
+  await save.click();
+  await expect(
+    editor.getByText("A changed anchor date cannot be in the past."),
+  ).toBeVisible();
+  expect(replaceRequests).toBe(0);
+
+  await anchor.fill("2099-01-01");
+  await save.click();
+  await expect(
+    editor.getByText("anchor_date must be today or later when changed").last(),
+  ).toBeVisible();
+  expect(replaceRequests).toBe(1);
 });
 
 test("definition actions preserve newer user focus", async ({ page }) => {

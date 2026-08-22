@@ -935,10 +935,12 @@ export const fetchRecurringReviewPage = async () => {
 };
 
 export const confirmRecurringOccurrenceById = (
-  occurrence: Pick<RecurringOccurrence, "recurring_occurrence_id">,
+  occurrence: Pick<RecurringOccurrence, "recurring_occurrence_id"> & {
+    readonly actual_date?: string;
+  },
 ) =>
   confirmGeneratedRecurringOccurrence({
-    body: { status: "posted" },
+    body: { actual_date: occurrence.actual_date, status: "posted" },
     path: {
       recurring_occurrence_id: occurrence.recurring_occurrence_id,
     },

@@ -995,7 +995,14 @@ test("creating the first template restores focus to the header action", async ({
   const emptyAction = page.getByRole("button", { name: "New template" }).last();
   await emptyAction.click();
   const editor = page.getByRole("dialog", { name: "New template" });
-  await editor.getByLabel("Template FQN").fill(fqn);
+  const fqnInput = editor.getByLabel("Template FQN");
+  await fqnInput.pressSequentially(fqn);
+  await fqnInput.press("Tab");
+  await expect(
+    editor.getByText(
+      "Enter a colon-separated template path with no empty segments.",
+    ),
+  ).toHaveCount(0);
   const createResponsePromise = page.waitForResponse((response) => {
     const url = new URL(response.url());
     return (

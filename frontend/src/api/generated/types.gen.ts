@@ -1090,7 +1090,7 @@ export type RecurringDefinitionWriteRequest = {
     fqn: string;
     schedule_rule: RecurringScheduleRule;
     /**
-     * Schedule anchor date in YYYY-MM-DD format.
+     * Schedule floor in YYYY-MM-DD format. The next occurrence is the first unoccupied schedule slot on or after this date. Creation accepts historical anchors for backfill; replacement accepts a changed anchor only on or after the server's current civil date, while an unchanged historical anchor remains valid.
      */
     anchor_date: string;
     /**
@@ -1105,11 +1105,11 @@ export type RecurringDefinitionWriteRequest = {
 
 export type RecurringDefinitionDeferRequest = {
     /**
-     * Positive number of cadence units by which to re-anchor the interval schedule.
+     * Positive defer distance. For interval schedules this counts cadence units and defaults to the schedule's cadence; for date-rule schedules it counts natural schedule periods and defaults to 1.
      */
     every?: number;
     /**
-     * Cadence unit used for the defer offset.
+     * Cadence unit used for an interval-schedule offset. Must be omitted for date-rule schedules.
      */
     unit?: 'DAY' | 'WEEK' | 'MONTH' | 'YEAR';
 };
@@ -1449,6 +1449,22 @@ export type SettlementIntent = {
     posted_date?: string | null;
 };
 
+export type RecurringOccurrenceConfirmRequest = {
+    /**
+     * Actual transaction date; defaults to the occurrence's scheduled date and must not be after the server's current civil date.
+     */
+    actual_date?: string;
+    status: SettlementStatus;
+    /**
+     * Exact UTC time the balance record entered pending; omitted manual values are derived by the service.
+     */
+    pending_date?: string | null;
+    /**
+     * Exact UTC time the balance record posted; omitted manual values are derived by the service.
+     */
+    posted_date?: string | null;
+};
+
 /**
  * Whether a journal record has been reconciled with its external or expected source.
  */
@@ -1629,6 +1645,10 @@ export type Transaction = {
      * Recurring definition for a read-only future row computed by transaction-list date navigation; null or omitted when the transaction is persisted.
      */
     recurring_projection_definition_id?: number | null;
+    /**
+     * True only for the definition's next non-materialized projected occurrence; false for its later projections and null or omitted when the transaction is persisted.
+     */
+    recurring_projection_is_next?: boolean | null;
     lifecycle_status: TransactionLifecycleStatus;
     settlement: TransactionSettlement;
     transaction_class: TransactionClass;
@@ -5134,7 +5154,7 @@ export type DeferRecurringDefinitionError = DeferRecurringDefinitionErrors[keyof
 
 export type DeferRecurringDefinitionResponses = {
     /**
-     * Next interval occurrence deferred.
+     * Next recurring occurrence deferred.
      */
     200: RecurringOccurrence;
 };
@@ -5280,7 +5300,7 @@ export type ListRecurringOccurrencesResponses = {
 export type ListRecurringOccurrencesResponse = ListRecurringOccurrencesResponses[keyof ListRecurringOccurrencesResponses];
 
 export type ConfirmRecurringOccurrenceData = {
-    body: SettlementIntent;
+    body: RecurringOccurrenceConfirmRequest;
     path: {
         /**
          * Numeric identifier of the recurring occurrence.

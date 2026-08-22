@@ -33,6 +33,8 @@ interface TransactionFixture {
   readonly etag: string;
   readonly initiated_date?: string;
   readonly lifecycle_status?: string;
+  readonly recurring_projection_definition_id?: number | null;
+  readonly recurring_projection_is_next?: boolean | null;
   readonly settlement?: string;
   readonly transaction_id: number;
   readonly updated_at: string;

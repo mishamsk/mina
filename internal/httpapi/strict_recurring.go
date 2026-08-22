@@ -107,12 +107,23 @@ func (s *strictServer) ReplaceRecurringDefinition(ctx context.Context, request o
 }
 
 func (s *strictServer) ConfirmRecurringOccurrence(ctx context.Context, request openapi.ConfirmRecurringOccurrenceRequestObject) (openapi.ConfirmRecurringOccurrenceResponseObject, error) {
-	occurrence, err := s.deps.Recurring.ConfirmOccurrence(ctx, request.RecurringOccurrenceId, recurringConfirmationAPIInput(*request.Body))
+	occurrence, err := s.deps.Recurring.ConfirmOccurrence(ctx, request.RecurringOccurrenceId, recurringOccurrenceConfirmationAPIInput(*request.Body))
 	if err != nil {
 		return nil, err
 	}
 
 	return openapi.ConfirmRecurringOccurrence200JSONResponse(recurringOccurrenceAPIResponse(occurrence)), nil
+}
+
+func recurringOccurrenceConfirmationAPIInput(input openapi.RecurringOccurrenceConfirmRequest) recurring.ConfirmOccurrenceInput {
+	return recurring.ConfirmOccurrenceInput{
+		ActualDate: nullableCivilDateFromOpenAPI(input.ActualDate),
+		Settlement: transactions.SettlementIntent{
+			Status:      transactions.SettlementStatus(input.Status),
+			PendingDate: nullableTimestampFromOpenAPI(input.PendingDate),
+			PostedDate:  nullableTimestampFromOpenAPI(input.PostedDate),
+		},
+	}
 }
 
 func recurringConfirmationAPIInput(input openapi.SettlementIntent) transactions.SettlementIntent {

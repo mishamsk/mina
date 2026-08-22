@@ -559,7 +559,7 @@ operations:
     mcp:
       state: exposed
       name: replace_definition
-      description: Replace the schedule and complete balanced record set for one definition while preserving its ID. Already materialized occurrences are unchanged.
+      description: Replace the schedule and complete balanced record set for one definition while preserving its ID. A changed anchor must be current or future and becomes the schedule floor; already materialized occurrences are unchanged.
       annotations: {read_only: false, destructive: false, idempotent: true, open_world: false}
   deleteRecurringDefinition:
     cli: {state: exposed, name: delete-definition}
@@ -580,7 +580,7 @@ operations:
     mcp:
       state: exposed
       name: defer
-      description: Re-anchor the next non-materialized interval occurrence and all later ones; date-rule definitions cannot be deferred. Existing materialized occurrences remain in the review queue.
+      description: Defer the next non-materialized occurrence and re-anchor every later slot. Interval definitions use cadence units; date-rule definitions use natural schedule periods. Existing materialized occurrences remain in the review queue.
       annotations: {read_only: false, destructive: false, idempotent: false, open_world: false}
   pauseRecurringDefinition:
     cli: {state: exposed, name: pause}
@@ -608,7 +608,7 @@ operations:
     mcp:
       state: exposed
       name: confirm_occurrence
-      description: Confirm one expected review-queue occurrence as a normal transaction. If values differ, confirm then edit the transaction; this mutation requires explicit user intent.
+      description: Confirm one expected review-queue occurrence as a normal transaction, optionally recording the actual date while leaving the schedule fixed. If other values differ, confirm then edit the transaction; this mutation requires explicit user intent.
       annotations: {read_only: false, destructive: false, idempotent: false, open_world: false}
   dismissRecurringOccurrence:
     cli: {state: exposed, name: dismiss-occurrence}
@@ -623,7 +623,7 @@ operations:
     mcp:
       state: exposed
       name: list
-      description: Use for transaction-level results with nested balanced journal records, including free-text, currency, class, entity, status, and date filters. Supply limit (1-500); defaults sort by initiated date descending. Use records_search for individual record matches or register queries.
+      description: Use for transaction-level results with nested balanced journal records, including free-text, currency, class, entity, status, and date filters. Future expected projections identify the next non-materialized slot for each definition. Supply limit (1-500); defaults sort by initiated date descending. Use records_search for individual record matches or register queries.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   createTransaction:
     cli: {state: exposed, name: create}

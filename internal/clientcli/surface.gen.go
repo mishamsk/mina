@@ -410,6 +410,12 @@ func Operations() []Operation {
 					Type:     "object",
 					Properties: []BodyPropertyDescriptor{
 						{
+							Name:        "actual_date",
+							Type:        "string",
+							Description: "Actual transaction date; defaults to the occurrence's scheduled date and must not be after the server's current civil date.",
+							Required:    false,
+						},
+						{
 							Name:        "pending_date",
 							Type:        "string",
 							Description: "Exact UTC time the balance record entered pending; omitted manual values are derived by the service.",
@@ -859,7 +865,7 @@ func Operations() []Operation {
 						{
 							Name:        "anchor_date",
 							Type:        "string",
-							Description: "Schedule anchor date in YYYY-MM-DD format.",
+							Description: "Schedule floor in YYYY-MM-DD format. The next occurrence is the first unoccupied schedule slot on or after this date. Creation accepts historical anchors for backfill; replacement accepts a changed anchor only on or after the server's current civil date, while an unchanged historical anchor remains valid.",
 							Required:    true,
 						},
 						{
@@ -1266,7 +1272,7 @@ func Operations() []Operation {
 			ID:          "deferRecurringDefinition",
 			Method:      "POST",
 			Path:        "/api/recurring-definitions/{recurring_definition_id}/defer",
-			Summary:     "Defer the next non-materialized interval occurrence.",
+			Summary:     "Defer the next non-materialized recurring occurrence.",
 			Description: "",
 			CLI:         CLIOperation{Area: "recurring", Name: "defer"},
 			Input: InputDescriptor{
@@ -1286,13 +1292,13 @@ func Operations() []Operation {
 						{
 							Name:        "every",
 							Type:        "integer",
-							Description: "Positive number of cadence units by which to re-anchor the interval schedule.",
+							Description: "Positive defer distance. For interval schedules this counts cadence units and defaults to the schedule's cadence; for date-rule schedules it counts natural schedule periods and defaults to 1.",
 							Required:    false,
 						},
 						{
 							Name:        "unit",
 							Type:        "string",
-							Description: "Cadence unit used for the defer offset.",
+							Description: "Cadence unit used for an interval-schedule offset. Must be omitted for date-rule schedules.",
 							Required:    false,
 							Enum:        []string{"DAY", "WEEK", "MONTH", "YEAR"},
 						},
@@ -3125,7 +3131,7 @@ func Operations() []Operation {
 						{
 							Name:        "anchor_date",
 							Type:        "string",
-							Description: "Schedule anchor date in YYYY-MM-DD format.",
+							Description: "Schedule floor in YYYY-MM-DD format. The next occurrence is the first unoccupied schedule slot on or after this date. Creation accepts historical anchors for backfill; replacement accepts a changed anchor only on or after the server's current civil date, while an unchanged historical anchor remains valid.",
 							Required:    true,
 						},
 						{

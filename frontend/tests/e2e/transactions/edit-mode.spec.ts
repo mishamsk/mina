@@ -951,9 +951,15 @@ test("matching conflict winners reapply the active query", async ({
   const memo = `E2E matching winner filter ${unique}`;
   const transaction = await createSearchSpend(page, memo);
   const baseline = await getTransactionDetail(page, transaction);
+  const initialPageResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === "GET" &&
+      new URL(response.url()).pathname === "/api/transactions",
+  );
   await page.goto(
     `/transactions?page=1&pageSize=50&q=${encodeURIComponent(memo)}`,
   );
+  await initialPageResponse;
   await page.getByRole("button", { name: "Edit mode" }).click();
   const amountInput = page.getByTestId(
     `transaction-${transaction.transaction_id}-amount-input`,

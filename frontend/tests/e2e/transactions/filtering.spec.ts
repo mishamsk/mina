@@ -950,6 +950,9 @@ test("transactions inline recurring occurrences support lifecycle filtering, con
   await expect(
     overdueActionsMenu.getByRole("button", { name: "Dismiss occurrence" }),
   ).toBeVisible();
+  await expect(
+    overdueActionsMenu.getByRole("button", { name: "Defer" }),
+  ).toHaveCount(0);
   await page.keyboard.press("Escape");
   await expect(overdueActionsMenu).toBeHidden();
 
@@ -1003,10 +1006,76 @@ test("transactions inline recurring occurrences support lifecycle filtering, con
     .getByTestId("featured-balance-row")
     .filter({ hasText: overdueFixture.checking.fqn.split(":").at(-1) ?? "" });
   await expect(featuredRow).toContainText("0.00 $");
+  let accountingHistoryRangeRequested = false;
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname === "/api/accounting-history/range") {
+      accountingHistoryRangeRequested = true;
+    }
+  });
   await clickRowAction(page, overdueRow, "Confirm occurrence");
+  const confirmDialog = page.getByRole("alertdialog", {
+    name: "Confirm occurrence",
+  });
+  const actualDateInput = confirmDialog.getByLabel("Actual date");
+  await expect(actualDateInput).toHaveValue(overdueDate);
+  expect(accountingHistoryRangeRequested).toBe(false);
+  await expect(actualDateInput).toHaveCSS("border-top-width", "2px");
+  await expect(actualDateInput).not.toHaveCSS("box-shadow", "none");
+  const confirmOccurrenceButton = confirmDialog.getByRole("button", {
+    name: "Confirm occurrence",
+  });
+  await actualDateInput.fill("");
+  await expect(confirmDialog.getByText("Choose an actual date.")).toBeVisible();
+  await expect(confirmOccurrenceButton).toBeDisabled();
+  await confirmOccurrenceButton.locator("..").hover();
+  await expect(page.getByRole("tooltip")).toHaveText("Choose an actual date.");
+  await page.mouse.move(0, 0);
+  const actualDate = formatLocalDate(new Date());
+  await actualDateInput.fill(actualDate);
+  await expect(confirmOccurrenceButton).toBeEnabled();
+  const confirmRequest = page.waitForRequest((request) =>
+    /\/api\/recurring-occurrences\/\d+\/confirm$/.test(
+      new URL(request.url()).pathname,
+    ),
+  );
+  let markConfirmationRefreshStarted!: () => void;
+  const confirmationRefreshStarted = new Promise<void>((resolve) => {
+    markConfirmationRefreshStarted = resolve;
+  });
+  let releaseConfirmationRefresh!: () => void;
+  const confirmationRefreshReleased = new Promise<void>((resolve) => {
+    releaseConfirmationRefresh = resolve;
+  });
+  await page.route("**/api/transactions?*", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.get("search") !== search) {
+      await route.continue();
+      return;
+    }
+    markConfirmationRefreshStarted();
+    await confirmationRefreshReleased;
+    await route.continue();
+  });
+  await confirmOccurrenceButton.click();
+  expect((await confirmRequest).postDataJSON()).toMatchObject({
+    actual_date: actualDate,
+  });
+  await confirmationRefreshStarted;
+  await expect(confirmDialog).toBeVisible();
+  await expect(
+    confirmDialog.getByRole("button", { name: "Confirming" }),
+  ).toBeVisible();
+  await expect(
+    page.locator("tbody > tr").filter({
+      hasText:
+        overdueFixture.merchantFqn.split(":").at(-1) ?? "Overdue merchant",
+    }),
+  ).toBeVisible();
+  releaseConfirmationRefresh();
   await expect(
     page.getByRole("status").filter({ hasText: "Occurrence confirmed." }),
   ).toBeVisible();
+  await expect(overdueRow).toBeFocused();
   await expect(overdueRow.locator('[aria-label="Expected"]')).toHaveCount(0);
   await expect(
     overdueRow.getByText("-23.45 $", { exact: true }),

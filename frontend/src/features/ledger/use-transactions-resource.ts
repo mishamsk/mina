@@ -564,6 +564,18 @@ const refreshTransactionPageInBackground = (
   return refresh;
 };
 
+export const refreshTransactionPagePreservingSnapshot = async (
+  params: TransactionPageParams,
+): Promise<readonly Transaction[]> => {
+  await waitForCurrentRecurringOccurrenceCatchup();
+  markOtherTransactionPagesStale(params);
+  const refresh = await refreshTransactionPageInBackground(params);
+  if (!refresh.refreshed) {
+    throw new Error("Transactions could not be refreshed.");
+  }
+  return refresh.transactions ?? [];
+};
+
 export const refreshLedgerLookups = async (): Promise<void> => {
   await loadLedgerLookups();
 };
@@ -608,12 +620,24 @@ export const refreshTransactionPageAfterSave = async (
   previousTransactions: readonly Transaction[] = [],
   options: {
     readonly onPageRefresh?: (rowRemainsVisible: boolean) => void;
-    readonly pageRefreshMode?: "background" | "blocking";
+    readonly pageRefreshMode?:
+      "background" | "blocking" | "blocking-preserving";
   } = {},
 ): Promise<boolean> => {
   invalidateReferencePagesAfterTransactionMutation();
   if (transaction) {
     invalidateAccountRegistersForTransaction(transaction, previousTransactions);
+  }
+
+  if (options.pageRefreshMode === "blocking-preserving") {
+    const [transactions] = await Promise.all([
+      refreshTransactionPagePreservingSnapshot(params),
+      refreshFeaturedBalances(),
+      refreshOverview(),
+    ]);
+    return transactions.some(
+      (current) => current.transaction_id === transactionId,
+    );
   }
 
   if (options.pageRefreshMode !== "blocking") {

@@ -4,6 +4,7 @@ import {
   canSplitTransaction,
   isActiveWhollyPendingTransaction,
   isExpectedRecurringOccurrence,
+  isProjectedRecurringTransaction,
 } from "./format";
 
 export interface TransactionActionApplicability {
@@ -11,6 +12,7 @@ export interface TransactionActionApplicability {
   readonly createRecurring: boolean;
   readonly createTemplate: boolean;
   readonly delete: boolean;
+  readonly deferProjection: boolean;
   readonly duplicate: boolean;
   readonly edit: boolean;
   readonly post: boolean;
@@ -22,6 +24,7 @@ export const transactionActionApplicability = (
   transaction: Transaction,
 ): TransactionActionApplicability => {
   const expectedOccurrence = isExpectedRecurringOccurrence(transaction);
+  const projectedOccurrence = isProjectedRecurringTransaction(transaction);
   const active = transaction.lifecycle_status === "active";
   const cancelled = transaction.lifecycle_status === "cancelled";
   const reusable = !expectedOccurrence && (active || cancelled);
@@ -33,6 +36,8 @@ export const transactionActionApplicability = (
     createRecurring: reusable,
     createTemplate: reusable,
     delete: reusable,
+    deferProjection:
+      projectedOccurrence && transaction.recurring_projection_is_next === true,
     duplicate: reusable,
     edit: !expectedOccurrence && active,
     post: whollyPending,

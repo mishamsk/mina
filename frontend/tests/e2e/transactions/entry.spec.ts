@@ -145,6 +145,11 @@ test("clear draft confirms hand-entered and restored work and deletes persistenc
   await expect(memoField).toBeEditable();
 
   await memoField.fill(memo);
+  await expect
+    .poll(async () => readStoredTransactionEntryDraft(page))
+    .toMatchObject({
+      tabs: { spend: { memo } },
+    });
   await editor.getByRole("button", { name: "Clear draft" }).click();
   let clearDialog = page.getByRole("alertdialog", {
     name: "Clear entry draft?",

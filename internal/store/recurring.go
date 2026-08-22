@@ -630,8 +630,54 @@ WHERE 1 = 1`
 	}, nil
 }
 
-// ConfirmOccurrence activates an expected transaction and stamps balance records atomically.
-func (s *RecurringStore) ConfirmOccurrence(ctx context.Context, id int64, pendingDate *time.Time, postedDate *time.Time, reviewedAt time.Time) (recurring.Occurrence, error) {
+// GetOccurrenceConfirmation returns an occurrence with the generated records needed for actual-date valuation.
+func (s *RecurringStore) GetOccurrenceConfirmation(ctx context.Context, id int64) (recurring.OccurrenceConfirmation, error) {
+	occurrence, err := selectRecurringOccurrenceByID(ctx, s.db.query(), s.db, id)
+	if err != nil {
+		return recurring.OccurrenceConfirmation{}, err
+	}
+	confirmation := recurring.OccurrenceConfirmation{Occurrence: occurrence, Records: []recurring.OccurrenceConfirmationRecord{}}
+	if occurrence.GeneratedTransactionID == nil {
+		return confirmation, nil
+	}
+	rows, err := s.db.query().QueryContext(
+		ctx,
+		`SELECT record_id, currency, amount
+FROM `+s.db.accountingName("journal_record")+`
+WHERE transaction_id = ? AND tombstoned_at IS NULL
+ORDER BY record_id ASC`,
+		*occurrence.GeneratedTransactionID,
+	)
+	if err != nil {
+		return recurring.OccurrenceConfirmation{}, fmt.Errorf("list recurring occurrence confirmation records: %w", err)
+	}
+	for rows.Next() {
+		var record recurring.OccurrenceConfirmationRecord
+		var amount duckdb.Decimal
+		if err := rows.Scan(&record.ID, &record.Currency, &amount); err != nil {
+			_ = rows.Close()
+			return recurring.OccurrenceConfirmation{}, fmt.Errorf("scan recurring occurrence confirmation record: %w", err)
+		}
+		record.Amount, err = decimalFromDuckDB(amount)
+		if err != nil {
+			_ = rows.Close()
+			return recurring.OccurrenceConfirmation{}, fmt.Errorf("decode recurring occurrence confirmation amount: %w", err)
+		}
+		confirmation.Records = append(confirmation.Records, record)
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return recurring.OccurrenceConfirmation{}, fmt.Errorf("iterate recurring occurrence confirmation records: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return recurring.OccurrenceConfirmation{}, fmt.Errorf("close recurring occurrence confirmation records: %w", err)
+	}
+
+	return confirmation, nil
+}
+
+// ConfirmOccurrence activates an expected transaction on its actual date and stamps balance records atomically.
+func (s *RecurringStore) ConfirmOccurrence(ctx context.Context, id int64, actualDate values.CivilDate, valuations []recurring.OccurrenceRecordValuation, pendingDate *time.Time, postedDate *time.Time, reviewedAt time.Time) (recurring.Occurrence, error) {
 	var occurrence recurring.Occurrence
 	err := s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
 		current, err := selectRecurringOccurrenceByID(ctx, tx, s.db, id)
@@ -647,12 +693,13 @@ func (s *RecurringStore) ConfirmOccurrence(ctx context.Context, id int64, pendin
 		result, err := tx.ExecContext(
 			ctx,
 			`UPDATE `+s.db.accountingName("transaction")+`
-SET lifecycle_status = CAST('ACTIVE' AS `+s.db.accountingName("transaction_lifecycle_status")+`),
+SET initiated_date = ?,
+    lifecycle_status = CAST('ACTIVE' AS `+s.db.accountingName("transaction_lifecycle_status")+`),
     updated_at = CURRENT_TIMESTAMP
 WHERE transaction_id = ?
   AND tombstoned_at IS NULL
   AND lifecycle_status = CAST('EXPECTED' AS `+s.db.accountingName("transaction_lifecycle_status")+`)`,
-			*current.GeneratedTransactionID,
+			civilDateArg(actualDate), *current.GeneratedTransactionID,
 		)
 		if err != nil {
 			return fmt.Errorf("activate recurring occurrence transaction: %w", err)
@@ -663,6 +710,28 @@ WHERE transaction_id = ?
 		}
 		if updated == 0 {
 			return services.ErrConflict
+		}
+		for _, valuation := range valuations {
+			result, err := tx.ExecContext(
+				ctx,
+				`UPDATE `+s.db.accountingName("journal_record")+`
+SET amount_usd = ?,
+    updated_at = CURRENT_TIMESTAMP
+WHERE record_id = ?
+  AND transaction_id = ?
+  AND tombstoned_at IS NULL`,
+				nullableDecimalArg(valuation.AmountUSD), valuation.ID, *current.GeneratedTransactionID,
+			)
+			if err != nil {
+				return fmt.Errorf("revalue recurring occurrence record: %w", err)
+			}
+			updated, err := result.RowsAffected()
+			if err != nil {
+				return fmt.Errorf("revalue recurring occurrence record affected rows: %w", err)
+			}
+			if updated == 0 {
+				return services.ErrConflict
+			}
 		}
 		if _, err := tx.ExecContext(ctx, `UPDATE `+s.db.accountingName("journal_record")+` AS jr
 SET pending_date = ?,
@@ -807,12 +876,17 @@ WHERE recurring_occurrence_id = ?
 
 // ListOccurrenceDates returns occurrence slots for one definition through the supplied date.
 func (s *RecurringStore) ListOccurrenceDates(ctx context.Context, definitionID int64, through values.CivilDate) ([]values.CivilDate, error) {
-	dates, err := recurringOccurrenceDatesByDefinitionIDs(ctx, s.db.query(), s.db, []int64{definitionID}, through)
+	dates, err := s.ListOccurrenceDatesByDefinitionIDs(ctx, []int64{definitionID}, through)
 	if err != nil {
 		return nil, err
 	}
 
 	return dates[definitionID], nil
+}
+
+// ListOccurrenceDatesByDefinitionIDs returns occurrence slots for multiple definitions through the supplied date.
+func (s *RecurringStore) ListOccurrenceDatesByDefinitionIDs(ctx context.Context, definitionIDs []int64, through values.CivilDate) (map[int64][]values.CivilDate, error) {
+	return recurringOccurrenceDatesByDefinitionIDs(ctx, s.db.query(), s.db, definitionIDs, through)
 }
 
 // DeferOccurrenceAndShiftAnchor inserts a DEFERRED audit row and shifts the definition anchor.
