@@ -1,178 +1,126 @@
 # Plaid MVP Working Decisions
 
-## Minimal MVP checklist
+Status: temporary working design and ordered chunk sequence — a plan of plans. Each chunk becomes its own committed implementation plan when claimed. It is not a fleet plan, a Kata roadmap, or a replacement for Mina's owning architecture and semantics documents.
 
-- Define the portable, operational, secret, and transient state needed for Plaid.
-- Add Plaid under Mina's existing provider architecture using Plaid's official Go SDK.
-- Build a deterministic mock provider so normal development and app tests need no Plaid credentials or network.
-- Add one-household Plaid configuration, connection, account-discovery, and account-mapping capabilities.
-- Import and incrementally synchronize Plaid transactions without duplicates or cursor loss.
-- Expose transaction loading as a concrete manual/background operation through REST, CLI, and UI.
-- Extend demo mode with a forced mock connection and manual transaction-loading run for reconciliation demos.
-- Support CLI Link and update-mode flows through Hosted Link plus Mina REST polling.
-- Support UI Link and update-mode flows through a Mina REST callback and explicit session state.
-- Add only a very small, opt-in Plaid Sandbox smoke suite before validating a Trial connection.
+## Delivery constraints
 
-Status: temporary working design and ordered implementation sequence. It is not
-a fleet plan, Kata roadmap, or replacement for Mina's owning architecture and
-semantics documents.
+- Every chunk ends at a REST-provable surface and is independently reviewed and confirmed working through app tests (and generated CLI where applicable) before the next chunk starts. Mina has no unit tests, so no chunk may end as an internal package or service without a REST consumer.
+- Every chunk before the final gates requires no Plaid account, credentials, or network. The real adapter is compiled and exercised against SDK-shaped fixture responses throughout, so Sandbox is a verification gate, not the first proof that the architecture fits Plaid.
+- New code stays off the production path: new packages, new tables, new REST resources. Existing user flows are untouched until the concrete operation is registered, and even then startup loading is disabled and its schedule empty.
+- No user-facing Plaid screens until the dedicated UI chunk. The Status-page operation module is pattern-required admin plumbing and lands with the concrete operation; connection and mapping flows come last before the real-Plaid gates.
 
-## Ordered implementation sequence
+## Existing foundation
 
-Steps 1–9 must be implementable without a Plaid account, Plaid credentials, or
-real network calls. The real Plaid adapter is still compiled and exercised
-against SDK-shaped fixture responses throughout, so Sandbox is a verification
-gate rather than the first proof that the architecture fits Plaid.
+Already in the repo; chunks build on it and must not recreate it:
 
-### 1. Settle import, reconciliation, and state contracts
+- `imported_record_metadata` stores provider-neutral fields, provider status and dates, external provenance, and raw payload JSON. It is store-level only; no import service or pipeline exists.
+- Journal records carry `reconciliation_status` (`RECONCILED`/`UNRECONCILED`), a writable `imported` source, and `external_id`/`external_system`; `POST /api/records/bulk/reconciliation` already exists.
+- `account.external_system`/`account.external_id` are the canonical external-account link; do not create a second competing account mapping.
+- The concrete background-operation pattern — status/start/run-detail across REST, generated CLI/MCP with run-wait, and the Status UI — is proven by three shipped operations; `plaid-transaction-loading` becomes the fourth.
+- Provider-layer precedent: service-owned narrow interfaces, concrete packages under `internal/providers/`, wiring in `internal/runtime`, depguard enforcement. Background runners call services, never providers.
+- Test precedent: domain-level fake providers injected through `runtime.Dependencies` and apptest options, and injected in-memory HTTP transports serving fixture JSON against a real adapter.
+- Hand-written CLI/MCP extension hooks (`clientcli.RegisterExtensions`, `mcpserver.Extension`) exist and are unused; the headless Link flow is their first user.
 
-- Define how an imported bank-side record becomes a balanced Mina transaction,
-  how `UNRECONCILED` affects user workflows, and what matching, confirmation,
-  pending-to-posted replacement, and removal mean.
-- Define the persistent connection, discovered-account, mapping, sync-cursor,
-  and provider-provenance model around the existing account external IDs and
-  `imported_record_metadata` model.
-- Finalize the provisional REST resources and state machines described below.
-- Record durable outcomes in the owning semantics, data-model, architecture,
-  OpenAPI, and package documents before implementation relies on them.
+Gaps this plan must build rather than reuse:
 
-### 2. Add the persistent state foundation
+- No secret-sealing mechanism exists for runtime-created secrets; the env-only key precedent (`MINA_DATABASE_ENCRYPTION_KEY`) exists, but encrypting per-Item access tokens at rest is new machinery.
+- Demo mode is startup-seed-only; no runtime flag reaches provider selection today, so forcing a mock provider in demo is new machinery.
+- Operation-run records are in-memory and non-portable; sync cursors must live in portable accounting state, committed atomically with the changes they cover.
+- No reconciliation workflow semantics exist anywhere; `docs/accounting-semantics.md` deliberately excludes them.
 
-- Add the minimum portable accounting tables and store access needed for one
-  household's connection metadata, discovered accounts, mapping decisions, and
-  cursor checkpoints.
-- Reuse `account.external_system` and `account.external_id` as the canonical
-  external-account link; do not create a second competing account mapping.
-- Add a persistent local secret-state mechanism for Plaid access tokens outside
-  the portable accounting database. Exact storage and file-permission behavior
-  is resolved in Step 1.
+## Ordered chunks
 
-### 3. Establish the Plaid provider seam and deterministic mock
+### 1. Settle import semantics and contracts
 
-- Add the official `github.com/plaid/plaid-go` dependency and the concrete
-  `internal/providers/imports/plaid` adapter.
-- The consuming import/loading service owns the narrow provider interface and
-  Mina-shaped inputs, results, and normalized errors. Plaid SDK types do not
-  escape the concrete provider package.
-- Add a deterministic mock implementation for app tests and demo mode.
-- Exercise the real adapter through the app boundary with an injected in-memory
-  HTTP transport and representative Plaid JSON fixtures. This uses the actual
-  SDK serialization without opening a network socket.
+- Define how an imported bank-side record becomes a balanced Mina transaction under the minimal reconciliation scope: counterpart account/category choice, `UNRECONCILED` marking, pending-to-posted replacement, and removal semantics.
+- Define the persistent connection, discovered-account, mapping, and cursor model around the existing account external IDs and `imported_record_metadata`.
+- Fix the REST resource names, the Link-session state machine below, the token-sealing format, the needs-relink recovery semantics, the secret-rotation re-seal workflow, and the Plaid config/env shape.
+- Record durable outcomes in the owning semantics docs and OpenAPI before implementation relies on them; update package docs as chunks land.
+- Proof: reviewed docs only; no code.
 
-### 4. Deliver account discovery and mapping
+### 2. State foundation and mock connection creation
 
-- Add REST operations to list connections and discovered provider accounts and
-  to map or ignore each account.
-- Mapping supports linking to an existing Mina account or creating a compatible
-  Mina balance account, while preserving an explicit unmapped state.
-- Add generated CLI/MCP exposure decisions and app tests through the in-process
-  REST client using the mock provider.
-- Add the minimal UI state for reviewing unmapped, mapped, and ignored accounts.
+- Add migrations and store access for connection metadata, discovered accounts with mapping decisions, and cursor checkpoints.
+- Persist per-Item access tokens in the accounting database as ciphertext sealed with a key derived (HKDF) from the env-only Plaid `client_id` and `secret`, behind a service-owned sealing contract; runtime supplies the derived key. No new files and no extra env vars.
+- Add the `github.com/plaid/plaid-go` dependency, the concrete `internal/providers/imports/plaid` adapter, and the deterministic mock implementing the same service-owned interface.
+- Implement the minimal Link-session REST machine — create, observe, complete, plus failure and expiry — enough to turn a mock Link completion into one persistent connection with its sealed token persisted. Update mode and the browser callback come later.
+- Proof: app tests complete a mock Link session through REST and observe the persisted connection; a fixture-transport test drives the real adapter's token exchange through the actual SDK without sockets.
 
-### 5. Deliver cursor-safe transaction loading
+### 3. Account discovery and mapping
 
-- Add a loading service that consumes `/transactions/sync`-shaped pages and
-  applies added, modified, and removed transactions atomically with the cursor.
-- Restart a whole page sequence from the original cursor after Plaid's
-  `TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION` error.
-- Make replay idempotent through provider external IDs and preserve raw Plaid
-  payloads in `imported_record_metadata`.
-- Import only mapped accounts; report unmapped-account work instead of silently
-  dropping or guessing a Mina account.
+- Refresh a connection's provider account inventory and expose connections and discovered accounts over REST.
+- Support mapping each discovered account to an existing compatible Mina balance account or creating one through normal account behavior, marking it ignored, or leaving it `unmapped`; newly appearing provider accounts return to `unmapped`.
+- Add explicit CLI/MCP exposure decisions for every new operation.
+- Proof: app tests drive discovery and mapping end to end against the mock connection; fixture-transport coverage for the real adapter's accounts call.
 
-### 6. Add the concrete operation and demo/reconciliation scenario
+### 4. Cursor-safe loading and the concrete operation
 
-- Register a named `plaid-transaction-loading` operation following Mina's
-  existing concrete status/start/run-detail pattern.
-- Initially disable startup loading and leave its schedule empty. The REST API,
-  generated clients, Status UI, and CLI can trigger and observe manual runs.
-- In `mina serve --demo`, force the deterministic mock provider even if real
-  Plaid settings exist, seed one mock connection and its account mappings, and
-  perform no automatic load.
-- Script successive mock cursors so manual runs demonstrate initial imports,
-  pending-to-posted modification, removal, and idempotent no-op replay.
-- Make the resulting imported records visible in the minimal reconciliation
-  workflow established in Step 1 so the demo proves loading and reconciliation,
-  not merely that rows were inserted.
+- Add the loading service that consumes `/transactions/sync`-shaped pages and applies added, modified, and removed transactions atomically with the cursor; restart the page sequence from the original cursor after `TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION`.
+- Make replay idempotent through provider external IDs and preserve raw payloads in `imported_record_metadata`; import only mapped accounts and report unmapped-account work instead of guessing.
+- Register the `plaid-transaction-loading` operation with startup disabled and an empty schedule, following the existing concrete status/start/run-detail pattern including the Status-page module and CLI run-wait.
+- Proof: app tests trigger manual runs against scripted mock cursor pages covering initial import, pending-to-posted, removal, mutation restart, and idempotent replay; imported records visible through existing transaction REST with `UNRECONCILED` status.
 
-### 7. Implement the Link-session REST state machine
+### 5. Demo mock-connection scenario
 
-- Implement create, observe, advance/complete, callback, and expiry behavior
-  against the mock provider first.
-- A successful completion exchanges the public token exactly once and creates
-  one persistent connection; retries are idempotent.
-- Use the same state machine for initial Link and update mode.
-- Keep short-lived Link tokens, hosted URLs, and callback-return state outside
-  portable accounting data; a process restart may expire an unfinished Link
-  session without damaging a completed connection.
+- Add the runtime machinery for `mina serve --demo` to force the deterministic mock provider even when real Plaid settings exist.
+- Seed one completed mock connection, realistic discovered accounts, and explicit account mappings; do not preload imported transactions or schedule loading.
+- Script successive mock cursors so manual runs from the Status UI, REST, or CLI demonstrate initial imports, a pending-to-posted change, a removal, and an idempotent no-op, all visible in the existing transaction UI.
+- Proof: this chunk is the first manual-confirmation surface; a frontend e2e exercise of the demo trigger path plus reviewer walkthrough.
 
-### 8. Add the headless CLI flow
+### 6. Full Link-session lifecycle
 
-- Add a hand-written REST-backed CLI workflow that creates a Mina Link session,
-  opens the Hosted Link URL when possible, always prints it as a fallback, and
-  polls/advances the Mina REST session until terminal.
-- Support a browser on another device: the browser callback is optional for the
-  CLI because Mina can learn completion through Plaid `/link/token/get`.
-- Add headless commands for listing discovered accounts, mapping/ignoring them,
-  starting a manual load, and waiting for the concrete operation run.
+- Extend the session machine with update mode tied to an existing connection (never a duplicate connection), the browser callback route, and restart-safe expiry of unfinished sessions.
+- Completion exchanges the public token exactly once; retries while pending or after success are idempotent.
+- Proof: app tests cover update-mode recovery, callback validation, expiry, and exactly-once exchange against the mock; fixture-transport coverage for `/link/token/get` and update-mode requests.
 
-### 9. Add the UI callback and recovery flows
+### 7. Headless CLI Link flow
 
-- Add a connection/mapping screen that launches Hosted Link, resumes through
-  the REST callback route, and renders the Link-session state machine.
-- Add update-mode actions for connection errors and consent renewal.
-- Keep public tokens, access tokens, and Plaid credentials out of frontend state;
-  the UI receives only Mina session IDs, hosted URLs, statuses, and safe metadata.
-- Prove browser callback, mapping, manual loading, and reconciliation with the
-  mock provider in the existing frontend e2e class.
+- Add the hand-written REST-backed CLI workflow (first extension-hook user): create a session, open or print the Hosted Link URL, and poll the Mina session until terminal; the backend owns `/link/token/get`, so a browser on another device needs no callback.
+- Add headless commands for listing and mapping accounts, starting a manual load, and waiting on the run where the generated surface is not already sufficient.
+- Proof: app tests plus a CLI e2e script against the mock.
 
-### 10. Cross the real-Plaid gates
+### 8. UI connection and mapping flows
 
-- Add a credential-gated, opt-in Sandbox smoke recipe with only a few cases:
-  create/exchange a Sandbox Item without automating Link, discover accounts,
-  consume `/transactions/sync`, and exercise one update/error scenario.
-- Use Plaid's Sandbox-only `/sandbox/public_token/create` to keep automation
-  independent of Plaid Link UI changes.
-- Run one manual Sandbox Link check for Hosted Link and the callback flow.
-- Finally, use a Plaid Trial Item for a small manual acceptance matrix covering
-  representative OAuth and non-OAuth institutions before enabling scheduled
-  loading or declaring the integration production-ready.
+- Connection is initiated from account pages: an account (or the accounts list) launches Hosted Link for its institution, resumes through the callback route, and pre-suggests mapping the originating account among the discovered ones. Link is Item-scoped, so one login discovers all of that institution's accounts.
+- Ongoing management lives under Settings: institution list with health, needs-relink/update-mode repair for connection errors and consent renewal, and review of unmapped and ignored discovered accounts. Account pages also surface their own connection state and relink entry.
+- Plaid client credentials are configured entirely outside the UI via env vars; frontend receives only Mina session IDs, hosted URLs, statuses, and safe metadata — never public tokens, access tokens, or Plaid credentials.
+- Proof: frontend e2e with the mock provider covering account-page initiation, callback, mapping, manual loading, and Settings management.
+
+### 9. Real-Plaid gates
+
+- Add a credential-gated, opt-in Sandbox smoke suite with only a few cases: create/exchange a Sandbox Item via `/sandbox/public_token/create` (no Link automation), discover accounts, consume `/transactions/sync`, and one update/error scenario. Placement needs a `docs/TESTING.md` decision and a Justfile-owned recipe.
+- Run one manual Sandbox Hosted Link check for the callback flow.
+- Finish with a Plaid Trial Item manual acceptance matrix over representative OAuth and non-OAuth institutions before enabling scheduled loading or calling the integration production-ready.
 
 ## Decisions
 
 ### Provider and initial scope
 
-- Plaid is a provider under Mina's existing provider concept. The concrete
-  adapter belongs at `internal/providers/imports/plaid`, implements a
-  service-owned interface, and is wired by `internal/runtime`.
-- Plaid is the only aggregation provider in the MVP; do not create a new generic
-  provider framework beyond the boundaries Mina already has.
-- Use Plaid's Transactions product for account discovery and transaction sync.
-  “Authentication” below means the Plaid Link connection flow, not Plaid's ACH
-  Auth product.
-- Initial institution targets are TD Bank, Barclays US, Discover, Capital One,
-  Chase, Marcus, and American Express. Fidelity support is not required for the
-  MVP.
-- Mina is a single-household system with one Plaid credential set and one stable
-  Plaid `client_user_id`. Do not model users, per-user credentials, ownership,
-  invitations, or credential selection.
-- The household supplies its own Plaid Trial credentials. Mina does not ship or
-  operate a shared Plaid secret.
-- Plaid's Trial allowance is ten Items, where an Item is normally one
-  institution login and can contain multiple accounts.
+- Plaid is a provider under Mina's existing provider concept: concrete adapter at `internal/providers/imports/plaid`, service-owned interface, wired by `internal/runtime`. No new generic provider framework.
+- Plaid is the only aggregation provider in the MVP; use Plaid's Transactions product for discovery and sync.
+- Initial institution targets: TD Bank, Barclays US, Discover, Capital One, Chase, Marcus, American Express. Fidelity is not required.
+- Mina is single-household: one Plaid credential set, one stable `client_user_id`. No users, per-user credentials, ownership, or credential selection.
+- The household supplies its own Plaid Trial credentials (ten-Item allowance; an Item is one institution login). Mina ships no shared secret.
+
+### Reconciliation scope
+
+- Minimal, status-only: imports post as real balanced transactions flagged `UNRECONCILED` and immediately affect balances; the counterpart account/category choice is settled in chunk 1.
+- The existing bulk reconciliation endpoint and normal transaction editing are the reconciliation workflow for the MVP.
+- Matching imports to existing manual or recurring transactions, inboxes, and classification stay in the backlog katas (`dw1v`, `s1kz`, `m2jn`, `p0xt`); when matching lands it must run recurring lazy catch-up before matching, per the contract recorded on kata `y4v6`.
 
 ### SDK and boundary
 
-- Use Plaid's official Go SDK for Plaid API types, requests, and transport.
-- Follow the existing provider boundary: the consuming service owns a narrow
-  interface; the Plaid package owns authentication, SDK requests/responses,
-  network side effects, and Plaid error normalization; runtime owns selection
-  and construction.
-- Plaid client credentials and access tokens never enter frontend code.
-- Client credentials and access tokens are local secret/operational state, not
-  portable accounting data. Connection identity, household client ID, account
-  mappings, cursors, and imported provenance must travel with the accounting
-  database so moving it cannot silently duplicate imports.
+- Use Plaid's official Go SDK for API types, requests, and transport. SDK types do not escape the concrete provider package; the consuming service owns the narrow interface, Mina-shaped inputs and results, and normalized errors.
+- Plaid client credentials and access tokens never enter frontend code or raw REST responses.
+- Config follows the existing flat domain-section precedent in `internal/appconfig` (like exchange rates), not a generic providers section. Plaid `client_id` and `secret` are env-only (`MINA_PLAID_CLIENT_ID`, `MINA_PLAID_SECRET`), following the `MINA_DATABASE_ENCRYPTION_KEY` precedent, and never appear in settings output.
+
+### State and secrets
+
+- Plaid access tokens are per Item (one institution login covering all its accounts), created at runtime by Link completion, and never expire; there is no refresh mechanism, so losing one requires Link update mode for that institution. Short-lived link and public tokens remain in-process Link-session state only.
+- Access tokens persist in the accounting database as ciphertext sealed with a key derived (HKDF) from the env-only Plaid `client_id` and `secret`. No secrets file and no separate key env var; the two Plaid env vars are the whole secret surface. An access token is useless without those same credentials on every Plaid call, so sealing gives up nothing versus a dedicated key.
+- Connection identity, household `client_user_id`, account mappings, cursors, and imported provenance travel with the accounting database so moving it cannot silently duplicate imports.
+- A database opened without the same Plaid credentials cannot unseal tokens and degrades connections to a needs-relink condition; Link update mode repairs them without creating duplicate connections or Items. A legitimate move with the same env credentials keeps connections working. Backups carry only ciphertext.
+- Rotating the Plaid secret changes the derived key without invalidating tokens on Plaid's side, so rotation is an explicit workflow: re-seal stored tokens under the new secret, or accept re-Linking every institution.
 
 ## Stateful connection and account-mapping design
 
@@ -180,42 +128,30 @@ gate rather than the first proof that the architecture fits Plaid.
 
 | State | Lifetime and owner |
 | --- | --- |
-| Plaid client ID and environment secret | One household-wide local configuration/secret set; immutable for a running process and never exposed through write APIs. |
-| Plaid access token | Persistent local secret state keyed by Mina connection ID; never stored in browser state or raw REST responses. |
+| Plaid client ID and environment secret | Env-only household-wide credentials; immutable for a running process and never exposed through APIs or settings output. |
+| Plaid access token (per Item) | Accounting database as ciphertext sealed with a key derived from the env-only Plaid credentials; plaintext never in browser state, REST responses, or on disk. |
 | Household `client_user_id` | One stable opaque value in portable accounting state; all household Items use it. |
-| Completed connection/Item identity | Portable accounting state, with safe institution metadata and last known connection condition. |
+| Completed connection/Item identity | Portable accounting state with safe institution metadata and last known connection condition. |
 | Discovered provider account and mapping decision | Portable accounting state: `unmapped`, `mapped`, or `ignored`; mapped identity reuses Mina account external fields. |
-| Transactions Sync cursor | Portable accounting state and committed atomically with the updates it covers. |
+| Transactions Sync cursor | Portable accounting state, committed atomically with the updates it covers. |
 | Imported record provenance | Portable `imported_record_metadata`, including normalized fields and raw provider JSON. |
 | Link session | Short-lived process state; losing it requires restarting Link but cannot corrupt a completed connection. |
-| Operation runs | Existing process-local operation-run storage; accounting effects and cursor commits remain portable. |
+| Operation runs | Existing in-memory operation-run storage; accounting effects and cursor commits remain portable. |
 
 ### Provisional REST resources
 
-The exact OpenAPI names are finalized in Step 1, but the resource behavior is:
+Exact OpenAPI names are finalized in chunk 1; every operation gets explicit CLI/MCP exposure decisions in `api/client-surfaces.yaml`.
 
-- `POST /api/providers/plaid/link-sessions` creates an initial or update-mode
-  session and returns a Mina session ID, Hosted Link URL, expiry, and status.
-- `GET /api/providers/plaid/link-sessions/{id}` observes state without returning
-  Plaid secrets or tokens.
-- `POST /api/providers/plaid/link-sessions/{id}/complete` asks the backend to
-  query `/link/token/get`, exchange a newly available public token exactly once,
-  and return the new state. It is safe to retry while pending or after success.
-- `GET /api/providers/plaid/link-sessions/{id}/callback` is a browser navigation
-  adapter. It validates the opaque session ID and redirects to the Mina UI; the
-  callback alone is not proof of success, and no token belongs in its URL.
-- Connection and discovered-account resources expose health, account inventory,
-  and `unmapped`/`mapped`/`ignored` decisions. Mapping mutations are explicit and
-  independently usable by generated clients.
-- Plaid transaction loading uses concrete background-operation APIs rather than
-  a generic provider action endpoint.
+- `POST /api/providers/plaid/link-sessions` creates an initial or update-mode session and returns a Mina session ID, Hosted Link URL, expiry, and status.
+- `GET /api/providers/plaid/link-sessions/{id}` observes state without returning Plaid secrets or tokens.
+- `POST /api/providers/plaid/link-sessions/{id}/complete` asks the backend to query `/link/token/get`, exchange a newly available public token exactly once, and return the new state; safe to retry while pending or after success.
+- `GET /api/providers/plaid/link-sessions/{id}/callback` is a browser navigation adapter: it validates the opaque session ID and redirects to the Mina UI. The callback alone is not proof of success, and no token belongs in its URL.
+- Connection and discovered-account resources expose health, account inventory, and mapping decisions; mapping mutations are explicit and independently usable by generated clients.
+- Transaction loading uses the concrete background-operation APIs, not a generic provider action endpoint.
 
 ### Link-session state machine
 
-Mina exposes stable states such as `pending`, `succeeded`, `exited`, `expired`,
-and `failed`; Plaid event details remain provider metadata. `succeeded` is
-terminal only after token exchange and connection persistence finish. A browser
-return is recorded separately and never implies success.
+Mina exposes stable states; Plaid event details remain provider metadata. `succeeded` is terminal only after token exchange and connection persistence finish. A browser return is recorded separately and never implies success.
 
 ```text
 create -> pending -> succeeded
@@ -224,94 +160,29 @@ create -> pending -> succeeded
                   -> failed
 ```
 
-- CLI polling calls Mina REST, not Plaid directly. The backend owns
-  `/link/token/get`, token exchange, and state transitions.
-- UI completion uses the same backend transition. The callback merely brings the
-  browser back to Mina and lets the UI resume observing/advancing the session.
-- Update mode creates a new transient Link session tied to an existing
-  connection. It must never create a duplicate completed connection.
-- A truly headless bank login does not exist. A headless Mina process can print
-  a Hosted Link URL, let the household complete it in any browser, and poll the
-  Mina REST session without requiring an inbound webhook or browser callback.
-
-### Account discovery and mapping state
-
-- Successful initial Link creates a connection and refreshes its provider
-  account inventory, but does not guess Mina account matches.
-- Each discovered account is explicitly mapped to one Mina balance account or
-  marked ignored. Newly appearing provider accounts return to `unmapped`.
-- Mapping may select an existing compatible Mina account or create one through
-  normal account behavior. The integration must not bypass account service
-  validation.
-- Transaction loading processes only mapped accounts and reports unmapped
-  accounts as actionable work. Ignored accounts are intentionally skipped.
-- REST is the owning capability boundary. UI and headless CLI are equal clients
-  of the same discovery and mapping resources.
-
-### Link flows
-
-- Production bank login is interactive; Mina will not collect bank credentials
-  or attempt an API-only/headless login.
-- CLI flow: Mina REST creates a Hosted Link session; the CLI opens or prints its
-  URL and polls the Mina session while the backend uses `/link/token/get`.
-- UI flow: Mina opens Hosted Link with a completion callback URL understood by
-  the REST API. The callback returns navigation to the UI, which resumes the
-  same backend-owned session and completion logic.
-- A browser callback is distinct from a Plaid server-to-server webhook. Public
-  webhooks are not required for the MVP.
-- Initial and ongoing transaction updates use `/transactions/sync` with a saved
-  cursor. Manual loading is delivered first; scheduling stays disabled until
-  the manual and demo workflows are proven.
-- Reauthentication, consent renewal, and account-selection changes reuse the
-  existing Item through Link update mode rather than creating another Item.
+- CLI polling calls Mina REST, not Plaid; the backend owns `/link/token/get`, token exchange, and state transitions. UI completion uses the same backend transition.
+- Update mode creates a new transient session tied to an existing connection and must never create a duplicate completed connection.
+- A truly headless bank login does not exist; a headless Mina process prints a Hosted Link URL, the household completes it in any browser, and Mina polls its own REST session without inbound webhooks.
+- Production bank login is interactive; Mina never collects bank credentials. Public server-to-server webhooks are not required for the MVP.
+- Reauthentication, consent renewal, and account-selection changes reuse the existing Item through Link update mode rather than creating another Item.
 
 ### Testing
 
-- The normal app-test suite exercises Plaid-facing behavior through Mina's
-  in-process generated REST client and a mock Plaid backend injected at runtime
-  composition. These tests make no real network calls.
-- The mock covers successful Link completion, failures and expiry, account
-  discovery, paginated transaction sync, modified and removed transactions,
-  mutation-during-pagination restart, provider errors, and update-mode recovery.
-- A runtime-bound fixture mode exercises the real Plaid adapter and official SDK
-  through an in-memory HTTP transport. It complements the domain-level mock by
-  detecting request/response mapping drift without real sockets or credentials.
-- Keep only a very small set of credential-gated, opt-in integration smoke tests
-  against Plaid Sandbox. They verify SDK/request wiring and representative Link
-  and transaction-sync behavior; they do not use real financial accounts or
-  duplicate app-test scenarios.
-- Sandbox smoke tests must fit Mina's existing test taxonomy and run through a
-  Justfile-owned recipe. Exact placement is decided before implementation.
-- Automated Sandbox tests bypass Link with `/sandbox/public_token/create`;
-  Hosted Link itself receives only a small manual smoke check.
+- App tests exercise all Plaid-facing behavior through the in-process generated REST client with the mock provider injected at runtime composition; no real network.
+- The mock covers Link completion, failure and expiry, discovery, paginated sync, modified and removed transactions, mutation-during-pagination restart, provider errors, and update-mode recovery.
+- Fixture-transport tests drive the real adapter and official SDK through an injected in-memory HTTP transport, catching request/response mapping drift without sockets or credentials.
+- Sandbox smoke tests are a small credential-gated opt-in set behind a Justfile recipe; they verify wiring, not app scenarios, and their taxonomy placement is a `docs/TESTING.md` decision in chunk 9.
 
 ## Demo behavior
 
-- `mina serve --demo` always selects the deterministic import mock and cannot
-  contact Plaid, even when Plaid credentials are present in the environment.
-- Demo seeding creates one completed mock connection, realistic discovered
-  accounts, and explicit Mina account mappings. It does not preload imported
-  transactions.
-- Plaid transaction loading has startup disabled and no schedule in demo mode.
-  The Status UI, REST API, or CLI manual trigger starts it.
-- Successive manual runs return deterministic cursor pages: initial
-  unreconciled imports, a pending-to-posted change plus another transaction, a
-  removal, and then an idempotent no-op.
-- The demo data must be usable in the minimal reconciliation workflow, including
-  observing unmatched imports and confirming or matching them according to the
-  semantics settled in Step 1.
+- `mina serve --demo` always selects the deterministic import mock and cannot contact Plaid, even when Plaid credentials are present. This demo-to-provider-selection plumbing is new machinery built in chunk 5.
+- Demo seeding creates one completed mock connection, realistic discovered accounts, and explicit mappings; it preloads no imported transactions and schedules nothing.
+- Successive manual runs return deterministic cursor pages: initial unreconciled imports, a pending-to-posted change plus another transaction, a removal, then an idempotent no-op — all reviewable in the existing transaction UI under the minimal reconciliation scope.
 
 ## Open design questions
 
-- How are pending, posted, modified, and removed Plaid transactions represented
-  without violating Mina's accounting and import semantics?
-- Does an unreconciled import immediately affect balances, or remain a candidate
-  until confirmation/matching? Step 1 must settle this before loading persists
-  imported records.
-- What is the concrete local secret-store mechanism and recovery behavior when a
-  portable database is moved without its Plaid access tokens?
-- What callback URL works for the supported local UI deployment modes while
-  satisfying Plaid's Production OAuth redirect requirements?
+- Which counterpart account or category do imported records post against before a human categorizes them (chunk 1)?
+- What callback URL works for the supported local UI deployment modes while satisfying Plaid's Production OAuth redirect requirements?
 - Which representative institutions form the minimal Trial acceptance matrix?
 
 ## Plaid references
