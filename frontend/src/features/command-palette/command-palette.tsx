@@ -926,6 +926,7 @@ export const CommandPalette = () => {
 
       void fetchTransactionPage({
         filters: { search: transactionQuery },
+        includeExpectedByDefault: true,
         limit: transactionResultLimit,
         offset: 0,
         sort: defaultTransactionSort,

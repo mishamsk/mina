@@ -151,13 +151,24 @@ export const TransactionBrowserToolbar = ({
 
     if (previousEditMode) {
       const frame = window.requestAnimationFrame(() => {
+        if (hasActiveFilterChips) setFilterBarOpen(true);
         editModeButtonRef.current?.focus({ preventScroll: true });
       });
       return () => {
         window.cancelAnimationFrame(frame);
       };
     }
-  }, [editMode]);
+  }, [editMode, hasActiveFilterChips]);
+
+  useLayoutEffect(() => {
+    if (!hasActiveFilterChips) return;
+    const frame = window.requestAnimationFrame(() => {
+      setFilterBarOpen(true);
+    });
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [hasActiveFilterChips]);
 
   return (
     <div className="flex flex-col gap-3">
@@ -216,7 +227,9 @@ export const TransactionBrowserToolbar = ({
               type="button"
               size="sm"
               data-edit-mode-done
-              onClick={() => onSetEditMode(false)}
+              onClick={() => {
+                onSetEditMode(false);
+              }}
             >
               Done
             </Button>
@@ -619,7 +632,7 @@ export const TransactionBrowserToolbar = ({
       {showFilterBar ? (
         <div
           data-testid="transaction-browser-filter-bar"
-          className="bg-card border-2 border-[var(--border-ink)] p-3 shadow-[var(--shadow-pixel)]"
+          className="bg-card text-foreground max-h-[min(20svh,12rem)] overflow-y-auto border-2 border-[var(--border-ink)] p-3 shadow-[var(--shadow-pixel)]"
         >
           {filterControls}
         </div>

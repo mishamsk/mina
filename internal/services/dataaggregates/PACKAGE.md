@@ -8,7 +8,7 @@
 
 - DuckDB returns presentation-ready periods, stable ranked contributors, filtered totals, conversion disclosure, and selected trends; this service does not aggregate accounting rows.
 - Household flow semantics and scope behavior are owned by [`docs/household-flow-reporting.md`](../../../docs/household-flow-reporting.md).
-- Entity transaction previews delegate to the transaction service's classified list behavior and remain outside chart filtering.
+- Entity transaction previews delegate to the transaction service's classified list behavior through a leaf's stable entity ID or a group's descendant-scoped FQN and remain outside chart filtering and user-expression limits.
 
 ## Boundaries
 

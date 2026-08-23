@@ -2786,7 +2786,7 @@ paths:
       tags:
         - transactions
       summary: List transactions with journal records.
-      description: Defaults to `initiated_date` descending. Every sort uses `transaction_id` in the same direction as the stable tiebreaker. A future anchor_date also merges read-only recurring projections through that date when lifecycle_status explicitly includes expected; projections do not create recurring occurrences or transactions.
+      description: Defaults to `initiated_date` descending. Every sort uses `transaction_id` in the same direction as the stable tiebreaker. A future anchor_date computes read-only recurring projections through that date before applying the transaction filters, then merges matching projected rows without creating recurring occurrences or transactions. Requests that would generate more than 10,000 projections are rejected.
       parameters:
         - name: sort
           description: "Field used to sort matching results; defaults to `initiated_date`. `updated_at` includes transaction and nested journal-record changes."
@@ -2829,105 +2829,17 @@ paths:
         - name: anchor_date
           in: query
           required: false
-          description: Date-only anchor that returns the page containing the first transaction at or before this initiated date. If the anchor is older than every transaction, the page clamps to the oldest transaction page. Valid only with initiated_date descending ordering. When future recurring projections participate, omit offset to land at the anchor; an explicit offset then addresses the absolute merged sequence. Without projections, the anchor determines the persisted page regardless of offset.
+          description: Date-only anchor that returns the page containing the first transaction at or before this initiated date. If the anchor is older than every transaction, the page clamps to the oldest transaction page. Valid only with initiated_date descending ordering. For a future anchor, omit offset to land at the anchor after recurring projections are merged; an explicit offset then addresses the absolute merged sequence. For a non-future anchor, the anchor determines the persisted page regardless of offset.
           schema:
             type: string
             pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
             format: date
-        - name: account_id
-          description: "Account identifier to target or filter by."
-          in: query
-          required: false
-          style: form
-          explode: true
-          schema:
-            type: array
-            items:
-              type: integer
-              format: int64
-              minimum: 1
-        - name: category_id
-          description: "Category identifier to target or filter by."
-          in: query
-          required: false
-          style: form
-          explode: true
-          schema:
-            type: array
-            items:
-              type: integer
-              format: int64
-              minimum: 1
-        - name: category_fqn_prefix
-          description: Exact Category FQN descendant scope. Includes hidden active descendants and is independent of category_id filters.
+        - name: filter
+          description: "Composable expression with terms joined by AND or OR, prefixed by NOT, and grouped with parentheses; precedence is NOT, AND, OR. Membership fields using `:` are `account`, `category`, `tag`, `member`, `currency`, `role`, `class`, `lifecycle`, `settlement`, and `shape`. `account`, `category`, and `tag` accept an exact FQN, bare `*`, or a quoted hierarchy scope such as `category:\"Food:*\"`; `member` accepts an exact name; `currency` accepts a three-letter ISO code or quoted `C::` crypto code. Enums are role=`expense|refund|income|clawback|exchange|adjustment|balance`, class=`spend|income|refund|clawback|transfer|currency_exchange|adjustment|mixed`, lifecycle=`active|expected|cancelled`, settlement=`pending|posted|mixed|not_applicable`, and shape=`spend|refund|income|clawback|adjustment|exchange|transfer`. Comparison fields using `=`, `>`, `>=`, `<`, or `<=` are `amount`, `amount_usd`, `initiated`, `pending`, and `posted`; amounts are signed DECIMAL(18,8), while dates accept `YYYY-MM-DD`, RFC3339, or signed offsets with `s|m|h|d|w|mo|y`. Quote values containing whitespace, parentheses, quotes, or extra colons. Limits are 4096 structural characters, 100 terms, 10 nesting levels, and relative-offset magnitude 100000. Examples: `(category:\"Food:*\" OR tag:Travel) AND NOT lifecycle:cancelled`; `amount_usd>=100 AND initiated>=-30d`. Supplying a filter disables default expected-transaction exclusion and combines with `transaction_class` by AND."
           in: query
           required: false
           schema:
             type: string
-            minLength: 1
-        - name: tag_id
-          description: "Tag identifier to target or filter by."
-          in: query
-          required: false
-          style: form
-          explode: true
-          schema:
-            type: array
-            items:
-              type: integer
-              format: int64
-              minimum: 1
-        - name: tag_fqn_prefix
-          description: Exact Tag FQN descendant scope. Includes hidden active descendants and is independent of tag_id filters.
-          in: query
-          required: false
-          schema:
-            type: string
-            minLength: 1
-        - name: member_id
-          description: "Household-member identifier to target or filter by."
-          in: query
-          required: false
-          style: form
-          explode: true
-          schema:
-            type: array
-            items:
-              type: integer
-              format: int64
-              minimum: 1
-        - name: currency
-          description: "Filter by active journal-record currency codes, using ISO 4217 or the `C::` crypto prefix. Repeated values use any-of matching. This filter composes independently with other record-derived filters, so different active records in one transaction may satisfy different filters."
-          in: query
-          required: false
-          style: form
-          explode: true
-          schema:
-            type: array
-            minItems: 1
-            items:
-              type: string
-              pattern: ^([A-Z]{3}|C::.+)$
-        - name: lifecycle_status
-          in: query
-          required: false
-          description: Filters transactions by lifecycle. Expected transactions are excluded by default and returned only when this filter explicitly includes `expected`.
-          style: form
-          explode: true
-          schema:
-            type: array
-            items:
-              $ref: "#/components/schemas/TransactionLifecycleStatus"
-        - name: settlement
-          in: query
-          required: false
-          description: Filters transactions by server-derived settlement summary.
-          style: form
-          explode: true
-          schema:
-            type: array
-            items:
-              $ref: "#/components/schemas/TransactionSettlement"
         - name: transaction_class
           description: "Filter by one or more server-derived transaction classes."
           in: query
@@ -2938,102 +2850,6 @@ paths:
             type: array
             items:
               $ref: "#/components/schemas/TransactionClass"
-        - name: transaction_shape
-          description: "Filter by one or more server-derived transaction shapes."
-          in: query
-          required: false
-          style: form
-          explode: true
-          schema:
-            type: array
-            items:
-              $ref: "#/components/schemas/TransactionShapeType"
-        - name: record_role
-          description: "Filter by one or more server-derived record roles present in a transaction."
-          in: query
-          required: false
-          style: form
-          explode: true
-          schema:
-            type: array
-            items:
-              $ref: "#/components/schemas/RecordRole"
-        - name: amount_min
-          in: query
-          required: false
-          description: JSON string, not a JSON number. Signed DECIMAL(18,8) minimum filter; use at most 10 integer digits and 8 fractional digits.
-          schema:
-            type: string
-            pattern: ^-?[0-9]{1,10}(\.[0-9]{1,8})?$
-            maxLength: 20
-        - name: amount_max
-          in: query
-          required: false
-          description: JSON string, not a JSON number. Signed DECIMAL(18,8) maximum filter; use at most 10 integer digits and 8 fractional digits.
-          schema:
-            type: string
-            pattern: ^-?[0-9]{1,10}(\.[0-9]{1,8})?$
-            maxLength: 20
-        - name: amount_usd_min
-          in: query
-          required: false
-          description: JSON string, not a JSON number. Signed DECIMAL(18,8) USD minimum filter; use at most 10 integer digits and 8 fractional digits.
-          schema:
-            type: string
-            pattern: ^-?[0-9]{1,10}(\.[0-9]{1,8})?$
-            maxLength: 20
-        - name: amount_usd_max
-          in: query
-          required: false
-          description: JSON string, not a JSON number. Signed DECIMAL(18,8) USD maximum filter; use at most 10 integer digits and 8 fractional digits.
-          schema:
-            type: string
-            pattern: ^-?[0-9]{1,10}(\.[0-9]{1,8})?$
-            maxLength: 20
-        - name: initiated_date_from
-          description: "Minimum transaction initiated date in YYYY-MM-DD format."
-          in: query
-          required: false
-          schema:
-            type: string
-            pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
-            format: date
-        - name: initiated_date_to
-          description: "Maximum transaction initiated date in YYYY-MM-DD format."
-          in: query
-          required: false
-          schema:
-            type: string
-            pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
-            format: date
-        - name: pending_date_from
-          description: "Minimum pending timestamp in ISO 8601 format; records without a pending timestamp do not match."
-          in: query
-          required: false
-          schema:
-            type: string
-            format: date-time
-        - name: pending_date_to
-          description: "Maximum pending timestamp in ISO 8601 format; records without a pending timestamp do not match."
-          in: query
-          required: false
-          schema:
-            type: string
-            format: date-time
-        - name: posted_date_from
-          description: "Minimum posted timestamp in ISO 8601 format."
-          in: query
-          required: false
-          schema:
-            type: string
-            format: date-time
-        - name: posted_date_to
-          description: "Maximum posted timestamp in ISO 8601 format."
-          in: query
-          required: false
-          schema:
-            type: string
-            format: date-time
         - name: search
           in: query
           required: false

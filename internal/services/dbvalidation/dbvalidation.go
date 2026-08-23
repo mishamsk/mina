@@ -342,6 +342,11 @@ func (s *Service) classificationFindings(ctx context.Context) ([]Finding, error)
 	}
 
 	findings := []Finding{}
+	allLifecycles := &transactions.ResolvedFilter{Expression: &transactions.FilterOr{Terms: []transactions.FilterExpression{
+		&transactions.FilterEnumTerm{Field: transactions.FilterFieldLifecycle, Value: string(transactions.LifecycleStatusActive)},
+		&transactions.FilterEnumTerm{Field: transactions.FilterFieldLifecycle, Value: string(transactions.LifecycleStatusExpected)},
+		&transactions.FilterEnumTerm{Field: transactions.FilterFieldLifecycle, Value: string(transactions.LifecycleStatusCancelled)},
+	}}}
 	for offset := 0; ; offset += batchSize {
 		limit := batchSize
 		result, err := s.transactions.List(ctx, transactions.ListOptions{
@@ -349,11 +354,7 @@ func (s *Service) classificationFindings(ctx context.Context) ([]Finding, error)
 				Limit:  &limit,
 				Offset: offset,
 			},
-			LifecycleStatuses: []transactions.LifecycleStatus{
-				transactions.LifecycleStatusActive,
-				transactions.LifecycleStatusExpected,
-				transactions.LifecycleStatusCancelled,
-			},
+			Filter: allLifecycles,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("list transactions for classification validation: %w", err)

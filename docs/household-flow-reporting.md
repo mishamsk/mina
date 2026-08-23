@@ -17,7 +17,7 @@ Owning documents:
 - A Category scope includes matching categorized economic-flow records only. A split transaction contributes only the records in the selected leaf or group.
 - A Tag scope matches a transaction when an active record carries the selected Tag or a descendant Tag. Every categorized economic-flow record in each matched transaction contributes once, even when multiple records or tags match.
 - Hidden state affects ordinary discovery, not reporting attribution.
-- Category and Tag reports retain a fixed preview of the newest matching transactions. Their Transactions links preserve the exact leaf ID or group FQN-prefix scope. Chart configuration and contributor filters never change either surface.
+- Category and Tag reports retain a fixed preview of the newest matching transactions. Their Transactions links preserve the exact leaf FQN or group descendant-scoped FQN expression. Chart configuration and contributor filters never change either surface.
 
 ### Members
 

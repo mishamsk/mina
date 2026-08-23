@@ -2904,7 +2904,7 @@ func Operations() []Operation {
 			Method:      "GET",
 			Path:        "/api/transactions",
 			Summary:     "List transactions with journal records.",
-			Description: "Defaults to `initiated_date` descending. Every sort uses `transaction_id` in the same direction as the stable tiebreaker. A future anchor_date also merges read-only recurring projections through that date when lifecycle_status explicitly includes expected; projections do not create recurring occurrences or transactions.",
+			Description: "Defaults to `initiated_date` descending. Every sort uses `transaction_id` in the same direction as the stable tiebreaker. A future anchor_date computes read-only recurring projections through that date before applying the transaction filters, then merges matching projected rows without creating recurring occurrences or transactions. Requests that would generate more than 10,000 projections are rejected.",
 			CLI:         CLIOperation{Area: "transactions", Name: "list"},
 			Input: InputDescriptor{
 				Query: []ParameterDescriptor{
@@ -2937,78 +2937,14 @@ func Operations() []Operation {
 					{
 						Name:        "anchor_date",
 						Type:        "string",
-						Description: "Date-only anchor that returns the page containing the first transaction at or before this initiated date. If the anchor is older than every transaction, the page clamps to the oldest transaction page. Valid only with initiated_date descending ordering. When future recurring projections participate, omit offset to land at the anchor; an explicit offset then addresses the absolute merged sequence. Without projections, the anchor determines the persisted page regardless of offset.",
+						Description: "Date-only anchor that returns the page containing the first transaction at or before this initiated date. If the anchor is older than every transaction, the page clamps to the oldest transaction page. Valid only with initiated_date descending ordering. For a future anchor, omit offset to land at the anchor after recurring projections are merged; an explicit offset then addresses the absolute merged sequence. For a non-future anchor, the anchor determines the persisted page regardless of offset.",
 						Required:    false,
 					},
 					{
-						Name:        "account_id",
-						Type:        "array",
-						Description: "Account identifier to target or filter by.",
-						Required:    false,
-						Array:       true,
-						ItemType:    "integer",
-					},
-					{
-						Name:        "category_id",
-						Type:        "array",
-						Description: "Category identifier to target or filter by.",
-						Required:    false,
-						Array:       true,
-						ItemType:    "integer",
-					},
-					{
-						Name:        "category_fqn_prefix",
+						Name:        "filter",
 						Type:        "string",
-						Description: "Exact Category FQN descendant scope. Includes hidden active descendants and is independent of category_id filters.",
+						Description: "Composable expression with terms joined by AND or OR, prefixed by NOT, and grouped with parentheses; precedence is NOT, AND, OR. Membership fields using `:` are `account`, `category`, `tag`, `member`, `currency`, `role`, `class`, `lifecycle`, `settlement`, and `shape`. `account`, `category`, and `tag` accept an exact FQN, bare `*`, or a quoted hierarchy scope such as `category:\"Food:*\"`; `member` accepts an exact name; `currency` accepts a three-letter ISO code or quoted `C::` crypto code. Enums are role=`expense|refund|income|clawback|exchange|adjustment|balance`, class=`spend|income|refund|clawback|transfer|currency_exchange|adjustment|mixed`, lifecycle=`active|expected|cancelled`, settlement=`pending|posted|mixed|not_applicable`, and shape=`spend|refund|income|clawback|adjustment|exchange|transfer`. Comparison fields using `=`, `>`, `>=`, `<`, or `<=` are `amount`, `amount_usd`, `initiated`, `pending`, and `posted`; amounts are signed DECIMAL(18,8), while dates accept `YYYY-MM-DD`, RFC3339, or signed offsets with `s|m|h|d|w|mo|y`. Quote values containing whitespace, parentheses, quotes, or extra colons. Limits are 4096 structural characters, 100 terms, 10 nesting levels, and relative-offset magnitude 100000. Examples: `(category:\"Food:*\" OR tag:Travel) AND NOT lifecycle:cancelled`; `amount_usd>=100 AND initiated>=-30d`. Supplying a filter disables default expected-transaction exclusion and combines with `transaction_class` by AND.",
 						Required:    false,
-					},
-					{
-						Name:        "tag_id",
-						Type:        "array",
-						Description: "Tag identifier to target or filter by.",
-						Required:    false,
-						Array:       true,
-						ItemType:    "integer",
-					},
-					{
-						Name:        "tag_fqn_prefix",
-						Type:        "string",
-						Description: "Exact Tag FQN descendant scope. Includes hidden active descendants and is independent of tag_id filters.",
-						Required:    false,
-					},
-					{
-						Name:        "member_id",
-						Type:        "array",
-						Description: "Household-member identifier to target or filter by.",
-						Required:    false,
-						Array:       true,
-						ItemType:    "integer",
-					},
-					{
-						Name:        "currency",
-						Type:        "array",
-						Description: "Filter by active journal-record currency codes, using ISO 4217 or the `C::` crypto prefix. Repeated values use any-of matching. This filter composes independently with other record-derived filters, so different active records in one transaction may satisfy different filters.",
-						Required:    false,
-						Array:       true,
-						ItemType:    "string",
-					},
-					{
-						Name:        "lifecycle_status",
-						Type:        "array",
-						Description: "Filters transactions by lifecycle. Expected transactions are excluded by default and returned only when this filter explicitly includes `expected`.",
-						Required:    false,
-						Array:       true,
-						ItemType:    "string",
-						Enum:        []string{"active", "expected", "cancelled"},
-					},
-					{
-						Name:        "settlement",
-						Type:        "array",
-						Description: "Filters transactions by server-derived settlement summary.",
-						Required:    false,
-						Array:       true,
-						ItemType:    "string",
-						Enum:        []string{"pending", "posted", "mixed", "not_applicable"},
 					},
 					{
 						Name:        "transaction_class",
@@ -3018,84 +2954,6 @@ func Operations() []Operation {
 						Array:       true,
 						ItemType:    "string",
 						Enum:        []string{"spend", "income", "refund", "clawback", "transfer", "currency_exchange", "adjustment", "mixed"},
-					},
-					{
-						Name:        "transaction_shape",
-						Type:        "array",
-						Description: "Filter by one or more server-derived transaction shapes.",
-						Required:    false,
-						Array:       true,
-						ItemType:    "string",
-						Enum:        []string{"spend", "refund", "income", "clawback", "adjustment", "exchange", "transfer"},
-					},
-					{
-						Name:        "record_role",
-						Type:        "array",
-						Description: "Filter by one or more server-derived record roles present in a transaction.",
-						Required:    false,
-						Array:       true,
-						ItemType:    "string",
-						Enum:        []string{"expense", "refund", "income", "clawback", "exchange", "adjustment", "balance"},
-					},
-					{
-						Name:        "amount_min",
-						Type:        "string",
-						Description: "JSON string, not a JSON number. Signed DECIMAL(18,8) minimum filter; use at most 10 integer digits and 8 fractional digits.",
-						Required:    false,
-					},
-					{
-						Name:        "amount_max",
-						Type:        "string",
-						Description: "JSON string, not a JSON number. Signed DECIMAL(18,8) maximum filter; use at most 10 integer digits and 8 fractional digits.",
-						Required:    false,
-					},
-					{
-						Name:        "amount_usd_min",
-						Type:        "string",
-						Description: "JSON string, not a JSON number. Signed DECIMAL(18,8) USD minimum filter; use at most 10 integer digits and 8 fractional digits.",
-						Required:    false,
-					},
-					{
-						Name:        "amount_usd_max",
-						Type:        "string",
-						Description: "JSON string, not a JSON number. Signed DECIMAL(18,8) USD maximum filter; use at most 10 integer digits and 8 fractional digits.",
-						Required:    false,
-					},
-					{
-						Name:        "initiated_date_from",
-						Type:        "string",
-						Description: "Minimum transaction initiated date in YYYY-MM-DD format.",
-						Required:    false,
-					},
-					{
-						Name:        "initiated_date_to",
-						Type:        "string",
-						Description: "Maximum transaction initiated date in YYYY-MM-DD format.",
-						Required:    false,
-					},
-					{
-						Name:        "pending_date_from",
-						Type:        "string",
-						Description: "Minimum pending timestamp in ISO 8601 format; records without a pending timestamp do not match.",
-						Required:    false,
-					},
-					{
-						Name:        "pending_date_to",
-						Type:        "string",
-						Description: "Maximum pending timestamp in ISO 8601 format; records without a pending timestamp do not match.",
-						Required:    false,
-					},
-					{
-						Name:        "posted_date_from",
-						Type:        "string",
-						Description: "Minimum posted timestamp in ISO 8601 format.",
-						Required:    false,
-					},
-					{
-						Name:        "posted_date_to",
-						Type:        "string",
-						Description: "Maximum posted timestamp in ISO 8601 format.",
-						Required:    false,
 					},
 					{
 						Name:        "search",
@@ -8077,7 +7935,7 @@ func invokeListTransactionTemplates(ctx context.Context, client httpclient.Clien
 }
 
 func invokeListTransactions(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, []string{"account_id", "amount_max", "amount_min", "amount_usd_max", "amount_usd_min", "anchor_date", "category_fqn_prefix", "category_id", "currency", "initiated_date_from", "initiated_date_to", "lifecycle_status", "limit", "member_id", "offset", "pending_date_from", "pending_date_to", "posted_date_from", "posted_date_to", "record_role", "search", "settlement", "sort", "sort_dir", "tag_fqn_prefix", "tag_id", "transaction_class", "transaction_shape"}, nil, false, false); err != nil {
+	if err := validateInvocationInput(input, nil, []string{"anchor_date", "filter", "limit", "offset", "search", "sort", "sort_dir", "transaction_class"}, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	params := &httpclient.ListTransactionsParams{}
@@ -8181,212 +8039,38 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 		}
 		params.AnchorDate = &queryValue4
 	}
-	queryValues5, querySupplied5 := input.Query["account_id"]
+	queryValues5, querySupplied5 := input.Query["filter"]
 	if querySupplied5 {
-		if len(queryValues5) == 0 {
+		if len(queryValues5) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "account_id",
-				Err:      errors.New("value is required"),
+				Name:     "filter",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues5)),
 			}
 		}
-		queryValue5 := make([]int64, len(queryValues5))
-		for valueIndex, raw := range queryValues5 {
-			if err := parseInvocationValue(raw, false, &queryValue5[valueIndex]); err != nil {
-				return InvocationResult{}, &InvocationInputError{
-					Location: "query",
-					Name:     "account_id",
-					Value:    raw,
-					Err:      err,
-				}
+		var queryValue5 string
+		if err := parseInvocationValue(queryValues5[0], true, &queryValue5); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "filter",
+				Value:    queryValues5[0],
+				Err:      err,
 			}
 		}
-		params.AccountId = &queryValue5
+		params.Filter = &queryValue5
 	}
-	queryValues6, querySupplied6 := input.Query["category_id"]
+	queryValues6, querySupplied6 := input.Query["transaction_class"]
 	if querySupplied6 {
 		if len(queryValues6) == 0 {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "category_id",
-				Err:      errors.New("value is required"),
-			}
-		}
-		queryValue6 := make([]int64, len(queryValues6))
-		for valueIndex, raw := range queryValues6 {
-			if err := parseInvocationValue(raw, false, &queryValue6[valueIndex]); err != nil {
-				return InvocationResult{}, &InvocationInputError{
-					Location: "query",
-					Name:     "category_id",
-					Value:    raw,
-					Err:      err,
-				}
-			}
-		}
-		params.CategoryId = &queryValue6
-	}
-	queryValues7, querySupplied7 := input.Query["category_fqn_prefix"]
-	if querySupplied7 {
-		if len(queryValues7) != 1 {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "category_fqn_prefix",
-				Err:      fmt.Errorf("got %d values, want 1", len(queryValues7)),
-			}
-		}
-		var queryValue7 string
-		if err := parseInvocationValue(queryValues7[0], true, &queryValue7); err != nil {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "category_fqn_prefix",
-				Value:    queryValues7[0],
-				Err:      err,
-			}
-		}
-		params.CategoryFqnPrefix = &queryValue7
-	}
-	queryValues8, querySupplied8 := input.Query["tag_id"]
-	if querySupplied8 {
-		if len(queryValues8) == 0 {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "tag_id",
-				Err:      errors.New("value is required"),
-			}
-		}
-		queryValue8 := make([]int64, len(queryValues8))
-		for valueIndex, raw := range queryValues8 {
-			if err := parseInvocationValue(raw, false, &queryValue8[valueIndex]); err != nil {
-				return InvocationResult{}, &InvocationInputError{
-					Location: "query",
-					Name:     "tag_id",
-					Value:    raw,
-					Err:      err,
-				}
-			}
-		}
-		params.TagId = &queryValue8
-	}
-	queryValues9, querySupplied9 := input.Query["tag_fqn_prefix"]
-	if querySupplied9 {
-		if len(queryValues9) != 1 {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "tag_fqn_prefix",
-				Err:      fmt.Errorf("got %d values, want 1", len(queryValues9)),
-			}
-		}
-		var queryValue9 string
-		if err := parseInvocationValue(queryValues9[0], true, &queryValue9); err != nil {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "tag_fqn_prefix",
-				Value:    queryValues9[0],
-				Err:      err,
-			}
-		}
-		params.TagFqnPrefix = &queryValue9
-	}
-	queryValues10, querySupplied10 := input.Query["member_id"]
-	if querySupplied10 {
-		if len(queryValues10) == 0 {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "member_id",
-				Err:      errors.New("value is required"),
-			}
-		}
-		queryValue10 := make([]int64, len(queryValues10))
-		for valueIndex, raw := range queryValues10 {
-			if err := parseInvocationValue(raw, false, &queryValue10[valueIndex]); err != nil {
-				return InvocationResult{}, &InvocationInputError{
-					Location: "query",
-					Name:     "member_id",
-					Value:    raw,
-					Err:      err,
-				}
-			}
-		}
-		params.MemberId = &queryValue10
-	}
-	queryValues11, querySupplied11 := input.Query["currency"]
-	if querySupplied11 {
-		if len(queryValues11) == 0 {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "currency",
-				Err:      errors.New("value is required"),
-			}
-		}
-		queryValue11 := make([]string, len(queryValues11))
-		for valueIndex, raw := range queryValues11 {
-			if err := parseInvocationValue(raw, true, &queryValue11[valueIndex]); err != nil {
-				return InvocationResult{}, &InvocationInputError{
-					Location: "query",
-					Name:     "currency",
-					Value:    raw,
-					Err:      err,
-				}
-			}
-		}
-		params.Currency = &queryValue11
-	}
-	queryValues12, querySupplied12 := input.Query["lifecycle_status"]
-	if querySupplied12 {
-		if len(queryValues12) == 0 {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "lifecycle_status",
-				Err:      errors.New("value is required"),
-			}
-		}
-		queryValue12 := make([]httpclient.TransactionLifecycleStatus, len(queryValues12))
-		for valueIndex, raw := range queryValues12 {
-			if err := parseInvocationValue(raw, true, &queryValue12[valueIndex]); err != nil {
-				return InvocationResult{}, &InvocationInputError{
-					Location: "query",
-					Name:     "lifecycle_status",
-					Value:    raw,
-					Err:      err,
-				}
-			}
-		}
-		params.LifecycleStatus = &queryValue12
-	}
-	queryValues13, querySupplied13 := input.Query["settlement"]
-	if querySupplied13 {
-		if len(queryValues13) == 0 {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "settlement",
-				Err:      errors.New("value is required"),
-			}
-		}
-		queryValue13 := make([]httpclient.TransactionSettlement, len(queryValues13))
-		for valueIndex, raw := range queryValues13 {
-			if err := parseInvocationValue(raw, true, &queryValue13[valueIndex]); err != nil {
-				return InvocationResult{}, &InvocationInputError{
-					Location: "query",
-					Name:     "settlement",
-					Value:    raw,
-					Err:      err,
-				}
-			}
-		}
-		params.Settlement = &queryValue13
-	}
-	queryValues14, querySupplied14 := input.Query["transaction_class"]
-	if querySupplied14 {
-		if len(queryValues14) == 0 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
 				Name:     "transaction_class",
 				Err:      errors.New("value is required"),
 			}
 		}
-		queryValue14 := make([]httpclient.TransactionClass, len(queryValues14))
-		for valueIndex, raw := range queryValues14 {
-			if err := parseInvocationValue(raw, true, &queryValue14[valueIndex]); err != nil {
+		queryValue6 := make([]httpclient.TransactionClass, len(queryValues6))
+		for valueIndex, raw := range queryValues6 {
+			if err := parseInvocationValue(raw, true, &queryValue6[valueIndex]); err != nil {
 				return InvocationResult{}, &InvocationInputError{
 					Location: "query",
 					Name:     "transaction_class",
@@ -8395,271 +8079,27 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 				}
 			}
 		}
-		params.TransactionClass = &queryValue14
+		params.TransactionClass = &queryValue6
 	}
-	queryValues15, querySupplied15 := input.Query["transaction_shape"]
-	if querySupplied15 {
-		if len(queryValues15) == 0 {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "transaction_shape",
-				Err:      errors.New("value is required"),
-			}
-		}
-		queryValue15 := make([]httpclient.TransactionShapeType, len(queryValues15))
-		for valueIndex, raw := range queryValues15 {
-			if err := parseInvocationValue(raw, true, &queryValue15[valueIndex]); err != nil {
-				return InvocationResult{}, &InvocationInputError{
-					Location: "query",
-					Name:     "transaction_shape",
-					Value:    raw,
-					Err:      err,
-				}
-			}
-		}
-		params.TransactionShape = &queryValue15
-	}
-	queryValues16, querySupplied16 := input.Query["record_role"]
-	if querySupplied16 {
-		if len(queryValues16) == 0 {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "record_role",
-				Err:      errors.New("value is required"),
-			}
-		}
-		queryValue16 := make([]httpclient.RecordRole, len(queryValues16))
-		for valueIndex, raw := range queryValues16 {
-			if err := parseInvocationValue(raw, true, &queryValue16[valueIndex]); err != nil {
-				return InvocationResult{}, &InvocationInputError{
-					Location: "query",
-					Name:     "record_role",
-					Value:    raw,
-					Err:      err,
-				}
-			}
-		}
-		params.RecordRole = &queryValue16
-	}
-	queryValues17, querySupplied17 := input.Query["amount_min"]
-	if querySupplied17 {
-		if len(queryValues17) != 1 {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "amount_min",
-				Err:      fmt.Errorf("got %d values, want 1", len(queryValues17)),
-			}
-		}
-		var queryValue17 string
-		if err := parseInvocationValue(queryValues17[0], true, &queryValue17); err != nil {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "amount_min",
-				Value:    queryValues17[0],
-				Err:      err,
-			}
-		}
-		params.AmountMin = &queryValue17
-	}
-	queryValues18, querySupplied18 := input.Query["amount_max"]
-	if querySupplied18 {
-		if len(queryValues18) != 1 {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "amount_max",
-				Err:      fmt.Errorf("got %d values, want 1", len(queryValues18)),
-			}
-		}
-		var queryValue18 string
-		if err := parseInvocationValue(queryValues18[0], true, &queryValue18); err != nil {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "amount_max",
-				Value:    queryValues18[0],
-				Err:      err,
-			}
-		}
-		params.AmountMax = &queryValue18
-	}
-	queryValues19, querySupplied19 := input.Query["amount_usd_min"]
-	if querySupplied19 {
-		if len(queryValues19) != 1 {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "amount_usd_min",
-				Err:      fmt.Errorf("got %d values, want 1", len(queryValues19)),
-			}
-		}
-		var queryValue19 string
-		if err := parseInvocationValue(queryValues19[0], true, &queryValue19); err != nil {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "amount_usd_min",
-				Value:    queryValues19[0],
-				Err:      err,
-			}
-		}
-		params.AmountUsdMin = &queryValue19
-	}
-	queryValues20, querySupplied20 := input.Query["amount_usd_max"]
-	if querySupplied20 {
-		if len(queryValues20) != 1 {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "amount_usd_max",
-				Err:      fmt.Errorf("got %d values, want 1", len(queryValues20)),
-			}
-		}
-		var queryValue20 string
-		if err := parseInvocationValue(queryValues20[0], true, &queryValue20); err != nil {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "amount_usd_max",
-				Value:    queryValues20[0],
-				Err:      err,
-			}
-		}
-		params.AmountUsdMax = &queryValue20
-	}
-	queryValues21, querySupplied21 := input.Query["initiated_date_from"]
-	if querySupplied21 {
-		if len(queryValues21) != 1 {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "initiated_date_from",
-				Err:      fmt.Errorf("got %d values, want 1", len(queryValues21)),
-			}
-		}
-		var queryValue21 openapi_types.Date
-		if err := parseInvocationValue(queryValues21[0], true, &queryValue21); err != nil {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "initiated_date_from",
-				Value:    queryValues21[0],
-				Err:      err,
-			}
-		}
-		params.InitiatedDateFrom = &queryValue21
-	}
-	queryValues22, querySupplied22 := input.Query["initiated_date_to"]
-	if querySupplied22 {
-		if len(queryValues22) != 1 {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "initiated_date_to",
-				Err:      fmt.Errorf("got %d values, want 1", len(queryValues22)),
-			}
-		}
-		var queryValue22 openapi_types.Date
-		if err := parseInvocationValue(queryValues22[0], true, &queryValue22); err != nil {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "initiated_date_to",
-				Value:    queryValues22[0],
-				Err:      err,
-			}
-		}
-		params.InitiatedDateTo = &queryValue22
-	}
-	queryValues23, querySupplied23 := input.Query["pending_date_from"]
-	if querySupplied23 {
-		if len(queryValues23) != 1 {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "pending_date_from",
-				Err:      fmt.Errorf("got %d values, want 1", len(queryValues23)),
-			}
-		}
-		var queryValue23 time.Time
-		if err := parseInvocationValue(queryValues23[0], true, &queryValue23); err != nil {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "pending_date_from",
-				Value:    queryValues23[0],
-				Err:      err,
-			}
-		}
-		params.PendingDateFrom = &queryValue23
-	}
-	queryValues24, querySupplied24 := input.Query["pending_date_to"]
-	if querySupplied24 {
-		if len(queryValues24) != 1 {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "pending_date_to",
-				Err:      fmt.Errorf("got %d values, want 1", len(queryValues24)),
-			}
-		}
-		var queryValue24 time.Time
-		if err := parseInvocationValue(queryValues24[0], true, &queryValue24); err != nil {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "pending_date_to",
-				Value:    queryValues24[0],
-				Err:      err,
-			}
-		}
-		params.PendingDateTo = &queryValue24
-	}
-	queryValues25, querySupplied25 := input.Query["posted_date_from"]
-	if querySupplied25 {
-		if len(queryValues25) != 1 {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "posted_date_from",
-				Err:      fmt.Errorf("got %d values, want 1", len(queryValues25)),
-			}
-		}
-		var queryValue25 time.Time
-		if err := parseInvocationValue(queryValues25[0], true, &queryValue25); err != nil {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "posted_date_from",
-				Value:    queryValues25[0],
-				Err:      err,
-			}
-		}
-		params.PostedDateFrom = &queryValue25
-	}
-	queryValues26, querySupplied26 := input.Query["posted_date_to"]
-	if querySupplied26 {
-		if len(queryValues26) != 1 {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "posted_date_to",
-				Err:      fmt.Errorf("got %d values, want 1", len(queryValues26)),
-			}
-		}
-		var queryValue26 time.Time
-		if err := parseInvocationValue(queryValues26[0], true, &queryValue26); err != nil {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "posted_date_to",
-				Value:    queryValues26[0],
-				Err:      err,
-			}
-		}
-		params.PostedDateTo = &queryValue26
-	}
-	queryValues27, querySupplied27 := input.Query["search"]
-	if querySupplied27 {
-		if len(queryValues27) != 1 {
+	queryValues7, querySupplied7 := input.Query["search"]
+	if querySupplied7 {
+		if len(queryValues7) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
 				Name:     "search",
-				Err:      fmt.Errorf("got %d values, want 1", len(queryValues27)),
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues7)),
 			}
 		}
-		var queryValue27 string
-		if err := parseInvocationValue(queryValues27[0], true, &queryValue27); err != nil {
+		var queryValue7 string
+		if err := parseInvocationValue(queryValues7[0], true, &queryValue7); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
 				Name:     "search",
-				Value:    queryValues27[0],
+				Value:    queryValues7[0],
 				Err:      err,
 			}
 		}
-		params.Search = &queryValue27
+		params.Search = &queryValue7
 	}
 	response, err := client.ListTransactionsWithResponse(ctx, params)
 	if err != nil {

@@ -1,6 +1,8 @@
-import { Close, EyeOff, Filter } from "pixelarticons/react";
+import { Close, EyeOff, Filter, Plus, Trash } from "pixelarticons/react";
 import {
   type ReactNode,
+  useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -13,6 +15,8 @@ import type {
   Member,
   RecordRole,
   Tag,
+  TransactionClass,
+  TransactionSettlement,
   TransactionShapeType,
 } from "@/api";
 import {
@@ -28,35 +32,59 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import type { TransactionFilters } from "@/models/transaction-filters";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 import {
   normalizeTransactionFilterCurrency,
   recordRoles,
+  transactionClasses,
+  type TransactionFilterChip,
   transactionFilterCurrencyPattern,
+  transactionFilterDatePattern,
   transactionFilterDecimalPattern,
+  type TransactionFilterMembershipField,
+  type TransactionFilterMembershipMode,
+  type TransactionFilterRow,
+  transactionFilterRows,
+  type TransactionFilters,
   transactionLifecycleStatuses,
   transactionSettlements,
   transactionShapes,
+  withTransactionFilterExpression,
+  withTransactionFilterRows,
 } from "@/models/transaction-filters";
 import type { LedgerLookupsSnapshot } from "@/store";
 
 import { EntityMultiPicker, type EntityOption } from "./entity-picker";
-import { lifecycleStatusLabel, settlementStatusLabel } from "./format";
+import {
+  lifecycleStatusLabel,
+  settlementStatusLabel,
+  transactionClassLabel,
+} from "./format";
 
 type EntityDimension = "account" | "category" | "tag" | "member";
 type RangeDimension = "amount" | "amountUsd" | "initiated";
-export type TransactionFilterDimension =
+type MembershipDimension =
   | EntityDimension
+  | "class"
   | "currency"
   | "lifecycle"
   | "role"
   | "settlement"
-  | "shape"
-  | RangeDimension;
+  | "shape";
+export type TransactionFilterDimension = MembershipDimension | RangeDimension;
+
+const entityDimensionLabels: Record<EntityDimension, string> = {
+  account: "Accounts",
+  category: "Categories",
+  member: "Members",
+  tag: "Tags",
+};
 
 interface TransactionFilterControlsProps {
   readonly filters: TransactionFilters;
@@ -66,33 +94,97 @@ interface TransactionFilterControlsProps {
 }
 
 interface DimensionDefinition {
+  readonly field:
+    TransactionFilterMembershipField | "amount_usd" | "amount" | "initiated";
   readonly id: TransactionFilterDimension;
   readonly label: string;
+  readonly modes?: readonly TransactionFilterMembershipMode[];
 }
 
+const multiValueModes = ["any", "all", "none"] as const;
+const singleValueModes = ["any", "none"] as const;
 const dimensions: readonly DimensionDefinition[] = [
-  { id: "account", label: "Account" },
-  { id: "currency", label: "Currency" },
-  { id: "category", label: "Category" },
-  { id: "tag", label: "Tag" },
-  { id: "member", label: "Member" },
-  { id: "lifecycle", label: "Lifecycle" },
-  { id: "settlement", label: "Settlement" },
-  { id: "shape", label: "Transaction shape" },
-  { id: "role", label: "Record role" },
-  { id: "amount", label: "Amount" },
-  { id: "amountUsd", label: "Amount USD" },
-  { id: "initiated", label: "Initiated date" },
+  {
+    field: "account",
+    id: "account",
+    label: "Account",
+    modes: multiValueModes,
+  },
+  {
+    field: "currency",
+    id: "currency",
+    label: "Currency",
+    modes: multiValueModes,
+  },
+  {
+    field: "category",
+    id: "category",
+    label: "Category",
+    modes: multiValueModes,
+  },
+  { field: "tag", id: "tag", label: "Tag", modes: multiValueModes },
+  {
+    field: "member",
+    id: "member",
+    label: "Member",
+    modes: multiValueModes,
+  },
+  {
+    field: "lifecycle",
+    id: "lifecycle",
+    label: "Lifecycle",
+    modes: singleValueModes,
+  },
+  {
+    field: "settlement",
+    id: "settlement",
+    label: "Settlement",
+    modes: singleValueModes,
+  },
+  {
+    field: "class",
+    id: "class",
+    label: "Transaction class",
+    modes: singleValueModes,
+  },
+  {
+    field: "shape",
+    id: "shape",
+    label: "Transaction shape",
+    modes: multiValueModes,
+  },
+  {
+    field: "role",
+    id: "role",
+    label: "Record role",
+    modes: multiValueModes,
+  },
+  { field: "amount", id: "amount", label: "Amount" },
+  { field: "amount_usd", id: "amountUsd", label: "Amount USD" },
+  { field: "initiated", id: "initiated", label: "Initiated date" },
 ];
 
-const settlementChipValueLabel = (
-  settlement: TransactionFilters["settlements"][number],
-): string =>
+const dimensionById = new Map(
+  dimensions.map((dimension) => [dimension.id, dimension] as const),
+);
+
+const dimensionForChip = (
+  chip: TransactionFilterChip,
+): TransactionFilterDimension =>
+  chip.field === "amount_usd" ? "amountUsd" : chip.field;
+
+const modeLabel = (mode: TransactionFilterMembershipMode): string =>
+  mode === "any" ? "Any of" : mode === "all" ? "All of" : "None of";
+
+const settlementChipValueLabel = (settlement: TransactionSettlement): string =>
   settlement === "mixed"
     ? "Mixed"
     : settlement === "not_applicable"
       ? "Not applicable"
       : settlementStatusLabel(settlement);
+
+const accountingLabel = (value: RecordRole | TransactionShapeType): string =>
+  `${value.charAt(0).toUpperCase()}${value.slice(1)}`;
 
 const editorFocusableSelector = [
   "button:not(:disabled)",
@@ -156,114 +248,136 @@ const mapById = <T,>(
   new Map(values?.map((value) => [getId(value), value] as const));
 
 const selectedOrVisible = (
-  id: number,
-  selectedIds: readonly number[],
+  selected: boolean,
   hidden: boolean,
   includeHidden: boolean,
-): boolean => selectedIds.includes(id) || !hidden || includeHidden;
+): boolean => selected || !hidden || includeHidden;
 
 const rangeLabel = (
   label: string,
   from: string | undefined,
   to: string | undefined,
 ): string | undefined => {
-  if (from && to) {
-    return `${label} ${from}-${to}`;
-  }
-  if (from) {
-    return `${label} >= ${from}`;
-  }
-  if (to) {
-    return `${label} <= ${to}`;
-  }
+  if (from && to) return `${label} ${from}-${to}`;
+  if (from) return `${label} >= ${from}`;
+  if (to) return `${label} <= ${to}`;
   return undefined;
 };
 
-const filterCount = (
-  filters: TransactionFilters,
+const valuesForField = (
+  rows: readonly TransactionFilterRow[],
+  field: TransactionFilterMembershipField,
+): readonly string[] =>
+  rows.flatMap((row) =>
+    row.chips.flatMap((chip) =>
+      chip.kind === "membership" && chip.field === field ? chip.values : [],
+    ),
+  );
+
+const filterChipCount = (
+  rows: readonly TransactionFilterRow[],
   hiddenDimensions: ReadonlySet<TransactionFilterDimension>,
 ): number =>
-  (hiddenDimensions.has("account") ? 0 : filters.accountIds.length) +
-  (hiddenDimensions.has("currency") ? 0 : filters.currencies.length) +
-  (hiddenDimensions.has("category") ? 0 : filters.categoryIds.length) +
-  (hiddenDimensions.has("category") || !filters.categoryFqnPrefix ? 0 : 1) +
-  (hiddenDimensions.has("tag") ? 0 : filters.tagIds.length) +
-  (hiddenDimensions.has("tag") || !filters.tagFqnPrefix ? 0 : 1) +
-  (hiddenDimensions.has("member") ? 0 : filters.memberIds.length) +
-  (hiddenDimensions.has("lifecycle") ? 0 : filters.lifecycleStatuses.length) +
-  (hiddenDimensions.has("settlement") ? 0 : filters.settlements.length) +
-  (hiddenDimensions.has("shape") ? 0 : filters.shapes.length) +
-  (hiddenDimensions.has("role") ? 0 : filters.recordRoles.length) +
-  [
-    hiddenDimensions.has("amount")
-      ? undefined
-      : rangeLabel("Amount", filters.amountMin, filters.amountMax),
-    hiddenDimensions.has("amountUsd")
-      ? undefined
-      : rangeLabel("Amount USD", filters.amountUsdMin, filters.amountUsdMax),
-    hiddenDimensions.has("initiated")
-      ? undefined
-      : rangeLabel("Initiated", filters.initiatedFrom, filters.initiatedTo),
-  ].filter(Boolean).length;
+  rows.reduce(
+    (count, row) =>
+      count +
+      row.chips.filter((chip) => !hiddenDimensions.has(dimensionForChip(chip)))
+        .length,
+    0,
+  );
 
 export const hasActiveTransactionFilterChips = (
   filters: TransactionFilters,
   hiddenDimensions: readonly TransactionFilterDimension[] = [],
-): boolean => filterCount(filters, new Set(hiddenDimensions)) > 0;
+): boolean => {
+  if (filters.filterText === "") return true;
+  const rows = transactionFilterRows(filters);
+  return rows
+    ? filterChipCount(rows, new Set(hiddenDimensions)) > 0
+    : Boolean(filters.filterText);
+};
 
 interface FilterChipProps {
+  readonly editKey: string;
   readonly hidden?: boolean;
   readonly label: string;
+  readonly labelSuffix?: string;
+  readonly onEdit: (opener: HTMLButtonElement) => void;
   readonly onRemove: () => void;
-  readonly truncateLabel?: boolean;
   readonly tooltip?: string;
+  readonly truncateLabel?: boolean;
 }
 
 const FilterChip = ({
+  editKey,
   hidden,
   label,
+  labelSuffix,
+  onEdit,
   onRemove,
+  tooltip = `${label}${labelSuffix ?? ""}`,
   truncateLabel = true,
-  tooltip,
 }: FilterChipProps) => {
-  const tooltipText = tooltip ?? label;
-  const chip = (
-    <Badge
-      variant="secondary"
-      className={[
-        truncateLabel
-          ? "max-w-64"
-          : "h-auto min-h-5 max-w-full overflow-visible py-1 whitespace-normal",
-        "justify-start gap-1 normal-case",
-      ].join(" ")}
-    >
-      {hidden ? <EyeOff aria-label="Hidden" className="size-3" /> : null}
-      <span
-        className={truncateLabel ? "truncate" : "break-all whitespace-normal"}
-      >
-        {label}
-      </span>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-xs"
-        aria-label={`Remove ${label}`}
-        onClick={onRemove}
-      >
-        <Close aria-hidden="true" />
-      </Button>
-    </Badge>
-  );
-
+  const accessibleLabel = `${label}${labelSuffix ?? ""}`;
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>{chip}</TooltipTrigger>
-      <TooltipContent>{tooltipText}</TooltipContent>
-    </Tooltip>
+    <AppTooltip asChild label={tooltip}>
+      <Badge
+        variant="secondary"
+        className={cn(
+          "h-auto max-w-full min-w-0 justify-start gap-1 py-1 normal-case",
+          !truncateLabel && "min-h-5 overflow-visible whitespace-normal",
+        )}
+      >
+        {hidden ? (
+          <EyeOff aria-label="Hidden" className="size-3 shrink-0" />
+        ) : null}
+        <Button
+          type="button"
+          variant="ghost"
+          size="xs"
+          className={cn(
+            "h-auto max-w-full min-w-0! shrink! px-0 py-0 normal-case shadow-none",
+            !truncateLabel && "whitespace-normal",
+          )}
+          aria-label={`Edit ${accessibleLabel}`}
+          data-filter-chip-edit={editKey}
+          onClick={(event) => onEdit(event.currentTarget)}
+        >
+          <span
+            data-filter-chip-label
+            className={
+              truncateLabel
+                ? "max-w-72 min-w-8 shrink-0 truncate max-sm:max-w-20"
+                : "break-all whitespace-normal"
+            }
+          >
+            {label}
+          </span>
+          {labelSuffix ? (
+            <span
+              data-filter-chip-operator
+              className="shrink-0 whitespace-nowrap"
+            >
+              {labelSuffix}
+            </span>
+          ) : null}
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          aria-label={`Remove ${accessibleLabel}`}
+          onClick={onRemove}
+        >
+          <Close aria-hidden="true" />
+        </Button>
+      </Badge>
+    </AppTooltip>
   );
 };
 
 interface CheckboxListProps<T extends string> {
+  readonly idPrefix: string;
   readonly labelFor: (value: T) => string;
   readonly onChange: (values: readonly T[]) => void;
   readonly values: readonly T[];
@@ -271,6 +385,7 @@ interface CheckboxListProps<T extends string> {
 }
 
 const CheckboxList = <T extends string>({
+  idPrefix,
   labelFor,
   onChange,
   selectedValues,
@@ -279,7 +394,7 @@ const CheckboxList = <T extends string>({
   <div className="flex flex-col gap-2">
     {values.map((value) => {
       const checked = selectedValues.includes(value);
-      const id = `transactions-filter-${value}`;
+      const id = `${idPrefix}-${value}`;
       return (
         <label
           key={value}
@@ -308,32 +423,36 @@ const CheckboxList = <T extends string>({
   </div>
 );
 
-const accountingLabel = (value: RecordRole | TransactionShapeType): string =>
-  `${value.charAt(0).toUpperCase()}${value.slice(1)}`;
-
 interface CurrencyFilterEditorProps {
+  readonly idPrefix: string;
   readonly onChange: (values: readonly string[]) => void;
   readonly options: readonly string[];
   readonly selectedValues: readonly string[];
 }
 
 const CurrencyFilterEditor = ({
+  idPrefix,
   onChange,
   options,
   selectedValues,
 }: CurrencyFilterEditorProps) => {
   const datalistKeyboardSelectionRef = useRef(false);
   const draftInputRef = useRef<HTMLInputElement>(null);
-  const removedCheckboxRef = useRef<HTMLElement | null>(null);
+  const removedCheckboxIdRef = useRef<string | undefined>(undefined);
   const [draft, setDraft] = useState("");
   const [invalid, setInvalid] = useState(false);
 
   useLayoutEffect(() => {
-    const removedCheckbox = removedCheckboxRef.current;
-    removedCheckboxRef.current = null;
-    if (removedCheckbox && !removedCheckbox.isConnected) {
-      draftInputRef.current?.focus();
-    }
+    const removedCheckboxId = removedCheckboxIdRef.current;
+    if (!removedCheckboxId) return;
+    removedCheckboxIdRef.current = undefined;
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        const removedCheckbox = document.getElementById(removedCheckboxId);
+        if (removedCheckbox) removedCheckbox.focus();
+        else draftInputRef.current?.focus();
+      });
+    });
   }, [options, selectedValues]);
 
   const addDraft = (value = draft): void => {
@@ -344,25 +463,28 @@ const CurrencyFilterEditor = ({
     }
     setInvalid(false);
     setDraft("");
-    if (selectedValues.includes(currency)) {
-      return;
+    if (!selectedValues.includes(currency)) {
+      onChange([...selectedValues, currency]);
     }
-    onChange([...selectedValues, currency]);
   };
 
+  const datalistId = `${idPrefix}-currency-options`;
   return (
     <div className="flex flex-col gap-3">
       <div className="max-h-[min(16rem,40svh)] overflow-y-auto pr-1">
         <CheckboxList
+          idPrefix={`${idPrefix}-currency`}
           values={options}
           selectedValues={selectedValues}
           labelFor={(currency) => currency}
           onChange={(values) => {
             if (values.length < selectedValues.length) {
-              removedCheckboxRef.current =
-                document.activeElement instanceof HTMLElement
-                  ? document.activeElement
-                  : null;
+              const removedCurrency = selectedValues.find(
+                (currency) => !values.includes(currency),
+              );
+              removedCheckboxIdRef.current = removedCurrency
+                ? `${idPrefix}-currency-${removedCurrency}`
+                : undefined;
             }
             onChange(values);
           }}
@@ -373,10 +495,10 @@ const CurrencyFilterEditor = ({
           Currency code
           <input
             ref={draftInputRef}
-            list="transactions-filter-currency-options"
+            list={datalistId}
             aria-invalid={invalid}
             aria-describedby={
-              invalid ? "transactions-filter-currency-error" : undefined
+              invalid ? `${idPrefix}-currency-error` : undefined
             }
             className="bg-card h-9 border-2 border-[var(--border-ink)] px-2 text-sm shadow-[var(--shadow-pixel)]"
             value={draft}
@@ -393,9 +515,7 @@ const CurrencyFilterEditor = ({
               }
             }}
             onKeyUp={(event) => {
-              if (event.key !== "Enter") {
-                return;
-              }
+              if (event.key !== "Enter") return;
               const matches = matchingDatalistOptions(event.currentTarget);
               const value =
                 datalistKeyboardSelectionRef.current && matches.length === 1
@@ -410,14 +530,14 @@ const CurrencyFilterEditor = ({
           Add
         </Button>
       </div>
-      <datalist id="transactions-filter-currency-options">
+      <datalist id={datalistId}>
         {options.map((currency) => (
           <option key={currency} value={currency} />
         ))}
       </datalist>
       {invalid ? (
         <p
-          id="transactions-filter-currency-error"
+          id={`${idPrefix}-currency-error`}
           role="alert"
           className="text-destructive font-body text-xs"
         >
@@ -429,36 +549,43 @@ const CurrencyFilterEditor = ({
 };
 
 interface RangeEditorProps {
+  readonly formatHint?: string;
   readonly fromLabel: string;
   readonly fromValue: string | undefined;
-  readonly inputType?: "date" | "text";
+  readonly inputMode: "decimal" | "text";
   readonly onChange: (from: string | undefined, to: string | undefined) => void;
-  readonly pattern?: RegExp;
+  readonly pattern: RegExp;
   readonly toLabel: string;
   readonly toValue: string | undefined;
 }
 
 const RangeEditor = ({
+  formatHint,
   fromLabel,
   fromValue,
-  inputType = "text",
+  inputMode,
   onChange,
   pattern,
   toLabel,
   toValue,
 }: RangeEditorProps) => {
+  const formatHintId = useId();
   const [draftState, setDraftState] = useState({
     fromDraft: fromValue ?? "",
     fromValue,
     toDraft: toValue ?? "",
     toValue,
   });
-  const draftMatchesValues =
-    draftState.fromValue === fromValue && draftState.toValue === toValue;
-  const fromDraft = draftMatchesValues
+  const fromDraftMatchesValue = draftState.fromValue === fromValue;
+  const toDraftMatchesValue = draftState.toValue === toValue;
+  const fromDraft = fromDraftMatchesValue
     ? draftState.fromDraft
     : (fromValue ?? "");
-  const toDraft = draftMatchesValues ? draftState.toDraft : (toValue ?? "");
+  const toDraft = toDraftMatchesValue ? draftState.toDraft : (toValue ?? "");
+  const fromInvalid = Boolean(
+    fromDraft.trim() && !pattern.test(fromDraft.trim()),
+  );
+  const toInvalid = Boolean(toDraft.trim() && !pattern.test(toDraft.trim()));
 
   const update = (side: "from" | "to", rawValue: string): void => {
     const value = rawValue.trim();
@@ -470,24 +597,15 @@ const RangeEditor = ({
       toDraft: nextToDraft,
       toValue,
     });
-    if (value && pattern && !pattern.test(value)) {
-      return;
-    }
-
+    if (value && !pattern.test(value)) return;
     const normalizeDraft = (
       draft: string,
       previousValue: string | undefined,
     ): string | undefined => {
       const nextValue = draft.trim();
-      if (!nextValue) {
-        return undefined;
-      }
-      if (pattern && !pattern.test(nextValue)) {
-        return previousValue;
-      }
-      return nextValue;
+      if (!nextValue) return undefined;
+      return !pattern.test(nextValue) ? previousValue : nextValue;
     };
-
     onChange(
       normalizeDraft(nextFromDraft, fromValue),
       normalizeDraft(nextToDraft, toValue),
@@ -495,34 +613,75 @@ const RangeEditor = ({
   };
 
   return (
-    <div className="grid grid-cols-2 gap-3">
-      <label className="flex flex-col gap-1 font-mono text-xs">
-        {fromLabel}
-        <input
-          type={inputType}
-          inputMode={inputType === "text" ? "decimal" : undefined}
-          className="bg-card h-9 border-2 border-[var(--border-ink)] px-2 text-sm shadow-[var(--shadow-pixel)]"
-          value={fromDraft}
-          onChange={(event) => {
-            update("from", event.target.value);
-          }}
-        />
-      </label>
-      <label className="flex flex-col gap-1 font-mono text-xs">
-        {toLabel}
-        <input
-          type={inputType}
-          inputMode={inputType === "text" ? "decimal" : undefined}
-          className="bg-card h-9 border-2 border-[var(--border-ink)] px-2 text-sm shadow-[var(--shadow-pixel)]"
-          value={toDraft}
-          onChange={(event) => {
-            update("to", event.target.value);
-          }}
-        />
-      </label>
+    <div className="space-y-2">
+      <div className="grid grid-cols-2 gap-3">
+        <label className="flex flex-col gap-1 font-mono text-xs">
+          {fromLabel}
+          <input
+            type="text"
+            inputMode={inputMode}
+            className="bg-card h-9 border-2 border-[var(--border-ink)] px-2 text-sm shadow-[var(--shadow-pixel)]"
+            value={fromDraft}
+            aria-describedby={formatHint ? formatHintId : undefined}
+            aria-invalid={fromInvalid || undefined}
+            onChange={(event) => update("from", event.target.value)}
+          />
+        </label>
+        <label className="flex flex-col gap-1 font-mono text-xs">
+          {toLabel}
+          <input
+            type="text"
+            inputMode={inputMode}
+            className="bg-card h-9 border-2 border-[var(--border-ink)] px-2 text-sm shadow-[var(--shadow-pixel)]"
+            value={toDraft}
+            aria-describedby={formatHint ? formatHintId : undefined}
+            aria-invalid={toInvalid || undefined}
+            onChange={(event) => update("to", event.target.value)}
+          />
+        </label>
+      </div>
+      {formatHint ? (
+        <p
+          id={formatHintId}
+          role={fromInvalid || toInvalid ? "alert" : undefined}
+          className={cn(
+            "font-body text-xs",
+            fromInvalid || toInvalid
+              ? "text-destructive"
+              : "text-muted-foreground",
+          )}
+        >
+          {formatHint}
+        </p>
+      ) : null}
     </div>
   );
 };
+
+interface RowState {
+  readonly rows: readonly TransactionFilterRow[];
+  readonly source: string;
+}
+
+interface EditorState {
+  readonly dimension?: TransactionFilterDimension;
+  readonly mode: TransactionFilterMembershipMode;
+  readonly rowIndex: number;
+}
+
+interface EditorSession extends EditorState {
+  readonly currentSource: string;
+  readonly pendingPreviousSource?: string;
+  readonly previousMode?: TransactionFilterMembershipMode;
+}
+
+interface EditedChipFocusTarget {
+  readonly editKey: string;
+  readonly source: string;
+}
+
+const filterSourceKey = (filterText: string | undefined): string =>
+  filterText === undefined ? "absent" : `present:${filterText}`;
 
 export const TransactionFilterControls = ({
   filters,
@@ -530,22 +689,45 @@ export const TransactionFilterControls = ({
   lookups,
   onChange,
 }: TransactionFilterControlsProps) => {
-  const addFilterTriggerRef = useRef<HTMLButtonElement>(null);
-  const datalistEscapePendingRef = useRef(false);
-  const datalistKeyboardCommitTargetRef = useRef<HTMLInputElement | null>(null);
-  const datalistPointerTargetRef = useRef<HTMLInputElement | null>(null);
-  const restoreAddFilterTriggerFocusRef = useRef(false);
-  const [open, setOpen] = useState(false);
-  const [selectedDimension, setSelectedDimension] =
-    useState<TransactionFilterDimension>();
+  const parsedRows = transactionFilterRows(filters);
+  const source = filterSourceKey(filters.filterText);
+  const sourceRef = useRef(source);
+  const historySourceRef = useRef<string | undefined>(undefined);
+  const [rowState, setRowState] = useState<RowState>({
+    rows: parsedRows ?? [{ chips: [] }],
+    source,
+  });
+  const externalRows = parsedRows ?? [{ chips: [] }];
+  const rows = rowState.source === source ? rowState.rows : externalRows;
+  const advanced = parsedRows === undefined;
+  const [editor, setEditor] = useState<EditorSession>();
+  const editorSourceIsCurrent =
+    source === editor?.currentSource ||
+    source === editor?.pendingPreviousSource;
+  const activeEditor = editorSourceIsCurrent ? editor : undefined;
   const [includeHidden, setIncludeHidden] = useState<
     Partial<Record<EntityDimension, boolean>>
   >({});
   const [entityPickerOpen, setEntityPickerOpen] = useState(false);
+  const controlsRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<HTMLDivElement>(null);
-  const restoreDimensionRef = useRef<TransactionFilterDimension | undefined>(
+  const editorAutoFocusKeyRef = useRef<string | undefined>(undefined);
+  const addFilterTriggerRefs = useRef(new Map<number, HTMLButtonElement>());
+  const advancedClearButtonRef = useRef<HTMLButtonElement>(null);
+  const restoreAdvancedSourceFocusRef = useRef(false);
+  const restoreAdvancedClearFocusRef = useRef(false);
+  const restoreAddFilterTriggerFocusRef = useRef<number | undefined>(undefined);
+  const restoreEditedChipOnCloseRef = useRef<EditedChipFocusTarget | undefined>(
     undefined,
   );
+  const restoreEditedChipAfterCloseRef = useRef(false);
+  const restoreDimensionMenuFocusRef = useRef<
+    TransactionFilterDimension | undefined
+  >(undefined);
+  const restoreRemovedRowFocusRef = useRef<number | undefined>(undefined);
+  const datalistKeyboardCommitTargetRef = useRef<HTMLInputElement | null>(null);
+  const datalistPointerTargetRef = useRef<HTMLInputElement | null>(null);
+  const datalistEscapePendingRef = useRef(false);
   const hiddenDimensionSet = useMemo(
     () => new Set<TransactionFilterDimension>(hiddenDimensions),
     [hiddenDimensions],
@@ -557,214 +739,570 @@ export const TransactionFilterControls = ({
   );
 
   useLayoutEffect(() => {
-    if (!open) {
-      return;
-    }
+    sourceRef.current = source;
+  }, [source]);
 
-    if (selectedDimension) {
-      const firstEditorControl = editorRef.current?.querySelector<HTMLElement>(
-        editorFocusableSelector,
+  useEffect(() => {
+    const recordHistorySource = () => {
+      const searchParams = new URL(window.location.href).searchParams;
+      historySourceRef.current = filterSourceKey(
+        searchParams.has("filter")
+          ? (searchParams.get("filter") ?? "")
+          : undefined,
       );
-      firstEditorControl?.focus();
+    };
+    window.addEventListener("popstate", recordHistorySource);
+    return () => window.removeEventListener("popstate", recordHistorySource);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!editor) return;
+    const historyRestoredDifferentSource =
+      historySourceRef.current === source && source !== editor.currentSource;
+    if (editorSourceIsCurrent && !historyRestoredDifferentSource) return;
+    historySourceRef.current = undefined;
+    if (parsedRows === undefined) {
+      restoreAdvancedSourceFocusRef.current = true;
+    } else if (editor.dimension) {
+      const candidates =
+        parsedRows?.[editor.rowIndex]?.chips.filter(
+          (chip) => dimensionForChip(chip) === editor.dimension,
+        ) ?? [];
+      const restoredChip =
+        candidates.find(
+          (chip) =>
+            chip.kind === "membership" && chip.mode === editor.previousMode,
+        ) ??
+        candidates.find(
+          (chip) => chip.kind === "membership" && chip.mode === editor.mode,
+        ) ??
+        candidates[0];
+      if (restoredChip) {
+        restoreEditedChipAfterCloseRef.current = true;
+        restoreEditedChipOnCloseRef.current = {
+          editKey: `${editor.rowIndex}:${editor.dimension}:${restoredChip.kind === "membership" ? restoredChip.mode : "range"}`,
+          source,
+        };
+      } else if (parsedRows?.length) {
+        const restoreRowIndex = Math.min(
+          editor.rowIndex,
+          parsedRows.length - 1,
+        );
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(() => {
+            focusWithoutTooltip(
+              addFilterTriggerRefs.current.get(restoreRowIndex),
+            );
+          });
+        });
+      }
+    }
+    setEntityPickerOpen(false);
+    setEditor(undefined);
+  }, [editor, editorSourceIsCurrent, parsedRows, source]);
+
+  useLayoutEffect(() => {
+    if (!advanced || !restoreAdvancedSourceFocusRef.current) return;
+    restoreAdvancedSourceFocusRef.current = false;
+    focusWithoutTooltip(advancedClearButtonRef.current);
+  }, [advanced]);
+
+  useLayoutEffect(() => {
+    if (!activeEditor) {
+      editorAutoFocusKeyRef.current = undefined;
       return;
     }
-
-    if (!restoreDimensionRef.current) {
+    if (activeEditor.dimension) {
+      const focusKey = `${activeEditor.rowIndex}:${activeEditor.dimension}`;
+      if (editorAutoFocusKeyRef.current === focusKey) return;
+      editorAutoFocusKeyRef.current = focusKey;
+      editorRef.current
+        ?.querySelector<HTMLElement>(editorFocusableSelector)
+        ?.focus();
       return;
     }
+    editorAutoFocusKeyRef.current = undefined;
+    const dimension = restoreDimensionMenuFocusRef.current;
+    if (!dimension) return;
+    restoreDimensionMenuFocusRef.current = undefined;
+    editorRef.current
+      ?.querySelector<HTMLElement>(`[data-filter-dimension="${dimension}"]`)
+      ?.focus();
+  }, [activeEditor]);
 
-    const dimensionButton = editorRef.current?.querySelector<HTMLElement>(
-      `[data-filter-dimension="${restoreDimensionRef.current}"]`,
+  useLayoutEffect(() => {
+    const rowIndex = restoreRemovedRowFocusRef.current;
+    if (rowIndex === undefined) return;
+    restoreRemovedRowFocusRef.current = undefined;
+    focusWithoutTooltip(addFilterTriggerRefs.current.get(rowIndex));
+  }, [rows.length]);
+
+  useLayoutEffect(() => {
+    if (advanced || !restoreAdvancedClearFocusRef.current) return;
+    restoreAdvancedClearFocusRef.current = false;
+    focusWithoutTooltip(addFilterTriggerRefs.current.get(0));
+  }, [advanced]);
+
+  useLayoutEffect(() => {
+    const target = restoreEditedChipOnCloseRef.current;
+    if (
+      !restoreEditedChipAfterCloseRef.current ||
+      !target ||
+      source !== target.source
+    )
+      return;
+    const liveTrigger = controlsRef.current?.querySelector<HTMLButtonElement>(
+      `[data-filter-chip-edit="${target.editKey}"]`,
     );
-    restoreDimensionRef.current = undefined;
-    dimensionButton?.focus();
-  }, [open, selectedDimension]);
+    if (!liveTrigger) return;
+    focusWithoutTooltip(liveTrigger);
+  }, [activeEditor, rows, source]);
 
-  const accountOptions = useMemo(
-    () =>
-      lookups?.accounts
-        .filter(activeRecord)
-        .filter((account) =>
-          selectedOrVisible(
-            account.account_id,
-            filters.accountIds,
-            account.is_hidden,
-            includeHidden.account ?? false,
-          ),
-        )
-        .map(accountOption) ?? [],
-    [filters.accountIds, includeHidden.account, lookups?.accounts],
+  const commitRows = (nextRows: readonly TransactionFilterRow[]): void => {
+    const normalizedRows = nextRows.length > 0 ? nextRows : [{ chips: [] }];
+    const nextFilters = withTransactionFilterRows(filters, normalizedRows);
+    const nextSource = filterSourceKey(nextFilters.filterText);
+    setRowState({
+      rows: normalizedRows,
+      source: nextSource,
+    });
+    setEditor((current) =>
+      current
+        ? {
+            ...current,
+            currentSource: nextSource,
+            pendingPreviousSource: source,
+          }
+        : current,
+    );
+    onChange(nextFilters);
+    const settleEditorSource = (attempts: number): void => {
+      window.requestAnimationFrame(() => {
+        if (sourceRef.current !== nextSource && attempts > 1) {
+          settleEditorSource(attempts - 1);
+          return;
+        }
+        if (sourceRef.current !== nextSource) return;
+        setEditor((current) => {
+          if (
+            !current ||
+            current.currentSource !== nextSource ||
+            current.pendingPreviousSource === undefined
+          ) {
+            return current;
+          }
+          const { pendingPreviousSource: _, ...settled } = current;
+          return settled;
+        });
+      });
+    };
+    settleEditorSource(60);
+  };
+
+  const openEditor = (nextEditor: EditorState): void => {
+    setEditor({ ...nextEditor, currentSource: source });
+  };
+
+  const updateRow = (
+    rowIndex: number,
+    chips: readonly TransactionFilterChip[],
+  ) => {
+    const nextRows = [...rows];
+    nextRows[rowIndex] = { chips };
+    commitRows(nextRows);
+  };
+
+  const removeRow = (rowIndex: number): void => {
+    restoreRemovedRowFocusRef.current = Math.min(rowIndex, rows.length - 2);
+    commitRows(rows.filter((_, index) => index !== rowIndex));
+  };
+
+  const updateMembership = (
+    rowIndex: number,
+    field: TransactionFilterMembershipField,
+    mode: TransactionFilterMembershipMode,
+    values: readonly string[],
+  ): void => {
+    const chips = [...(rows[rowIndex]?.chips ?? [])];
+    const chipIndex = chips.findIndex(
+      (chip) =>
+        chip.kind === "membership" &&
+        chip.field === field &&
+        chip.mode === mode,
+    );
+    if (values.length === 0) {
+      if (chipIndex >= 0) chips.splice(chipIndex, 1);
+    } else {
+      const scopedValues =
+        chipIndex >= 0 && chips[chipIndex]?.kind === "membership"
+          ? chips[chipIndex].scopedValues
+          : undefined;
+      const chip = {
+        field,
+        kind: "membership",
+        mode,
+        ...(scopedValues ? { scopedValues } : {}),
+        values,
+      } as const;
+      if (chipIndex >= 0) chips[chipIndex] = chip;
+      else chips.push(chip);
+    }
+    updateRow(rowIndex, chips);
+  };
+
+  const changeMembershipMode = (
+    rowIndex: number,
+    field: TransactionFilterMembershipField,
+    previousMode: TransactionFilterMembershipMode,
+    nextMode: TransactionFilterMembershipMode,
+  ): boolean => {
+    if (previousMode === nextMode) return true;
+    const chips = [...(rows[rowIndex]?.chips ?? [])];
+    const sourceIndex = chips.findIndex(
+      (chip) =>
+        chip.kind === "membership" &&
+        chip.field === field &&
+        chip.mode === previousMode,
+    );
+    if (sourceIndex < 0) return true;
+    const source = chips[sourceIndex]! as Extract<
+      TransactionFilterChip,
+      { readonly kind: "membership" }
+    >;
+    const remaining = chips.filter((_, index) => index !== sourceIndex);
+    const targetIndex = remaining.findIndex(
+      (chip) =>
+        chip.kind === "membership" &&
+        chip.field === field &&
+        chip.mode === nextMode,
+    );
+    if (targetIndex >= 0) {
+      const target = remaining[targetIndex]! as Extract<
+        TransactionFilterChip,
+        { readonly kind: "membership" }
+      >;
+      const sourceScopes = new Set(source.scopedValues ?? []);
+      const targetScopes = new Set(target.scopedValues ?? []);
+      const scopeCollision = source.values.some(
+        (value) =>
+          target.values.includes(value) &&
+          sourceScopes.has(value) !== targetScopes.has(value),
+      );
+      if (scopeCollision) return false;
+      remaining[targetIndex] = {
+        ...target,
+        scopedValues: [
+          ...new Set([
+            ...(target.scopedValues ?? []),
+            ...(source.scopedValues ?? []),
+          ]),
+        ],
+        values: [...new Set([...target.values, ...source.values])],
+      };
+    } else {
+      remaining.push({ ...source, mode: nextMode });
+    }
+    updateRow(rowIndex, remaining);
+    return true;
+  };
+
+  const updateRange = (
+    rowIndex: number,
+    field: "amount" | "amount_usd" | "initiated",
+    from: string | undefined,
+    to: string | undefined,
+  ): void => {
+    const chips = [...(rows[rowIndex]?.chips ?? [])];
+    const chipIndex = chips.findIndex(
+      (chip) => chip.kind === "range" && chip.field === field,
+    );
+    if (!from && !to) {
+      if (chipIndex >= 0) chips.splice(chipIndex, 1);
+    } else {
+      const chip = { field, from, kind: "range", to } as const;
+      if (chipIndex >= 0) chips[chipIndex] = chip;
+      else chips.push(chip);
+    }
+    updateRow(rowIndex, chips);
+  };
+
+  const accountById = useMemo(
+    () => mapById(lookups?.accounts, (account) => account.account_id),
+    [lookups?.accounts],
   );
-  const categoryOptions = useMemo(
-    () =>
-      lookups?.categories
-        .filter(activeRecord)
-        .filter((category) =>
-          selectedOrVisible(
-            category.category_id,
-            filters.categoryIds,
-            category.is_hidden,
-            includeHidden.category ?? false,
-          ),
-        )
-        .map(categoryOption) ?? [],
-    [filters.categoryIds, includeHidden.category, lookups?.categories],
+  const categoryById = useMemo(
+    () => mapById(lookups?.categories, (category) => category.category_id),
+    [lookups?.categories],
   );
-  const tagOptions = useMemo(
-    () =>
-      lookups?.tags
-        .filter(activeRecord)
-        .filter((tag) =>
-          selectedOrVisible(
-            tag.tag_id,
-            filters.tagIds,
-            tag.is_hidden,
-            includeHidden.tag ?? false,
-          ),
-        )
-        .map(tagOption) ?? [],
-    [filters.tagIds, includeHidden.tag, lookups?.tags],
+  const tagById = useMemo(
+    () => mapById(lookups?.tags, (tag) => tag.tag_id),
+    [lookups?.tags],
   );
-  const memberOptions = useMemo(
-    () =>
-      lookups?.members
-        .filter(activeRecord)
-        .filter((member) =>
-          selectedOrVisible(
-            member.member_id,
-            filters.memberIds,
-            member.is_hidden,
-            includeHidden.member ?? false,
-          ),
-        )
-        .map(memberOption) ?? [],
-    [filters.memberIds, includeHidden.member, lookups?.members],
+  const memberById = useMemo(
+    () => mapById(lookups?.members, (member) => member.member_id),
+    [lookups?.members],
   );
+
   const currencyOptions = useMemo(() => {
-    const currencies = new Set<string>(filters.currencies);
+    const currencies = new Set(valuesForField(rows, "currency"));
     for (const account of lookups?.accounts ?? []) {
       if (activeRecord(account) && account.currency) {
         currencies.add(account.currency);
       }
     }
     return [...currencies].sort((left, right) => left.localeCompare(right));
-  }, [filters.currencies, lookups?.accounts]);
-  const accountsById = useMemo(
-    () => mapById(lookups?.accounts, (account) => account.account_id),
-    [lookups?.accounts],
-  );
-  const categoriesById = useMemo(
-    () => mapById(lookups?.categories, (category) => category.category_id),
-    [lookups?.categories],
-  );
-  const tagsById = useMemo(
-    () => mapById(lookups?.tags, (tag) => tag.tag_id),
-    [lookups?.tags],
-  );
-  const membersById = useMemo(
-    () => mapById(lookups?.members, (member) => member.member_id),
-    [lookups?.members],
-  );
-  const activeFilterCount = filterCount(filters, hiddenDimensionSet);
+  }, [lookups?.accounts, rows]);
 
-  const updateFilters = (nextFilters: TransactionFilters) => {
-    onChange(nextFilters);
-  };
+  const membershipChip = (
+    rowIndex: number,
+    field: TransactionFilterMembershipField,
+    mode: TransactionFilterMembershipMode,
+  ) =>
+    rows[rowIndex]?.chips.find(
+      (chip) =>
+        chip.kind === "membership" &&
+        chip.field === field &&
+        chip.mode === mode,
+    ) as
+      | Extract<TransactionFilterChip, { readonly kind: "membership" }>
+      | undefined;
 
-  const selectDimension = (
-    dimension: TransactionFilterDimension | undefined,
-  ) => {
-    setEntityPickerOpen(false);
-    setSelectedDimension(dimension);
-  };
-
-  const renderEntityEditor = (dimension: EntityDimension): ReactNode => {
+  const renderEntityEditor = (
+    rowIndex: number,
+    dimension: EntityDimension,
+    mode: TransactionFilterMembershipMode,
+  ): ReactNode => {
+    const chip = membershipChip(rowIndex, dimension, mode);
+    const exactValues =
+      chip?.values.filter((value) => !chip.scopedValues?.includes(value)) ?? [];
+    const options = {
+      account:
+        lookups?.accounts
+          .filter(activeRecord)
+          .filter((account) =>
+            selectedOrVisible(
+              exactValues.includes(account.fqn),
+              account.is_hidden,
+              includeHidden.account ?? false,
+            ),
+          )
+          .map(accountOption) ?? [],
+      category:
+        lookups?.categories
+          .filter(activeRecord)
+          .filter((category) =>
+            selectedOrVisible(
+              exactValues.includes(category.fqn),
+              category.is_hidden,
+              includeHidden.category ?? false,
+            ),
+          )
+          .map(categoryOption) ?? [],
+      member:
+        lookups?.members
+          .filter(activeRecord)
+          .filter((member) =>
+            selectedOrVisible(
+              exactValues.includes(member.name),
+              member.is_hidden,
+              includeHidden.member ?? false,
+            ),
+          )
+          .map(memberOption) ?? [],
+      tag:
+        lookups?.tags
+          .filter(activeRecord)
+          .filter((tag) =>
+            selectedOrVisible(
+              exactValues.includes(tag.fqn),
+              tag.is_hidden,
+              includeHidden.tag ?? false,
+            ),
+          )
+          .map(tagOption) ?? [],
+    };
     const configs = {
       account: {
-        hiddenToggle: true,
-        label: "Accounts",
-        options: accountOptions,
-        setValue: (ids: readonly number[]) => {
-          updateFilters({ ...filters, accountIds: ids });
-        },
-        value: filters.accountIds,
+        options: options.account,
+        selectedIds: exactValues.flatMap((fqn) => {
+          const match = lookups?.accounts.find(
+            (value) => activeRecord(value) && value.fqn === fqn,
+          );
+          return match ? [match.account_id] : [];
+        }),
+        toValue: (id: number) => accountById.get(id)?.fqn,
       },
       category: {
-        hiddenToggle: true,
-        label: "Categories",
-        options: categoryOptions,
-        setValue: (ids: readonly number[]) => {
-          updateFilters({
-            ...filters,
-            categoryFqnPrefix: undefined,
-            categoryIds: ids,
-          });
-        },
-        value: filters.categoryIds,
+        options: options.category,
+        selectedIds: exactValues.flatMap((fqn) => {
+          const match = lookups?.categories.find(
+            (value) => activeRecord(value) && value.fqn === fqn,
+          );
+          return match ? [match.category_id] : [];
+        }),
+        toValue: (id: number) => categoryById.get(id)?.fqn,
       },
       member: {
-        hiddenToggle: true,
-        label: "Members",
-        options: memberOptions,
-        setValue: (ids: readonly number[]) => {
-          updateFilters({ ...filters, memberIds: ids });
-        },
-        value: filters.memberIds,
+        options: options.member,
+        selectedIds: exactValues.flatMap((name) => {
+          const match = lookups?.members.find(
+            (value) => activeRecord(value) && value.name === name,
+          );
+          return match ? [match.member_id] : [];
+        }),
+        toValue: (id: number) => memberById.get(id)?.name,
       },
       tag: {
-        hiddenToggle: true,
-        label: "Tags",
-        options: tagOptions,
-        setValue: (ids: readonly number[]) => {
-          updateFilters({ ...filters, tagFqnPrefix: undefined, tagIds: ids });
-        },
-        value: filters.tagIds,
+        options: options.tag,
+        selectedIds: exactValues.flatMap((fqn) => {
+          const match = lookups?.tags.find(
+            (value) => activeRecord(value) && value.fqn === fqn,
+          );
+          return match ? [match.tag_id] : [];
+        }),
+        toValue: (id: number) => tagById.get(id)?.fqn,
       },
-    } satisfies Record<
-      EntityDimension,
-      {
-        readonly hiddenToggle: boolean;
-        readonly label: string;
-        readonly options: readonly EntityOption[];
-        readonly setValue: (ids: readonly number[]) => void;
-        readonly value: readonly number[];
-      }
-    >;
+    };
     const config = configs[dimension];
-
+    const resolvedValues = new Set(
+      config.selectedIds.flatMap((id) => {
+        const value = config.toValue(id);
+        return value ? [value] : [];
+      }),
+    );
+    const unresolvedValues =
+      chip?.values.filter((value) => !resolvedValues.has(value)) ?? [];
+    const editorId =
+      rowIndex === 0 && mode === "any"
+        ? `transactions-filter-${dimension}`
+        : `transactions-filter-row-${rowIndex}-${dimension}-${mode}`;
     return (
       <div className="flex flex-col gap-3">
-        {config.hiddenToggle ? (
-          <label className="flex items-center gap-2">
-            <Checkbox
-              checked={includeHidden[dimension] ?? false}
-              onCheckedChange={(checked) => {
-                setIncludeHidden((current) => ({
-                  ...current,
-                  [dimension]: checked === true,
-                }));
-              }}
-            />
-            <span className="font-mono text-sm">Include hidden</span>
-          </label>
-        ) : null}
+        <label className="flex items-center gap-2">
+          <Checkbox
+            checked={includeHidden[dimension] ?? false}
+            onCheckedChange={(checked) => {
+              setIncludeHidden((current) => ({
+                ...current,
+                [dimension]: checked === true,
+              }));
+            }}
+          />
+          <span className="font-mono text-sm">Include hidden</span>
+        </label>
         <EntityMultiPicker
           hierarchical={dimension !== "member"}
-          id={`transactions-filter-${dimension}`}
-          label={config.label}
+          id={editorId}
+          label={entityDimensionLabels[dimension]}
           onOpenChange={setEntityPickerOpen}
           options={config.options}
-          value={config.value}
-          onChange={config.setValue}
+          value={config.selectedIds}
+          onChange={(ids) => {
+            updateMembership(rowIndex, dimension, mode, [
+              ...unresolvedValues,
+              ...ids.flatMap((id) => {
+                const value = config.toValue(id);
+                return value ? [value] : [];
+              }),
+            ]);
+          }}
         />
       </div>
     );
   };
 
-  const renderEditor = (): ReactNode => {
-    if (!selectedDimension) {
+  const renderMembershipEditor = (
+    rowIndex: number,
+    dimension: MembershipDimension,
+    mode: TransactionFilterMembershipMode,
+  ): ReactNode => {
+    if (
+      dimension === "account" ||
+      dimension === "category" ||
+      dimension === "tag" ||
+      dimension === "member"
+    ) {
+      return renderEntityEditor(rowIndex, dimension, mode);
+    }
+    const field = dimension as TransactionFilterMembershipField;
+    const selectedValues = membershipChip(rowIndex, field, mode)?.values ?? [];
+    const update = (values: readonly string[]) =>
+      updateMembership(rowIndex, field, mode, values);
+    const idPrefix =
+      rowIndex === 0 && mode === "any"
+        ? "transactions-filter"
+        : `transactions-filter-row-${rowIndex}-${dimension}-${mode}`;
+    if (dimension === "currency") {
       return (
-        <div className="grid grid-cols-1 gap-1">
+        <CurrencyFilterEditor
+          idPrefix={idPrefix}
+          options={currencyOptions}
+          selectedValues={selectedValues}
+          onChange={update}
+        />
+      );
+    }
+    if (dimension === "lifecycle") {
+      return (
+        <CheckboxList
+          idPrefix={idPrefix}
+          values={transactionLifecycleStatuses}
+          selectedValues={
+            selectedValues as readonly (typeof transactionLifecycleStatuses)[number][]
+          }
+          labelFor={lifecycleStatusLabel}
+          onChange={update}
+        />
+      );
+    }
+    if (dimension === "settlement") {
+      return (
+        <CheckboxList
+          idPrefix={idPrefix}
+          values={transactionSettlements}
+          selectedValues={selectedValues as readonly TransactionSettlement[]}
+          labelFor={settlementStatusLabel}
+          onChange={update}
+        />
+      );
+    }
+    if (dimension === "class") {
+      return (
+        <CheckboxList
+          idPrefix={idPrefix}
+          values={transactionClasses}
+          selectedValues={selectedValues as readonly TransactionClass[]}
+          labelFor={transactionClassLabel}
+          onChange={update}
+        />
+      );
+    }
+    if (dimension === "shape") {
+      return (
+        <CheckboxList
+          idPrefix={idPrefix}
+          values={transactionShapes}
+          selectedValues={selectedValues as readonly TransactionShapeType[]}
+          labelFor={accountingLabel}
+          onChange={update}
+        />
+      );
+    }
+    return (
+      <CheckboxList
+        idPrefix={idPrefix}
+        values={recordRoles}
+        selectedValues={selectedValues as readonly RecordRole[]}
+        labelFor={accountingLabel}
+        onChange={update}
+      />
+    );
+  };
+
+  const renderEditor = (rowIndex: number): ReactNode => {
+    if (!activeEditor?.dimension) {
+      return (
+        <div className="grid max-h-[min(28rem,70svh)] grid-cols-1 gap-1 overflow-y-auto pr-1 sm:grid-cols-2">
           {visibleDimensions.map((dimension) => (
             <Button
               key={dimension.id}
@@ -773,8 +1311,25 @@ export const TransactionFilterControls = ({
               className="justify-start"
               data-filter-dimension={dimension.id}
               onClick={() => {
-                restoreDimensionRef.current = dimension.id;
-                selectDimension(dimension.id);
+                const existing = rows[rowIndex]?.chips.find(
+                  (chip) => dimensionForChip(chip) === dimension.id,
+                );
+                const availableMode = dimension.modes?.find(
+                  (mode) =>
+                    !rows[rowIndex]?.chips.some(
+                      (chip) =>
+                        chip.kind === "membership" &&
+                        chip.field === dimension.field &&
+                        chip.mode === mode,
+                    ),
+                );
+                openEditor({
+                  dimension: dimension.id,
+                  mode:
+                    availableMode ??
+                    (existing?.kind === "membership" ? existing.mode : "any"),
+                  rowIndex,
+                });
               }}
             >
               {dimension.label}
@@ -784,584 +1339,583 @@ export const TransactionFilterControls = ({
       );
     }
 
-    if (
-      selectedDimension === "account" ||
-      selectedDimension === "category" ||
-      selectedDimension === "tag" ||
-      selectedDimension === "member"
-    ) {
-      return renderEntityEditor(selectedDimension);
-    }
-
-    if (selectedDimension === "lifecycle") {
+    const definition = dimensionById.get(activeEditor.dimension)!;
+    if (definition.modes) {
       return (
-        <CheckboxList
-          values={transactionLifecycleStatuses}
-          selectedValues={filters.lifecycleStatuses}
-          labelFor={lifecycleStatusLabel}
-          onChange={(lifecycleStatuses) => {
-            updateFilters({ ...filters, lifecycleStatuses });
-          }}
-        />
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-1 font-mono text-xs">
+            <span>Match</span>
+            <Select
+              value={activeEditor.mode}
+              onValueChange={(value) => {
+                const nextMode = value as TransactionFilterMembershipMode;
+                if (
+                  !changeMembershipMode(
+                    rowIndex,
+                    activeEditor.dimension as TransactionFilterMembershipField,
+                    activeEditor.mode,
+                    nextMode,
+                  )
+                ) {
+                  return;
+                }
+                setEditor((current) =>
+                  current
+                    ? {
+                        ...current,
+                        mode: nextMode,
+                        previousMode: current.mode,
+                      }
+                    : current,
+                );
+              }}
+            >
+              <SelectTrigger
+                aria-label="Filter operator"
+                className="w-full"
+                onKeyDown={(event) => {
+                  if (
+                    event.key.toLowerCase() === "n" &&
+                    !event.altKey &&
+                    !event.ctrlKey &&
+                    !event.metaKey &&
+                    !event.shiftKey
+                  ) {
+                    event.stopPropagation();
+                  }
+                }}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {definition.modes.map((mode) => (
+                  <SelectItem key={mode} value={mode}>
+                    {modeLabel(mode)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {renderMembershipEditor(
+            rowIndex,
+            activeEditor.dimension as MembershipDimension,
+            activeEditor.mode,
+          )}
+        </div>
       );
     }
 
-    if (selectedDimension === "currency") {
-      return (
-        <CurrencyFilterEditor
-          options={currencyOptions}
-          selectedValues={filters.currencies}
-          onChange={(currencies) => {
-            updateFilters({ ...filters, currencies });
-          }}
-        />
-      );
-    }
-
-    if (selectedDimension === "settlement") {
-      return (
-        <CheckboxList
-          values={transactionSettlements}
-          selectedValues={filters.settlements}
-          labelFor={settlementStatusLabel}
-          onChange={(settlements) => {
-            updateFilters({ ...filters, settlements });
-          }}
-        />
-      );
-    }
-
-    if (selectedDimension === "shape") {
-      return (
-        <CheckboxList
-          values={transactionShapes}
-          selectedValues={filters.shapes}
-          labelFor={accountingLabel}
-          onChange={(shapes) => {
-            updateFilters({ ...filters, shapes });
-          }}
-        />
-      );
-    }
-
-    if (selectedDimension === "role") {
-      return (
-        <CheckboxList
-          values={recordRoles}
-          selectedValues={filters.recordRoles}
-          labelFor={accountingLabel}
-          onChange={(recordRoles) => {
-            updateFilters({ ...filters, recordRoles });
-          }}
-        />
-      );
-    }
-
-    if (selectedDimension === "amount") {
-      return (
-        <RangeEditor
-          fromLabel="Min"
-          toLabel="Max"
-          fromValue={filters.amountMin}
-          toValue={filters.amountMax}
-          pattern={transactionFilterDecimalPattern}
-          onChange={(amountMin, amountMax) => {
-            updateFilters({ ...filters, amountMax, amountMin });
-          }}
-        />
-      );
-    }
-
-    if (selectedDimension === "amountUsd") {
-      return (
-        <RangeEditor
-          fromLabel="Min"
-          toLabel="Max"
-          fromValue={filters.amountUsdMin}
-          toValue={filters.amountUsdMax}
-          pattern={transactionFilterDecimalPattern}
-          onChange={(amountUsdMin, amountUsdMax) => {
-            updateFilters({ ...filters, amountUsdMax, amountUsdMin });
-          }}
-        />
-      );
-    }
-
-    const dateConfigs = {
-      initiated: {
-        from: filters.initiatedFrom,
-        setValue: (
-          initiatedFrom: string | undefined,
-          initiatedTo: string | undefined,
-        ) => {
-          updateFilters({ ...filters, initiatedFrom, initiatedTo });
-        },
-        to: filters.initiatedTo,
-      },
-    } satisfies Record<
-      "initiated",
-      {
-        readonly from: string | undefined;
-        readonly setValue: (
-          from: string | undefined,
-          to: string | undefined,
-        ) => void;
-        readonly to: string | undefined;
-      }
-    >;
-    const config = dateConfigs[selectedDimension];
+    const rangeChip = rows[rowIndex]?.chips.find(
+      (chip) =>
+        chip.kind === "range" &&
+        dimensionForChip(chip) === activeEditor.dimension,
+    ) as Extract<TransactionFilterChip, { readonly kind: "range" }> | undefined;
     return (
       <RangeEditor
-        inputType="date"
-        fromLabel="From"
-        toLabel="To"
-        fromValue={config.from}
-        toValue={config.to}
-        onChange={config.setValue}
+        formatHint={
+          activeEditor.dimension === "initiated"
+            ? "Use YYYY-MM-DD, RFC3339, or a signed offset such as -30d."
+            : undefined
+        }
+        inputMode={activeEditor.dimension === "initiated" ? "text" : "decimal"}
+        fromLabel={activeEditor.dimension === "initiated" ? "From" : "Min"}
+        toLabel={activeEditor.dimension === "initiated" ? "To" : "Max"}
+        fromValue={rangeChip?.from}
+        toValue={rangeChip?.to}
+        pattern={
+          activeEditor.dimension === "initiated"
+            ? transactionFilterDatePattern
+            : transactionFilterDecimalPattern
+        }
+        onChange={(from, to) => {
+          updateRange(
+            rowIndex,
+            definition.field as "amount" | "amount_usd" | "initiated",
+            from,
+            to,
+          );
+        }}
       />
     );
   };
 
-  const selectedDimensionLabel = dimensions.find(
-    (dimension) => dimension.id === selectedDimension,
-  )?.label;
+  const valuePresentation = (
+    field: TransactionFilterMembershipField,
+    value: string,
+    scoped = false,
+  ): { hidden?: boolean; label: string; tooltip: string } => {
+    if (field === "account") {
+      const fqn = scoped && value !== "*" ? value.slice(0, -2) : value;
+      const account = lookups?.accounts.find(
+        (candidate) => candidate.fqn === fqn,
+      );
+      return {
+        hidden: account?.is_hidden,
+        label: scoped ? `group ${fqn}` : (account?.name ?? fqn),
+        tooltip: value,
+      };
+    }
+    if (field === "category" || field === "tag") {
+      const fqn = scoped && value !== "*" ? value.slice(0, -2) : value;
+      const candidate =
+        field === "category"
+          ? lookups?.categories.find((item) => item.fqn === fqn)
+          : lookups?.tags.find((item) => item.fqn === fqn);
+      return {
+        hidden: candidate?.is_hidden,
+        label: scoped ? `group ${fqn}` : (candidate?.name ?? fqn),
+        tooltip: value,
+      };
+    }
+    if (field === "member") {
+      const member = lookups?.members.find(
+        (candidate) => candidate.name === value,
+      );
+      return { hidden: member?.is_hidden, label: value, tooltip: value };
+    }
+    if (field === "lifecycle") {
+      return {
+        label: lifecycleStatusLabel(
+          value as (typeof transactionLifecycleStatuses)[number],
+        ),
+        tooltip: value,
+      };
+    }
+    if (field === "settlement") {
+      return {
+        label: settlementChipValueLabel(value as TransactionSettlement),
+        tooltip: value,
+      };
+    }
+    if (field === "class") {
+      return {
+        label: transactionClassLabel(value as TransactionClass),
+        tooltip: value,
+      };
+    }
+    if (field === "shape" || field === "role") {
+      return {
+        label: accountingLabel(value as RecordRole),
+        tooltip: value,
+      };
+    }
+    return { label: value, tooltip: value };
+  };
+
+  const chipPresentation = (
+    chip: TransactionFilterChip,
+  ): {
+    hidden?: boolean;
+    label: string;
+    labelSuffix?: string;
+    tooltip: string;
+    truncateLabel?: boolean;
+  } => {
+    const dimension = dimensionById.get(dimensionForChip(chip))!;
+    if (chip.kind === "range") {
+      const dimensionLabel =
+        chip.field === "initiated" ? "Initiated" : dimension.label;
+      const label =
+        rangeLabel(dimensionLabel, chip.from, chip.to) ?? dimensionLabel;
+      return {
+        label,
+        tooltip: label,
+        truncateLabel: chip.field === "initiated",
+      };
+    }
+    const values = chip.values.map((value) =>
+      valuePresentation(chip.field, value, chip.scopedValues?.includes(value)),
+    );
+    const describedValues = values.map((value) =>
+      value.hidden ? `${value.label} (hidden)` : value.label,
+    );
+    const describedTooltips = values.map((value) =>
+      value.hidden ? `${value.tooltip} (hidden)` : value.tooltip,
+    );
+    const label = `${dimension.label} ${describedValues.join(", ")}`;
+    const labelSuffix = ` · ${modeLabel(chip.mode).toLowerCase()}`;
+    return {
+      hidden: values.some((value) => value.hidden),
+      label,
+      labelSuffix,
+      tooltip: `${dimension.label} ${describedTooltips.join(", ")}${labelSuffix}`,
+    };
+  };
+
+  if (advanced) {
+    return (
+      <div
+        data-testid="transaction-filter-advanced"
+        className="flex min-w-0 items-start gap-3 border-2 border-[var(--border-ink)] bg-[var(--band)] p-3"
+        aria-label="Advanced transaction filter"
+      >
+        <div className="min-w-0 flex-1">
+          <p className="font-heading text-xs font-semibold uppercase">
+            Advanced filter
+          </p>
+          <code className="mt-1 block font-mono text-sm break-all whitespace-pre-wrap">
+            {filters.filterText}
+          </code>
+        </div>
+        <Button
+          ref={advancedClearButtonRef}
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            restoreAdvancedClearFocusRef.current = true;
+            onChange(withTransactionFilterExpression(filters, undefined));
+          }}
+        >
+          <Close aria-hidden="true" className="size-4" />
+          Clear
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div
-      className="flex min-w-0 flex-wrap items-center gap-2"
+      ref={controlsRef}
+      className="flex min-w-0 flex-col gap-2"
       aria-label="Transaction filters"
     >
-      <Popover
-        open={open}
-        onOpenChange={(nextOpen) => {
-          setOpen(nextOpen);
-          if (!nextOpen) {
-            selectDimension(undefined);
-          }
-        }}
-      >
-        <AppTooltip asChild disabled={open} label="Add filter">
-          <PopoverTrigger asChild>
-            <Button
-              ref={addFilterTriggerRef}
-              type="button"
-              variant="outline"
-              size="icon-lg"
-              aria-label="Add filter"
+      {rows.map((row, rowIndex) => (
+        <div key={rowIndex} className="contents">
+          {rowIndex > 0 ? (
+            <div
+              className="flex items-center gap-2"
+              role="separator"
+              aria-label="OR"
             >
-              <Filter aria-hidden="true" />
-            </Button>
-          </PopoverTrigger>
-        </AppTooltip>
-        <PopoverContent
-          onCloseAutoFocus={(event) => {
-            if (!restoreAddFilterTriggerFocusRef.current) {
-              return;
-            }
-
-            restoreAddFilterTriggerFocusRef.current = false;
-            event.preventDefault();
-            focusWithoutTooltip(addFilterTriggerRef.current);
-          }}
-          onEscapeKeyDown={(event) => {
-            event.preventDefault();
-            if (
-              event.target instanceof HTMLInputElement &&
-              event.target.list !== null &&
-              !event.target.disabled &&
-              !event.target.readOnly &&
-              datalistEscapePendingRef.current
-            ) {
-              datalistKeyboardCommitTargetRef.current = null;
-              datalistPointerTargetRef.current = null;
-              datalistEscapePendingRef.current = false;
-              return;
-            }
-            if (entityPickerOpen) {
-              return;
-            }
-            restoreAddFilterTriggerFocusRef.current = true;
-            setOpen(false);
-            selectDimension(undefined);
-          }}
-          onKeyDownCapture={(event) => {
-            if (
-              event.key === "Enter" &&
-              event.target instanceof HTMLInputElement &&
-              event.target.list !== null &&
-              datalistEscapePendingRef.current
-            ) {
-              datalistKeyboardCommitTargetRef.current = event.target;
-              datalistPointerTargetRef.current = null;
-              datalistEscapePendingRef.current = false;
-              return;
-            }
-            if (
-              (event.key === "ArrowDown" || event.key === "ArrowUp") &&
-              event.target instanceof HTMLInputElement &&
-              event.target.list !== null &&
-              !event.target.disabled &&
-              !event.target.readOnly &&
-              hasMatchingDatalistOption(event.target)
-            ) {
-              datalistEscapePendingRef.current = true;
-              return;
-            }
-            if (event.key !== "Escape") {
-              datalistKeyboardCommitTargetRef.current = null;
-              datalistPointerTargetRef.current = null;
-              datalistEscapePendingRef.current = false;
-            }
-          }}
-          onKeyUpCapture={(event) => {
-            if (
-              event.key === "Enter" &&
-              event.target === datalistKeyboardCommitTargetRef.current
-            ) {
-              datalistKeyboardCommitTargetRef.current = null;
-            }
-          }}
-          onPointerDownCapture={(event) => {
-            const target =
-              event.target instanceof HTMLInputElement &&
-              event.target.list !== null &&
-              !event.target.disabled &&
-              !event.target.readOnly &&
-              hasMatchingDatalistOption(event.target)
-                ? event.target
-                : null;
-            datalistKeyboardCommitTargetRef.current = null;
-            datalistPointerTargetRef.current = target;
-            datalistEscapePendingRef.current = target !== null;
-          }}
-          onBlurCapture={(event) => {
-            if (event.relatedTarget === datalistPointerTargetRef.current) {
-              return;
-            }
-            datalistKeyboardCommitTargetRef.current = null;
-            datalistPointerTargetRef.current = null;
-            datalistEscapePendingRef.current = false;
-          }}
-          onFocusCapture={(event) => {
-            if (event.target === datalistPointerTargetRef.current) {
-              datalistPointerTargetRef.current = null;
-              return;
-            }
-            datalistKeyboardCommitTargetRef.current = null;
-            datalistPointerTargetRef.current = null;
-            datalistEscapePendingRef.current = false;
-          }}
-          onInputCapture={(event) => {
-            if (event.target === datalistKeyboardCommitTargetRef.current) {
-              datalistKeyboardCommitTargetRef.current = null;
-              datalistEscapePendingRef.current = false;
-              return;
-            }
-            if (event.target === datalistPointerTargetRef.current) {
-              datalistPointerTargetRef.current = null;
-              datalistEscapePendingRef.current = false;
-              return;
-            }
-            datalistEscapePendingRef.current =
-              event.target instanceof HTMLInputElement &&
-              event.target.list !== null &&
-              !event.target.disabled &&
-              !event.target.readOnly &&
-              hasMatchingDatalistOption(event.target);
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "Escape") {
-              event.stopPropagation();
-            }
-          }}
-        >
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="font-heading text-sm font-semibold uppercase">
-                {selectedDimensionLabel ?? "Add filter"}
-              </h2>
-              {selectedDimension ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="xs"
-                  onClick={() => {
-                    selectDimension(undefined);
-                  }}
-                >
-                  Back
-                </Button>
-              ) : null}
+              <span className="h-px flex-1 bg-[var(--hairline)]" />
+              <span
+                className="font-heading text-xs font-semibold uppercase"
+                aria-hidden="true"
+              >
+                OR
+              </span>
+              <span className="h-px flex-1 bg-[var(--hairline)]" />
             </div>
-            <div ref={editorRef}>{renderEditor()}</div>
+          ) : null}
+          <div
+            data-testid={`transaction-filter-row-${rowIndex + 1}`}
+            className={
+              rows.length > 1
+                ? "flex min-w-0 flex-wrap items-center gap-2 border-2 border-[var(--border-ink)] bg-[var(--band)] p-2"
+                : "flex min-w-0 flex-wrap items-center gap-2"
+            }
+          >
+            {rows.length > 1 ? (
+              <span className="font-heading mr-1 text-xs font-semibold uppercase">
+                Row {rowIndex + 1}
+              </span>
+            ) : null}
+            <Popover
+              open={activeEditor?.rowIndex === rowIndex}
+              onOpenChange={(open) => {
+                setEntityPickerOpen(false);
+                if (open) openEditor({ mode: "any", rowIndex });
+                else {
+                  setEditor(undefined);
+                }
+              }}
+            >
+              <AppTooltip
+                asChild
+                disabled={activeEditor?.rowIndex === rowIndex}
+                label={
+                  rows.length > 1
+                    ? `Add filter to row ${rowIndex + 1}`
+                    : "Add filter"
+                }
+              >
+                <PopoverTrigger asChild>
+                  <Button
+                    ref={(element) => {
+                      if (element)
+                        addFilterTriggerRefs.current.set(rowIndex, element);
+                      else addFilterTriggerRefs.current.delete(rowIndex);
+                    }}
+                    type="button"
+                    variant="outline"
+                    size="icon-lg"
+                    aria-label={
+                      rows.length > 1
+                        ? `Add filter to row ${rowIndex + 1}`
+                        : "Add filter"
+                    }
+                  >
+                    <Filter aria-hidden="true" />
+                  </Button>
+                </PopoverTrigger>
+              </AppTooltip>
+              <PopoverContent
+                className="max-w-[calc(100vw-1rem)]"
+                onOpenAutoFocus={(event) => {
+                  if (!activeEditor?.dimension) return;
+                  event.preventDefault();
+                  editorRef.current
+                    ?.querySelector<HTMLElement>(editorFocusableSelector)
+                    ?.focus();
+                }}
+                onCloseAutoFocus={(event) => {
+                  const focusTarget = restoreEditedChipOnCloseRef.current;
+                  if (focusTarget) {
+                    event.preventDefault();
+                    restoreEditedChipAfterCloseRef.current = true;
+                    window.requestAnimationFrame(() => {
+                      const target = restoreEditedChipOnCloseRef.current;
+                      if (!target || sourceRef.current !== target.source)
+                        return;
+                      const liveTrigger =
+                        controlsRef.current?.querySelector<HTMLButtonElement>(
+                          `[data-filter-chip-edit="${target.editKey}"]`,
+                        );
+                      restoreEditedChipOnCloseRef.current = undefined;
+                      restoreEditedChipAfterCloseRef.current = false;
+                      focusWithoutTooltip(
+                        liveTrigger ??
+                          addFilterTriggerRefs.current.get(rowIndex),
+                      );
+                    });
+                    return;
+                  }
+                  if (restoreAddFilterTriggerFocusRef.current !== rowIndex)
+                    return;
+                  restoreAddFilterTriggerFocusRef.current = undefined;
+                  event.preventDefault();
+                  focusWithoutTooltip(
+                    addFilterTriggerRefs.current.get(rowIndex),
+                  );
+                }}
+                onEscapeKeyDown={(event) => {
+                  if (
+                    event.target instanceof HTMLInputElement &&
+                    event.target.list !== null &&
+                    !event.target.disabled &&
+                    !event.target.readOnly &&
+                    datalistEscapePendingRef.current
+                  ) {
+                    event.preventDefault();
+                    datalistKeyboardCommitTargetRef.current = null;
+                    datalistPointerTargetRef.current = null;
+                    datalistEscapePendingRef.current = false;
+                    return;
+                  }
+                  if (entityPickerOpen) {
+                    event.preventDefault();
+                    return;
+                  }
+                  const currentEditKey = activeEditor?.dimension
+                    ? `${rowIndex}:${activeEditor.dimension}:${dimensionById.get(activeEditor.dimension)?.modes ? activeEditor.mode : "range"}`
+                    : undefined;
+                  if (currentEditKey) {
+                    restoreEditedChipAfterCloseRef.current = false;
+                    restoreEditedChipOnCloseRef.current = {
+                      editKey: currentEditKey,
+                      source: activeEditor?.currentSource ?? source,
+                    };
+                  } else {
+                    restoreAddFilterTriggerFocusRef.current = rowIndex;
+                  }
+                }}
+                onKeyDownCapture={(event) => {
+                  if (
+                    event.key === "Enter" &&
+                    event.target instanceof HTMLInputElement &&
+                    event.target.list !== null &&
+                    datalistEscapePendingRef.current
+                  ) {
+                    datalistKeyboardCommitTargetRef.current = event.target;
+                    datalistPointerTargetRef.current = null;
+                    datalistEscapePendingRef.current = false;
+                    return;
+                  }
+                  if (
+                    (event.key === "ArrowDown" || event.key === "ArrowUp") &&
+                    event.target instanceof HTMLInputElement &&
+                    event.target.list !== null &&
+                    !event.target.disabled &&
+                    !event.target.readOnly &&
+                    hasMatchingDatalistOption(event.target)
+                  ) {
+                    datalistEscapePendingRef.current = true;
+                    return;
+                  }
+                  if (event.key !== "Escape") {
+                    datalistKeyboardCommitTargetRef.current = null;
+                    datalistPointerTargetRef.current = null;
+                    datalistEscapePendingRef.current = false;
+                  }
+                }}
+                onKeyUpCapture={(event) => {
+                  if (
+                    event.key === "Enter" &&
+                    event.target === datalistKeyboardCommitTargetRef.current
+                  ) {
+                    datalistKeyboardCommitTargetRef.current = null;
+                  }
+                }}
+                onPointerDownCapture={(event) => {
+                  const target =
+                    event.target instanceof HTMLInputElement &&
+                    event.target.list !== null &&
+                    !event.target.disabled &&
+                    !event.target.readOnly &&
+                    hasMatchingDatalistOption(event.target)
+                      ? event.target
+                      : null;
+                  datalistKeyboardCommitTargetRef.current = null;
+                  datalistPointerTargetRef.current = target;
+                  datalistEscapePendingRef.current = target !== null;
+                }}
+                onPointerDownOutside={() => {
+                  datalistKeyboardCommitTargetRef.current = null;
+                  datalistPointerTargetRef.current = null;
+                  datalistEscapePendingRef.current = false;
+                }}
+                onFocusCapture={(event) => {
+                  if (event.target === datalistPointerTargetRef.current) {
+                    datalistPointerTargetRef.current = null;
+                    return;
+                  }
+                  datalistKeyboardCommitTargetRef.current = null;
+                  datalistPointerTargetRef.current = null;
+                  datalistEscapePendingRef.current = false;
+                }}
+                onInputCapture={(event) => {
+                  if (
+                    event.target === datalistKeyboardCommitTargetRef.current
+                  ) {
+                    datalistKeyboardCommitTargetRef.current = null;
+                    datalistEscapePendingRef.current = false;
+                    return;
+                  }
+                  if (event.target === datalistPointerTargetRef.current) {
+                    datalistPointerTargetRef.current = null;
+                    datalistEscapePendingRef.current = false;
+                    return;
+                  }
+                  datalistEscapePendingRef.current =
+                    event.target instanceof HTMLInputElement &&
+                    event.target.list !== null &&
+                    !event.target.disabled &&
+                    !event.target.readOnly &&
+                    hasMatchingDatalistOption(event.target);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") event.stopPropagation();
+                }}
+              >
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <h2 className="font-heading text-sm font-semibold uppercase">
+                      {activeEditor?.dimension
+                        ? dimensionById.get(activeEditor.dimension)?.label
+                        : rows.length > 1
+                          ? `Add filter · Row ${rowIndex + 1}`
+                          : "Add filter"}
+                    </h2>
+                    {activeEditor?.dimension ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="xs"
+                        onClick={() => {
+                          setEntityPickerOpen(false);
+                          restoreDimensionMenuFocusRef.current =
+                            activeEditor.dimension;
+                          openEditor({ mode: "any", rowIndex });
+                        }}
+                      >
+                        Back
+                      </Button>
+                    ) : null}
+                  </div>
+                  <div ref={editorRef}>{renderEditor(rowIndex)}</div>
+                </div>
+              </PopoverContent>
+            </Popover>
+            <div
+              className="flex min-w-0 shrink-0 basis-full flex-wrap items-center gap-2 sm:flex-1 sm:shrink sm:basis-0"
+              aria-label={`Active filters in row ${rowIndex + 1}`}
+            >
+              {row.chips.map((chip, chipIndex) => {
+                if (hiddenDimensionSet.has(dimensionForChip(chip))) return null;
+                const presentation = chipPresentation(chip);
+                return (
+                  <div
+                    key={`${chip.kind}-${chip.field}-${chip.kind === "membership" ? chip.mode : "range"}`}
+                    className="flex max-w-full min-w-0 shrink-0 items-center gap-2"
+                    data-filter-chip-group
+                  >
+                    {chipIndex >
+                    row.chips.findIndex(
+                      (candidate) =>
+                        !hiddenDimensionSet.has(dimensionForChip(candidate)),
+                    ) ? (
+                      <span className="font-heading text-muted-foreground shrink-0 text-xs font-semibold uppercase">
+                        AND
+                      </span>
+                    ) : null}
+                    <div className="max-w-full min-w-0">
+                      <FilterChip
+                        {...presentation}
+                        editKey={`${rowIndex}:${dimensionForChip(chip)}:${chip.kind === "membership" ? chip.mode : "range"}`}
+                        onEdit={() => {
+                          openEditor({
+                            dimension: dimensionForChip(chip),
+                            mode:
+                              chip.kind === "membership" ? chip.mode : "any",
+                            rowIndex,
+                          });
+                        }}
+                        onRemove={() => {
+                          updateRow(
+                            rowIndex,
+                            row.chips.filter((_, index) => index !== chipIndex),
+                          );
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {rowIndex === rows.length - 1 ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                onClick={() => {
+                  const nextRows = [...rows, { chips: [] }];
+                  setRowState({ rows: nextRows, source });
+                  openEditor({
+                    mode: "any",
+                    rowIndex: nextRows.length - 1,
+                  });
+                }}
+              >
+                <Plus aria-hidden="true" className="size-4" />
+                Add OR row
+              </Button>
+            ) : null}
+            {rows.length > 1 ? (
+              <Button
+                type="button"
+                variant="ghost"
+                aria-label={`Remove row ${rowIndex + 1}`}
+                onClick={() => removeRow(rowIndex)}
+              >
+                <Trash aria-hidden="true" />
+                Remove row
+              </Button>
+            ) : null}
           </div>
-        </PopoverContent>
-      </Popover>
-      {activeFilterCount > 0 ? (
-        <div
-          className="flex min-w-0 flex-1 flex-wrap items-center gap-2"
-          aria-label="Active transaction filters"
-        >
-          {!hiddenDimensionSet.has("account")
-            ? filters.accountIds.map((accountId) => {
-                const account = accountsById.get(accountId);
-                return (
-                  <FilterChip
-                    key={`account-${accountId}`}
-                    hidden={account?.is_hidden}
-                    label={
-                      account
-                        ? `Account ${account.name}`
-                        : `Account #${accountId}`
-                    }
-                    tooltip={account?.fqn ?? `Selected account ID ${accountId}`}
-                    onRemove={() => {
-                      updateFilters({
-                        ...filters,
-                        accountIds: filters.accountIds.filter(
-                          (selectedAccountId) =>
-                            selectedAccountId !== accountId,
-                        ),
-                      });
-                    }}
-                  />
-                );
-              })
-            : null}
-          {!hiddenDimensionSet.has("currency")
-            ? filters.currencies.map((currency) => (
-                <FilterChip
-                  key={`currency-${currency}`}
-                  label={`Currency ${currency}`}
-                  onRemove={() => {
-                    updateFilters({
-                      ...filters,
-                      currencies: filters.currencies.filter(
-                        (selectedCurrency) => selectedCurrency !== currency,
-                      ),
-                    });
-                  }}
-                />
-              ))
-            : null}
-          {!hiddenDimensionSet.has("category")
-            ? filters.categoryIds.map((categoryId) => {
-                const category = categoriesById.get(categoryId);
-                return (
-                  <FilterChip
-                    key={`category-${categoryId}`}
-                    hidden={category?.is_hidden}
-                    label={
-                      category
-                        ? `Category ${category.name}`
-                        : `Category #${categoryId}`
-                    }
-                    tooltip={
-                      category?.fqn ?? `Selected category ID ${categoryId}`
-                    }
-                    onRemove={() => {
-                      updateFilters({
-                        ...filters,
-                        categoryIds: filters.categoryIds.filter(
-                          (selectedCategoryId) =>
-                            selectedCategoryId !== categoryId,
-                        ),
-                      });
-                    }}
-                  />
-                );
-              })
-            : null}
-          {!hiddenDimensionSet.has("category") && filters.categoryFqnPrefix ? (
-            <FilterChip
-              label={`Category group ${filters.categoryFqnPrefix}`}
-              onRemove={() => {
-                updateFilters({ ...filters, categoryFqnPrefix: undefined });
-              }}
-            />
-          ) : null}
-          {!hiddenDimensionSet.has("tag")
-            ? filters.tagIds.map((tagId) => {
-                const tag = tagsById.get(tagId);
-                return (
-                  <FilterChip
-                    key={`tag-${tagId}`}
-                    hidden={tag?.is_hidden}
-                    label={tag ? `Tag ${tag.name}` : `Tag #${tagId}`}
-                    tooltip={tag?.fqn ?? `Selected tag ID ${tagId}`}
-                    onRemove={() => {
-                      updateFilters({
-                        ...filters,
-                        tagIds: filters.tagIds.filter(
-                          (selectedTagId) => selectedTagId !== tagId,
-                        ),
-                      });
-                    }}
-                  />
-                );
-              })
-            : null}
-          {!hiddenDimensionSet.has("tag") && filters.tagFqnPrefix ? (
-            <FilterChip
-              label={`Tag group ${filters.tagFqnPrefix}`}
-              onRemove={() => {
-                updateFilters({ ...filters, tagFqnPrefix: undefined });
-              }}
-            />
-          ) : null}
-          {!hiddenDimensionSet.has("member")
-            ? filters.memberIds.map((memberId) => {
-                const member = membersById.get(memberId);
-                return (
-                  <FilterChip
-                    key={`member-${memberId}`}
-                    hidden={member?.is_hidden}
-                    label={
-                      member ? `Member ${member.name}` : `Member #${memberId}`
-                    }
-                    tooltip={
-                      member ? undefined : `Selected member ID ${memberId}`
-                    }
-                    onRemove={() => {
-                      updateFilters({
-                        ...filters,
-                        memberIds: filters.memberIds.filter(
-                          (selectedMemberId) => selectedMemberId !== memberId,
-                        ),
-                      });
-                    }}
-                  />
-                );
-              })
-            : null}
-          {!hiddenDimensionSet.has("lifecycle")
-            ? filters.lifecycleStatuses.map((status) => (
-                <FilterChip
-                  key={`lifecycle-${status}`}
-                  label={`Lifecycle ${lifecycleStatusLabel(status)}`}
-                  onRemove={() => {
-                    updateFilters({
-                      ...filters,
-                      lifecycleStatuses: filters.lifecycleStatuses.filter(
-                        (selectedStatus) => selectedStatus !== status,
-                      ),
-                    });
-                  }}
-                />
-              ))
-            : null}
-          {!hiddenDimensionSet.has("settlement")
-            ? filters.settlements.map((settlement) => (
-                <FilterChip
-                  key={`settlement-${settlement}`}
-                  label={`Settlement ${settlementChipValueLabel(settlement)}`}
-                  onRemove={() => {
-                    updateFilters({
-                      ...filters,
-                      settlements: filters.settlements.filter(
-                        (selectedSettlement) =>
-                          selectedSettlement !== settlement,
-                      ),
-                    });
-                  }}
-                />
-              ))
-            : null}
-          {!hiddenDimensionSet.has("shape")
-            ? filters.shapes.map((shape) => (
-                <FilterChip
-                  key={`shape-${shape}`}
-                  label={`Transaction shape ${accountingLabel(shape)}`}
-                  onRemove={() => {
-                    updateFilters({
-                      ...filters,
-                      shapes: filters.shapes.filter(
-                        (selectedShape) => selectedShape !== shape,
-                      ),
-                    });
-                  }}
-                />
-              ))
-            : null}
-          {!hiddenDimensionSet.has("role")
-            ? filters.recordRoles.map((role) => (
-                <FilterChip
-                  key={`role-${role}`}
-                  label={`Record role ${accountingLabel(role)}`}
-                  onRemove={() => {
-                    updateFilters({
-                      ...filters,
-                      recordRoles: filters.recordRoles.filter(
-                        (selectedRole) => selectedRole !== role,
-                      ),
-                    });
-                  }}
-                />
-              ))
-            : null}
-          {!hiddenDimensionSet.has("amount") &&
-          rangeLabel("Amount", filters.amountMin, filters.amountMax) ? (
-            <FilterChip
-              label={rangeLabel(
-                "Amount",
-                filters.amountMin,
-                filters.amountMax,
-              )!}
-              truncateLabel={false}
-              onRemove={() => {
-                updateFilters({
-                  ...filters,
-                  amountMax: undefined,
-                  amountMin: undefined,
-                });
-              }}
-            />
-          ) : null}
-          {!hiddenDimensionSet.has("amountUsd") &&
-          rangeLabel(
-            "Amount USD",
-            filters.amountUsdMin,
-            filters.amountUsdMax,
-          ) ? (
-            <FilterChip
-              label={rangeLabel(
-                "Amount USD",
-                filters.amountUsdMin,
-                filters.amountUsdMax,
-              )!}
-              truncateLabel={false}
-              onRemove={() => {
-                updateFilters({
-                  ...filters,
-                  amountUsdMax: undefined,
-                  amountUsdMin: undefined,
-                });
-              }}
-            />
-          ) : null}
-          {!hiddenDimensionSet.has("initiated") &&
-          rangeLabel(
-            "Initiated",
-            filters.initiatedFrom,
-            filters.initiatedTo,
-          ) ? (
-            <FilterChip
-              label={rangeLabel(
-                "Initiated",
-                filters.initiatedFrom,
-                filters.initiatedTo,
-              )!}
-              onRemove={() => {
-                updateFilters({
-                  ...filters,
-                  initiatedFrom: undefined,
-                  initiatedTo: undefined,
-                });
-              }}
-            />
-          ) : null}
         </div>
-      ) : null}
+      ))}
     </div>
   );
 };

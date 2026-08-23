@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -249,14 +250,28 @@ func TestConcurrentColdReferenceReads(t *testing.T) {
 		t.Fatal("seeded transactions contain no fixture with account, category, tag, and member references")
 	}
 
-	date := fixture.InitiatedDate
+	account, err := rest.GetAccountWithResponse(ctx, accountID, nil)
+	if err != nil || account.StatusCode() != http.StatusOK {
+		t.Fatalf("get cold-cache account request: %v; response %+v", err, account)
+	}
+	category, err := rest.GetCategoryWithResponse(ctx, categoryID, nil)
+	if err != nil || category.StatusCode() != http.StatusOK {
+		t.Fatalf("get cold-cache category request: %v; response %+v", err, category)
+	}
+	tag, err := rest.GetTagWithResponse(ctx, tagID, nil)
+	if err != nil || tag.StatusCode() != http.StatusOK {
+		t.Fatalf("get cold-cache tag request: %v; response %+v", err, tag)
+	}
+	member, err := rest.GetMemberWithResponse(ctx, memberID, nil)
+	if err != nil || member.StatusCode() != http.StatusOK {
+		t.Fatalf("get cold-cache member request: %v; response %+v", err, member)
+	}
+	filter := "account:" + strconv.Quote(account.JSON200.Fqn) +
+		" and category:" + strconv.Quote(category.JSON200.Fqn) +
+		" and tag:" + strconv.Quote(tag.JSON200.Fqn) +
+		" and member:" + strconv.Quote(member.JSON200.Name)
 	params := &httpclient.ListTransactionsParams{
-		AccountId:         &[]int64{accountID},
-		CategoryId:        &[]int64{categoryID},
-		TagId:             &[]int64{tagID},
-		MemberId:          &[]int64{memberID},
-		InitiatedDateFrom: &date,
-		InitiatedDateTo:   &date,
+		Filter: &filter,
 	}
 
 	type readResult struct {
@@ -305,11 +320,9 @@ func TestConcurrentReadsWithReferenceMutation(t *testing.T) {
 	rest := client.REST()
 	refs := createTransactionRefs(t, client)
 	created := createTransaction(t, client, balancedTransactionRequest(refs))
+	filter := `account:"checking:Chase:Primary" and category:"Food:Restaurants" and tag:"Trips:Local" and member:Avery`
 	params := &httpclient.ListTransactionsParams{
-		AccountId:  &[]int64{refs.CheckingAccountId},
-		CategoryId: &[]int64{refs.CategoryId},
-		TagId:      &[]int64{refs.TagId},
-		MemberId:   &[]int64{refs.MemberId},
+		Filter: &filter,
 	}
 
 	warm, err := rest.ListTransactionsWithResponse(context.Background(), params)

@@ -128,7 +128,7 @@ interface TransactionBrowserProps {
   readonly onDeferRecurringProjection?: (
     transaction: Transaction,
     request: RecurringDefinitionDeferRequest,
-  ) => Promise<void>;
+  ) => Promise<number | undefined>;
   readonly onChangeTransactionLifecycle: (
     transaction: Transaction,
     action: "cancel" | "restore",
@@ -1057,11 +1057,13 @@ export const TransactionBrowser = ({
     setDeferErrorMessage(undefined);
     deletedRowFocusIndexRef.current = deferDialog.rowIndex;
     try {
-      await onDeferRecurringProjection(deferDialog.transaction, request);
+      retainedRowFocusTransactionIdRef.current =
+        await onDeferRecurringProjection(deferDialog.transaction, request);
       setDeferDialog(undefined);
       setDeferDefinition(undefined);
     } catch (error) {
       deletedRowFocusIndexRef.current = undefined;
+      retainedRowFocusTransactionIdRef.current = undefined;
       setDeferErrorMessage(
         error instanceof Error ? error.message : "The API request failed.",
       );

@@ -155,6 +155,7 @@ export const useTransactionBrowserPage = ({
   const unanchoredParams: TransactionPageParams = useMemo(
     () => ({
       filters,
+      includeExpectedByDefault: true,
       limit: pageSize,
       offset: transactionOffsetFromPage(page, pageSize),
       sort,
@@ -615,7 +616,7 @@ export const useTransactionBrowserPage = ({
           "Next occurrence deferred, but transactions could not be refreshed.",
           "warning",
         );
-        return;
+        return undefined;
       }
       detail.refreshSelectedProjectedTransactionDetail(
         transaction.transaction_id,
@@ -623,6 +624,11 @@ export const useTransactionBrowserPage = ({
         refreshedTransactions,
       );
       showNotice("Next occurrence deferred.");
+      return refreshedTransactions.find(
+        (candidate) =>
+          candidate.recurring_projection_definition_id === definitionId &&
+          candidate.recurring_projection_is_next === true,
+      )?.transaction_id;
     },
     [detail, displayedPageParams, showNotice],
   );

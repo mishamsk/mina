@@ -199,7 +199,7 @@ func (s *Service) CreateExchange(ctx context.Context, input ExchangeInput) (Tran
 	if soldCurrency == boughtCurrency {
 		return Transaction{}, services.InvalidRequest("sold_currency and bought_currency must differ")
 	}
-	exchange, err := s.accounts.ActiveReferenceByFQN(ctx, "system:exchange")
+	exchange, err := s.accounts.ActiveReferenceByFQN(ctx, "system:exchange", accounts.ReferenceOptions{})
 	if errors.Is(err, services.ErrInvalidReference) {
 		return Transaction{}, services.InvalidRequest("system:exchange account is unavailable")
 	}

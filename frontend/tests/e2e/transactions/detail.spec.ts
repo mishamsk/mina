@@ -283,8 +283,9 @@ test("a captured BlueCash Target spend without amounts is offered for Spend and 
   );
   const blueCash = findByFqn(accounts, "bank:Amex:BlueCash");
   const target = findByFqn(accounts, "merchant:Target");
+  const accountFilter = `account:"${blueCash.fqn}"`;
   const transactionsResponse = await page.request.get(
-    `/api/transactions?limit=500&offset=0&sort=initiated_date&sort_dir=desc&account_id=${blueCash.account_id}&search=${encodeURIComponent("Household supplies")}`,
+    `/api/transactions?limit=500&offset=0&sort=initiated_date&sort_dir=desc&filter=${encodeURIComponent(accountFilter)}&search=${encodeURIComponent("Household supplies")}`,
   );
   expect(transactionsResponse.ok(), await transactionsResponse.text()).toBe(
     true,
@@ -1232,7 +1233,7 @@ test("transaction detail panel is read-only while category chips keep filtering"
     .first()
     .click();
   await expectTransactionFilterUrl(page, {
-    categories: [initialCategory.category_id],
+    filter: `category:"${initialCategory.fqn}"`,
   });
   await expect(
     page.getByRole("button", {
@@ -1242,7 +1243,9 @@ test("transaction detail panel is read-only while category chips keep filtering"
   await expect(panel).toBeVisible();
 
   const expected = await createExpectedRecurringFixture(page, unique);
-  await page.goto("/transactions?page=1&pageSize=50");
+  await page.goto(
+    "/transactions?page=1&pageSize=50&filter=lifecycle%3Aexpected",
+  );
   const expectedRow = page
     .getByRole("row")
     .filter({ has: page.getByRole("img", { name: "Expected" }) })
@@ -1804,8 +1807,8 @@ test("Escape closes filter popover before transaction detail panel", async ({
   await page.getByRole("option").filter({ hasText: category.fqn }).click();
   await expect(panel).toBeVisible();
   await expect
-    .poll(() => new URL(page.url()).searchParams.get("category"))
-    .toBe(String(category.category_id));
+    .poll(() => new URL(page.url()).searchParams.get("filter"))
+    .toBe(`category:"${category.fqn}"`);
 
   await page.keyboard.press("Escape");
   await expect(popover).toBeHidden();

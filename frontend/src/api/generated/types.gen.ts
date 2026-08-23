@@ -5446,97 +5446,17 @@ export type ListTransactionsData = {
          */
         offset?: number;
         /**
-         * Date-only anchor that returns the page containing the first transaction at or before this initiated date. If the anchor is older than every transaction, the page clamps to the oldest transaction page. Valid only with initiated_date descending ordering. When future recurring projections participate, omit offset to land at the anchor; an explicit offset then addresses the absolute merged sequence. Without projections, the anchor determines the persisted page regardless of offset.
+         * Date-only anchor that returns the page containing the first transaction at or before this initiated date. If the anchor is older than every transaction, the page clamps to the oldest transaction page. Valid only with initiated_date descending ordering. For a future anchor, omit offset to land at the anchor after recurring projections are merged; an explicit offset then addresses the absolute merged sequence. For a non-future anchor, the anchor determines the persisted page regardless of offset.
          */
         anchor_date?: string;
         /**
-         * Account identifier to target or filter by.
+         * Composable expression with terms joined by AND or OR, prefixed by NOT, and grouped with parentheses; precedence is NOT, AND, OR. Membership fields using `:` are `account`, `category`, `tag`, `member`, `currency`, `role`, `class`, `lifecycle`, `settlement`, and `shape`. `account`, `category`, and `tag` accept an exact FQN, bare `*`, or a quoted hierarchy scope such as `category:"Food:*"`; `member` accepts an exact name; `currency` accepts a three-letter ISO code or quoted `C::` crypto code. Enums are role=`expense|refund|income|clawback|exchange|adjustment|balance`, class=`spend|income|refund|clawback|transfer|currency_exchange|adjustment|mixed`, lifecycle=`active|expected|cancelled`, settlement=`pending|posted|mixed|not_applicable`, and shape=`spend|refund|income|clawback|adjustment|exchange|transfer`. Comparison fields using `=`, `>`, `>=`, `<`, or `<=` are `amount`, `amount_usd`, `initiated`, `pending`, and `posted`; amounts are signed DECIMAL(18,8), while dates accept `YYYY-MM-DD`, RFC3339, or signed offsets with `s|m|h|d|w|mo|y`. Quote values containing whitespace, parentheses, quotes, or extra colons. Limits are 4096 structural characters, 100 terms, 10 nesting levels, and relative-offset magnitude 100000. Examples: `(category:"Food:*" OR tag:Travel) AND NOT lifecycle:cancelled`; `amount_usd>=100 AND initiated>=-30d`. Supplying a filter disables default expected-transaction exclusion and combines with `transaction_class` by AND.
          */
-        account_id?: Array<number>;
-        /**
-         * Category identifier to target or filter by.
-         */
-        category_id?: Array<number>;
-        /**
-         * Exact Category FQN descendant scope. Includes hidden active descendants and is independent of category_id filters.
-         */
-        category_fqn_prefix?: string;
-        /**
-         * Tag identifier to target or filter by.
-         */
-        tag_id?: Array<number>;
-        /**
-         * Exact Tag FQN descendant scope. Includes hidden active descendants and is independent of tag_id filters.
-         */
-        tag_fqn_prefix?: string;
-        /**
-         * Household-member identifier to target or filter by.
-         */
-        member_id?: Array<number>;
-        /**
-         * Filter by active journal-record currency codes, using ISO 4217 or the `C::` crypto prefix. Repeated values use any-of matching. This filter composes independently with other record-derived filters, so different active records in one transaction may satisfy different filters.
-         */
-        currency?: Array<string>;
-        /**
-         * Filters transactions by lifecycle. Expected transactions are excluded by default and returned only when this filter explicitly includes `expected`.
-         */
-        lifecycle_status?: Array<TransactionLifecycleStatus>;
-        /**
-         * Filters transactions by server-derived settlement summary.
-         */
-        settlement?: Array<TransactionSettlement>;
+        filter?: string;
         /**
          * Filter by one or more server-derived transaction classes.
          */
         transaction_class?: Array<TransactionClass>;
-        /**
-         * Filter by one or more server-derived transaction shapes.
-         */
-        transaction_shape?: Array<TransactionShapeType>;
-        /**
-         * Filter by one or more server-derived record roles present in a transaction.
-         */
-        record_role?: Array<RecordRole>;
-        /**
-         * JSON string, not a JSON number. Signed DECIMAL(18,8) minimum filter; use at most 10 integer digits and 8 fractional digits.
-         */
-        amount_min?: string;
-        /**
-         * JSON string, not a JSON number. Signed DECIMAL(18,8) maximum filter; use at most 10 integer digits and 8 fractional digits.
-         */
-        amount_max?: string;
-        /**
-         * JSON string, not a JSON number. Signed DECIMAL(18,8) USD minimum filter; use at most 10 integer digits and 8 fractional digits.
-         */
-        amount_usd_min?: string;
-        /**
-         * JSON string, not a JSON number. Signed DECIMAL(18,8) USD maximum filter; use at most 10 integer digits and 8 fractional digits.
-         */
-        amount_usd_max?: string;
-        /**
-         * Minimum transaction initiated date in YYYY-MM-DD format.
-         */
-        initiated_date_from?: string;
-        /**
-         * Maximum transaction initiated date in YYYY-MM-DD format.
-         */
-        initiated_date_to?: string;
-        /**
-         * Minimum pending timestamp in ISO 8601 format; records without a pending timestamp do not match.
-         */
-        pending_date_from?: string;
-        /**
-         * Maximum pending timestamp in ISO 8601 format; records without a pending timestamp do not match.
-         */
-        pending_date_to?: string;
-        /**
-         * Minimum posted timestamp in ISO 8601 format.
-         */
-        posted_date_from?: string;
-        /**
-         * Maximum posted timestamp in ISO 8601 format.
-         */
-        posted_date_to?: string;
         /**
          * Case-insensitive search over active journal records. Contains-match fields are record memo, counterparty account name, account FQN, category FQN, tag FQN, member name, and account external_id. Record currency matches by exact case-insensitive code equality. Account external_system is intentionally excluded to avoid broad system-label matches.
          */

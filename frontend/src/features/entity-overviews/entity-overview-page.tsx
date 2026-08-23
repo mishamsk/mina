@@ -26,9 +26,13 @@ import {
   apiErrorMessage,
   fetchAccountingHistoryRange,
   fetchEntityOverview,
+  getCategory,
+  getMember,
+  getTag,
   householdFlowSelectionFromDataset,
 } from "@/api";
 import { PageHelp } from "@/components/page-help";
+import { Toast, toastDurationMs } from "@/components/toast";
 import { Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import {
@@ -53,14 +57,17 @@ import {
   refreshLedgerLookups,
   TransactionBrowser,
   TransactionDetailPanel,
+  useEntityFilterRequestGuard,
   useLedgerLookupsResource,
   useTransactionDetail,
   writeTransactionFiltersToSearchParams,
 } from "@/features/ledger";
 import { ReferenceDrilldownNotFound } from "@/features/reference";
 import {
+  addRequiredTransactionFilterMembership,
   emptyTransactionFilters,
   type TransactionFilters,
+  withTransactionFilterEntityScope,
 } from "@/models/transaction-filters";
 
 import { useEntityOverview } from "./use-entity-overview";
@@ -1201,6 +1208,12 @@ const TransactionPreview = ({
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const lookups = useLedgerLookupsResource();
+  const [filterNotice, setFilterNotice] = useState<string>();
+  const {
+    beginEntityFilterRequest,
+    cancelEntityFilterRequests,
+    completeEntityFilterRequest,
+  } = useEntityFilterRequestGuard();
   const retryLookups = useCallback(() => {
     void refreshLedgerLookups();
   }, []);
@@ -1223,6 +1236,52 @@ const TransactionPreview = ({
       nextFilters,
     );
     void navigate(`/transactions?${params.toString()}`);
+  };
+  const addPreviewFilter = async (
+    kind: "category" | "member" | "tag",
+    id: number,
+  ): Promise<void> => {
+    cancelEntityFilterRequests();
+    const controller = beginEntityFilterRequest();
+    let error: unknown;
+    let value: string | undefined;
+    if (kind === "category") {
+      const response = await getCategory({
+        path: { category_id: id },
+        signal: controller.signal,
+      });
+      error = response.error;
+      value = response.data?.fqn;
+    } else if (kind === "tag") {
+      const response = await getTag({
+        path: { tag_id: id },
+        signal: controller.signal,
+      });
+      error = response.error;
+      value = response.data?.fqn;
+    } else {
+      const response = await getMember({
+        path: { member_id: id },
+        signal: controller.signal,
+      });
+      error = response.error;
+      value = response.data?.name;
+    }
+    if (!completeEntityFilterRequest(controller)) {
+      return;
+    }
+    if (!value) {
+      setFilterNotice(
+        apiErrorMessage(
+          error,
+          `The ${kind} could not be loaded for filtering.`,
+        ),
+      );
+      return;
+    }
+    openTransactionsWithFilters(
+      addRequiredTransactionFilterMembership(filters, kind, value),
+    );
   };
 
   return (
@@ -1262,19 +1321,13 @@ const TransactionPreview = ({
         onChangeTransactionLifecycle={noopAsync}
         onClearSelection={noop}
         onFilterCategory={(categoryId) => {
-          openTransactionsWithFilters({
-            ...filters,
-            categoryIds: [categoryId],
-          });
+          void addPreviewFilter("category", categoryId);
         }}
         onFilterMember={(memberId) => {
-          openTransactionsWithFilters({ ...filters, memberIds: [memberId] });
+          void addPreviewFilter("member", memberId);
         }}
         onFilterTag={(tagId) => {
-          openTransactionsWithFilters({
-            ...filters,
-            tagIds: [...new Set([...filters.tagIds, tagId])],
-          });
+          void addPreviewFilter("tag", tagId);
         }}
         onDeleteTransaction={noopAsync}
         onDismissRecurringOccurrence={noopAsync}
@@ -1298,6 +1351,15 @@ const TransactionPreview = ({
         totalCount={report.transactions.length}
         transactions={report.transactions}
       />
+      <Toast
+        key={filterNotice ?? "empty"}
+        className="text-[var(--color-class-adjustment-ink)]"
+        durationMs={toastDurationMs}
+        message={filterNotice}
+        onDismiss={() => {
+          setFilterNotice(undefined);
+        }}
+      />
       {detail.selectedTransactionId ? (
         <TransactionDetailPanel
           readOnly
@@ -1308,19 +1370,13 @@ const TransactionPreview = ({
           onClose={detail.closeTransactionDetail}
           onDelete={noopAsync}
           onFilterCategory={(categoryId) => {
-            openTransactionsWithFilters({
-              ...filters,
-              categoryIds: [categoryId],
-            });
+            void addPreviewFilter("category", categoryId);
           }}
           onFilterMember={(memberId) => {
-            openTransactionsWithFilters({ ...filters, memberIds: [memberId] });
+            void addPreviewFilter("member", memberId);
           }}
           onFilterTag={(tagId) => {
-            openTransactionsWithFilters({
-              ...filters,
-              tagIds: [...new Set([...filters.tagIds, tagId])],
-            });
+            void addPreviewFilter("tag", tagId);
           }}
           onPost={noopAsync}
           onRestoreFocus={detail.restoreDetailFocus}
@@ -1372,26 +1428,12 @@ export const EntityOverviewPage = ({
     : "";
   const filters = useMemo<TransactionFilters | undefined>(() => {
     if (!report) return undefined;
-    if (report.scope.entity_kind === "category") {
-      return report.scope.scope_kind === "leaf"
-        ? {
-            ...emptyTransactionFilters,
-            categoryIds: [report.scope.entity_id!],
-          }
-        : {
-            ...emptyTransactionFilters,
-            categoryFqnPrefix: report.scope.fqn,
-          };
-    }
-    return report.scope.scope_kind === "leaf"
-      ? {
-          ...emptyTransactionFilters,
-          tagIds: [report.scope.entity_id!],
-        }
-      : {
-          ...emptyTransactionFilters,
-          tagFqnPrefix: report.scope.fqn,
-        };
+    return withTransactionFilterEntityScope(
+      emptyTransactionFilters,
+      report.scope.entity_kind,
+      report.scope.fqn,
+      report.scope.scope_kind === "group",
+    );
   }, [report]);
 
   return (

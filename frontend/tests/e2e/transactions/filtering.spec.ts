@@ -32,6 +32,9 @@ import {
   waitForLedgerLookups,
 } from "@tests/e2e/transactions/support";
 
+const defaultTransactionBrowserFilter =
+  "(lifecycle:active or lifecycle:expected or lifecycle:cancelled)";
+
 test("transactions page uses server pagination controls", async ({ page }) => {
   const defaultPageRequest = page.waitForRequest((request) => {
     const url = new URL(request.url());
@@ -376,6 +379,9 @@ test("transactions page add-filter menu drives server filters and chips", async 
   const unique = `${slug}${Date.now()}`;
   const visibleTagOne = await createTag(page, `E2E:Filter:${unique}:Groceries`);
   const visibleTagTwo = await createTag(page, `E2E:Filter:${unique}:Errands`);
+  const tagFilter = `(tag:"${visibleTagTwo.fqn}" or tag:"${visibleTagOne.fqn}")`;
+  const composedFilter = `(${tagFilter} and currency:USD and settlement:pending and (amount>=10 and amount<=20) and (initiated>=2026-05-01 and initiated<=2026-05-31))`;
+  const deepLinkFilter = `((tag:"${visibleTagOne.fqn}" or tag:"${visibleTagTwo.fqn}") and currency:USD and settlement:pending and amount>=10 and amount<=20 and initiated>=2026-05-01 and initiated<=2026-05-31)`;
   const hiddenTag = await createTag(page, `E2E:Filter:${unique}:HiddenMatch`);
   await hideTag(page, hiddenTag);
 
@@ -486,9 +492,8 @@ test("transactions page add-filter menu drives server filters and chips", async 
     return (
       url.pathname === "/api/transactions" &&
       transactionRequestHasFilters(url, {
-        currencies: ["EUR", "USD"],
+        filter: `(${tagFilter} and (currency:EUR or currency:USD))`,
         limit: "25",
-        tags: [visibleTagOne.tag_id, visibleTagTwo.tag_id],
       })
     );
   });
@@ -496,9 +501,8 @@ test("transactions page add-filter menu drives server filters and chips", async 
   await page.getByRole("checkbox", { name: "EUR" }).click();
   await multiCurrencyRequest;
   await expectTransactionFilterUrl(page, {
-    currencies: ["EUR", "USD"],
+    filter: `(${tagFilter} and (currency:EUR or currency:USD))`,
     pageSize: "25",
-    tags: [visibleTagOne.tag_id, visibleTagTwo.tag_id],
   });
   await expect(
     page.getByRole("row").filter({ hasText: eurMemo }),
@@ -506,9 +510,8 @@ test("transactions page add-filter menu drives server filters and chips", async 
 
   await page.getByRole("checkbox", { name: "EUR" }).click();
   await expectTransactionFilterUrl(page, {
-    currencies: ["USD"],
+    filter: `(${tagFilter} and currency:USD)`,
     pageSize: "25",
-    tags: [visibleTagOne.tag_id, visibleTagTwo.tag_id],
   });
   await expect(page.getByRole("row").filter({ hasText: eurMemo })).toBeHidden();
 
@@ -537,14 +540,8 @@ test("transactions page add-filter menu drives server filters and chips", async 
     return (
       url.pathname === "/api/transactions" &&
       transactionRequestHasFilters(url, {
-        amountMax: "20",
-        amountMin: "10",
-        currencies: ["USD"],
-        initiatedFrom: "2026-05-01",
-        initiatedTo: "2026-05-31",
+        filter: composedFilter,
         limit: "25",
-        settlements: ["pending"],
-        tags: [visibleTagOne.tag_id, visibleTagTwo.tag_id],
       })
     );
   });
@@ -554,14 +551,8 @@ test("transactions page add-filter menu drives server filters and chips", async 
   await finalFilterRequest;
 
   await expectTransactionFilterUrl(page, {
-    amountMax: "20",
-    amountMin: "10",
-    currencies: ["USD"],
-    initiatedFrom: "2026-05-01",
-    initiatedTo: "2026-05-31",
+    filter: composedFilter,
     pageSize: "25",
-    settlements: ["pending"],
-    tags: [visibleTagOne.tag_id, visibleTagTwo.tag_id],
   });
   await expect(
     page.getByRole("row").filter({ hasText: targetMemo }),
@@ -572,21 +563,13 @@ test("transactions page add-filter menu drives server filters and chips", async 
     return (
       url.pathname === "/api/transactions" &&
       transactionRequestHasFilters(url, {
-        amountMax: "20",
-        amountMin: "10",
-        currencies: ["USD"],
-        initiatedFrom: "2026-05-01",
-        initiatedTo: "2026-05-31",
+        filter: deepLinkFilter,
         limit: "25",
-        settlements: ["pending"],
-        tags: [visibleTagOne.tag_id, visibleTagTwo.tag_id],
       })
     );
   });
   await page.goto(
-    `/transactions?page=1&pageSize=25&tag=${visibleTagOne.tag_id}` +
-      `&tag=${visibleTagTwo.tag_id}&settlement=pending&amountMin=10` +
-      `&amountMax=20&currency=USD&initiatedFrom=2026-05-01&initiatedTo=2026-05-31`,
+    `/transactions?page=1&pageSize=25&filter=${encodeURIComponent(deepLinkFilter)}`,
   );
   await deepLinkRequest;
   await expect(page.getByText("Tag Groceries")).toBeVisible();
@@ -600,14 +583,8 @@ test("transactions page add-filter menu drives server filters and chips", async 
     return (
       url.pathname === "/api/transactions" &&
       transactionRequestHasFilters(url, {
-        amountMax: "20",
-        amountMin: "10",
-        currencies: ["USD"],
-        initiatedFrom: "2026-05-01",
-        initiatedTo: "2026-05-31",
+        filter: deepLinkFilter,
         limit: "50",
-        settlements: ["pending"],
-        tags: [visibleTagOne.tag_id, visibleTagTwo.tag_id],
       })
     );
   });
@@ -620,15 +597,9 @@ test("transactions page add-filter menu drives server filters and chips", async 
     return (
       url.pathname === "/api/transactions" &&
       transactionRequestHasFilters(url, {
-        amountMax: "20",
-        amountMin: "10",
         anchorDate: "2026-05-31",
-        currencies: ["USD"],
-        initiatedFrom: "2026-05-01",
-        initiatedTo: "2026-05-31",
+        filter: deepLinkFilter,
         limit: "50",
-        settlements: ["pending"],
-        tags: [visibleTagOne.tag_id, visibleTagTwo.tag_id],
       })
     );
   });
@@ -637,13 +608,8 @@ test("transactions page add-filter menu drives server filters and chips", async 
 
   await page.getByRole("button", { name: "Remove Currency USD" }).click();
   await expectTransactionFilterUrl(page, {
-    amountMax: "20",
-    amountMin: "10",
-    initiatedFrom: "2026-05-01",
-    initiatedTo: "2026-05-31",
+    filter: `(${tagFilter} and settlement:pending and (amount>=10 and amount<=20) and (initiated>=2026-05-01 and initiated<=2026-05-31))`,
     pageSize: "50",
-    settlements: ["pending"],
-    tags: [visibleTagOne.tag_id, visibleTagTwo.tag_id],
   });
   await expect(
     page.getByRole("row").filter({ hasText: eurMemo }),
@@ -654,19 +620,30 @@ test("transactions page add-filter menu drives server filters and chips", async 
 
   await page.getByRole("button", { name: "Remove Settlement Pending" }).click();
   await expectTransactionFilterUrl(page, {
-    amountMax: "20",
-    amountMin: "10",
-    currencies: ["USD"],
-    initiatedFrom: "2026-05-01",
-    initiatedTo: "2026-05-31",
+    filter: `(${tagFilter} and currency:USD and (amount>=10 and amount<=20) and (initiated>=2026-05-01 and initiated<=2026-05-31))`,
     pageSize: "50",
-    tags: [visibleTagOne.tag_id, visibleTagTwo.tag_id],
   });
 
   await page.getByRole("button", { name: "Close filters" }).click();
-  await expectTransactionFilterUrl(page, { pageSize: "50" });
+  await expectTransactionFilterUrl(page, { filter: null, pageSize: "50" });
   await expect(page.getByText("Tag Groceries")).toBeHidden();
   await expect(page.getByText("Amount 10-20")).toBeHidden();
+
+  const relativeDateRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return (
+      url.pathname === "/api/transactions" &&
+      url.searchParams.get("filter") === "initiated>=-30d"
+    );
+  });
+  await page.goto(
+    `/transactions?page=1&pageSize=50&filter=${encodeURIComponent("initiated>=-30d")}`,
+  );
+  await relativeDateRequest;
+  await page.getByRole("button", { name: "Edit Initiated >= -30d" }).click();
+  await expect(
+    page.getByRole("textbox", { exact: true, name: "From" }),
+  ).toHaveValue("-30d");
 });
 
 test("typed currency filters commit suggestions and layer Escape", async ({
@@ -690,14 +667,14 @@ test("typed currency filters commit suggestions and layer Escape", async ({
     const url = new URL(request.url());
     return (
       url.pathname === "/api/transactions" &&
-      transactionRequestHasFilters(url, { currencies: ["EUR"] })
+      transactionRequestHasFilters(url, { filter: "currency:EUR" })
     );
   });
   await currencyCode.fill("E");
   await currencyCode.press("ArrowDown");
   await currencyCode.press("Enter");
   await eurRequest;
-  await expectTransactionFilterUrl(page, { currencies: ["EUR"] });
+  await expectTransactionFilterUrl(page, { filter: "currency:EUR" });
 
   const historyLengthBeforeDuplicate = await page.evaluate(
     () => window.history.length,
@@ -713,7 +690,7 @@ test("typed currency filters commit suggestions and layer Escape", async ({
     return (
       url.pathname === "/api/transactions" &&
       transactionRequestHasFilters(url, {
-        currencies: ["C::stETH", "EUR"],
+        filter: '(currency:"C::stETH" or currency:EUR)',
       })
     );
   });
@@ -721,13 +698,13 @@ test("typed currency filters commit suggestions and layer Escape", async ({
   await currencyCode.press("Enter");
   await cryptoRequest;
   await expectTransactionFilterUrl(page, {
-    currencies: ["C::stETH", "EUR"],
+    filter: '(currency:"C::stETH" or currency:EUR)',
   });
 
   const cryptoCheckbox = page.getByRole("checkbox", { name: "C::stETH" });
   await cryptoCheckbox.focus();
   await cryptoCheckbox.press("Space");
-  await expectTransactionFilterUrl(page, { currencies: ["EUR"] });
+  await expectTransactionFilterUrl(page, { filter: "currency:EUR" });
   await expect(currencyCode).toBeFocused();
 
   await currencyCode.fill("E");
@@ -796,7 +773,10 @@ test("transactions inline recurring occurrences support lifecycle filtering, con
     return (
       url.pathname === "/api/transactions" &&
       url.searchParams.get("search") === search &&
-      transactionRequestHasFilters(url, { limit: "50" })
+      transactionRequestHasFilters(url, {
+        filter: defaultTransactionBrowserFilter,
+        limit: "50",
+      })
     );
   });
   await page.goto(
@@ -813,6 +793,29 @@ test("transactions inline recurring occurrences support lifecycle filtering, con
     })
     .filter({ has: page.getByRole("img", { name: "Expected" }) });
   const ordinaryRow = page.getByRole("row").filter({ hasText: ordinaryMemo });
+  await expect(overdueRow).toBeVisible();
+  await expect(dueRow).toBeVisible();
+  await expect(ordinaryRow).toBeVisible();
+
+  await page.getByRole("button", { name: "Open filters" }).click();
+  await page.getByRole("button", { name: "Add filter" }).click();
+  await page.getByRole("button", { exact: true, name: "Lifecycle" }).click();
+  await page.getByRole("checkbox", { name: "Active" }).click();
+  const allLifecycleRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return (
+      url.pathname === "/api/transactions" &&
+      url.searchParams.get("search") === search &&
+      transactionRequestHasFilters(url, {
+        filter: "(lifecycle:active or lifecycle:expected)",
+        limit: "50",
+      })
+    );
+  });
+  await page.getByRole("checkbox", { name: "Expected" }).click();
+  await allLifecycleRequest;
+  await page.getByRole("button", { name: "Back" }).click();
+  await page.keyboard.press("Escape");
   await expect(overdueRow).toBeVisible();
   await expect(dueRow).toBeVisible();
   await expect(ordinaryRow).toBeVisible();
@@ -972,35 +975,41 @@ test("transactions inline recurring occurrences support lifecycle filtering, con
   await expect(entryPanel).toHaveCount(0);
   await page.setViewportSize({ width: 700, height: 720 });
 
-  await page.getByRole("button", { name: "Open filters" }).click();
-  await page.getByRole("button", { name: "Add filter" }).click();
-  await page.getByRole("button", { name: "Lifecycle" }).click();
+  await page
+    .getByRole("button", { name: "Edit Lifecycle Active, Expected · any of" })
+    .click();
   const expectedRequest = page.waitForRequest((request) => {
     const url = new URL(request.url());
     return (
       url.pathname === "/api/transactions" &&
       url.searchParams.get("search") === search &&
       transactionRequestHasFilters(url, {
-        lifecycles: ["expected"],
+        filter: "lifecycle:expected",
         limit: "50",
       })
     );
   });
-  await page.getByText("Expected", { exact: true }).click();
+  await page.getByRole("checkbox", { name: "Active" }).click();
   await expectedRequest;
 
   await expectTransactionFilterUrl(page, {
-    lifecycles: ["expected"],
+    filter: "lifecycle:expected",
     pageSize: "50",
     q: search,
   });
-  await expect(page.getByText("Lifecycle Expected")).toBeVisible();
+  await expect(page.getByText("Lifecycle Expected · any of")).toBeVisible();
   await expect(overdueRow).toBeVisible();
   await expect(dueRow).toBeVisible();
+  await expect(ordinaryRow).toBeHidden();
 
-  await page.getByRole("button", { name: "Remove Lifecycle Expected" }).click();
-  await expectTransactionFilterUrl(page, { pageSize: "50", q: search });
-  await expect(overdueRow).toBeVisible();
+  await page.getByRole("checkbox", { name: "Active" }).click();
+  await expectTransactionFilterUrl(page, {
+    filter: "(lifecycle:active or lifecycle:expected)",
+    pageSize: "50",
+    q: search,
+  });
+  await page.keyboard.press("Escape");
+  await expect(ordinaryRow).toBeVisible();
 
   const featuredRow = page
     .getByTestId("featured-balance-row")
@@ -1202,7 +1211,7 @@ test("transaction amount chips share one right edge across row variants", async 
     mixedTransaction = (await mixedResponse.json()) as TransactionFixture;
 
     await page.goto(
-      `/transactions?page=1&pageSize=50&q=${encodeURIComponent(unique)}`,
+      `/transactions?page=1&pageSize=50&q=${encodeURIComponent(unique)}&filter=${encodeURIComponent("(lifecycle:active or lifecycle:expected)")}`,
     );
     const ordinaryRow = page.getByRole("row").filter({ hasText: ordinaryMemo });
     const overdueRow = page
@@ -1573,6 +1582,7 @@ test("transactions class toolbar popover selects and clears multiple classes", a
       url.pathname === "/api/transactions" &&
       transactionRequestHasFilters(url, {
         classes: ["spend"],
+        filter: defaultTransactionBrowserFilter,
         limit: "50",
       })
     );
@@ -1591,6 +1601,7 @@ test("transactions class toolbar popover selects and clears multiple classes", a
   await spendRequest;
   await expectTransactionFilterUrl(page, {
     classes: ["spend"],
+    filter: null,
     pageSize: "50",
     q: unique,
   });
@@ -1603,6 +1614,7 @@ test("transactions class toolbar popover selects and clears multiple classes", a
       url.pathname === "/api/transactions" &&
       transactionRequestHasFilters(url, {
         classes: ["spend", "income"],
+        filter: defaultTransactionBrowserFilter,
         limit: "50",
       })
     );
@@ -1612,6 +1624,7 @@ test("transactions class toolbar popover selects and clears multiple classes", a
   await expect(classPopover).toBeVisible();
   await expectTransactionFilterUrl(page, {
     classes: ["spend", "income"],
+    filter: null,
     pageSize: "50",
     q: unique,
   });
@@ -1632,6 +1645,7 @@ test("transactions class toolbar popover selects and clears multiple classes", a
       url.pathname === "/api/transactions" &&
       transactionRequestHasFilters(url, {
         classes: ["spend", "income"],
+        filter: defaultTransactionBrowserFilter,
         limit: "50",
       })
     );
@@ -1649,6 +1663,7 @@ test("transactions class toolbar popover selects and clears multiple classes", a
       url.pathname === "/api/transactions" &&
       transactionRequestHasFilters(url, {
         classes: ["income"],
+        filter: defaultTransactionBrowserFilter,
         limit: "50",
       })
     );
@@ -1658,6 +1673,7 @@ test("transactions class toolbar popover selects and clears multiple classes", a
   await expect(classFilter).toContainText("Income");
   await expectTransactionFilterUrl(page, {
     classes: ["income"],
+    filter: null,
     pageSize: "50",
     q: unique,
   });
@@ -1668,13 +1684,20 @@ test("transactions class toolbar popover selects and clears multiple classes", a
     const url = new URL(request.url());
     return (
       url.pathname === "/api/transactions" &&
-      transactionRequestHasFilters(url, { limit: "50" })
+      transactionRequestHasFilters(url, {
+        filter: defaultTransactionBrowserFilter,
+        limit: "50",
+      })
     );
   });
   await incomeCheckbox.click();
   await allClassesRequest;
   await expect(classFilter).toContainText("All classes");
-  await expectTransactionFilterUrl(page, { pageSize: "50", q: unique });
+  await expectTransactionFilterUrl(page, {
+    filter: null,
+    pageSize: "50",
+    q: unique,
+  });
   await expect(spendCheckbox).not.toBeChecked();
   await expect(incomeCheckbox).not.toBeChecked();
   await page.keyboard.press("Escape");
@@ -1691,6 +1714,7 @@ test("transactions class toolbar popover selects and clears multiple classes", a
   await expect(classFilter).toHaveAccessibleName("Class: Income");
   await expectTransactionFilterUrl(page, {
     classes: ["income"],
+    filter: null,
     pageSize: "50",
     q: unique,
   });
@@ -1702,7 +1726,11 @@ test("transactions class toolbar popover selects and clears multiple classes", a
   ).toBeVisible();
   await page.goForward();
   await expect(classFilter).toHaveAccessibleName("Class: All classes");
-  await expectTransactionFilterUrl(page, { pageSize: "50", q: unique });
+  await expectTransactionFilterUrl(page, {
+    filter: null,
+    pageSize: "50",
+    q: unique,
+  });
   await expect(
     page.getByRole("row").filter({ hasText: spendMemo }),
   ).toBeVisible();
@@ -1714,7 +1742,7 @@ test("transactions class toolbar popover selects and clears multiple classes", a
   await page.getByRole("button", { name: "Add filter" }).click();
   await expect(
     page.getByRole("button", { exact: true, name: "Transaction class" }),
-  ).toHaveCount(0);
+  ).toBeVisible();
 });
 
 test("transactions filter toolbar keeps a stable inline trigger geometry", async ({
@@ -1770,15 +1798,25 @@ test("transactions filter toolbar keeps a stable inline trigger geometry", async
   await expect(settlementButton).toBeVisible();
   await settlementButton.focus();
   await page.keyboard.press("Enter");
+  const operator = page.getByRole("combobox", { name: "Filter operator" });
+  await expect(operator).toBeFocused();
+  await expect(operator).toHaveAttribute("data-slot", "select-trigger");
   const pendingCheckbox = page.getByRole("checkbox", { name: "Pending" });
-  await expect(pendingCheckbox).toBeFocused();
   await expect(pendingCheckbox).toBeVisible();
   await page.getByText("Pending", { exact: true }).click();
   await expect
-    .poll(() => new URL(page.url()).searchParams.get("settlement"))
-    .toBe("pending");
+    .poll(() => new URL(page.url()).searchParams.get("filter"))
+    .toBe("settlement:pending");
 
-  const settlementChip = page.getByText("Settlement Pending", { exact: true });
+  await operator.click();
+  await page.getByRole("option", { name: "None of" }).click();
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get("filter"))
+    .toBe("not settlement:pending");
+
+  const settlementChip = page.getByText("Settlement Pending · none of", {
+    exact: true,
+  });
   await expect(settlementChip).toBeVisible();
   await page.keyboard.press("Escape");
   const triggerWithChipBox = await closeFilterButton.boundingBox();
@@ -1874,18 +1912,16 @@ test("transactions filter toolbar suppresses open-control tooltips and supports 
   await expect(classFilter).toBeFocused();
   await expect(classTooltip).toBeHidden();
 
-  const transactionsHeadingBox = await page
-    .getByRole("heading", { name: "Transactions" })
-    .boundingBox();
-  expect(transactionsHeadingBox).not.toBeNull();
-  if (!transactionsHeadingBox) {
-    throw new Error("Transactions heading must be visible");
-  }
+  const transactionsHeading = page.locator("main h1").filter({
+    hasText: "Transactions",
+  });
   await page.keyboard.press("Enter");
   await expect(classPopover).toBeVisible();
+  const transactionsHeadingBox = await transactionsHeading.boundingBox();
+  expect(transactionsHeadingBox).not.toBeNull();
   await page.mouse.click(
-    transactionsHeadingBox.x + transactionsHeadingBox.width / 2,
-    transactionsHeadingBox.y + transactionsHeadingBox.height / 2,
+    transactionsHeadingBox!.x + transactionsHeadingBox!.width / 2,
+    transactionsHeadingBox!.y + transactionsHeadingBox!.height / 2,
   );
   await expect(classPopover).toBeHidden();
   await expect(classFilter).toBeFocused();
@@ -1893,7 +1929,15 @@ test("transactions filter toolbar suppresses open-control tooltips and supports 
 
   await sortMenu.click();
   await expect(sortPopover).toBeVisible();
-  await page.getByRole("heading", { name: "Transactions" }).click();
+  const refreshedTransactionsHeadingBox =
+    await transactionsHeading.boundingBox();
+  expect(refreshedTransactionsHeadingBox).not.toBeNull();
+  await page.mouse.click(
+    refreshedTransactionsHeadingBox!.x +
+      refreshedTransactionsHeadingBox!.width / 2,
+    refreshedTransactionsHeadingBox!.y +
+      refreshedTransactionsHeadingBox!.height / 2,
+  );
   await expect(sortPopover).toBeHidden();
   await expect(sortMenu).toBeFocused();
 
@@ -1981,7 +2025,7 @@ test("filter X dismiss clears chips while retaining standing search and class fi
   const search = "E2E X dismiss standing controls";
 
   await page.goto(
-    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(search)}&class=spend&category=${category.category_id}`,
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(search)}&class=spend&filter=${encodeURIComponent(`category:"${category.fqn}"`)}`,
   );
 
   await expect(
@@ -1997,6 +2041,7 @@ test("filter X dismiss clears chips while retaining standing search and class fi
   await expect(page.getByTestId("transaction-browser-filter-bar")).toBeHidden();
   await expectTransactionFilterUrl(page, {
     classes: ["spend"],
+    filter: null,
     pageSize: "50",
     q: search,
   });
@@ -2024,7 +2069,7 @@ test("transaction entity chips add filters in place", async ({
   const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const category = await createCategory(
     page,
-    `E2E:ChipFilter:${unique}:CategoryOne`,
+    `E2E:ChipFilter:${unique}:Category*One`,
     "expense",
   );
   const alternateCategory = await createCategory(
@@ -2084,7 +2129,7 @@ test("transaction entity chips add filters in place", async ({
   await expect(memberChip).toHaveCSS("color", "rgb(15, 13, 22)");
   await memberChip.click();
   await expectTransactionFilterUrl(page, {
-    members: [member.member_id],
+    filter: `member:"${member.name}"`,
     pageSize: "50",
     q: searchQuery,
   });
@@ -2099,19 +2144,32 @@ test("transaction entity chips add filters in place", async ({
     .getByRole("button", { name: `Remove Member ${member.name}` })
     .click();
   await expectTransactionFilterUrl(page, {
+    filter: null,
     pageSize: "50",
     q: searchQuery,
   });
+
+  const renamedCategoryFqn = `E2E:ChipFilterRenamed:${unique}:Category*One`;
+  const renameResponse = await page.request.post(
+    "/api/categories/restructure",
+    {
+      data: {
+        from_fqn: category.fqn,
+        to_fqn: renamedCategoryFqn,
+      },
+    },
+  );
+  expect(renameResponse.ok(), await renameResponse.text()).toBe(true);
 
   await targetRow
     .getByRole("button", { name: `Filter by ${category.name}` })
     .click();
   await expectTransactionFilterUrl(page, {
-    categories: [category.category_id],
+    filter: `category:"${renamedCategoryFqn}"`,
     pageSize: "50",
     q: searchQuery,
   });
-  await expect(page.getByText(`Category ${category.name}`)).toBeVisible();
+  await expect(page.getByText(`Category ${renamedCategoryFqn}`)).toBeVisible();
   await expect(
     page.getByRole("row").filter({ hasText: alternateMemo }),
   ).toBeHidden();
@@ -2121,10 +2179,9 @@ test("transaction entity chips add filters in place", async ({
     .first()
     .click();
   await expectTransactionFilterUrl(page, {
-    categories: [category.category_id],
+    filter: `(category:"${renamedCategoryFqn}" and tag:"${tag.fqn}")`,
     pageSize: "50",
     q: searchQuery,
-    tags: [tag.tag_id],
   });
   await expect(page.getByText(`Tag ${tag.name}`)).toBeVisible();
 
@@ -2137,7 +2194,7 @@ test("transactions sidebar restores the last-used transactions URL state", async
   page,
 }) => {
   await page.goto(
-    "/transactions?page=2&pageSize=25&q=Target&currency=USD&settlement=posted",
+    `/transactions?page=2&pageSize=25&q=Target&filter=${encodeURIComponent("(currency:USD and settlement:posted)")}`,
   );
   await expect(
     page.getByRole("heading", { exact: true, name: "Transactions" }),
@@ -2146,11 +2203,10 @@ test("transactions sidebar restores the last-used transactions URL state", async
     "Target",
   );
   await expectTransactionFilterUrl(page, {
-    currencies: ["USD"],
+    filter: "(currency:USD and settlement:posted)",
     page: "2",
     pageSize: "25",
     q: "Target",
-    settlements: ["posted"],
   });
 
   await page.getByRole("link", { name: "Status" }).click();
@@ -2166,10 +2222,9 @@ test("transactions sidebar restores the last-used transactions URL state", async
     "Target",
   );
   await expectTransactionFilterUrl(page, {
-    currencies: ["USD"],
+    filter: "(currency:USD and settlement:posted)",
     page: "2",
     pageSize: "25",
     q: "Target",
-    settlements: ["posted"],
   });
 });

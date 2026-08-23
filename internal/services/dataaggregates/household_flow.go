@@ -344,21 +344,21 @@ func (s *Service) report(ctx context.Context, scope Scope, metric CoreMetric, de
 		return Report{}, err
 	}
 	previewPageLimit := previewLimit
-	listOptions := transactions.ListOptions{
-		ListOptions:       services.ListOptions{SortKey: services.SortKeyInitiatedDate, SortDirection: services.SortDirectionDesc, Limit: &previewPageLimit},
-		LifecycleStatuses: []transactions.LifecycleStatus{transactions.LifecycleStatusActive},
-		InitiatedDateTo:   &query.Today,
+	field := transactions.FilterFieldCategory
+	if scope.EntityKind == EntityKindTag {
+		field = transactions.FilterFieldTag
 	}
-	if scope.EntityKind == EntityKindCategory {
-		if scope.ScopeKind == ScopeKindLeaf {
-			listOptions.CategoryIDs = []int64{*scope.EntityID}
-		} else {
-			listOptions.CategoryFQNPrefix = &scope.FQN
-		}
-	} else if scope.ScopeKind == ScopeKindLeaf {
-		listOptions.TagIDs = []int64{*scope.EntityID}
-	} else {
-		listOptions.TagFQNPrefix = &scope.FQN
+	entityFilter := &transactions.FilterEntityTerm{Field: field, FQN: scope.FQN, Scoped: scope.ScopeKind == ScopeKindGroup}
+	if scope.EntityID != nil {
+		entityFilter.EntityID = *scope.EntityID
+	}
+	listOptions := transactions.ListOptions{
+		ListOptions: services.ListOptions{SortKey: services.SortKeyInitiatedDate, SortDirection: services.SortDirectionDesc, Limit: &previewPageLimit},
+		Filter: &transactions.ResolvedFilter{Expression: &transactions.FilterAnd{Terms: []transactions.FilterExpression{
+			entityFilter,
+			&transactions.FilterEnumTerm{Field: transactions.FilterFieldLifecycle, Value: string(transactions.LifecycleStatusActive)},
+			&transactions.FilterDateTerm{Op: transactions.FilterCompareAtMost, Date: query.Today},
+		}}},
 	}
 	preview, err := s.transactions.List(ctx, listOptions)
 	if err != nil {

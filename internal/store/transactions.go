@@ -461,79 +461,8 @@ func (s *TransactionStore) transactionListPredicate(opts transactions.ListOption
 	query := `FROM ` + s.db.accountingName("transaction") + ` tx
 WHERE tx.tombstoned_at IS NULL`
 	args := []any{}
-	if !slices.Contains(opts.LifecycleStatuses, transactions.LifecycleStatusExpected) {
+	if opts.Filter == nil {
 		query += " AND tx.lifecycle_status <> CAST('EXPECTED' AS " + s.db.accountingName("transaction_lifecycle_status") + ")"
-	}
-	if opts.InitiatedDateFrom != nil {
-		query += " AND tx.initiated_date >= ?"
-		args = append(args, civilDateArg(*opts.InitiatedDateFrom))
-	}
-	if opts.InitiatedDateTo != nil {
-		query += " AND tx.initiated_date <= ?"
-		args = append(args, civilDateArg(*opts.InitiatedDateTo))
-	}
-	if len(opts.AccountIDs) > 0 {
-		query += " AND " + s.transactionListRecordExists("jr.account_id IN ("+placeholders(len(opts.AccountIDs))+")")
-		args = append(args, int64Args(opts.AccountIDs)...)
-	}
-	if len(opts.CategoryIDs) > 0 {
-		query += " AND " + s.transactionListRecordExists("jr.category_id IN ("+placeholders(len(opts.CategoryIDs))+")")
-		args = append(args, int64Args(opts.CategoryIDs)...)
-	}
-	if opts.CategoryFQNPrefix != nil {
-		query += ` AND EXISTS (
-	SELECT 1
-	FROM ` + s.db.accountingName("journal_record") + ` jr
-	JOIN ` + s.db.accountingName("category") + ` c ON c.category_id = jr.category_id
-	WHERE jr.transaction_id = tx.transaction_id
-	  AND jr.tombstoned_at IS NULL
-	  AND c.tombstoned_at IS NULL
-	  AND (c.fqn = ? OR starts_with(c.fqn, ? || ':'))
-)`
-		args = append(args, *opts.CategoryFQNPrefix, *opts.CategoryFQNPrefix)
-	}
-	if len(opts.MemberIDs) > 0 {
-		query += " AND " + s.transactionListRecordExists("jr.member_id IN ("+placeholders(len(opts.MemberIDs))+")")
-		args = append(args, int64Args(opts.MemberIDs)...)
-	}
-	if len(opts.Currencies) > 0 {
-		query += " AND " + s.transactionListRecordExists("jr.currency IN ("+placeholders(len(opts.Currencies))+")")
-		for _, currency := range opts.Currencies {
-			args = append(args, currency)
-		}
-	}
-	if len(opts.TagIDs) > 0 {
-		tagConditions := make([]string, 0, len(opts.TagIDs))
-		for range opts.TagIDs {
-			tagConditions = append(tagConditions, "list_contains(jr.tag_ids, ?)")
-		}
-		query += " AND " + s.transactionListRecordExists("("+strings.Join(tagConditions, " OR ")+")")
-		args = append(args, int64Args(opts.TagIDs)...)
-	}
-	if opts.TagFQNPrefix != nil {
-		query += ` AND EXISTS (
-	SELECT 1
-	FROM ` + s.db.accountingName("journal_record") + ` jr
-	CROSS JOIN unnest(jr.tag_ids) AS matched_tag(tag_id)
-	JOIN ` + s.db.accountingName("tag") + ` tg ON tg.tag_id = matched_tag.tag_id
-	WHERE jr.transaction_id = tx.transaction_id
-	  AND jr.tombstoned_at IS NULL
-	  AND tg.tombstoned_at IS NULL
-	  AND (tg.fqn = ? OR starts_with(tg.fqn, ? || ':'))
-)`
-		args = append(args, *opts.TagFQNPrefix, *opts.TagFQNPrefix)
-	}
-	if len(opts.LifecycleStatuses) > 0 {
-		query += " AND tx.lifecycle_status IN (" + placeholders(len(opts.LifecycleStatuses)) + ")"
-		for _, status := range opts.LifecycleStatuses {
-			args = append(args, enumValue(status))
-		}
-	}
-	if len(opts.Settlements) > 0 {
-		query += " AND " + s.transactionSettlementExpression() + " IN (" + placeholders(len(opts.Settlements)) + ")"
-		for _, settlement := range opts.Settlements {
-			args = append(args, string(settlement))
-		}
 	}
 	if len(opts.TransactionClasses) > 0 {
 		query += " AND " + s.transactionListClassExpression() + " IN (" + placeholders(len(opts.TransactionClasses)) + ")"
@@ -541,67 +470,8 @@ WHERE tx.tombstoned_at IS NULL`
 			args = append(args, string(class))
 		}
 	}
-	if len(opts.TransactionShapes) > 0 {
-		shapeConditions := make([]string, 0, len(opts.TransactionShapes))
-		for _, shape := range opts.TransactionShapes {
-			shapeConditions = append(shapeConditions, s.transactionListShapeCondition(shape))
-		}
-		query += " AND (" + strings.Join(shapeConditions, " OR ") + ")"
-	}
-	if len(opts.RecordRoles) > 0 {
-		roleCondition := s.recordRoleExpression() + " IN (" + placeholders(len(opts.RecordRoles)) + ")"
-		query += " AND " + s.transactionListSemanticRecordExists(roleCondition)
-		for _, role := range opts.RecordRoles {
-			args = append(args, string(role))
-		}
-	}
-	if opts.AmountMin != nil || opts.AmountMax != nil {
-		conditions := []string{}
-		if opts.AmountMin != nil {
-			conditions = append(conditions, "jr.amount >= ?")
-			args = append(args, opts.AmountMin.LibraryDecimal())
-		}
-		if opts.AmountMax != nil {
-			conditions = append(conditions, "jr.amount <= ?")
-			args = append(args, opts.AmountMax.LibraryDecimal())
-		}
-		query += " AND " + s.transactionListRecordExists(strings.Join(conditions, " AND "))
-	}
-	if opts.AmountUSDMin != nil || opts.AmountUSDMax != nil {
-		conditions := []string{}
-		if opts.AmountUSDMin != nil {
-			conditions = append(conditions, "jr.amount_usd >= ?")
-			args = append(args, opts.AmountUSDMin.LibraryDecimal())
-		}
-		if opts.AmountUSDMax != nil {
-			conditions = append(conditions, "jr.amount_usd <= ?")
-			args = append(args, opts.AmountUSDMax.LibraryDecimal())
-		}
-		query += " AND " + s.transactionListRecordExists(strings.Join(conditions, " AND "))
-	}
-	if opts.PendingDateFrom != nil || opts.PendingDateTo != nil {
-		conditions := []string{}
-		if opts.PendingDateFrom != nil {
-			conditions = append(conditions, "jr.pending_date >= ?")
-			args = append(args, timestampArg(*opts.PendingDateFrom))
-		}
-		if opts.PendingDateTo != nil {
-			conditions = append(conditions, "jr.pending_date <= ?")
-			args = append(args, timestampArg(*opts.PendingDateTo))
-		}
-		query += " AND " + s.transactionListRecordExists(strings.Join(conditions, " AND "))
-	}
-	if opts.PostedDateFrom != nil || opts.PostedDateTo != nil {
-		conditions := []string{}
-		if opts.PostedDateFrom != nil {
-			conditions = append(conditions, "jr.posted_date >= ?")
-			args = append(args, timestampArg(*opts.PostedDateFrom))
-		}
-		if opts.PostedDateTo != nil {
-			conditions = append(conditions, "jr.posted_date <= ?")
-			args = append(args, timestampArg(*opts.PostedDateTo))
-		}
-		query += " AND " + s.transactionListRecordExists(strings.Join(conditions, " AND "))
+	if opts.Filter != nil {
+		query += " AND " + s.transactionFilterExpressionSQL(opts.Filter.Expression, &args)
 	}
 	if opts.Search != nil {
 		searchTerm := strings.ToLower(*opts.Search)
@@ -667,6 +537,148 @@ func (s *TransactionStore) transactionListRecordExists(condition string) string 
 )`
 }
 
+// transactionFilterExpressionSQL translates one resolved filter expression
+// into a SQL condition; parsed values bind only through args.
+func (s *TransactionStore) transactionFilterExpressionSQL(expression transactions.FilterExpression, args *[]any) string {
+	switch node := expression.(type) {
+	case *transactions.FilterAnd:
+		conditions := make([]string, 0, len(node.Terms))
+		for _, term := range node.Terms {
+			conditions = append(conditions, s.transactionFilterExpressionSQL(term, args))
+		}
+		return "(" + strings.Join(conditions, " AND ") + ")"
+	case *transactions.FilterOr:
+		conditions := make([]string, 0, len(node.Terms))
+		for _, term := range node.Terms {
+			conditions = append(conditions, s.transactionFilterExpressionSQL(term, args))
+		}
+		return "(" + strings.Join(conditions, " OR ") + ")"
+	case *transactions.FilterNot:
+		return "(NOT " + s.transactionFilterExpressionSQL(node.Term, args) + ")"
+	case *transactions.FilterEntityTerm:
+		return s.transactionFilterEntityCondition(node, args)
+	case *transactions.FilterMemberTerm:
+		*args = append(*args, node.MemberID)
+		return s.transactionListRecordExists("jr.member_id = ?")
+	case *transactions.FilterCurrencyTerm:
+		*args = append(*args, node.Currency)
+		return s.transactionListRecordExists("jr.currency = ?")
+	case *transactions.FilterEnumTerm:
+		return s.transactionFilterEnumCondition(node, args)
+	case *transactions.FilterDecimalTerm:
+		column := "jr.amount"
+		if node.Field == transactions.FilterFieldAmountUSD {
+			column = "jr.amount_usd"
+		}
+		*args = append(*args, node.Value.LibraryDecimal())
+		return s.transactionListRecordExists(column + " " + filterComparisonSQL(node.Op) + " ?")
+	case *transactions.FilterDateTerm:
+		*args = append(*args, civilDateArg(node.Date))
+		return "tx.initiated_date " + filterComparisonSQL(node.Op) + " ?"
+	case *transactions.FilterTimestampTerm:
+		column := "jr.pending_date"
+		if node.Field == transactions.FilterFieldPosted {
+			column = "jr.posted_date"
+		}
+		*args = append(*args, timestampArg(node.Time))
+		return s.transactionListRecordExists(column + " " + filterComparisonSQL(node.Op) + " ?")
+	default:
+		return "FALSE"
+	}
+}
+
+func filterComparisonSQL(operator transactions.FilterCompareOp) string {
+	switch operator {
+	case transactions.FilterCompareEqual:
+		return "="
+	case transactions.FilterCompareGreater:
+		return ">"
+	case transactions.FilterCompareAtLeast:
+		return ">="
+	case transactions.FilterCompareLess:
+		return "<"
+	case transactions.FilterCompareAtMost:
+		return "<="
+	default:
+		panic("unsupported transaction filter comparison operator")
+	}
+}
+
+// transactionFilterEntityCondition builds the record-level EXISTS predicate for
+// one account, category, or tag FQN scope.
+func (s *TransactionStore) transactionFilterEntityCondition(term *transactions.FilterEntityTerm, args *[]any) string {
+	if !term.Scoped {
+		*args = append(*args, term.EntityID)
+		switch term.Field {
+		case transactions.FilterFieldAccount:
+			return s.transactionListRecordExists("jr.account_id = ?")
+		case transactions.FilterFieldCategory:
+			return s.transactionListRecordExists("jr.category_id = ?")
+		default:
+			return s.transactionListRecordExists("list_contains(jr.tag_ids, ?)")
+		}
+	}
+	fqnCondition := func(column string) string {
+		if term.FQN == "" {
+			return "TRUE"
+		}
+		*args = append(*args, term.FQN, term.FQN)
+		return "(" + column + " = ? OR starts_with(" + column + ", ? || ':'))"
+	}
+	switch term.Field {
+	case transactions.FilterFieldAccount:
+		return `EXISTS (
+	SELECT 1
+	FROM ` + s.db.accountingName("journal_record") + ` jr
+	JOIN ` + s.db.accountingName("account") + ` a ON a.account_id = jr.account_id
+	WHERE jr.transaction_id = tx.transaction_id
+	  AND jr.tombstoned_at IS NULL
+	  AND a.tombstoned_at IS NULL
+	  AND ` + fqnCondition("a.fqn") + `
+)`
+	case transactions.FilterFieldCategory:
+		return `EXISTS (
+	SELECT 1
+	FROM ` + s.db.accountingName("journal_record") + ` jr
+	JOIN ` + s.db.accountingName("category") + ` c ON c.category_id = jr.category_id
+	WHERE jr.transaction_id = tx.transaction_id
+	  AND jr.tombstoned_at IS NULL
+	  AND c.tombstoned_at IS NULL
+	  AND ` + fqnCondition("c.fqn") + `
+)`
+	default:
+		return `EXISTS (
+	SELECT 1
+	FROM ` + s.db.accountingName("journal_record") + ` jr
+	CROSS JOIN unnest(jr.tag_ids) AS matched_tag(tag_id)
+	JOIN ` + s.db.accountingName("tag") + ` tg ON tg.tag_id = matched_tag.tag_id
+	WHERE jr.transaction_id = tx.transaction_id
+	  AND jr.tombstoned_at IS NULL
+	  AND tg.tombstoned_at IS NULL
+	  AND ` + fqnCondition("tg.fqn") + `
+)`
+	}
+}
+
+func (s *TransactionStore) transactionFilterEnumCondition(term *transactions.FilterEnumTerm, args *[]any) string {
+	switch term.Field {
+	case transactions.FilterFieldLifecycle:
+		*args = append(*args, enumValue(transactions.LifecycleStatus(term.Value)))
+		return "tx.lifecycle_status = CAST(? AS " + s.db.accountingName("transaction_lifecycle_status") + ")"
+	case transactions.FilterFieldSettlement:
+		*args = append(*args, term.Value)
+		return s.transactionSettlementExpression() + " = ?"
+	case transactions.FilterFieldClass:
+		*args = append(*args, term.Value)
+		return s.transactionListClassExpression() + " = ?"
+	case transactions.FilterFieldShape:
+		return s.transactionListShapeCondition(transactions.TransactionShapeType(term.Value))
+	default:
+		*args = append(*args, term.Value)
+		return s.transactionListSemanticRecordExists(s.recordRoleExpression() + " = ?")
+	}
+}
+
 func (s *TransactionStore) transactionListSemanticRecordExists(condition string) string {
 	return `EXISTS (
 	SELECT 1
@@ -722,9 +734,9 @@ func (s *TransactionStore) transactionListShapeCondition(shape transactions.Tran
 	case transactions.TransactionShapeExchange:
 		return s.transactionListSemanticRecordExists(s.recordRoleExpression() + " = 'exchange'")
 	case transactions.TransactionShapeTransfer:
-		return s.transactionListSemanticRecordExists(s.recordRoleExpression()+" = 'balance' AND jr.amount > 0") +
+		return "(" + s.transactionListSemanticRecordExists(s.recordRoleExpression()+" = 'balance' AND jr.amount > 0") +
 			" AND " + s.transactionListSemanticRecordExists(s.recordRoleExpression()+" = 'balance' AND jr.amount < 0") +
-			" AND NOT " + s.transactionListSemanticRecordExists(s.recordRoleExpression()+" = 'exchange'")
+			" AND NOT " + s.transactionListSemanticRecordExists(s.recordRoleExpression()+" = 'exchange'") + ")"
 	default:
 		return "FALSE"
 	}

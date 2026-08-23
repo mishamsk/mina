@@ -298,7 +298,9 @@ test("edit dock and broader pickers expose explicit hidden-entity controls", asy
   const includeHiddenToggle = page.getByRole("checkbox", {
     name: "Include hidden",
   });
-  await expect(includeHiddenToggle).toBeFocused();
+  await expect(
+    page.getByRole("combobox", { name: "Filter operator" }),
+  ).toBeFocused();
   const filterTagsPicker = page.getByRole("combobox", { name: "Tags" });
   await filterTagsPicker.fill(hiddenTagFqn);
   await expect(filterTagsPicker).toHaveValue(hiddenTagFqn);
@@ -469,4 +471,35 @@ test("member pickers keep colon-containing names flat", async ({
     member.name,
   );
   await expect(memberPicker).toHaveValue("");
+});
+
+test("filter editors do not inherit hidden choices from other chips", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const [hiddenCategory, visibleCategory] = await Promise.all([
+    createCategory(page, `E2E:HiddenOtherChip:${unique}:Hidden`, "expense"),
+    createCategory(page, `E2E:HiddenOtherChip:${unique}:Visible`, "expense"),
+  ]);
+  await hideCategory(page, hiddenCategory);
+  const filter = `category:"${hiddenCategory.fqn}" and not category:"${visibleCategory.fqn}"`;
+  const lookups = waitForLedgerLookups(page);
+  await page.goto(`/transactions?filter=${encodeURIComponent(filter)}`);
+  await lookups;
+
+  await page
+    .getByRole("button", {
+      name: `Edit Category ${visibleCategory.name} · none of`,
+    })
+    .click();
+  const picker = page.getByRole("combobox", { name: "Categories" });
+  const options = page.locator(
+    "#transactions-filter-row-0-category-none-options",
+  );
+  await picker.fill(hiddenCategory.fqn);
+  await expect(options).toContainText("No matches");
+
+  await page.getByRole("checkbox", { name: "Include hidden" }).click();
+  await picker.focus();
+  await expect(options).toContainText(hiddenCategory.name);
 });

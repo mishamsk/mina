@@ -634,6 +634,7 @@ test("transaction refreshes wait for recurring catch-up", async ({
     `transaction-${transaction.transaction_id}-amount-input`,
   );
   await amountInput.fill("2.00");
+  await expect(amountInput).toHaveValue("2.00");
   const saveResponse = page.waitForResponse(
     (response) =>
       new URL(response.url()).pathname ===
@@ -665,7 +666,7 @@ test("transaction refreshes wait for recurring catch-up", async ({
   releaseCatchup?.();
 
   await expect.poll(() => transactionRequests).toBeGreaterThan(0);
-  await expect(page.locator("[data-transaction-row='true']")).toHaveCount(1);
+  await expect(row).toHaveCount(0);
 });
 
 test("pending transaction actions post all balance records and retain history", async ({
@@ -889,9 +890,7 @@ test("pending transaction actions post all balance records and retain history", 
     .click();
   await expect(recurringEditor).toBeHidden();
   await expect(overflowTrigger).toBeFocused();
-  await expect(
-    page.locator("[data-transaction-row='true']").filter({ hasText: memo }),
-  ).toHaveCount(2);
+  await expect(row).toBeVisible();
 
   await overflowTrigger.click();
   await page
@@ -1113,7 +1112,8 @@ test("pending transaction actions post all balance records and retain history", 
 
   await detailRecurringAction.click();
   await expect(detailRecurringEditor).toBeVisible();
-  await row.click({ position: { x: 8, y: 8 } });
+  await expect(detailRecurringEditor).toBeFocused();
+  await row.locator(".transactions-description-column").click();
   await expect(detail).toBeHidden();
   await detailRecurringEditor
     .getByRole("button", { name: "Close definition editor" })

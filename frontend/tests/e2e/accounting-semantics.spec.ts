@@ -418,7 +418,7 @@ test("clawback is available in class and record-role filters", async ({
     const url = new URL(request.url());
     return (
       url.pathname === "/api/transactions" &&
-      url.searchParams.getAll("record_role").includes("clawback")
+      url.searchParams.get("filter") === "role:clawback"
     );
   });
   await clawbackRole.click();

@@ -640,9 +640,9 @@ func TestTransactionSettlementNormalizationAndExactTimestampsBoundary(t *testing
 
 	pendingFrom := apptest.Timestamp("2024-03-12T00:00:00Z")
 	pendingTo := apptest.Timestamp("2024-03-12T23:59:59Z")
+	pendingFilter := `pending>="2024-03-12T00:00:00Z" and pending<="2024-03-12T23:59:59Z"`
 	listed, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
-		PendingDateFrom: &pendingFrom,
-		PendingDateTo:   &pendingTo,
+		Filter: &pendingFilter,
 	})
 	requireNoTransportError(t, "list transactions by pending range", err)
 	assertTransactionListResponse(t, "pending range transaction list", listed, []int64{pending.JSON201.TransactionId}, 1)
@@ -712,8 +712,9 @@ func TestTransactionMixedAndNotApplicableSettlementBoundary(t *testing.T) {
 		{name: "not applicable", settlement: httpclient.TransactionSettlementNotApplicable, transaction: notApplicable},
 	} {
 		t.Run(tc.name+" filter", func(t *testing.T) {
+			filter := "settlement:" + string(tc.settlement)
 			response, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
-				Settlement: &[]httpclient.TransactionSettlement{tc.settlement},
+				Filter: &filter,
 			})
 			requireNoTransportError(t, "list transactions by settlement", err)
 			assertTransactionListResponse(t, tc.name+" settlement", response, []int64{tc.transaction.JSON201.TransactionId}, 1)
@@ -1592,7 +1593,7 @@ func assertTransactionIDs(t *testing.T, transactions []httpclient.Transaction, w
 	assertInt64s(t, got, want)
 }
 
-func assertInvalidTransactionListQuery(t *testing.T, client *apptest.Client, rawQuery string) {
+func assertInvalidTransactionListQuery(t *testing.T, client *apptest.Client, rawQuery string) *httpclient.ListTransactionsResponse {
 	t.Helper()
 
 	response, err := client.REST().ListTransactionsWithResponse(context.Background(), nil, apptest.ReplaceRawQuery(rawQuery))
@@ -1605,6 +1606,7 @@ func assertInvalidTransactionListQuery(t *testing.T, client *apptest.Client, raw
 	if response.JSON400 == nil || response.JSON400.Error.Code != httpclient.APIErrorCodeInvalidRequest {
 		t.Fatalf("invalid transaction list query %q code = %+v, want %q", rawQuery, response.JSON400, httpclient.APIErrorCodeInvalidRequest)
 	}
+	return response
 }
 
 func assertInt64s(t *testing.T, got []int64, want []int64) {

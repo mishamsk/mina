@@ -6,7 +6,7 @@
 
 ## Implicit Contracts
 
-- Transaction search uses server-derived display titles with current account FQNs in tooltip and accessible context, falls back to unenriched results when lookup loading fails, follows the transaction browser's initiated-date-descending default order, and opens results without losing the remembered transaction-page URL.
+- Transaction search includes Active, Expected, and Cancelled results; uses server-derived display titles with current account FQNs in tooltip and accessible context; falls back to unenriched results when lookup loading fails; follows the transaction browser's initiated-date-descending default order; and opens results without losing the remembered transaction-page URL.
 
 ## Boundaries
 

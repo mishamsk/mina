@@ -95,7 +95,7 @@ interface TransactionDetailPanelProps {
   readonly onDeferProjection?: (
     transaction: Transaction,
     request: RecurringDefinitionDeferRequest,
-  ) => Promise<void>;
+  ) => Promise<number | undefined>;
   readonly onDelete: (transaction: Transaction) => Promise<void>;
   readonly onDismissOccurrence?: (transaction: Transaction) => Promise<void>;
   readonly onDuplicate?: (

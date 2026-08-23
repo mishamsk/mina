@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 
 import {
+  getCategory,
   type JournalRecord,
   type Transaction,
   updateLedgerAccount,
@@ -28,7 +29,10 @@ import {
   refreshLedgerLookups,
   TransactionDetailPanel,
   transactionPageSizeOptions,
+  useEntityFilterRequestGuard,
+  writeTransactionFiltersToSearchParams,
 } from "@/features/ledger";
+import { withTransactionFilterEntityScope } from "@/models/transaction-filters";
 import { openTransactionEntryLaunch } from "@/store";
 
 const pageSizes = transactionPageSizeOptions;
@@ -104,7 +108,7 @@ const AccountPageError = ({ message }: { readonly message: string }) => (
 
 interface ToggleNotice {
   readonly message: string;
-  readonly tone: "error" | "success";
+  readonly tone: "error" | "success" | "warning";
 }
 
 const AccountPageContent = ({ accountId }: { readonly accountId: number }) => {
@@ -113,6 +117,8 @@ const AccountPageContent = ({ accountId }: { readonly accountId: number }) => {
   const [toggleNotice, setToggleNotice] = useState<ToggleNotice | undefined>();
   const [favoriteTogglePending, setFavoriteTogglePending] = useState(false);
   const favoriteTogglePendingRef = useRef(false);
+  const { beginEntityFilterRequest, completeEntityFilterRequest } =
+    useEntityFilterRequestGuard();
   const page = readPage(searchParams);
   const pageSize = readPageSize(searchParams);
   const params = useMemo(
@@ -189,12 +195,39 @@ const AccountPageContent = ({ accountId }: { readonly accountId: number }) => {
     });
   };
   const openTransactionsEntityFilter = useCallback(
-    (categoryId: number) => {
-      const next = new URLSearchParams();
-      next.append("category", String(categoryId));
+    async (categoryId: number) => {
+      const controller = beginEntityFilterRequest();
+      const response = await getCategory({
+        path: { category_id: categoryId },
+        signal: controller.signal,
+      });
+      if (!completeEntityFilterRequest(controller)) {
+        return;
+      }
+      if (!response.data?.fqn) {
+        setToggleNotice({
+          message: apiErrorMessage(
+            response.error,
+            "The category could not be loaded for filtering.",
+          ),
+          tone: "warning",
+        });
+        return;
+      }
+      const filters = withTransactionFilterEntityScope(
+        { classes: [] },
+        "category",
+        response.data.fqn,
+        false,
+      );
+      const next = writeTransactionFiltersToSearchParams(
+        new URLSearchParams(),
+        filters,
+        { resetPage: false },
+      );
       void navigate(`/transactions?${next.toString()}`);
     },
-    [navigate],
+    [beginEntityFilterRequest, completeEntityFilterRequest, navigate],
   );
   const openEntry = (
     transaction: Transaction,
@@ -313,7 +346,9 @@ const AccountPageContent = ({ accountId }: { readonly accountId: number }) => {
         className={
           toggleNotice?.tone === "error"
             ? "text-destructive"
-            : "text-[var(--color-money-in)]"
+            : toggleNotice?.tone === "warning"
+              ? "text-[var(--color-class-adjustment-ink)]"
+              : "text-[var(--color-money-in)]"
         }
         durationMs={toastDurationMs}
         message={toggleNotice?.message}
@@ -349,7 +384,7 @@ const AccountPageContent = ({ accountId }: { readonly accountId: number }) => {
             openEntry(transaction, "edit");
           }}
           onFilterCategory={(categoryId) => {
-            openTransactionsEntityFilter(categoryId);
+            void openTransactionsEntityFilter(categoryId);
           }}
           onPost={registerDetail.postTransaction}
           onRestoreFocus={registerDetail.detail.restoreDetailFocus}

@@ -2987,7 +2987,10 @@ test("account form creates edits and clears display label overrides", async ({
   await updatedAccountRow.getByRole("button", { name: "Edit account" }).click();
   await expect(editPanel).toBeVisible();
   await expect(editLabel).toHaveValue("Everyday");
-  await editLabel.fill("");
+  await expect(async () => {
+    await editLabel.fill("");
+    await expect(editLabel).toHaveValue("", { timeout: 250 });
+  }).toPass();
   const clearLabelResponse = page.waitForResponse((response) => {
     const url = new URL(response.url());
     return (
@@ -3447,4 +3450,139 @@ test("account header ignores favorite feedback after account navigation", async 
   await expect(
     page.getByRole("status").filter({ hasText: "Account featured." }),
   ).toHaveCount(0);
+});
+
+test("account register discards lookups after unmount but preserves them across query changes", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const categories = await listFixtures<CategoryFixture>(
+    page,
+    "/api/categories",
+    "categories",
+  );
+  const category = findByFqn(categories, "Entertainment:Books");
+  const [filteredAccount, balancingAccount] = await Promise.all([
+    createAccount(page, {
+      accountType: "flow",
+      fqn: `e2e:accounts:${unique}:FilteredFlow`,
+    }),
+    createAccount(page, {
+      accountType: "flow",
+      fqn: `e2e:accounts:${unique}:BalancingFlow`,
+    }),
+  ]);
+  const memo = `E2E stale account category lookup ${unique}`;
+  const transaction = await page.request.post("/api/transactions", {
+    data: {
+      initiated_date: "2026-08-23",
+      records: [
+        {
+          account_id: balancingAccount.account_id,
+          amount: "-8.75",
+          category_id: category.category_id,
+          currency: "USD",
+          memo,
+          reconciliation_status: "unreconciled",
+          settlement: null,
+          source: "manual",
+        },
+        {
+          account_id: filteredAccount.account_id,
+          amount: "8.75",
+          category_id: category.category_id,
+          currency: "USD",
+          memo,
+          reconciliation_status: "unreconciled",
+          settlement: null,
+          source: "manual",
+        },
+      ],
+    },
+  });
+  expect(transaction.ok()).toBe(true);
+
+  const accountUrl = `/accounts/${filteredAccount.account_id}`;
+  await page.goto(accountUrl);
+  const registerRow = page
+    .getByTestId("account-register-row")
+    .filter({ hasText: memo });
+  await expect(registerRow).toBeVisible();
+  await registerRow.click();
+  const detailPanel = page.getByTestId("transaction-detail-panel");
+  await expect(detailPanel).toBeVisible();
+
+  let releaseLookup: (() => void) | undefined;
+  const lookupReleased = new Promise<void>((resolve) => {
+    releaseLookup = resolve;
+  });
+  let markLookupStarted: (() => void) | undefined;
+  const lookupStarted = new Promise<void>((resolve) => {
+    markLookupStarted = resolve;
+  });
+  await page.route(`/api/categories/${category.category_id}`, async (route) => {
+    markLookupStarted?.();
+    await lookupReleased;
+    await route.continue().catch(() => undefined);
+  });
+
+  await detailPanel
+    .getByRole("button", { name: `Filter by ${category.fqn}` })
+    .first()
+    .click();
+  await lookupStarted;
+  await page.goto("/overview");
+  await page.goto(accountUrl);
+  await expect(
+    page.getByRole("heading", { name: "FilteredFlow" }),
+  ).toBeVisible();
+
+  releaseLookup?.();
+  await expect(page).toHaveURL(
+    new RegExp(`/accounts/${filteredAccount.account_id}$`),
+  );
+
+  await page.unroute(`/api/categories/${category.category_id}`);
+  let releaseSamePageLookup: (() => void) | undefined;
+  const samePageLookupReleased = new Promise<void>((resolve) => {
+    releaseSamePageLookup = resolve;
+  });
+  let markSamePageLookupStarted: (() => void) | undefined;
+  const samePageLookupStarted = new Promise<void>((resolve) => {
+    markSamePageLookupStarted = resolve;
+  });
+  await page.route(`/api/categories/${category.category_id}`, async (route) => {
+    markSamePageLookupStarted?.();
+    await samePageLookupReleased;
+    await route.continue().catch(() => undefined);
+  });
+
+  await registerRow.click();
+  await expect(detailPanel).toBeVisible();
+  await detailPanel
+    .getByRole("button", { name: `Filter by ${category.fqn}` })
+    .first()
+    .click();
+  await samePageLookupStarted;
+  await page.getByLabel("Rows").click();
+  await page.getByRole("option", { exact: true, name: "25" }).click();
+  await expect(page).toHaveURL(
+    new RegExp(`/accounts/${filteredAccount.account_id}\\?page=1&pageSize=25$`),
+  );
+
+  const samePageLookupFinished = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return url.pathname === `/api/categories/${category.category_id}`;
+  });
+  releaseSamePageLookup?.();
+  await samePageLookupFinished;
+  await expect
+    .poll(() => {
+      const url = new URL(page.url());
+      return { filter: url.searchParams.get("filter"), pathname: url.pathname };
+    })
+    .toEqual({
+      filter: `category:"${category.fqn}"`,
+      pathname: "/transactions",
+    });
 });

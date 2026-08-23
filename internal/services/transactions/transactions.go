@@ -246,32 +246,9 @@ type ListOptions struct {
 	AnchorDate *values.CivilDate
 	// OffsetSpecified distinguishes an explicit absolute merged-sequence offset from an omitted landing offset.
 	OffsetSpecified    bool
-	AccountIDs         []int64
-	CategoryIDs        []int64
-	CategoryFQNPrefix  *string
-	TagIDs             []int64
-	TagFQNPrefix       *string
-	MemberIDs          []int64
-	Currencies         []string
-	LifecycleStatuses  []LifecycleStatus
-	Settlements        []SettlementSummary
+	FilterText         *string
+	Filter             *ResolvedFilter
 	TransactionClasses []TransactionClass
-	TransactionShapes  []TransactionShapeType
-	RecordRoles        []RecordRole
-	AmountMinText      *string
-	AmountMaxText      *string
-	AmountUSDMinText   *string
-	AmountUSDMaxText   *string
-	AmountMin          *values.Decimal
-	AmountMax          *values.Decimal
-	AmountUSDMin       *values.Decimal
-	AmountUSDMax       *values.Decimal
-	InitiatedDateFrom  *values.CivilDate
-	InitiatedDateTo    *values.CivilDate
-	PendingDateFrom    *time.Time
-	PendingDateTo      *time.Time
-	PostedDateFrom     *time.Time
-	PostedDateTo       *time.Time
 	Search             *string
 }
 
@@ -438,23 +415,26 @@ type AccountReferenceValidator interface {
 	ValidateActiveReferences(context.Context, []int64, accounts.ReferenceOptions) (map[int64]accounts.Reference, error)
 	ValidateActiveReference(context.Context, int64, accounts.ReferenceOptions) (accounts.Reference, error)
 	ValidateActiveRecordReferences(context.Context, []accounts.RecordReference, accounts.ReferenceOptions) (map[int64]accounts.Reference, error)
-	ActiveReferenceByFQN(context.Context, string) (accounts.Reference, error)
+	ActiveReferenceByFQN(context.Context, string, accounts.ReferenceOptions) (accounts.Reference, error)
 }
 
 // CategoryReferenceValidator resolves active category references for transaction validation.
 type CategoryReferenceValidator interface {
 	ValidateActiveReferences(context.Context, []int64, categories.ReferenceOptions) (map[int64]categories.Reference, error)
 	ValidateActiveReference(context.Context, int64, categories.ReferenceOptions) (categories.Reference, error)
+	ActiveReferenceByFQN(context.Context, string, categories.ReferenceOptions) (categories.Reference, error)
 }
 
 // TagReferenceValidator resolves active tag references for transaction validation.
 type TagReferenceValidator interface {
 	ValidateActiveReferences(context.Context, []int64, tags.ReferenceOptions) (map[int64]tags.Reference, error)
+	ActiveReferenceByFQN(context.Context, string, tags.ReferenceOptions) (tags.Reference, error)
 }
 
 // MemberReferenceValidator resolves active household-member references for transaction validation.
 type MemberReferenceValidator interface {
 	ValidateActiveReferences(context.Context, []int64, members.ReferenceOptions) (map[int64]members.Reference, error)
+	ActiveReferenceByName(context.Context, string, members.ReferenceOptions) (members.Reference, error)
 }
 
 // AmountUSDDeriver derives signed USD amounts for generated journal records.
@@ -977,15 +957,30 @@ func (s *Service) List(ctx context.Context, opts ListOptions) (ListResult, error
 	if err != nil {
 		return ListResult{}, err
 	}
-	if err := s.validateTransactionListFilterReferences(ctx, validatedOpts); err != nil {
-		return ListResult{}, err
+	if opts.FilterText == nil {
+		return s.listValidatedTransactions(ctx, validatedOpts)
 	}
-	if !s.shouldProjectFutureTransactions(validatedOpts) {
+
+	var result ListResult
+	err = s.refs.WithSharedLease(ctx, func(ctx context.Context) error {
+		resolvedFilter, err := s.resolveTransactionFilter(ctx, *opts.FilterText)
+		if err != nil {
+			return err
+		}
+		validatedOpts.Filter = resolvedFilter
+		result, err = s.listValidatedTransactions(ctx, validatedOpts)
+		return err
+	})
+	return result, err
+}
+
+func (s *Service) listValidatedTransactions(ctx context.Context, validatedOpts ListOptions) (ListResult, error) {
+	if s.futureProjections == nil || validatedOpts.AnchorDate == nil || !validatedOpts.AnchorDate.Time().After(values.LocalCivilDateFromTime(s.clock.Now()).Time()) {
 		return s.listPersistedTransactions(ctx, validatedOpts)
 	}
 
 	var result ListResult
-	err = s.futureProjections.WithProjectedTransactions(ctx, *validatedOpts.AnchorDate, validatedOpts, func(ctx context.Context, projected []Transaction) error {
+	err := s.futureProjections.WithProjectedTransactions(ctx, *validatedOpts.AnchorDate, validatedOpts, func(ctx context.Context, projected []Transaction) error {
 		position, err := s.repo.ListPosition(ctx, validatedOpts)
 		if err != nil {
 			return err
@@ -1009,16 +1004,6 @@ func (s *Service) listPersistedTransactions(ctx context.Context, opts ListOption
 		transactions.Items[index] = classified
 	}
 	return transactions, nil
-}
-
-func (s *Service) shouldProjectFutureTransactions(opts ListOptions) bool {
-	if s.futureProjections == nil || opts.AnchorDate == nil || !opts.AnchorDate.Time().After(values.LocalCivilDateFromTime(s.clock.Now()).Time()) {
-		return false
-	}
-	if len(opts.Settlements) > 0 && !slices.Contains(opts.Settlements, SettlementSummaryNotApplicable) {
-		return false
-	}
-	return slices.Contains(opts.LifecycleStatuses, LifecycleStatusExpected)
 }
 
 func (s *Service) mergeFutureTransactionPage(ctx context.Context, opts ListOptions, position PagePosition, projected []Transaction) (ListResult, error) {
@@ -1110,118 +1095,15 @@ func validateTransactionListOptions(opts ListOptions) (ListOptions, error) {
 			return ListOptions{}, services.InvalidRequest("anchor_date is only valid with initiated_date descending sort")
 		}
 	}
-	if err := validatePositiveIDs("account_id", opts.AccountIDs); err != nil {
-		return ListOptions{}, err
-	}
-	if err := validatePositiveIDs("category_id", opts.CategoryIDs); err != nil {
-		return ListOptions{}, err
-	}
-	if err := validatePositiveIDs("tag_id", opts.TagIDs); err != nil {
-		return ListOptions{}, err
-	}
-	if opts.CategoryFQNPrefix != nil {
-		if err := services.ValidateFQN(*opts.CategoryFQNPrefix); err != nil {
-			return ListOptions{}, services.InvalidRequest("category_fqn_prefix must be a valid FQN")
-		}
-	}
-	if opts.TagFQNPrefix != nil {
-		if err := services.ValidateFQN(*opts.TagFQNPrefix); err != nil {
-			return ListOptions{}, services.InvalidRequest("tag_fqn_prefix must be a valid FQN")
-		}
-	}
-	if err := validatePositiveIDs("member_id", opts.MemberIDs); err != nil {
-		return ListOptions{}, err
-	}
-	for _, currency := range opts.Currencies {
-		if !values.ValidCurrencyCode(currency) {
-			return ListOptions{}, services.InvalidRequest("currency values must use ISO 4217 or the C:: crypto prefix")
-		}
-	}
-	for _, status := range opts.LifecycleStatuses {
-		if !validLifecycleStatus(status) {
-			return ListOptions{}, services.InvalidRequest("lifecycle_status values must be active, expected, or cancelled")
-		}
-	}
-	for _, settlement := range opts.Settlements {
-		if !validSettlementSummary(settlement) {
-			return ListOptions{}, services.InvalidRequest("settlement values must be pending, posted, mixed, or not_applicable")
-		}
-	}
 	for _, class := range opts.TransactionClasses {
 		if !validTransactionClass(class) {
 			return ListOptions{}, services.InvalidRequest("transaction_class values must be spend, income, refund, clawback, transfer, currency_exchange, adjustment, or mixed")
 		}
 	}
-	for _, shape := range opts.TransactionShapes {
-		if !validTransactionShape(shape) {
-			return ListOptions{}, services.InvalidRequest("transaction_shape values must be spend, refund, income, clawback, adjustment, exchange, or transfer")
-		}
-	}
-	for _, role := range opts.RecordRoles {
-		if !validRecordRole(role) {
-			return ListOptions{}, services.InvalidRequest("record_role values must be expense, refund, income, clawback, exchange, adjustment, or balance")
-		}
-	}
 	if opts.Search != nil && *opts.Search == "" {
 		return ListOptions{}, services.InvalidRequest("search must be non-empty")
 	}
-
-	var err error
-	if opts.AmountMin, err = parseTransactionListDecimal("amount_min", opts.AmountMinText); err != nil {
-		return ListOptions{}, err
-	}
-	if opts.AmountMax, err = parseTransactionListDecimal("amount_max", opts.AmountMaxText); err != nil {
-		return ListOptions{}, err
-	}
-	if opts.AmountUSDMin, err = parseTransactionListDecimal("amount_usd_min", opts.AmountUSDMinText); err != nil {
-		return ListOptions{}, err
-	}
-	if opts.AmountUSDMax, err = parseTransactionListDecimal("amount_usd_max", opts.AmountUSDMaxText); err != nil {
-		return ListOptions{}, err
-	}
-
 	return opts, nil
-}
-
-func (s *Service) validateTransactionListFilterReferences(ctx context.Context, opts ListOptions) error {
-	if _, err := s.accounts.ValidateActiveReferences(ctx, opts.AccountIDs, accounts.ReferenceOptions{AllowHidden: true}); err != nil {
-		if errors.Is(err, services.ErrInvalidReference) {
-			return invalidTransactionFilterReferenceError()
-		}
-		return err
-	}
-	if _, err := s.categories.ValidateActiveReferences(ctx, opts.CategoryIDs, categories.ReferenceOptions{AllowHidden: true}); err != nil {
-		if errors.Is(err, services.ErrInvalidReference) {
-			return invalidTransactionFilterReferenceError()
-		}
-		return err
-	}
-	if _, err := s.tags.ValidateActiveReferences(ctx, opts.TagIDs, tags.ReferenceOptions{AllowHidden: true}); err != nil {
-		if errors.Is(err, services.ErrInvalidReference) {
-			return invalidTransactionFilterReferenceError()
-		}
-		return err
-	}
-	if _, err := s.members.ValidateActiveReferences(ctx, opts.MemberIDs, members.ReferenceOptions{AllowHidden: true}); err != nil {
-		if errors.Is(err, services.ErrInvalidReference) {
-			return invalidTransactionFilterReferenceError()
-		}
-		return err
-	}
-
-	return nil
-}
-
-func parseTransactionListDecimal(name string, value *string) (*values.Decimal, error) {
-	if value == nil {
-		return nil, nil
-	}
-	parsed, err := values.ParseDecimal(*value)
-	if err != nil {
-		return nil, services.InvalidRequest(name + " must be a decimal with at most 10 integer digits and 8 fractional digits")
-	}
-
-	return &parsed, nil
 }
 
 func validTransactionClass(class TransactionClass) bool {
@@ -2402,16 +2284,6 @@ func validatePositiveUniqueIDs(name string, ids []int64) error {
 			return services.InvalidRequest(name + " values must be unique")
 		}
 		seen[id] = struct{}{}
-	}
-
-	return nil
-}
-
-func validatePositiveIDs(name string, ids []int64) error {
-	for _, id := range ids {
-		if id <= 0 {
-			return services.InvalidRequest(name + " values must be positive")
-		}
 	}
 
 	return nil

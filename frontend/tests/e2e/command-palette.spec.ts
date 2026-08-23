@@ -412,6 +412,8 @@ test("command palette transaction search renders results and opens off-page deta
     return (
       url.pathname === "/api/transactions" &&
       url.searchParams.get("search") === member.name &&
+      url.searchParams.get("filter") ===
+        "(lifecycle:active or lifecycle:expected or lifecycle:cancelled)" &&
       url.searchParams.get("limit") === "20" &&
       url.searchParams.get("offset") === "0"
     );

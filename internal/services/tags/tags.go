@@ -162,6 +162,22 @@ func (s *Service) ValidateActiveReferences(ctx context.Context, ids []int64, opt
 	return refs, nil
 }
 
+// ActiveReferenceByFQN returns one active tag reference by exact FQN.
+//
+// Hidden active tags are rejected unless opts.AllowHidden is true.
+func (s *Service) ActiveReferenceByFQN(ctx context.Context, fqn string, opts ReferenceOptions) (Reference, error) {
+	states, err := s.cache.Snapshot(ctx)
+	if err != nil {
+		return Reference{}, err
+	}
+	for _, state := range states {
+		if state.active && state.fqn == fqn && (opts.AllowHidden || !state.reference.IsHidden) {
+			return state.reference, nil
+		}
+	}
+	return Reference{}, services.ErrInvalidReference
+}
+
 // ValidateActiveReference returns one active tag reference.
 //
 // Hidden active tags are rejected unless opts.AllowHidden is true.

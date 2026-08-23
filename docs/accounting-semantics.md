@@ -107,7 +107,7 @@ Lifecycle belongs to the transaction:
 - `EXPECTED` is an unconfirmed recurring occurrence. Recurring materialization is its only creator.
 - `CANCELLED` is preserved history that no longer affects accounting. It is reached only by cancelling an active transaction.
 
-Lifecycle is separate from tombstoning. Tombstoning deletes a transaction from active persistence views; cancellation keeps it reviewable and reversible. Expected and cancelled transactions remain structurally balanced, but balances, running balances, month totals, and reports include only active transactions. Default transaction and record listings omit expected transactions; explicit lifecycle filters may request any lifecycle.
+Lifecycle is separate from tombstoning. Tombstoning deletes a transaction from active persistence views; cancellation keeps it reviewable and reversible. Expected and cancelled transactions remain structurally balanced, but balances, running balances, month totals, and reports include only active transactions. Transaction listings omit expected transactions only when no filter expression is supplied; any supplied expression governs lifecycle inclusion by itself. Record listings omit expected transactions by default and may include them through an explicit lifecycle filter.
 
 Settlement applies only to `owned` and `party` records and is derived from event dates:
 

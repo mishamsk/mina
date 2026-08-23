@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"net/http"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -186,6 +187,53 @@ func TestEntityOverviewRESTContract(t *testing.T) {
 	)
 	conversionReport := getCategoryOverview(t, client, fixture.categories[0].CategoryId).Dataset
 	assertPeriodUnconvertedCounts(t, conversionReport, "2026-08", 1, 1, 1)
+}
+
+func TestEntityOverviewPreviewSupportsEscapedFQNs(t *testing.T) {
+	client := newSharedClient(t, apptest.WithClock(apptest.NewFakeClock(time.Date(2026, time.August, 15, 12, 0, 0, 0, time.UTC))))
+	semantic := newClassificationFixture(t, client)
+	starLeaf := client.Scenario().Category("escaped-preview:leaf:*")
+	controlLeaf := client.Scenario().Category("escaped-preview:tab\tleaf")
+	groupLeaf := client.Scenario().Category("escaped*preview:group:child")
+
+	starTransaction := createOverviewTransaction(t, client, "2026-08-10",
+		balanceRecord(semantic.checking.AccountId, "USD", "-1.00"),
+		record(semantic.merchant.AccountId, starLeaf.CategoryId, "USD", "1.00"),
+	)
+	controlTransaction := createOverviewTransaction(t, client, "2026-08-11",
+		balanceRecord(semantic.checking.AccountId, "USD", "-2.00"),
+		record(semantic.merchant.AccountId, controlLeaf.CategoryId, "USD", "2.00"),
+	)
+	groupTransaction := createOverviewTransaction(t, client, "2026-08-12",
+		balanceRecord(semantic.checking.AccountId, "USD", "-3.00"),
+		record(semantic.merchant.AccountId, groupLeaf.CategoryId, "USD", "3.00"),
+	)
+
+	assertPreviewContainsOnlyTransactions(t, getCategoryOverview(t, client, starLeaf.CategoryId).Transactions, starTransaction.TransactionId)
+	assertPreviewContainsOnlyTransactions(t, getCategoryOverview(t, client, controlLeaf.CategoryId).Transactions, controlTransaction.TransactionId)
+	assertPreviewContainsOnlyTransactions(t, getCategoryGroupOverview(t, client, "escaped*preview:group").Transactions, groupTransaction.TransactionId)
+}
+
+func TestEntityOverviewPreviewSupportsLongFQNs(t *testing.T) {
+	client := newSharedClient(t)
+	semantic := newClassificationFixture(t, client)
+	fqn := strings.Repeat("x", 4091)
+	category := client.Scenario().Category(fqn)
+	tag := client.Scenario().Tag(fqn)
+	categoryFilter := `category:"` + fqn + `"`
+	tagFilter := `tag:"` + fqn + `"`
+	if len([]rune(categoryFilter)) <= 4096 || len([]rune(tagFilter)) <= 4096 {
+		t.Fatalf("long FQN filters must exceed the structural length cap")
+	}
+	transaction := createOverviewTransaction(t, client, "2026-08-10",
+		balanceRecord(semantic.checking.AccountId, "USD", "-1.00"),
+		withOverviewTags(record(semantic.merchant.AccountId, category.CategoryId, "USD", "1.00"), tag.TagId),
+	)
+
+	assertPreviewIncludesTransactions(t, getCategoryOverview(t, client, category.CategoryId).Transactions, transaction.TransactionId)
+	assertPreviewIncludesTransactions(t, getTagOverview(t, client, tag.TagId).Transactions, transaction.TransactionId)
+	assertDSLFilterResult(t, client, categoryFilter, []int64{transaction.TransactionId}, 1)
+	assertDSLFilterResult(t, client, tagFilter, []int64{transaction.TransactionId}, 1)
 }
 
 func TestHouseholdFlowRESTContract(t *testing.T) {
@@ -1042,6 +1090,14 @@ func assertPreviewIncludesTransactions(t *testing.T, preview []httpclient.Transa
 	}
 }
 
+func assertPreviewContainsOnlyTransactions(t *testing.T, preview []httpclient.Transaction, transactionIDs ...int64) {
+	t.Helper()
+	if len(preview) != len(transactionIDs) {
+		t.Fatalf("overview preview = %+v, want only transaction IDs %v", preview, transactionIDs)
+	}
+	assertPreviewIncludesTransactions(t, preview, transactionIDs...)
+}
+
 func assertPreviewExcludesTransactions(t *testing.T, preview []httpclient.Transaction, transactionIDs ...int64) {
 	t.Helper()
 	for _, transaction := range preview {
@@ -1105,7 +1161,8 @@ func assertStacksJoinBreakdown(t *testing.T, report httpclient.HouseholdFlowData
 func assertHiddenCategoryScopeInTransactions(t *testing.T, client *apptest.Client, fqn string, hiddenCategoryID int64, excludedTransactionIDs ...int64) {
 	t.Helper()
 	limit := 100
-	response, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{CategoryFqnPrefix: &fqn, Limit: &limit})
+	filter := `category:"` + fqn + `:*"`
+	response, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{Filter: &filter, Limit: &limit})
 	requireNoTransportError(t, "list category group transactions", err)
 	if response.StatusCode() != http.StatusOK {
 		t.Fatalf("category group transactions status = %d, want %d; body %s", response.StatusCode(), http.StatusOK, response.Body)
@@ -1127,7 +1184,8 @@ func assertHiddenCategoryScopeInTransactions(t *testing.T, client *apptest.Clien
 func assertHiddenTagScopeInTransactions(t *testing.T, client *apptest.Client, fqn string, hiddenTagID int64, excludedTransactionIDs ...int64) {
 	t.Helper()
 	limit := 100
-	response, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{TagFqnPrefix: &fqn, Limit: &limit})
+	filter := `tag:"` + fqn + `:*"`
+	response, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{Filter: &filter, Limit: &limit})
 	requireNoTransportError(t, "list tag group transactions", err)
 	if response.StatusCode() != http.StatusOK {
 		t.Fatalf("tag group transactions status = %d, want %d; body %s", response.StatusCode(), http.StatusOK, response.Body)

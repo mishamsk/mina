@@ -344,6 +344,15 @@ func TestTagValidationErrors(t *testing.T) {
 	if invalid.JSON400.Error.Code != httpclient.APIErrorCodeInvalidRequest {
 		t.Fatalf("invalid code = %q, want %q", invalid.JSON400.Error.Code, httpclient.APIErrorCodeInvalidRequest)
 	}
+	literalScopeMarker, err := client.REST().CreateTagWithResponse(context.Background(), httpclient.CreateTagRequest{
+		Fqn: "Tax:*",
+	})
+	if err != nil {
+		t.Fatalf("literal scope-marker request: %v", err)
+	}
+	if literalScopeMarker.StatusCode() != http.StatusCreated {
+		t.Fatalf("literal scope-marker status = %d, want %d; body %s", literalScopeMarker.StatusCode(), http.StatusCreated, literalScopeMarker.Body)
+	}
 
 	badQuery, err := client.REST().ListTagsWithResponse(context.Background(), nil, apptest.ReplaceRawQuery("include_hidden=maybe"))
 	if err != nil {

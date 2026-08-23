@@ -1378,7 +1378,7 @@ test("concurrent amount saves prune selected rows that leave the active filter",
   ]);
   await page.goto(
     `/transactions?page=1&pageSize=50&q=${encodeURIComponent(memo)}` +
-      "&amountMin=10&amountMax=20",
+      `&filter=${encodeURIComponent("amount=12.34")}`,
   );
   await page.getByRole("button", { name: "Edit mode" }).click();
 
@@ -1477,7 +1477,7 @@ test("a winning amount refresh prunes a selection removed by an older dock save"
 
   await page.goto(
     `/transactions?page=1&pageSize=50&q=${encodeURIComponent(memo)}` +
-      `&member=${member.member_id}`,
+      `&filter=${encodeURIComponent(`member:"${member.name}"`)}`,
   );
   await page.getByRole("button", { name: "Edit mode" }).click();
   const header = page.getByTestId("transaction-browser-edit-mode-header");
@@ -1715,8 +1715,7 @@ test("saved entry routes load after a pending amount save", async ({
   };
   await page.route(`**${transactionPath}`, holdSave);
 
-  await amountInput.selectText();
-  await amountInput.pressSequentially("18.76");
+  await amountInput.fill("18.76");
   await expect(amountInput).toHaveValue("18.76");
   await amountInput.press("Enter");
   await saveStarted;

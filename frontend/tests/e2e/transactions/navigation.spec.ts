@@ -1,5 +1,6 @@
 import { test } from "@tests/e2e/test";
 import {
+  activateTransactionRow,
   createAccount,
   createCategory,
   expect,
@@ -8,6 +9,30 @@ import {
   shiftLocalDate,
   type TransactionListFixture,
 } from "@tests/e2e/transactions/support";
+
+test("opening detail does not refetch an unchanged relative-time page", async ({
+  page,
+}) => {
+  const filter = "initiated>=-30d";
+  let listRequestCount = 0;
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (
+      url.pathname === "/api/transactions" &&
+      url.searchParams.get("filter") === filter
+    ) {
+      listRequestCount += 1;
+    }
+  });
+
+  await page.goto(`/transactions?filter=${encodeURIComponent(filter)}`);
+  const firstRow = page.locator("tbody > tr[data-transaction-id]").first();
+  await expect(firstRow).toBeVisible();
+  await activateTransactionRow(firstRow);
+  await expect(page.getByTestId("transaction-detail-panel")).toBeVisible();
+
+  expect(listRequestCount).toBe(1);
+});
 
 test("future date navigation displays future active and expected transactions", async ({
   page,
@@ -107,7 +132,7 @@ test("future date navigation displays future active and expected transactions", 
     recurring_definition_id: number;
   };
 
-  const filteredTransactionsURL = `/transactions?page=1&pageSize=25&category=${String(category.category_id)}`;
+  const filteredTransactionsURL = `/transactions?page=1&pageSize=25&filter=${encodeURIComponent(`category:"${category.fqn}"`)}`;
   await page.goto(filteredTransactionsURL);
   await expect(
     page.locator("tbody > tr[data-transaction-id]").first(),
@@ -119,7 +144,8 @@ test("future date navigation displays future active and expected transactions", 
     const url = new URL(response.url());
     return (
       url.pathname === "/api/transactions" &&
-      url.searchParams.getAll("lifecycle_status").includes("expected")
+      url.searchParams.get("filter") ===
+        `(category:"${category.fqn}" and lifecycle:expected)`
     );
   });
   await page.getByText("Expected", { exact: true }).click();
@@ -341,9 +367,12 @@ test("only the next recurring projection can be deferred", async ({
     recurring_definition_id: number;
   };
 
-  await page.goto(
-    `/transactions?page=1&pageSize=25&category=${String(category.category_id)}`,
-  );
+  const transactionParams = new URLSearchParams({
+    filter: `category:${JSON.stringify(category.fqn)}`,
+    page: "1",
+    pageSize: "25",
+  });
+  await page.goto(`/transactions?${transactionParams.toString()}`);
   const anchoredResponse = page.waitForResponse((response) => {
     const url = new URL(response.url());
     return (
@@ -733,6 +762,33 @@ test("transactions page jumps to a date-anchored page", async ({ page }) => {
     }),
   ).toHaveLength(0);
   await expect(page.getByLabel("Go to day")).toHaveValue(jumpDate);
+
+  const entityLookupRoute = /\/api\/(?:categories|members|tags)\/\d+$/;
+  await page.route(entityLookupRoute, async (route) => {
+    await route.fulfill({
+      body: JSON.stringify({
+        error: { code: "internal_error", message: "Entity lookup failed." },
+      }),
+      contentType: "application/json",
+      status: 500,
+    });
+  });
+  const entityFilter = page
+    .locator("tbody > tr[data-transaction-id]")
+    .getByRole("button", { name: /^Filter by / })
+    .first();
+  await expect(entityFilter).toBeVisible();
+  await entityFilter.click();
+  await expect(
+    page.getByRole("status").filter({ hasText: "Entity lookup failed." }),
+  ).toBeVisible();
+  await expectTransactionsPageUrl(page, landedPage, 25, {
+    anchorDate: jumpDate,
+  });
+  await expect(
+    page.locator(`[data-date-jump-anchor="${jumpDate}"]`),
+  ).toBeVisible();
+  await page.unroute(entityLookupRoute);
 
   await page.getByRole("button", { exact: true, name: "Next" }).click();
   await expectTransactionsPageUrl(page, landedPage + 1, 25, {

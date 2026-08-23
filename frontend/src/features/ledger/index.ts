@@ -71,6 +71,7 @@ export {
 } from "./transaction-page-position";
 export { transactionRowFallback } from "./transaction-row-focus";
 export { TransactionSearchInput } from "./transaction-search-input";
+export { useEntityFilterRequestGuard } from "./use-entity-filter-request-guard";
 export { useTransactionBrowserPage } from "./use-transaction-browser-page";
 export { useTransactionDateJump } from "./use-transaction-date-jump";
 export {

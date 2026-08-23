@@ -882,7 +882,7 @@ test("categories row actions hide groups and move renamed paths into transaction
   await page.getByRole("button", { exact: true, name: "Category" }).click();
   const categoryPicker = page.getByRole("combobox", { name: "Categories" });
   await expect(
-    page.getByRole("checkbox", { name: "Include hidden" }),
+    page.getByRole("combobox", { name: "Filter operator" }),
   ).toBeFocused();
   await categoryPicker.fill(moveSource);
   await expect(
@@ -987,7 +987,7 @@ test("categories row actions hide groups and move renamed paths into transaction
     name: "Categories",
   });
   await expect(
-    page.getByRole("checkbox", { name: "Include hidden" }),
+    page.getByRole("combobox", { name: "Filter operator" }),
   ).toBeFocused();
   await refreshedCategoryPicker.fill(moveDestination);
   await expect(

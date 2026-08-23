@@ -11,7 +11,7 @@
 - Only `owned`, `party`, and `flow` accounts are user-writable. The `system` namespace and fixed system accounts remain readable and referenceable but reject creation and every mutation.
 - An account-type change requires the injected transaction validator to reclassify every affected active transaction; without that validator, type changes are rejected.
 - Account-currency transitions follow [account-currency semantics](../../../docs/accounting-semantics.md#account-currency): active credit-limit history blocks any real change, and a new single currency must match all active journal and recurring-definition records.
-- Hidden active accounts are valid references only when the caller explicitly allows them.
+- Hidden active accounts are valid references only when the caller explicitly allows them, for both ID and exact-FQN lookup.
 - Deletion is refused while active journal, template, recurring, or credit-limit references exist; list deleteability is derived from that same usage.
 - FQNs are the hierarchy identity: prefix conflicts are rejected, and restructuring rewrites an active subtree while preserving custom display labels. References expose the FQN and presentation/search metadata needed by dependent read projections.
 - Balance reads return only active `owned` and `party` accounts. Current balances include active posted and pending records; posted balances exclude pending records, and expected and cancelled transactions are excluded.

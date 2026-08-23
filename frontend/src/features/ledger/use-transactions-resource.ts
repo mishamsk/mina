@@ -20,6 +20,7 @@ import {
 } from "@/api";
 import { refreshFeaturedBalances } from "@/features/featured-balances";
 import { refreshOverview } from "@/features/overview";
+import { transactionFilterUsesRelativeTime } from "@/models/transaction-filters";
 import {
   categoryPickerIntentKey,
   clearTransactionPageLoading,
@@ -120,6 +121,7 @@ const effectivePageParams = (
 ): TransactionPageParams => ({
   anchorDate: params.anchorDate,
   filters: params.filters,
+  includeExpectedByDefault: params.includeExpectedByDefault,
   limit: params.limit,
   offset,
   sort: params.sort,
@@ -219,6 +221,7 @@ export const useTransactionsResource = (params: TransactionPageParams) => {
   const page = useTransactionPageView(params);
   const lookups = useLedgerLookupsView();
   const [pageRetryToken, setPageRetryToken] = useState(0);
+  const usesRelativeTime = transactionFilterUsesRelativeTime(params.filters);
   const catchupPromiseRef = useRef<
     | {
         readonly generation: number;
@@ -233,6 +236,14 @@ export const useTransactionsResource = (params: TransactionPageParams) => {
     },
     [pageKey, requestKey],
   );
+
+  useEffect(() => {
+    if (!usesRelativeTime) return;
+    return () => {
+      const snapshot = getTransactionsSnapshot().pages[pageKey];
+      if (snapshot) markTransactionPageStale(snapshot.params, snapshot);
+    };
+  }, [pageKey, usesRelativeTime]);
 
   const loadPage = useEffectEvent((isActive: () => boolean) => {
     const requestParams = params;

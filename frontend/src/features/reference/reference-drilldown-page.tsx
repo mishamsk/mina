@@ -2,7 +2,13 @@ import { Reload } from "pixelarticons/react";
 import { useCallback, useMemo } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 
-import type { JournalRecord, Transaction } from "@/api";
+import {
+  apiErrorMessage,
+  getCategory,
+  getTag,
+  type JournalRecord,
+  type Transaction,
+} from "@/api";
 import { Toast, toastDurationMs } from "@/components/toast";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -16,17 +22,22 @@ import {
   TransactionBrowserToolbar,
   TransactionDetailPanel,
   TransactionFilterControls,
+  useEntityFilterRequestGuard,
   useTransactionBrowserPage,
   writeTransactionFiltersToSearchParams,
 } from "@/features/ledger";
 import {
+  addRequiredTransactionFilterMembership,
+  addTransactionFilterMembership,
   emptyTransactionFilters,
+  transactionFilterRows,
   type TransactionFilters,
+  withoutTransactionFilterMembership,
 } from "@/models/transaction-filters";
 import { openTransactionEntryLaunch } from "@/store";
 
 export interface ReferenceDrilldownPageProps {
-  readonly filterIds: readonly number[];
+  readonly memberName: string;
 }
 
 export const ReferenceDrilldownSkeleton = () => (
@@ -114,17 +125,20 @@ export const ReferenceDrilldownNotFound = ({
 );
 
 const withMemberScope = (
-  ids: readonly number[],
+  memberName: string,
   filters: TransactionFilters,
-): TransactionFilters => ({ ...filters, memberIds: ids });
+): TransactionFilters =>
+  addRequiredTransactionFilterMembership(
+    withoutTransactionFilterMembership(filters, "member"),
+    "member",
+    memberName,
+  );
 
-const stripMemberScope = (filters: TransactionFilters): TransactionFilters => ({
-  ...filters,
-  memberIds: [],
-});
+const withoutMemberScope = (filters: TransactionFilters): TransactionFilters =>
+  withoutTransactionFilterMembership(filters, "member");
 
 export const ReferenceDrilldownPage = ({
-  filterIds,
+  memberName,
 }: ReferenceDrilldownPageProps) => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -135,15 +149,19 @@ export const ReferenceDrilldownPage = ({
   const readScopedFiltersFromSearchParams = useCallback(
     (current: URLSearchParams) =>
       withMemberScope(
-        filterIds,
-        stripMemberScope(readTransactionFiltersFromSearchParams(current)),
+        memberName,
+        readTransactionFiltersFromSearchParams(current),
       ),
-    [filterIds],
+    [memberName],
   );
-  const pageFilters = useMemo(() => stripMemberScope(urlFilters), [urlFilters]);
+  const pageFilters = useMemo(
+    () => withoutMemberScope(urlFilters),
+    [urlFilters],
+  );
+  const filterRowsEditable = transactionFilterRows(pageFilters) !== undefined;
   const filters = useMemo(
-    () => withMemberScope(filterIds, pageFilters),
-    [filterIds, pageFilters],
+    () => withMemberScope(memberName, pageFilters),
+    [memberName, pageFilters],
   );
   const browser = useTransactionBrowserPage({
     filters,
@@ -151,14 +169,19 @@ export const ReferenceDrilldownPage = ({
     searchParams,
     setSearchParams,
   });
+  const {
+    beginEntityFilterRequest,
+    cancelEntityFilterRequests,
+    completeEntityFilterRequest,
+  } = useEntityFilterRequestGuard();
 
   const addEntityFilter = useCallback(
-    (kind: "category" | "member" | "tag", id: number) => {
+    async (kind: "category" | "member" | "tag", id: number) => {
       browser.cancelDateJump();
-      const current = readLiveSearchParams();
       if (kind === "member") {
+        const current = readLiveSearchParams();
         browser.detail.closeTransactionDetail();
-        const nextFilters = stripMemberScope(
+        const nextFilters = withoutMemberScope(
           readTransactionFiltersFromSearchParams(current),
         );
         const next = writeTransactionFiltersToSearchParams(
@@ -174,31 +197,58 @@ export const ReferenceDrilldownPage = ({
         return;
       }
 
-      const currentFilters = stripMemberScope(
+      const controller = beginEntityFilterRequest();
+      const response =
+        kind === "category"
+          ? await getCategory({
+              path: { category_id: id },
+              signal: controller.signal,
+            })
+          : await getTag({
+              path: { tag_id: id },
+              signal: controller.signal,
+            });
+      if (!completeEntityFilterRequest(controller)) {
+        return;
+      }
+      const fqn = response.data?.fqn;
+      if (!fqn) {
+        browser.showNotice(
+          apiErrorMessage(
+            response.error,
+            `The ${kind} could not be loaded for filtering.`,
+          ),
+          "warning",
+        );
+        return;
+      }
+
+      const current = readLiveSearchParams();
+      const currentFilters = withoutMemberScope(
         readTransactionFiltersFromSearchParams(current),
       );
-      const nextFilters =
-        kind === "category"
-          ? {
-              ...currentFilters,
-              categoryIds: [...currentFilters.categoryIds, id],
-            }
-          : {
-              ...currentFilters,
-              tagIds: [...currentFilters.tagIds, id],
-            };
+      const nextFilters = addTransactionFilterMembership(
+        currentFilters,
+        kind,
+        fqn,
+      );
       const next = writeTransactionFiltersToSearchParams(current, nextFilters);
-      next.set("pageSize", String(browser.pageSize));
       setSearchParams(next);
     },
-    [browser, navigate, setSearchParams],
+    [
+      beginEntityFilterRequest,
+      browser,
+      completeEntityFilterRequest,
+      navigate,
+      setSearchParams,
+    ],
   );
 
   const setSearchFilter = useCallback(
     (normalizedSearch: string) => {
       browser.cancelDateJump();
       const current = readLiveSearchParams();
-      const nextFilters = stripMemberScope(
+      const nextFilters = withoutMemberScope(
         readTransactionFiltersFromSearchParams(current),
       );
       const next = writeTransactionFiltersToSearchParams(current, {
@@ -227,10 +277,7 @@ export const ReferenceDrilldownPage = ({
     (nextFilters: TransactionFilters) => {
       browser.cancelDateJump();
       const current = readLiveSearchParams();
-      const next = writeTransactionFiltersToSearchParams(
-        current,
-        stripMemberScope(nextFilters),
-      );
+      const next = writeTransactionFiltersToSearchParams(current, nextFilters);
       next.set("pageSize", String(browser.pageSize));
       setSearchParams(next);
     },
@@ -239,7 +286,7 @@ export const ReferenceDrilldownPage = ({
 
   const setTransactionClassFilters = useCallback(
     (classes: TransactionFilters["classes"]) => {
-      const currentFilters = stripMemberScope(
+      const currentFilters = withoutMemberScope(
         readTransactionFiltersFromSearchParams(readLiveSearchParams()),
       );
       setTransactionFilters({
@@ -250,15 +297,16 @@ export const ReferenceDrilldownPage = ({
     [setTransactionFilters],
   );
   const clearFilterChips = useCallback(() => {
-    const currentFilters = stripMemberScope(
-      readTransactionFiltersFromSearchParams(readLiveSearchParams()),
+    cancelEntityFilterRequests();
+    const currentFilters = readTransactionFiltersFromSearchParams(
+      readLiveSearchParams(),
     );
     setTransactionFilters({
       ...emptyTransactionFilters,
       classes: currentFilters.classes,
       search: currentFilters.search,
     });
-  }, [setTransactionFilters]);
+  }, [cancelEntityFilterRequests, setTransactionFilters]);
 
   const recoverTransactionAmountConflict = (
     transaction: Transaction,
@@ -342,15 +390,27 @@ export const ReferenceDrilldownPage = ({
           onDeferRecurringProjection={browser.deferRecurringProjection}
           onChangeTransactionLifecycle={browser.changeTransactionLifecycle}
           onClearSelection={browser.clearTransactionSelection}
-          onFilterCategory={(categoryId) => {
-            addEntityFilter("category", categoryId);
-          }}
-          onFilterMember={(memberId) => {
-            addEntityFilter("member", memberId);
-          }}
-          onFilterTag={(tagId) => {
-            addEntityFilter("tag", tagId);
-          }}
+          onFilterCategory={
+            filterRowsEditable
+              ? (categoryId) => {
+                  void addEntityFilter("category", categoryId);
+                }
+              : undefined
+          }
+          onFilterMember={
+            filterRowsEditable
+              ? (memberId) => {
+                  void addEntityFilter("member", memberId);
+                }
+              : undefined
+          }
+          onFilterTag={
+            filterRowsEditable
+              ? (tagId) => {
+                  void addEntityFilter("tag", tagId);
+                }
+              : undefined
+          }
           onDeleteTransaction={browser.deleteTransactionFromRow}
           onDiscardTransactionAmountConflict={
             browser.discardTransactionAmountConflict
@@ -445,9 +505,13 @@ export const ReferenceDrilldownPage = ({
             );
           }}
           onPost={browser.postTransaction}
-          onFilterCategory={(categoryId) => {
-            addEntityFilter("category", categoryId);
-          }}
+          onFilterCategory={
+            filterRowsEditable
+              ? (categoryId) => {
+                  void addEntityFilter("category", categoryId);
+                }
+              : undefined
+          }
           onRestoreFocus={browser.detail.restoreDetailFocus}
           onSplit={(transaction) => {
             openTransactionEntryLaunch(

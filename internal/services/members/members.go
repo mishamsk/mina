@@ -158,6 +158,22 @@ func (s *Service) ValidateActiveReference(ctx context.Context, id int64, opts Re
 	return refs[id], nil
 }
 
+// ActiveReferenceByName returns one active household member reference by exact name.
+//
+// Hidden active members are rejected unless opts.AllowHidden is true.
+func (s *Service) ActiveReferenceByName(ctx context.Context, name string, opts ReferenceOptions) (Reference, error) {
+	states, err := s.cache.Snapshot(ctx)
+	if err != nil {
+		return Reference{}, err
+	}
+	for _, state := range states {
+		if state.active && state.reference.Name == name && (opts.AllowHidden || !state.reference.IsHidden) {
+			return state.reference, nil
+		}
+	}
+	return Reference{}, services.ErrInvalidReference
+}
+
 // UpdateHidden validates and updates a household member hidden state.
 func (s *Service) UpdateHidden(ctx context.Context, id int64, isHidden *bool) (Member, error) {
 	if id <= 0 {

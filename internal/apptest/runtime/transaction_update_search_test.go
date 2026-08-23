@@ -807,14 +807,11 @@ func TestTransactionCancelRestoreUpdatedAtOrderingBoundary(t *testing.T) {
 
 	sortUpdated := httpclient.ListTransactionsParamsSortUpdatedAt
 	sortDescending := httpclient.ListTransactionsParamsSortDirDesc
-	allLifecycleStatuses := []httpclient.TransactionLifecycleStatus{
-		httpclient.TransactionLifecycleStatusActive,
-		httpclient.TransactionLifecycleStatusCancelled,
-	}
+	allLifecycleStatuses := "(lifecycle:active or lifecycle:cancelled)"
 	afterCancel, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
-		LifecycleStatus: &allLifecycleStatuses,
-		Sort:            &sortUpdated,
-		SortDir:         &sortDescending,
+		Filter:  &allLifecycleStatuses,
+		Sort:    &sortUpdated,
+		SortDir: &sortDescending,
 	})
 	requireNoTransportError(t, "list transactions after cancel by updated_at", err)
 	assertTransactionListResponse(t, "transactions after cancel by updated_at", afterCancel, []int64{
@@ -832,11 +829,11 @@ func TestTransactionCancelRestoreUpdatedAtOrderingBoundary(t *testing.T) {
 		t.Fatalf("restored updated_at = %s, want after peer %s", restored.JSON200.UpdatedAt, restorePeer.JSON201.UpdatedAt)
 	}
 
-	activeLifecycleStatus := []httpclient.TransactionLifecycleStatus{httpclient.TransactionLifecycleStatusActive}
+	activeLifecycleStatus := "lifecycle:active"
 	afterRestore, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
-		LifecycleStatus: &activeLifecycleStatus,
-		Sort:            &sortUpdated,
-		SortDir:         &sortDescending,
+		Filter:  &activeLifecycleStatus,
+		Sort:    &sortUpdated,
+		SortDir: &sortDescending,
 	})
 	requireNoTransportError(t, "list transactions after restore by updated_at", err)
 	assertTransactionListResponse(t, "transactions after restore by updated_at", afterRestore, []int64{

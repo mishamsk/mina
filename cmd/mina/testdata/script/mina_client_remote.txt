@@ -23,6 +23,12 @@ stdout '"initiated_date":"2026-07-15"'
 stdout '"transaction_id":846'
 ! stderr .
 
+# The generated filter flag preserves DSL quoting, spaces, colons, and glob characters.
+exec mina client --server http://127.0.0.1:$PORT transactions list --filter 'category:"Entertainment:*" and not lifecycle:expected' --limit 5
+stdout '"transactions":\['
+stdout '"total_count":26'
+! stderr .
+
 # A path argument selects the transaction observed in the prior list.
 exec mina client --server http://127.0.0.1:$PORT transactions get 846
 stdout '"transaction_id":846'

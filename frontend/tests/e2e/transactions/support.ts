@@ -110,12 +110,6 @@ interface RecurringDefinitionFixture {
   readonly recurring_definition_id: number;
 }
 
-const defaultTransactionRequestLifecycles = [
-  "active",
-  "expected",
-  "cancelled",
-] as const;
-
 const formatLocalDate = (date: Date): string =>
   [date.getFullYear(), date.getMonth() + 1, date.getDate()]
     .map((part, index) =>
@@ -203,117 +197,50 @@ const expectTransactionsPageUrl = async (
 const expectTransactionFilterUrl = async (
   page: Page,
   expected: {
-    readonly amountMax?: string;
-    readonly amountMin?: string;
-    readonly categories?: readonly number[];
     readonly classes?: readonly string[];
-    readonly currencies?: readonly string[];
-    readonly initiatedFrom?: string;
-    readonly initiatedTo?: string;
-    readonly lifecycles?: readonly string[];
-    readonly members?: readonly number[];
+    readonly filter: string | null;
     readonly page?: string;
     readonly pageSize?: string;
     readonly q?: string;
-    readonly settlements?: readonly string[];
-    readonly tags?: readonly number[];
   },
 ): Promise<void> => {
   await expect
     .poll(() => {
       const searchParams = new URL(page.url()).searchParams;
+      const actualFilter = searchParams.get("filter");
       return {
-        amountMax: searchParams.get("amountMax"),
-        amountMin: searchParams.get("amountMin"),
-        initiatedFrom: searchParams.get("initiatedFrom"),
-        initiatedTo: searchParams.get("initiatedTo"),
-        lifecycles: searchParams.getAll("lifecycle").sort(),
+        filter: actualFilter,
         page: searchParams.get("page"),
         pageSize: searchParams.get("pageSize"),
         q: searchParams.get("q"),
-        categories: searchParams
-          .getAll("category")
-          .map((value) => Number(value))
-          .sort((left, right) => left - right),
         classes: searchParams.getAll("class").sort(),
-        currencies: searchParams.getAll("currency").sort(),
-        members: searchParams
-          .getAll("member")
-          .map((value) => Number(value))
-          .sort((left, right) => left - right),
-        settlements: searchParams.getAll("settlement").sort(),
-        tags: searchParams
-          .getAll("tag")
-          .map((value) => Number(value))
-          .sort((left, right) => left - right),
       };
     })
     .toEqual({
-      amountMax: expected.amountMax ?? null,
-      amountMin: expected.amountMin ?? null,
-      initiatedFrom: expected.initiatedFrom ?? null,
-      initiatedTo: expected.initiatedTo ?? null,
-      lifecycles: [...(expected.lifecycles ?? [])].sort(),
+      filter: expected.filter,
       page: expected.page ?? "1",
       pageSize: expected.pageSize ?? "50",
       q: expected.q ?? null,
-      categories: [...(expected.categories ?? [])].sort(
-        (left, right) => left - right,
-      ),
       classes: [...(expected.classes ?? [])].sort(),
-      currencies: [...(expected.currencies ?? [])].sort(),
-      members: [...(expected.members ?? [])].sort(
-        (left, right) => left - right,
-      ),
-      settlements: [...(expected.settlements ?? [])].sort(),
-      tags: [...(expected.tags ?? [])].sort((left, right) => left - right),
     });
 };
 
 const transactionRequestHasFilters = (
   requestUrl: URL,
   expected: {
-    readonly amountMax?: string;
-    readonly amountMin?: string;
     readonly anchorDate?: string;
     readonly classes?: readonly string[];
-    readonly currencies?: readonly string[];
-    readonly initiatedFrom?: string;
-    readonly initiatedTo?: string;
+    readonly filter: string | null;
     readonly limit?: string;
-    readonly lifecycles?: readonly string[];
-    readonly settlements?: readonly string[];
-    readonly tags?: readonly number[];
   },
 ): boolean => {
   const params = requestUrl.searchParams;
-  const tags = params
-    .getAll("tag_id")
-    .map((value) => Number(value))
-    .sort((left, right) => left - right);
   return (
-    params.get("amount_max") === (expected.amountMax ?? null) &&
-    params.get("amount_min") === (expected.amountMin ?? null) &&
+    params.get("filter") === expected.filter &&
     params.get("anchor_date") === (expected.anchorDate ?? null) &&
-    params.get("initiated_date_from") === (expected.initiatedFrom ?? null) &&
-    params.get("initiated_date_to") === (expected.initiatedTo ?? null) &&
     (expected.limit === undefined || params.get("limit") === expected.limit) &&
     JSON.stringify(params.getAll("transaction_class").sort()) ===
-      JSON.stringify([...(expected.classes ?? [])].sort()) &&
-    JSON.stringify(params.getAll("currency").sort()) ===
-      JSON.stringify([...(expected.currencies ?? [])].sort()) &&
-    JSON.stringify(params.getAll("lifecycle_status").sort()) ===
-      JSON.stringify(
-        [
-          ...(expected.lifecycles ?? defaultTransactionRequestLifecycles),
-        ].sort(),
-      ) &&
-    JSON.stringify(params.getAll("settlement").sort()) ===
-      JSON.stringify([...(expected.settlements ?? [])].sort()) &&
-    JSON.stringify(tags) ===
-      JSON.stringify(
-        [...(expected.tags ?? [])].sort((left, right) => left - right),
-      )
+      JSON.stringify([...(expected.classes ?? [])].sort())
   );
 };
 
@@ -1559,7 +1486,6 @@ export {
   createMember,
   createSearchSpend,
   createTag,
-  defaultTransactionRequestLifecycles,
   delayTransactionEntryDraftDeletion,
   deleteTransaction,
   editorButtonsFitContainer,

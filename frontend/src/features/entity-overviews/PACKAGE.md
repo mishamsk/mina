@@ -11,8 +11,9 @@
 - The range slider loads global accounting-history bounds separately from the scoped report and falls back to the visible report window with an inline retry when that read fails.
 - The selected trend renders on an explicit layer above the stacks; the hover summary leads with that metric and totals, then uses the same magnitude ordering as the stacks. Contributor labels, checkboxes, signs, and tooltips remain sufficient when series colors repeat.
 - The fixed preview configures the shared transaction browser/detail presentation without paging, filters, sorting, Edit mode, row actions, or internal scrolling.
-- Preview entity-chip actions open Transactions with the fixed report scope retained alongside the activated filter.
-- Group transaction links use exact FQN-prefix filters; Category breakdown links use backend-supplied exact-leaf IDs or group FQNs.
+- Preview entity-chip actions re-read the entity by stable ID for its current FQN or name, then open Transactions with the fixed report scope retained alongside the activated filter; failures warn without navigating.
+- Back and unmount cancel unresolved preview entity-filter lookups through ledger's shared lifecycle guard; a newer preview activation also cancels the previous lookup so only the latest selection can navigate.
+- Group transaction links use DSL FQN-prefix terms, while leaf transaction links use backend-supplied exact FQNs. Category breakdown links route groups by FQN prefix and leaves by numeric category ID.
 - Report semantics are owned by [`docs/household-flow-reporting.md`](../../../../docs/household-flow-reporting.md); page composition is owned by [`docs/webui-design.md`](../../../../docs/webui-design.md).
 
 ## Boundaries

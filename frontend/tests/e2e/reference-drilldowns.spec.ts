@@ -496,8 +496,8 @@ test("category leaf overview renders net bars and a fixed line while preview det
   const transactionsLink = preview.getByRole("link", { name: "Transactions" });
   const href = await transactionsLink.getAttribute("href");
   expect(
-    new URL(href ?? "", "http://mina.test").searchParams.getAll("category"),
-  ).toEqual([String(category.category_id)]);
+    new URL(href ?? "", "http://mina.test").searchParams.get("filter"),
+  ).toBe(`category:"${category.fqn}"`);
 });
 
 test("tag group overview uses exact prefix links and stacks chart before breakdown on small screens", async ({
@@ -541,8 +541,8 @@ test("tag group overview uses exact prefix links and stacks chart before breakdo
     .getByRole("link", { name: "Transactions" });
   const href = await transactionsLink.getAttribute("href");
   expect(
-    new URL(href ?? "", "http://mina.test").searchParams.get("tagPrefix"),
-  ).toBe(tagPrefix);
+    new URL(href ?? "", "http://mina.test").searchParams.get("filter"),
+  ).toBe(`tag:"${tagPrefix}:*"`);
 
   await page.setViewportSize({ width: 1440, height: 900 });
   const wideChartBox = await chart.boundingBox();
@@ -554,8 +554,11 @@ test("tag leaf preview chips retain the fixed tag scope", async ({
   page,
 }, testInfo) => {
   const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
-  const scopedTag = await createTag(page, `E2EPreviewScope:${unique}`);
-  const activatedTag = await createTag(page, `E2EPreviewFilter:${unique}`);
+  const scopedTag = await createTag(page, `E2EPreviewScope:${unique}:Scoped`);
+  const activatedTag = await createTag(
+    page,
+    `E2EPreviewFilter:${unique}:Activated`,
+  );
   const categories = await listFixtures<CategoryFixture>(
     page,
     "/api/categories",
@@ -571,16 +574,144 @@ test("tag leaf preview chips retain the fixed tag scope", async ({
   await page.goto(`/tags/${scopedTag.tag_id}`);
   const preview = page.getByTestId("entity-overview-transactions");
   await preview
+    .getByRole("button", { name: `Filter by ${scopedTag.name}` })
+    .first()
+    .click();
+
+  await expect(page).toHaveURL(/\/transactions\?/);
+  expect(new URL(page.url()).searchParams.get("filter")).toBe(
+    `tag:"${scopedTag.fqn}"`,
+  );
+
+  await page.goBack();
+  await expect(preview).toBeVisible();
+  await preview
     .getByRole("button", { name: `Filter by ${activatedTag.name}` })
     .first()
     .click();
 
   await expect(page).toHaveURL(/\/transactions\?/);
-  const activeTagIds = new URL(page.url()).searchParams.getAll("tag");
-  expect(activeTagIds).toEqual(
-    [scopedTag.tag_id, activatedTag.tag_id]
-      .sort((left, right) => left - right)
-      .map(String),
+  const activeFilter = new URL(page.url()).searchParams.get("filter");
+  expect(activeFilter).toBe(
+    `(tag:"${scopedTag.fqn}" and tag:"${activatedTag.fqn}")`,
+  );
+});
+
+test("Back cancels an entity preview filter lookup", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const scopedTag = await createTag(page, `E2E:PreviewBack:${unique}:Scoped`);
+  const category = await createCategory(
+    page,
+    `E2E:PreviewBack:${unique}:Category`,
+  );
+  const memo = `E2E preview Back ${unique}`;
+  await createSpend(page, {
+    category,
+    memo,
+    tag: scopedTag,
+  });
+
+  await page.goto(`/tags/${scopedTag.tag_id}`);
+  const preview = page.getByTestId("entity-overview-transactions");
+  const row = preview.getByRole("row").filter({ hasText: memo });
+  await row.focus();
+  await row.press("Enter");
+  const detail = page.getByTestId("transaction-detail-panel");
+  await expect(detail).toBeVisible();
+
+  let releaseLookup: () => void = () => undefined;
+  let finishLookup: () => void = () => undefined;
+  const lookupFinished = new Promise<void>((resolve) => {
+    finishLookup = resolve;
+  });
+  const lookupRequested = new Promise<void>((resolve) => {
+    void page.route(
+      `**/api/categories/${category.category_id}`,
+      async (route) => {
+        resolve();
+        await new Promise<void>((release) => {
+          releaseLookup = release;
+        });
+        await route.continue().catch(() => undefined);
+        finishLookup();
+      },
+    );
+  });
+
+  await detail
+    .getByRole("button", { name: `Filter by ${category.fqn}` })
+    .click();
+  await lookupRequested;
+  await page.goBack();
+  await expect(detail).toHaveCount(0);
+
+  releaseLookup();
+  await lookupFinished;
+  await expect(page).toHaveURL(new RegExp(`/tags/${scopedTag.tag_id}$`));
+});
+
+test("latest entity preview filter lookup wins", async ({ page }, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const scopedTag = await createTag(page, `E2E:PreviewLatest:${unique}:Scoped`);
+  const activatedTag = await createTag(
+    page,
+    `E2E:PreviewLatest:${unique}:Activated`,
+  );
+  const category = await createCategory(
+    page,
+    `E2E:PreviewLatest:${unique}:Category`,
+  );
+  const memo = `E2E preview latest ${unique}`;
+  await createSpend(page, {
+    category,
+    memo,
+    tags: [scopedTag, activatedTag],
+  });
+
+  await page.goto(`/tags/${scopedTag.tag_id}`);
+  const preview = page.getByTestId("entity-overview-transactions");
+  const row = preview.getByRole("row").filter({ hasText: memo });
+
+  let releaseCategory: () => void = () => undefined;
+  const categoryRequested = new Promise<void>((resolve) => {
+    void page.route(
+      `**/api/categories/${category.category_id}`,
+      async (route) => {
+        resolve();
+        await new Promise<void>((release) => {
+          releaseCategory = release;
+        });
+        await route.continue().catch(() => undefined);
+      },
+    );
+  });
+  let releaseTag: () => void = () => undefined;
+  const tagRequested = new Promise<void>((resolve) => {
+    void page.route(`**/api/tags/${activatedTag.tag_id}`, async (route) => {
+      resolve();
+      await new Promise<void>((release) => {
+        releaseTag = release;
+      });
+      await route.continue();
+    });
+  });
+
+  await row.getByRole("button", { name: `Filter by ${category.name}` }).click();
+  await categoryRequested;
+  await row
+    .getByRole("button", { name: `Filter by ${activatedTag.name}` })
+    .click();
+  await tagRequested;
+
+  releaseCategory();
+  await expect(page).toHaveURL(new RegExp(`/tags/${scopedTag.tag_id}$`));
+  releaseTag();
+
+  await expect(page).toHaveURL(/\/transactions\?/);
+  expect(new URL(page.url()).searchParams.get("filter")).toBe(
+    `(tag:"${scopedTag.fqn}" and tag:"${activatedTag.fqn}")`,
   );
 });
 
@@ -728,16 +859,18 @@ test("member drill-down direct navigation filters attributed transactions", asyn
     memo: alternateMemo,
   });
 
+  const sharedFilter = `(member:"${alternateMember.name}" or lifecycle:cancelled)`;
+  const scopedFilter = `member:"${targetMember.name}"`;
   const filteredRequest = page.waitForRequest((request) => {
     const url = new URL(request.url());
     return (
       url.pathname === "/api/transactions" &&
-      url.searchParams
-        .getAll("member_id")
-        .includes(String(targetMember.member_id))
+      url.searchParams.get("filter") === scopedFilter
     );
   });
-  await page.goto(`/members/${targetMember.member_id}`);
+  await page.goto(
+    `/members/${targetMember.member_id}?filter=${encodeURIComponent(sharedFilter)}`,
+  );
   await filteredRequest;
 
   await expect(
@@ -752,5 +885,8 @@ test("member drill-down direct navigation filters attributed transactions", asyn
   ).toBeVisible();
   await expect(
     page.getByRole("row").filter({ hasText: alternateMemo }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByTestId("transaction-filter-row-1").getByText("AND"),
   ).toHaveCount(0);
 });

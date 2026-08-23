@@ -2,7 +2,14 @@ import { Plus } from "pixelarticons/react";
 import { useCallback, useEffect, useMemo } from "react";
 import { useLocation, useSearchParams } from "react-router";
 
-import type { JournalRecord, Transaction } from "@/api";
+import {
+  apiErrorMessage,
+  getCategory,
+  getMember,
+  getTag,
+  type JournalRecord,
+  type Transaction,
+} from "@/api";
 import { PageHelp } from "@/components/page-help";
 import { Toast, toastDurationMs } from "@/components/toast";
 import { Button } from "@/components/ui/button";
@@ -17,11 +24,14 @@ import {
   TransactionBrowserToolbar,
   TransactionDetailPanel,
   TransactionFilterControls,
+  useEntityFilterRequestGuard,
   useTransactionBrowserPage,
   writeTransactionFiltersToSearchParams,
 } from "@/features/ledger";
 import {
+  addTransactionFilterMembership,
   emptyTransactionFilters,
+  transactionFilterRows,
   type TransactionFilters,
 } from "@/models/transaction-filters";
 import {
@@ -37,11 +47,17 @@ export const TransactionsPage = () => {
     () => readTransactionFiltersFromSearchParams(searchParams),
     [searchParams],
   );
+  const filterRowsEditable = transactionFilterRows(filters) !== undefined;
   const browser = useTransactionBrowserPage({
     filters,
     searchParams,
     setSearchParams,
   });
+  const {
+    beginEntityFilterRequest,
+    cancelEntityFilterRequests,
+    completeEntityFilterRequest,
+  } = useEntityFilterRequestGuard();
 
   useEffect(() => {
     setLastTransactionsPageSearch(location.search);
@@ -158,6 +174,7 @@ export const TransactionsPage = () => {
     [setTransactionFilters],
   );
   const clearFilterChips = useCallback(() => {
+    cancelEntityFilterRequests();
     const currentFilters = readTransactionFiltersFromSearchParams(
       readLiveSearchParams(),
     );
@@ -166,32 +183,65 @@ export const TransactionsPage = () => {
       classes: currentFilters.classes,
       search: currentFilters.search,
     });
-  }, [setTransactionFilters]);
+  }, [cancelEntityFilterRequests, setTransactionFilters]);
   const addEntityFilter = useCallback(
-    (kind: "category" | "member" | "tag", id: number) => {
+    async (kind: "category" | "member" | "tag", id: number) => {
+      const controller = beginEntityFilterRequest();
+      let error: unknown;
+      let value: string | undefined;
+      if (kind === "category") {
+        const category = await getCategory({
+          path: { category_id: id },
+          signal: controller.signal,
+        });
+        error = category.error;
+        value = category.data?.fqn;
+      } else if (kind === "tag") {
+        const tag = await getTag({
+          path: { tag_id: id },
+          signal: controller.signal,
+        });
+        error = tag.error;
+        value = tag.data?.fqn;
+      } else {
+        const member = await getMember({
+          path: { member_id: id },
+          signal: controller.signal,
+        });
+        error = member.error;
+        value = member.data?.name;
+      }
+      if (!completeEntityFilterRequest(controller)) {
+        return;
+      }
+      if (!value) {
+        browser.showNotice(
+          apiErrorMessage(
+            error,
+            `The ${kind} could not be loaded for filtering.`,
+          ),
+          "warning",
+        );
+        return;
+      }
       browser.cancelDateJump();
       const current = readLiveSearchParams();
       const currentFilters = readTransactionFiltersFromSearchParams(current);
-      const nextFilters =
-        kind === "category"
-          ? {
-              ...currentFilters,
-              categoryIds: [...currentFilters.categoryIds, id],
-            }
-          : kind === "tag"
-            ? {
-                ...currentFilters,
-                tagIds: [...currentFilters.tagIds, id],
-              }
-            : {
-                ...currentFilters,
-                memberIds: [...currentFilters.memberIds, id],
-              };
+      const nextFilters = addTransactionFilterMembership(
+        currentFilters,
+        kind,
+        value,
+      );
       setSearchParams(
         writeTransactionFiltersToSearchParams(current, nextFilters),
       );
     },
-    [browser, setSearchParams],
+    [
+      beginEntityFilterRequest,
+      browser,
+      completeEntityFilterRequest,
+      setSearchParams,
+    ],
   );
 
   return (
@@ -281,15 +331,27 @@ export const TransactionsPage = () => {
             onDeferRecurringProjection={browser.deferRecurringProjection}
             onChangeTransactionLifecycle={browser.changeTransactionLifecycle}
             onClearSelection={browser.clearTransactionSelection}
-            onFilterCategory={(categoryId) => {
-              addEntityFilter("category", categoryId);
-            }}
-            onFilterMember={(memberId) => {
-              addEntityFilter("member", memberId);
-            }}
-            onFilterTag={(tagId) => {
-              addEntityFilter("tag", tagId);
-            }}
+            onFilterCategory={
+              filterRowsEditable
+                ? (categoryId) => {
+                    void addEntityFilter("category", categoryId);
+                  }
+                : undefined
+            }
+            onFilterMember={
+              filterRowsEditable
+                ? (memberId) => {
+                    void addEntityFilter("member", memberId);
+                  }
+                : undefined
+            }
+            onFilterTag={
+              filterRowsEditable
+                ? (tagId) => {
+                    void addEntityFilter("tag", tagId);
+                  }
+                : undefined
+            }
             onNewTransaction={openEntryPanel}
             onDeleteTransaction={browser.deleteTransactionFromRow}
             onDiscardTransactionAmountConflict={
@@ -366,9 +428,13 @@ export const TransactionsPage = () => {
             onEdit={editTransaction}
             onPost={browser.postTransaction}
             onSplit={splitTransaction}
-            onFilterCategory={(categoryId) => {
-              addEntityFilter("category", categoryId);
-            }}
+            onFilterCategory={
+              filterRowsEditable
+                ? (categoryId) => {
+                    void addEntityFilter("category", categoryId);
+                  }
+                : undefined
+            }
             onRestoreFocus={browser.detail.restoreDetailFocus}
             transaction={browser.detail.transaction}
             transactionId={browser.detail.selectedTransactionId}

@@ -108,6 +108,7 @@ export const useTransactionDateJump = ({
           {
             anchorDate,
             filters: params.filters,
+            includeExpectedByDefault: params.includeExpectedByDefault,
             limit: pageSize,
             offset: 0,
             sort: params.sort,
@@ -155,6 +156,7 @@ export const useTransactionDateJump = ({
       page,
       pageSize,
       params.filters,
+      params.includeExpectedByDefault,
       params.sort,
       params.sortDirection,
       readFiltersFromSearchParams,

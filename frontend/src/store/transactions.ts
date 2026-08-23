@@ -28,6 +28,7 @@ import { createSelectors } from "./selectors";
 export interface TransactionsPageParams {
   readonly anchorDate?: string;
   readonly filters?: Partial<TransactionFilters>;
+  readonly includeExpectedByDefault?: boolean;
   readonly limit: number;
   readonly offset: number;
   readonly sort: TransactionSort;
@@ -144,7 +145,15 @@ export const useTransactionsStore = createSelectors(transactionsStore);
 
 export const transactionPageKey = (params: TransactionsPageParams): string => {
   const filterSignature = transactionFilterSignature(params.filters);
-  return `${params.limit}:${params.offset}:${params.sort}:${params.sortDirection}:${params.anchorDate ?? ""}:${filterSignature}`;
+  return JSON.stringify([
+    params.limit,
+    params.offset,
+    params.sort,
+    params.sortDirection,
+    params.anchorDate ?? "",
+    params.includeExpectedByDefault ?? false,
+    filterSignature,
+  ]);
 };
 
 export const transactionPageRequestKey = (

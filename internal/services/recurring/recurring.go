@@ -23,7 +23,7 @@ import (
 	"github.com/mishamsk/mina/internal/x/lease"
 )
 
-const maxFutureProjectionSlots = 10_000
+const maxFutureProjections = 10_000
 
 // ScheduleClass identifies the recurring schedule class derived from schedule_rule.kind.
 type ScheduleClass string
@@ -468,10 +468,7 @@ func (s *Service) ListOccurrences(ctx context.Context, opts OccurrenceListOption
 
 // WithProjectedTransactions supplies read-only future recurring rows while preventing occurrence changes during use.
 func (s *Service) WithProjectedTransactions(ctx context.Context, through values.CivilDate, opts transactions.ListOptions, use func(context.Context, []transactions.Transaction) error) error {
-	return lease.Combine(ctx, []lease.Func{
-		s.refs.WithSharedLease,
-		s.occurrences.WithExclusiveLease,
-	}, func(ctx context.Context) error {
+	return lease.Combine(ctx, []lease.Func{s.refs.WithSharedLease, s.occurrences.WithExclusiveLease}, func(ctx context.Context) error {
 		projected, err := s.projectTransactionsWithReferences(ctx, through, opts)
 		if err != nil {
 			return err
@@ -490,7 +487,7 @@ func (s *Service) projectTransactionsWithReferences(ctx context.Context, through
 		return nil, err
 	}
 	projected := []transactions.Transaction{}
-	projectionSlots := 0
+	projectionCount := 0
 	for _, materialization := range definitions {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -506,12 +503,12 @@ func (s *Service) projectTransactionsWithReferences(ctx context.Context, through
 			if !slot.Time().After(today.Time()) {
 				return nil
 			}
-			projectionSlots++
-			if projectionSlots > maxFutureProjectionSlots {
-				return services.InvalidRequest("future recurring projection exceeds the 10000-slot request limit")
-			}
 			if _, ok := existing[slot.String()]; ok {
 				return nil
+			}
+			projectionCount++
+			if projectionCount > maxFutureProjections {
+				return services.InvalidRequest("future recurring projection exceeds the 10000-projection request limit")
 			}
 			isNext := !nextProjectionFound
 			nextProjectionFound = true
@@ -629,87 +626,23 @@ func recurringProjectionID(kind string, definitionID int64, slot values.CivilDat
 }
 
 func projectedTransactionMatches(transaction transactions.Transaction, opts transactions.ListOptions, refs transactionProjectionReferences) bool {
-	if opts.InitiatedDateFrom != nil && transaction.InitiatedDate.Time().Before(opts.InitiatedDateFrom.Time()) {
+	if opts.Filter == nil {
 		return false
 	}
-	if opts.InitiatedDateTo != nil && transaction.InitiatedDate.Time().After(opts.InitiatedDateTo.Time()) {
-		return false
-	}
-	if len(opts.Settlements) > 0 && !slices.Contains(opts.Settlements, transaction.Settlement) {
+	if !transactions.FilterMatchesTransaction(transaction, opts.Filter, func(field transactions.FilterField, id int64) string {
+		switch field {
+		case transactions.FilterFieldCategory:
+			return refs.categories[id].FQN
+		default:
+			return refs.tags[id].FQN
+		}
+	}) {
 		return false
 	}
 	if len(opts.TransactionClasses) > 0 && !slices.Contains(opts.TransactionClasses, transaction.Class) {
 		return false
 	}
-	if len(opts.TransactionShapes) > 0 && !projectedHasShape(transaction, opts.TransactionShapes) {
-		return false
-	}
-	if len(opts.RecordRoles) > 0 && !projectedHasRole(transaction, opts.RecordRoles) {
-		return false
-	}
-	if opts.PendingDateFrom != nil || opts.PendingDateTo != nil || opts.PostedDateFrom != nil || opts.PostedDateTo != nil {
-		return false
-	}
-	if !projectedRecordFiltersMatch(transaction.Records, opts, refs) {
-		return false
-	}
 	return opts.Search == nil || projectedSearchMatches(transaction.Records, strings.ToLower(*opts.Search), refs)
-}
-
-func projectedRecordFiltersMatch(records []transactions.JournalRecord, opts transactions.ListOptions, refs transactionProjectionReferences) bool {
-	checks := []func(transactions.JournalRecord) bool{
-		func(record transactions.JournalRecord) bool {
-			return len(opts.AccountIDs) == 0 || slices.Contains(opts.AccountIDs, record.AccountID)
-		},
-		func(record transactions.JournalRecord) bool {
-			return len(opts.CategoryIDs) == 0 || record.CategoryID != nil && slices.Contains(opts.CategoryIDs, *record.CategoryID)
-		},
-		func(record transactions.JournalRecord) bool {
-			return opts.CategoryFQNPrefix == nil || record.CategoryID != nil && services.FQNAtOrUnder(refs.categories[*record.CategoryID].FQN, *opts.CategoryFQNPrefix)
-		},
-		func(record transactions.JournalRecord) bool {
-			return len(opts.TagIDs) == 0 || slices.ContainsFunc(record.TagIDs, func(id int64) bool { return slices.Contains(opts.TagIDs, id) })
-		},
-		func(record transactions.JournalRecord) bool {
-			return opts.TagFQNPrefix == nil || slices.ContainsFunc(record.TagIDs, func(id int64) bool { return services.FQNAtOrUnder(refs.tags[id].FQN, *opts.TagFQNPrefix) })
-		},
-		func(record transactions.JournalRecord) bool {
-			return len(opts.MemberIDs) == 0 || record.MemberID != nil && slices.Contains(opts.MemberIDs, *record.MemberID)
-		},
-		func(record transactions.JournalRecord) bool {
-			return len(opts.Currencies) == 0 || slices.Contains(opts.Currencies, record.Currency)
-		},
-		func(record transactions.JournalRecord) bool {
-			return decimalRangeMatches(record.Amount, opts.AmountMin, opts.AmountMax)
-		},
-		func(record transactions.JournalRecord) bool {
-			return record.AmountUSD != nil && decimalRangeMatches(*record.AmountUSD, opts.AmountUSDMin, opts.AmountUSDMax)
-		},
-	}
-	for index, check := range checks {
-		if index == 7 && opts.AmountMin == nil && opts.AmountMax == nil {
-			continue
-		}
-		if index == 8 && opts.AmountUSDMin == nil && opts.AmountUSDMax == nil {
-			continue
-		}
-		if !slices.ContainsFunc(records, check) {
-			return false
-		}
-	}
-	return true
-}
-
-func decimalRangeMatches(value values.Decimal, minimum *values.Decimal, maximum *values.Decimal) bool {
-	return (minimum == nil || value.Cmp(*minimum) >= 0) && (maximum == nil || value.Cmp(*maximum) <= 0)
-}
-
-func projectedHasShape(transaction transactions.Transaction, shapes []transactions.TransactionShapeType) bool {
-	return slices.ContainsFunc(transaction.Shapes, func(shape transactions.TransactionShape) bool { return slices.Contains(shapes, shape.Shape) })
-}
-
-func projectedHasRole(transaction transactions.Transaction, roles []transactions.RecordRole) bool {
-	return slices.ContainsFunc(transaction.Records, func(record transactions.JournalRecord) bool { return slices.Contains(roles, record.Role) })
 }
 
 func projectedSearchMatches(records []transactions.JournalRecord, term string, refs transactionProjectionReferences) bool {

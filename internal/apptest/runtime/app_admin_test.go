@@ -430,8 +430,8 @@ func assertSeededRecurringDemoData(t *testing.T, client *apptest.Client, seeded 
 		t.Fatalf("listed recurring definitions = %d, want %d", len(definitions.JSON200.RecurringDefinitions), seeded.RecurringDefinitions)
 	}
 
-	expectedStatus := []httpclient.TransactionLifecycleStatus{httpclient.TransactionLifecycleStatusExpected}
-	expectedTransactions, err := client.REST().ListTransactionsWithResponse(ctx, &httpclient.ListTransactionsParams{LifecycleStatus: &expectedStatus})
+	expectedFilter := "lifecycle:expected"
+	expectedTransactions, err := client.REST().ListTransactionsWithResponse(ctx, &httpclient.ListTransactionsParams{Filter: &expectedFilter})
 	if err != nil {
 		t.Fatalf("list expected seeded transactions request: %v", err)
 	}

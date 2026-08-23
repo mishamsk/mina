@@ -1,10 +1,12 @@
 import { Reload } from "pixelarticons/react";
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 
 import {
   type Account,
   type AccountBalance,
+  apiErrorMessage,
+  getCategory,
   type JournalRecord,
   type Transaction,
 } from "@/api";
@@ -27,7 +29,10 @@ import {
   sumDecimalStrings,
   TransactionDetailPanel,
   transactionPageSizeOptions,
+  useEntityFilterRequestGuard,
+  writeTransactionFiltersToSearchParams,
 } from "@/features/ledger";
+import { withTransactionFilterEntityScope } from "@/models/transaction-filters";
 import { openTransactionEntryLaunch } from "@/store";
 
 import { AccountRegisterTable } from "./account-register-table";
@@ -223,6 +228,9 @@ const GroupSubtotals = ({
 const GroupRegister = ({ prefix }: { readonly prefix: string }) => {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+  const [filterNotice, setFilterNotice] = useState<string>();
+  const { beginEntityFilterRequest, completeEntityFilterRequest } =
+    useEntityFilterRequestGuard();
   const page = readPage(searchParams);
   const pageSize = readPageSize(searchParams);
   const params = useMemo(
@@ -261,12 +269,38 @@ const GroupRegister = ({ prefix }: { readonly prefix: string }) => {
     });
   };
   const openTransactionsEntityFilter = useCallback(
-    (categoryId: number) => {
-      const next = new URLSearchParams();
-      next.append("category", String(categoryId));
+    async (categoryId: number) => {
+      const controller = beginEntityFilterRequest();
+      const response = await getCategory({
+        path: { category_id: categoryId },
+        signal: controller.signal,
+      });
+      if (!completeEntityFilterRequest(controller)) {
+        return;
+      }
+      if (!response.data?.fqn) {
+        setFilterNotice(
+          apiErrorMessage(
+            response.error,
+            "The category could not be loaded for filtering.",
+          ),
+        );
+        return;
+      }
+      const filters = withTransactionFilterEntityScope(
+        { classes: [] },
+        "category",
+        response.data.fqn,
+        false,
+      );
+      const next = writeTransactionFiltersToSearchParams(
+        new URLSearchParams(),
+        filters,
+        { resetPage: false },
+      );
       void navigate(`/transactions?${next.toString()}`);
     },
-    [navigate],
+    [beginEntityFilterRequest, completeEntityFilterRequest, navigate],
   );
   const openEntry = (
     transaction: Transaction,
@@ -330,6 +364,16 @@ const GroupRegister = ({ prefix }: { readonly prefix: string }) => {
         transactionsById={resource.transactions.transactions}
       />
       <Toast
+        key={filterNotice ?? "empty-filter-notice"}
+        className="text-[var(--color-class-adjustment-ink)]"
+        containerClassName={registerDetail.notice ? "bottom-16" : undefined}
+        durationMs={toastDurationMs}
+        message={filterNotice}
+        onDismiss={() => {
+          setFilterNotice(undefined);
+        }}
+      />
+      <Toast
         key={registerDetail.notice?.id ?? "empty"}
         className="text-[var(--color-money-in)]"
         durationMs={toastDurationMs}
@@ -356,7 +400,7 @@ const GroupRegister = ({ prefix }: { readonly prefix: string }) => {
             openEntry(transaction, "edit");
           }}
           onFilterCategory={(categoryId) => {
-            openTransactionsEntityFilter(categoryId);
+            void openTransactionsEntityFilter(categoryId);
           }}
           onPost={registerDetail.postTransaction}
           onRestoreFocus={registerDetail.detail.restoreDetailFocus}

@@ -88,27 +88,27 @@ func TestTransactionListFiltersBoundary(t *testing.T) {
 		total  int64
 	}{
 		{name: "no params", want: []int64{fifth.JSON201.TransactionId, fourth.JSON201.TransactionId, third.JSON201.TransactionId, second.JSON201.TransactionId, first.JSON201.TransactionId}, total: 5},
-		{name: "account", params: &httpclient.ListTransactionsParams{AccountId: ptrTo([]int64{refs.CheckingAccountId})}, want: []int64{fourth.JSON201.TransactionId, third.JSON201.TransactionId, first.JSON201.TransactionId}, total: 3},
-		{name: "duplicate account values", params: &httpclient.ListTransactionsParams{AccountId: ptrTo([]int64{refs.CheckingAccountId, refs.CheckingAccountId})}, want: []int64{fourth.JSON201.TransactionId, third.JSON201.TransactionId, first.JSON201.TransactionId}, total: 3},
-		{name: "category", params: &httpclient.ListTransactionsParams{CategoryId: ptrTo([]int64{refs.SecondCategoryId})}, want: []int64{fifth.JSON201.TransactionId, second.JSON201.TransactionId}, total: 2},
-		{name: "tag", params: &httpclient.ListTransactionsParams{TagId: ptrTo([]int64{refs.SecondTagId})}, want: []int64{fifth.JSON201.TransactionId, second.JSON201.TransactionId}, total: 2},
-		{name: "member", params: &httpclient.ListTransactionsParams{MemberId: ptrTo([]int64{refs.SecondMemberId})}, want: []int64{fifth.JSON201.TransactionId, second.JSON201.TransactionId}, total: 2},
-		{name: "settlement", params: &httpclient.ListTransactionsParams{Settlement: ptrTo([]httpclient.TransactionSettlement{httpclient.TransactionSettlementPending})}, want: []int64{second.JSON201.TransactionId}, total: 1},
-		{name: "amount min", params: &httpclient.ListTransactionsParams{AmountMin: apptest.StringPtr("70.00")}, want: []int64{third.JSON201.TransactionId}, total: 1},
-		{name: "amount max", params: &httpclient.ListTransactionsParams{AmountMax: apptest.StringPtr("-70.00")}, want: []int64{third.JSON201.TransactionId}, total: 1},
-		{name: "amount usd min", params: &httpclient.ListTransactionsParams{AmountUsdMin: apptest.StringPtr("70.00")}, want: []int64{third.JSON201.TransactionId}, total: 1},
-		{name: "amount usd max", params: &httpclient.ListTransactionsParams{AmountUsdMax: apptest.StringPtr("-70.00")}, want: []int64{third.JSON201.TransactionId}, total: 1},
-		{name: "initiated from", params: &httpclient.ListTransactionsParams{InitiatedDateFrom: apptest.DatePtr("2024-01-04")}, want: []int64{fifth.JSON201.TransactionId, fourth.JSON201.TransactionId}, total: 2},
-		{name: "initiated to", params: &httpclient.ListTransactionsParams{InitiatedDateTo: apptest.DatePtr("2024-01-02")}, want: []int64{second.JSON201.TransactionId, first.JSON201.TransactionId}, total: 2},
-		{name: "pending from", params: &httpclient.ListTransactionsParams{PendingDateFrom: apptest.TimestampPtr("2024-01-05T00:00:00Z")}, want: []int64{fifth.JSON201.TransactionId, second.JSON201.TransactionId}, total: 2},
-		{name: "pending to", params: &httpclient.ListTransactionsParams{PendingDateTo: apptest.TimestampPtr("2024-01-03T00:00:00Z")}, want: []int64{third.JSON201.TransactionId, first.JSON201.TransactionId}, total: 2},
-		{name: "posted from", params: &httpclient.ListTransactionsParams{PostedDateFrom: apptest.TimestampPtr("2024-01-06T00:00:00Z")}, want: []int64{fifth.JSON201.TransactionId, fourth.JSON201.TransactionId}, total: 2},
-		{name: "posted to", params: &httpclient.ListTransactionsParams{PostedDateTo: apptest.TimestampPtr("2024-01-02T00:00:00Z")}, want: []int64{first.JSON201.TransactionId}, total: 1},
+		{name: "account", params: &httpclient.ListTransactionsParams{Filter: apptest.StringPtr(`account:"checking:Chase:Primary"`)}, want: []int64{fourth.JSON201.TransactionId, third.JSON201.TransactionId, first.JSON201.TransactionId}, total: 3},
+		{name: "duplicate account values", params: &httpclient.ListTransactionsParams{Filter: apptest.StringPtr(`account:"checking:Chase:Primary" or account:"checking:Chase:Primary"`)}, want: []int64{fourth.JSON201.TransactionId, third.JSON201.TransactionId, first.JSON201.TransactionId}, total: 3},
+		{name: "category", params: &httpclient.ListTransactionsParams{Filter: apptest.StringPtr(`category:"Housing:Rent"`)}, want: []int64{fifth.JSON201.TransactionId, second.JSON201.TransactionId}, total: 2},
+		{name: "tag", params: &httpclient.ListTransactionsParams{Filter: apptest.StringPtr(`tag:"Recurring:Monthly"`)}, want: []int64{fifth.JSON201.TransactionId, second.JSON201.TransactionId}, total: 2},
+		{name: "member", params: &httpclient.ListTransactionsParams{Filter: apptest.StringPtr("member:Blake")}, want: []int64{fifth.JSON201.TransactionId, second.JSON201.TransactionId}, total: 2},
+		{name: "settlement", params: &httpclient.ListTransactionsParams{Filter: apptest.StringPtr("settlement:pending")}, want: []int64{second.JSON201.TransactionId}, total: 1},
+		{name: "amount min", params: &httpclient.ListTransactionsParams{Filter: apptest.StringPtr("amount>=70.00")}, want: []int64{third.JSON201.TransactionId}, total: 1},
+		{name: "amount max", params: &httpclient.ListTransactionsParams{Filter: apptest.StringPtr("amount<=-70.00")}, want: []int64{third.JSON201.TransactionId}, total: 1},
+		{name: "amount usd min", params: &httpclient.ListTransactionsParams{Filter: apptest.StringPtr("amount_usd>=70.00")}, want: []int64{third.JSON201.TransactionId}, total: 1},
+		{name: "amount usd max", params: &httpclient.ListTransactionsParams{Filter: apptest.StringPtr("amount_usd<=-70.00")}, want: []int64{third.JSON201.TransactionId}, total: 1},
+		{name: "initiated from", params: &httpclient.ListTransactionsParams{Filter: apptest.StringPtr("initiated>=2024-01-04")}, want: []int64{fifth.JSON201.TransactionId, fourth.JSON201.TransactionId}, total: 2},
+		{name: "initiated to", params: &httpclient.ListTransactionsParams{Filter: apptest.StringPtr("initiated<=2024-01-02")}, want: []int64{second.JSON201.TransactionId, first.JSON201.TransactionId}, total: 2},
+		{name: "pending from", params: &httpclient.ListTransactionsParams{Filter: apptest.StringPtr(`pending>="2024-01-05T00:00:00Z"`)}, want: []int64{fifth.JSON201.TransactionId, second.JSON201.TransactionId}, total: 2},
+		{name: "pending to", params: &httpclient.ListTransactionsParams{Filter: apptest.StringPtr(`pending<="2024-01-03T00:00:00Z"`)}, want: []int64{third.JSON201.TransactionId, first.JSON201.TransactionId}, total: 2},
+		{name: "posted from", params: &httpclient.ListTransactionsParams{Filter: apptest.StringPtr(`posted>="2024-01-06T00:00:00Z"`)}, want: []int64{fifth.JSON201.TransactionId, fourth.JSON201.TransactionId}, total: 2},
+		{name: "posted to", params: &httpclient.ListTransactionsParams{Filter: apptest.StringPtr(`posted<="2024-01-02T00:00:00Z"`)}, want: []int64{first.JSON201.TransactionId}, total: 1},
 		{name: "search memo case insensitive", params: &httpclient.ListTransactionsParams{Search: apptest.StringPtr("lunch")}, want: []int64{first.JSON201.TransactionId}, total: 1},
 		{name: "search escapes like chars", params: &httpclient.ListTransactionsParams{Search: apptest.StringPtr("100%_")}, want: []int64{first.JSON201.TransactionId}, total: 1},
 		{name: "search counterparty case insensitive", params: &httpclient.ListTransactionsParams{Search: apptest.StringPtr("landLORD")}, want: []int64{second.JSON201.TransactionId}, total: 1},
-		{name: "composed dimensions", params: &httpclient.ListTransactionsParams{AccountId: ptrTo([]int64{refs.SavingsAccountId}), CategoryId: ptrTo([]int64{refs.SecondCategoryId}), Search: apptest.StringPtr("landlord")}, want: []int64{second.JSON201.TransactionId}, total: 1},
-		{name: "multi value any of", params: &httpclient.ListTransactionsParams{CategoryId: ptrTo([]int64{refs.CategoryId, refs.SecondCategoryId})}, want: []int64{fifth.JSON201.TransactionId, fourth.JSON201.TransactionId, third.JSON201.TransactionId, second.JSON201.TransactionId, first.JSON201.TransactionId}, total: 5},
+		{name: "composed dimensions", params: &httpclient.ListTransactionsParams{Filter: apptest.StringPtr(`account:"savings:Emergency" and category:"Housing:Rent"`), Search: apptest.StringPtr("landlord")}, want: []int64{second.JSON201.TransactionId}, total: 1},
+		{name: "multi value any of", params: &httpclient.ListTransactionsParams{Filter: apptest.StringPtr(`category:"Food:Restaurants" or category:"Housing:Rent"`)}, want: []int64{fifth.JSON201.TransactionId, fourth.JSON201.TransactionId, third.JSON201.TransactionId, second.JSON201.TransactionId, first.JSON201.TransactionId}, total: 5},
 	}
 
 	for _, tc := range cases {
@@ -196,21 +196,21 @@ func TestTransactionListCurrencyFiltersBoundary(t *testing.T) {
 		want   []int64
 	}{
 		{
-			name: "one currency", params: &httpclient.ListTransactionsParams{Currency: ptrTo([]string{"EUR"})},
+			name: "one currency", params: &httpclient.ListTransactionsParams{Filter: apptest.StringPtr("currency:EUR")},
 			want: []int64{multiCurrency.JSON201.TransactionId},
 		},
 		{
-			name: "multiple currencies", params: &httpclient.ListTransactionsParams{Currency: ptrTo([]string{"EUR", "JPY"})},
+			name: "multiple currencies", params: &httpclient.ListTransactionsParams{Filter: apptest.StringPtr("currency:EUR or currency:JPY")},
 			want: []int64{jpy.JSON201.TransactionId, multiCurrency.JSON201.TransactionId},
 		},
 		{
-			name: "crypto currency", params: &httpclient.ListTransactionsParams{Currency: ptrTo([]string{"C::stETH"})},
+			name: "crypto currency", params: &httpclient.ListTransactionsParams{Filter: apptest.StringPtr(`currency:"C::stETH"`)},
 			want: []int64{crypto.JSON201.TransactionId},
 		},
 		{
 			name: "composes across active records",
 			params: &httpclient.ListTransactionsParams{
-				Currency: ptrTo([]string{"USD"}), CategoryId: ptrTo([]int64{firstCategory.CategoryId}),
+				Filter: apptest.StringPtr(`currency:USD and category:"CurrencyFilter:First"`),
 			},
 			want: []int64{multiCurrency.JSON201.TransactionId},
 		},
@@ -268,9 +268,8 @@ func TestTransactionListFiltersComposeAcrossActiveRecordsBoundary(t *testing.T) 
 	})
 
 	response, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
-		AccountId:  ptrTo([]int64{refs.CheckingAccountId}),
-		CategoryId: ptrTo([]int64{refs.SecondCategoryId}),
-		Search:     apptest.StringPtr("split needle"),
+		Filter: apptest.StringPtr(`account:"checking:Chase:Primary" and category:"Housing:Rent"`),
+		Search: apptest.StringPtr("split needle"),
 	})
 	requireNoTransportError(t, "list transactions split across records", err)
 	assertTransactionListResponse(t, "split across records", response, []int64{matched.JSON201.TransactionId}, 1)
@@ -311,7 +310,7 @@ func TestDerivedTransactionAndRecordFiltersBoundary(t *testing.T) {
 		semanticRecord(fixture.checking.AccountId, "-20.00", "USD", nil),
 		semanticRecord(fixture.savings.AccountId, "20.00", "USD", nil),
 	))
-	createDatedClassificationTransaction(t, client, "2024-02-05", classificationRequest(
+	exchange := createDatedClassificationTransaction(t, client, "2024-02-05", classificationRequest(
 		semanticRecord(fixture.checking.AccountId, "-110.00", "USD", nil),
 		semanticRecordWithoutSettlement(fixture.exchange.AccountId, "110.00", "USD", nil),
 		semanticRecordWithoutSettlement(fixture.exchange.AccountId, "-100.00", "EUR", nil),
@@ -347,23 +346,32 @@ func TestDerivedTransactionAndRecordFiltersBoundary(t *testing.T) {
 	requireNoTransportError(t, "list transactions by clawback class", err)
 	assertTransactionListResponse(t, "clawback class", clawbackClassList, []int64{clawback.JSON201.TransactionId}, 1)
 
-	transferShape := []httpclient.TransactionShapeType{httpclient.TransactionShapeTypeTransfer}
 	transferList, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
-		TransactionShape: &transferShape,
+		Filter: apptest.StringPtr("shape:transfer"),
 	})
 	requireNoTransportError(t, "list transactions by derived shape", err)
 	assertTransactionListResponse(t, "derived shape", transferList, []int64{transfer.JSON201.TransactionId}, 1)
 
-	clawbackShape := []httpclient.TransactionShapeType{httpclient.TransactionShapeTypeClawback}
+	notTransferList, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+		Filter: apptest.StringPtr("not shape:transfer"),
+	})
+	requireNoTransportError(t, "list transactions excluding transfer shape", err)
+	assertTransactionListResponse(t, "negated transfer shape", notTransferList, []int64{
+		clawback.JSON201.TransactionId,
+		exchange.JSON201.TransactionId,
+		mixed.JSON201.TransactionId,
+		refund.JSON201.TransactionId,
+		spend.JSON201.TransactionId,
+	}, 5)
+
 	clawbackShapeList, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
-		TransactionShape: &clawbackShape,
+		Filter: apptest.StringPtr("shape:clawback"),
 	})
 	requireNoTransportError(t, "list transactions by clawback shape", err)
 	assertTransactionListResponse(t, "clawback shape", clawbackShapeList, []int64{clawback.JSON201.TransactionId}, 1)
 
-	expenseRole := []httpclient.RecordRole{httpclient.RecordRoleExpense}
 	expenseTransactions, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
-		RecordRole: &expenseRole,
+		Filter: apptest.StringPtr("role:expense"),
 	})
 	requireNoTransportError(t, "list transactions by derived record role", err)
 	assertTransactionListResponse(
@@ -374,12 +382,8 @@ func TestDerivedTransactionAndRecordFiltersBoundary(t *testing.T) {
 		2,
 	)
 
-	expenseOrRefundRole := []httpclient.RecordRole{
-		httpclient.RecordRoleExpense,
-		httpclient.RecordRoleRefund,
-	}
 	expenseOrRefundTransactions, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
-		RecordRole: &expenseOrRefundRole,
+		Filter: apptest.StringPtr("role:expense or role:refund"),
 	})
 	requireNoTransportError(t, "list transactions by multiple record roles", err)
 	assertTransactionListResponse(
@@ -394,9 +398,8 @@ func TestDerivedTransactionAndRecordFiltersBoundary(t *testing.T) {
 		3,
 	)
 
-	clawbackRole := []httpclient.RecordRole{httpclient.RecordRoleClawback}
 	clawbackTransactions, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
-		RecordRole: &clawbackRole,
+		Filter: apptest.StringPtr("role:clawback"),
 	})
 	requireNoTransportError(t, "list transactions by clawback record role", err)
 	assertTransactionListResponse(t, "clawback record role", clawbackTransactions, []int64{clawback.JSON201.TransactionId}, 1)
@@ -690,6 +693,7 @@ func TestTransactionListFiltersComposeWithAnchorBoundary(t *testing.T) {
 	client := newSharedClient(t)
 	refs := createSearchRefs(t, client)
 	otherMerchant := client.Scenario().Account("expense:OtherFilteredAnchor")
+	accountFilter := `account:"checking:Chase:Primary"`
 
 	first := createTransactionForDate(t, client, refs.transactionRefs, "2024-01-01", "First")
 	createTransaction(t, client, transactionListFilterRequest(transactionListFilterInput{
@@ -711,7 +715,7 @@ func TestTransactionListFiltersComposeWithAnchorBoundary(t *testing.T) {
 	limitTwo := 2
 	midHistory := apptest.Date("2024-01-03")
 	midPage, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
-		AccountId:  ptrTo([]int64{refs.CheckingAccountId}),
+		Filter:     &accountFilter,
 		Limit:      &limitTwo,
 		AnchorDate: &midHistory,
 	})
@@ -721,7 +725,7 @@ func TestTransactionListFiltersComposeWithAnchorBoundary(t *testing.T) {
 
 	olderThanAll := apptest.Date("2023-12-01")
 	olderPage, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
-		AccountId:  ptrTo([]int64{refs.CheckingAccountId}),
+		Filter:     &accountFilter,
 		Limit:      &limitTwo,
 		AnchorDate: &olderThanAll,
 	})
@@ -731,7 +735,7 @@ func TestTransactionListFiltersComposeWithAnchorBoundary(t *testing.T) {
 
 	pageAligned := apptest.Date("2024-01-01")
 	alignedPage, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
-		AccountId:  ptrTo([]int64{refs.CheckingAccountId}),
+		Filter:     &accountFilter,
 		Limit:      &limitTwo,
 		AnchorDate: &pageAligned,
 	})
@@ -790,28 +794,28 @@ func TestTransactionListFiltersIgnoreReplacedRecordsBoundary(t *testing.T) {
 	}{
 		{
 			name:   "account",
-			old:    &httpclient.ListTransactionsParams{AccountId: ptrTo([]int64{oldBalanceAccount.AccountId})},
-			active: &httpclient.ListTransactionsParams{AccountId: ptrTo([]int64{refs.SavingsAccountId})},
+			old:    &httpclient.ListTransactionsParams{Filter: apptest.StringPtr(`account:"checking:ReplacedFilter:Old"`)},
+			active: &httpclient.ListTransactionsParams{Filter: apptest.StringPtr(`account:"savings:Emergency"`)},
 		},
 		{
 			name:   "currency",
-			old:    &httpclient.ListTransactionsParams{Currency: ptrTo([]string{"CHF"})},
-			active: &httpclient.ListTransactionsParams{Currency: ptrTo([]string{"USD"})},
+			old:    &httpclient.ListTransactionsParams{Filter: apptest.StringPtr("currency:CHF")},
+			active: &httpclient.ListTransactionsParams{Filter: apptest.StringPtr("currency:USD")},
 		},
 		{
 			name:   "category",
-			old:    &httpclient.ListTransactionsParams{CategoryId: ptrTo([]int64{refs.CategoryId})},
-			active: &httpclient.ListTransactionsParams{CategoryId: ptrTo([]int64{refs.SecondCategoryId})},
+			old:    &httpclient.ListTransactionsParams{Filter: apptest.StringPtr(`category:"Food:Restaurants"`)},
+			active: &httpclient.ListTransactionsParams{Filter: apptest.StringPtr(`category:"Housing:Rent"`)},
 		},
 		{
 			name:   "tag",
-			old:    &httpclient.ListTransactionsParams{TagId: ptrTo([]int64{refs.TagId})},
-			active: &httpclient.ListTransactionsParams{TagId: ptrTo([]int64{refs.SecondTagId})},
+			old:    &httpclient.ListTransactionsParams{Filter: apptest.StringPtr(`tag:"Trips:Local"`)},
+			active: &httpclient.ListTransactionsParams{Filter: apptest.StringPtr(`tag:"Recurring:Monthly"`)},
 		},
 		{
 			name:   "member",
-			old:    &httpclient.ListTransactionsParams{MemberId: ptrTo([]int64{refs.MemberId})},
-			active: &httpclient.ListTransactionsParams{MemberId: ptrTo([]int64{refs.SecondMemberId})},
+			old:    &httpclient.ListTransactionsParams{Filter: apptest.StringPtr("member:Avery")},
+			active: &httpclient.ListTransactionsParams{Filter: apptest.StringPtr("member:Blake")},
 		},
 		{
 			name:   "memo search",
@@ -821,51 +825,43 @@ func TestTransactionListFiltersIgnoreReplacedRecordsBoundary(t *testing.T) {
 		{
 			name: "amount range",
 			old: &httpclient.ListTransactionsParams{
-				AmountMin: apptest.StringPtr("12.34"),
-				AmountMax: apptest.StringPtr("12.34"),
+				Filter: apptest.StringPtr("amount=12.34"),
 			},
 			active: &httpclient.ListTransactionsParams{
-				AmountMin: apptest.StringPtr("56.78"),
-				AmountMax: apptest.StringPtr("56.78"),
+				Filter: apptest.StringPtr("amount=56.78"),
 			},
 		},
 		{
 			name: "amount usd range",
 			old: &httpclient.ListTransactionsParams{
-				AmountUsdMin: apptest.StringPtr("12.34"),
-				AmountUsdMax: apptest.StringPtr("12.34"),
+				Filter: apptest.StringPtr("amount_usd=12.34"),
 			},
 			active: &httpclient.ListTransactionsParams{
-				AmountUsdMin: apptest.StringPtr("56.78"),
-				AmountUsdMax: apptest.StringPtr("56.78"),
+				Filter: apptest.StringPtr("amount_usd=56.78"),
 			},
 		},
 		{
 			name: "pending date",
 			old: &httpclient.ListTransactionsParams{
-				PendingDateFrom: apptest.TimestampPtr("2024-02-01T00:00:00Z"),
-				PendingDateTo:   apptest.TimestampPtr("2024-02-01T00:00:00Z"),
+				Filter: apptest.StringPtr(`pending>="2024-02-01T00:00:00Z" and pending<="2024-02-01T00:00:00Z"`),
 			},
 			active: &httpclient.ListTransactionsParams{
-				PendingDateFrom: apptest.TimestampPtr("2024-02-03T00:00:00Z"),
-				PendingDateTo:   apptest.TimestampPtr("2024-02-03T00:00:00Z"),
+				Filter: apptest.StringPtr(`pending>="2024-02-03T00:00:00Z" and pending<="2024-02-03T00:00:00Z"`),
 			},
 		},
 		{
 			name: "posted date",
 			old: &httpclient.ListTransactionsParams{
-				PostedDateFrom: apptest.TimestampPtr("2024-02-02T00:00:00Z"),
-				PostedDateTo:   apptest.TimestampPtr("2024-02-02T00:00:00Z"),
+				Filter: apptest.StringPtr(`posted>="2024-02-02T00:00:00Z" and posted<="2024-02-02T00:00:00Z"`),
 			},
 			active: &httpclient.ListTransactionsParams{
-				PostedDateFrom: apptest.TimestampPtr("2024-02-04T00:00:00Z"),
-				PostedDateTo:   apptest.TimestampPtr("2024-02-04T00:00:00Z"),
+				Filter: apptest.StringPtr(`posted>="2024-02-04T00:00:00Z" and posted<="2024-02-04T00:00:00Z"`),
 			},
 		},
 		{
 			name:   "settlement",
-			old:    &httpclient.ListTransactionsParams{Settlement: ptrTo([]httpclient.TransactionSettlement{httpclient.TransactionSettlementPending})},
-			active: &httpclient.ListTransactionsParams{Settlement: ptrTo([]httpclient.TransactionSettlement{httpclient.TransactionSettlementPosted})},
+			old:    &httpclient.ListTransactionsParams{Filter: apptest.StringPtr("settlement:pending")},
+			active: &httpclient.ListTransactionsParams{Filter: apptest.StringPtr("settlement:posted")},
 		},
 	}
 
@@ -883,23 +879,13 @@ func TestTransactionListFiltersIgnoreReplacedRecordsBoundary(t *testing.T) {
 	}
 }
 
-func TestTransactionListFilterValidationBoundary(t *testing.T) {
+func TestTransactionListRejectsRemovedFlatFilterParameters(t *testing.T) {
 	client := newSharedClient(t)
 
 	for _, rawQuery := range []string{
 		"account_id=0",
-		"category_id=0",
-		"tag_id=0",
-		"member_id=0",
-		"currency=usd",
-		"currency=AAA",
-		"currency=USD&currency=AAA",
-		"settlement=unknown",
-		"amount_min=not-a-decimal",
-		"amount_usd_max=100000000000.00",
-		"initiated_date_from=2024-02-30",
-		"pending_date_from=not-a-time",
-		"search=",
+		"category_fqn_prefix=Food",
+		"lifecycle_status=active&lifecycle_status=expected",
 	} {
 		t.Run(rawQuery, func(t *testing.T) {
 			assertInvalidTransactionListQuery(t, client, rawQuery)
@@ -907,74 +893,13 @@ func TestTransactionListFilterValidationBoundary(t *testing.T) {
 	}
 }
 
-func TestTransactionListDictionaryFilterReferencesBoundary(t *testing.T) {
+func TestTransactionListRejectsEmptySearch(t *testing.T) {
 	client := newSharedClient(t)
-	scenario := client.Scenario()
-
-	for _, rawQuery := range []string{
-		"account_id=999999",
-		"category_id=999999",
-		"tag_id=999999",
-		"member_id=999999",
-	} {
-		t.Run("missing "+rawQuery, func(t *testing.T) {
-			assertInvalidTransactionListQuery(t, client, rawQuery)
-		})
-	}
-
-	tombstonedAccount := scenario.AccountWithCurrency("checking:TransactionList:TombstonedFilter", "USD")
-	deleteAccount(t, client, tombstonedAccount.AccountId)
-	tombstonedCategory := scenario.Category("TransactionList:TombstonedFilter")
-	deleteCategory(t, client, tombstonedCategory.CategoryId)
-	tombstonedTag := scenario.Tag("TransactionList:TombstonedFilter")
-	deleteTag(t, client, tombstonedTag.TagId)
-	tombstonedMember := scenario.Member("Transaction List Tombstoned Filter")
-	deleteMember(t, client, tombstonedMember.MemberId)
-
-	for _, rawQuery := range []string{
-		"account_id=" + apptest.FormatID(tombstonedAccount.AccountId),
-		"category_id=" + apptest.FormatID(tombstonedCategory.CategoryId),
-		"tag_id=" + apptest.FormatID(tombstonedTag.TagId),
-		"member_id=" + apptest.FormatID(tombstonedMember.MemberId),
-	} {
-		t.Run("tombstoned "+rawQuery, func(t *testing.T) {
-			assertInvalidTransactionListQuery(t, client, rawQuery)
-		})
-	}
-
-	hidden := true
-	hiddenAccount, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
-		Fqn:         "checking:TransactionList:HiddenFilter",
-		AccountType: httpclient.WritableAccountTypeOwned,
-		IsHidden:    &hidden,
-		Currency:    ptrTo("USD"),
-	})
-	if err != nil {
-		t.Fatalf("hidden transaction list filter account request: %v", err)
-	}
-	if hiddenAccount.StatusCode() != http.StatusCreated {
-		t.Fatalf("hidden transaction list filter account status = %d, want %d; body %s", hiddenAccount.StatusCode(), http.StatusCreated, hiddenAccount.Body)
-	}
-	hiddenCategory := scenario.CategoryWithHidden("TransactionList:HiddenFilter", hidden)
-	hiddenTag, err := client.REST().CreateTagWithResponse(context.Background(), httpclient.CreateTagRequest{
-		Fqn:      "TransactionList:HiddenFilter",
-		IsHidden: &hidden,
-	})
-	if err != nil {
-		t.Fatalf("hidden transaction list filter tag request: %v", err)
-	}
-	if hiddenTag.StatusCode() != http.StatusCreated {
-		t.Fatalf("hidden transaction list filter tag status = %d, want %d; body %s", hiddenTag.StatusCode(), http.StatusCreated, hiddenTag.Body)
-	}
-
-	for _, rawQuery := range []string{
-		"account_id=" + apptest.FormatID(hiddenAccount.JSON201.AccountId),
-		"category_id=" + apptest.FormatID(hiddenCategory.CategoryId),
-		"tag_id=" + apptest.FormatID(hiddenTag.JSON201.TagId),
-	} {
-		t.Run("hidden active "+rawQuery, func(t *testing.T) {
-			assertEmptyTransactionListQuery(t, client, rawQuery)
-		})
+	response, err := client.REST().ListTransactionsWithResponse(context.Background(), nil, apptest.ReplaceRawQuery("search="))
+	requireNoTransportError(t, "list transactions with empty search", err)
+	if response.StatusCode() != http.StatusBadRequest || response.JSON400 == nil ||
+		response.JSON400.Error.Message != "search must be non-empty" {
+		t.Fatalf("empty search response status = %d body = %s", response.StatusCode(), response.Body)
 	}
 }
 
@@ -1059,12 +984,4 @@ func assertTransactionListResponse(t *testing.T, label string, response *httpcli
 	if response.JSON200.TotalCount != total {
 		t.Fatalf("%s total_count = %d, want %d; body %+v", label, response.JSON200.TotalCount, total, response.JSON200)
 	}
-}
-
-func assertEmptyTransactionListQuery(t *testing.T, client *apptest.Client, rawQuery string) {
-	t.Helper()
-
-	response, err := client.REST().ListTransactionsWithResponse(context.Background(), nil, apptest.ReplaceRawQuery(rawQuery))
-	requireNoTransportError(t, "list transactions", err)
-	assertTransactionListResponse(t, "transaction list query "+rawQuery, response, nil, 0)
 }

@@ -31,28 +31,8 @@ func (s *strictServer) ListTransactions(ctx context.Context, request openapi.Lis
 		ListOptions:        listOptions,
 		AnchorDate:         nullableCivilDateFromOpenAPI(request.Params.AnchorDate),
 		OffsetSpecified:    request.Params.Offset != nil,
-		AccountIDs:         cloneOptionalInt64Slice(request.Params.AccountId),
-		CategoryIDs:        cloneOptionalInt64Slice(request.Params.CategoryId),
-		CategoryFQNPrefix:  request.Params.CategoryFqnPrefix,
-		TagIDs:             cloneOptionalInt64Slice(request.Params.TagId),
-		TagFQNPrefix:       request.Params.TagFqnPrefix,
-		MemberIDs:          cloneOptionalInt64Slice(request.Params.MemberId),
-		Currencies:         cloneOptionalStringSlice(request.Params.Currency),
-		LifecycleStatuses:  transactionAPILifecycleStatusSlice(request.Params.LifecycleStatus),
-		Settlements:        transactionAPISettlementSummarySlice(request.Params.Settlement),
+		FilterText:         request.Params.Filter,
 		TransactionClasses: transactionAPIClassSlice(request.Params.TransactionClass),
-		TransactionShapes:  transactionAPIShapeSlice(request.Params.TransactionShape),
-		RecordRoles:        transactionAPIRoleSlice(request.Params.RecordRole),
-		AmountMinText:      request.Params.AmountMin,
-		AmountMaxText:      request.Params.AmountMax,
-		AmountUSDMinText:   request.Params.AmountUsdMin,
-		AmountUSDMaxText:   request.Params.AmountUsdMax,
-		InitiatedDateFrom:  nullableCivilDateFromOpenAPI(request.Params.InitiatedDateFrom),
-		InitiatedDateTo:    nullableCivilDateFromOpenAPI(request.Params.InitiatedDateTo),
-		PendingDateFrom:    nullableTimestampFromOpenAPI(request.Params.PendingDateFrom),
-		PendingDateTo:      nullableTimestampFromOpenAPI(request.Params.PendingDateTo),
-		PostedDateFrom:     nullableTimestampFromOpenAPI(request.Params.PostedDateFrom),
-		PostedDateTo:       nullableTimestampFromOpenAPI(request.Params.PostedDateTo),
 		Search:             request.Params.Search,
 	})
 	if err != nil {
@@ -838,43 +818,12 @@ func cloneOptionalInt64Slice(values *[]int64) []int64 {
 	return slices.Clone(*values)
 }
 
-func cloneOptionalStringSlice(values *[]string) []string {
-	if values == nil {
-		return nil
-	}
-
-	return slices.Clone(*values)
-}
-
 func cloneInt64Slice(values []int64) []int64 {
 	if values == nil {
 		return []int64{}
 	}
 
 	return slices.Clone(values)
-}
-
-func transactionAPILifecycleStatusSlice(statuses *[]openapi.TransactionLifecycleStatus) []transactions.LifecycleStatus {
-	if statuses == nil {
-		return nil
-	}
-	values := make([]transactions.LifecycleStatus, 0, len(*statuses))
-	for _, status := range *statuses {
-		values = append(values, transactions.LifecycleStatus(status))
-	}
-
-	return values
-}
-
-func transactionAPISettlementSummarySlice(statuses *[]openapi.TransactionSettlement) []transactions.SettlementSummary {
-	if statuses == nil {
-		return nil
-	}
-	values := make([]transactions.SettlementSummary, 0, len(*statuses))
-	for _, status := range *statuses {
-		values = append(values, transactions.SettlementSummary(status))
-	}
-	return values
 }
 
 func transactionAPIClassSlice(classes *[]openapi.TransactionClass) []transactions.TransactionClass {
@@ -886,28 +835,6 @@ func transactionAPIClassSlice(classes *[]openapi.TransactionClass) []transaction
 		values = append(values, transactions.TransactionClass(class))
 	}
 
-	return values
-}
-
-func transactionAPIShapeSlice(shapes *[]openapi.TransactionShapeType) []transactions.TransactionShapeType {
-	if shapes == nil {
-		return nil
-	}
-	values := make([]transactions.TransactionShapeType, 0, len(*shapes))
-	for _, shape := range *shapes {
-		values = append(values, transactions.TransactionShapeType(shape))
-	}
-	return values
-}
-
-func transactionAPIRoleSlice(roles *[]openapi.RecordRole) []transactions.RecordRole {
-	if roles == nil {
-		return nil
-	}
-	values := make([]transactions.RecordRole, 0, len(*roles))
-	for _, role := range *roles {
-		values = append(values, transactions.RecordRole(role))
-	}
 	return values
 }
 

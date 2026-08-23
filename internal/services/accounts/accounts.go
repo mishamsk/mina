@@ -301,13 +301,15 @@ func (s *Service) ValidateActiveRecordReferences(
 }
 
 // ActiveReferenceByFQN returns one active account reference by exact FQN.
-func (s *Service) ActiveReferenceByFQN(ctx context.Context, fqn string) (Reference, error) {
+//
+// Hidden active accounts are rejected unless opts.AllowHidden is true.
+func (s *Service) ActiveReferenceByFQN(ctx context.Context, fqn string, opts ReferenceOptions) (Reference, error) {
 	states, err := s.cache.Snapshot(ctx)
 	if err != nil {
 		return Reference{}, err
 	}
 	for _, state := range states {
-		if state.active && state.reference.FQN == fqn {
+		if state.active && state.reference.FQN == fqn && (opts.AllowHidden || !state.reference.IsHidden) {
 			return state.reference, nil
 		}
 	}

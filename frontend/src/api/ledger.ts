@@ -1,7 +1,6 @@
 import {
   normalizeTransactionFilters,
   type TransactionFilters,
-  transactionLifecycleStatuses,
 } from "@/models/transaction-filters";
 import type {
   TransactionSort,
@@ -116,6 +115,7 @@ import {
 export interface TransactionPageParams {
   readonly anchorDate?: string;
   readonly filters?: Partial<TransactionFilters>;
+  readonly includeExpectedByDefault?: boolean;
   readonly limit: number;
   readonly offset: number;
   readonly sort: TransactionSort;
@@ -222,63 +222,22 @@ const listAllAccountsForLookups = async () => {
 
 const transactionFilterQuery = (
   filters: Partial<TransactionFilters> | undefined,
+  includeExpectedByDefault = false,
 ) => {
   const normalized = normalizeTransactionFilters(filters);
   return {
-    ...(normalized.accountIds.length > 0
-      ? { account_id: [...normalized.accountIds] }
-      : {}),
-    ...(normalized.amountMax ? { amount_max: normalized.amountMax } : {}),
-    ...(normalized.amountMin ? { amount_min: normalized.amountMin } : {}),
-    ...(normalized.amountUsdMax
-      ? { amount_usd_max: normalized.amountUsdMax }
-      : {}),
-    ...(normalized.amountUsdMin
-      ? { amount_usd_min: normalized.amountUsdMin }
-      : {}),
-    ...(normalized.categoryIds.length > 0
-      ? { category_id: [...normalized.categoryIds] }
-      : {}),
-    ...(normalized.categoryFqnPrefix
-      ? { category_fqn_prefix: normalized.categoryFqnPrefix }
-      : {}),
+    ...(normalized.filterText !== undefined
+      ? { filter: normalized.filterText }
+      : includeExpectedByDefault
+        ? {
+            filter:
+              "(lifecycle:active or lifecycle:expected or lifecycle:cancelled)",
+          }
+        : {}),
     ...(normalized.classes.length > 0
       ? { transaction_class: [...normalized.classes] }
       : {}),
-    ...(normalized.currencies.length > 0
-      ? { currency: [...normalized.currencies] }
-      : {}),
-    ...(normalized.shapes.length > 0
-      ? { transaction_shape: [...normalized.shapes] }
-      : {}),
-    ...(normalized.recordRoles.length > 0
-      ? { record_role: [...normalized.recordRoles] }
-      : {}),
-    ...(normalized.initiatedFrom
-      ? { initiated_date_from: normalized.initiatedFrom }
-      : {}),
-    ...(normalized.initiatedTo
-      ? { initiated_date_to: normalized.initiatedTo }
-      : {}),
-    ...(normalized.memberIds.length > 0
-      ? { member_id: [...normalized.memberIds] }
-      : {}),
     ...(normalized.search ? { search: normalized.search } : {}),
-    ...(filters
-      ? {
-          lifecycle_status:
-            normalized.lifecycleStatuses.length > 0
-              ? [...normalized.lifecycleStatuses]
-              : [...transactionLifecycleStatuses],
-        }
-      : {}),
-    ...(normalized.settlements.length > 0
-      ? { settlement: [...normalized.settlements] }
-      : {}),
-    ...(normalized.tagIds.length > 0 ? { tag_id: [...normalized.tagIds] } : {}),
-    ...(normalized.tagFqnPrefix
-      ? { tag_fqn_prefix: normalized.tagFqnPrefix }
-      : {}),
   };
 };
 
@@ -390,7 +349,10 @@ export const fetchTransactionPage = (params: TransactionPageParams) =>
       limit: params.limit,
       offset: params.offset,
       anchor_date: params.anchorDate,
-      ...transactionFilterQuery(params.filters),
+      ...transactionFilterQuery(
+        params.filters,
+        params.includeExpectedByDefault,
+      ),
       sort: params.sort,
       sort_dir: params.sortDirection,
     },
