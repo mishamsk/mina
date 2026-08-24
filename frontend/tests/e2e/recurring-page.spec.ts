@@ -83,18 +83,25 @@ const completeEditor = async (page: Page, fqn: string) => {
     name: "New recurring definition",
   });
   await expect(editor).toBeVisible();
+  await expect(
+    editor.getByRole("button", { name: "Save definition" }),
+  ).toBeEnabled();
   await editor.getByLabel("Definition FQN").fill(fqn);
   const records = editor.getByLabel("Definition records").locator("section");
   const first = records.nth(0);
   const second = records.nth(1);
-  await first.getByLabel("Account").fill("bank:Chase:joint_checking");
-  await first.getByLabel("Account").press("Enter");
+  const firstAccount = first.getByLabel("Account");
+  await firstAccount.fill("bank:Chase:joint_checking");
+  await expect(firstAccount).toHaveAttribute("aria-expanded", "false");
   await first.getByLabel("Amount").fill("-12.34");
-  await second.getByLabel("Account").fill("merchant:PowellsBooks");
-  await second.getByLabel("Account").press("Enter");
+  const secondAccount = second.getByLabel("Account");
+  await secondAccount.fill("merchant:PowellsBooks");
+  await expect(secondAccount).toHaveAttribute("aria-expanded", "false");
   await second.getByLabel("Amount").fill("12.34");
-  await second.getByLabel("Category").fill("Entertainment:Books");
-  await second.getByLabel("Category").press("Enter");
+  const secondCategory = second.getByLabel("Category");
+  await expect(secondCategory).toBeVisible();
+  await secondCategory.fill("Entertainment:Books");
+  await expect(secondCategory).toHaveAttribute("aria-expanded", "false");
   return editor;
 };
 
@@ -524,12 +531,17 @@ test("a delayed definition fragment waits for the command palette", async ({
   await page.goto(
     `/recurring#definition-${definition.recurring_definition_id}`,
   );
-  await page.keyboard.press("Control+K");
+  await expect(
+    page.getByRole("button", { name: "New definition" }),
+  ).toBeVisible();
   const palette = page.getByRole("dialog", { name: "Command Palette" });
   const commandSearch = palette.getByRole("combobox", {
     name: "Command search",
   });
-  await expect(commandSearch).toBeFocused();
+  await Promise.all([
+    expect(commandSearch).toBeFocused(),
+    page.keyboard.press("Control+K"),
+  ]);
 
   releaseDefinitions();
   await expect(page.getByTestId("recurring-definitions-table")).toBeVisible();
@@ -723,12 +735,14 @@ test("definition fragment waits for the global recurring editor to close", async
   await expect(page).toHaveURL(
     new RegExp(`/recurring#definition-${definition.recurring_definition_id}$`),
   );
-  await editor.getByRole("button", { name: "Close definition editor" }).click();
-  await expect(editor).toHaveCount(0);
   const linkedEditor = page.getByRole("complementary", {
     name: "Edit recurring definition",
   });
-  await expect(linkedEditor).toBeFocused();
+  await Promise.all([
+    expect(linkedEditor).toBeFocused(),
+    editor.getByRole("button", { name: "Close definition editor" }).click(),
+  ]);
+  await expect(editor).toHaveCount(0);
   await expect(linkedEditor.getByLabel("Definition FQN")).toHaveValue(
     definition.fqn,
   );
@@ -755,12 +769,14 @@ test("definition fragment waits for the global template editor to close", async 
     window.history.pushState({}, "", `/recurring#definition-${definitionId}`);
     window.dispatchEvent(new PopStateEvent("popstate"));
   }, definition.recurring_definition_id);
-  await editor.getByRole("button", { name: "Close template editor" }).click();
-  await expect(editor).toHaveCount(0);
   const linkedEditor = page.getByRole("complementary", {
     name: "Edit recurring definition",
   });
-  await expect(linkedEditor).toBeFocused();
+  await Promise.all([
+    expect(linkedEditor).toBeFocused(),
+    editor.getByRole("button", { name: "Close template editor" }).click(),
+  ]);
+  await expect(editor).toHaveCount(0);
   await expect(linkedEditor.getByLabel("Definition FQN")).toHaveValue(
     definition.fqn,
   );

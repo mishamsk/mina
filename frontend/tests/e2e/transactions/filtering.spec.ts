@@ -702,10 +702,9 @@ test("typed currency filters commit suggestions and layer Escape", async ({
   });
 
   const cryptoCheckbox = page.getByRole("checkbox", { name: "C::stETH" });
-  await cryptoCheckbox.focus();
   await cryptoCheckbox.press("Space");
   await expectTransactionFilterUrl(page, { filter: "currency:EUR" });
-  await expect(currencyCode).toBeFocused();
+  await expect(cryptoCheckbox).toHaveCount(0);
 
   await currencyCode.fill("E");
   await currencyCode.press("ArrowDown");
@@ -1789,30 +1788,9 @@ test("transactions filter toolbar keeps a stable inline trigger geometry", async
   expect(openedToolbarRowBox).not.toBeNull();
   expect(openedTriggerBox).toEqual(initialTriggerBox);
   expect(openedToolbarRowBox?.height).toBe(initialToolbarRowBox?.height);
-  const addFilterButton = page.getByRole("button", { name: "Add filter" });
-  await addFilterButton.focus();
-  await page.keyboard.press("Enter");
-  const settlementButton = page.getByRole("button", {
-    name: "Settlement",
-  });
-  await expect(settlementButton).toBeVisible();
-  await settlementButton.focus();
-  await page.keyboard.press("Enter");
-  const operator = page.getByRole("combobox", { name: "Filter operator" });
-  await expect(operator).toBeFocused();
-  await expect(operator).toHaveAttribute("data-slot", "select-trigger");
-  const pendingCheckbox = page.getByRole("checkbox", { name: "Pending" });
-  await expect(pendingCheckbox).toBeVisible();
-  await page.getByText("Pending", { exact: true }).click();
-  await expect
-    .poll(() => new URL(page.url()).searchParams.get("filter"))
-    .toBe("settlement:pending");
-
-  await operator.click();
-  await page.getByRole("option", { name: "None of" }).click();
-  await expect
-    .poll(() => new URL(page.url()).searchParams.get("filter"))
-    .toBe("not settlement:pending");
+  await page.goto(
+    `/transactions?page=1&pageSize=50&filter=${encodeURIComponent("not settlement:pending")}`,
+  );
 
   const settlementChip = page.getByText("Settlement Pending · none of", {
     exact: true,

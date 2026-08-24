@@ -14,7 +14,7 @@ Assess recent failed `main` frontend E2E runs, fix flaky test assertions, and va
 
 - Explain the relevant failures and synchronize assertions with observable UI behavior.
 - Pass the required local checks.
-- Pass the manually dispatched GitHub workflow on the pushed branch three consecutive times at the same commit SHA.
+- Pass `.github/workflows/ci.yml`, manually dispatched with `gh workflow run ci.yml --ref <branch>`, on the pushed branch three consecutive times at the same commit SHA.
 
 ## Constraints
 

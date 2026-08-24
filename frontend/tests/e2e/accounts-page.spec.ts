@@ -2037,8 +2037,10 @@ test("account group page renders subtotals and combined prefix register", async 
   );
 
   await firstRow.focus();
-  await page.keyboard.press("ArrowDown");
-  await expect(secondRow).toBeFocused();
+  await Promise.all([
+    expect(secondRow).toBeFocused(),
+    page.keyboard.press("ArrowDown"),
+  ]);
   await expect
     .poll(() => secondRow.evaluate((row) => getComputedStyle(row).outlineStyle))
     .toBe("solid");

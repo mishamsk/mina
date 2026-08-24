@@ -1134,43 +1134,7 @@ test("transactions page repositions a same-page day jump, then keeps stepping an
   const samePageJumpAnchor = page.locator(
     `[data-date-jump-anchor="${mishaReviewDate}"]`,
   );
-  await expect(samePageJumpAnchor).toBeVisible();
-  const samePageJumpBounds = await page
-    .getByTestId("transactions-table-scroll")
-    .evaluate((container, anchorDate) => {
-      const row = container.querySelector(
-        `[data-date-jump-anchor="${anchorDate}"]`,
-      );
-      if (!row) {
-        return undefined;
-      }
-
-      const containerRect = container.getBoundingClientRect();
-      const rowRect = row.getBoundingClientRect();
-      return {
-        containerBottom: containerRect.bottom,
-        containerLeft: containerRect.left,
-        containerRight: containerRect.right,
-        containerTop: containerRect.top,
-        rowBottom: rowRect.bottom,
-        rowLeft: rowRect.left,
-        rowRight: rowRect.right,
-        rowTop: rowRect.top,
-      };
-    }, mishaReviewDate);
-  expect(samePageJumpBounds).toBeDefined();
-  expect(samePageJumpBounds!.rowTop).toBeGreaterThanOrEqual(
-    samePageJumpBounds!.containerTop - 1,
-  );
-  expect(samePageJumpBounds!.rowBottom).toBeLessThanOrEqual(
-    samePageJumpBounds!.containerBottom + 1,
-  );
-  expect(samePageJumpBounds!.rowLeft).toBeGreaterThanOrEqual(
-    samePageJumpBounds!.containerLeft - 1,
-  );
-  expect(samePageJumpBounds!.rowRight).toBeLessThanOrEqual(
-    samePageJumpBounds!.containerRight + 1,
-  );
+  await expect(samePageJumpAnchor).toBeInViewport({ ratio: 1 });
 
   const previousResponse = page.waitForResponse((response) => {
     const url = new URL(response.url());

@@ -519,8 +519,8 @@ test("recurring save retries failed occurrence catch-up before refresh", async (
   });
   await editor.getByRole("button", { name: "Save definition" }).click();
 
-  await expect(page.getByText("Transactions may be stale.")).toBeVisible();
   await expect.poll(() => catchupRequests).toBe(2);
+  await expect(page.getByText("Transactions may be stale.")).toBeVisible();
   expect(transactionRefreshes).toBe(0);
   await page.getByRole("button", { name: "Retry" }).click();
   await expect.poll(() => catchupRequests).toBe(3);
