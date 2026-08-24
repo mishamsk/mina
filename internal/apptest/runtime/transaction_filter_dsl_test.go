@@ -2,6 +2,7 @@ package runtime_test
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -12,11 +13,15 @@ import (
 )
 
 type dslFilterFixture struct {
-	alpha     *httpclient.CreateTransactionResponse
-	beta      *httpclient.CreateTransactionResponse
-	multi     *httpclient.CreateTransactionResponse
-	refund    *httpclient.CreateTransactionResponse
-	scopeLeaf *httpclient.CreateTransactionResponse
+	accountID  int64
+	alpha      *httpclient.CreateTransactionResponse
+	beta       *httpclient.CreateTransactionResponse
+	categoryID int64
+	memberID   int64
+	multi      *httpclient.CreateTransactionResponse
+	refund     *httpclient.CreateTransactionResponse
+	scopeLeaf  *httpclient.CreateTransactionResponse
+	tagID      int64
 }
 
 func createDslFilterFixture(t *testing.T, client *apptest.Client) dslFilterFixture {
@@ -140,11 +145,15 @@ func createDslFilterFixture(t *testing.T, client *apptest.Client) dslFilterFixtu
 	scopeLeaf := createTransaction(t, client, scopeRequest)
 
 	return dslFilterFixture{
-		alpha:     alpha,
-		beta:      beta,
-		multi:     multi,
-		refund:    refund,
-		scopeLeaf: scopeLeaf,
+		accountID:  refs.CheckingAccountId,
+		alpha:      alpha,
+		beta:       beta,
+		categoryID: refs.CategoryId,
+		memberID:   refs.MemberId,
+		multi:      multi,
+		refund:     refund,
+		scopeLeaf:  scopeLeaf,
+		tagID:      refs.TagId,
 	}
 }
 
@@ -204,6 +213,12 @@ func TestTransactionFilterDSLExpressionsBoundary(t *testing.T) {
 		{name: "initiated exact equality", expression: `initiated=2024-06-04`, want: []int64{refund}, total: 1},
 		{name: "posted exact equality", expression: `posted="2024-06-04T00:00:00Z"`, want: []int64{refund}, total: 1},
 		{name: "quoted member value", expression: `member:"Avery"`, want: []int64{alpha}, total: 1},
+		{name: "account entity-ID literal", expression: fmt.Sprintf("account:#%d", fixture.accountID), want: []int64{scopeLeaf, refund, multi, alpha}, total: 4},
+		{name: "category entity-ID literal", expression: fmt.Sprintf("category:#%d", fixture.categoryID), want: []int64{refund, alpha}, total: 2},
+		{name: "tag entity-ID literal", expression: fmt.Sprintf("tag:#%d", fixture.tagID), want: []int64{alpha}, total: 1},
+		{name: "member entity-ID literal", expression: fmt.Sprintf("member:#%d", fixture.memberID), want: []int64{alpha}, total: 1},
+		{name: "entity-ID literals preserve boolean composition", expression: fmt.Sprintf("account:#%d and category:#%d", fixture.accountID, fixture.categoryID), want: []int64{refund, alpha}, total: 2},
+		{name: "nonexistent entity-ID literal", expression: `account:#9223372036854775807`, want: nil, total: 0},
 		{name: "unquoted backslash stays literal", expression: `member:A\tB`, want: nil, total: 0},
 		{name: "unquoted entity backslash stays literal", expression: `category:Dsl\Probe`, want: nil, total: 0},
 		{name: "case-insensitive keywords", expression: `NoT member:Avery OR role:expense`, want: []int64{scopeLeaf, refund, multi, beta, alpha}, total: 5},
@@ -699,6 +714,8 @@ func TestTransactionFilterDSLErrorMessagesBoundary(t *testing.T) {
 		{name: "invalid pending timestamp", rawQuery: "filter=" + "pending>=not-a-time", wantSubstring: "field pending needs YYYY-MM-DD, RFC3339, or a relative offset like -30d"},
 		{name: "invalid posted timestamp", rawQuery: "filter=" + "posted<=not-a-time", wantSubstring: "field posted needs YYYY-MM-DD, RFC3339, or a relative offset like -30d"},
 		{name: "invalid currency", rawQuery: "filter=" + "currency:AAA", wantSubstring: "currency value must use ISO 4217 or the C:: crypto prefix"},
+		{name: "malformed entity-ID literal", rawQuery: "filter=account:%23nope", wantSubstring: "entity-ID literal must use # followed by a positive base-10 integer at byte 8"},
+		{name: "malformed quoted entity-ID literal", rawQuery: "filter=account:%231%22", wantSubstring: "entity-ID literal must use # followed by a positive base-10 integer at byte 8"},
 		{name: "unresolvable account reference", rawQuery: "filter=" + "account:%22checking:Ghost%22", wantSubstring: "transaction filters reference missing or inactive resource"},
 		{name: "unresolvable category reference", rawQuery: "filter=" + "category:Ghost", wantSubstring: "transaction filters reference missing or inactive resource"},
 		{name: "unresolvable tag reference", rawQuery: "filter=" + "tag:Ghost", wantSubstring: "transaction filters reference missing or inactive resource"},

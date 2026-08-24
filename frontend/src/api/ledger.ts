@@ -220,6 +220,120 @@ const listAllAccountsForLookups = async () => {
   };
 };
 
+const listCategoriesPageForLookups = (offset: number) =>
+  listCategories({
+    query: {
+      include_hidden: true,
+      include_tombstoned: true,
+      limit: lookupLimit,
+      offset,
+      sort: "fqn",
+      sort_dir: "asc",
+    },
+  });
+
+const listAllCategoriesForLookups = async () => {
+  const firstPage = await listCategoriesPageForLookups(0);
+  if (
+    !firstPage.data ||
+    firstPage.data.categories.length >= firstPage.data.total_count
+  ) {
+    return firstPage;
+  }
+
+  const categories = [...firstPage.data.categories];
+  for (
+    let offset = lookupLimit;
+    offset < firstPage.data.total_count;
+    offset += lookupLimit
+  ) {
+    const page = await listCategoriesPageForLookups(offset);
+    if (!page.data) return page;
+    categories.push(...page.data.categories);
+  }
+
+  return {
+    ...firstPage,
+    data: { ...firstPage.data, categories },
+  };
+};
+
+const listTagsPageForLookups = (offset: number) =>
+  listTags({
+    query: {
+      include_hidden: true,
+      include_tombstoned: true,
+      limit: lookupLimit,
+      offset,
+      sort: "fqn",
+      sort_dir: "asc",
+    },
+  });
+
+const listAllTagsForLookups = async () => {
+  const firstPage = await listTagsPageForLookups(0);
+  if (
+    !firstPage.data ||
+    firstPage.data.tags.length >= firstPage.data.total_count
+  ) {
+    return firstPage;
+  }
+
+  const tags = [...firstPage.data.tags];
+  for (
+    let offset = lookupLimit;
+    offset < firstPage.data.total_count;
+    offset += lookupLimit
+  ) {
+    const page = await listTagsPageForLookups(offset);
+    if (!page.data) return page;
+    tags.push(...page.data.tags);
+  }
+
+  return {
+    ...firstPage,
+    data: { ...firstPage.data, tags },
+  };
+};
+
+const listMembersPageForLookups = (offset: number) =>
+  listMembers({
+    query: {
+      include_hidden: true,
+      include_tombstoned: true,
+      limit: lookupLimit,
+      offset,
+      sort: "name",
+      sort_dir: "asc",
+    },
+  });
+
+const listAllMembersForLookups = async () => {
+  const firstPage = await listMembersPageForLookups(0);
+  if (
+    !firstPage.data ||
+    firstPage.data.members.length >= firstPage.data.total_count
+  ) {
+    return firstPage;
+  }
+
+  const members = [...firstPage.data.members];
+  for (
+    let offset = lookupLimit;
+    offset < firstPage.data.total_count;
+    offset += lookupLimit
+  ) {
+    const page = await listMembersPageForLookups(offset);
+    if (!page.data) return page;
+    members.push(...page.data.members);
+  }
+
+  return {
+    ...firstPage,
+    data: { ...firstPage.data, members },
+  };
+};
+
 const transactionFilterQuery = (
   filters: Partial<TransactionFilters> | undefined,
   includeExpectedByDefault = false,
@@ -471,36 +585,9 @@ export const restoreTransactionById = (transactionId: number) =>
 export const fetchLedgerLookups = async () => {
   const [accounts, categories, tags, members] = await Promise.all([
     listAllAccountsForLookups(),
-    listCategories({
-      query: {
-        include_hidden: true,
-        include_tombstoned: true,
-        limit: lookupLimit,
-        offset: 0,
-        sort: "fqn",
-        sort_dir: "asc",
-      },
-    }),
-    listTags({
-      query: {
-        include_hidden: true,
-        include_tombstoned: true,
-        limit: lookupLimit,
-        offset: 0,
-        sort: "fqn",
-        sort_dir: "asc",
-      },
-    }),
-    listMembers({
-      query: {
-        include_hidden: true,
-        include_tombstoned: true,
-        limit: lookupLimit,
-        offset: 0,
-        sort: "name",
-        sort_dir: "asc",
-      },
-    }),
+    listAllCategoriesForLookups(),
+    listAllTagsForLookups(),
+    listAllMembersForLookups(),
   ]);
 
   return { accounts, categories, members, tags };

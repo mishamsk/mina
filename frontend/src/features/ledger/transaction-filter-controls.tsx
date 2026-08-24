@@ -210,6 +210,13 @@ const activeRecord = <T extends { readonly tombstoned_at?: string | null }>(
   value: T,
 ): boolean => !value.tombstoned_at;
 
+const entityIDFromLiteral = (value: string): number | undefined => {
+  const match = /^#0*([1-9]\d*)$/.exec(value);
+  if (!match) return undefined;
+  const id = Number(match[1]);
+  return Number.isSafeInteger(id) ? id : undefined;
+};
+
 const accountOption = (account: Account): EntityOption => ({
   detail: `${account.fqn} · ${account.currency ? `${account.currency} · Single-currency` : "Multi-currency"}`,
   hidden: account.is_hidden,
@@ -725,6 +732,7 @@ export const TransactionFilterControls = ({
     TransactionFilterDimension | undefined
   >(undefined);
   const restoreRemovedRowFocusRef = useRef<number | undefined>(undefined);
+  const restoreEntityIDLiteralFocusRef = useRef<number | undefined>(undefined);
   const datalistKeyboardCommitTargetRef = useRef<HTMLInputElement | null>(null);
   const datalistPointerTargetRef = useRef<HTMLInputElement | null>(null);
   const datalistEscapePendingRef = useRef(false);
@@ -838,6 +846,21 @@ export const TransactionFilterControls = ({
   }, [rows.length]);
 
   useLayoutEffect(() => {
+    const removedIndex = restoreEntityIDLiteralFocusRef.current;
+    if (removedIndex === undefined) return;
+    restoreEntityIDLiteralFocusRef.current = undefined;
+    const remainingButtons = Array.from(
+      editorRef.current?.querySelectorAll<HTMLButtonElement>(
+        "[data-filter-entity-id-remove]",
+      ) ?? [],
+    );
+    const fallback =
+      remainingButtons[Math.min(removedIndex, remainingButtons.length - 1)] ??
+      editorRef.current?.querySelector<HTMLElement>(editorFocusableSelector);
+    fallback?.focus();
+  }, [rows]);
+
+  useLayoutEffect(() => {
     if (advanced || !restoreAdvancedClearFocusRef.current) return;
     restoreAdvancedClearFocusRef.current = false;
     focusWithoutTooltip(addFilterTriggerRefs.current.get(0));
@@ -922,6 +945,10 @@ export const TransactionFilterControls = ({
     field: TransactionFilterMembershipField,
     mode: TransactionFilterMembershipMode,
     values: readonly string[],
+    entityProvenance?: {
+      readonly entityIdValues: readonly string[];
+      readonly humanEntityValues: readonly string[];
+    },
   ): void => {
     const chips = [...(rows[rowIndex]?.chips ?? [])];
     const chipIndex = chips.findIndex(
@@ -933,12 +960,24 @@ export const TransactionFilterControls = ({
     if (values.length === 0) {
       if (chipIndex >= 0) chips.splice(chipIndex, 1);
     } else {
+      const entityIdValues =
+        entityProvenance?.entityIdValues ??
+        (chipIndex >= 0 && chips[chipIndex]?.kind === "membership"
+          ? chips[chipIndex].entityIdValues
+          : undefined);
+      const humanEntityValues =
+        entityProvenance?.humanEntityValues ??
+        (chipIndex >= 0 && chips[chipIndex]?.kind === "membership"
+          ? chips[chipIndex].humanEntityValues
+          : undefined);
       const scopedValues =
         chipIndex >= 0 && chips[chipIndex]?.kind === "membership"
           ? chips[chipIndex].scopedValues
           : undefined;
       const chip = {
         field,
+        ...(entityIdValues ? { entityIdValues } : {}),
+        ...(humanEntityValues ? { humanEntityValues } : {}),
         kind: "membership",
         mode,
         ...(scopedValues ? { scopedValues } : {}),
@@ -983,14 +1022,43 @@ export const TransactionFilterControls = ({
       >;
       const sourceScopes = new Set(source.scopedValues ?? []);
       const targetScopes = new Set(target.scopedValues ?? []);
+      const sourceEntityIds = new Set(source.entityIdValues ?? []);
+      const targetEntityIds = new Set(target.entityIdValues ?? []);
+      const sourceHumanValues = new Set(
+        source.values.filter(
+          (value) =>
+            !sourceEntityIds.has(value) ||
+            source.humanEntityValues?.includes(value),
+        ),
+      );
+      const targetHumanValues = new Set(
+        target.values.filter(
+          (value) =>
+            !targetEntityIds.has(value) ||
+            target.humanEntityValues?.includes(value),
+        ),
+      );
       const scopeCollision = source.values.some(
         (value) =>
           target.values.includes(value) &&
+          sourceHumanValues.has(value) &&
+          targetHumanValues.has(value) &&
           sourceScopes.has(value) !== targetScopes.has(value),
       );
       if (scopeCollision) return false;
+      const entityIdValues = [
+        ...new Set([
+          ...(target.entityIdValues ?? []),
+          ...(source.entityIdValues ?? []),
+        ]),
+      ];
+      const humanValues = new Set([...targetHumanValues, ...sourceHumanValues]);
       remaining[targetIndex] = {
         ...target,
+        entityIdValues,
+        humanEntityValues: entityIdValues.filter((value) =>
+          humanValues.has(value),
+        ),
         scopedValues: [
           ...new Set([
             ...(target.scopedValues ?? []),
@@ -1073,15 +1141,25 @@ export const TransactionFilterControls = ({
     mode: TransactionFilterMembershipMode,
   ): ReactNode => {
     const chip = membershipChip(rowIndex, dimension, mode);
+    const entityIdValues = new Set(chip?.entityIdValues ?? []);
+    const humanEntityValues = new Set(chip?.humanEntityValues ?? []);
     const exactValues =
-      chip?.values.filter((value) => !chip.scopedValues?.includes(value)) ?? [];
+      chip?.values.filter(
+        (value) =>
+          !chip.scopedValues?.includes(value) &&
+          (!entityIdValues.has(value) || humanEntityValues.has(value)),
+      ) ?? [];
+    const selectedEntityValue = (
+      humanValue: string,
+      active: boolean,
+    ): boolean => active && exactValues.includes(humanValue);
     const options = {
       account:
         lookups?.accounts
           .filter(activeRecord)
           .filter((account) =>
             selectedOrVisible(
-              exactValues.includes(account.fqn),
+              selectedEntityValue(account.fqn, activeRecord(account)),
               account.is_hidden,
               includeHidden.account ?? false,
             ),
@@ -1092,7 +1170,7 @@ export const TransactionFilterControls = ({
           .filter(activeRecord)
           .filter((category) =>
             selectedOrVisible(
-              exactValues.includes(category.fqn),
+              selectedEntityValue(category.fqn, activeRecord(category)),
               category.is_hidden,
               includeHidden.category ?? false,
             ),
@@ -1103,7 +1181,7 @@ export const TransactionFilterControls = ({
           .filter(activeRecord)
           .filter((member) =>
             selectedOrVisible(
-              exactValues.includes(member.name),
+              selectedEntityValue(member.name, activeRecord(member)),
               member.is_hidden,
               includeHidden.member ?? false,
             ),
@@ -1114,7 +1192,7 @@ export const TransactionFilterControls = ({
           .filter(activeRecord)
           .filter((tag) =>
             selectedOrVisible(
-              exactValues.includes(tag.fqn),
+              selectedEntityValue(tag.fqn, activeRecord(tag)),
               tag.is_hidden,
               includeHidden.tag ?? false,
             ),
@@ -1123,55 +1201,54 @@ export const TransactionFilterControls = ({
     };
     const configs = {
       account: {
+        humanValue: (id: number) => accountById.get(id)?.fqn,
         options: options.account,
-        selectedIds: exactValues.flatMap((fqn) => {
-          const match = lookups?.accounts.find(
-            (value) => activeRecord(value) && value.fqn === fqn,
-          );
-          return match ? [match.account_id] : [];
-        }),
-        toValue: (id: number) => accountById.get(id)?.fqn,
+        selectedIds:
+          lookups?.accounts
+            .filter((account) =>
+              selectedEntityValue(account.fqn, activeRecord(account)),
+            )
+            .map((account) => account.account_id) ?? [],
       },
       category: {
+        humanValue: (id: number) => categoryById.get(id)?.fqn,
         options: options.category,
-        selectedIds: exactValues.flatMap((fqn) => {
-          const match = lookups?.categories.find(
-            (value) => activeRecord(value) && value.fqn === fqn,
-          );
-          return match ? [match.category_id] : [];
-        }),
-        toValue: (id: number) => categoryById.get(id)?.fqn,
+        selectedIds:
+          lookups?.categories
+            .filter((category) =>
+              selectedEntityValue(category.fqn, activeRecord(category)),
+            )
+            .map((category) => category.category_id) ?? [],
       },
       member: {
+        humanValue: (id: number) => memberById.get(id)?.name,
         options: options.member,
-        selectedIds: exactValues.flatMap((name) => {
-          const match = lookups?.members.find(
-            (value) => activeRecord(value) && value.name === name,
-          );
-          return match ? [match.member_id] : [];
-        }),
-        toValue: (id: number) => memberById.get(id)?.name,
+        selectedIds:
+          lookups?.members
+            .filter((member) =>
+              selectedEntityValue(member.name, activeRecord(member)),
+            )
+            .map((member) => member.member_id) ?? [],
       },
       tag: {
+        humanValue: (id: number) => tagById.get(id)?.fqn,
         options: options.tag,
-        selectedIds: exactValues.flatMap((fqn) => {
-          const match = lookups?.tags.find(
-            (value) => activeRecord(value) && value.fqn === fqn,
-          );
-          return match ? [match.tag_id] : [];
-        }),
-        toValue: (id: number) => tagById.get(id)?.fqn,
+        selectedIds:
+          lookups?.tags
+            .filter((tag) => selectedEntityValue(tag.fqn, activeRecord(tag)))
+            .map((tag) => tag.tag_id) ?? [],
       },
     };
     const config = configs[dimension];
-    const resolvedValues = new Set(
+    const resolvedHumanValues = new Set(
       config.selectedIds.flatMap((id) => {
-        const value = config.toValue(id);
+        const value = config.humanValue(id);
         return value ? [value] : [];
       }),
     );
-    const unresolvedValues =
-      chip?.values.filter((value) => !resolvedValues.has(value)) ?? [];
+    const unresolvedHumanValues = exactValues.filter(
+      (value) => !resolvedHumanValues.has(value),
+    );
     const editorId =
       rowIndex === 0 && mode === "any"
         ? `transactions-filter-${dimension}`
@@ -1198,15 +1275,88 @@ export const TransactionFilterControls = ({
           options={config.options}
           value={config.selectedIds}
           onChange={(ids) => {
-            updateMembership(rowIndex, dimension, mode, [
-              ...unresolvedValues,
-              ...ids.flatMap((id) => {
-                const value = config.toValue(id);
-                return value ? [value] : [];
-              }),
-            ]);
+            const nextEntityIdValues = new Set(chip?.entityIdValues);
+            const nextHumanValues = new Set(unresolvedHumanValues);
+            for (const id of ids) {
+              const humanValue = config.humanValue(id);
+              if (humanValue) nextHumanValues.add(humanValue);
+            }
+            const nextValues = [
+              ...new Set([...nextEntityIdValues, ...nextHumanValues]),
+            ];
+            updateMembership(rowIndex, dimension, mode, nextValues, {
+              entityIdValues: [...nextEntityIdValues],
+              humanEntityValues: [...nextEntityIdValues].filter((value) =>
+                nextHumanValues.has(value),
+              ),
+            });
           }}
         />
+        {entityIdValues.size > 0 ? (
+          <div className="relative z-40 flex w-full min-w-0 flex-wrap gap-1 overflow-x-hidden p-0.5">
+            {[...entityIdValues].map((value, valueIndex) => {
+              const presentation = valuePresentation(
+                dimension,
+                value,
+                false,
+                true,
+              );
+              return (
+                <span
+                  key={value}
+                  className="bg-muted inline-flex h-7 max-w-full min-w-0 items-center gap-1 border border-[var(--border-ink)] px-2 font-mono text-xs shadow-[var(--shadow-chip)]"
+                >
+                  {presentation.hidden ? (
+                    <EyeOff aria-label="Hidden" className="size-3 shrink-0" />
+                  ) : null}
+                  <AppTooltip
+                    className="min-w-0 flex-1"
+                    focusable={false}
+                    label={presentation.tooltip}
+                  >
+                    <span className="block truncate">{presentation.label}</span>
+                  </AppTooltip>
+                  <AppTooltip asChild label={`Remove ${presentation.tooltip}`}>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      className="shrink-0"
+                      aria-label={`Remove ${presentation.label}`}
+                      data-filter-entity-id-remove
+                      onClick={() => {
+                        restoreEntityIDLiteralFocusRef.current = valueIndex;
+                        const nextEntityIdValues = [...entityIdValues].filter(
+                          (candidate) => candidate !== value,
+                        );
+                        const nextValues =
+                          humanEntityValues.has(value) && chip
+                            ? chip.values
+                            : (chip?.values.filter(
+                                (candidate) => candidate !== value,
+                              ) ?? []);
+                        updateMembership(
+                          rowIndex,
+                          dimension,
+                          mode,
+                          nextValues,
+                          {
+                            entityIdValues: nextEntityIdValues,
+                            humanEntityValues: nextEntityIdValues.filter(
+                              (candidate) => humanEntityValues.has(candidate),
+                            ),
+                          },
+                        );
+                      }}
+                    >
+                      <Close aria-hidden="true" />
+                    </Button>
+                  </AppTooltip>
+                </span>
+              );
+            })}
+          </div>
+        ) : null}
       </div>
     );
   };
@@ -1443,7 +1593,28 @@ export const TransactionFilterControls = ({
     field: TransactionFilterMembershipField,
     value: string,
     scoped = false,
+    entityId = false,
   ): { hidden?: boolean; label: string; tooltip: string } => {
+    if (entityId) {
+      const id = entityIDFromLiteral(value);
+      const entity =
+        id === undefined
+          ? undefined
+          : field === "account"
+            ? accountById.get(id)
+            : field === "category"
+              ? categoryById.get(id)
+              : field === "tag"
+                ? tagById.get(id)
+                : memberById.get(id);
+      return {
+        hidden: entity?.is_hidden,
+        label: entity ? `${entity.name} (${value})` : value,
+        tooltip: entity
+          ? `${"fqn" in entity ? entity.fqn : entity.name} (${value})`
+          : value,
+      };
+    }
     if (field === "account") {
       const fqn = scoped && value !== "*" ? value.slice(0, -2) : value;
       const account = lookups?.accounts.find(
@@ -1523,9 +1694,24 @@ export const TransactionFilterControls = ({
         truncateLabel: chip.field === "initiated",
       };
     }
-    const values = chip.values.map((value) =>
-      valuePresentation(chip.field, value, chip.scopedValues?.includes(value)),
-    );
+    const values = chip.values.flatMap((value) => {
+      const entityId = chip.entityIdValues?.includes(value) ?? false;
+      const humanEntity = chip.humanEntityValues?.includes(value) ?? false;
+      return [
+        ...(entityId
+          ? [valuePresentation(chip.field, value, false, true)]
+          : []),
+        ...(!entityId || humanEntity
+          ? [
+              valuePresentation(
+                chip.field,
+                value,
+                chip.scopedValues?.includes(value),
+              ),
+            ]
+          : []),
+      ];
+    });
     const describedValues = values.map((value) =>
       value.hidden ? `${value.label} (hidden)` : value.label,
     );

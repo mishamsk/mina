@@ -174,10 +174,10 @@ func (p *filterParser) parseTermLeaf(token filterToken) (FilterExpression, error
 		return nil, filterErrorf(token.offset, "%s", err.Error())
 	}
 	field := FilterField(fieldText)
-	if strings.ContainsRune(rawValue, '"') && !filterValueIsQuoted(rawValue) {
+	if strings.ContainsRune(rawValue, '"') && !filterValueIsQuoted(rawValue) && !filterValueStartsEntityIDLiteral(rawValue) {
 		return nil, filterErrorf(token.offset, "quotes must delimit one complete value")
 	}
-	if strings.Contains(rawValue, ":") && !filterValueIsQuoted(rawValue) {
+	if strings.Contains(rawValue, ":") && !filterValueIsQuoted(rawValue) && !filterValueStartsEntityIDLiteral(rawValue) {
 		return nil, filterErrorf(token.offset, "values containing : must be quoted")
 	}
 	switch {
@@ -186,6 +186,19 @@ func (p *filterParser) parseTermLeaf(token filterToken) (FilterExpression, error
 			return nil, filterErrorf(token.offset, "field %s only supports : membership terms", fieldText)
 		}
 		valueOffset := token.offset + valueOffsetInToken
+		if filterValueStartsEntityIDLiteral(rawValue) {
+			if field != FilterFieldAccount && field != FilterFieldCategory && field != FilterFieldTag && field != FilterFieldMember {
+				return nil, filterErrorf(valueOffset, "field %s does not accept entity-ID literals", fieldText)
+			}
+			entityID, err := parseFilterEntityIDLiteral(rawValue)
+			if err != nil {
+				return nil, filterErrorf(valueOffset, "entity-ID literal must use # followed by a positive base-10 integer")
+			}
+			if field == FilterFieldMember {
+				return &FilterMemberTerm{MemberID: entityID}, nil
+			}
+			return &FilterEntityTerm{Field: field, EntityID: entityID}, nil
+		}
 		if field == FilterFieldAccount || field == FilterFieldCategory || field == FilterFieldTag {
 			return parseFilterEntityTermLeaf(token.offset, valueOffset, field, rawValue)
 		}
@@ -199,6 +212,9 @@ func (p *filterParser) parseTermLeaf(token filterToken) (FilterExpression, error
 			return nil, filterErrorf(token.offset, "field %s requires =, >, >=, <, or <= comparisons", fieldText)
 		}
 		valueOffset := token.offset + valueOffsetInToken
+		if filterValueStartsEntityIDLiteral(rawValue) {
+			return nil, filterErrorf(valueOffset, "field %s does not accept entity-ID literals", fieldText)
+		}
 		value, escapeOffset, err := decodeFilterValue(rawValue)
 		if err != nil {
 			return nil, filterErrorf(valueOffset+escapeOffset, "%s", err.Error())
@@ -207,6 +223,24 @@ func (p *filterParser) parseTermLeaf(token filterToken) (FilterExpression, error
 	default:
 		return nil, filterErrorf(token.offset, "has unknown field %q", fieldText)
 	}
+}
+
+func filterValueStartsEntityIDLiteral(rawValue string) bool {
+	return !filterValueIsQuoted(rawValue) && strings.HasPrefix(rawValue, "#")
+}
+
+func parseFilterEntityIDLiteral(rawValue string) (int64, error) {
+	digits := strings.TrimPrefix(rawValue, "#")
+	if digits == "" || strings.ContainsFunc(digits, func(character rune) bool {
+		return character < '0' || character > '9'
+	}) {
+		return 0, fmt.Errorf("malformed entity-ID literal")
+	}
+	entityID, err := strconv.ParseInt(digits, 10, 64)
+	if err != nil || entityID <= 0 {
+		return 0, fmt.Errorf("malformed entity-ID literal")
+	}
+	return entityID, nil
 }
 
 // splitFilterTerm separates one raw term into its field, operator, and raw value.

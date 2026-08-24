@@ -28,7 +28,7 @@ func (s *Service) resolveFilterReferences(ctx context.Context, expression Filter
 	case *FilterNot:
 		return s.resolveFilterReferences(ctx, node.Term)
 	case *FilterEntityTerm:
-		if node.Scoped {
+		if node.Scoped || node.EntityID > 0 {
 			return nil
 		}
 		var (
@@ -58,6 +58,9 @@ func (s *Service) resolveFilterReferences(ctx context.Context, expression Filter
 		node.EntityID = referenceID
 		return nil
 	case *FilterMemberTerm:
+		if node.MemberID > 0 {
+			return nil
+		}
 		reference, err := s.members.ActiveReferenceByName(ctx, node.Name, members.ReferenceOptions{AllowHidden: true})
 		if errors.Is(err, services.ErrInvalidReference) {
 			return invalidTransactionFilterReferenceError()

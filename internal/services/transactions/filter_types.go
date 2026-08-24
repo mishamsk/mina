@@ -68,9 +68,9 @@ type FilterNot struct {
 	Term FilterExpression
 }
 
-// FilterEntityTerm matches active journal records whose account, category, or
-// tag resolves under an FQN. An empty FQN with Scoped true matches any entity
-// of the kind.
+// FilterEntityTerm matches active journal records by an account, category, or
+// tag ID or under an FQN. An empty FQN with Scoped true matches any entity of
+// the kind.
 type FilterEntityTerm struct {
 	Field    FilterField
 	FQN      string

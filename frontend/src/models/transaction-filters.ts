@@ -71,6 +71,7 @@ export type TransactionFilterExpression =
   | {
       readonly kind: "term";
       readonly field: string;
+      readonly entityId?: boolean;
       readonly operator: TransactionFilterOperator;
       readonly scoped?: boolean;
       readonly value: string;
@@ -93,6 +94,8 @@ export type TransactionFilterMembershipMode = "any" | "all" | "none";
 export type TransactionFilterChip =
   | {
       readonly field: TransactionFilterMembershipField;
+      readonly entityIdValues?: readonly string[];
+      readonly humanEntityValues?: readonly string[];
       readonly kind: "membership";
       readonly mode: TransactionFilterMembershipMode;
       readonly scopedValues?: readonly string[];
@@ -156,7 +159,9 @@ const term = (
   operator: TransactionFilterOperator,
   value: string,
   scoped = false,
+  entityId = false,
 ): TransactionFilterExpression => ({
+  ...(entityId ? { entityId } : {}),
   field,
   kind: "term",
   operator,
@@ -243,9 +248,17 @@ const expressionFromFilterChip = (
   }
   const values = normalizedMembershipValues(chip.field, chip.values);
   if (values.length === 0) return undefined;
-  const terms = values.map((value) =>
-    term(chip.field, ":", value, chip.scopedValues?.includes(value)),
-  );
+  const terms = values.flatMap((value) => {
+    const entityId = chip.entityIdValues?.includes(value) ?? false;
+    const humanEntity =
+      !entityId || (chip.humanEntityValues?.includes(value) ?? false);
+    return [
+      ...(entityId ? [term(chip.field, ":", value, false, true)] : []),
+      ...(humanEntity
+        ? [term(chip.field, ":", value, chip.scopedValues?.includes(value))]
+        : []),
+    ];
+  });
   const positive: TransactionFilterExpression =
     terms.length === 1
       ? chip.mode === "all"
@@ -274,8 +287,18 @@ const normalizedFilterRows = (
         const scopedValues = chip.scopedValues?.filter((value) =>
           values.includes(value),
         );
+        const entityIdValues = chip.entityIdValues?.filter((value) =>
+          values.includes(value),
+        );
+        const humanEntityValues = chip.humanEntityValues?.filter((value) =>
+          values.includes(value),
+        );
         chips.push({
-          ...chip,
+          field: chip.field,
+          ...(entityIdValues?.length ? { entityIdValues } : {}),
+          ...(humanEntityValues?.length ? { humanEntityValues } : {}),
+          kind: "membership",
+          mode: chip.mode,
           ...(scopedValues?.length ? { scopedValues } : {}),
           values,
         });
@@ -325,9 +348,13 @@ const escapedFilterValue = (
 const quoteFilterValue = (
   value: string,
   escapeExactScopeMarker = false,
+  quoteEntityIdPrefix = false,
 ): string => {
   const escaped = escapedFilterValue(value, escapeExactScopeMarker);
-  return value === "" || /[\s()":\\]/.test(value) || escaped !== value
+  return value === "" ||
+    /[\s()":\\]/.test(value) ||
+    escaped !== value ||
+    (quoteEntityIdPrefix && value.startsWith("#"))
     ? `"${escaped}"`
     : escaped;
 };
@@ -337,14 +364,22 @@ const serializeTransactionFilterExpression = (
 ): string => {
   switch (expression.kind) {
     case "term":
-      return `${expression.field}${expression.operator}${quoteFilterValue(
-        expression.value,
-        expression.operator === ":" &&
-          !expression.scoped &&
-          (expression.field === "account" ||
-            expression.field === "category" ||
-            expression.field === "tag"),
-      )}`;
+      return `${expression.field}${expression.operator}${
+        expression.entityId
+          ? expression.value
+          : quoteFilterValue(
+              expression.value,
+              expression.operator === ":" &&
+                !expression.scoped &&
+                (expression.field === "account" ||
+                  expression.field === "category" ||
+                  expression.field === "tag"),
+              expression.operator === ":" &&
+                entityMembershipFields.has(
+                  expression.field as TransactionFilterMembershipField,
+                ),
+            )
+      }`;
     case "not":
       return `not ${serializeTransactionFilterExpression(expression.term)}`;
     default:
@@ -597,7 +632,18 @@ const parseTransactionFilterExpression = (
     const value = decodeFilterValue(split.rawValue);
     return value === undefined || (split.operator !== ":" && value === "")
       ? undefined
-      : term(split.field, split.operator, value, scoped);
+      : term(
+          split.field,
+          split.operator,
+          value,
+          scoped,
+          split.operator === ":" &&
+            entityMembershipFields.has(
+              split.field as TransactionFilterMembershipField,
+            ) &&
+            !quoted &&
+            split.rawValue.startsWith("#"),
+        );
   };
   const expression = parseOr(0);
   return expression && position === tokens.length ? expression : undefined;
@@ -705,15 +751,36 @@ const membershipTerms = (
   const scopeByValue = new Map<string, boolean>();
   for (const candidate of terms) {
     const scoped = Boolean(candidate.scoped);
+    const provenanceKey = `${candidate.entityId ? "id" : "human"}\0${candidate.value}`;
     if (
-      scopeByValue.has(candidate.value) &&
-      scopeByValue.get(candidate.value) !== scoped
+      scopeByValue.has(provenanceKey) &&
+      scopeByValue.get(provenanceKey) !== scoped
     ) {
       return undefined;
     }
-    scopeByValue.set(candidate.value, scoped);
+    scopeByValue.set(provenanceKey, scoped);
   }
   return terms;
+};
+
+const membershipTermProvenance = (
+  terms: readonly MembershipTerm[],
+): {
+  readonly entityIdValues: readonly string[];
+  readonly humanEntityValues: readonly string[];
+} => {
+  const entityIdValues = new Set(
+    terms.filter((candidate) => candidate.entityId).map(({ value }) => value),
+  );
+  const humanValues = new Set(
+    terms.filter((candidate) => !candidate.entityId).map(({ value }) => value),
+  );
+  return {
+    entityIdValues: [...entityIdValues],
+    humanEntityValues: [...entityIdValues].filter((value) =>
+      humanValues.has(value),
+    ),
+  };
 };
 
 const membershipChipFromExpression = (
@@ -731,8 +798,11 @@ const membershipChipFromExpression = (
   if (expression.kind === "not") {
     const terms = membershipTerms(expression.term, "or");
     if (!terms) return undefined;
+    const provenance = membershipTermProvenance(terms);
     return {
       field: terms[0]!.field as TransactionFilterMembershipField,
+      entityIdValues: provenance.entityIdValues,
+      humanEntityValues: provenance.humanEntityValues,
       kind: "membership",
       mode: "none",
       scopedValues: terms
@@ -743,8 +813,11 @@ const membershipChipFromExpression = (
   }
   const orTerms = membershipTerms(expression, "or");
   if (orTerms) {
+    const provenance = membershipTermProvenance(orTerms);
     return {
       field: orTerms[0]!.field as TransactionFilterMembershipField,
+      entityIdValues: provenance.entityIdValues,
+      humanEntityValues: provenance.humanEntityValues,
       kind: "membership",
       mode: "any",
       scopedValues: orTerms
@@ -762,8 +835,11 @@ const membershipChipFromExpression = (
   ) {
     return undefined;
   }
+  const provenance = membershipTermProvenance(andTerms);
   return {
     field: andTerms[0]!.field as TransactionFilterMembershipField,
+    entityIdValues: provenance.entityIdValues,
+    humanEntityValues: provenance.humanEntityValues,
     kind: "membership",
     mode: "all",
     scopedValues: andTerms
@@ -880,10 +956,28 @@ const filterRowFromExpression = (
       >;
       const existingScopes = new Set(existing.scopedValues);
       const chipScopes = new Set(chip.scopedValues);
+      const existingEntityIds = new Set(existing.entityIdValues);
+      const chipEntityIds = new Set(chip.entityIdValues);
+      const existingHumanValues = new Set(
+        existing.values.filter(
+          (value) =>
+            !existingEntityIds.has(value) ||
+            existing.humanEntityValues?.includes(value),
+        ),
+      );
+      const chipHumanValues = new Set(
+        chip.values.filter(
+          (value) =>
+            !chipEntityIds.has(value) ||
+            chip.humanEntityValues?.includes(value),
+        ),
+      );
       if (
         chip.values.some(
           (value) =>
             existing.values.includes(value) &&
+            existingHumanValues.has(value) &&
+            chipHumanValues.has(value) &&
             existingScopes.has(value) !== chipScopes.has(value),
         )
       ) {
@@ -895,8 +989,20 @@ const filterRowFromExpression = (
           ...(chip.scopedValues ?? []),
         ]),
       ];
+      const entityIdValues = [
+        ...new Set([
+          ...(existing.entityIdValues ?? []),
+          ...(chip.entityIdValues ?? []),
+        ]),
+      ];
+      const humanValues = new Set([...existingHumanValues, ...chipHumanValues]);
+      const humanEntityValues = entityIdValues.filter((value) =>
+        humanValues.has(value),
+      );
       chips[existingIndex] = {
         ...existing,
+        ...(entityIdValues.length ? { entityIdValues } : {}),
+        ...(humanEntityValues.length ? { humanEntityValues } : {}),
         ...(scopedValues.length ? { scopedValues } : {}),
         values: [...new Set([...existing.values, ...chip.values])],
       };
@@ -993,17 +1099,20 @@ export const transactionFilterRows = (
   if (explicitRows) return explicitRows;
   const singleAny = membershipTerms(filters.expression, "or");
   if (singleAny) {
+    const provenance = membershipTermProvenance(singleAny);
     return [
       {
         chips: [
           {
             field: singleAny[0]!.field as TransactionFilterMembershipField,
+            entityIdValues: provenance.entityIdValues,
+            humanEntityValues: provenance.humanEntityValues,
             kind: "membership",
             mode: "any",
             scopedValues: singleAny
               .filter((candidate) => candidate.scoped)
               .map((candidate) => candidate.value),
-            values: singleAny.map((candidate) => candidate.value),
+            values: [...new Set(singleAny.map((candidate) => candidate.value))],
           },
         ],
       },
@@ -1050,7 +1159,11 @@ export const addTransactionFilterMembership = (
           TransactionFilterChip,
           { readonly kind: "membership" }
         >;
-        if (existing.values.includes(value)) {
+        const existingEntityId = existing.entityIdValues?.includes(value);
+        if (
+          existing.values.includes(value) &&
+          (!existingEntityId || existing.humanEntityValues?.includes(value))
+        ) {
           return row;
         }
         if (existing.scopedValues?.length) {
@@ -1074,6 +1187,13 @@ export const addTransactionFilterMembership = (
               values: [value],
             });
           }
+        } else if (existing.values.includes(value) && existingEntityId) {
+          chips[existingIndex] = {
+            ...existing,
+            humanEntityValues: [
+              ...new Set([...(existing.humanEntityValues ?? []), value]),
+            ],
+          };
         } else {
           chips[existingIndex] = {
             ...existing,
