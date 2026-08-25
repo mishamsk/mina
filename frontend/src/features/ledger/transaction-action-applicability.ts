@@ -8,6 +8,7 @@ import {
 } from "./format";
 
 export interface TransactionActionApplicability {
+  readonly confirmNextProjection: boolean;
   readonly confirmOccurrence: boolean;
   readonly createRecurring: boolean;
   readonly createTemplate: boolean;
@@ -32,6 +33,8 @@ export const transactionActionApplicability = (
     !expectedOccurrence && isActiveWhollyPendingTransaction(transaction);
 
   return {
+    confirmNextProjection:
+      projectedOccurrence && transaction.recurring_projection_is_next === true,
     confirmOccurrence: expectedOccurrence,
     createRecurring: reusable,
     createTemplate: reusable,

@@ -183,8 +183,11 @@ test("future date navigation displays future active and expected transactions", 
   await expect(expectedRow).not.toHaveAttribute("aria-disabled");
   await expect(expectedRow.locator(".row-actions")).toHaveAttribute(
     "data-row-actions-count",
-    "1",
+    "2",
   );
+  await expect(
+    expectedRow.getByRole("button", { name: "Confirm next" }),
+  ).toBeVisible();
   await expect(
     expectedRow.getByRole("button", { name: "Defer" }),
   ).toBeVisible();
@@ -215,6 +218,9 @@ test("future date navigation displays future active and expected transactions", 
   await expect(
     projectedDetail.getByRole("button", { name: "Confirm occurrence" }),
   ).toHaveCount(0);
+  await expect(
+    projectedDetail.getByRole("button", { name: "Confirm next" }),
+  ).toBeVisible();
   await expect(
     projectedDetail.getByRole("button", { name: "Defer" }),
   ).toBeVisible();
@@ -305,9 +311,24 @@ test("future date navigation displays future active and expected transactions", 
     recurring_occurrences: unknown[];
   };
   expect(occurrencesBody.recurring_occurrences).toEqual([]);
+
+  await page.getByRole("button", { exact: true, name: "Previous" }).click();
+  await expect(expectedRow).toBeVisible();
+  await expectedRow.click();
+  const detailConfirmResponse = page.waitForResponse((response) =>
+    new URL(response.url()).pathname.endsWith(
+      `/api/recurring-definitions/${String(recurringDefinitionBody.recurring_definition_id)}/confirm-next`,
+    ),
+  );
+  await projectedDetail.getByRole("button", { name: "Confirm next" }).click();
+  expect((await detailConfirmResponse).ok()).toBe(true);
+  await expect(projectedDetail).toHaveCount(0);
+  await expect(
+    page.locator("[data-transaction-detail-restore-target]"),
+  ).toBeFocused();
 });
 
-test("only the next recurring projection can be deferred", async ({
+test("only the next recurring projection exposes definition actions", async ({
   page,
 }, testInfo) => {
   const unique = `next-projection-${testInfo.workerIndex}-${Date.now()}`;
@@ -406,13 +427,36 @@ test("only the next recurring projection can be deferred", async ({
   await expect(nextRow).toBeVisible();
   await expect(nextRow.locator(".row-actions")).toHaveAttribute(
     "data-row-actions-count",
-    "1",
+    "2",
   );
+  await expect(
+    nextRow.getByRole("button", { name: "Confirm next" }),
+  ).toBeVisible();
+  await expect(nextRow.getByRole("button", { name: "Defer" })).toBeVisible();
+  await page.setViewportSize({ width: 900, height: 800 });
+  const overflowTrigger = nextRow.getByRole("button", {
+    name: "More row actions",
+  });
+  await expect(overflowTrigger).toBeVisible();
+  await overflowTrigger.focus();
+  await page.keyboard.press("Enter");
+  await expect(
+    page.getByRole("button", { name: "Confirm next" }).last(),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Defer" }).last(),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(overflowTrigger).toBeFocused();
+  await page.setViewportSize({ width: 1280, height: 800 });
   await expect(nextRow.getByRole("button", { name: "Defer" })).toBeVisible();
 
   for (const projection of laterProjections) {
     const row = page.locator(
       `tbody > tr[data-transaction-id="${String(projection.transaction_id)}"]`,
+    );
+    await expect(row.getByRole("button", { name: "Confirm next" })).toHaveCount(
+      0,
     );
     await expect(row.getByRole("button", { name: "Defer" })).toHaveCount(0);
   }
@@ -456,6 +500,9 @@ test("only the next recurring projection can be deferred", async ({
     exact: true,
     name: "Defer",
   });
+  await expect(
+    nextProjectionDetail.getByRole("button", { name: "Confirm next" }),
+  ).toBeVisible();
   const failedProvenance = nextProjectionDetail.getByTestId(
     "transaction-recurring-definition",
   );

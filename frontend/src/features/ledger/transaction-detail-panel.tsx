@@ -79,6 +79,7 @@ import {
 
 interface TransactionDetailPanelProps {
   readonly autoFocusOnTransactionChange?: boolean;
+  readonly confirmingProjectionDefinitionId?: number;
   readonly readOnly?: boolean;
   readonly errorMessage: string | undefined;
   readonly loading: boolean;
@@ -92,6 +93,9 @@ interface TransactionDetailPanelProps {
     transaction: Transaction,
     actualDate: string,
   ) => Promise<void>;
+  readonly onConfirmNextProjection?: (
+    transaction: Transaction,
+  ) => Promise<number | undefined>;
   readonly onDeferProjection?: (
     transaction: Transaction,
     request: RecurringDefinitionDeferRequest,
@@ -111,7 +115,7 @@ interface TransactionDetailPanelProps {
   readonly onFilterCategory?: (categoryId: number) => void;
   readonly onFilterMember?: (memberId: number) => void;
   readonly onFilterTag?: (tagId: number) => void;
-  readonly onRestoreFocus: () => void;
+  readonly onRestoreFocus: (force?: boolean) => void;
   readonly transaction: Transaction | undefined;
   readonly transactionId: number;
 }
@@ -834,12 +838,14 @@ export const TransactionDetailContent = ({
 
 export const TransactionDetailPanel = ({
   autoFocusOnTransactionChange = true,
+  confirmingProjectionDefinitionId,
   readOnly = false,
   errorMessage,
   loading,
   lookups,
   onClose,
   onChangeLifecycle,
+  onConfirmNextProjection,
   onConfirmOccurrence,
   onDeferProjection,
   onDelete,
@@ -856,6 +862,7 @@ export const TransactionDetailPanel = ({
   transactionId,
 }: TransactionDetailPanelProps) => {
   const panelRef = useRef<HTMLElement | null>(null);
+  const confirmNextProjectionButtonRef = useRef<HTMLButtonElement | null>(null);
   const confirmOccurrenceButtonRef = useRef<HTMLButtonElement | null>(null);
   const deferButtonRef = useRef<HTMLButtonElement | null>(null);
   const deleteButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -891,6 +898,13 @@ export const TransactionDetailPanel = ({
   >();
   const [deferOpen, setDeferOpen] = useState(false);
   const [deferring, setDeferring] = useState(false);
+  const [projectionConfirmError, setProjectionConfirmError] = useState<
+    | {
+        readonly message: string;
+        readonly transactionId: Transaction["transaction_id"];
+      }
+    | undefined
+  >();
   const [postErrorMessage, setPostErrorMessage] = useState<
     string | undefined
   >();
@@ -924,6 +938,7 @@ export const TransactionDetailPanel = ({
     setConfirmOccurrenceOpen(false);
     setDeferActionErrorMessage(undefined);
     setDeferOpen(false);
+    setProjectionConfirmError(undefined);
     setConfirmPostOpen(false);
     setPostDialogTransaction(undefined);
     setPostErrorMessage(undefined);
@@ -986,6 +1001,13 @@ export const TransactionDetailPanel = ({
   useEffect(() => {
     transactionIdRef.current = transaction?.transaction_id;
   }, [transaction?.transaction_id]);
+
+  useEffect(
+    () => () => {
+      transactionIdRef.current = undefined;
+    },
+    [],
+  );
 
   useEffect(() => {
     restoreFocusOnCloseRef.current = true;
@@ -1165,6 +1187,59 @@ export const TransactionDetailPanel = ({
     setDeferOpen(true);
   };
 
+  const confirmNextProjection = async () => {
+    if (!transaction || !onConfirmNextProjection) {
+      return;
+    }
+    const projectionTransactionId = transaction.transaction_id;
+    const focusSource = document.activeElement;
+    setProjectionConfirmError(undefined);
+    try {
+      await onConfirmNextProjection(transaction);
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          if (
+            transactionIdRef.current !== undefined &&
+            transactionIdRef.current !== projectionTransactionId
+          ) {
+            return;
+          }
+          const activeElement = document.activeElement;
+          if (
+            activeElement instanceof HTMLElement &&
+            activeElement !== focusSource &&
+            activeElement !== document.body &&
+            activeElement.matches(
+              "a, button, input, select, textarea, [contenteditable='true'], " +
+                "[tabindex]:not([tabindex='-1'])",
+            )
+          ) {
+            return;
+          }
+          if (confirmNextProjectionButtonRef.current?.isConnected) {
+            confirmNextProjectionButtonRef.current.focus({
+              preventScroll: true,
+            });
+            return;
+          }
+          onRestoreFocus(true);
+        });
+      });
+    } catch (error) {
+      setProjectionConfirmError({
+        message:
+          error instanceof Error ? error.message : "The API request failed.",
+        transactionId: projectionTransactionId,
+      });
+      window.requestAnimationFrame(() => {
+        if (transactionIdRef.current !== projectionTransactionId) {
+          return;
+        }
+        confirmNextProjectionButtonRef.current?.focus({ preventScroll: true });
+      });
+    }
+  };
+
   const confirmDeferProjection = async (
     request: RecurringDefinitionDeferRequest,
   ) => {
@@ -1304,6 +1379,17 @@ export const TransactionDetailPanel = ({
   const projectionDeferAvailable =
     actionApplicability?.deferProjection === true &&
     onDeferProjection !== undefined;
+  const projectionConfirmAvailable =
+    actionApplicability?.confirmNextProjection === true &&
+    onConfirmNextProjection !== undefined;
+  const projectionActionBusy = confirmingProjectionDefinitionId !== undefined;
+  const projectionActionDisabledReason = projectionActionBusy
+    ? "Next occurrence confirmation in progress."
+    : undefined;
+  const projectionConfirmErrorMessage =
+    projectionConfirmError?.transactionId === transaction?.transaction_id
+      ? projectionConfirmError?.message
+      : undefined;
   const detailActionsApplicable =
     actionApplicability !== undefined &&
     Object.values(actionApplicability).some(Boolean);
@@ -1431,6 +1517,19 @@ export const TransactionDetailPanel = ({
           />
         ) : null}
       </div>
+      {projectionConfirmErrorMessage ? (
+        <div
+          className="border-destructive bg-card border-t-2 p-3 text-sm"
+          role="alert"
+        >
+          <p className="text-destructive font-semibold">
+            Next occurrence could not be confirmed.
+          </p>
+          <p className="text-muted-foreground mt-1">
+            {projectionConfirmErrorMessage}
+          </p>
+        </div>
+      ) : null}
       {!readOnly &&
       detailActionsApplicable &&
       transaction &&
@@ -1492,15 +1591,47 @@ export const TransactionDetailPanel = ({
                 )}
               </>
             ) : null
-          ) : projectionDeferAvailable ? (
-            <Button
-              ref={deferButtonRef}
-              type="button"
-              onClick={openDeferProjection}
-            >
-              <Calendar aria-hidden="true" />
-              Defer
-            </Button>
+          ) : projectionConfirmAvailable || projectionDeferAvailable ? (
+            <>
+              {projectionConfirmAvailable ? (
+                <Tooltip
+                  disabled={!projectionActionBusy}
+                  focusable={projectionActionBusy}
+                  label={projectionActionDisabledReason ?? ""}
+                >
+                  <Button
+                    ref={confirmNextProjectionButtonRef}
+                    type="button"
+                    disabled={projectionActionBusy}
+                    onClick={() => void confirmNextProjection()}
+                  >
+                    <Check aria-hidden="true" />
+                    {confirmingProjectionDefinitionId ===
+                    transaction.recurring_projection_definition_id
+                      ? "Confirming"
+                      : "Confirm next"}
+                  </Button>
+                </Tooltip>
+              ) : null}
+              {projectionDeferAvailable ? (
+                <Tooltip
+                  disabled={!projectionActionBusy}
+                  focusable={projectionActionBusy}
+                  label={projectionActionDisabledReason ?? ""}
+                >
+                  <Button
+                    ref={deferButtonRef}
+                    type="button"
+                    variant="outline"
+                    disabled={projectionActionBusy}
+                    onClick={openDeferProjection}
+                  >
+                    <Calendar aria-hidden="true" />
+                    Defer
+                  </Button>
+                </Tooltip>
+              ) : null}
+            </>
           ) : (
             <>
               {actionApplicability?.edit && onEdit ? (

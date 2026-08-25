@@ -111,6 +111,7 @@ import type { TransactionAmountDisplayMode } from "./use-transaction-browser-pag
 
 interface TransactionBrowserProps {
   readonly amountDisplayMode: TransactionAmountDisplayMode;
+  readonly confirmingProjectionDefinitionId?: number;
   readonly preview?: boolean;
   readonly editMode: boolean;
   readonly dateJumpAnchor?: {
@@ -125,6 +126,10 @@ interface TransactionBrowserProps {
     transaction: Transaction,
     actualDate: string,
   ) => Promise<void>;
+  readonly onConfirmNextRecurringProjection?: (
+    transaction: Transaction,
+    origin?: "detail" | "row",
+  ) => Promise<number | undefined>;
   readonly onDeferRecurringProjection?: (
     transaction: Transaction,
     request: RecurringDefinitionDeferRequest,
@@ -518,6 +523,7 @@ interface AmountEditorRetention {
 
 export const TransactionBrowser = ({
   amountDisplayMode,
+  confirmingProjectionDefinitionId,
   preview = false,
   editMode,
   dateJumpAnchor,
@@ -525,6 +531,7 @@ export const TransactionBrowser = ({
   hasNextPage,
   loading,
   lookups,
+  onConfirmNextRecurringProjection,
   onConfirmRecurringOccurrence,
   onDeferRecurringProjection,
   onChangeTransactionLifecycle,
@@ -600,6 +607,13 @@ export const TransactionBrowser = ({
   const [deferErrorMessage, setDeferErrorMessage] = useState<string>();
   const [deferLoading, setDeferLoading] = useState(false);
   const [deferring, setDeferring] = useState(false);
+  const [projectionConfirmError, setProjectionConfirmError] = useState<
+    | {
+        readonly message: string;
+        readonly transactionId: Transaction["transaction_id"];
+      }
+    | undefined
+  >();
   const [dismissErrorMessage, setDismissErrorMessage] = useState<
     string | undefined
   >();
@@ -658,6 +672,12 @@ export const TransactionBrowser = ({
     }
     return current;
   }, [amountEditorRecords, transactions]);
+  const projectionConfirmErrorMessage = visibleTransactions.some(
+    (transaction) =>
+      transaction.transaction_id === projectionConfirmError?.transactionId,
+  )
+    ? projectionConfirmError?.message
+    : undefined;
 
   useEffect(() => {
     const previousEditMode = previousEditModeRef.current;
@@ -1045,6 +1065,30 @@ export const TransactionBrowser = ({
           setDeferLoading(false);
         }
       });
+  };
+
+  const confirmNextProjection = async (
+    transaction: Transaction,
+    rowIndex: number,
+  ) => {
+    const definitionId = transaction.recurring_projection_definition_id;
+    if (definitionId == null || !onConfirmNextRecurringProjection) {
+      return;
+    }
+    setProjectionConfirmError(undefined);
+    deletedRowFocusIndexRef.current = rowIndex;
+    try {
+      retainedRowFocusTransactionIdRef.current =
+        await onConfirmNextRecurringProjection(transaction, "row");
+    } catch (error) {
+      deletedRowFocusIndexRef.current = undefined;
+      retainedRowFocusTransactionIdRef.current = undefined;
+      setProjectionConfirmError({
+        message:
+          error instanceof Error ? error.message : "The API request failed.",
+        transactionId: transaction.transaction_id,
+      });
+    }
   };
 
   const confirmDeferProjection = async (
@@ -1540,6 +1584,17 @@ export const TransactionBrowser = ({
                     actionApplicability.deferProjection &&
                     onDeferRecurringProjection !== undefined &&
                     onLoadRecurringDefinitionForProjection !== undefined;
+                  const projectionConfirmAvailable =
+                    actionApplicability.confirmNextProjection &&
+                    onConfirmNextRecurringProjection !== undefined;
+                  const projectionActionBusy =
+                    confirmingProjectionDefinitionId !== undefined;
+                  const projectionActionDisabledReason = projectionActionBusy
+                    ? confirmingProjectionDefinitionId ===
+                      transaction.recurring_projection_definition_id
+                      ? "Next occurrence confirmation in progress."
+                      : "Another next occurrence confirmation is in progress."
+                    : undefined;
                   const lifecycleBusyAction = lifecycleActionsBusy.get(
                     transaction.transaction_id,
                   );
@@ -2031,6 +2086,7 @@ export const TransactionBrowser = ({
                       <td className="transactions-actions-column px-3 py-2 text-right align-middle">
                         {editMode ||
                         (projectedOccurrence &&
+                          !projectionConfirmAvailable &&
                           !projectionDeferAvailable) ? null : (
                           <RowActions
                             foldable
@@ -2077,19 +2133,55 @@ export const TransactionBrowser = ({
                                       },
                                     },
                                   ]
-                                : projectionDeferAvailable
+                                : projectionConfirmAvailable ||
+                                    projectionDeferAvailable
                                   ? [
-                                      {
-                                        icon: <Calendar aria-hidden="true" />,
-                                        label: "Defer",
-                                        onSelect: (opener: HTMLElement) => {
-                                          openDeferProjection(
-                                            transaction,
-                                            transactionIndex,
-                                            opener,
-                                          );
-                                        },
-                                      },
+                                      ...(projectionConfirmAvailable
+                                        ? [
+                                            {
+                                              disabled: projectionActionBusy,
+                                              disabledReason:
+                                                projectionActionDisabledReason,
+                                              id: "confirm-next",
+                                              icon: (
+                                                <Check aria-hidden="true" />
+                                              ),
+                                              label:
+                                                confirmingProjectionDefinitionId ===
+                                                transaction.recurring_projection_definition_id
+                                                  ? "Confirming"
+                                                  : "Confirm next",
+                                              onSelect: () => {
+                                                void confirmNextProjection(
+                                                  transaction,
+                                                  transactionIndex,
+                                                );
+                                              },
+                                            },
+                                          ]
+                                        : []),
+                                      ...(projectionDeferAvailable
+                                        ? [
+                                            {
+                                              disabled: projectionActionBusy,
+                                              disabledReason:
+                                                projectionActionDisabledReason,
+                                              icon: (
+                                                <Calendar aria-hidden="true" />
+                                              ),
+                                              label: "Defer",
+                                              onSelect: (
+                                                opener: HTMLElement,
+                                              ) => {
+                                                openDeferProjection(
+                                                  transaction,
+                                                  transactionIndex,
+                                                  opener,
+                                                );
+                                              },
+                                            },
+                                          ]
+                                        : []),
                                     ]
                                   : [
                                       ...(actionApplicability.edit &&
@@ -2358,6 +2450,19 @@ export const TransactionBrowser = ({
               </p>
               <p className="text-muted-foreground mt-1">
                 {occurrenceActionErrorMessage}
+              </p>
+            </div>
+          ) : null}
+          {projectionConfirmErrorMessage ? (
+            <div
+              className="border-destructive bg-card border-2 p-3 text-sm shadow-[var(--shadow-pixel)]"
+              role="alert"
+            >
+              <p className="text-destructive font-semibold">
+                Next occurrence could not be confirmed.
+              </p>
+              <p className="text-muted-foreground mt-1">
+                {projectionConfirmErrorMessage}
               </p>
             </div>
           ) : null}

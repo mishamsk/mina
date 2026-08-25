@@ -8,7 +8,13 @@ import {
   Reload,
   Repeat,
 } from "pixelarticons/react";
-import { useCallback, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 
 import {
   apiErrorMessage,
@@ -147,6 +153,97 @@ export const refreshAfterRecurringDefinitionMutation = async (
   return refresh();
 };
 
+type PostedRecurringDefinitionConfirmationRequest = ReturnType<
+  typeof confirmNextRecurringDefinition
+>;
+
+interface PendingPostedRecurringDefinitionConfirmation {
+  consumers: number;
+  readonly request: PostedRecurringDefinitionConfirmationRequest;
+}
+
+export interface PostedRecurringDefinitionConfirmation {
+  readonly release: () => void;
+  readonly result: PostedRecurringDefinitionConfirmationRequest;
+}
+
+const pendingPostedConfirmations = new Map<
+  number,
+  PendingPostedRecurringDefinitionConfirmation
+>();
+const pendingPostedConfirmationListeners = new Set<() => void>();
+let pendingPostedConfirmationIds: ReadonlySet<number> = new Set();
+
+const publishPendingPostedConfirmations = () => {
+  pendingPostedConfirmationIds = new Set(pendingPostedConfirmations.keys());
+  for (const listener of pendingPostedConfirmationListeners) {
+    listener();
+  }
+};
+
+export const getPendingPostedRecurringDefinitionConfirmationIds = () =>
+  pendingPostedConfirmationIds;
+
+export const subscribePendingPostedRecurringDefinitionConfirmations = (
+  listener: () => void,
+) => {
+  pendingPostedConfirmationListeners.add(listener);
+  return () => {
+    pendingPostedConfirmationListeners.delete(listener);
+  };
+};
+
+export const confirmNextRecurringDefinitionPosted = (
+  recurringDefinitionId: number,
+): PostedRecurringDefinitionConfirmation => {
+  let pending = pendingPostedConfirmations.get(recurringDefinitionId);
+  if (!pending) {
+    pending = {
+      consumers: 0,
+      request: confirmNextRecurringDefinition({
+        body: { status: "posted" },
+        path: { recurring_definition_id: recurringDefinitionId },
+      }),
+    };
+    pendingPostedConfirmations.set(recurringDefinitionId, pending);
+    publishPendingPostedConfirmations();
+  }
+  pending.consumers += 1;
+  let released = false;
+  return {
+    release: () => {
+      if (released) {
+        return;
+      }
+      released = true;
+      const current = pendingPostedConfirmations.get(recurringDefinitionId);
+      if (!current) {
+        return;
+      }
+      current.consumers -= 1;
+      if (current.consumers > 0) {
+        return;
+      }
+      pendingPostedConfirmations.delete(recurringDefinitionId);
+      publishPendingPostedConfirmations();
+    },
+    result: pending.request,
+  };
+};
+
+export const refreshAfterRecurringDefinitionConfirmation = async (
+  refresh: RefreshDefinitions,
+): Promise<boolean> => {
+  invalidateAccountHeaders();
+  invalidateRecurringDefinitionMutationCaches();
+  const [, , definitionsRefreshed] = await Promise.all([
+    refreshFeaturedBalances(),
+    refreshOverview(),
+    refresh(),
+  ]);
+  return definitionsRefreshed;
+};
+
 const interactiveTargetSelector =
   "a, button, input, select, textarea, summary, [role='button'], " +
   "[contenteditable='true'], " +
@@ -239,6 +336,11 @@ export const RecurringPageContent = ({
     readonly action: DefinitionAction;
     readonly definitionId: number;
   }>();
+  const pendingConfirmationIds = useSyncExternalStore(
+    subscribePendingPostedRecurringDefinitionConfirmations,
+    getPendingPostedRecurringDefinitionConfirmationIds,
+    getPendingPostedRecurringDefinitionConfirmationIds,
+  );
   const inFlightRef = useRef<number | undefined>(undefined);
   const focusFallbackRef = useRef<HTMLDivElement>(null);
 
@@ -269,14 +371,7 @@ export const RecurringPageContent = ({
   }, []);
 
   const refreshAfterConfirm = useCallback(async () => {
-    invalidateAccountHeaders();
-    invalidateRecurringDefinitionMutationCaches();
-    const [, , definitionsRefreshed] = await Promise.all([
-      refreshFeaturedBalances(),
-      refreshOverview(),
-      refresh(),
-    ]);
-    return definitionsRefreshed;
+    return refreshAfterRecurringDefinitionConfirmation(refresh);
   }, [refresh]);
 
   const runAction = useCallback(
@@ -287,6 +382,7 @@ export const RecurringPageContent = ({
       run: () => DefinitionActionResult,
       successMessage: string,
       refreshAfter = () => refreshAfterRecurringDefinitionMutation(refresh),
+      onSettled?: () => void,
     ) => {
       if (inFlightRef.current !== undefined) {
         return;
@@ -309,6 +405,7 @@ export const RecurringPageContent = ({
         );
         return false;
       } finally {
+        onSettled?.();
         inFlightRef.current = undefined;
         setInFlight(undefined);
         restoreFocus(opener);
@@ -454,8 +551,15 @@ export const RecurringPageContent = ({
                   const rowAction = actionByDefinition.get(
                     definition.recurring_definition_id,
                   );
-                  const rowBusy = rowAction !== undefined;
-                  const actionDisabled = inFlight !== undefined && !rowBusy;
+                  const confirmationPending = pendingConfirmationIds.has(
+                    definition.recurring_definition_id,
+                  );
+                  const rowBusy =
+                    rowAction !== undefined || confirmationPending;
+                  const actionDisabled =
+                    (inFlight !== undefined ||
+                      pendingConfirmationIds.size > 0) &&
+                    !rowBusy;
                   const amounts = definition.display_amounts;
                   const status = definition.paused_at ? "Paused" : "Active";
                   const actions: readonly RowAction[] = [
@@ -481,22 +585,26 @@ export const RecurringPageContent = ({
                       id: "confirm-next",
                       icon: <Check aria-hidden="true" />,
                       label:
-                        rowAction === "confirm" ? "Confirming" : "Confirm next",
+                        rowAction === "confirm" || confirmationPending
+                          ? "Confirming"
+                          : "Confirm next",
                       onSelect: (opener) => {
+                        let releaseConfirmation: (() => void) | undefined;
                         void runAction(
                           "confirm",
                           definition,
                           opener,
-                          () =>
-                            confirmNextRecurringDefinition({
-                              body: { status: "posted" },
-                              path: {
-                                recurring_definition_id:
-                                  definition.recurring_definition_id,
-                              },
-                            }),
+                          () => {
+                            const confirmation =
+                              confirmNextRecurringDefinitionPosted(
+                                definition.recurring_definition_id,
+                              );
+                            releaseConfirmation = confirmation.release;
+                            return confirmation.result;
+                          },
                           "Next occurrence confirmed.",
                           refreshAfterConfirm,
+                          () => releaseConfirmation?.(),
                         );
                       },
                     },

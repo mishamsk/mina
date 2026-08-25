@@ -5,6 +5,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import {
   NavigationType,
@@ -36,8 +37,12 @@ import {
   updateJournalRecordsTagsOperation,
 } from "@/api";
 import {
+  confirmNextRecurringDefinitionPosted,
+  getPendingPostedRecurringDefinitionConfirmationIds,
   invalidateRecurringDefinitionMutationCaches,
+  refreshAfterRecurringDefinitionConfirmation,
   refreshMountedRecurringDefinitions,
+  subscribePendingPostedRecurringDefinitionConfirmations,
 } from "@/features/recurring";
 import type { TransactionFilters } from "@/models/transaction-filters";
 import type {
@@ -149,6 +154,14 @@ export const useTransactionBrowserPage = ({
     });
   }, []);
   const dateJumpFocusRestoreRef = useRef<HTMLButtonElement | null>(null);
+  const pendingProjectionConfirmationIds = useSyncExternalStore(
+    subscribePendingPostedRecurringDefinitionConfirmations,
+    getPendingPostedRecurringDefinitionConfirmationIds,
+    getPendingPostedRecurringDefinitionConfirmationIds,
+  );
+  const confirmingProjectionDefinitionId = pendingProjectionConfirmationIds
+    .values()
+    .next().value;
   const { page, pageSize, sort, sortDirection } =
     readTransactionPageFromSearchParams(searchParams);
   const anchorDate = readTransactionAnchorDateFromSearchParams(searchParams);
@@ -572,6 +585,89 @@ export const useTransactionBrowserPage = ({
       return result.data;
     },
     [],
+  );
+
+  const confirmNextRecurringProjection = useCallback(
+    async (
+      transaction: Transaction,
+      origin: "detail" | "row" = "detail",
+    ): Promise<number | undefined> => {
+      const definitionId = transaction.recurring_projection_definition_id;
+      if (
+        definitionId == null ||
+        transaction.recurring_projection_is_next !== true
+      ) {
+        throw new Error(
+          "This transaction is not the next recurring projection.",
+        );
+      }
+
+      const confirmation = confirmNextRecurringDefinitionPosted(definitionId);
+      try {
+        const result = await confirmation.result;
+        if (!result.data) {
+          throw new Error(
+            apiErrorMessage(
+              result.error,
+              "Next occurrence could not be confirmed.",
+            ),
+          );
+        }
+
+        const confirmedTransactionId =
+          result.data.generated_transaction_id ?? undefined;
+        let refreshedTransactions: readonly Transaction[];
+        try {
+          [, refreshedTransactions] = await Promise.all([
+            refreshAfterRecurringDefinitionConfirmation(
+              refreshMountedRecurringDefinitions,
+            ),
+            refreshTransactionPagePreservingSnapshot(displayedPageParams),
+          ]);
+        } catch {
+          invalidateTransactionPages();
+          detail.refreshSelectedProjectedTransactionDetail(
+            transaction.transaction_id,
+            definitionId,
+            [],
+            {
+              autoFocusOnTransactionChange: origin === "detail",
+              onlyIfSourceSelected: true,
+            },
+          );
+          showNotice(
+            "Next occurrence confirmed, but transactions could not be refreshed.",
+            "warning",
+          );
+          return confirmedTransactionId;
+        }
+        detail.refreshSelectedProjectedTransactionDetail(
+          transaction.transaction_id,
+          definitionId,
+          refreshedTransactions,
+          {
+            autoFocusOnTransactionChange: origin === "detail",
+            onlyIfSourceSelected: true,
+          },
+        );
+        showNotice("Next occurrence confirmed.");
+        return confirmedTransactionId;
+      } catch (error) {
+        if (
+          origin === "detail" &&
+          !detail.isTransactionDetailSelected(transaction.transaction_id)
+        ) {
+          showNotice(
+            error instanceof Error ? error.message : "The API request failed.",
+            "warning",
+          );
+        }
+        throw error;
+      } finally {
+        confirmation.release();
+      }
+    },
+    [detail, displayedPageParams, showNotice],
   );
 
   const deferRecurringProjection = useCallback(
@@ -1123,6 +1219,8 @@ export const useTransactionBrowserPage = ({
     changeDateJumpValue,
     changeTransactionLifecycle,
     clearTransactionSelection,
+    confirmNextRecurringProjection,
+    confirmingProjectionDefinitionId,
     confirmRecurringOccurrenceFromRow,
     deferRecurringProjection,
     dateJumpAnchor,

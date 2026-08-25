@@ -313,6 +313,9 @@ export const TransactionsPage = () => {
         <div className="flex min-h-0 min-w-0 flex-col gap-3">
           <TransactionBrowser
             amountDisplayMode={browser.amountDisplayMode}
+            confirmingProjectionDefinitionId={
+              browser.confirmingProjectionDefinitionId
+            }
             editMode={browser.editMode}
             dateJumpAnchor={browser.dateJumpAnchor}
             errorMessage={browser.errorMessage}
@@ -325,6 +328,9 @@ export const TransactionsPage = () => {
             }
             loading={browser.loading}
             lookups={browser.lookups.snapshot}
+            onConfirmNextRecurringProjection={
+              browser.confirmNextRecurringProjection
+            }
             onConfirmRecurringOccurrence={
               browser.confirmRecurringOccurrenceFromRow
             }
@@ -368,7 +374,11 @@ export const TransactionsPage = () => {
             onNextPage={() => {
               browser.setPage(browser.page + 1);
             }}
-            onOpenTransaction={browser.detail.openTransactionDetail}
+            onOpenTransaction={(transaction, opener) => {
+              browser.detail.openTransactionDetail(transaction, opener, {
+                autoFocusOnTransactionChange: true,
+              });
+            }}
             onPageSizeChange={browser.setPageSize}
             onPreviousPage={() => {
               browser.setPage(
@@ -415,11 +425,18 @@ export const TransactionsPage = () => {
         />
         {!browser.editMode && browser.detail.selectedTransactionId ? (
           <TransactionDetailPanel
+            autoFocusOnTransactionChange={
+              browser.detail.autoFocusOnTransactionChange
+            }
+            confirmingProjectionDefinitionId={
+              browser.confirmingProjectionDefinitionId
+            }
             errorMessage={browser.detail.errorMessage}
             loading={browser.detail.loading}
             lookups={browser.lookups.snapshot}
             onChangeLifecycle={browser.changeTransactionLifecycle}
             onClose={browser.detail.closeTransactionDetail}
+            onConfirmNextProjection={browser.confirmNextRecurringProjection}
             onConfirmOccurrence={browser.confirmRecurringOccurrenceFromRow}
             onDeferProjection={browser.deferRecurringProjection}
             onDelete={browser.deleteSelectedTransaction}

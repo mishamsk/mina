@@ -8,10 +8,14 @@ export {
   recurringDefinitionRecordsFromTransaction,
 } from "./recurring-definition-draft";
 export {
+  confirmNextRecurringDefinitionPosted,
+  getPendingPostedRecurringDefinitionConfirmationIds,
   invalidateRecurringDefinitionMutationCaches,
   RecurringPageContent,
+  refreshAfterRecurringDefinitionConfirmation,
   refreshAfterRecurringDefinitionMutation,
   revealRecurringDefinitionActionRow,
+  subscribePendingPostedRecurringDefinitionConfirmations,
 } from "./recurring-page-content";
 export {
   refreshMountedRecurringDefinitions,

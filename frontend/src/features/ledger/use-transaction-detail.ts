@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { type SetURLSearchParams, useLocation } from "react-router";
 
 import type { Transaction } from "@/api";
@@ -58,11 +64,13 @@ export const useTransactionDetail = ({
     useState<FetchedTransactionDetail>();
   const [responseLocalDetail, setResponseLocalDetail] =
     useState<ResponseLocalDetail>();
+  const responseLocalDetailRef = useRef(responseLocalDetail);
   const [suppressedDetailFetchId, setSuppressedDetailFetchId] = useState<
     number | undefined
   >();
   const detailRestoreFocusRef = useRef<HTMLElement | null>(null);
   const suppressNextRestoreFocusRef = useRef(false);
+  const suppressNextTransactionChangeAutoFocusRef = useRef(false);
   const rowOpenedTransactionIdRef = useRef<number | undefined>(undefined);
   const selectedPersistedTransactionId = parseOptionalPositiveInteger(
     searchParams.get("transaction"),
@@ -90,6 +98,7 @@ export const useTransactionDetail = ({
   const selectedTransactionId =
     selectedResponseLocalDetail?.transaction_id ??
     selectedPersistedTransactionId;
+  const selectedTransactionIdRef = useRef(selectedTransactionId);
   const selectedTransactionFromSnapshot = transactions?.find(
     (transaction) => transaction.transaction_id === selectedTransactionId,
   );
@@ -111,6 +120,11 @@ export const useTransactionDetail = ({
     !selectedFetchedDetail,
   );
   const loading = detailNeedsFetch || Boolean(transaction && !lookupsLoaded);
+
+  useLayoutEffect(() => {
+    responseLocalDetailRef.current = currentResponseLocalDetail;
+    selectedTransactionIdRef.current = selectedTransactionId;
+  }, [currentResponseLocalDetail, selectedTransactionId]);
 
   const closeTransactionDetail = useCallback(
     (options: { readonly suppressFetch?: boolean } = {}) => {
@@ -135,7 +149,10 @@ export const useTransactionDetail = ({
     (
       nextTransaction: Transaction | number,
       opener?: HTMLElement,
-      options: { readonly toggle?: boolean } = {},
+      options: {
+        readonly autoFocusOnTransactionChange?: boolean;
+        readonly toggle?: boolean;
+      } = {},
     ) => {
       const nextTransactionId =
         typeof nextTransaction === "number"
@@ -156,7 +173,9 @@ export const useTransactionDetail = ({
         return;
       }
 
-      setAutoFocusOnTransactionChange(false);
+      setAutoFocusOnTransactionChange(
+        options.autoFocusOnTransactionChange ?? false,
+      );
       rowOpenedTransactionIdRef.current = nextTransactionId;
       detailRestoreFocusRef.current = opener ?? null;
       if (
@@ -247,12 +266,30 @@ export const useTransactionDetail = ({
         Transaction["recurring_projection_definition_id"]
       >,
       refreshedTransactions: readonly Transaction[],
+      options: {
+        readonly autoFocusOnTransactionChange?: boolean;
+        readonly onlyIfSourceSelected?: boolean;
+      } = {},
     ) => {
+      const currentResponseLocalDetail = responseLocalDetailRef.current;
+      if (
+        options.autoFocusOnTransactionChange !== undefined &&
+        currentResponseLocalDetail?.transaction
+          .recurring_projection_definition_id === recurringDefinitionId &&
+        currentResponseLocalDetail.transaction.transaction_id ===
+          deferredTransactionId
+      ) {
+        suppressNextTransactionChangeAutoFocusRef.current =
+          !options.autoFocusOnTransactionChange;
+        setAutoFocusOnTransactionChange(options.autoFocusOnTransactionChange);
+      }
       setResponseLocalDetail((current) => {
         if (
           !current ||
           current.transaction.recurring_projection_definition_id !==
-            recurringDefinitionId
+            recurringDefinitionId ||
+          (options.onlyIfSourceSelected === true &&
+            current.transaction.transaction_id !== deferredTransactionId)
         ) {
           return current;
         }
@@ -280,11 +317,12 @@ export const useTransactionDetail = ({
     [],
   );
 
-  const restoreDetailFocus = useCallback(() => {
-    if (suppressNextRestoreFocusRef.current) {
+  const restoreDetailFocus = useCallback((force = false) => {
+    if (suppressNextRestoreFocusRef.current && !force) {
       suppressNextRestoreFocusRef.current = false;
       return;
     }
+    suppressNextRestoreFocusRef.current = false;
     const fallback = document.querySelector<HTMLElement>(
       restoreFallbackSelector,
     );
@@ -295,6 +333,19 @@ export const useTransactionDetail = ({
       preventScroll: true,
     });
   }, []);
+
+  const isTransactionDetailSelected = useCallback(
+    (transactionId: Transaction["transaction_id"]) =>
+      selectedTransactionIdRef.current === transactionId,
+    [],
+  );
+
+  useEffect(
+    () => () => {
+      selectedTransactionIdRef.current = undefined;
+    },
+    [],
+  );
 
   useEffect(() => {
     if (
@@ -342,6 +393,10 @@ export const useTransactionDetail = ({
   ]);
 
   useEffect(() => {
+    if (suppressNextTransactionChangeAutoFocusRef.current) {
+      suppressNextTransactionChangeAutoFocusRef.current = false;
+      return;
+    }
     if (!selectedTransactionId) {
       rowOpenedTransactionIdRef.current = undefined;
       return;
@@ -375,6 +430,7 @@ export const useTransactionDetail = ({
     autoFocusOnTransactionChange,
     closeTransactionDetail,
     errorMessage,
+    isTransactionDetailSelected,
     loading,
     openTransactionDetail,
     refreshSelectedProjectedTransactionDetail,
