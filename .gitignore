@@ -22,3 +22,4 @@ coverage.*
 /internal/webui/dist/*
 !/internal/webui/dist/README.md
 !.claude/
+.Trash
