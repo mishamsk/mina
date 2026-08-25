@@ -23,6 +23,7 @@ Prior review history: `{{PREVIOUS_REVIEW_FILE}}`
 ## Decision rules
 
 - Ground decisions in the repository `AGENTS.md`, `docs/architecture.md`, the review basis, and the exact review range.
+- Use temporary directories for all review-owned side effects, created only beneath the caller-provided `$TMPDIR`; pass `$TMPDIR` explicitly to tools such as `mktemp` rather than relying on an OS default, and leave cleanup to the caller. Reuse inherited tool caches and do not override `GOCACHE` or `GOMODCACHE`.
 - Start from the supplied reviews. Read only narrow code or diff regions needed to resolve overlap or an obvious contradiction; do not re-review the full diff.
 - Keep findings that are concrete, actionable, introduced by this diff, reachable in normal operation, and supported by the supplied Evidence.
 - Merge equivalent findings and retain the clearest file location, explanation, severity, and evidence.

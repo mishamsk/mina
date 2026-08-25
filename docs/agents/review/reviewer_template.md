@@ -17,7 +17,8 @@ Success means every reported finding is concrete, in range, reachable in a suppo
 ## Constraints
 
 - Do not edit repository files or create commits.
-- Use unique scratch paths under `/tmp/` for any review-owned side effects.
+- Use temporary directories for all review-owned side effects, created only beneath the caller-provided `$TMPDIR`. Pass `$TMPDIR` explicitly to tools such as `mktemp` rather than relying on an OS default. The caller owns cleanup; do not remove these directories yourself.
+- Reuse inherited tool caches. In particular, do not override `GOCACHE` or `GOMODCACHE` or create per-review Go caches; the shared Go caches support concurrent agents.
 - Do not report speculative risks, pre-existing issues, trivial style preferences, or behavior intentionally requested by the task.
 - Treat state at the range base as pre-existing, even when it conflicts with task constraints. Do not ask to revert or modify it.
 - Report a failure only when it is reachable through a supported user, API, or developer workflow; a documented package contract; app-created data; or an unreliable external boundary such as filesystem, database, subprocess, network, clock, or OS behavior.

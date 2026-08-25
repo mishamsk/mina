@@ -8,6 +8,7 @@
 
 - Backend application selection includes configuration, background execution, concrete providers, shared backend helpers, and hand-written CLI and MCP surface code so accounting-data migration risks receive compatibility review wherever they originate.
 - Generated application outputs are excluded; their declarative inputs and generators remain reviewable.
+- Each invocation owns one unique ignored `build/.reviewloop-*` scratch directory, gives it to child agents through `TMPDIR` and `GOTMPDIR`, and removes only that directory best-effort without changing the review outcome when cleanup is incomplete.
 
 ## Boundaries
 

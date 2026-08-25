@@ -18,7 +18,8 @@ Exact review range: {{REVIEW_RANGE}}
 
 - Validate only the supplied candidate; do not search for additional findings.
 - Do not edit repository files or create commits.
-- Use unique scratch paths under `/tmp/` for any validation-owned side effects.
+- Use temporary directories for all validation-owned side effects, created only beneath the caller-provided `$TMPDIR`. Pass `$TMPDIR` explicitly to tools such as `mktemp` rather than relying on an OS default. The caller owns cleanup; do not remove these directories yourself.
+- Reuse inherited tool caches. In particular, do not override `GOCACHE` or `GOMODCACHE` or create per-review Go caches; the shared Go caches support concurrent agents.
 - Inspect the narrowest relevant code and diff first. Run a focused smoke test when it materially strengthens or refutes the evidence.
 - Reject the finding if its evidence is not reproducible, the behavior is pre-existing or out of range, the scenario is unsupported or unrealistic, or the task intentionally requires the behavior.
 - Stop once the evidence is sufficient for a definite decision.

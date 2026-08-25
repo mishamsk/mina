@@ -68,6 +68,7 @@ var (
 
 type config struct {
 	root                    string
+	scratchDir              string
 	reviewBasis             string
 	claudeModel             string
 	codexReviewer           codexSettings
@@ -194,6 +195,12 @@ func run(args []string) (int, error) {
 	if err := requireCleanWorktree(cfg.root); err != nil {
 		return 1, err
 	}
+	scratchDir, err := createReviewScratchDir(cfg.root)
+	if err != nil {
+		return 2, err
+	}
+	cfg.scratchDir = scratchDir
+	defer removeReviewScratchDir(scratchDir)
 
 	for iteration := 1; iteration <= cfg.maxIterations; iteration++ {
 		reviewScope := cfg.reviewTarget.scope(iteration)
@@ -273,6 +280,24 @@ func run(args []string) (int, error) {
 	}
 
 	return 2, errors.New("unreachable review loop state")
+}
+
+func createReviewScratchDir(root string) (string, error) {
+	buildDir := filepath.Join(root, "build")
+	if err := os.MkdirAll(buildDir, 0o755); err != nil {
+		return "", fmt.Errorf("create review scratch parent: %w", err)
+	}
+	scratchDir, err := os.MkdirTemp(buildDir, ".reviewloop-*")
+	if err != nil {
+		return "", fmt.Errorf("create review scratch directory: %w", err)
+	}
+	return scratchDir, nil
+}
+
+func removeReviewScratchDir(scratchDir string) {
+	if err := os.RemoveAll(scratchDir); err != nil {
+		fmt.Fprintf(os.Stderr, "reviewloop: warning: some scratch paths could not be removed from %s: %v\n", scratchDir, err)
+	}
 }
 
 func loadConfig(args []string) (config, error) {
@@ -1355,7 +1380,7 @@ func singleValidationResult(message string) (string, error) {
 
 func runReviewerAgent(cfg config, label string, prompt string, useClaude bool) (string, error) {
 	if useClaude {
-		message, err := runClaude(cfg.root, label, prompt, cfg.claudeModel)
+		message, err := runClaude(cfg.root, cfg.scratchDir, label, prompt, cfg.claudeModel)
 		if err == nil {
 			return message, nil
 		}
@@ -1364,7 +1389,7 @@ func runReviewerAgent(cfg config, label string, prompt string, useClaude bool) (
 	return runCodex(cfg, label, prompt, cfg.codexReviewer)
 }
 
-func runClaude(root string, label string, prompt string, model string) (string, error) {
+func runClaude(root string, scratchDir string, label string, prompt string, model string) (string, error) {
 	cmd := exec.Command(
 		"claude",
 		"-p",
@@ -1374,7 +1399,7 @@ func runClaude(root string, label string, prompt string, model string) (string, 
 	)
 	cmd.Dir = root
 	cmd.Stdin = strings.NewReader(prompt)
-	cmd.Env = append(os.Environ(), reviewLoopActiveEnvName+"=1")
+	cmd.Env = reviewAgentEnv(scratchDir)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	var stdout bytes.Buffer
@@ -1426,7 +1451,7 @@ func runClaude(root string, label string, prompt string, model string) (string, 
 }
 
 func runCodex(cfg config, label string, prompt string, settings codexSettings) (string, error) {
-	outputFile, err := os.CreateTemp("/tmp", "mina-reviewloop-"+fileSafeName(label)+"-*.md")
+	outputFile, err := os.CreateTemp(cfg.scratchDir, "output-"+fileSafeName(label)+"-*.md")
 	if err != nil {
 		return "", fmt.Errorf("create %s output file: %w", label, err)
 	}
@@ -1450,7 +1475,7 @@ func runCodex(cfg config, label string, prompt string, settings codexSettings) (
 		"-",
 	)
 	cmd.Stdin = strings.NewReader(prompt)
-	cmd.Env = append(os.Environ(), reviewLoopActiveEnvName+"=1")
+	cmd.Env = reviewAgentEnv(cfg.scratchDir)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	var stdout bytes.Buffer
@@ -1540,6 +1565,15 @@ func runCodex(cfg config, label string, prompt string, settings codexSettings) (
 		return "", fmt.Errorf("read %s output file: %w", label, err)
 	}
 	return strings.TrimRight(string(message), "\n"), nil
+}
+
+func reviewAgentEnv(scratchDir string) []string {
+	return append(
+		os.Environ(),
+		reviewLoopActiveEnvName+"=1",
+		"TMPDIR="+scratchDir,
+		"GOTMPDIR="+scratchDir,
+	)
 }
 
 func killProcessGroup(process *os.Process) {
