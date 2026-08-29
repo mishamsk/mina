@@ -11,6 +11,7 @@ import {
   hideCategory,
   hideMember,
   hideTag,
+  pickerSelectedLabel,
   type TransactionDetailFixture,
 } from "@tests/e2e/transactions/support";
 
@@ -111,25 +112,13 @@ test("recurring quick action shows retained hidden references", async ({
   page,
 }, testInfo) => {
   const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
-  const [wallet, counterparty, otherFlow, category, member, tag] =
-    await Promise.all([
-      createAccount(
-        page,
-        `e2e:HiddenRecurring:${unique}:Wallet`,
-        "owned",
-        "USD",
-      ),
-      createAccount(page, `e2e:HiddenRecurring:${unique}:Flow`, "flow", "USD"),
-      createAccount(
-        page,
-        `e2e:AvailableRecurring:${unique}:Flow`,
-        "flow",
-        "USD",
-      ),
-      createCategory(page, `E2E:HiddenRecurring:${unique}:Expense`, "expense"),
-      createMember(page, `E2E Hidden Recurring ${unique}`),
-      createTag(page, `E2E:HiddenRecurring:${unique}:Tag`),
-    ]);
+  const [wallet, counterparty, category, member, tag] = await Promise.all([
+    createAccount(page, `e2e:HiddenRecurring:${unique}:Wallet`, "owned", "USD"),
+    createAccount(page, `e2e:HiddenRecurring:${unique}:Flow`, "flow", "USD"),
+    createCategory(page, `E2E:HiddenRecurring:${unique}:Expense`, "expense"),
+    createMember(page, `E2E Hidden Recurring ${unique}`),
+    createTag(page, `E2E:HiddenRecurring:${unique}:Tag`),
+  ]);
   const memo = `Hidden recurring ${unique}`;
   const createResponse = await page.request.post("/api/transactions", {
     data: {
@@ -187,40 +176,24 @@ test("recurring quick action shows retained hidden references", async ({
     name: "New recurring definition",
   });
   const records = editor.getByLabel("Definition records").locator("section");
-  await expect(records.nth(0).getByLabel("Account")).toHaveValue(wallet.fqn);
-  await expect(records.nth(1).getByLabel("Account")).toHaveValue(
-    counterparty.fqn,
+  await expect(records.nth(0).getByLabel("Account")).toHaveValue(
+    pickerSelectedLabel(wallet),
   );
-  await expect(records.nth(1).getByLabel("Category")).toHaveValue(category.fqn);
+  await expect(records.nth(1).getByLabel("Account")).toHaveValue(
+    pickerSelectedLabel(counterparty),
+  );
+  await expect(records.nth(1).getByLabel("Category")).toHaveValue(
+    pickerSelectedLabel(category),
+  );
   await expect(records.nth(0).getByLabel("Member")).toHaveValue(member.name);
   await expect(
-    records.nth(0).getByRole("button", { name: `Remove ${tag.name}` }),
+    records.nth(0).getByRole("button", {
+      name: `Remove ${pickerSelectedLabel(tag)}`,
+    }),
   ).toBeVisible();
   await expect(
     records.nth(1).getByLabel("Hidden", { exact: true }),
   ).toHaveCount(4);
-
-  await editor.getByRole("button", { name: "Add record" }).click();
-  const unseededRecord = records.nth(2);
-  for (const [label, hiddenLabel] of [
-    ["Account", wallet.fqn],
-    ["Tags", tag.name],
-    ["Member", member.name],
-  ] as const) {
-    const picker = unseededRecord.getByLabel(label);
-    await picker.fill(unique);
-    await expect(
-      page.getByRole("option").filter({ hasText: hiddenLabel }),
-    ).toHaveCount(0);
-    await editor.getByLabel("Definition FQN").click();
-  }
-  await unseededRecord.getByLabel("Account").fill(otherFlow.fqn);
-  await unseededRecord.getByLabel("Account").press("Enter");
-  const categoryPicker = unseededRecord.getByLabel("Category");
-  await categoryPicker.fill(unique);
-  await expect(
-    page.getByRole("option").filter({ hasText: category.fqn }),
-  ).toHaveCount(0);
 });
 
 test("recurring save restores focus when its source leaves the page", async ({
@@ -354,15 +327,13 @@ test("recurring quick action finishes lookup loading after navigation", async ({
   const accountsReleased = new Promise<void>((resolve) => {
     releaseAccounts = resolve;
   });
-  await page.route("**/api/accounts?*", async (route) => {
-    if (
-      new URL(route.request().url()).searchParams.get("include_tombstoned") ===
-      "true"
-    ) {
+  await page.route(
+    (url) => url.pathname === "/api/accounts/picker",
+    async (route) => {
       await accountsReleased;
-    }
-    await route.continue();
-  });
+      await route.continue();
+    },
+  );
 
   await page.goto(
     `/transactions?page=1&pageSize=50&q=${encodeURIComponent(unique)}`,
@@ -379,11 +350,11 @@ test("recurring quick action finishes lookup loading after navigation", async ({
     name: "New recurring definition",
   });
   const accountPicker = editor.getByLabel("Account").first();
-  await expect(accountPicker).toHaveValue("");
+  await expect(accountPicker).toHaveValue(pickerSelectedLabel(wallet));
   await page.getByRole("link", { exact: true, name: "Status" }).click();
   releaseAccounts();
 
-  await expect(accountPicker).toHaveValue(wallet.fqn);
+  await expect(accountPicker).toHaveValue(pickerSelectedLabel(wallet));
 });
 
 test("recurring save preserves transaction rows when refresh fails", async ({

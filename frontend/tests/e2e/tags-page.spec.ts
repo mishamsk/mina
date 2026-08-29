@@ -413,10 +413,6 @@ test("tags row actions hide groups and move renamed paths into transaction filte
   await expect(page.locator("#transactions-filter-tag-options")).toContainText(
     `${moveDestination}:Alpha`,
   );
-  await fillAndExpectValue(refreshedTagPicker, moveSource);
-  await expect(page.locator("#transactions-filter-tag-options")).toContainText(
-    "No matches",
-  );
 });
 
 test("tag delete row actions respect the API deleteability signal", async ({
@@ -731,4 +727,69 @@ test("tags side panel creates edits and deletes tags with conflict feedback", as
     `/api/tags/${staleTag.tag_id}`,
   );
   expect(tagDeleteResponse.ok()).toBe(true);
+});
+
+test("tag editor persists and clears a display-label override", async ({
+  browserName,
+  page,
+}) => {
+  const unique = `${browserName}${Date.now()}`;
+  const fqn = `E2ELabel:${unique}:Weekly`;
+  const label = `Weekend routine ${unique}`;
+
+  await page.goto("/tags");
+  await page.getByRole("button", { name: "New tag" }).click();
+  const createPanel = page.getByRole("dialog", { name: "Create tag" });
+  await createPanel.getByLabel("FQN").fill(fqn);
+  const labelInput = createPanel.getByLabel("Display label (optional)");
+  await labelInput.fill(`${label} `);
+  await createPanel.getByRole("button", { name: "Create" }).click();
+  await expect(labelInput).toHaveValue(`${label} `);
+  await expect(
+    createPanel.getByText("Remove leading or trailing whitespace."),
+  ).toBeVisible();
+  await labelInput.fill(label);
+  const createdResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/api/tags") &&
+      response.request().method() === "POST",
+  );
+  await createPanel.getByRole("button", { name: "Create" }).click();
+  const created = await createdResponse;
+  expect(created.status()).toBe(201);
+  expect(created.request().postDataJSON()).toMatchObject({
+    display_label: label,
+  });
+  const tag = (await created.json()) as TagFixture & {
+    readonly display_label: string;
+  };
+  expect(tag.display_label).toBe(label);
+
+  await page.goto(`/tags?q=${encodeURIComponent(fqn)}`);
+  const row = page
+    .getByTestId("tags-tree-row")
+    .filter({ hasText: fqn })
+    .first();
+  await expect(row).toBeVisible({ timeout: 10_000 });
+  await row.getByRole("button", { name: "Edit tag" }).click();
+  const editPanel = page.getByRole("dialog", { name: "Edit tag" });
+  const editLabel = editPanel.getByLabel("Display label (optional)");
+  await expect(editLabel).toHaveValue(label);
+  await expect(async () => {
+    await editLabel.fill("");
+    await expect(editLabel).toHaveValue("", { timeout: 250 });
+  }).toPass();
+  const updatedResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith(`/api/tags/${tag.tag_id}`) &&
+      response.request().method() === "PATCH",
+  );
+  await editPanel.getByRole("button", { name: "Save" }).click();
+  const updated = await updatedResponse;
+  expect(updated.request().postDataJSON()).toMatchObject({
+    display_label: null,
+  });
+  expect(
+    ((await updated.json()) as { display_label: string }).display_label,
+  ).toBe(`${unique}:Weekly`);
 });

@@ -90,6 +90,85 @@ test("template cold load focuses the picker when the dialog remains idle", async
   ).toBeFocused();
 });
 
+test("picker debounces search and retains stable rows until replacement", async ({
+  page,
+}, testInfo) => {
+  const suffix =
+    `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`.slice(
+      -6,
+    );
+  const baselineLabel = `Base${suffix}`;
+  const targetLabel = `Next${suffix}`;
+  const [baseline, target] = await Promise.all([
+    createCategory(
+      page,
+      `E2E:Debounce:${suffix}:Baseline`,
+      "expense",
+      baselineLabel,
+    ),
+    createCategory(
+      page,
+      `E2E:Debounce:${suffix}:Target`,
+      "expense",
+      targetLabel,
+    ),
+  ]);
+
+  await page.goto("/transactions?page=1&pageSize=25");
+  await page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" })
+    .click();
+  const categoryPicker = page.getByRole("combobox", { name: "Category" });
+  const options = page.locator("#spend-merchant-0-category-options");
+  await categoryPicker.fill(baselineLabel);
+  const baselineOption = options.locator(
+    `#spend-merchant-0-category-option-${baseline.category_id}`,
+  );
+  await expect(baselineOption).toBeVisible();
+  const baselineCreateOption = options.locator(
+    "#spend-merchant-0-category-option-create",
+  );
+  await expect(baselineCreateOption).toBeVisible();
+  const stableClass = await baselineOption.getAttribute("class");
+  expect(stableClass).not.toBeNull();
+
+  let releaseTarget!: () => void;
+  const targetReleased = new Promise<void>((resolve) => {
+    releaseTarget = resolve;
+  });
+  let targetRequested!: () => void;
+  const targetRequest = new Promise<void>((resolve) => {
+    targetRequested = resolve;
+  });
+  const requestedQueries: string[] = [];
+  await page.route(
+    (url) => url.pathname === "/api/categories/picker",
+    async (route) => {
+      const query = new URL(route.request().url()).searchParams.get("q") ?? "";
+      requestedQueries.push(query);
+      if (query === targetLabel) {
+        targetRequested();
+        await targetReleased;
+      }
+      await route.continue();
+    },
+  );
+
+  await categoryPicker.selectText();
+  await categoryPicker.pressSequentially(targetLabel, { delay: 10 });
+  await targetRequest;
+  await expect(baselineOption).toBeVisible();
+  await expect(baselineCreateOption).toBeVisible();
+  await expect(baselineOption).toHaveAttribute("class", stableClass!);
+
+  releaseTarget();
+  await expect(
+    options.locator(`#spend-merchant-0-category-option-${target.category_id}`),
+  ).toBeVisible();
+  expect(requestedQueries).toEqual([targetLabel]);
+});
+
 test("template picker constrains long paths and exposes the full path", async ({
   page,
 }, testInfo) => {
@@ -116,7 +195,8 @@ test("template picker constrains long paths and exposes the full path", async ({
     .fill(unique);
   const option = page.getByRole("option").filter({ hasText: fqn });
   await expect(option).toBeVisible();
-  const activeLabel = option.getByText(leaf, { exact: true }).first();
+  const activeLabel = option.getByTestId("entity-picker-fqn");
+  await expect(activeLabel).toHaveText(fqn);
   await expect(activeLabel).toHaveCSS("white-space", "normal");
   const [optionBox, listboxBox] = await Promise.all([
     option.boundingBox(),
@@ -133,7 +213,7 @@ test("template picker constrains long paths and exposes the full path", async ({
     )
     .toBe(true);
   await option.locator("[data-slot='tooltip-trigger']").last().hover();
-  await expect(page.getByRole("tooltip")).toHaveText(fqn);
+  await expect(page.getByRole("tooltip")).toHaveText(`${fqn} (${leaf})`);
 
   const deleted = await page.request.delete(
     `/api/transaction-templates/${templateId}`,
@@ -431,7 +511,7 @@ test("entry category picker completes hierarchy segments and preserves full-path
   const fallbackFqn = `${base}:Food:Supermarket:Groceries`;
   await Promise.all([
     createCategory(page, diningFqn, "expense"),
-    createCategory(page, pantryFqn, "expense"),
+    createCategory(page, pantryFqn, "expense", "Pantry Pick"),
     createCategory(page, fallbackFqn, "expense"),
     createCategory(page, `${base}:Travel:Flights`, "expense"),
   ]);
@@ -512,12 +592,20 @@ test("entry category picker completes hierarchy segments and preserves full-path
   await expect(categoryPicker).toHaveValue("");
   await expect(categoryPicker).toBeFocused();
   await categoryPicker.fill(`${base}:`);
+  await expect(categoryPicker).toHaveAttribute(
+    "aria-activedescendant",
+    /spend-merchant-0-category-option-group-/,
+  );
   await categoryPicker.press("Enter");
   await expect(categoryPicker).toHaveValue(`${base}:Food:`);
 
   await categoryPicker.press("End");
   await categoryPicker.press("ArrowLeft");
   await expect(categoryPicker).toHaveValue(`${base}:`);
+  await expect(categoryPicker).toHaveAttribute(
+    "aria-activedescendant",
+    /spend-merchant-0-category-option-group-/,
+  );
   await categoryPicker.press("ArrowRight");
   await expect(categoryPicker).toHaveValue(`${base}:Food:`);
   await categoryPicker.press("End");
@@ -538,7 +626,7 @@ test("entry category picker completes hierarchy segments and preserves full-path
   ).toBeVisible();
 
   await categoryPicker.fill(diningFqn);
-  await expect(categoryPicker).toHaveValue(diningFqn);
+  await expect(categoryPicker).toHaveValue(`${diningFqn} (Food:Dining)`);
   await expect(categoryPicker).toHaveAttribute("aria-expanded", "false");
 
   await categoryPicker.fill(`${base}:Food:Pan`);
@@ -553,7 +641,7 @@ test("entry category picker completes hierarchy segments and preserves full-path
   await categoryPicker.pressSequentially("n");
   await expect(categoryPicker).toHaveAttribute("aria-expanded", "true");
   const pantryOption = categoryOptions.getByRole("option", {
-    name: /Pantry/,
+    name: new RegExp(`${pantryFqn}.*Pantry Pick`),
   });
   await expect(pantryOption).toBeVisible();
   const pantryOptionId = await pantryOption.evaluate((option) => option.id);
@@ -562,18 +650,23 @@ test("entry category picker completes hierarchy segments and preserves full-path
     pantryOptionId,
   );
   await categoryPicker.press("Tab");
-  await expect(categoryPicker).toHaveValue(pantryFqn);
+  await expect(categoryPicker).toHaveValue(`${pantryFqn} (Pantry Pick)`);
   await expect(categoryPicker).toHaveAttribute("aria-expanded", "false");
   await categoryPicker.press("Tab");
   await expect(categoryPicker).not.toBeFocused();
-  await expect(categoryPicker).toHaveValue(pantryFqn);
+  await expect(categoryPicker).toHaveValue(`${pantryFqn} (Pantry Pick)`);
   await page.getByRole("combobox", { name: "Funding account" }).focus();
   await categoryPicker.focus();
   await expect(categoryPicker).toHaveAttribute("aria-expanded", "true");
   await categoryPicker.press("Tab");
   await expect(categoryPicker).not.toBeFocused();
-  await expect(categoryPicker).toHaveValue(pantryFqn);
+  await expect(categoryPicker).toHaveValue(`${pantryFqn} (Pantry Pick)`);
   await expect(categoryPicker).toHaveAttribute("aria-expanded", "false");
+  await page.mouse.move(0, 0);
+  await categoryPicker.hover();
+  await expect(page.getByRole("tooltip")).toHaveText(
+    `${pantryFqn} (Pantry Pick)`,
+  );
 
   const createdFqn = `${base}:Food:New:Bakery`;
   await categoryPicker.fill(createdFqn);
@@ -601,11 +694,11 @@ test("entry category picker completes hierarchy segments and preserves full-path
   const createdCategory = (await createResponse.json()) as CategoryFixture;
   expect(createdCategory.fqn).toBe(createdFqn);
   expect(createdCategory.economic_intent).toBe("expense");
-  await expect(categoryPicker).toHaveValue(createdFqn);
+  await expect(categoryPicker).toHaveValue(`${createdFqn} (New:Bakery)`);
   await expect(categoryPicker).toBeFocused();
   await categoryPicker.press("Tab");
   await expect(categoryPicker).not.toBeFocused();
-  await expect(categoryPicker).toHaveValue(createdFqn);
+  await expect(categoryPicker).toHaveValue(`${createdFqn} (New:Bakery)`);
   await accountRefreshPromise;
   await page.evaluate(
     () =>
@@ -633,9 +726,6 @@ test("entry category picker completes hierarchy segments and preserves full-path
 
   const merchantPicker = page.getByRole("combobox", { name: "Merchant" });
   await merchantPicker.fill("cash");
-  await expect(page.locator("#spend-merchant-0-account-options")).toContainText(
-    "No matches",
-  );
   await expect(
     page
       .locator("#spend-merchant-0-account-options")
@@ -740,7 +830,9 @@ test("late category creation failures remain visible after blur", async ({
   releaseCreate?.();
 
   await expect(categoryPicker).toHaveAttribute("aria-expanded", "false");
-  await expect(categoryPicker.locator("..").getByRole("alert")).toBeVisible();
+  await expect(
+    page.getByRole("group", { name: "Merchant 1" }).getByRole("alert"),
+  ).toBeVisible();
   await expect(memo).toBeFocused();
 });
 
@@ -769,6 +861,16 @@ test("tags multi-picker retains its prefix for sibling batching", async ({
   const rootSearchOptionId = `spend-tags-option-${rootSearchTag.tag_id}`;
   const rootSearchOption = tagsOptions.locator(`#${rootSearchOptionId}`);
   await expect(rootSearchOption).toBeVisible();
+  await expect(rootSearchOption.getByTestId("entity-picker-fqn")).toHaveText(
+    rootSearchTag.fqn,
+  );
+  const rootSearchDisplayTitle = rootSearchOption.getByTestId(
+    "entity-picker-display-title",
+  );
+  await expect(rootSearchDisplayTitle).toHaveText(
+    `(${rootSearchTag.display_label})`,
+  );
+  await expect(rootSearchDisplayTitle).toHaveClass(/text-muted-foreground/);
   await expect(tagsPicker).toHaveAttribute(
     "aria-activedescendant",
     rootSearchOptionId,
@@ -1106,7 +1208,7 @@ test("keyboard spend entry creates a transaction and keeps sticky fields", async
   await expect(dateInput).toHaveValue("2026-05-31");
   await expect(
     page.getByRole("combobox", { name: "Funding account" }),
-  ).toHaveValue("bank:Chase:Sapphire");
+  ).toHaveValue("bank:Chase:Sapphire (Chase:Sapphire)");
   await expect(page.getByLabel("Amount")).toHaveValue("");
 
   await page.getByRole("button", { name: "Clear draft" }).click();

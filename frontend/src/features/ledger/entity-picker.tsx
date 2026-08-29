@@ -1,5 +1,12 @@
 import { ChevronRight, Close, EyeOff, Home, Plus } from "pixelarticons/react";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import { Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
@@ -8,11 +15,12 @@ import {
   PopoverAnchor,
   PopoverContent,
 } from "@/components/ui/popover";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
-import { FqnPath } from "./fqn-path";
-
 export interface EntityOption {
+  readonly accountType?: string;
+  readonly currency?: string | null;
   readonly detail?: string;
   readonly hidden?: boolean;
   readonly id: number;
@@ -22,44 +30,72 @@ export interface EntityOption {
   readonly selectedLabel?: string;
 }
 
-type CreateEntityOption = (fqn: string) => Promise<EntityOption>;
-
-interface EntityPickerProps {
-  readonly autoFocus?: boolean;
-  readonly createConflictOptions?: readonly EntityOption[];
-  readonly clearOnSelect?: boolean;
-  readonly createOption?: CreateEntityOption;
-  readonly disabled?: boolean;
-  readonly exactMatchOptions?: readonly EntityOption[];
-  readonly excludedOptionIds?: readonly number[];
-  readonly id: string;
-  readonly hierarchical?: boolean;
-  readonly label: string;
-  readonly labelClassName?: string;
-  readonly onChange: (id: number | undefined) => void;
-  readonly onOpenChange?: (open: boolean) => void;
-  readonly openOnFocus?: boolean;
-  readonly options: readonly EntityOption[];
-  readonly placeholder?: string;
-  readonly value: number | undefined;
-}
-
-interface HierarchyGroup {
+export interface EntityPickerGroup {
   readonly childCount: number;
   readonly fqn: string;
   readonly parentFqn: string;
   readonly segment: string;
 }
 
-interface PickerLeafRow {
+export interface EntityPickerLeafRow {
   readonly kind: "leaf";
   readonly option: EntityOption;
 }
 
-interface PickerGroupRow {
-  readonly group: HierarchyGroup;
+export interface EntityPickerGroupRow {
+  readonly group: EntityPickerGroup;
   readonly kind: "group";
 }
+
+export type EntityPickerRow = EntityPickerLeafRow | EntityPickerGroupRow;
+
+export interface EntityPickerLoadRequest {
+  readonly parentFqn: string | undefined;
+  readonly query: string;
+  readonly selectedIds: readonly number[];
+}
+
+export interface EntityPickerLoadResult {
+  readonly canCreate: boolean;
+  readonly eligibleCount?: number;
+  readonly rows: readonly EntityPickerRow[];
+  readonly selectedOptions: readonly EntityOption[];
+}
+
+export type EntityOptionLoader = (
+  request: EntityPickerLoadRequest,
+) => Promise<EntityPickerLoadResult>;
+
+type CreateEntityOption = (fqn: string) => Promise<EntityOption>;
+
+interface EntityPickerProps {
+  readonly autoFocus?: boolean;
+  readonly clearOnSelect?: boolean;
+  readonly createOption?: CreateEntityOption;
+  readonly disabled?: boolean;
+  readonly excludedOptionIds?: readonly number[];
+  readonly id: string;
+  readonly hierarchical?: boolean;
+  readonly label: string;
+  readonly labelClassName?: string;
+  readonly loadKey?: string | number;
+  readonly loadOptions?: EntityOptionLoader;
+  readonly onChange: (id: number | undefined, option?: EntityOption) => void;
+  readonly onLoadedOptions?: (
+    options: readonly EntityOption[],
+    result: EntityPickerLoadResult,
+  ) => void;
+  readonly onOpenChange?: (open: boolean) => void;
+  readonly openOnFocus?: boolean;
+  readonly options?: readonly EntityOption[];
+  readonly placeholder?: string;
+  readonly value: number | undefined;
+  readonly selectedIds?: readonly number[];
+}
+
+type HierarchyGroup = EntityPickerGroup;
+type PickerLeafRow = EntityPickerLeafRow;
+type PickerGroupRow = EntityPickerGroupRow;
 
 interface PickerCreateRow {
   readonly fqn: string;
@@ -75,8 +111,96 @@ interface QueryModel {
 }
 
 const searchLimit = 8;
+const searchDebounceMilliseconds = 200;
+const noSelectedIds: readonly number[] = [];
 
 const normalized = (value: string): string => value.trim().toLocaleLowerCase();
+
+const optionPresentation = (option: EntityOption): string =>
+  option.label === option.searchLabel
+    ? option.searchLabel
+    : `${option.searchLabel} (${option.label})`;
+
+interface EntityOptionPresentationProps {
+  readonly className?: string;
+  readonly expanded?: boolean;
+  readonly option: EntityOption;
+}
+
+const EntityOptionPresentation = ({
+  className,
+  expanded = false,
+  option,
+}: EntityOptionPresentationProps) => (
+  <span
+    className={cn(
+      "inline-flex max-w-full min-w-0 items-center font-mono",
+      expanded && "flex-wrap",
+      className,
+    )}
+  >
+    <span
+      data-testid="entity-picker-fqn"
+      className={cn(
+        "text-foreground min-w-0 font-medium",
+        expanded ? "break-all whitespace-normal" : "truncate",
+      )}
+    >
+      {option.searchLabel}
+    </span>
+    {option.label !== option.searchLabel ? (
+      <span
+        data-testid="entity-picker-display-title"
+        className={cn(
+          "text-muted-foreground min-w-0",
+          expanded ? "break-all whitespace-normal" : "truncate",
+        )}
+      >
+        {` (${option.label})`}
+      </span>
+    ) : null}
+  </span>
+);
+
+const queryAfterPresentationEdit = (
+  presentation: string,
+  searchLabel: string,
+  editedValue: string,
+): string => {
+  if (!presentation.startsWith(searchLabel)) {
+    return editedValue;
+  }
+  let unchangedPrefixLength = 0;
+  while (
+    unchangedPrefixLength < presentation.length &&
+    presentation[unchangedPrefixLength] === editedValue[unchangedPrefixLength]
+  ) {
+    unchangedPrefixLength += 1;
+  }
+  if (unchangedPrefixLength >= searchLabel.length) {
+    return searchLabel;
+  }
+  let unchangedSuffixLength = 0;
+  while (
+    unchangedSuffixLength < presentation.length - unchangedPrefixLength &&
+    unchangedSuffixLength < editedValue.length - unchangedPrefixLength &&
+    presentation[presentation.length - unchangedSuffixLength - 1] ===
+      editedValue[editedValue.length - unchangedSuffixLength - 1]
+  ) {
+    unchangedSuffixLength += 1;
+  }
+  const searchEditEnd = Math.min(
+    searchLabel.length,
+    Math.max(
+      unchangedPrefixLength,
+      presentation.length - unchangedSuffixLength,
+    ),
+  );
+  return `${searchLabel.slice(0, unchangedPrefixLength)}${editedValue.slice(
+    unchangedPrefixLength,
+    editedValue.length - unchangedSuffixLength,
+  )}${searchLabel.slice(searchEditEnd)}`;
+};
 
 const optionParentFqn = (option: EntityOption): string => {
   const separatorIndex = option.searchLabel.lastIndexOf(":");
@@ -164,11 +288,6 @@ const fqnIsValid = (fqn: string): boolean =>
     .split(":")
     .every((segment) => segment.length > 0 && segment.trim() === segment);
 
-const pathsConflict = (candidate: string, existing: string): boolean =>
-  candidate === existing ||
-  candidate.startsWith(`${existing}:`) ||
-  existing.startsWith(`${candidate}:`);
-
 const mergeOptions = (
   options: readonly EntityOption[],
   additions: readonly EntityOption[],
@@ -250,51 +369,105 @@ const retainedPrefixAfterPick = (
 
 export const EntityPicker = ({
   autoFocus = false,
-  createConflictOptions = [],
   clearOnSelect = false,
   createOption,
   disabled = false,
-  exactMatchOptions = [],
   excludedOptionIds = [],
   id,
   hierarchical = true,
   label,
   labelClassName,
+  loadKey,
+  loadOptions,
   onChange,
+  onLoadedOptions,
   onOpenChange,
   openOnFocus = true,
-  options,
+  options = [],
   placeholder = "Search",
   value,
+  selectedIds = noSelectedIds,
 }: EntityPickerProps) => {
   const [createdOptions, setCreatedOptions] = useState<readonly EntityOption[]>(
     [],
   );
+  const [loadedRows, setLoadedRows] = useState<readonly EntityPickerRow[]>([]);
+  const [loadedRequestKey, setLoadedRequestKey] = useState<string>();
+  const [loadedOptions, setLoadedOptions] = useState<readonly EntityOption[]>(
+    [],
+  );
+  const [loadError, setLoadError] = useState<string>();
+  const [loading, setLoading] = useState(false);
+  const [reloadVersion, setReloadVersion] = useState(0);
+  const [loadedCanCreate, setLoadedCanCreate] = useState(false);
+  const [loadedQuery, setLoadedQuery] = useState<string>();
+  const [remoteParentFqn, setRemoteParentFqn] = useState<string>();
+  const loadOptionsRef = useRef(loadOptions);
+  const onLoadedOptionsRef = useRef(onLoadedOptions);
+  const loadVersionRef = useRef(0);
+  const lastIssuedSearchKeyRef = useRef<string | undefined>(undefined);
+  const flushPendingLoadRef = useRef<(() => void) | undefined>(undefined);
+  const pendingEnterRef = useRef(false);
+  useEffect(() => {
+    loadOptionsRef.current = loadOptions;
+    onLoadedOptionsRef.current = onLoadedOptions;
+  }, [loadOptions, onLoadedOptions]);
+  const selectedIdsKey = selectedIds.join(",");
+  const requestedSelectedIds = useMemo(
+    () => [
+      ...new Set([
+        ...(selectedIdsKey
+          ? selectedIdsKey.split(",").map((idValue) => Number(idValue))
+          : []),
+        ...(value === undefined ? [] : [value]),
+      ]),
+    ],
+    [selectedIdsKey, value],
+  );
   const effectiveOptions = useMemo(
     () =>
-      mergeOptions(options, createdOptions).filter(
+      mergeOptions(mergeOptions(options, loadedOptions), createdOptions).filter(
         (option) => !excludedOptionIds.includes(option.id),
       ),
-    [createdOptions, excludedOptionIds, options],
+    [createdOptions, excludedOptionIds, loadedOptions, options],
   );
+  const typedThisSessionRef = useRef(false);
+  const [typedThisSession, setTypedThisSession] = useState(false);
   const selected = effectiveOptions.find((option) => option.id === value);
   const [query, setQuery] = useState(selected?.searchLabel ?? "");
-  const displayQuery =
-    query || (value === undefined ? "" : (selected?.searchLabel ?? ""));
+  const loadRequestKey = JSON.stringify([
+    loadKey,
+    query,
+    reloadVersion,
+    remoteParentFqn,
+    requestedSelectedIds,
+  ]);
+  const requestPending = Boolean(
+    loadOptions && loadedRequestKey !== loadRequestKey,
+  );
   const [open, setOpen] = useState(false);
+  const selectedPresentation = selected
+    ? (selected.selectedLabel ?? optionPresentation(selected))
+    : undefined;
+  const showSelectedPresentation = Boolean(
+    selectedPresentation && (!open || !typedThisSession),
+  );
+  const displayQuery = showSelectedPresentation
+    ? selectedPresentation
+    : query || (value === undefined ? "" : (selected?.searchLabel ?? ""));
   const [activeIndex, setActiveIndex] = useState(0);
   const [announcement, setAnnouncement] = useState("");
   const [createError, setCreateError] = useState<string>();
   const [creating, setCreating] = useState(false);
-  const typedThisSessionRef = useRef(false);
   const interactionVersionRef = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listboxRef = useRef<HTMLDivElement>(null);
+  const retryButtonRef = useRef<HTMLButtonElement>(null);
   const deferredCloseFrameRef = useRef<number | undefined>(undefined);
   const onChangeRef = useRef(onChange);
   const skipInitialAutoFocusOpenRef = useRef(autoFocus);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     onChangeRef.current = onChange;
   }, [onChange]);
 
@@ -306,58 +479,274 @@ export const EntityPicker = ({
     [],
   );
 
+  useEffect(() => {
+    const loader = loadOptionsRef.current;
+    if (!loader) {
+      setLoading(false);
+      setLoadError(undefined);
+      setLoadedRows([]);
+      setLoadedRequestKey(undefined);
+      setLoadedCanCreate(false);
+      setLoadedQuery(undefined);
+      lastIssuedSearchKeyRef.current = undefined;
+      flushPendingLoadRef.current = undefined;
+      return;
+    }
+    if (!open && !autoFocus && requestedSelectedIds.length === 0) {
+      return;
+    }
+
+    const version = ++loadVersionRef.current;
+    queueMicrotask(() => {
+      if (loadVersionRef.current === version) {
+        setLoading(true);
+        setLoadError(undefined);
+      }
+    });
+    const searchKey = JSON.stringify([query, remoteParentFqn]);
+    let debounceTimer: number | undefined;
+    let loadStarted = false;
+    const load = () => {
+      if (loadStarted) {
+        return;
+      }
+      loadStarted = true;
+      window.clearTimeout(debounceTimer);
+      flushPendingLoadRef.current = undefined;
+      lastIssuedSearchKeyRef.current = searchKey;
+      void loader({
+        parentFqn: remoteParentFqn,
+        query,
+        selectedIds: requestedSelectedIds,
+      })
+        .then((result) => {
+          if (loadVersionRef.current !== version) {
+            return;
+          }
+          setLoadedRows(result.rows);
+          setLoadedRequestKey(loadRequestKey);
+          setLoadedCanCreate(result.canCreate);
+          setLoadedQuery(query);
+          const returnedOptions = mergeOptions(
+            [],
+            [
+              ...result.rows.flatMap((row) =>
+                row.kind === "leaf" ? [row.option] : [],
+              ),
+              ...result.selectedOptions,
+            ],
+          );
+          setLoadedOptions(returnedOptions);
+          onLoadedOptionsRef.current?.(returnedOptions, result);
+          setLoading(false);
+        })
+        .catch((error: unknown) => {
+          if (loadVersionRef.current !== version) {
+            return;
+          }
+          setLoading(false);
+          setLoadError(
+            error instanceof Error
+              ? error.message
+              : "Options could not be loaded.",
+          );
+        });
+    };
+    const debounceSearch =
+      lastIssuedSearchKeyRef.current !== undefined &&
+      lastIssuedSearchKeyRef.current !== searchKey;
+    if (debounceSearch) {
+      debounceTimer = window.setTimeout(load, searchDebounceMilliseconds);
+      flushPendingLoadRef.current = load;
+    } else {
+      load();
+    }
+
+    return () => {
+      window.clearTimeout(debounceTimer);
+      if (flushPendingLoadRef.current === load) {
+        flushPendingLoadRef.current = undefined;
+      }
+      if (loadVersionRef.current === version) {
+        loadVersionRef.current += 1;
+      }
+    };
+  }, [
+    autoFocus,
+    loadKey,
+    loadRequestKey,
+    open,
+    query,
+    reloadVersion,
+    remoteParentFqn,
+    requestedSelectedIds,
+  ]);
+
   const groups = useMemo(
-    () => (hierarchical ? deriveGroups(effectiveOptions) : []),
-    [effectiveOptions, hierarchical],
+    () =>
+      loadOptions
+        ? loadedRows.flatMap((row) => (row.kind === "group" ? [row.group] : []))
+        : hierarchical
+          ? deriveGroups(effectiveOptions)
+          : [],
+    [effectiveOptions, hierarchical, loadOptions, loadedRows],
   );
   const groupFqns = useMemo(
     () => new Set(groups.map((group) => group.fqn)),
     [groups],
   );
-  const model = useMemo(
-    () => deriveQueryModel(query, groupFqns),
-    [groupFqns, query],
-  );
+  const model = useMemo(() => {
+    if (!loadOptions) {
+      return deriveQueryModel(query, groupFqns);
+    }
+    const committedPrefix = remoteParentFqn ?? "";
+    return {
+      committedPrefix,
+      filter: committedPrefix
+        ? query.slice(Math.min(query.length, committedPrefix.length + 1))
+        : query,
+      levelMode: committedPrefix.length > 0,
+    };
+  }, [groupFqns, loadOptions, query, remoteParentFqn]);
   const retainedPrefixRef = useRef(model.committedPrefix);
   useEffect(() => {
-    if (!selected || query || typedThisSessionRef.current) {
+    if (
+      !loadOptions ||
+      !hierarchical ||
+      remoteParentFqn ||
+      !open ||
+      requestPending ||
+      !query.endsWith(":")
+    ) {
       return;
     }
-    const selectedModel = deriveQueryModel(selected.searchLabel, groupFqns);
-    const selectedRows = rowsForQuery(effectiveOptions, groups, selectedModel);
-    retainedPrefixRef.current = selectedModel.committedPrefix;
-    setQuery(selected.searchLabel);
-    setActiveIndex(
-      Math.max(
-        0,
-        selectedRows.findIndex(
-          (row) => row.kind === "leaf" && row.option.id === selected.id,
-        ),
-      ),
+    const typedParent = query.slice(0, -1);
+    if (!fqnIsValid(typedParent) || !groupFqns.has(typedParent)) {
+      return;
+    }
+    const frame = window.requestAnimationFrame(() => {
+      retainedPrefixRef.current = typedParent;
+      setRemoteParentFqn(typedParent);
+      setAnnouncement(`Browsing under ${typedParent}`);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [
+    groupFqns,
+    hierarchical,
+    loadOptions,
+    open,
+    query,
+    remoteParentFqn,
+    requestPending,
+  ]);
+  const optionRows = useMemo(() => {
+    if (!loadOptions) {
+      return rowsForQuery(effectiveOptions, groups, model);
+    }
+    const returnedRows = loadedRows.filter(
+      (row) =>
+        row.kind === "group" || !excludedOptionIds.includes(row.option.id),
     );
-  }, [effectiveOptions, groupFqns, groups, query, selected]);
-  const optionRows = useMemo(
-    () => rowsForQuery(effectiveOptions, groups, model),
-    [effectiveOptions, groups, model],
+    if (
+      !selected ||
+      excludedOptionIds.includes(selected.id) ||
+      returnedRows.some(
+        (row) => row.kind === "leaf" && row.option.id === selected.id,
+      )
+    ) {
+      return returnedRows;
+    }
+    return [{ kind: "leaf" as const, option: selected }, ...returnedRows];
+  }, [
+    effectiveOptions,
+    excludedOptionIds,
+    groups,
+    loadOptions,
+    loadedRows,
+    model,
+    selected,
+  ]);
+  const updateOpen = useCallback(
+    (nextOpen: boolean, typedSession = false) => {
+      if (nextOpen && !open) {
+        typedThisSessionRef.current = typedSession;
+        setTypedThisSession(typedSession);
+      }
+      if (!nextOpen) {
+        pendingEnterRef.current = false;
+        typedThisSessionRef.current = false;
+        setTypedThisSession(false);
+      }
+      setOpen(nextOpen);
+      onOpenChange?.(nextOpen);
+    },
+    [onOpenChange, open, setOpen, setTypedThisSession],
   );
-  const createAllowed =
-    Boolean(createOption) &&
-    fqnIsValid(query) &&
-    ![...effectiveOptions, ...exactMatchOptions, ...createConflictOptions].some(
-      (option) => pathsConflict(query, option.searchLabel),
+  const selectOption = useCallback(
+    (option: EntityOption) => {
+      pendingEnterRef.current = false;
+      interactionVersionRef.current += 1;
+      setLoadedOptions((current) => mergeOptions(current, [option]));
+      onChangeRef.current(option.id, option);
+      const retainedPrefix =
+        clearOnSelect && hierarchical
+          ? model.committedPrefix
+          : clearOnSelect
+            ? ""
+            : retainedPrefixRef.current;
+      retainedPrefixRef.current = retainedPrefix;
+      setQuery(retainedPrefixAfterPick(option, clearOnSelect, retainedPrefix));
+      setActiveIndex(0);
+      setCreateError(undefined);
+      updateOpen(false);
+    },
+    [
+      clearOnSelect,
+      hierarchical,
+      model.committedPrefix,
+      setActiveIndex,
+      setCreateError,
+      setLoadedOptions,
+      setQuery,
+      updateOpen,
+    ],
+  );
+  useEffect(() => {
+    if (
+      !loadOptions ||
+      requestPending ||
+      !open ||
+      !typedThisSessionRef.current
+    ) {
+      return;
+    }
+    const exact = optionRows.find(
+      (row) => row.kind === "leaf" && row.option.searchLabel === query,
     );
-  const rows = useMemo<readonly PickerRow[]>(
-    () =>
-      createAllowed
-        ? [...optionRows, { fqn: query, kind: "create" }]
-        : optionRows,
-    [createAllowed, optionRows, query],
+    if (!exact || exact.kind !== "leaf") {
+      return;
+    }
+    const frame = window.requestAnimationFrame(() => {
+      selectOption(exact.option);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [loadOptions, open, optionRows, query, requestPending, selectOption]);
+  const createAllowed = Boolean(
+    loadOptions && createOption && loadedCanCreate && loadedQuery !== undefined,
   );
+  const rows = useMemo<readonly PickerRow[]>(() => {
+    if (!createAllowed || loadedQuery === undefined) {
+      return optionRows;
+    }
+    return [...optionRows, { fqn: loadedQuery, kind: "create" }];
+  }, [createAllowed, loadedQuery, optionRows]);
   const clampedActiveIndex =
     rows.length === 0 ? 0 : Math.min(activeIndex, rows.length - 1);
   const activeRow = rows[clampedActiveIndex];
   const activeOptionId =
-    open && !disabled && activeRow ? rowId(id, activeRow) : undefined;
+    open && !disabled && !requestPending && activeRow
+      ? rowId(id, activeRow)
+      : undefined;
   const contextText = model.committedPrefix
     ? `Browsing under ${model.committedPrefix}`
     : "Searching full paths";
@@ -375,16 +764,21 @@ export const EntityPicker = ({
       ?.scrollIntoView({ block: "nearest" });
   }, [activeOptionId, open]);
 
-  const updateOpen = (nextOpen: boolean, typedSession = false) => {
-    if (nextOpen && !open) {
-      typedThisSessionRef.current = typedSession;
+  useEffect(() => {
+    if (requestPending || !open || !pendingEnterRef.current) {
+      return;
     }
-    if (!nextOpen) {
-      typedThisSessionRef.current = false;
-    }
-    setOpen(nextOpen);
-    onOpenChange?.(nextOpen);
-  };
+    const frame = window.requestAnimationFrame(() => {
+      if (!pendingEnterRef.current) {
+        return;
+      }
+      pendingEnterRef.current = false;
+      inputRef.current?.dispatchEvent(
+        new KeyboardEvent("keydown", { bubbles: true, key: "Enter" }),
+      );
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [open, requestPending]);
 
   const updatePopoverOpen = (nextOpen: boolean) => {
     window.cancelAnimationFrame(deferredCloseFrameRef.current ?? 0);
@@ -399,20 +793,12 @@ export const EntityPicker = ({
     updateOpen(nextOpen, typedThisSessionRef.current);
   };
 
-  const selectOption = (option: EntityOption) => {
-    interactionVersionRef.current += 1;
-    onChangeRef.current(option.id);
-    setQuery(
-      retainedPrefixAfterPick(option, clearOnSelect, retainedPrefixRef.current),
-    );
-    setActiveIndex(0);
-    setCreateError(undefined);
-    updateOpen(false);
-  };
-
   const drillInto = (group: HierarchyGroup) => {
     interactionVersionRef.current += 1;
     retainedPrefixRef.current = group.fqn;
+    if (loadOptions) {
+      setRemoteParentFqn(group.fqn);
+    }
     const nextQuery = `${group.fqn}:`;
     setQuery(nextQuery);
     setActiveIndex(0);
@@ -428,6 +814,9 @@ export const EntityPicker = ({
   const backTo = (prefix: string) => {
     interactionVersionRef.current += 1;
     retainedPrefixRef.current = prefix;
+    if (loadOptions) {
+      setRemoteParentFqn(prefix || undefined);
+    }
     const nextQuery = prefix ? `${prefix}:` : "";
     setQuery(nextQuery);
     setActiveIndex(0);
@@ -442,6 +831,9 @@ export const EntityPicker = ({
   };
 
   const activateRow = async (row: PickerRow) => {
+    if (requestPending) {
+      return;
+    }
     if (row.kind === "leaf") {
       selectOption(row.option);
       return;
@@ -522,204 +914,309 @@ export const EntityPicker = ({
         >
           {label}
         </label>
-        <PopoverAnchor asChild>
-          <input
-            ref={inputRef}
-            id={id}
-            type="text"
-            autoFocus={autoFocus}
-            role="combobox"
-            aria-controls={`${id}-options`}
-            aria-describedby={`${id}-context`}
-            aria-expanded={open && !disabled}
-            aria-autocomplete="list"
-            aria-activedescendant={activeOptionId}
-            className={cn(
-              "bg-card h-9 w-full shrink-0 border-2 border-[var(--border-ink)] px-2 text-sm shadow-[var(--shadow-pixel)]",
-              selected?.hidden && "pr-8",
-            )}
-            disabled={disabled}
-            placeholder={placeholder}
-            value={displayQuery}
-            onChange={(event) => {
-              interactionVersionRef.current += 1;
-              const nextQuery = event.target.value;
-              const nextModel = deriveQueryModel(nextQuery, groupFqns);
-              retainedPrefixRef.current =
-                nextModel.committedPrefix ||
-                (retainedPrefixRef.current &&
-                nextQuery.startsWith(`${retainedPrefixRef.current}:`)
-                  ? retainedPrefixRef.current
-                  : "");
-              typedThisSessionRef.current = true;
-              const exactOption = [
-                ...effectiveOptions,
-                ...exactMatchOptions,
-              ].find((option) => option.searchLabel === nextQuery);
-              if (exactOption) {
-                selectOption(exactOption);
-                return;
-              }
-              if (nextModel.levelMode !== model.levelMode) {
-                setAnnouncement(
-                  nextModel.levelMode
-                    ? `Browsing under ${nextModel.committedPrefix}`
-                    : "Searching full paths",
-                );
-              }
-              setQuery(nextQuery);
-              setCreateError(undefined);
-              updateOpen(true, true);
-              setActiveIndex(0);
-              if (!selected || selected.searchLabel !== nextQuery) {
-                onChange(undefined);
-              }
-            }}
-            onFocus={() => {
-              if (disabled || !openOnFocus) {
-                return;
-              }
-              const nextQuery = selected?.searchLabel ?? query;
-              setQuery(nextQuery);
-              if (skipInitialAutoFocusOpenRef.current) {
-                skipInitialAutoFocusOpenRef.current = false;
-                return;
-              }
-              updateOpen(true);
-              const focusedModel = deriveQueryModel(nextQuery, groupFqns);
-              const focusedRows = rowsForQuery(
-                effectiveOptions,
-                groups,
-                focusedModel,
-              );
-              setActiveIndex(
-                Math.max(
-                  0,
-                  focusedRows.findIndex(
-                    (row) => row.kind === "leaf" && row.option.id === value,
-                  ),
-                ),
-              );
-            }}
-            onKeyDown={(event) => {
-              if (disabled) {
-                return;
-              }
-
-              if (event.metaKey || event.ctrlKey) {
-                return;
-              }
-
-              if (event.key === "Escape") {
-                if (open) {
-                  event.preventDefault();
-                  updateOpen(false);
-                }
-                return;
-              }
-
-              if (event.key === "ArrowDown") {
-                event.preventDefault();
-                updateOpen(true);
-                setActiveIndex((current) =>
-                  rows.length === 0
-                    ? 0
-                    : Math.min(current + 1, rows.length - 1),
-                );
-                return;
-              }
-
-              if (event.key === "ArrowUp") {
-                event.preventDefault();
-                updateOpen(true);
-                setActiveIndex((current) =>
-                  rows.length === 0 ? 0 : Math.max(current - 1, 0),
-                );
-                return;
-              }
-
-              if (event.key === "Enter" && open && activeRow) {
-                event.preventDefault();
-                void activateRow(activeRow);
-                return;
-              }
-
-              if (
-                event.key === "ArrowRight" &&
-                open &&
-                activeRow?.kind === "group" &&
-                event.currentTarget.selectionStart === query.length &&
-                event.currentTarget.selectionEnd === query.length
-              ) {
-                event.preventDefault();
-                drillInto(activeRow.group);
-                return;
-              }
-
-              if (
-                event.key === "Tab" &&
-                !event.shiftKey &&
-                open &&
-                activeRow &&
-                typedThisSessionRef.current
-              ) {
-                const adoptedValue =
-                  activeRow.kind === "group"
-                    ? `${activeRow.group.fqn}:`
-                    : activeRow.kind === "leaf"
-                      ? activeRow.option.searchLabel
-                      : activeRow.fqn;
-                if (adoptedValue !== query) {
-                  event.preventDefault();
-                  adoptActiveRow();
-                }
-                return;
-              }
-
-              if (
-                event.key === "ArrowLeft" &&
-                open &&
-                model.committedPrefix &&
-                model.filter === "" &&
-                event.currentTarget.selectionStart === query.length &&
-                event.currentTarget.selectionEnd === query.length
-              ) {
-                event.preventDefault();
-                const separatorIndex = model.committedPrefix.lastIndexOf(":");
-                backTo(
-                  separatorIndex < 0
-                    ? ""
-                    : model.committedPrefix.slice(0, separatorIndex),
-                );
-                return;
-              }
-
-              if (
-                event.key === "Backspace" &&
-                open &&
-                query.endsWith(":") &&
-                event.currentTarget.selectionStart === query.length &&
-                event.currentTarget.selectionEnd === query.length
-              ) {
-                event.preventDefault();
+        <Tooltip
+          className="w-full"
+          disabled={!selected}
+          focusable={false}
+          label={selected ? optionPresentation(selected) : ""}
+        >
+          <PopoverAnchor asChild>
+            <input
+              ref={inputRef}
+              id={id}
+              type="text"
+              autoFocus={autoFocus}
+              role="combobox"
+              aria-controls={`${id}-options`}
+              aria-describedby={`${id}-context`}
+              aria-expanded={open && !disabled}
+              aria-autocomplete="list"
+              aria-activedescendant={activeOptionId}
+              className={cn(
+                "bg-card h-9 w-full shrink-0 border-2 border-[var(--border-ink)] px-2 text-sm shadow-[var(--shadow-pixel)]",
+                selected?.hidden && "pr-8",
+                showSelectedPresentation &&
+                  "text-transparent caret-transparent",
+              )}
+              disabled={disabled}
+              placeholder={placeholder}
+              value={displayQuery}
+              onChange={(event) => {
+                pendingEnterRef.current = false;
                 interactionVersionRef.current += 1;
-                typedThisSessionRef.current = true;
-                const nextQuery = query.slice(0, -1);
-                setQuery(nextQuery);
-                setActiveIndex(0);
-                setCreateError(undefined);
-                onChange(undefined);
-                const nextModel = deriveQueryModel(nextQuery, groupFqns);
-                retainedPrefixRef.current = nextModel.committedPrefix;
-                setAnnouncement(
-                  nextModel.committedPrefix
-                    ? `Back to ${nextModel.committedPrefix}`
-                    : "Back to root",
+                const editedValue = event.target.value;
+                const nextQuery =
+                  !typedThisSessionRef.current &&
+                  selected &&
+                  selectedPresentation
+                    ? queryAfterPresentationEdit(
+                        selectedPresentation,
+                        selected.searchLabel,
+                        editedValue,
+                      )
+                    : editedValue;
+                const remoteRemainder =
+                  remoteParentFqn && nextQuery.startsWith(`${remoteParentFqn}:`)
+                    ? nextQuery.slice(remoteParentFqn.length + 1)
+                    : undefined;
+                const retainsRemotePrefix = Boolean(
+                  loadOptions &&
+                  remoteParentFqn &&
+                  remoteRemainder !== undefined &&
+                  !remoteRemainder.includes(":"),
                 );
-              }
-            }}
-          />
-        </PopoverAnchor>
+                const typedRemoteParent =
+                  loadOptions && hierarchical && nextQuery.endsWith(":")
+                    ? nextQuery.slice(0, -1)
+                    : undefined;
+                const nextRemoteParent = retainsRemotePrefix
+                  ? remoteParentFqn
+                  : typedRemoteParent &&
+                      fqnIsValid(typedRemoteParent) &&
+                      groupFqns.has(typedRemoteParent)
+                    ? typedRemoteParent
+                    : undefined;
+                const nextModel = loadOptions
+                  ? {
+                      committedPrefix: nextRemoteParent ?? "",
+                      filter: nextRemoteParent
+                        ? nextQuery.slice(nextRemoteParent.length + 1)
+                        : nextQuery,
+                      levelMode: Boolean(nextRemoteParent),
+                    }
+                  : deriveQueryModel(nextQuery, groupFqns);
+                if (loadOptions && nextRemoteParent !== remoteParentFqn) {
+                  setRemoteParentFqn(nextRemoteParent);
+                }
+                retainedPrefixRef.current =
+                  nextModel.committedPrefix ||
+                  (retainedPrefixRef.current &&
+                  nextQuery.startsWith(`${retainedPrefixRef.current}:`)
+                    ? retainedPrefixRef.current
+                    : "");
+                typedThisSessionRef.current = true;
+                setTypedThisSession(true);
+                const exactOption = loadOptions
+                  ? undefined
+                  : effectiveOptions.find(
+                      (option) => option.searchLabel === nextQuery,
+                    );
+                if (exactOption) {
+                  selectOption(exactOption);
+                  return;
+                }
+                if (nextModel.levelMode !== model.levelMode) {
+                  setAnnouncement(
+                    nextModel.levelMode
+                      ? `Browsing under ${nextModel.committedPrefix}`
+                      : "Searching full paths",
+                  );
+                }
+                setQuery(nextQuery);
+                setCreateError(undefined);
+                updateOpen(true, true);
+                setActiveIndex(0);
+                if (!selected || selected.searchLabel !== nextQuery) {
+                  onChange(undefined);
+                }
+              }}
+              onFocus={() => {
+                if (disabled || !openOnFocus) {
+                  return;
+                }
+                const nextQuery = selected?.searchLabel ?? query;
+                if (selected) {
+                  inputRef.current?.select();
+                }
+                if (skipInitialAutoFocusOpenRef.current) {
+                  skipInitialAutoFocusOpenRef.current = false;
+                  return;
+                }
+                updateOpen(true);
+                const focusedRows = loadOptions
+                  ? optionRows
+                  : rowsForQuery(
+                      effectiveOptions,
+                      groups,
+                      deriveQueryModel(nextQuery, groupFqns),
+                    );
+                const selectedIndex = focusedRows.findIndex(
+                  (row) => row.kind === "leaf" && row.option.id === value,
+                );
+                setActiveIndex(value === undefined ? 0 : selectedIndex);
+              }}
+              onKeyDown={(event) => {
+                if (disabled) {
+                  return;
+                }
+
+                if (event.metaKey || event.ctrlKey) {
+                  return;
+                }
+
+                if (event.key === "Escape") {
+                  if (open) {
+                    event.preventDefault();
+                    updateOpen(false);
+                  }
+                  return;
+                }
+
+                if (event.key === "ArrowDown") {
+                  event.preventDefault();
+                  updateOpen(true);
+                  setActiveIndex((current) =>
+                    rows.length === 0
+                      ? 0
+                      : Math.min(current + 1, rows.length - 1),
+                  );
+                  return;
+                }
+
+                if (event.key === "ArrowUp") {
+                  event.preventDefault();
+                  updateOpen(true);
+                  setActiveIndex((current) =>
+                    rows.length === 0 ? 0 : Math.max(current - 1, 0),
+                  );
+                  return;
+                }
+
+                if (event.key === "Enter" && open && requestPending) {
+                  event.preventDefault();
+                  pendingEnterRef.current = true;
+                  flushPendingLoadRef.current?.();
+                  return;
+                }
+
+                if (
+                  event.key === "Enter" &&
+                  open &&
+                  !requestPending &&
+                  activeRow
+                ) {
+                  event.preventDefault();
+                  void activateRow(activeRow);
+                  return;
+                }
+
+                if (
+                  event.key === "Tab" &&
+                  !event.shiftKey &&
+                  open &&
+                  loadError
+                ) {
+                  event.preventDefault();
+                  retryButtonRef.current?.focus();
+                  return;
+                }
+
+                if (
+                  event.key === "ArrowRight" &&
+                  open &&
+                  !requestPending &&
+                  activeRow?.kind === "group" &&
+                  event.currentTarget.selectionStart === query.length &&
+                  event.currentTarget.selectionEnd === query.length
+                ) {
+                  event.preventDefault();
+                  drillInto(activeRow.group);
+                  return;
+                }
+
+                if (
+                  event.key === "Tab" &&
+                  !event.shiftKey &&
+                  open &&
+                  !requestPending &&
+                  activeRow &&
+                  typedThisSessionRef.current
+                ) {
+                  const adoptedValue =
+                    activeRow.kind === "group"
+                      ? `${activeRow.group.fqn}:`
+                      : activeRow.kind === "leaf"
+                        ? activeRow.option.searchLabel
+                        : activeRow.fqn;
+                  if (adoptedValue !== query) {
+                    event.preventDefault();
+                    adoptActiveRow();
+                  }
+                  return;
+                }
+
+                if (
+                  event.key === "ArrowLeft" &&
+                  open &&
+                  model.committedPrefix &&
+                  model.filter === "" &&
+                  event.currentTarget.selectionStart === query.length &&
+                  event.currentTarget.selectionEnd === query.length
+                ) {
+                  event.preventDefault();
+                  const separatorIndex = model.committedPrefix.lastIndexOf(":");
+                  backTo(
+                    separatorIndex < 0
+                      ? ""
+                      : model.committedPrefix.slice(0, separatorIndex),
+                  );
+                  return;
+                }
+
+                if (
+                  event.key === "Backspace" &&
+                  open &&
+                  query.endsWith(":") &&
+                  event.currentTarget.selectionStart === query.length &&
+                  event.currentTarget.selectionEnd === query.length
+                ) {
+                  event.preventDefault();
+                  interactionVersionRef.current += 1;
+                  typedThisSessionRef.current = true;
+                  setTypedThisSession(true);
+                  const nextQuery = query.slice(0, -1);
+                  setQuery(nextQuery);
+                  setActiveIndex(0);
+                  setCreateError(undefined);
+                  onChange(undefined);
+                  const nextRemoteParent = remoteParentFqn?.includes(":")
+                    ? remoteParentFqn.slice(0, remoteParentFqn.lastIndexOf(":"))
+                    : undefined;
+                  const nextModel = loadOptions
+                    ? {
+                        committedPrefix: nextRemoteParent ?? "",
+                        filter: nextRemoteParent
+                          ? nextQuery.slice(nextRemoteParent.length + 1)
+                          : nextQuery,
+                        levelMode: Boolean(nextRemoteParent),
+                      }
+                    : deriveQueryModel(nextQuery, groupFqns);
+                  retainedPrefixRef.current = nextModel.committedPrefix;
+                  if (loadOptions) {
+                    setRemoteParentFqn(nextRemoteParent);
+                  }
+                  setAnnouncement(
+                    nextModel.committedPrefix
+                      ? `Back to ${nextModel.committedPrefix}`
+                      : "Back to root",
+                  );
+                }
+              }}
+            />
+          </PopoverAnchor>
+        </Tooltip>
+        {showSelectedPresentation && selected ? (
+          <span
+            aria-hidden="true"
+            className={cn(
+              "pointer-events-none absolute left-2 flex h-9 min-w-0 items-center overflow-hidden text-sm",
+              labelClassName === "sr-only" ? "top-0" : "top-6",
+              selected.hidden ? "right-8" : "right-2",
+            )}
+          >
+            <EntityOptionPresentation className="w-full" option={selected} />
+          </span>
+        ) : null}
         {selected?.hidden ? (
           <EyeOff
             aria-label="Hidden"
@@ -745,6 +1242,7 @@ export const EntityPicker = ({
             ref={listboxRef}
             id={`${id}-options`}
             role="listbox"
+            aria-busy={loading}
             data-picker-portal
             data-picker-mode={model.levelMode ? "level" : "search"}
             align="start"
@@ -827,6 +1325,31 @@ export const EntityPicker = ({
                 ))}
               </div>
             ) : null}
+            {loading ? (
+              <span className="sr-only" role="status">
+                Loading options…
+              </span>
+            ) : null}
+            {loadError ? (
+              <div
+                className="border-destructive text-destructive flex items-center justify-between gap-2 border-b px-2 py-1 text-xs"
+                role="alert"
+              >
+                <span>{loadError}</span>
+                <Button
+                  ref={retryButtonRef}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setReloadVersion((current) => current + 1);
+                    inputRef.current?.focus();
+                  }}
+                >
+                  Retry
+                </Button>
+              </div>
+            ) : null}
             {rows.length > 0 ? (
               rows.map((row, rowIndex) => {
                 const option = (
@@ -836,13 +1359,19 @@ export const EntityPicker = ({
                     type="button"
                     role="option"
                     tabIndex={-1}
+                    disabled={requestPending}
+                    aria-hidden={requestPending ? true : undefined}
                     aria-disabled={
-                      row.kind === "create" && creating ? true : undefined
+                      requestPending || (row.kind === "create" && creating)
+                        ? true
+                        : undefined
                     }
                     aria-description={
-                      row.kind === "create" && creating
-                        ? "Wait for creation to finish."
-                        : undefined
+                      requestPending
+                        ? "Wait for options to finish loading."
+                        : row.kind === "create" && creating
+                          ? "Wait for creation to finish."
+                          : undefined
                     }
                     aria-label={
                       row.kind === "group"
@@ -873,7 +1402,7 @@ export const EntityPicker = ({
                   >
                     {row.kind === "leaf" ? (
                       <span className="flex w-full min-w-0 flex-col items-start overflow-hidden">
-                        <span className="flex max-w-full min-w-0 items-center gap-1 font-medium">
+                        <span className="flex max-w-full min-w-0 items-center gap-1">
                           {row.option.hidden ? (
                             <EyeOff
                               aria-label="Hidden"
@@ -883,45 +1412,36 @@ export const EntityPicker = ({
                           <Tooltip
                             className="min-w-0"
                             focusable={false}
-                            label={row.option.label}
+                            label={optionPresentation(row.option)}
                           >
-                            <span
-                              className={cn(
-                                "block",
-                                rowIndex === clampedActiveIndex
-                                  ? "break-all whitespace-normal"
-                                  : "truncate",
-                              )}
-                            >
-                              {row.option.label}
-                            </span>
+                            <EntityOptionPresentation
+                              expanded={rowIndex === clampedActiveIndex}
+                              option={row.option}
+                            />
                           </Tooltip>
                         </span>
-                        {row.option.detail || row.option.metadata ? (
+                        {(row.option.detail &&
+                          row.option.detail !== row.option.searchLabel) ||
+                        row.option.metadata ? (
                           <span className="flex max-w-full min-w-0 items-center gap-1 text-xs">
-                            {row.option.detail ? (
-                              row.option.detail === row.option.searchLabel ? (
-                                <FqnPath
-                                  className="min-w-0 flex-1 text-xs"
-                                  focusable={false}
-                                  value={row.option.detail}
-                                />
-                              ) : (
-                                <Tooltip
-                                  className={cn(
-                                    "text-muted-foreground block min-w-0 flex-1 font-mono text-xs",
-                                    rowIndex === clampedActiveIndex
-                                      ? "break-all whitespace-normal"
-                                      : "truncate",
-                                  )}
-                                  focusable={false}
-                                  label={row.option.detail}
-                                >
-                                  {row.option.detail}
-                                </Tooltip>
-                              )
+                            {row.option.detail &&
+                            row.option.detail !== row.option.searchLabel ? (
+                              <Tooltip
+                                className={cn(
+                                  "text-muted-foreground block min-w-0 flex-1 font-mono text-xs",
+                                  rowIndex === clampedActiveIndex
+                                    ? "break-all whitespace-normal"
+                                    : "truncate",
+                                )}
+                                focusable={false}
+                                label={row.option.detail}
+                              >
+                                {row.option.detail}
+                              </Tooltip>
                             ) : null}
-                            {row.option.detail && row.option.metadata ? (
+                            {row.option.detail &&
+                            row.option.detail !== row.option.searchLabel &&
+                            row.option.metadata ? (
                               <span
                                 aria-hidden="true"
                                 className="text-muted-foreground shrink-0"
@@ -932,7 +1452,11 @@ export const EntityPicker = ({
                             {row.option.metadata ? (
                               <Tooltip
                                 className={cn(
-                                  "text-muted-foreground block max-w-[45%] shrink-0 font-mono text-xs",
+                                  "text-muted-foreground block min-w-0 font-mono text-xs",
+                                  row.option.detail &&
+                                    row.option.detail !== row.option.searchLabel
+                                    ? "max-w-[45%] shrink-0"
+                                    : "max-w-full flex-1",
                                   rowIndex === clampedActiveIndex
                                     ? "break-all whitespace-normal"
                                     : "truncate",
@@ -982,8 +1506,12 @@ export const EntityPicker = ({
                   <Tooltip
                     key={rowId(id, row)}
                     asChild
-                    disabled={!creating}
-                    label="Wait for creation to finish."
+                    disabled={!requestPending && !creating}
+                    label={
+                      requestPending
+                        ? "Wait for options to finish loading."
+                        : "Wait for creation to finish."
+                    }
                   >
                     {option}
                   </Tooltip>
@@ -991,6 +1519,18 @@ export const EntityPicker = ({
                   option
                 );
               })
+            ) : loading ? (
+              <div data-testid={`${id}-loading-skeleton`}>
+                {["w-2/5", "w-1/2", "w-1/3"].map((width, index) => (
+                  <div
+                    key={index}
+                    className="flex min-h-10 flex-col justify-center gap-1 px-2 py-2"
+                  >
+                    <Skeleton className={cn("h-4", width)} />
+                    {hierarchical ? <Skeleton className="h-3 w-3/4" /> : null}
+                  </div>
+                ))}
+              </div>
             ) : (
               <div className="text-muted-foreground px-2 py-2 text-sm">
                 {model.committedPrefix
@@ -1012,62 +1552,62 @@ export const EntityPicker = ({
 
 interface EntityMultiPickerProps {
   readonly autoFocus?: boolean;
-  readonly createConflictOptions?: readonly EntityOption[];
   readonly createOption?: CreateEntityOption;
   readonly disabled?: boolean;
   readonly id: string;
   readonly hierarchical?: boolean;
   readonly label: string;
   readonly labelClassName?: string;
-  readonly onChange: (ids: readonly number[]) => void;
+  readonly loadKey?: string | number;
+  readonly loadOptions: EntityOptionLoader;
+  readonly onChange: (
+    ids: readonly number[],
+    selectedOptions: readonly EntityOption[],
+  ) => void;
   readonly onOpenChange?: (open: boolean) => void;
-  readonly options: readonly EntityOption[];
+  readonly options?: readonly EntityOption[];
   readonly placeholder?: string;
   readonly value: readonly number[];
 }
 
 export const EntityMultiPicker = ({
   autoFocus = false,
-  createConflictOptions = [],
   createOption,
   disabled = false,
   id,
   hierarchical = true,
   label,
   labelClassName,
+  loadKey,
+  loadOptions,
   onChange,
   onOpenChange,
-  options,
+  options = [],
   placeholder = "Search",
   value,
 }: EntityMultiPickerProps) => {
   const [createdOptions, setCreatedOptions] = useState<readonly EntityOption[]>(
     [],
   );
+  const [loadedOptions, setLoadedOptions] = useState<readonly EntityOption[]>(
+    [],
+  );
   const effectiveOptions = useMemo(
-    () => mergeOptions(options, createdOptions),
-    [createdOptions, options],
+    () => mergeOptions(mergeOptions(options, loadedOptions), createdOptions),
+    [createdOptions, loadedOptions, options],
   );
   const selectedOptions = effectiveOptions.filter((option) =>
     value.includes(option.id),
   );
   const valueRef = useRef(value);
-  useEffect(() => {
+  useLayoutEffect(() => {
     valueRef.current = value;
   }, [value]);
-  const availableOptions = effectiveOptions.filter(
-    (option) => !value.includes(option.id),
-  );
-
   return (
     <div className="flex min-w-0 flex-col gap-2">
       <EntityPicker
         autoFocus={autoFocus}
         clearOnSelect
-        createConflictOptions={mergeOptions(
-          createConflictOptions,
-          createdOptions,
-        )}
         createOption={
           createOption
             ? async (fqn) => {
@@ -1083,15 +1623,32 @@ export const EntityMultiPicker = ({
         id={id}
         label={label}
         labelClassName={labelClassName}
+        loadKey={loadKey}
+        loadOptions={loadOptions}
+        onLoadedOptions={(returned) => {
+          setLoadedOptions(returned);
+        }}
         onOpenChange={onOpenChange}
-        options={availableOptions}
         placeholder={placeholder}
+        options={options}
+        selectedIds={value}
         value={undefined}
-        onChange={(nextId) => {
+        onChange={(nextId, selectedOption) => {
           if (nextId) {
+            if (selectedOption) {
+              setLoadedOptions((current) =>
+                mergeOptions(current, [selectedOption]),
+              );
+            }
             const nextValue = [...valueRef.current, nextId];
             valueRef.current = nextValue;
-            onChange(nextValue);
+            onChange(
+              nextValue,
+              mergeOptions(
+                effectiveOptions,
+                selectedOption ? [selectedOption] : [],
+              ).filter((option) => nextValue.includes(option.id)),
+            );
           }
         }}
       />
@@ -1101,7 +1658,8 @@ export const EntityMultiPicker = ({
           data-testid="entity-multi-picker-selected"
         >
           {selectedOptions.map((option) => {
-            const selectedLabel = option.selectedLabel ?? option.label;
+            const selectedLabel =
+              option.selectedLabel ?? optionPresentation(option);
             return (
               <span
                 key={option.id}
@@ -1115,7 +1673,7 @@ export const EntityMultiPicker = ({
                   focusable={false}
                   label={selectedLabel}
                 >
-                  <span className="block truncate">{selectedLabel}</span>
+                  <EntityOptionPresentation option={option} />
                 </Tooltip>
                 <Button
                   type="button"
@@ -1129,7 +1687,12 @@ export const EntityMultiPicker = ({
                       (idValue) => idValue !== option.id,
                     );
                     valueRef.current = nextValue;
-                    onChange(nextValue);
+                    onChange(
+                      nextValue,
+                      effectiveOptions.filter((candidate) =>
+                        nextValue.includes(candidate.id),
+                      ),
+                    );
                   }}
                 >
                   <Close aria-hidden="true" />

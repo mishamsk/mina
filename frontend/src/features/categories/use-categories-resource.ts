@@ -12,7 +12,6 @@ import {
   clearCategoriesPageLoading,
   getCategoriesSnapshot,
   invalidateCategoriesPage,
-  invalidateCategoryPickerCategories,
   invalidateTransactionPages,
   setCategoriesPage,
   setCategoriesPageError,
@@ -125,7 +124,6 @@ export const refreshCategoriesAfterMutation = async (options?: {
   readonly bulk?: boolean;
 }): Promise<boolean> => {
   invalidateCategoriesPage();
-  invalidateCategoryPickerCategories();
   if (options?.bulk) {
     invalidateTransactionPages();
   }

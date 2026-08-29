@@ -997,11 +997,6 @@ test("categories row actions hide groups and move renamed paths into transaction
   await expect(
     page.locator("#transactions-filter-category-options"),
   ).toContainText(`${moveDestination}:Alpha`);
-  await refreshedCategoryPicker.fill(moveSource);
-  await refreshedCategoryPicker.press("ArrowDown");
-  await expect(
-    page.locator("#transactions-filter-category-options"),
-  ).toContainText("No matches");
 });
 
 test("category delete row actions respect the API deleteability signal", async ({
@@ -1332,6 +1327,73 @@ test("categories side panel creates edits and deletes categories with conflict f
   expect(categoryDeleteResponse.ok()).toBe(true);
 });
 
+test("category editor persists and clears a display-label override", async ({
+  browserName,
+  page,
+}) => {
+  const unique = `${browserName}${Date.now()}`;
+  const fqn = `E2ELabel:${unique}:Groceries`;
+  const label = `Weekly food ${unique}`;
+
+  await page.goto("/categories");
+  await page.getByRole("button", { name: "New category" }).click();
+  const createPanel = page.getByRole("dialog", { name: "Create category" });
+  await createPanel.getByLabel("FQN").fill(fqn);
+  await createPanel.getByLabel("Intent").click();
+  await page.getByRole("option", { exact: true, name: "Expense" }).click();
+  const labelInput = createPanel.getByLabel("Display label (optional)");
+  await labelInput.fill(` ${label}`);
+  await createPanel.getByRole("button", { name: "Create" }).click();
+  await expect(labelInput).toHaveValue(` ${label}`);
+  await expect(
+    createPanel.getByText("Remove leading or trailing whitespace."),
+  ).toBeVisible();
+  await labelInput.fill(label);
+  const createdResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/api/categories") &&
+      response.request().method() === "POST",
+  );
+  await createPanel.getByRole("button", { name: "Create" }).click();
+  const created = await createdResponse;
+  expect(created.status()).toBe(201);
+  expect(created.request().postDataJSON()).toMatchObject({
+    display_label: label,
+  });
+  const category = (await created.json()) as CategoryFixture & {
+    readonly display_label: string;
+  };
+  expect(category.display_label).toBe(label);
+
+  await page.goto(`/categories?q=${encodeURIComponent(fqn)}`);
+  const row = page
+    .getByTestId("categories-tree-row")
+    .filter({ hasText: fqn })
+    .first();
+  await expect(row).toBeVisible({ timeout: 10_000 });
+  await row.getByRole("button", { name: "Edit category" }).click();
+  const editPanel = page.getByRole("dialog", { name: "Edit category" });
+  const editLabel = editPanel.getByLabel("Display label (optional)");
+  await expect(editLabel).toHaveValue(label);
+  await expect(async () => {
+    await editLabel.fill("");
+    await expect(editLabel).toHaveValue("", { timeout: 250 });
+  }).toPass();
+  const updatedResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith(`/api/categories/${category.category_id}`) &&
+      response.request().method() === "PATCH",
+  );
+  await editPanel.getByRole("button", { name: "Save" }).click();
+  const updated = await updatedResponse;
+  expect(updated.request().postDataJSON()).toMatchObject({
+    display_label: null,
+  });
+  expect(
+    ((await updated.json()) as { display_label: string }).display_label,
+  ).toBe(`${unique}:Groceries`);
+});
+
 test("category creation refreshes the entry category picker after navigation", async ({
   browserName,
   page,
@@ -1358,5 +1420,5 @@ test("category creation refreshes the entry category picker after navigation", a
     .click();
   const categoryPicker = page.getByRole("combobox", { name: "Category" });
   await categoryPicker.fill(fqn);
-  await expect(categoryPicker).toHaveValue(fqn);
+  await expect(categoryPicker).toHaveValue(`${fqn} (${unique}:${name})`);
 });

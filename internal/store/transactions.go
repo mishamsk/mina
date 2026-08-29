@@ -364,6 +364,54 @@ WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 	return transaction, nil
 }
 
+// TransactionsByIDs returns active transactions and their records in request order.
+func (s *TransactionStore) TransactionsByIDs(ctx context.Context, transactionIDs []int64) ([]transactions.Transaction, error) {
+	if len(transactionIDs) == 0 {
+		return []transactions.Transaction{}, nil
+	}
+	rows, err := s.db.query().QueryContext(
+		ctx,
+		`SELECT transaction_id, initiated_date, recurring_occurrence_id, CAST(lifecycle_status AS VARCHAR), created_at, updated_at, tombstoned_at
+FROM `+s.db.accountingName("transaction")+`
+WHERE transaction_id IN (`+placeholders(len(transactionIDs))+`) AND tombstoned_at IS NULL`,
+		int64Args(transactionIDs)...,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list transactions by IDs: %w", err)
+	}
+	byID := make(map[int64]transactions.Transaction, len(transactionIDs))
+	for rows.Next() {
+		transaction, scanErr := scanTransaction(rows)
+		if scanErr != nil {
+			_ = rows.Close()
+			return nil, fmt.Errorf("scan transaction by IDs: %w", scanErr)
+		}
+		byID[transaction.ID] = transaction
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return nil, fmt.Errorf("iterate transactions by IDs: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, fmt.Errorf("close transactions by IDs: %w", err)
+	}
+
+	records, err := s.recordsByTransactionIDs(ctx, transactionIDs)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]transactions.Transaction, 0, len(byID))
+	for _, id := range transactionIDs {
+		transaction, ok := byID[id]
+		if !ok {
+			continue
+		}
+		transaction.Records = records[id]
+		result = append(result, transaction)
+	}
+	return result, nil
+}
+
 // List returns transactions with nested journal records in deterministic date order.
 func (s *TransactionStore) List(ctx context.Context, opts transactions.ListOptions) (transactions.ListResult, error) {
 	predicate := s.transactionListPredicate(opts)

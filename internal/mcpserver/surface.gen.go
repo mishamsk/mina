@@ -567,7 +567,7 @@ func Operations() []Operation {
 			MCP: MCPOperation{
 				Group: "categories", Name: "create",
 				ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: false,
-				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"economic_intent\":{\"description\":\"Whether a category describes spending or income.\",\"enum\":[\"expense\",\"income\"],\"type\":\"string\"},\"fqn\":{\"description\":\"Colon-separated hierarchical FQN for the category leaf.\",\"type\":\"string\"},\"is_featured\":{\"default\":false,\"description\":\"Whether the entity is featured in prominent selection and display surfaces.\",\"type\":\"boolean\"},\"is_hidden\":{\"default\":false,\"description\":\"Whether the entity is excluded from default lists.\",\"type\":\"boolean\"}},\"required\":[\"economic_intent\",\"fqn\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"display_label\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Optional non-unique presentation label. Custom values must be non-empty without leading or trailing whitespace. Null or omission uses the final one or two FQN segments.\"},\"economic_intent\":{\"description\":\"Whether a category describes spending or income.\",\"enum\":[\"expense\",\"income\"],\"type\":\"string\"},\"fqn\":{\"description\":\"Colon-separated hierarchical FQN for the category leaf.\",\"type\":\"string\"},\"is_featured\":{\"default\":false,\"description\":\"Whether the entity is featured in prominent selection and display surfaces.\",\"type\":\"boolean\"},\"is_hidden\":{\"default\":false,\"description\":\"Whether the entity is excluded from default lists.\",\"type\":\"boolean\"}},\"required\":[\"economic_intent\",\"fqn\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Body: BodyDescriptor{
@@ -575,6 +575,12 @@ func Operations() []Operation {
 					Required: true,
 					Type:     "object",
 					Properties: []BodyPropertyDescriptor{
+						{
+							Name:        "display_label",
+							Type:        "string",
+							Description: "Optional non-unique presentation label. Custom values must be non-empty without leading or trailing whitespace. Null or omission uses the final one or two FQN segments.",
+							Required:    false,
+						},
 						{
 							Name:        "economic_intent",
 							Type:        "string",
@@ -602,7 +608,7 @@ func Operations() []Operation {
 						},
 					},
 					RequiredProperties: []string{"economic_intent", "fqn"},
-					Simple:             true,
+					Simple:             false,
 				},
 			},
 			Invoke: invokeCreateCategory,
@@ -1172,7 +1178,7 @@ func Operations() []Operation {
 			MCP: MCPOperation{
 				Group: "tags", Name: "create",
 				ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: false,
-				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"fqn\":{\"description\":\"Colon-separated hierarchical FQN for the tag leaf.\",\"type\":\"string\"},\"is_featured\":{\"default\":false,\"description\":\"Whether the entity is featured in prominent selection and display surfaces.\",\"type\":\"boolean\"},\"is_hidden\":{\"default\":false,\"description\":\"Whether the entity is excluded from default lists.\",\"type\":\"boolean\"}},\"required\":[\"fqn\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"display_label\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Optional non-unique presentation label. Custom values must be non-empty without leading or trailing whitespace. Null or omission uses the final one or two FQN segments.\"},\"fqn\":{\"description\":\"Colon-separated hierarchical FQN for the tag leaf.\",\"type\":\"string\"},\"is_featured\":{\"default\":false,\"description\":\"Whether the entity is featured in prominent selection and display surfaces.\",\"type\":\"boolean\"},\"is_hidden\":{\"default\":false,\"description\":\"Whether the entity is excluded from default lists.\",\"type\":\"boolean\"}},\"required\":[\"fqn\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Body: BodyDescriptor{
@@ -1180,6 +1186,12 @@ func Operations() []Operation {
 					Required: true,
 					Type:     "object",
 					Properties: []BodyPropertyDescriptor{
+						{
+							Name:        "display_label",
+							Type:        "string",
+							Description: "Optional non-unique presentation label. Custom values must be non-empty without leading or trailing whitespace. Null or omission uses the final one or two FQN segments.",
+							Required:    false,
+						},
 						{
 							Name:        "fqn",
 							Type:        "string",
@@ -1200,7 +1212,7 @@ func Operations() []Operation {
 						},
 					},
 					RequiredProperties: []string{"fqn"},
-					Simple:             true,
+					Simple:             false,
 				},
 			},
 			Invoke: invokeCreateTag,
@@ -4185,11 +4197,11 @@ func Operations() []Operation {
 			Method:      "PATCH",
 			Path:        "/api/categories/{category_id}",
 			Summary:     "Update category mutable metadata.",
-			Description: "Update hidden or featured metadata for one category ID; it does not rename the FQN or change economic intent. Use categories_restructure for rename or move operations.",
+			Description: "Set or clear the display-label override and update hidden or featured metadata for one category ID; it does not rename the FQN or change economic intent. Use categories_restructure for rename or move operations.",
 			MCP: MCPOperation{
 				Group: "categories", Name: "update",
 				ReadOnly: false, Destructive: false, Idempotent: true, OpenWorld: false,
-				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"is_featured\":{\"description\":\"Whether the entity is featured in prominent selection and display surfaces.\",\"type\":\"boolean\"},\"is_hidden\":{\"description\":\"Whether the entity is excluded from default lists.\",\"type\":\"boolean\"}},\"type\":\"object\"},\"category_id\":{\"description\":\"Category identifier to target or filter by.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"body\",\"category_id\"],\"type\":\"object\"}"),
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"display_label\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Set a custom non-unique presentation label without leading or trailing whitespace, set null to restore the FQN-derived fallback, or omit to leave unchanged. Custom values must be non-empty.\"},\"is_featured\":{\"description\":\"Whether the entity is featured in prominent selection and display surfaces.\",\"type\":\"boolean\"},\"is_hidden\":{\"description\":\"Whether the entity is excluded from default lists.\",\"type\":\"boolean\"}},\"type\":\"object\"},\"category_id\":{\"description\":\"Category identifier to target or filter by.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"body\",\"category_id\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -4206,6 +4218,12 @@ func Operations() []Operation {
 					Type:     "object",
 					Properties: []BodyPropertyDescriptor{
 						{
+							Name:        "display_label",
+							Type:        "string",
+							Description: "Set a custom non-unique presentation label without leading or trailing whitespace, set null to restore the FQN-derived fallback, or omit to leave unchanged. Custom values must be non-empty.",
+							Required:    false,
+						},
+						{
 							Name:        "is_featured",
 							Type:        "boolean",
 							Description: "Whether the entity is featured in prominent selection and display surfaces.",
@@ -4218,7 +4236,7 @@ func Operations() []Operation {
 							Required:    false,
 						},
 					},
-					Simple: true,
+					Simple: false,
 				},
 			},
 			Invoke: invokeUpdateCategory,
@@ -4342,11 +4360,11 @@ func Operations() []Operation {
 			Method:      "PATCH",
 			Path:        "/api/tags/{tag_id}",
 			Summary:     "Update tag hidden state.",
-			Description: "Update hidden or featured metadata for one tag ID; it does not rename the FQN. Use tags_restructure for rename or move operations.",
+			Description: "Set or clear the display-label override and update hidden or featured metadata for one tag ID; it does not rename the FQN. Use tags_restructure for rename or move operations.",
 			MCP: MCPOperation{
 				Group: "tags", Name: "update",
 				ReadOnly: false, Destructive: false, Idempotent: true, OpenWorld: false,
-				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"is_featured\":{\"description\":\"Whether the entity is featured in prominent selection and display surfaces.\",\"type\":\"boolean\"},\"is_hidden\":{\"description\":\"Whether the entity is excluded from default lists.\",\"type\":\"boolean\"}},\"type\":\"object\"},\"tag_id\":{\"description\":\"Tag identifier to target or filter by.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"body\",\"tag_id\"],\"type\":\"object\"}"),
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"display_label\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"description\":\"Set a custom non-unique presentation label without leading or trailing whitespace, set null to restore the FQN-derived fallback, or omit to leave unchanged. Custom values must be non-empty.\"},\"is_featured\":{\"description\":\"Whether the entity is featured in prominent selection and display surfaces.\",\"type\":\"boolean\"},\"is_hidden\":{\"description\":\"Whether the entity is excluded from default lists.\",\"type\":\"boolean\"}},\"type\":\"object\"},\"tag_id\":{\"description\":\"Tag identifier to target or filter by.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"body\",\"tag_id\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -4363,6 +4381,12 @@ func Operations() []Operation {
 					Type:     "object",
 					Properties: []BodyPropertyDescriptor{
 						{
+							Name:        "display_label",
+							Type:        "string",
+							Description: "Set a custom non-unique presentation label without leading or trailing whitespace, set null to restore the FQN-derived fallback, or omit to leave unchanged. Custom values must be non-empty.",
+							Required:    false,
+						},
+						{
 							Name:        "is_featured",
 							Type:        "boolean",
 							Description: "Whether the entity is featured in prominent selection and display surfaces.",
@@ -4375,7 +4399,7 @@ func Operations() []Operation {
 							Required:    false,
 						},
 					},
-					Simple: true,
+					Simple: false,
 				},
 			},
 			Invoke: invokeUpdateTag,

@@ -15,6 +15,7 @@ require (
 	github.com/go-chi/chi/v5 v5.3.1
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/govalues/decimal v0.1.36
+	github.com/lithammer/fuzzysearch v1.1.8
 	github.com/modelcontextprotocol/go-sdk v1.6.1
 	github.com/oapi-codegen/nethttp-middleware v1.1.2
 	github.com/oapi-codegen/nullable v1.2.0

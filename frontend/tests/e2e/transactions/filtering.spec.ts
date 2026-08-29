@@ -25,6 +25,7 @@ import {
   listFixtures,
   type Locator,
   openRowActionsMenu,
+  pickerSelectedLabel,
   runCapturedSearchDebounce,
   shiftLocalDate,
   type TransactionFixture,
@@ -476,13 +477,17 @@ test("transactions page add-filter menu drives server filters and chips", async 
       .getByRole("option")
       .filter({ hasText: "HiddenMatch" }),
   ).toBeVisible();
-  await fillAndExpectValue(tagsPicker, visibleTagOne.fqn);
+  await tagsPicker.fill(visibleTagOne.fqn);
   await expect(
-    page.getByRole("button", { name: "Remove Groceries" }),
+    page.getByRole("button", {
+      name: `Remove ${pickerSelectedLabel(visibleTagOne)}`,
+    }),
   ).toBeVisible();
-  await fillAndExpectValue(tagsPicker, visibleTagTwo.fqn);
+  await tagsPicker.fill(visibleTagTwo.fqn);
   await expect(
-    page.getByRole("button", { name: "Remove Errands" }),
+    page.getByRole("button", {
+      name: `Remove ${pickerSelectedLabel(visibleTagTwo)}`,
+    }),
   ).toBeVisible();
 
   await page.getByRole("button", { name: "Back" }).click();
@@ -572,7 +577,8 @@ test("transactions page add-filter menu drives server filters and chips", async 
     `/transactions?page=1&pageSize=25&filter=${encodeURIComponent(deepLinkFilter)}`,
   );
   await deepLinkRequest;
-  await expect(page.getByText("Tag Groceries")).toBeVisible();
+  const deepLinkTagLabel = `Tag ${pickerSelectedLabel(visibleTagOne)}, ${pickerSelectedLabel(visibleTagTwo)} · any of`;
+  await expect(page.getByText(deepLinkTagLabel)).toBeVisible();
   await expect(page.getByText("Settlement Pending")).toBeVisible();
   await expect(page.getByText("Currency USD")).toBeVisible();
   await expect(page.getByText("Amount 10-20")).toBeVisible();
@@ -626,7 +632,7 @@ test("transactions page add-filter menu drives server filters and chips", async 
 
   await page.getByRole("button", { name: "Close filters" }).click();
   await expectTransactionFilterUrl(page, { filter: null, pageSize: "50" });
-  await expect(page.getByText("Tag Groceries")).toBeHidden();
+  await expect(page.getByText(deepLinkTagLabel)).toBeHidden();
   await expect(page.getByText("Amount 10-20")).toBeHidden();
 
   const relativeDateRequest = page.waitForRequest((request) => {
@@ -2009,7 +2015,9 @@ test("filter X dismiss clears chips while retaining standing search and class fi
   await expect(
     page.getByTestId("transaction-browser-filter-bar"),
   ).toBeVisible();
-  await expect(page.getByText(`Category ${category.name}`)).toBeVisible();
+  await expect(
+    page.getByText(`Category ${category.display_label}`),
+  ).toBeVisible();
   await expect(page.getByRole("searchbox", { name: "Search" })).toHaveValue(
     search,
   );
@@ -2161,7 +2169,7 @@ test("transaction entity chips add filters in place", async ({
     pageSize: "50",
     q: searchQuery,
   });
-  await expect(page.getByText(`Tag ${tag.name}`)).toBeVisible();
+  await expect(page.getByText(`Tag ${pickerSelectedLabel(tag)}`)).toBeVisible();
 
   await activateTransactionRow(targetRow);
   const panel = page.getByRole("dialog", { name: target.display_title });

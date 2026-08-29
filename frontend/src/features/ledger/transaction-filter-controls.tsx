@@ -10,11 +10,7 @@ import {
 } from "react";
 
 import type {
-  Account,
-  Category,
-  Member,
   RecordRole,
-  Tag,
   TransactionClass,
   TransactionSettlement,
   TransactionShapeType,
@@ -61,6 +57,16 @@ import {
 import type { LedgerLookupsSnapshot } from "@/store";
 
 import { EntityMultiPicker, type EntityOption } from "./entity-picker";
+import {
+  accountPickerLoader,
+  accountPickerOption,
+  categoryPickerLoader,
+  categoryPickerOption,
+  memberPickerLoader,
+  memberPickerOption,
+  tagPickerLoader,
+  tagPickerOption,
+} from "./entity-picker-loaders";
 import {
   lifecycleStatusLabel,
   settlementStatusLabel,
@@ -217,48 +223,11 @@ const entityIDFromLiteral = (value: string): number | undefined => {
   return Number.isSafeInteger(id) ? id : undefined;
 };
 
-const accountOption = (account: Account): EntityOption => ({
-  detail: `${account.fqn} · ${account.currency ? `${account.currency} · Single-currency` : "Multi-currency"}`,
-  hidden: account.is_hidden,
-  id: account.account_id,
-  label: account.name,
-  searchLabel: account.fqn,
-});
-
-const categoryOption = (category: Category): EntityOption => ({
-  detail: category.fqn,
-  hidden: category.is_hidden,
-  id: category.category_id,
-  label: category.name,
-  searchLabel: category.fqn,
-});
-
-const tagOption = (tag: Tag): EntityOption => ({
-  detail: tag.fqn,
-  hidden: tag.is_hidden,
-  id: tag.tag_id,
-  label: tag.name,
-  searchLabel: tag.fqn,
-});
-
-const memberOption = (member: Member): EntityOption => ({
-  hidden: member.is_hidden,
-  id: member.member_id,
-  label: member.name,
-  searchLabel: member.name,
-});
-
 const mapById = <T,>(
   values: readonly T[] | undefined,
   getId: (value: T) => number,
 ): Map<number, T> =>
   new Map(values?.map((value) => [getId(value), value] as const));
-
-const selectedOrVisible = (
-  selected: boolean,
-  hidden: boolean,
-  includeHidden: boolean,
-): boolean => selected || !hidden || includeHidden;
 
 const rangeLabel = (
   label: string,
@@ -308,6 +277,7 @@ interface FilterChipProps {
   readonly editKey: string;
   readonly hidden?: boolean;
   readonly label: string;
+  readonly labelContent?: ReactNode;
   readonly labelSuffix?: string;
   readonly onEdit: (opener: HTMLButtonElement) => void;
   readonly onRemove: () => void;
@@ -319,6 +289,7 @@ const FilterChip = ({
   editKey,
   hidden,
   label,
+  labelContent,
   labelSuffix,
   onEdit,
   onRemove,
@@ -358,7 +329,7 @@ const FilterChip = ({
                 : "break-all whitespace-normal"
             }
           >
-            {label}
+            {labelContent ?? label}
           </span>
           {labelSuffix ? (
             <span
@@ -382,6 +353,33 @@ const FilterChip = ({
     </AppTooltip>
   );
 };
+
+interface ValuePresentation {
+  readonly displayTitle?: string;
+  readonly hidden?: boolean;
+  readonly label: string;
+  readonly tooltip: string;
+}
+
+const valuePresentationText = (presentation: ValuePresentation): string =>
+  presentation.displayTitle
+    ? `${presentation.label} (${presentation.displayTitle})`
+    : presentation.label;
+
+const ValuePresentationLabel = ({
+  presentation,
+}: {
+  readonly presentation: ValuePresentation;
+}) => (
+  <>
+    {presentation.label}
+    {presentation.displayTitle ? (
+      <span className="text-muted-foreground">
+        {` (${presentation.displayTitle})`}
+      </span>
+    ) : null}
+  </>
+);
 
 interface CheckboxListProps<T extends string> {
   readonly idPrefix: string;
@@ -716,6 +714,9 @@ export const TransactionFilterControls = ({
     Partial<Record<EntityDimension, boolean>>
   >({});
   const [entityPickerOpen, setEntityPickerOpen] = useState(false);
+  const [pickerOptionsByValue, setPickerOptionsByValue] = useState<
+    ReadonlyMap<string, EntityOption>
+  >(new Map());
   const controlsRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<HTMLDivElement>(null);
   const editorAutoFocusKeyRef = useRef<string | undefined>(undefined);
@@ -1153,90 +1154,98 @@ export const TransactionFilterControls = ({
       humanValue: string,
       active: boolean,
     ): boolean => active && exactValues.includes(humanValue);
-    const options = {
-      account:
-        lookups?.accounts
-          .filter(activeRecord)
-          .filter((account) =>
-            selectedOrVisible(
-              selectedEntityValue(account.fqn, activeRecord(account)),
-              account.is_hidden,
-              includeHidden.account ?? false,
-            ),
-          )
-          .map(accountOption) ?? [],
-      category:
-        lookups?.categories
-          .filter(activeRecord)
-          .filter((category) =>
-            selectedOrVisible(
-              selectedEntityValue(category.fqn, activeRecord(category)),
-              category.is_hidden,
-              includeHidden.category ?? false,
-            ),
-          )
-          .map(categoryOption) ?? [],
-      member:
-        lookups?.members
-          .filter(activeRecord)
-          .filter((member) =>
-            selectedOrVisible(
-              selectedEntityValue(member.name, activeRecord(member)),
-              member.is_hidden,
-              includeHidden.member ?? false,
-            ),
-          )
-          .map(memberOption) ?? [],
-      tag:
-        lookups?.tags
-          .filter(activeRecord)
-          .filter((tag) =>
-            selectedOrVisible(
-              selectedEntityValue(tag.fqn, activeRecord(tag)),
-              tag.is_hidden,
-              includeHidden.tag ?? false,
-            ),
-          )
-          .map(tagOption) ?? [],
+    const selectedIds = (
+      selectedDimension: EntityDimension,
+      lookupIds: readonly number[],
+    ): number[] => [
+      ...new Set([
+        ...lookupIds,
+        ...exactValues.flatMap((value) => {
+          const option = pickerOptionsByValue.get(
+            `${selectedDimension}:${value}`,
+          );
+          return option ? [option.id] : [];
+        }),
+      ]),
+    ];
+    const showHidden = includeHidden[dimension] ?? false;
+    const pickerHumanValue = (
+      selectedDimension: EntityDimension,
+      id: number,
+    ): string | undefined => {
+      for (const [key, option] of pickerOptionsByValue) {
+        if (key.startsWith(`${selectedDimension}:`) && option.id === id) {
+          return option.searchLabel;
+        }
+      }
+      return undefined;
     };
     const configs = {
       account: {
-        humanValue: (id: number) => accountById.get(id)?.fqn,
-        options: options.account,
-        selectedIds:
+        humanValue: (id: number) =>
+          accountById.get(id)?.fqn ?? pickerHumanValue("account", id),
+        loadOptions: accountPickerLoader({
+          context: "transaction_filter",
+          include_hidden: showHidden,
+        }),
+        options: (lookups?.accounts ?? []).map(accountPickerOption),
+        selectedIds: selectedIds(
+          "account",
           lookups?.accounts
             .filter((account) =>
               selectedEntityValue(account.fqn, activeRecord(account)),
             )
             .map((account) => account.account_id) ?? [],
+        ),
       },
       category: {
-        humanValue: (id: number) => categoryById.get(id)?.fqn,
-        options: options.category,
-        selectedIds:
+        humanValue: (id: number) =>
+          categoryById.get(id)?.fqn ?? pickerHumanValue("category", id),
+        loadOptions: categoryPickerLoader({
+          context: "transaction_filter",
+          include_hidden: showHidden,
+        }),
+        options: (lookups?.categories ?? []).map(categoryPickerOption),
+        selectedIds: selectedIds(
+          "category",
           lookups?.categories
             .filter((category) =>
               selectedEntityValue(category.fqn, activeRecord(category)),
             )
             .map((category) => category.category_id) ?? [],
+        ),
       },
       member: {
-        humanValue: (id: number) => memberById.get(id)?.name,
-        options: options.member,
-        selectedIds:
+        humanValue: (id: number) =>
+          memberById.get(id)?.name ?? pickerHumanValue("member", id),
+        loadOptions: memberPickerLoader({
+          context: "transaction_filter",
+          include_hidden: showHidden,
+        }),
+        options: (lookups?.members ?? []).map(memberPickerOption),
+        selectedIds: selectedIds(
+          "member",
           lookups?.members
             .filter((member) =>
               selectedEntityValue(member.name, activeRecord(member)),
             )
             .map((member) => member.member_id) ?? [],
+        ),
       },
       tag: {
-        humanValue: (id: number) => tagById.get(id)?.fqn,
-        options: options.tag,
-        selectedIds:
+        humanValue: (id: number) =>
+          tagById.get(id)?.fqn ?? pickerHumanValue("tag", id),
+        loadOptions: tagPickerLoader({
+          context: "transaction_filter",
+          include_hidden: showHidden,
+        }),
+        options: (lookups?.tags ?? []).map(tagPickerOption),
+        selectedIds: selectedIds(
+          "tag",
           lookups?.tags
             .filter((tag) => selectedEntityValue(tag.fqn, activeRecord(tag)))
             .map((tag) => tag.tag_id) ?? [],
+        ),
       },
     };
     const config = configs[dimension];
@@ -1268,17 +1277,31 @@ export const TransactionFilterControls = ({
           <span className="font-mono text-sm">Include hidden</span>
         </label>
         <EntityMultiPicker
+          key={`${rowIndex}:${dimension}:${mode}`}
           hierarchical={dimension !== "member"}
           id={editorId}
           label={entityDimensionLabels[dimension]}
-          onOpenChange={setEntityPickerOpen}
+          loadKey={`transaction_filter:${dimension}:${showHidden}`}
+          loadOptions={config.loadOptions}
           options={config.options}
+          onOpenChange={setEntityPickerOpen}
           value={config.selectedIds}
-          onChange={(ids) => {
+          onChange={(ids, selectedOptions) => {
+            setPickerOptionsByValue((current) => {
+              const next = new Map(current);
+              for (const option of selectedOptions) {
+                next.set(`${dimension}:${option.searchLabel}`, option);
+              }
+              return next;
+            });
             const nextEntityIdValues = new Set(chip?.entityIdValues);
             const nextHumanValues = new Set(unresolvedHumanValues);
+            const returnedHumanValues = new Map(
+              selectedOptions.map((option) => [option.id, option.searchLabel]),
+            );
             for (const id of ids) {
-              const humanValue = config.humanValue(id);
+              const humanValue =
+                returnedHumanValues.get(id) ?? config.humanValue(id);
               if (humanValue) nextHumanValues.add(humanValue);
             }
             const nextValues = [
@@ -1314,7 +1337,9 @@ export const TransactionFilterControls = ({
                     focusable={false}
                     label={presentation.tooltip}
                   >
-                    <span className="block truncate">{presentation.label}</span>
+                    <span className="block truncate">
+                      <ValuePresentationLabel presentation={presentation} />
+                    </span>
                   </AppTooltip>
                   <AppTooltip asChild label={`Remove ${presentation.tooltip}`}>
                     <Button
@@ -1322,7 +1347,7 @@ export const TransactionFilterControls = ({
                       variant="ghost"
                       size="icon-xs"
                       className="shrink-0"
-                      aria-label={`Remove ${presentation.label}`}
+                      aria-label={`Remove ${valuePresentationText(presentation)}`}
                       data-filter-entity-id-remove
                       onClick={() => {
                         restoreEntityIDLiteralFocusRef.current = valueIndex;
@@ -1594,7 +1619,7 @@ export const TransactionFilterControls = ({
     value: string,
     scoped = false,
     entityId = false,
-  ): { hidden?: boolean; label: string; tooltip: string } => {
+  ): ValuePresentation => {
     if (entityId) {
       const id = entityIDFromLiteral(value);
       const entity =
@@ -1608,8 +1633,13 @@ export const TransactionFilterControls = ({
                 ? tagById.get(id)
                 : memberById.get(id);
       return {
+        displayTitle: entity
+          ? "display_label" in entity
+            ? entity.display_label
+            : entity.name
+          : undefined,
         hidden: entity?.is_hidden,
-        label: entity ? `${entity.name} (${value})` : value,
+        label: value,
         tooltip: entity
           ? `${"fqn" in entity ? entity.fqn : entity.name} (${value})`
           : value,
@@ -1620,9 +1650,14 @@ export const TransactionFilterControls = ({
       const account = lookups?.accounts.find(
         (candidate) => candidate.fqn === fqn,
       );
+      const pickerOption = pickerOptionsByValue.get(`account:${fqn}`);
       return {
-        hidden: account?.is_hidden,
-        label: scoped ? `group ${fqn}` : (account?.name ?? fqn),
+        displayTitle:
+          !scoped && (account?.display_label ?? pickerOption?.label) !== fqn
+            ? (account?.display_label ?? pickerOption?.label)
+            : undefined,
+        hidden: account?.is_hidden ?? pickerOption?.hidden,
+        label: scoped ? `group ${fqn}` : fqn,
         tooltip: value,
       };
     }
@@ -1632,9 +1667,14 @@ export const TransactionFilterControls = ({
         field === "category"
           ? lookups?.categories.find((item) => item.fqn === fqn)
           : lookups?.tags.find((item) => item.fqn === fqn);
+      const pickerOption = pickerOptionsByValue.get(`${field}:${fqn}`);
       return {
-        hidden: candidate?.is_hidden,
-        label: scoped ? `group ${fqn}` : (candidate?.name ?? fqn),
+        displayTitle:
+          !scoped && (candidate?.display_label ?? pickerOption?.label) !== fqn
+            ? (candidate?.display_label ?? pickerOption?.label)
+            : undefined,
+        hidden: candidate?.is_hidden ?? pickerOption?.hidden,
+        label: scoped ? `group ${fqn}` : fqn,
         tooltip: value,
       };
     }
@@ -1678,6 +1718,7 @@ export const TransactionFilterControls = ({
   ): {
     hidden?: boolean;
     label: string;
+    labelContent?: ReactNode;
     labelSuffix?: string;
     tooltip: string;
     truncateLabel?: boolean;
@@ -1712,9 +1753,10 @@ export const TransactionFilterControls = ({
           : []),
       ];
     });
-    const describedValues = values.map((value) =>
-      value.hidden ? `${value.label} (hidden)` : value.label,
-    );
+    const describedValues = values.map((value) => {
+      const description = valuePresentationText(value);
+      return value.hidden ? `${description} (hidden)` : description;
+    });
     const describedTooltips = values.map((value) =>
       value.hidden ? `${value.tooltip} (hidden)` : value.tooltip,
     );
@@ -1723,6 +1765,18 @@ export const TransactionFilterControls = ({
     return {
       hidden: values.some((value) => value.hidden),
       label,
+      labelContent: (
+        <>
+          {dimension.label}{" "}
+          {values.map((value, index) => (
+            <span key={`${value.label}:${index}`}>
+              {index > 0 ? ", " : null}
+              <ValuePresentationLabel presentation={value} />
+              {value.hidden ? " (hidden)" : null}
+            </span>
+          ))}
+        </>
+      ),
       labelSuffix,
       tooltip: `${dimension.label} ${describedTooltips.join(", ")}${labelSuffix}`,
     };

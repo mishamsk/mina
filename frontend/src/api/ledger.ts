@@ -1037,19 +1037,6 @@ export const fetchTransactionMonthTotalsByMonth = (month: string) =>
     },
   });
 
-export const fetchCategoryPickerCategories = (
-  economicIntents: readonly CategoryEconomicIntent[],
-) =>
-  listCategories({
-    query: {
-      economic_intent: [...new Set(economicIntents)].sort(),
-      limit: lookupLimit,
-      offset: 0,
-      sort: "fqn",
-      sort_dir: "asc",
-    },
-  });
-
 export const createLedgerAccount = (body: CreateAccountRequest) =>
   createGeneratedAccount({ body });
 

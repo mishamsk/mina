@@ -8,6 +8,7 @@
 
 - Generated request types carry the shared household-flow anchor/window configuration and separate accounting-history range read without client-side date alignment or report arithmetic.
 - Generated transaction replacement requests preserve the required `If-Match` header and the mutually exclusive retained-record and new-record shapes from OpenAPI.
+- Generated entity picker requests preserve separate typed account, category, tag, and member contexts plus entity-shaped bounded and selected response rows; no generic entity-kind union is exposed.
 - In-process requests synchronously invoke the supplied handler without a listener; the synthetic base URL is only for generated request construction.
 - In-process responses are fully buffered, so this transport cannot support streaming response behavior.
 - Callers supply an in-process handler that remains valid for the client's use; they own its runtime and lifecycle.

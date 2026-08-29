@@ -7,6 +7,7 @@ import (
 
 	"github.com/mishamsk/mina/internal/apptest"
 	"github.com/mishamsk/mina/internal/httpclient"
+	"github.com/oapi-codegen/nullable"
 )
 
 func TestTagCreateReadListUpdateDeleteBoundary(t *testing.T) {
@@ -161,6 +162,73 @@ func TestTagCreateReadListUpdateDeleteBoundary(t *testing.T) {
 	assertTagIDs(t, withTombstones.JSON200.Tags, []int64{visibleDeleted.JSON201.TagId, hidden.JSON201.TagId, created.JSON201.TagId})
 	if withTombstones.JSON200.Tags[0].TombstonedAt == nil {
 		t.Fatal("deleted tag tombstoned_at = nil, want timestamp")
+	}
+}
+
+func TestTagDisplayLabelsBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	ctx := context.Background()
+	explicitLabel := "Weekend routine"
+
+	one, err := client.REST().CreateTagWithResponse(ctx, httpclient.CreateTagRequest{Fqn: "StandaloneTag"})
+	requireClientResponse(t, "create one-segment tag label", err, one.StatusCode(), http.StatusCreated, one.Body)
+	if one.JSON201.DisplayLabel != "StandaloneTag" || one.JSON201.DisplayLabelOverride != nil {
+		t.Fatalf("one-segment tag labels = %q/%v", one.JSON201.DisplayLabel, one.JSON201.DisplayLabelOverride)
+	}
+
+	explicit, err := client.REST().CreateTagWithResponse(ctx, httpclient.CreateTagRequest{Fqn: "Household:Routine:Weekly", DisplayLabel: &explicitLabel})
+	requireClientResponse(t, "create explicit tag label", err, explicit.StatusCode(), http.StatusCreated, explicit.Body)
+	if explicit.JSON201.DisplayLabel != explicitLabel || explicit.JSON201.DisplayLabelOverride == nil || *explicit.JSON201.DisplayLabelOverride != explicitLabel || explicit.JSON201.Name != "Weekly" {
+		t.Fatalf("explicit tag labels = %+v", explicit.JSON201)
+	}
+	automatic, err := client.REST().CreateTagWithResponse(ctx, httpclient.CreateTagRequest{Fqn: "Household:Routine:Daily"})
+	requireClientResponse(t, "create automatic tag label", err, automatic.StatusCode(), http.StatusCreated, automatic.Body)
+
+	listed, err := client.REST().ListTagsWithResponse(ctx, nil)
+	requireClientResponse(t, "list tag labels", err, listed.StatusCode(), http.StatusOK, listed.Body)
+	found := false
+	for _, tag := range listed.JSON200.Tags {
+		if tag.TagId == explicit.JSON201.TagId {
+			found = tag.DisplayLabel == explicitLabel && tag.DisplayLabelOverride != nil
+		}
+	}
+	if !found {
+		t.Fatal("explicit tag display label missing from list")
+	}
+
+	updatedLabel := "Weekly household"
+	updated, err := client.REST().UpdateTagWithResponse(ctx, explicit.JSON201.TagId, httpclient.UpdateTagRequest{DisplayLabel: nullable.NewNullableWithValue(updatedLabel)})
+	requireClientResponse(t, "update tag label", err, updated.StatusCode(), http.StatusOK, updated.Body)
+	if updated.JSON200.DisplayLabel != updatedLabel {
+		t.Fatalf("updated tag display_label = %q", updated.JSON200.DisplayLabel)
+	}
+
+	res := restructureTags(t, client, "Household:Routine", "Household:Cadence")
+	if res.JSON200.MovedCount != 2 {
+		t.Fatalf("tag restructure count = %d", res.JSON200.MovedCount)
+	}
+	read, err := client.REST().GetTagWithResponse(ctx, explicit.JSON201.TagId, nil)
+	requireClientResponse(t, "read restructured tag label", err, read.StatusCode(), http.StatusOK, read.Body)
+	if read.JSON200.DisplayLabel != updatedLabel || read.JSON200.DisplayLabelOverride == nil || *read.JSON200.DisplayLabelOverride != updatedLabel {
+		t.Fatalf("restructured tag override = %+v", read.JSON200)
+	}
+	automaticRead, err := client.REST().GetTagWithResponse(ctx, automatic.JSON201.TagId, nil)
+	requireClientResponse(t, "read restructured automatic tag label", err, automaticRead.StatusCode(), http.StatusOK, automaticRead.Body)
+	if automaticRead.JSON200.DisplayLabel != "Cadence:Daily" {
+		t.Fatalf("restructured tag fallback = %q", automaticRead.JSON200.DisplayLabel)
+	}
+
+	cleared, err := client.REST().UpdateTagWithResponse(ctx, explicit.JSON201.TagId, httpclient.UpdateTagRequest{DisplayLabel: nullable.NewNullNullable[string]()})
+	requireClientResponse(t, "clear tag label", err, cleared.StatusCode(), http.StatusOK, cleared.Body)
+	if cleared.JSON200.DisplayLabel != "Cadence:Weekly" || cleared.JSON200.DisplayLabelOverride != nil {
+		t.Fatalf("cleared tag labels = %q/%v", cleared.JSON200.DisplayLabel, cleared.JSON200.DisplayLabelOverride)
+	}
+
+	invalid := " padded "
+	rejected, err := client.REST().UpdateTagWithResponse(ctx, explicit.JSON201.TagId, httpclient.UpdateTagRequest{DisplayLabel: nullable.NewNullableWithValue(invalid)})
+	requireNoTransportError(t, "reject tag label whitespace", err)
+	if rejected.StatusCode() != http.StatusBadRequest || rejected.JSON400.Error.Code != httpclient.APIErrorCodeInvalidRequest {
+		t.Fatalf("invalid tag label response = %d %+v", rejected.StatusCode(), rejected.JSON400)
 	}
 }
 

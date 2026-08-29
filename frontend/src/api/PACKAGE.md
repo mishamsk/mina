@@ -20,6 +20,7 @@
 - Complete transaction replacement passes the caller's ETag through `If-Match`; response helpers retain the canonical response ETag, and normalized failures preserve 412 so ledger workflows can recover stale drafts.
 - Flow-report helpers pass the shared typed anchor/window configuration without transforming report values; the accounting-history-range helper remains a separate generated read.
 - Status consumes generated paged audit-entry DTO metadata and their JSON-presence flags without a persistent frontend cache; its thin response helper retains each JSON field's transport source for exact evidence formatting without JavaScript number coercion.
+- Entity picker consumers call the separate generated Account, Category, Tag, and Member `GET` operations directly; handwritten API code does not add a generic picker contract or reinterpret returned order.
 
 ## Boundaries
 

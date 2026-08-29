@@ -40,6 +40,48 @@ func (s *strictServer) ListAccounts(ctx context.Context, request openapi.ListAcc
 	}, nil
 }
 
+func (s *strictServer) PickAccounts(ctx context.Context, request openapi.PickAccountsRequestObject) (openapi.PickAccountsResponseObject, error) {
+	params := request.Params
+	result, err := s.deps.Accounts.Pick(ctx, accounts.PickerOptions{
+		Context:          accounts.PickerContext(params.Context),
+		Query:            optionalStringParam(params.Q),
+		ParentFQN:        params.ParentFqn,
+		IncludeHidden:    boolParam(params.IncludeHidden),
+		SelectedIDs:      cloneOptionalInt64Slice(params.SelectedIds),
+		ExcludedCurrency: params.ExcludedCurrency,
+		TransactionIDs:   cloneOptionalInt64Slice(params.TransactionIds),
+		SourceAccountID:  params.SourceAccountId,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return openapi.PickAccounts200JSONResponse{
+		Items: accountPickerAPIItems(result.Items), SelectedItems: accountPickerAPIItems(result.SelectedItems), CanCreate: result.CanCreate, EligibleCount: result.EligibleCount,
+	}, nil
+}
+
+func accountPickerAPIItems(source []accounts.PickerItem) []openapi.AccountPickerItem {
+	items := make([]openapi.AccountPickerItem, len(source))
+	for index, item := range source {
+		var accountType *openapi.AccountType
+		if item.AccountType != nil {
+			value := openapi.AccountType(*item.AccountType)
+			accountType = &value
+		}
+		items[index] = openapi.AccountPickerItem{
+			AccountId:   item.ID,
+			AccountType: accountType,
+			ChildCount:  item.ChildCount,
+			Currency:    item.Currency,
+			Fqn:         item.FQN,
+			IsHidden:    item.IsHidden,
+			Kind:        openapi.AccountPickerItemKind(item.Kind),
+			Title:       item.Title,
+		}
+	}
+	return items
+}
+
 func (s *strictServer) ListAccountBalances(ctx context.Context, request openapi.ListAccountBalancesRequestObject) (openapi.ListAccountBalancesResponseObject, error) {
 	balances, err := s.deps.Accounts.ListBalances(ctx, accounts.BalanceListOptions{
 		IncludeHidden: boolParam(request.Params.IncludeHidden),
@@ -185,6 +227,44 @@ func (s *strictServer) ListCategories(ctx context.Context, request openapi.ListC
 	}, nil
 }
 
+func (s *strictServer) PickCategories(ctx context.Context, request openapi.PickCategoriesRequestObject) (openapi.PickCategoriesResponseObject, error) {
+	params := request.Params
+	result, err := s.deps.Categories.Pick(ctx, categories.PickerOptions{
+		Context:       categories.PickerContext(params.Context),
+		Query:         optionalStringParam(params.Q),
+		ParentFQN:     params.ParentFqn,
+		IncludeHidden: boolParam(params.IncludeHidden),
+		SelectedIDs:   cloneOptionalInt64Slice(params.SelectedIds),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return openapi.PickCategories200JSONResponse{
+		Items: categoryPickerAPIItems(result.Items), SelectedItems: categoryPickerAPIItems(result.SelectedItems), CanCreate: result.CanCreate,
+	}, nil
+}
+
+func categoryPickerAPIItems(source []categories.PickerItem) []openapi.CategoryPickerItem {
+	items := make([]openapi.CategoryPickerItem, len(source))
+	for index, item := range source {
+		var intent *openapi.CategoryEconomicIntent
+		if item.EconomicIntent != nil {
+			value := openapi.CategoryEconomicIntent(*item.EconomicIntent)
+			intent = &value
+		}
+		items[index] = openapi.CategoryPickerItem{
+			CategoryId:     item.ID,
+			ChildCount:     item.ChildCount,
+			EconomicIntent: intent,
+			Fqn:            item.FQN,
+			IsHidden:       item.IsHidden,
+			Kind:           openapi.CategoryPickerItemKind(item.Kind),
+			Title:          item.Title,
+		}
+	}
+	return items
+}
+
 func (s *strictServer) ListCategoryGroups(ctx context.Context, request openapi.ListCategoryGroupsRequestObject) (openapi.ListCategoryGroupsResponseObject, error) {
 	groups, err := s.deps.Categories.GroupStates(ctx, boolParam(request.Params.IncludeHidden))
 	if err != nil {
@@ -199,6 +279,7 @@ func (s *strictServer) ListCategoryGroups(ctx context.Context, request openapi.L
 func (s *strictServer) CreateCategory(ctx context.Context, request openapi.CreateCategoryRequestObject) (openapi.CreateCategoryResponseObject, error) {
 	category, err := s.deps.Categories.Create(ctx, categories.CreateInput{
 		FQN:            request.Body.Fqn,
+		DisplayLabel:   request.Body.DisplayLabel,
 		EconomicIntent: categories.CategoryEconomicIntent(request.Body.EconomicIntent),
 		IsHidden:       request.Body.IsHidden != nil && *request.Body.IsHidden,
 		IsFeatured:     request.Body.IsFeatured != nil && *request.Body.IsFeatured,
@@ -247,8 +328,9 @@ func (s *strictServer) GetCategory(ctx context.Context, request openapi.GetCateg
 
 func (s *strictServer) UpdateCategory(ctx context.Context, request openapi.UpdateCategoryRequestObject) (openapi.UpdateCategoryResponseObject, error) {
 	category, err := s.deps.Categories.UpdateMutable(ctx, request.CategoryId, categories.UpdateInput{
-		IsHidden:   request.Body.IsHidden,
-		IsFeatured: request.Body.IsFeatured,
+		DisplayLabel: optionalNullableString(request.Body.DisplayLabel),
+		IsHidden:     request.Body.IsHidden,
+		IsFeatured:   request.Body.IsFeatured,
 	})
 	if err != nil {
 		return nil, err
@@ -278,6 +360,28 @@ func (s *strictServer) ListMembers(ctx context.Context, request openapi.ListMemb
 		Members:    memberAPIResponses(memberList.Items),
 		TotalCount: memberList.TotalCount,
 	}, nil
+}
+
+func (s *strictServer) PickMembers(ctx context.Context, request openapi.PickMembersRequestObject) (openapi.PickMembersResponseObject, error) {
+	params := request.Params
+	result, err := s.deps.Members.Pick(ctx, members.PickerOptions{
+		Context:       members.PickerContext(params.Context),
+		Query:         optionalStringParam(params.Q),
+		IncludeHidden: boolParam(params.IncludeHidden),
+		SelectedIDs:   cloneOptionalInt64Slice(params.SelectedIds),
+	})
+	if err != nil {
+		return nil, err
+	}
+	items := make([]openapi.MemberPickerItem, len(result.Items))
+	for index, item := range result.Items {
+		items[index] = openapi.MemberPickerItem{MemberId: item.ID, Title: item.Title, IsHidden: item.IsHidden}
+	}
+	selectedItems := make([]openapi.MemberPickerItem, len(result.SelectedItems))
+	for index, item := range result.SelectedItems {
+		selectedItems[index] = openapi.MemberPickerItem{MemberId: item.ID, Title: item.Title, IsHidden: item.IsHidden}
+	}
+	return openapi.PickMembers200JSONResponse{Items: items, SelectedItems: selectedItems}, nil
 }
 
 func (s *strictServer) CreateMember(ctx context.Context, request openapi.CreateMemberRequestObject) (openapi.CreateMemberResponseObject, error) {
@@ -349,6 +453,38 @@ func (s *strictServer) ListTags(ctx context.Context, request openapi.ListTagsReq
 	}, nil
 }
 
+func (s *strictServer) PickTags(ctx context.Context, request openapi.PickTagsRequestObject) (openapi.PickTagsResponseObject, error) {
+	params := request.Params
+	result, err := s.deps.Tags.Pick(ctx, tags.PickerOptions{
+		Context:       tags.PickerContext(params.Context),
+		Query:         optionalStringParam(params.Q),
+		ParentFQN:     params.ParentFqn,
+		IncludeHidden: boolParam(params.IncludeHidden),
+		SelectedIDs:   cloneOptionalInt64Slice(params.SelectedIds),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return openapi.PickTags200JSONResponse{
+		Items: tagPickerAPIItems(result.Items), SelectedItems: tagPickerAPIItems(result.SelectedItems), CanCreate: result.CanCreate,
+	}, nil
+}
+
+func tagPickerAPIItems(source []tags.PickerItem) []openapi.TagPickerItem {
+	items := make([]openapi.TagPickerItem, len(source))
+	for index, item := range source {
+		items[index] = openapi.TagPickerItem{
+			ChildCount: item.ChildCount,
+			Fqn:        item.FQN,
+			IsHidden:   item.IsHidden,
+			Kind:       openapi.TagPickerItemKind(item.Kind),
+			TagId:      item.ID,
+			Title:      item.Title,
+		}
+	}
+	return items
+}
+
 func (s *strictServer) ListTagGroups(ctx context.Context, request openapi.ListTagGroupsRequestObject) (openapi.ListTagGroupsResponseObject, error) {
 	groups, err := s.deps.Tags.GroupStates(ctx, boolParam(request.Params.IncludeHidden))
 	if err != nil {
@@ -362,9 +498,10 @@ func (s *strictServer) ListTagGroups(ctx context.Context, request openapi.ListTa
 
 func (s *strictServer) CreateTag(ctx context.Context, request openapi.CreateTagRequestObject) (openapi.CreateTagResponseObject, error) {
 	tag, err := s.deps.Tags.Create(ctx, tags.CreateInput{
-		FQN:        request.Body.Fqn,
-		IsHidden:   request.Body.IsHidden != nil && *request.Body.IsHidden,
-		IsFeatured: request.Body.IsFeatured != nil && *request.Body.IsFeatured,
+		FQN:          request.Body.Fqn,
+		DisplayLabel: request.Body.DisplayLabel,
+		IsHidden:     request.Body.IsHidden != nil && *request.Body.IsHidden,
+		IsFeatured:   request.Body.IsFeatured != nil && *request.Body.IsFeatured,
 	})
 	if err != nil {
 		return nil, err
@@ -410,8 +547,9 @@ func (s *strictServer) GetTag(ctx context.Context, request openapi.GetTagRequest
 
 func (s *strictServer) UpdateTag(ctx context.Context, request openapi.UpdateTagRequestObject) (openapi.UpdateTagResponseObject, error) {
 	tag, err := s.deps.Tags.UpdateMutable(ctx, request.TagId, tags.UpdateInput{
-		IsHidden:   request.Body.IsHidden,
-		IsFeatured: request.Body.IsFeatured,
+		DisplayLabel: optionalNullableString(request.Body.DisplayLabel),
+		IsHidden:     request.Body.IsHidden,
+		IsFeatured:   request.Body.IsFeatured,
 	})
 	if err != nil {
 		return nil, err
@@ -422,6 +560,13 @@ func (s *strictServer) UpdateTag(ctx context.Context, request openapi.UpdateTagR
 
 func boolParam(value *bool) bool {
 	return value != nil && *value
+}
+
+func optionalStringParam(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }
 
 func accountAPIResponse(account accounts.Account) openapi.Account {
@@ -447,15 +592,15 @@ func accountAPIResponse(account accounts.Account) openapi.Account {
 	}
 }
 
-func optionalNullableString(value nullable.Nullable[string]) accounts.OptionalStringUpdate {
+func optionalNullableString(value nullable.Nullable[string]) services.OptionalStringUpdate {
 	if !value.IsSpecified() {
-		return accounts.OptionalStringUpdate{}
+		return services.OptionalStringUpdate{}
 	}
 	if value.IsNull() {
-		return accounts.OptionalStringUpdate{Specified: true}
+		return services.OptionalStringUpdate{Specified: true}
 	}
 	stringValue := value.MustGet()
-	return accounts.OptionalStringUpdate{Specified: true, Value: &stringValue}
+	return services.OptionalStringUpdate{Specified: true, Value: &stringValue}
 }
 
 func accountAPIResponses(accounts []accounts.Account) []openapi.Account {
@@ -535,18 +680,20 @@ func accountIDsFromBalances(balances []accounts.AccountBalance) []int64 {
 
 func categoryAPIResponse(category categories.Category) openapi.Category {
 	return openapi.Category{
-		CategoryId:     category.ID,
-		Fqn:            category.FQN,
-		EconomicIntent: openapi.CategoryEconomicIntent(category.EconomicIntent),
-		IsHidden:       category.IsHidden,
-		IsFeatured:     category.IsFeatured,
-		Deletable:      category.Deletable,
-		ParentFqn:      category.ParentFQN,
-		Name:           category.Name,
-		Level:          category.Level,
-		CreatedAt:      category.CreatedAt.UTC(),
-		UpdatedAt:      category.UpdatedAt.UTC(),
-		TombstonedAt:   nullableTimestampTime(category.TombstonedAt),
+		CategoryId:           category.ID,
+		Fqn:                  category.FQN,
+		DisplayLabel:         category.DisplayLabel,
+		DisplayLabelOverride: category.DisplayLabelOverride,
+		EconomicIntent:       openapi.CategoryEconomicIntent(category.EconomicIntent),
+		IsHidden:             category.IsHidden,
+		IsFeatured:           category.IsFeatured,
+		Deletable:            category.Deletable,
+		ParentFqn:            category.ParentFQN,
+		Name:                 category.Name,
+		Level:                category.Level,
+		CreatedAt:            category.CreatedAt.UTC(),
+		UpdatedAt:            category.UpdatedAt.UTC(),
+		TombstonedAt:         nullableTimestampTime(category.TombstonedAt),
 	}
 }
 
@@ -595,17 +742,19 @@ func memberAPIResponses(members []members.Member) []openapi.Member {
 
 func tagAPIResponse(tag tags.Tag) openapi.Tag {
 	return openapi.Tag{
-		TagId:        tag.ID,
-		Fqn:          tag.FQN,
-		IsHidden:     tag.IsHidden,
-		IsFeatured:   tag.IsFeatured,
-		Deletable:    tag.Deletable,
-		ParentFqn:    tag.ParentFQN,
-		Name:         tag.Name,
-		Level:        tag.Level,
-		CreatedAt:    tag.CreatedAt.UTC(),
-		UpdatedAt:    tag.UpdatedAt.UTC(),
-		TombstonedAt: nullableTimestampTime(tag.TombstonedAt),
+		TagId:                tag.ID,
+		Fqn:                  tag.FQN,
+		DisplayLabel:         tag.DisplayLabel,
+		DisplayLabelOverride: tag.DisplayLabelOverride,
+		IsHidden:             tag.IsHidden,
+		IsFeatured:           tag.IsFeatured,
+		Deletable:            tag.Deletable,
+		ParentFqn:            tag.ParentFQN,
+		Name:                 tag.Name,
+		Level:                tag.Level,
+		CreatedAt:            tag.CreatedAt.UTC(),
+		UpdatedAt:            tag.UpdatedAt.UTC(),
+		TombstonedAt:         nullableTimestampTime(tag.TombstonedAt),
 	}
 }
 

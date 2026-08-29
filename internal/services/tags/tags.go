@@ -11,30 +11,34 @@ import (
 
 // Tag is a hierarchical label used for flexible journal record grouping.
 type Tag struct {
-	ID           int64
-	FQN          string
-	IsHidden     bool
-	IsFeatured   bool
-	ParentFQN    *string
-	Name         string
-	Level        int
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
-	TombstonedAt *time.Time
-	Deletable    *bool
+	ID                   int64
+	FQN                  string
+	DisplayLabel         string
+	DisplayLabelOverride *string
+	IsHidden             bool
+	IsFeatured           bool
+	ParentFQN            *string
+	Name                 string
+	Level                int
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
+	TombstonedAt         *time.Time
+	Deletable            *bool
 }
 
 // CreateInput contains fields for creating a tag.
 type CreateInput struct {
-	FQN        string
-	IsHidden   bool
-	IsFeatured bool
+	FQN          string
+	DisplayLabel *string
+	IsHidden     bool
+	IsFeatured   bool
 }
 
 // UpdateInput contains mutable tag fields.
 type UpdateInput struct {
-	IsHidden   *bool
-	IsFeatured *bool
+	DisplayLabel services.OptionalStringUpdate
+	IsHidden     *bool
+	IsFeatured   *bool
 }
 
 // ListOptions controls tag list visibility.
@@ -56,9 +60,10 @@ type ReferenceOptions struct {
 
 // Reference is the tag data needed to validate write references.
 type Reference struct {
-	ID       int64
-	FQN      string
-	IsHidden bool
+	ID                   int64
+	FQN                  string
+	DisplayLabelOverride *string
+	IsHidden             bool
 }
 
 // ActiveUsage reports active resources that reference a tag.
@@ -106,7 +111,10 @@ func NewService(repo Repository, refs ReferenceCoordinator) *Service {
 
 // Create validates and creates a tag.
 func (s *Service) Create(ctx context.Context, input CreateInput) (Tag, error) {
-	if err := validateFQN(input.FQN); err != nil {
+	if err := services.ValidateFQN(input.FQN); err != nil {
+		return Tag{}, err
+	}
+	if err := services.ValidateDisplayLabel(input.DisplayLabel); err != nil {
 		return Tag{}, err
 	}
 
@@ -131,7 +139,7 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (Tag, error) {
 		return Tag{}, err
 	}
 
-	return tag, nil
+	return withEffectiveDisplayLabel(tag), nil
 }
 
 // ValidateActiveReferences returns active tag references keyed by ID.
@@ -209,7 +217,7 @@ func (s *Service) Get(ctx context.Context, id int64, includeTombstoned bool) (Ta
 		return Tag{}, err
 	}
 
-	return tag, nil
+	return withEffectiveDisplayLabel(tag), nil
 }
 
 // List returns tags using default visibility rules unless explicitly overridden.
@@ -220,6 +228,9 @@ func (s *Service) List(ctx context.Context, opts ListOptions) (services.Paginate
 	}
 	if err := s.populateDeleteability(ctx, list.Items); err != nil {
 		return services.PaginatedList[Tag]{}, err
+	}
+	for index := range list.Items {
+		list.Items[index] = withEffectiveDisplayLabel(list.Items[index])
 	}
 
 	return list, nil
@@ -254,6 +265,11 @@ func (s *Service) UpdateMutable(ctx context.Context, id int64, input UpdateInput
 	if !input.hasChanges() {
 		return Tag{}, services.InvalidRequest("at least one tag field is required")
 	}
+	if input.DisplayLabel.Specified {
+		if err := services.ValidateDisplayLabel(input.DisplayLabel.Value); err != nil {
+			return Tag{}, err
+		}
+	}
 
 	var tag Tag
 	if err := s.refs.WithExclusiveLease(ctx, func(ctx context.Context) error {
@@ -272,19 +288,24 @@ func (s *Service) UpdateMutable(ctx context.Context, id int64, input UpdateInput
 		return Tag{}, err
 	}
 
-	return tag, nil
+	return withEffectiveDisplayLabel(tag), nil
 }
 
 func (input UpdateInput) hasChanges() bool {
-	return input.IsHidden != nil || input.IsFeatured != nil
+	return input.DisplayLabel.Specified || input.IsHidden != nil || input.IsFeatured != nil
+}
+
+func withEffectiveDisplayLabel(tag Tag) Tag {
+	tag.DisplayLabel = services.EffectiveDisplayLabel(tag.FQN, tag.DisplayLabelOverride)
+	return tag
 }
 
 // Restructure atomically rewrites an active tag FQN subtree from one path to another.
 func (s *Service) Restructure(ctx context.Context, from string, to string) (int64, error) {
-	if err := validateFQN(from); err != nil {
+	if err := services.ValidateFQN(from); err != nil {
 		return 0, err
 	}
-	if err := validateFQN(to); err != nil {
+	if err := services.ValidateFQN(to); err != nil {
 		return 0, err
 	}
 	if from == to {
@@ -344,7 +365,7 @@ func (s *Service) Restructure(ctx context.Context, from string, to string) (int6
 
 // SetHiddenByPath sets hidden state on every active tag leaf at or under path.
 func (s *Service) SetHiddenByPath(ctx context.Context, path string, hidden bool) (int64, error) {
-	if err := validateFQN(path); err != nil {
+	if err := services.ValidateFQN(path); err != nil {
 		return 0, err
 	}
 
@@ -502,9 +523,10 @@ func (s *Service) cacheActiveReference(tag Tag) {
 func tagReferenceStateFromTag(tag Tag) tagReferenceState {
 	return tagReferenceState{
 		reference: Reference{
-			ID:       tag.ID,
-			FQN:      tag.FQN,
-			IsHidden: tag.IsHidden,
+			ID:                   tag.ID,
+			FQN:                  tag.FQN,
+			DisplayLabelOverride: tag.DisplayLabelOverride,
+			IsHidden:             tag.IsHidden,
 		},
 		fqn:    tag.FQN,
 		active: tag.TombstonedAt == nil,
@@ -536,8 +558,4 @@ func deduplicateIDs(ids []int64) []int64 {
 	}
 
 	return uniqueIDs
-}
-
-func validateFQN(fqn string) error {
-	return services.ValidateFQN(fqn)
 }

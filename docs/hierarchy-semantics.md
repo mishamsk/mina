@@ -6,10 +6,12 @@ This document defines how hierarchical naming works for accounts, categories, ta
 
 Hierarchy is encoded only in the colon-separated FQN string of each stored row. Tree structure is derived at query time. There are no parent ids and no group rows.
 
-- A **leaf** is a stored row. Only leaves carry entity state (type, intent, currency, hidden, featured, template records, recurring schedules) and only leaves can be referenced by other entities (journal records, template records, recurring occurrences, tag assignments).
+- A **leaf** is a stored row. Only leaves carry entity state (type, intent, currency, hidden, featured, display-label override, template records, recurring schedules) and only leaves can be referenced by other entities (journal records, template records, recurring occurrences, tag assignments).
 - A **group** is an implicit FQN path prefix shared by one or more active leaves. Groups are folders: they have no row, no id, and no state of their own. A group exists exactly while at least one active leaf lives under it.
 - **Prefix-free rule**: among the active rows of one entity type, no FQN may be a path prefix of another FQN. A path prefix means equal segments at a `:` boundary (`Food` is a prefix of `Food:Dining`, not of `Foodie`). A stored row is therefore always a leaf and never also a group.
 - FQN comparison is case-sensitive byte equality. Uniqueness and the prefix-free rule apply to active rows only; tombstoned rows are exempt and keep their historical FQNs.
+- An account, category, or tag may store a non-unique display-label override for presentation. `name` remains the final FQN segment; without an override, the effective display label is the final one or two FQN segments. Restructure preserves overrides and recalculates only fallback labels from rewritten FQNs.
+- Entity-owned picker reads use effective labels, complete FQNs, and individual segments for discovery; services derive navigation-only groups from eligible leaves and keep FQNs and stable leaf IDs authoritative for selection.
 
 Two sanctioned exceptions reference group paths by FQN string instead of referencing a leaf row: `budget.category_fqn`, and a possible future featured-groups table. Any such reference is valid while at least one active leaf of the referenced entity type exists at or under the referenced path.
 

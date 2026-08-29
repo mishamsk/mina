@@ -106,6 +106,31 @@ func TestMigrationV17PreservesUTCInstantsAndCivilDates(t *testing.T) {
 	}
 }
 
+func TestMigrationV18PreservesCategoryAndTagRowsWithAutomaticLabels(t *testing.T) {
+	client := apptest.NewFromMigrationFixture(t, 17)
+	ctx := context.Background()
+
+	categories, err := client.REST().ListCategoriesWithResponse(ctx, nil)
+	requireClientResponse(t, "list v18 migrated categories", err, categories.StatusCode(), http.StatusOK, categories.Body)
+	if categories.JSON200.TotalCount != 1 || len(categories.JSON200.Categories) != 1 {
+		t.Fatalf("migrated categories = total %d rows %d, want 1", categories.JSON200.TotalCount, len(categories.JSON200.Categories))
+	}
+	category := categories.JSON200.Categories[0]
+	if category.Fqn != "Household:Food:Groceries" || category.DisplayLabel != "Food:Groceries" || category.DisplayLabelOverride != nil {
+		t.Fatalf("migrated category = %+v", category)
+	}
+
+	tags, err := client.REST().ListTagsWithResponse(ctx, nil)
+	requireClientResponse(t, "list v18 migrated tags", err, tags.StatusCode(), http.StatusOK, tags.Body)
+	if tags.JSON200.TotalCount != 1 || len(tags.JSON200.Tags) != 1 {
+		t.Fatalf("migrated tags = total %d rows %d, want 1", tags.JSON200.TotalCount, len(tags.JSON200.Tags))
+	}
+	tag := tags.JSON200.Tags[0]
+	if tag.Fqn != "Household:Routine:Weekly" || tag.DisplayLabel != "Routine:Weekly" || tag.DisplayLabelOverride != nil {
+		t.Fatalf("migrated tag = %+v", tag)
+	}
+}
+
 func TestV15FixtureRESTDataPreserved(t *testing.T) {
 	const fixtureVersion = 15
 	client := apptest.NewFromMigrationFixture(t, fixtureVersion)

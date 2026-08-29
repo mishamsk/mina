@@ -2,7 +2,6 @@ import {
   useCallback,
   useEffect,
   useEffectEvent,
-  useMemo,
   useRef,
   useState,
 } from "react";
@@ -10,8 +9,6 @@ import {
 import {
   apiErrorDetails,
   apiErrorMessage,
-  type CategoryEconomicIntent,
-  fetchCategoryPickerCategories,
   fetchLedgerLookups,
   fetchTransactionPage,
   type Transaction,
@@ -22,7 +19,6 @@ import { refreshFeaturedBalances } from "@/features/featured-balances";
 import { refreshOverview } from "@/features/overview";
 import { transactionFilterUsesRelativeTime } from "@/models/transaction-filters";
 import {
-  categoryPickerIntentKey,
   clearTransactionPageLoading,
   getTransactionsSnapshot,
   invalidateAccountHeader,
@@ -37,11 +33,7 @@ import {
   invalidateTransactionPagesPreservingSnapshots,
   markOtherTransactionPagesStale,
   markTransactionPageStale,
-  normalizedCategoryPickerIntents,
   seedAccountTransactionCache,
-  setCategoryPickerCategories,
-  setCategoryPickerCategoriesError,
-  setCategoryPickerCategoriesLoading,
   setLedgerLookups,
   setLedgerLookupsError,
   setLedgerLookupsLoading,
@@ -52,7 +44,6 @@ import {
   transactionPageKey,
   transactionPageRequestKey,
   updateDisplayedTransactionPage,
-  useCategoryPickerCategoriesView,
   useLedgerLookupsView,
   useTransactionPageView,
 } from "@/store";
@@ -424,55 +415,6 @@ export const useLedgerLookupsResource = (enabled = true) => {
   }, [enabled]);
 
   return lookups;
-};
-
-export const useCategoryPickerCategoriesResource = (
-  intents: readonly CategoryEconomicIntent[],
-  enabled: boolean,
-  retryToken = 0,
-) => {
-  const intentKey = categoryPickerIntentKey(intents);
-  const normalizedIntents = useMemo(
-    () => normalizedCategoryPickerIntents(intents),
-    [intents],
-  );
-  const categories = useCategoryPickerCategoriesView(normalizedIntents);
-
-  useEffect(() => {
-    if (!enabled) {
-      return;
-    }
-
-    const snapshot = getTransactionsSnapshot();
-    if (
-      snapshot.categoryPickerCategories[intentKey] ||
-      snapshot.categoryPickerCategoryLoading[intentKey]
-    ) {
-      return;
-    }
-
-    const requestEpoch = snapshot.categoryPickerCategoryEpoch;
-    setCategoryPickerCategoriesLoading(normalizedIntents);
-
-    void fetchCategoryPickerCategories(normalizedIntents).then((result) => {
-      if (result.data) {
-        setCategoryPickerCategories(
-          normalizedIntents,
-          result.data.categories,
-          requestEpoch,
-        );
-        return;
-      }
-
-      setCategoryPickerCategoriesError(
-        normalizedIntents,
-        apiErrorMessage(result.error),
-        requestEpoch,
-      );
-    });
-  }, [categories.epoch, enabled, intentKey, normalizedIntents, retryToken]);
-
-  return categories;
 };
 
 export const refreshTransactionPage = async (

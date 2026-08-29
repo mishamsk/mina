@@ -34,7 +34,6 @@ import {
   type CreateTransferTransactionRequest,
   fetchTransactionById,
   type JournalRecord,
-  type Member,
   replaceLedgerTransaction,
   restoreTransactionById,
   type Tag,
@@ -74,7 +73,6 @@ import {
 } from "@/services/indexeddb";
 import { getTransactionsSnapshot, type LedgerLookupsSnapshot } from "@/store";
 import {
-  addCategoryPickerCategory,
   getUiPreferencesSnapshot,
   invalidateAccountsPage,
   invalidateCategoriesPage,
@@ -92,6 +90,16 @@ import {
   type EntityOption,
   EntityPicker,
 } from "./entity-picker";
+import {
+  accountPickerLoader,
+  accountPickerOption,
+  categoryPickerLoader,
+  categoryPickerOption,
+  memberPickerLoader,
+  memberPickerOption,
+  tagPickerLoader,
+  tagPickerOption,
+} from "./entity-picker-loaders";
 import { captureTransactionEntryLaunchContext } from "./entry-launch-context";
 import {
   buildLookupMaps,
@@ -112,7 +120,6 @@ import {
   localSettlementDateTimeValue,
   settlementDateTimeToISO,
 } from "./settlement-date";
-import { useCategoryPickerCategoriesResource } from "./use-transactions-resource";
 import { refreshLedgerLookups } from "./use-transactions-resource";
 
 export interface EntryPanelProps {
@@ -951,7 +958,7 @@ const entityOption = (
   detail: entity.fqn,
   hidden: entity.is_hidden,
   id,
-  label: entity.name,
+  label: entity.display_label,
   metadata:
     "account_id" in entity
       ? entity.currency
@@ -959,13 +966,10 @@ const entityOption = (
         : "Multi-currency"
       : undefined,
   searchLabel: entity.fqn,
-});
-
-const memberOption = (member: Member): EntityOption => ({
-  hidden: member.is_hidden,
-  id: member.member_id,
-  label: member.name,
-  searchLabel: member.name,
+  selectedLabel:
+    entity.display_label === entity.fqn
+      ? entity.fqn
+      : `${entity.fqn} (${entity.display_label})`,
 });
 
 const normalizeAmount = (amount: string): string | undefined => {
@@ -2579,22 +2583,6 @@ const AdvancedRecordField = (props: {
   </div>
 );
 
-const RetryableFieldError = ({
-  message,
-  onRetry,
-}: {
-  readonly message: string | undefined;
-  readonly onRetry: () => void;
-}) =>
-  message ? (
-    <div className="flex items-center gap-2">
-      <p className="text-destructive text-xs">{message}</p>
-      <Button type="button" variant="outline" size="sm" onClick={onRetry}>
-        Retry
-      </Button>
-    </div>
-  ) : null;
-
 const classificationDisplayAmounts = (
   classification: TransactionClassification,
 ) =>
@@ -2824,14 +2812,6 @@ const lookupCurrencies = (
   return [...currencies].sort((left, right) => left.localeCompare(right));
 };
 
-const visibleAccount = (account: Account): boolean =>
-  !account.is_hidden && !account.tombstoned_at;
-
-const visibleMember = (member: Member): boolean =>
-  !member.is_hidden && !member.tombstoned_at;
-
-const visibleTag = (tag: Tag): boolean => !tag.is_hidden && !tag.tombstoned_at;
-
 const mergeLookupEntities = <Entity,>(
   current: readonly Entity[],
   additions: readonly Entity[],
@@ -2970,7 +2950,6 @@ export const EntryPanel = ({
   const [sessionTransactions, setSessionTransactions] = useState<
     readonly Transaction[]
   >([]);
-  const [categoryRetryToken, setCategoryRetryToken] = useState(0);
   const appliedInitialTemplateRef = useRef<number | undefined>(undefined);
   const [replacement, setReplacement] = useState<
     ReplacementContext | undefined
@@ -3048,6 +3027,22 @@ export const EntryPanel = ({
     };
   }, [inlineCreatedLookups, lookupSnapshot]);
   const lookupMaps = useMemo(() => buildLookupMaps(lookups), [lookups]);
+  const fallbackAccountOptions = useMemo(
+    () => (lookups?.accounts ?? []).map(accountPickerOption),
+    [lookups],
+  );
+  const fallbackCategoryOptions = useMemo(
+    () => (lookups?.categories ?? []).map(categoryPickerOption),
+    [lookups],
+  );
+  const fallbackMemberOptions = useMemo(
+    () => (lookups?.members ?? []).map(memberPickerOption),
+    [lookups],
+  );
+  const fallbackTagOptions = useMemo(
+    () => (lookups?.tags ?? []).map(tagPickerOption),
+    [lookups],
+  );
   const latestSessionTransaction = sessionTransactions[0];
   const latestSessionTransactionContext = latestSessionTransaction
     ? transactionAccountFqnContext(latestSessionTransaction, lookupMaps)
@@ -3220,15 +3215,6 @@ export const EntryPanel = ({
     launchLookupsReady &&
     initializedLaunchKey === launchKey &&
     (launch === undefined || initializedLaunch === launch);
-  const categoryPicker = useCategoryPickerCategoriesResource(
-    activeConfig?.categoryIntents ?? [],
-    open &&
-      currentDraftReady &&
-      activeTab !== "advanced" &&
-      Boolean(activeConfig?.categoryIntents.length),
-    categoryRetryToken,
-  );
-
   const cancelPendingLaunch = useCallback(() => {
     setConfirmDiscardDraftOpen(false);
     setPendingLaunchDraft(undefined);
@@ -3493,133 +3479,7 @@ export const EntryPanel = ({
     };
   }, [currentDraftReady, open, replacement, templatesColdLoading]);
 
-  const selectedEntityIds = useMemo(() => {
-    const accountIds = new Set<number>();
-    const categoryIds = new Set<number>();
-    const memberIds = new Set<number>();
-    const tagIds = new Set<number>();
-    const addNumber = (values: Set<number>, value: number | undefined) => {
-      if (value !== undefined) {
-        values.add(value);
-      }
-    };
-    const addTabDraft = (tabDraft: TransactionEntryTabDraft) => {
-      addNumber(accountIds, tabDraft.boughtAccountId);
-      addNumber(accountIds, tabDraft.chargeAccountId);
-      addNumber(accountIds, tabDraft.destinationAccountId);
-      addNumber(accountIds, tabDraft.fundingAccountId);
-      addNumber(accountIds, tabDraft.merchantAccountId);
-      addNumber(accountIds, tabDraft.sourceAccountId);
-      addNumber(accountIds, tabDraft.soldAccountId);
-      addNumber(categoryIds, tabDraft.chargeCategoryId);
-      for (const merchant of tabDraft.spendMerchants) {
-        addNumber(accountIds, merchant.accountId);
-        addNumber(categoryIds, merchant.categoryId);
-      }
-      addNumber(categoryIds, tabDraft.categoryId);
-      addNumber(memberIds, tabDraft.memberId);
-      for (const tagId of tabDraft.tagIds) {
-        tagIds.add(tagId);
-      }
-    };
-    for (const tabDraft of Object.values(draft.tabs)) {
-      addTabDraft(tabDraft);
-    }
-    for (const row of draft.advanced.records) {
-      addNumber(accountIds, row.accountId);
-      addNumber(categoryIds, row.categoryId);
-      addNumber(memberIds, row.memberId);
-      for (const tagId of row.tagIds) {
-        tagIds.add(tagId);
-      }
-    }
-    return { accountIds, categoryIds, memberIds, tagIds };
-  }, [draft]);
-
-  const optionAccounts = useMemo(
-    () =>
-      (lookups?.accounts ?? []).filter(
-        (account) =>
-          !account.tombstoned_at &&
-          (visibleAccount(account) ||
-            selectedEntityIds.accountIds.has(account.account_id)),
-      ),
-    [lookups, selectedEntityIds],
-  );
-  const exactMatchAccountOptions = useMemo(
-    () =>
-      (lookups?.accounts ?? [])
-        .filter((account) => !account.tombstoned_at)
-        .map((account) => entityOption(account, account.account_id)),
-    [lookups],
-  );
-
-  const options = useMemo(() => {
-    const categories = [
-      ...(categoryPicker.snapshot?.categories ?? []),
-      ...(lookups?.categories ?? []).filter(
-        (category) =>
-          selectedEntityIds.categoryIds.has(category.category_id) &&
-          !category.tombstoned_at &&
-          !(categoryPicker.snapshot?.categories ?? []).some(
-            (pickerCategory) =>
-              pickerCategory.category_id === category.category_id,
-          ),
-      ),
-    ];
-    const allCategories = (lookups?.categories ?? []).filter(
-      (category) =>
-        !category.tombstoned_at &&
-        (!category.is_hidden ||
-          selectedEntityIds.categoryIds.has(category.category_id)),
-    );
-    const members = (lookups?.members ?? []).filter(
-      (member) =>
-        !member.tombstoned_at &&
-        (visibleMember(member) ||
-          selectedEntityIds.memberIds.has(member.member_id)),
-    );
-    const tags = (lookups?.tags ?? []).filter(
-      (tag) =>
-        !tag.tombstoned_at &&
-        (visibleTag(tag) || selectedEntityIds.tagIds.has(tag.tag_id)),
-    );
-    return {
-      movementAccounts: optionAccounts
-        .filter(
-          (account) =>
-            account.account_type === "owned" ||
-            account.account_type === "party",
-        )
-        .map((account) => entityOption(account, account.account_id)),
-      allCategories: allCategories.map((category) =>
-        entityOption(category, category.category_id),
-      ),
-      categories: categories.map((category) =>
-        entityOption(category, category.category_id),
-      ),
-      flowAccounts: optionAccounts
-        .filter((account) => account.account_type === "flow")
-        .map((account) => entityOption(account, account.account_id)),
-      currencies: lookupCurrencies(lookups),
-      members: members.map(memberOption),
-      tags: tags.map((tag) => entityOption(tag, tag.tag_id)),
-    };
-  }, [categoryPicker.snapshot, lookups, optionAccounts, selectedEntityIds]);
-  const createConflictOptions = useMemo(
-    () => ({
-      accounts: (lookups?.accounts ?? [])
-        .filter((account) => !account.tombstoned_at)
-        .map((account) => entityOption(account, account.account_id)),
-      categories: (lookups?.categories ?? [])
-        .filter((category) => !category.tombstoned_at)
-        .map((category) => entityOption(category, category.category_id)),
-      tags: (lookups?.tags ?? [])
-        .filter((tag) => !tag.tombstoned_at)
-        .map((tag) => entityOption(tag, tag.tag_id)),
-    }),
-    [lookups],
-  );
+  const currencies = useMemo(() => lookupCurrencies(lookups), [lookups]);
   const createFlowAccountOption = async (fqn: string) => {
     const result = await createLedgerAccount({
       account_type: "flow",
@@ -3662,7 +3522,6 @@ export const EntryPanel = ({
       ),
     }));
     invalidateCategoriesPage();
-    addCategoryPickerCategory(created);
     void refreshLedgerLookups();
     return entityOption(created, created.category_id);
   };
@@ -3680,15 +3539,8 @@ export const EntryPanel = ({
     void refreshLedgerLookups();
     return entityOption(created, created.tag_id);
   };
-  const categoryPickerReady =
-    activeTab === "advanced" ||
-    activeTab === "exchange" ||
-    (activeTab === "transfer" && !activeTabDraft?.chargeEnabled) ||
-    Boolean(categoryPicker.snapshot);
   const ready = Boolean(lookups && currentDraftReady);
-  const canSubmit = Boolean(
-    lookups && currentDraftReady && categoryPickerReady && !saving,
-  );
+  const canSubmit = Boolean(lookups && currentDraftReady && !saving);
   const balances = advancedBalances(draft.advanced);
   const advancedCategoryErrors = useCallback(
     (advancedDraft: AdvancedTransactionEntryDraft): AdvancedFieldErrors => {
@@ -4174,10 +4026,6 @@ export const EntryPanel = ({
       });
     });
   }, []);
-
-  const retryCategoryPicker = () => {
-    setCategoryRetryToken((currentToken) => currentToken + 1);
-  };
 
   const editActiveTabAsJournal = useCallback(() => {
     if (!activeShorthandTab || !activeTabDraft) {
@@ -5130,27 +4978,14 @@ export const EntryPanel = ({
     activeTabDraft && activeConfig
       ? accountValue(activeTabDraft, activeConfig.secondaryAccountField)
       : undefined;
-  const primaryAccountOptions =
-    activeTab === "exchange" && exchangeBoughtAccountCurrency
-      ? options.movementAccounts.filter(
-          (option) =>
-            option.id === primaryAccountValue ||
-            accountCurrency(lookups, option.id) !==
-              exchangeBoughtAccountCurrency,
-        )
-      : activeConfig
-        ? options[activeConfig.primaryAccountOptionSet]
-        : [];
-  const secondaryAccountOptions =
-    activeTab === "exchange" && exchangeSoldAccountCurrency
-      ? options.movementAccounts.filter(
-          (option) =>
-            option.id === secondaryAccountValue ||
-            accountCurrency(lookups, option.id) !== exchangeSoldAccountCurrency,
-        )
-      : activeConfig
-        ? options[activeConfig.secondaryAccountOptionSet]
-        : [];
+  const primaryAccountContext =
+    activeTab === "exchange" ? "exchange" : "shorthand_balance";
+  const secondaryAccountContext =
+    activeTab === "exchange"
+      ? "exchange"
+      : activeConfig?.secondaryAccountOptionSet === "flowAccounts"
+        ? "shorthand_flow"
+        : "shorthand_balance";
   const chargeIsRetainedImportedRecord =
     replacement?.fit?.additionalRecords[0]?.source === "imported";
 
@@ -5484,13 +5319,13 @@ export const EntryPanel = ({
                           >
                             <EntityPicker
                               key={`${pickerLifecycle}:advanced:${row.draftId}:account`}
-                              exactMatchOptions={exactMatchAccountOptions}
                               id={`advanced-record-${rowIndex}-account`}
                               label={`Record ${rowIndex + 1} account`}
                               labelClassName="sr-only"
-                              options={optionAccounts.map((account) =>
-                                entityOption(account, account.account_id),
-                              )}
+                              loadOptions={accountPickerLoader({
+                                context: "record_assignment",
+                              })}
+                              options={fallbackAccountOptions}
                               value={row.accountId}
                               onChange={(accountId) => {
                                 const nextAccountType = accountTypeForId(
@@ -5592,7 +5427,10 @@ export const EntryPanel = ({
                                 id={`advanced-record-${rowIndex}-category`}
                                 label={`Record ${rowIndex + 1} category`}
                                 labelClassName="sr-only"
-                                options={options.allCategories}
+                                loadOptions={categoryPickerLoader({
+                                  context: "record_assignment",
+                                })}
+                                options={fallbackCategoryOptions}
                                 value={row.categoryId}
                                 onChange={(categoryId) => {
                                   updateAdvancedRow(rowIndex, { categoryId });
@@ -5622,12 +5460,14 @@ export const EntryPanel = ({
                           >
                             <EntityMultiPicker
                               key={`${pickerLifecycle}:advanced:${row.draftId}:tags`}
-                              createConflictOptions={createConflictOptions.tags}
                               createOption={createTagOption}
                               id={`advanced-record-${rowIndex}-tags`}
                               label={`Record ${rowIndex + 1} tags`}
                               labelClassName="sr-only"
-                              options={options.tags}
+                              loadOptions={tagPickerLoader({
+                                context: "record_assignment",
+                              })}
+                              options={fallbackTagOptions}
                               value={row.tagIds}
                               onChange={(tagIds) => {
                                 updateAdvancedRow(rowIndex, { tagIds });
@@ -5641,7 +5481,10 @@ export const EntryPanel = ({
                               id={`advanced-record-${rowIndex}-member`}
                               label={`Record ${rowIndex + 1} member`}
                               labelClassName="sr-only"
-                              options={options.members}
+                              loadOptions={memberPickerLoader({
+                                context: "record_assignment",
+                              })}
+                              options={fallbackMemberOptions}
                               placeholder="Whole household"
                               value={row.memberId}
                               onChange={(memberId) => {
@@ -5942,7 +5785,7 @@ export const EntryPanel = ({
                 </Button>
 
                 <datalist id="entry-currency-options">
-                  {options.currencies.map((currency) => (
+                  {currencies.map((currency) => (
                     <option key={currency} value={currency} />
                   ))}
                 </datalist>
@@ -6001,7 +5844,7 @@ export const EntryPanel = ({
                         }}
                       />
                       <datalist id="entry-currency-options">
-                        {options.currencies.map((currency) => (
+                        {currencies.map((currency) => (
                           <option key={currency} value={currency} />
                         ))}
                       </datalist>
@@ -6063,7 +5906,7 @@ export const EntryPanel = ({
                       }}
                     />
                     <datalist id="entry-currency-options">
-                      {options.currencies.map((currency) => (
+                      {currencies.map((currency) => (
                         <option key={currency} value={currency} />
                       ))}
                     </datalist>
@@ -6075,7 +5918,15 @@ export const EntryPanel = ({
                   key={`${pickerLifecycle}:${activeTab}:${activeConfig.primaryAccountField}`}
                   id={`${activeTab}-${activeConfig.primaryAccountField}`}
                   label={activeConfig.primaryAccountLabel}
-                  options={primaryAccountOptions}
+                  loadKey={`${primaryAccountContext}:${exchangeBoughtAccountCurrency ?? ""}`}
+                  loadOptions={accountPickerLoader({
+                    context: primaryAccountContext,
+                    excluded_currency:
+                      activeTab === "exchange"
+                        ? exchangeBoughtAccountCurrency
+                        : undefined,
+                  })}
+                  options={fallbackAccountOptions}
                   value={primaryAccountValue}
                   onChange={(accountId) => {
                     updateActiveTabDraft({
@@ -6118,13 +5969,13 @@ export const EntryPanel = ({
                             </legend>
                             <EntityPicker
                               key={`${pickerLifecycle}:${activeTab}:${merchant.draftId}:account`}
-                              createConflictOptions={
-                                createConflictOptions.accounts
-                              }
                               createOption={createFlowAccountOption}
                               id={`spend-merchant-${merchantIndex}-account`}
                               label="Merchant account"
-                              options={options.flowAccounts}
+                              loadOptions={accountPickerLoader({
+                                context: "shorthand_flow",
+                              })}
+                              options={fallbackAccountOptions}
                               value={merchant.accountId}
                               onChange={(accountId) => {
                                 updateSpendMerchant(merchantIndex, merchant, {
@@ -6169,15 +6020,15 @@ export const EntryPanel = ({
                             </div>
                             <EntityPicker
                               key={`${pickerLifecycle}:${activeTab}:${merchant.draftId}:category`}
-                              createConflictOptions={
-                                createConflictOptions.categories
-                              }
                               createOption={(fqn) =>
                                 createCategoryOption(fqn, "expense")
                               }
                               id={`spend-merchant-${merchantIndex}-category`}
                               label="Category"
-                              options={options.categories}
+                              loadOptions={categoryPickerLoader({
+                                context: "shorthand_expense",
+                              })}
+                              options={fallbackCategoryOptions}
                               value={merchant.categoryId}
                               onChange={(categoryId) => {
                                 updateSpendMerchant(merchantIndex, merchant, {
@@ -6271,7 +6122,6 @@ export const EntryPanel = ({
                   <>
                     <EntityPicker
                       key={`${pickerLifecycle}:${activeTab}:${activeConfig.secondaryAccountField}`}
-                      createConflictOptions={createConflictOptions.accounts}
                       createOption={
                         activeConfig.secondaryAccountOptionSet ===
                         "flowAccounts"
@@ -6280,7 +6130,15 @@ export const EntryPanel = ({
                       }
                       id={`${activeTab}-${activeConfig.secondaryAccountField}`}
                       label={activeConfig.secondaryAccountLabel}
-                      options={secondaryAccountOptions}
+                      loadKey={`${secondaryAccountContext}:${exchangeSoldAccountCurrency ?? ""}`}
+                      loadOptions={accountPickerLoader({
+                        context: secondaryAccountContext,
+                        excluded_currency:
+                          activeTab === "exchange"
+                            ? exchangeSoldAccountCurrency
+                            : undefined,
+                      })}
+                      options={fallbackAccountOptions}
                       value={secondaryAccountValue}
                       onChange={(accountId) => {
                         updateActiveTabDraft({
@@ -6369,19 +6227,21 @@ export const EntryPanel = ({
                 activeTab !== "exchange" ? (
                   <EntityPicker
                     key={`${pickerLifecycle}:${activeTab}:category`}
-                    createConflictOptions={createConflictOptions.categories}
                     createOption={(fqn) =>
                       createCategoryOption(fqn, activeCategoryCreationIntent!)
                     }
-                    disabled={!categoryPickerReady}
                     id={`${activeTab}-category`}
                     label={
                       activeTab === "refund" ? "Expense category" : "Category"
                     }
-                    options={options.categories}
-                    placeholder={
-                      categoryPickerReady ? "Search" : "Loading categories"
-                    }
+                    loadKey={activeCategoryCreationIntent}
+                    loadOptions={categoryPickerLoader({
+                      context:
+                        activeCategoryCreationIntent === "income"
+                          ? "shorthand_income"
+                          : "shorthand_expense",
+                    })}
+                    options={fallbackCategoryOptions}
                     value={activeTabDraft.categoryId}
                     onChange={(categoryId) => {
                       updateActiveTabDraft({ categoryId });
@@ -6391,21 +6251,15 @@ export const EntryPanel = ({
                 {activeTab !== "transfer" && activeTab !== "exchange" ? (
                   <FieldError message={fieldErrors.categoryId} />
                 ) : null}
-                {activeTab !== "exchange" &&
-                (activeTab !== "transfer" || activeTabDraft.chargeEnabled) ? (
-                  <RetryableFieldError
-                    message={categoryPicker.errorMessage}
-                    onRetry={retryCategoryPicker}
-                  />
-                ) : null}
-
                 <EntityMultiPicker
                   key={`${pickerLifecycle}:${activeTab}:tags`}
-                  createConflictOptions={createConflictOptions.tags}
                   createOption={createTagOption}
                   id={`${activeTab}-tags`}
                   label="Tags"
-                  options={options.tags}
+                  loadOptions={tagPickerLoader({
+                    context: "record_assignment",
+                  })}
+                  options={fallbackTagOptions}
                   value={activeTabDraft.tagIds}
                   onChange={(tagIds) => {
                     updateActiveTabDraft({ tagIds });
@@ -6418,7 +6272,10 @@ export const EntryPanel = ({
                   hierarchical={false}
                   id={`${activeTab}-member`}
                   label="Member"
-                  options={options.members}
+                  loadOptions={memberPickerLoader({
+                    context: "record_assignment",
+                  })}
+                  options={fallbackMemberOptions}
                   placeholder="Whole household"
                   value={activeTabDraft.memberId}
                   onChange={(memberId) => {
@@ -6456,11 +6313,13 @@ export const EntryPanel = ({
                       </legend>
                       <EntityPicker
                         key={`${pickerLifecycle}:transfer:charge-account`}
-                        createConflictOptions={createConflictOptions.accounts}
                         createOption={createFlowAccountOption}
                         id="transfer-charge-account"
                         label="Charge account"
-                        options={options.flowAccounts}
+                        loadOptions={accountPickerLoader({
+                          context: "shorthand_flow",
+                        })}
+                        options={fallbackAccountOptions}
                         value={activeTabDraft.chargeAccountId}
                         onChange={(chargeAccountId) => {
                           updateActiveTabDraft({ chargeAccountId });
@@ -6492,13 +6351,15 @@ export const EntryPanel = ({
                       </div>
                       <EntityPicker
                         key={`${pickerLifecycle}:transfer:charge-category`}
-                        createConflictOptions={createConflictOptions.categories}
                         createOption={(fqn) =>
                           createCategoryOption(fqn, "expense")
                         }
                         id="transfer-charge-category"
                         label="Charge category"
-                        options={options.categories}
+                        loadOptions={categoryPickerLoader({
+                          context: "shorthand_expense",
+                        })}
+                        options={fallbackCategoryOptions}
                         value={activeTabDraft.chargeCategoryId}
                         onChange={(chargeCategoryId) => {
                           updateActiveTabDraft({ chargeCategoryId });

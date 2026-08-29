@@ -113,6 +113,51 @@ export type AccountListResponse = {
     total_count: number;
 };
 
+export type AccountPickerResponse = {
+    items: Array<AccountPickerItem>;
+    /**
+     * Active selected leaves in request order, independent of query matching and the search result bound.
+     */
+    selected_items: Array<AccountPickerItem>;
+    /**
+     * Whether the current full query can be created through the caller's existing account creation flow.
+     */
+    can_create: boolean;
+    /**
+     * Complete eligible leaf count for the typed context before query matching, hierarchy scoping, and result bounding.
+     */
+    eligible_count: number;
+};
+
+export type AccountPickerItem = {
+    kind: 'leaf' | 'group';
+    /**
+     * Stable leaf identifier; absent for navigation groups.
+     */
+    account_id?: number;
+    /**
+     * Effective account display title for leaves or final FQN segment for groups.
+     */
+    title: string;
+    /**
+     * Complete authoritative account leaf or group path.
+     */
+    fqn: string;
+    is_hidden: boolean;
+    /**
+     * Descendant leaf count for navigation groups.
+     */
+    child_count?: number;
+    /**
+     * Account semantic type; absent for navigation groups.
+     */
+    account_type?: AccountType;
+    /**
+     * Fixed account currency, null for a multi-currency leaf, and absent for navigation groups.
+     */
+    currency?: string | null;
+};
+
 export type GroupState = {
     fqn: string;
     parent_fqn: string | null;
@@ -268,6 +313,14 @@ export type ApiError = {
 export type Category = {
     category_id: number;
     fqn: string;
+    /**
+     * Effective non-unique presentation label. An explicit override wins; otherwise Mina derives the final one or two FQN segments.
+     */
+    display_label: string;
+    /**
+     * Stored custom presentation label, or null when display_label is derived from the FQN.
+     */
+    display_label_override: string | null;
     economic_intent: CategoryEconomicIntent;
     is_hidden: boolean;
     is_featured: boolean;
@@ -291,6 +344,43 @@ export type CategoryListResponse = {
     total_count: number;
 };
 
+export type CategoryPickerResponse = {
+    items: Array<CategoryPickerItem>;
+    /**
+     * Active selected leaves in request order, independent of query matching and the search result bound.
+     */
+    selected_items: Array<CategoryPickerItem>;
+    /**
+     * Whether the supplied context and current full query are eligible for category creation; the caller independently decides whether to offer a creation flow.
+     */
+    can_create: boolean;
+};
+
+export type CategoryPickerItem = {
+    kind: 'leaf' | 'group';
+    /**
+     * Stable leaf identifier; absent for navigation groups.
+     */
+    category_id?: number;
+    /**
+     * Effective category display title for leaves or final FQN segment for groups.
+     */
+    title: string;
+    /**
+     * Complete authoritative category leaf or group path.
+     */
+    fqn: string;
+    is_hidden: boolean;
+    /**
+     * Descendant leaf count for navigation groups.
+     */
+    child_count?: number;
+    /**
+     * Category intent; absent for navigation groups.
+     */
+    economic_intent?: CategoryEconomicIntent;
+};
+
 /**
  * Whether a category describes spending or income.
  */
@@ -301,6 +391,10 @@ export type CreateCategoryRequest = {
      * Colon-separated hierarchical FQN for the category leaf.
      */
     fqn: string;
+    /**
+     * Optional non-unique presentation label. Custom values must be non-empty without leading or trailing whitespace. Null or omission uses the final one or two FQN segments.
+     */
+    display_label?: string | null;
     economic_intent: CategoryEconomicIntent;
     /**
      * Whether the entity is excluded from default lists.
@@ -1158,6 +1252,10 @@ export type CreateTagRequest = {
      */
     fqn: string;
     /**
+     * Optional non-unique presentation label. Custom values must be non-empty without leading or trailing whitespace. Null or omission uses the final one or two FQN segments.
+     */
+    display_label?: string | null;
+    /**
      * Whether the entity is excluded from default lists.
      */
     is_hidden?: boolean;
@@ -1359,6 +1457,20 @@ export type MemberListResponse = {
     total_count: number;
 };
 
+export type MemberPickerResponse = {
+    items: Array<MemberPickerItem>;
+    /**
+     * Active selected members in request order, independent of query matching and the search result bound.
+     */
+    selected_items: Array<MemberPickerItem>;
+};
+
+export type MemberPickerItem = {
+    member_id: number;
+    title: string;
+    is_hidden: boolean;
+};
+
 export type JournalRecord = {
     record_id: number;
     transaction_id: number;
@@ -1481,6 +1593,14 @@ export type Tag = {
     tag_id: number;
     fqn: string;
     /**
+     * Effective non-unique presentation label. An explicit override wins; otherwise Mina derives the final one or two FQN segments.
+     */
+    display_label: string;
+    /**
+     * Stored custom presentation label, or null when display_label is derived from the FQN.
+     */
+    display_label_override: string | null;
+    /**
      * Whether the entity is excluded from default lists.
      */
     is_hidden: boolean;
@@ -1506,6 +1626,39 @@ export type TagListResponse = {
      * Count of matching tags before limit and offset are applied.
      */
     total_count: number;
+};
+
+export type TagPickerResponse = {
+    items: Array<TagPickerItem>;
+    /**
+     * Active selected leaves in request order, independent of query matching and the search result bound.
+     */
+    selected_items: Array<TagPickerItem>;
+    /**
+     * Whether the supplied context and current full query are eligible for tag creation; the caller independently decides whether to offer a creation flow.
+     */
+    can_create: boolean;
+};
+
+export type TagPickerItem = {
+    kind: 'leaf' | 'group';
+    /**
+     * Stable leaf identifier; absent for navigation groups.
+     */
+    tag_id?: number;
+    /**
+     * Effective tag display title for leaves or final FQN segment for groups.
+     */
+    title: string;
+    /**
+     * Complete authoritative tag leaf or group path.
+     */
+    fqn: string;
+    is_hidden: boolean;
+    /**
+     * Descendant leaf count for navigation groups.
+     */
+    child_count?: number;
 };
 
 export type TransactionTemplate = {
@@ -1685,6 +1838,10 @@ export type TransactionListResponse = {
 
 export type UpdateCategoryRequest = {
     /**
+     * Set a custom non-unique presentation label without leading or trailing whitespace, set null to restore the FQN-derived fallback, or omit to leave unchanged. Custom values must be non-empty.
+     */
+    display_label?: string | null;
+    /**
      * Whether the entity is excluded from default lists.
      */
     is_hidden?: boolean;
@@ -1730,6 +1887,10 @@ export type UpdateExchangeRateRequest = {
 };
 
 export type UpdateTagRequest = {
+    /**
+     * Set a custom non-unique presentation label without leading or trailing whitespace, set null to restore the FQN-derived fallback, or omit to leave unchanged. Custom values must be non-empty.
+     */
+    display_label?: string | null;
     /**
      * Whether the entity is excluded from default lists.
      */
@@ -2694,6 +2855,47 @@ export type RestructureCategoriesResponses = {
 
 export type RestructureCategoriesResponse = RestructureCategoriesResponses[keyof RestructureCategoriesResponses];
 
+export type PickCategoriesData = {
+    body?: never;
+    path?: never;
+    query: {
+        context: 'record_assignment' | 'shorthand_expense' | 'shorthand_income' | 'transaction_filter';
+        q?: string;
+        /**
+         * Return only direct children of this hierarchy group; an empty value selects root children.
+         */
+        parent_fqn?: string;
+        include_hidden?: boolean;
+        /**
+         * Active selections retained even when hidden.
+         */
+        selected_ids?: Array<number>;
+    };
+    url: '/api/categories/picker';
+};
+
+export type PickCategoriesErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+};
+
+export type PickCategoriesError = PickCategoriesErrors[keyof PickCategoriesErrors];
+
+export type PickCategoriesResponses = {
+    /**
+     * Bounded category picker options in backend rank order.
+     */
+    200: CategoryPickerResponse;
+};
+
+export type PickCategoriesResponse = PickCategoriesResponses[keyof PickCategoriesResponses];
+
 export type ListCategoryGroupsData = {
     body?: never;
     path?: never;
@@ -3164,6 +3366,47 @@ export type RestructureTagsResponses = {
 };
 
 export type RestructureTagsResponse = RestructureTagsResponses[keyof RestructureTagsResponses];
+
+export type PickTagsData = {
+    body?: never;
+    path?: never;
+    query: {
+        context: 'record_assignment' | 'transaction_filter';
+        q?: string;
+        /**
+         * Return only direct children of this hierarchy group; an empty value selects root children.
+         */
+        parent_fqn?: string;
+        include_hidden?: boolean;
+        /**
+         * Active selections retained even when hidden.
+         */
+        selected_ids?: Array<number>;
+    };
+    url: '/api/tags/picker';
+};
+
+export type PickTagsErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+};
+
+export type PickTagsError = PickTagsErrors[keyof PickTagsErrors];
+
+export type PickTagsResponses = {
+    /**
+     * Bounded tag picker options in backend rank order.
+     */
+    200: TagPickerResponse;
+};
+
+export type PickTagsResponse = PickTagsResponses[keyof PickTagsResponses];
 
 export type ListTagGroupsData = {
     body?: never;
@@ -3726,6 +3969,43 @@ export type UpdateMemberResponses = {
 
 export type UpdateMemberResponse = UpdateMemberResponses[keyof UpdateMemberResponses];
 
+export type PickMembersData = {
+    body?: never;
+    path?: never;
+    query: {
+        context: 'record_assignment' | 'transaction_filter';
+        q?: string;
+        include_hidden?: boolean;
+        /**
+         * Active selections retained even when hidden.
+         */
+        selected_ids?: Array<number>;
+    };
+    url: '/api/members/picker';
+};
+
+export type PickMembersErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+};
+
+export type PickMembersError = PickMembersErrors[keyof PickMembersErrors];
+
+export type PickMembersResponses = {
+    /**
+     * Bounded member picker options in backend rank order.
+     */
+    200: MemberPickerResponse;
+};
+
+export type PickMembersResponse = PickMembersResponses[keyof PickMembersResponses];
+
 export type UpdateMemberHiddenData = {
     body: UpdateMemberHiddenRequest;
     path: {
@@ -3907,6 +4187,59 @@ export type RestructureAccountsResponses = {
 };
 
 export type RestructureAccountsResponse = RestructureAccountsResponses[keyof RestructureAccountsResponses];
+
+export type PickAccountsData = {
+    body?: never;
+    path?: never;
+    query: {
+        context: 'record_assignment' | 'shorthand_balance' | 'shorthand_flow' | 'exchange' | 'transaction_filter' | 'bulk_source' | 'bulk_replacement';
+        q?: string;
+        /**
+         * Return only direct children of this hierarchy group; an empty value selects root children.
+         */
+        parent_fqn?: string;
+        include_hidden?: boolean;
+        /**
+         * Active selections retained even when hidden.
+         */
+        selected_ids?: Array<number>;
+        /**
+         * Exchange context excludes fixed-currency accounts in this currency while retaining current selections.
+         */
+        excluded_currency?: string;
+        /**
+         * Selected transactions for a bulk source or replacement context.
+         */
+        transaction_ids?: Array<number>;
+        /**
+         * Common source account for a bulk replacement context.
+         */
+        source_account_id?: number;
+    };
+    url: '/api/accounts/picker';
+};
+
+export type PickAccountsErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+};
+
+export type PickAccountsError = PickAccountsErrors[keyof PickAccountsErrors];
+
+export type PickAccountsResponses = {
+    /**
+     * Bounded account picker options in backend rank order.
+     */
+    200: AccountPickerResponse;
+};
+
+export type PickAccountsResponse = PickAccountsResponses[keyof PickAccountsResponses];
 
 export type ListAccountGroupsData = {
     body?: never;

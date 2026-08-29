@@ -30,10 +30,11 @@ func (s *TagStore) Create(ctx context.Context, input tags.CreateInput) (tags.Tag
 	err := s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
 		row := tx.QueryRowContext(
 			ctx,
-			`INSERT INTO `+s.db.accountingName("tag")+` (fqn, is_hidden, is_featured)
-VALUES (?, ?, ?)
-RETURNING tag_id, fqn, is_hidden, is_featured, parent_fqn, name, level, created_at, updated_at, tombstoned_at`,
+			`INSERT INTO `+s.db.accountingName("tag")+` (fqn, display_label, is_hidden, is_featured)
+VALUES (?, ?, ?, ?)
+RETURNING tag_id, fqn, display_label, is_hidden, is_featured, parent_fqn, name, level, created_at, updated_at, tombstoned_at`,
 			input.FQN,
+			input.DisplayLabel,
 			input.IsHidden,
 			input.IsFeatured,
 		)
@@ -57,7 +58,7 @@ RETURNING tag_id, fqn, is_hidden, is_featured, parent_fqn, name, level, created_
 
 // Get returns a tag by ID.
 func (s *TagStore) Get(ctx context.Context, id int64, includeTombstoned bool) (tags.Tag, error) {
-	query := `SELECT tag_id, fqn, is_hidden, is_featured, parent_fqn, name, level, created_at, updated_at, tombstoned_at
+	query := `SELECT tag_id, fqn, display_label, is_hidden, is_featured, parent_fqn, name, level, created_at, updated_at, tombstoned_at
 FROM ` + s.db.accountingName("tag") + `
 WHERE tag_id = ?`
 	args := []any{id}
@@ -96,7 +97,7 @@ WHERE 1 = 1`
 		return services.PaginatedList[tags.Tag]{}, err
 	}
 
-	query := `SELECT tag_id, fqn, is_hidden, is_featured, parent_fqn, name, level, created_at, updated_at, tombstoned_at
+	query := `SELECT tag_id, fqn, display_label, is_hidden, is_featured, parent_fqn, name, level, created_at, updated_at, tombstoned_at
 ` + filterQuery
 	query, args = appendServiceListOrderAndPage(query, args, opts.List, tagSortColumns, services.SortKeyFQN, "tag_id")
 
@@ -133,6 +134,10 @@ WHERE 1 = 1`
 func (s *TagStore) UpdateMutable(ctx context.Context, id int64, input tags.UpdateInput) (tags.Tag, error) {
 	setClauses := []string{}
 	args := []any{}
+	if input.DisplayLabel.Specified {
+		setClauses = append(setClauses, "display_label = ?")
+		args = append(args, input.DisplayLabel.Value)
+	}
 	if input.IsHidden != nil {
 		setClauses = append(setClauses, "is_hidden = ?")
 		args = append(args, *input.IsHidden)
@@ -146,7 +151,7 @@ func (s *TagStore) UpdateMutable(ctx context.Context, id int64, input tags.Updat
 	row := s.db.query().QueryRowContext(ctx, `UPDATE `+s.db.accountingName("tag")+`
 SET `+strings.Join(setClauses, ", ")+`, updated_at = CURRENT_TIMESTAMP
 WHERE tag_id = ? AND tombstoned_at IS NULL
-RETURNING tag_id, fqn, is_hidden, is_featured, parent_fqn, name, level, created_at, updated_at, tombstoned_at`, args...)
+RETURNING tag_id, fqn, display_label, is_hidden, is_featured, parent_fqn, name, level, created_at, updated_at, tombstoned_at`, args...)
 	tag, err := scanTag(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return tags.Tag{}, services.ErrNotFound
@@ -238,6 +243,7 @@ type tagScanner interface {
 
 func scanTag(scanner tagScanner) (tags.Tag, error) {
 	var tag tags.Tag
+	var displayLabel sql.NullString
 	var parentFQN sql.NullString
 	var createdAt time.Time
 	var updatedAt time.Time
@@ -245,6 +251,7 @@ func scanTag(scanner tagScanner) (tags.Tag, error) {
 	if err := scanner.Scan(
 		&tag.ID,
 		&tag.FQN,
+		&displayLabel,
 		&tag.IsHidden,
 		&tag.IsFeatured,
 		&parentFQN,
@@ -257,6 +264,9 @@ func scanTag(scanner tagScanner) (tags.Tag, error) {
 		return tags.Tag{}, err
 	}
 	tag.CreatedAt = createdAt.UTC()
+	if displayLabel.Valid {
+		tag.DisplayLabelOverride = &displayLabel.String
+	}
 	tag.UpdatedAt = updatedAt.UTC()
 	if parentFQN.Valid {
 		tag.ParentFQN = &parentFQN.String

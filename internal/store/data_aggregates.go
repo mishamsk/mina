@@ -9,7 +9,7 @@ import (
 	"time"
 
 	duckdb "github.com/duckdb/duckdb-go/v2"
-	"github.com/mishamsk/mina/internal/services/accounts"
+	"github.com/mishamsk/mina/internal/services"
 	"github.com/mishamsk/mina/internal/services/dataaggregates"
 	"github.com/mishamsk/mina/internal/services/values"
 )
@@ -465,7 +465,7 @@ func (s *DataAggregateStore) flowBreakdown(ctx context.Context, tables aggregate
 				if override.Valid {
 					labelOverride = &override.String
 				}
-				item.Label = accounts.EffectiveDisplayLabel(fqn.String, labelOverride)
+				item.Label = services.EffectiveDisplayLabel(fqn.String, labelOverride)
 			} else {
 				segments := strings.Split(fqn.String, ":")
 				item.Label = segments[len(segments)-1]

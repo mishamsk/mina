@@ -15,9 +15,17 @@ import {
 import { focusWithoutTooltip, Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import {
+  accountPickerLoader,
+  accountPickerOption,
+  categoryPickerLoader,
+  categoryPickerOption,
   EntityMultiPicker,
   type EntityOption,
   EntityPicker,
+  memberPickerLoader,
+  memberPickerOption,
+  tagPickerLoader,
+  tagPickerOption,
   useLedgerLookupsResource,
 } from "@/features/ledger";
 import { cn } from "@/lib/utils";
@@ -161,37 +169,6 @@ const normalizedCurrencyInput = (value: string): string =>
 
 const recordErrorKey = (row: number, field: string) =>
   `records.${row}.${field}`;
-
-const option = (
-  entity: {
-    readonly fqn?: string;
-    readonly is_hidden?: boolean;
-    readonly name?: string;
-  },
-  id: number,
-): EntityOption => ({
-  hidden: entity.is_hidden,
-  id,
-  label: entity.name ?? entity.fqn ?? "Unknown",
-  searchLabel: entity.fqn ?? entity.name ?? "Unknown",
-});
-
-const retainSelectedOptions = (
-  available: readonly EntityOption[],
-  allById: ReadonlyMap<number, EntityOption>,
-  selectedIds: readonly number[],
-): readonly EntityOption[] => {
-  const includedIds = new Set(available.map((item) => item.id));
-  const retained: EntityOption[] = [];
-  for (const id of selectedIds) {
-    const selected = allById.get(id);
-    if (selected && !includedIds.has(id)) {
-      retained.push(selected);
-      includedIds.add(id);
-    }
-  }
-  return retained.length > 0 ? [...available, ...retained] : available;
-};
 
 const FieldError = ({ message }: { readonly message: string | undefined }) =>
   message ? <p className="text-destructive mt-1 text-xs">{message}</p> : null;
@@ -357,35 +334,35 @@ export const DefinitionEditorPanel = ({
     };
   }, [closeEditor, open, saving]);
 
-  const options = useMemo(() => {
-    const accounts = (lookups.snapshot?.accounts ?? [])
-      .filter((account) => !account.tombstoned_at)
-      .map((account) => ({
-        ...option(account, account.account_id),
-        detail: account.currency
-          ? `${account.currency} · Single-currency`
-          : "Multi-currency",
-      }));
-    const categories = (lookups.snapshot?.categories ?? [])
-      .filter((category) => !category.tombstoned_at)
-      .map((category) => option(category, category.category_id));
-    const members = (lookups.snapshot?.members ?? [])
-      .filter((member) => !member.tombstoned_at)
-      .map((member) => option(member, member.member_id));
-    const tags = (lookups.snapshot?.tags ?? [])
-      .filter((tag) => !tag.tombstoned_at)
-      .map((tag) => option(tag, tag.tag_id));
-    return {
-      accountById: new Map(accounts.map((item) => [item.id, item])),
-      accounts: accounts.filter((item) => !item.hidden),
-      categories: categories.filter((item) => !item.hidden),
-      categoryById: new Map(categories.map((item) => [item.id, item])),
-      memberById: new Map(members.map((item) => [item.id, item])),
-      members: members.filter((item) => !item.hidden),
-      tagById: new Map(tags.map((item) => [item.id, item])),
-      tags: tags.filter((item) => !item.hidden),
-    };
-  }, [lookups.snapshot]);
+  const categoryFqnById = useMemo(
+    () =>
+      new Map(
+        (lookups.snapshot?.categories ?? []).map((category) => [
+          category.category_id,
+          category.fqn,
+        ]),
+      ),
+    [lookups.snapshot],
+  );
+  const [accountPickerOptionsById, setAccountPickerOptionsById] = useState(
+    new Map<number, EntityOption>(),
+  );
+  const fallbackAccountOptions = useMemo(
+    () => (lookups.snapshot?.accounts ?? []).map(accountPickerOption),
+    [lookups.snapshot],
+  );
+  const fallbackCategoryOptions = useMemo(
+    () => (lookups.snapshot?.categories ?? []).map(categoryPickerOption),
+    [lookups.snapshot],
+  );
+  const fallbackMemberOptions = useMemo(
+    () => (lookups.snapshot?.members ?? []).map(memberPickerOption),
+    [lookups.snapshot],
+  );
+  const fallbackTagOptions = useMemo(
+    () => (lookups.snapshot?.tags ?? []).map(tagPickerOption),
+    [lookups.snapshot],
+  );
 
   const balances = useMemo(() => {
     const values = new Map<string, bigint>();
@@ -429,9 +406,11 @@ export const DefinitionEditorPanel = ({
     candidate.records.forEach((row, index) => {
       if (!row.accountId)
         next[recordErrorKey(index, "account")] = "Account is required.";
-      const accountType = lookups.snapshot?.accounts.find(
-        (account) => account.account_id === row.accountId,
-      )?.account_type;
+      const accountType =
+        lookups.snapshot?.accounts.find(
+          (account) => account.account_id === row.accountId,
+        )?.account_type ??
+        accountPickerOptionsById.get(row.accountId ?? -1)?.accountType;
       if (accountType === "flow" && !row.categoryId)
         next[recordErrorKey(index, "category")] = "Category is required.";
       if (accountType && accountType !== "flow" && row.categoryId)
@@ -736,23 +715,48 @@ export const DefinitionEditorPanel = ({
                       <EntityPicker
                         id={`recurring-record-${row.id}-account`}
                         label="Account"
-                        options={retainSelectedOptions(
-                          options.accounts,
-                          options.accountById,
-                          row.accountId === undefined ? [] : [row.accountId],
-                        )}
+                        loadOptions={accountPickerLoader({
+                          context: "record_assignment",
+                        })}
+                        options={fallbackAccountOptions}
+                        onLoadedOptions={(options) => {
+                          setAccountPickerOptionsById((current) => {
+                            const next = new Map(current);
+                            for (const option of options) {
+                              next.set(option.id, option);
+                            }
+                            return next;
+                          });
+                        }}
                         value={row.accountId}
-                        onChange={(accountId) => {
+                        onChange={(accountId, selectedOption) => {
+                          if (selectedOption) {
+                            setAccountPickerOptionsById((current) => {
+                              const next = new Map(current);
+                              next.set(selectedOption.id, selectedOption);
+                              return next;
+                            });
+                          }
                           const account = lookups.snapshot?.accounts.find(
                             (item) => item.account_id === accountId,
                           );
+                          const pickerOption =
+                            selectedOption ??
+                            (accountId === undefined
+                              ? undefined
+                              : accountPickerOptionsById.get(accountId));
+                          const accountType =
+                            account?.account_type ?? pickerOption?.accountType;
                           patchRow(index, {
                             accountId,
                             categoryId:
-                              account && account.account_type !== "flow"
+                              accountType && accountType !== "flow"
                                 ? undefined
                                 : row.categoryId,
-                            currency: account?.currency ?? row.currency,
+                            currency:
+                              account?.currency ??
+                              pickerOption?.currency ??
+                              row.currency,
                           });
                         }}
                       />
@@ -786,19 +790,18 @@ export const DefinitionEditorPanel = ({
                       />
                     </label>
                     <div className="col-span-full">
-                      {lookups.snapshot?.accounts.find(
+                      {(lookups.snapshot?.accounts.find(
                         (account) => account.account_id === row.accountId,
-                      )?.account_type === "flow" ? (
+                      )?.account_type ??
+                        accountPickerOptionsById.get(row.accountId ?? -1)
+                          ?.accountType) === "flow" ? (
                         <EntityPicker
                           id={`recurring-record-${row.id}-category`}
                           label="Category"
-                          options={retainSelectedOptions(
-                            options.categories,
-                            options.categoryById,
-                            row.categoryId === undefined
-                              ? []
-                              : [row.categoryId],
-                          )}
+                          loadOptions={categoryPickerLoader({
+                            context: "record_assignment",
+                          })}
+                          options={fallbackCategoryOptions}
                           value={row.categoryId}
                           onChange={(categoryId) =>
                             patchRow(index, { categoryId })
@@ -811,14 +814,14 @@ export const DefinitionEditorPanel = ({
                             <Tooltip
                               className="min-w-0"
                               label={
-                                options.categoryById.get(row.categoryId)
-                                  ?.searchLabel ?? `Category ${row.categoryId}`
+                                categoryFqnById.get(row.categoryId) ??
+                                `Category ${row.categoryId}`
                               }
                               triggerLabel="Show full category path"
                             >
                               <span className="block min-w-0 truncate">
-                                {options.categoryById.get(row.categoryId)
-                                  ?.searchLabel ?? `Category ${row.categoryId}`}
+                                {categoryFqnById.get(row.categoryId) ??
+                                  `Category ${row.categoryId}`}
                               </span>
                             </Tooltip>
                             <Button
@@ -845,11 +848,10 @@ export const DefinitionEditorPanel = ({
                       <EntityMultiPicker
                         id={`recurring-record-${row.id}-tags`}
                         label="Tags"
-                        options={retainSelectedOptions(
-                          options.tags,
-                          options.tagById,
-                          row.tagIds,
-                        )}
+                        loadOptions={tagPickerLoader({
+                          context: "record_assignment",
+                        })}
+                        options={fallbackTagOptions}
                         value={row.tagIds}
                         onChange={(tagIds) => patchRow(index, { tagIds })}
                       />
@@ -858,11 +860,10 @@ export const DefinitionEditorPanel = ({
                       hierarchical={false}
                       id={`recurring-record-${row.id}-member`}
                       label="Member"
-                      options={retainSelectedOptions(
-                        options.members,
-                        options.memberById,
-                        row.memberId === undefined ? [] : [row.memberId],
-                      )}
+                      loadOptions={memberPickerLoader({
+                        context: "record_assignment",
+                      })}
+                      options={fallbackMemberOptions}
                       placeholder="Whole household"
                       value={row.memberId}
                       onChange={(memberId) => patchRow(index, { memberId })}

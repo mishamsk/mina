@@ -12,12 +12,14 @@ interface AccountFixture {
 
 interface CategoryFixture {
   readonly category_id: number;
+  readonly display_label: string;
   readonly economic_intent: string;
   readonly fqn: string;
   readonly name: string;
 }
 
 interface TagFixture {
+  readonly display_label: string;
   readonly fqn: string;
   readonly name: string;
   readonly tag_id: number;
@@ -161,6 +163,14 @@ const findByFqn = <T extends { readonly fqn: string }>(
   return fixture as T;
 };
 
+const pickerSelectedLabel = (fixture: {
+  readonly display_label: string;
+  readonly fqn: string;
+}): string =>
+  fixture.display_label === fixture.fqn
+    ? fixture.fqn
+    : `${fixture.fqn} (${fixture.display_label})`;
+
 const expectTransactionsPageUrl = async (
   page: Page,
   expectedPage: number,
@@ -254,11 +264,13 @@ const createCategory = async (
   page: Page,
   fqn: string,
   economicIntent: string,
+  displayLabelOverride?: string,
 ): Promise<CategoryFixture> => {
   const response = await page.request.post("/api/categories", {
     data: {
       economic_intent: economicIntent,
       fqn,
+      display_label: displayLabelOverride,
     },
   });
   expect(response.ok()).toBe(true);
@@ -1138,6 +1150,19 @@ const chooseOptionByKeyboard = async (
   const picker = pickerScope.getByRole("combobox", { name: label });
   await picker.click();
   await expect(picker).toBeFocused();
+  if (searchText === optionValue) {
+    await picker.fill(searchText);
+    await expect
+      .poll(async () => ({
+        expanded: await picker.getAttribute("aria-expanded"),
+        value: await picker.inputValue(),
+      }))
+      .toEqual({
+        expanded: "false",
+        value: expect.stringContaining(optionValue),
+      });
+    return;
+  }
   await fillAndExpectValue(picker, searchText);
   if ((await picker.inputValue()) === optionValue) {
     await expect(picker).toHaveAttribute("aria-expanded", "false");
@@ -1517,6 +1542,7 @@ export {
   openAccountTransactionDetail,
   openRowActionsMenu,
   openUrlTransactionDetail,
+  pickerSelectedLabel,
   readStoredTransactionEntryDraft,
   requiredBoundingBox,
   runCapturedSearchDebounce,

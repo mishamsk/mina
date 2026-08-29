@@ -7,6 +7,7 @@ import (
 
 	"github.com/mishamsk/mina/internal/apptest"
 	"github.com/mishamsk/mina/internal/httpclient"
+	"github.com/oapi-codegen/nullable"
 )
 
 func TestCategoryCreateReadListUpdateDeleteBoundary(t *testing.T) {
@@ -144,6 +145,79 @@ func TestCategoryCreateReadListUpdateDeleteBoundary(t *testing.T) {
 	assertCategoryEconomicIntents(t, withTombstones.JSON200.Categories, []httpclient.CategoryEconomicIntent{httpclient.CategoryEconomicIntentExpense, httpclient.CategoryEconomicIntentExpense})
 	if withTombstones.JSON200.Categories[0].TombstonedAt == nil {
 		t.Fatal("deleted category tombstoned_at = nil, want timestamp")
+	}
+}
+
+func TestCategoryDisplayLabelsBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	ctx := context.Background()
+	explicitLabel := "Weekly food"
+
+	one, err := client.REST().CreateCategoryWithResponse(ctx, httpclient.CreateCategoryRequest{
+		Fqn: "Standalone", EconomicIntent: httpclient.CategoryEconomicIntentExpense,
+	})
+	requireClientResponse(t, "create one-segment category label", err, one.StatusCode(), http.StatusCreated, one.Body)
+	if one.JSON201.DisplayLabel != "Standalone" || one.JSON201.DisplayLabelOverride != nil {
+		t.Fatalf("one-segment category labels = %q/%v", one.JSON201.DisplayLabel, one.JSON201.DisplayLabelOverride)
+	}
+
+	explicit, err := client.REST().CreateCategoryWithResponse(ctx, httpclient.CreateCategoryRequest{
+		Fqn: "Household:Food:Groceries", DisplayLabel: &explicitLabel, EconomicIntent: httpclient.CategoryEconomicIntentExpense,
+	})
+	requireClientResponse(t, "create explicit category label", err, explicit.StatusCode(), http.StatusCreated, explicit.Body)
+	if explicit.JSON201.DisplayLabel != explicitLabel || explicit.JSON201.DisplayLabelOverride == nil || *explicit.JSON201.DisplayLabelOverride != explicitLabel || explicit.JSON201.Name != "Groceries" {
+		t.Fatalf("explicit category labels = %+v", explicit.JSON201)
+	}
+	automatic, err := client.REST().CreateCategoryWithResponse(ctx, httpclient.CreateCategoryRequest{
+		Fqn: "Household:Food:Dining", EconomicIntent: httpclient.CategoryEconomicIntentExpense,
+	})
+	requireClientResponse(t, "create automatic category label", err, automatic.StatusCode(), http.StatusCreated, automatic.Body)
+
+	listed, err := client.REST().ListCategoriesWithResponse(ctx, nil)
+	requireClientResponse(t, "list category labels", err, listed.StatusCode(), http.StatusOK, listed.Body)
+	found := false
+	for _, category := range listed.JSON200.Categories {
+		if category.CategoryId == explicit.JSON201.CategoryId {
+			found = category.DisplayLabel == explicitLabel && category.DisplayLabelOverride != nil
+		}
+	}
+	if !found {
+		t.Fatal("explicit category display label missing from list")
+	}
+
+	updatedLabel := "Groceries nearby"
+	updated, err := client.REST().UpdateCategoryWithResponse(ctx, explicit.JSON201.CategoryId, httpclient.UpdateCategoryRequest{DisplayLabel: nullable.NewNullableWithValue(updatedLabel)})
+	requireClientResponse(t, "update category label", err, updated.StatusCode(), http.StatusOK, updated.Body)
+	if updated.JSON200.DisplayLabel != updatedLabel {
+		t.Fatalf("updated category display_label = %q", updated.JSON200.DisplayLabel)
+	}
+
+	res := restructureCategories(t, client, "Household:Food", "Household:Market")
+	if res.JSON200.MovedCount != 2 {
+		t.Fatalf("category restructure count = %d", res.JSON200.MovedCount)
+	}
+	read, err := client.REST().GetCategoryWithResponse(ctx, explicit.JSON201.CategoryId, nil)
+	requireClientResponse(t, "read restructured category label", err, read.StatusCode(), http.StatusOK, read.Body)
+	if read.JSON200.DisplayLabel != updatedLabel || read.JSON200.DisplayLabelOverride == nil || *read.JSON200.DisplayLabelOverride != updatedLabel {
+		t.Fatalf("restructured category override = %+v", read.JSON200)
+	}
+	automaticRead, err := client.REST().GetCategoryWithResponse(ctx, automatic.JSON201.CategoryId, nil)
+	requireClientResponse(t, "read restructured automatic category label", err, automaticRead.StatusCode(), http.StatusOK, automaticRead.Body)
+	if automaticRead.JSON200.DisplayLabel != "Market:Dining" {
+		t.Fatalf("restructured category fallback = %q", automaticRead.JSON200.DisplayLabel)
+	}
+
+	cleared, err := client.REST().UpdateCategoryWithResponse(ctx, explicit.JSON201.CategoryId, httpclient.UpdateCategoryRequest{DisplayLabel: nullable.NewNullNullable[string]()})
+	requireClientResponse(t, "clear category label", err, cleared.StatusCode(), http.StatusOK, cleared.Body)
+	if cleared.JSON200.DisplayLabel != "Market:Groceries" || cleared.JSON200.DisplayLabelOverride != nil {
+		t.Fatalf("cleared category labels = %q/%v", cleared.JSON200.DisplayLabel, cleared.JSON200.DisplayLabelOverride)
+	}
+
+	invalid := " padded "
+	rejected, err := client.REST().UpdateCategoryWithResponse(ctx, explicit.JSON201.CategoryId, httpclient.UpdateCategoryRequest{DisplayLabel: nullable.NewNullableWithValue(invalid)})
+	requireNoTransportError(t, "reject category label whitespace", err)
+	if rejected.StatusCode() != http.StatusBadRequest || rejected.JSON400.Error.Code != httpclient.APIErrorCodeInvalidRequest {
+		t.Fatalf("invalid category label response = %d %+v", rejected.StatusCode(), rejected.JSON400)
 	}
 }
 

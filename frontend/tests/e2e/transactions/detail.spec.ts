@@ -29,6 +29,7 @@ import {
   openRowActionsMenu,
   openUrlTransactionDetail,
   type Page,
+  pickerSelectedLabel,
   readStoredTransactionEntryDraft,
   type Route,
   type TransactionDetailFixture,
@@ -362,10 +363,12 @@ test("a captured BlueCash Target spend without amounts is offered for Spend and 
     entryEditor.getByRole("heading", { name: "New spend" }),
   ).toBeVisible();
   await expect(entryEditor.getByLabel("Funding account")).toHaveValue(
-    blueCash.fqn,
+    pickerSelectedLabel(blueCash),
   );
   const merchant = entryEditor.getByRole("group", { name: "Merchant 1" });
-  await expect(merchant.getByLabel("Merchant account")).toHaveValue(target.fqn);
+  await expect(merchant.getByLabel("Merchant account")).toHaveValue(
+    pickerSelectedLabel(target),
+  );
   await expect(merchant.getByLabel("Category")).toHaveValue(
     "Shopping:Household",
   );
@@ -387,10 +390,10 @@ test("a captured BlueCash Target spend without amounts is offered for Spend and 
     entryEditor.getByRole("heading", { name: "New refund" }),
   ).toBeVisible();
   await expect(entryEditor.getByLabel("Destination account")).toHaveValue(
-    blueCash.fqn,
+    pickerSelectedLabel(blueCash),
   );
   await expect(entryEditor.getByLabel("Merchant", { exact: true })).toHaveValue(
-    target.fqn,
+    pickerSelectedLabel(target),
   );
   await expect(entryEditor.getByLabel("Category")).toHaveValue(
     "Shopping:Household",
@@ -489,7 +492,7 @@ test("transaction rows and detail create date-free template drafts", async ({
   await expect(editorRecords).toHaveCount(3);
   await expect(
     editorRecords.nth(0).getByLabel("Account (optional)"),
-  ).toHaveValue(fundingAccount.fqn);
+  ).toHaveValue(pickerSelectedLabel(fundingAccount));
   await expect(
     editorRecords.nth(0).getByLabel("Amount (optional)"),
   ).toHaveValue("-30");
@@ -505,7 +508,7 @@ test("transaction rows and detail create date-free template drafts", async ({
   await expect(editorRecords.nth(0)).toContainText(tag.name);
   await expect(
     editorRecords.nth(1).getByLabel("Category (optional)"),
-  ).toHaveValue(category.fqn);
+  ).toHaveValue(pickerSelectedLabel(category));
 
   await editor.getByRole("button", { name: "Cancel" }).click();
   await expect(editor).toHaveCount(0);
@@ -1237,7 +1240,7 @@ test("transaction detail panel is read-only while category chips keep filtering"
   });
   await expect(
     page.getByRole("button", {
-      name: `Remove Category ${initialCategory.name}`,
+      name: `Remove Category ${initialCategory.display_label}`,
     }),
   ).toBeVisible();
   await expect(panel).toBeVisible();
@@ -2864,7 +2867,7 @@ test("transaction detail split opens journal replacement and surfaces replace er
     .getByRole("option", { name: splitAccount.fqn });
   await expect(splitAccountOption).toBeVisible();
   await splitAccountOption.click();
-  await expect(accountPicker).toHaveValue(splitAccount.fqn);
+  await expect(accountPicker).toHaveValue(pickerSelectedLabel(splitAccount));
   await chooseOptionByKeyboard(
     page,
     "Category",

@@ -1279,7 +1279,7 @@ func (s *Service) prepareCreateInput(ctx context.Context, input WriteInput) (Sav
 }
 
 func (s *Service) prepareInput(ctx context.Context, input WriteInput) (SaveInput, error) {
-	if err := validateFQN(input.FQN); err != nil {
+	if err := services.ValidateFQN(input.FQN); err != nil {
 		return SaveInput{}, err
 	}
 	rule, err := validateScheduleRule(input.ScheduleRule)
@@ -2029,10 +2029,6 @@ func validateTagIDs(index int, tagIDs []int64) error {
 	}
 
 	return nil
-}
-
-func validateFQN(fqn string) error {
-	return services.ValidateFQN(fqn)
 }
 
 func validateListOptions(opts services.ListOptions) error {

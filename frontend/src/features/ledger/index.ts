@@ -4,8 +4,22 @@ export { ClassBadge } from "./class-badge";
 export {
   EntityMultiPicker,
   type EntityOption,
+  type EntityOptionLoader,
   EntityPicker,
+  type EntityPickerLoadRequest,
+  type EntityPickerLoadResult,
+  type EntityPickerRow,
 } from "./entity-picker";
+export {
+  accountPickerLoader,
+  accountPickerOption,
+  categoryPickerLoader,
+  categoryPickerOption,
+  memberPickerLoader,
+  memberPickerOption,
+  tagPickerLoader,
+  tagPickerOption,
+} from "./entity-picker-loaders";
 export { captureTransactionEntryLaunchContext } from "./entry-launch-context";
 export { EntryModal } from "./entry-modal";
 export {

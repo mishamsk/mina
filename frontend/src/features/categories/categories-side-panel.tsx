@@ -33,10 +33,11 @@ import {
 import { IntentBadge, intentLabel } from "./intent-badge";
 import { refreshCategoriesAfterMutation } from "./use-categories-resource";
 
-type CategoryFormField = "fqn" | "general" | "intent";
+type CategoryFormField = "displayLabel" | "fqn" | "general" | "intent";
 type CategoryFormErrors = Partial<Record<CategoryFormField, string>>;
 
 interface CategoryFormState {
+  readonly displayLabel: string;
   readonly economicIntent: CategoryEconomicIntent | "";
   readonly fqn: string;
   readonly isHidden: boolean;
@@ -67,6 +68,7 @@ const intentEffects = {
 const blankForm = (
   initialEconomicIntent?: CategoryEconomicIntent,
 ): CategoryFormState => ({
+  displayLabel: "",
   economicIntent: initialEconomicIntent ?? "",
   fqn: "",
   isHidden: false,
@@ -75,6 +77,7 @@ const blankForm = (
 const formFromCategory = (category: Category | undefined): CategoryFormState =>
   category
     ? {
+        displayLabel: category.display_label_override ?? "",
         economicIntent: category.economic_intent,
         fqn: category.fqn,
         isHidden: category.is_hidden,
@@ -83,6 +86,9 @@ const formFromCategory = (category: Category | undefined): CategoryFormState =>
 
 const fieldErrorsFromAPI = (message: string): CategoryFormErrors => {
   const lower = message.toLowerCase();
+  if (lower.includes("display_label")) {
+    return { displayLabel: message };
+  }
   if (lower.includes("fqn") || lower.includes("name")) {
     return { fqn: message };
   }
@@ -106,6 +112,9 @@ const validateForm = (
   if (mode === "create" && !form.economicIntent) {
     errors.intent = "Intent is required.";
   }
+  if (form.displayLabel !== form.displayLabel.trim()) {
+    errors.displayLabel = "Remove leading or trailing whitespace.";
+  }
   return errors;
 };
 
@@ -115,8 +124,18 @@ const validateFormField = (
   field: CategoryFormField,
 ): string | undefined => validateForm(form, mode)[field];
 
-const FieldError = ({ message }: { readonly message: string | undefined }) =>
-  message ? <p className="text-destructive text-xs">{message}</p> : null;
+const FieldError = ({
+  id,
+  message,
+}: {
+  readonly id?: string;
+  readonly message: string | undefined;
+}) =>
+  message ? (
+    <p id={id} className="text-destructive text-xs">
+      {message}
+    </p>
+  ) : null;
 
 const Field = ({
   children,
@@ -240,15 +259,22 @@ const CategoriesSidePanelContent = ({
     }
 
     setSaving(true);
+    const displayLabel = form.displayLabel || null;
+    const displayLabelChanged =
+      mode === "edit" &&
+      category !== undefined &&
+      displayLabel !== category.display_label_override;
     const result =
       mode === "create"
         ? await createLedgerCategory({
+            display_label: displayLabel,
             economic_intent: form.economicIntent as CategoryEconomicIntent,
             fqn: form.fqn.trim(),
             is_hidden: form.isHidden,
           } satisfies CreateCategoryRequest)
         : category
           ? await updateLedgerCategory(category.category_id, {
+              ...(displayLabelChanged ? { display_label: displayLabel } : {}),
               is_hidden: form.isHidden,
             } satisfies UpdateCategoryRequest)
           : undefined;
@@ -360,6 +386,47 @@ const CategoriesSidePanelContent = ({
               }}
             />
             <FieldError message={fieldErrors.fqn} />
+          </Field>
+
+          <Field
+            htmlFor="category-display-label"
+            label="Display label (optional)"
+          >
+            <input
+              id="category-display-label"
+              type="text"
+              disabled={saving}
+              aria-describedby={
+                fieldErrors.displayLabel
+                  ? "category-display-label-help category-display-label-error"
+                  : "category-display-label-help"
+              }
+              aria-invalid={fieldErrors.displayLabel ? true : undefined}
+              className="bg-card disabled:bg-muted h-9 border-2 border-[var(--border-ink)] px-2 font-mono text-sm shadow-[var(--shadow-pixel)] disabled:shadow-none"
+              placeholder="Automatic from FQN"
+              value={form.displayLabel}
+              onBlur={() => {
+                setFieldError(
+                  "displayLabel",
+                  validateFormField(form, mode, "displayLabel"),
+                );
+              }}
+              onChange={(event) => {
+                updateForm({ displayLabel: event.target.value });
+                setFieldError("displayLabel", undefined);
+              }}
+            />
+            <p
+              id="category-display-label-help"
+              className="text-muted-foreground font-body text-xs"
+            >
+              Leave blank to use the final one or two FQN segments
+              automatically.
+            </p>
+            <FieldError
+              id="category-display-label-error"
+              message={fieldErrors.displayLabel}
+            />
           </Field>
 
           <Field htmlFor="category-intent" label="Intent">

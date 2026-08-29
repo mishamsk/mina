@@ -172,6 +172,13 @@ operations:
       description: Use with an exact API audit-log compaction run ID, normally returned by the start tool. This returns one typed run; use operations_list_runs to discover historical IDs.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
 
+  pickCategories:
+    cli:
+      state: excluded
+      reason: Ranked picker options are a Web UI support projection; ordinary category discovery remains available through categories list.
+    mcp:
+      state: excluded
+      reason: Ranked picker options are a Web UI support projection; ordinary category discovery remains available through categories list.
   listCategories:
     cli: {state: exposed, name: list}
     mcp:
@@ -233,7 +240,7 @@ operations:
     mcp:
       state: exposed
       name: update
-      description: Update hidden or featured metadata for one category ID; it does not rename the FQN or change economic intent. Use categories_restructure for rename or move operations.
+      description: Set or clear the display-label override and update hidden or featured metadata for one category ID; it does not rename the FQN or change economic intent. Use categories_restructure for rename or move operations.
       annotations: {read_only: false, destructive: false, idempotent: true, open_world: false}
   deleteCategory:
     cli: {state: exposed, name: delete}
@@ -243,6 +250,13 @@ operations:
       description: Tombstone one category leaf by exact ID; referenced categories cannot be deleted. This is destructive and requires explicit user intent; use categories_get first when identity is uncertain.
       annotations: {read_only: false, destructive: true, idempotent: true, open_world: false}
 
+  pickTags:
+    cli:
+      state: excluded
+      reason: Ranked picker options are a Web UI support projection; ordinary tag discovery remains available through tags list.
+    mcp:
+      state: excluded
+      reason: Ranked picker options are a Web UI support projection; ordinary tag discovery remains available through tags list.
   listTags:
     cli: {state: exposed, name: list}
     mcp:
@@ -304,7 +318,7 @@ operations:
     mcp:
       state: exposed
       name: update
-      description: Update hidden or featured metadata for one tag ID; it does not rename the FQN. Use tags_restructure for rename or move operations.
+      description: Set or clear the display-label override and update hidden or featured metadata for one tag ID; it does not rename the FQN. Use tags_restructure for rename or move operations.
       annotations: {read_only: false, destructive: false, idempotent: true, open_world: false}
   deleteTag:
     cli: {state: exposed, name: delete}
@@ -314,6 +328,13 @@ operations:
       description: Tombstone one tag leaf by exact ID; referenced tags cannot be deleted. This is destructive and requires explicit user intent; use tags_get first when identity is uncertain.
       annotations: {read_only: false, destructive: true, idempotent: true, open_world: false}
 
+  pickMembers:
+    cli:
+      state: excluded
+      reason: Ranked picker options are a Web UI support projection; ordinary member discovery remains available through members list.
+    mcp:
+      state: excluded
+      reason: Ranked picker options are a Web UI support projection; ordinary member discovery remains available through members list.
   listMembers:
     cli: {state: exposed, name: list}
     mcp:
@@ -357,6 +378,13 @@ operations:
       description: Set hidden state for one household member by exact ID. Hidden members are excluded from default lists but remain addressable when explicitly included.
       annotations: {read_only: false, destructive: false, idempotent: true, open_world: false}
 
+  pickAccounts:
+    cli:
+      state: excluded
+      reason: Ranked picker options are a Web UI support projection; ordinary account discovery remains available through accounts list.
+    mcp:
+      state: excluded
+      reason: Ranked picker options are a Web UI support projection; ordinary account discovery remains available through accounts list.
   listAccounts:
     cli: {state: exposed, name: list}
     mcp:

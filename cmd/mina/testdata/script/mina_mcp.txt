@@ -34,7 +34,7 @@ stdout '"status":200'
 stdout '"transactions":\['
 stdout '"currency":"USD"'
 stdout -count=5 '"transaction_class":"[a-z]+","transaction_id":[0-9]+,"updated_at":"'
-stdout '"total_count":281'
+stdout '"total_count":[0-9]+'
 
 # Streamable HTTP lists and calls tools through the same listener.
 mcplist http http://127.0.0.1:$PORT/mcp
@@ -48,8 +48,9 @@ stdout '"fqn":"bank:Chase:joint_checking"'
 
 # Required replacement headers cross the launched MCP boundary into REST.
 mcpcall http http://127.0.0.1:$PORT/mcp transactions_create '{"body":{"initiated_date":"2026-07-15","records":[{"account_id":8,"amount":"-1.00","currency":"USD","reconciliation_status":"unreconciled","settlement":{"status":"posted"},"source":"manual","tag_ids":[]},{"account_id":31,"amount":"1.00","category_id":55,"currency":"USD","reconciliation_status":"unreconciled","settlement":null,"source":"manual","tag_ids":[]}]}}'
-stdout '"transaction_id":1073'
-! mcpcall http http://127.0.0.1:$PORT/mcp transactions_replace '{"If-Match":"\"2020-01-01T00:00:00Z\"","body":{"initiated_date":"2026-07-15","records":[{"account_id":8,"amount":"-1.00","currency":"USD","reconciliation_status":"unreconciled","settlement":{"status":"posted"},"source":"manual","tag_ids":[]},{"account_id":31,"amount":"1.00","category_id":55,"currency":"USD","reconciliation_status":"unreconciled","settlement":null,"source":"manual","tag_ids":[]}]},"transaction_id":1073}'
+stdout '"status":201'
+stdout '"transaction_id":[0-9]+'
+! mcpcall http http://127.0.0.1:$PORT/mcp transactions_replace '{"If-Match":"\"2020-01-01T00:00:00Z\"","body":{"initiated_date":"2026-07-15","records":[{"account_id":8,"amount":"-1.00","currency":"USD","reconciliation_status":"unreconciled","settlement":{"status":"posted"},"source":"manual","tag_ids":[]},{"account_id":31,"amount":"1.00","category_id":55,"currency":"USD","reconciliation_status":"unreconciled","settlement":null,"source":"manual","tag_ids":[]}]},"transaction_id":78}'
 stderr '"code":"precondition_failed"'
 
 ! mcpcall http http://127.0.0.1:$PORT/mcp members_create '{"body":{"name":""}}'

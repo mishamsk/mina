@@ -2,7 +2,7 @@ import { test } from "@tests/e2e/test";
 import {
   createTag,
   expect,
-  fillAndExpectValue,
+  pickerSelectedLabel,
   waitForLedgerLookups,
 } from "@tests/e2e/transactions/support";
 
@@ -38,8 +38,18 @@ test("filter rows compose all-of and none-of chips and survive navigation", asyn
   await page.getByLabel("Filter operator").click();
   await page.getByRole("option", { name: "All of" }).click();
   const tags = page.getByRole("combobox", { name: "Tags" });
-  await fillAndExpectValue(tags, allA.fqn);
-  await fillAndExpectValue(tags, allB.fqn);
+  await tags.fill(allA.fqn);
+  await expect(
+    page
+      .getByRole("button", { name: `Remove ${pickerSelectedLabel(allA)}` })
+      .last(),
+  ).toBeVisible();
+  await tags.fill(allB.fqn);
+  await expect(
+    page
+      .getByRole("button", { name: `Remove ${pickerSelectedLabel(allB)}` })
+      .last(),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Back" }).click();
   await page.keyboard.press("Escape");
 
@@ -49,12 +59,23 @@ test("filter rows compose all-of and none-of chips and survive navigation", asyn
     page.getByRole("separator", { name: "OR" }).getByText("OR"),
   ).toHaveCSS("color", "rgb(15, 13, 22)");
   await page.getByRole("button", { exact: true, name: "Tag" }).click();
-  await fillAndExpectValue(tags, onlyC.fqn);
+  await tags.fill(onlyC.fqn);
+  await expect(
+    page
+      .getByRole("button", { name: `Remove ${pickerSelectedLabel(onlyC)}` })
+      .last(),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Back" }).click();
   await page.getByRole("button", { exact: true, name: "Tag" }).click();
   await page.getByLabel("Filter operator").click();
   await page.getByRole("option", { name: "None of" }).click();
-  await fillAndExpectValue(tags, allA.fqn);
+  await tags.click();
+  await tags.fill(allA.fqn);
+  await expect(
+    page
+      .getByRole("button", { name: `Remove ${pickerSelectedLabel(allA)}` })
+      .last(),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Back" }).click();
   await page.keyboard.press("Escape");
 
@@ -72,8 +93,14 @@ test("filter rows compose all-of and none-of chips and survive navigation", asyn
   await expect
     .poll(() => new URL(page.url()).searchParams.get("filter"))
     .toBe(expression);
-  await expect(page.getByText(/Tag AllA, AllB · all of/)).toBeVisible();
-  await expect(page.getByText(/Tag AllA · none of/)).toBeVisible();
+  await expect(
+    page.getByText(
+      `Tag ${pickerSelectedLabel(allA)}, ${pickerSelectedLabel(allB)} · all of`,
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByText(`Tag ${pickerSelectedLabel(allA)} · none of`),
+  ).toBeVisible();
   await expect(
     page.getByText(/Transaction class Spend · any of/),
   ).toBeVisible();
@@ -88,7 +115,11 @@ test("filter rows compose all-of and none-of chips and survive navigation", asyn
   await expect(
     page.getByTestId("transaction-filter-row-2").getByText("Row 2"),
   ).toHaveCSS("color", "rgb(15, 13, 22)");
-  await expect(page.getByText(/Tag AllA, AllB · all of/)).toBeVisible();
+  await expect(
+    page.getByText(
+      `Tag ${pickerSelectedLabel(allA)}, ${pickerSelectedLabel(allB)} · all of`,
+    ),
+  ).toBeVisible();
   const removeRow = page.getByRole("button", { name: "Remove row 2" });
   await expect(removeRow).toHaveText("Remove row");
   await removeRow.click();
@@ -105,15 +136,21 @@ test("filter rows compose all-of and none-of chips and survive navigation", asyn
   await expect(page.getByTestId("transaction-filter-row-2")).toBeVisible();
 
   await page
-    .getByRole("button", { name: /Edit Tag AllA, AllB · all of/ })
+    .getByRole("button", {
+      name: `Edit Tag ${pickerSelectedLabel(allA)}, ${pickerSelectedLabel(allB)} · all of`,
+    })
     .click();
   await page.getByLabel("Filter operator").click();
   await page.getByRole("option", { name: "None of" }).click();
   await expect(
-    page.getByRole("button", { name: /Edit Tag AllA, AllB · all of/ }),
+    page.getByRole("button", {
+      name: `Edit Tag ${pickerSelectedLabel(allA)}, ${pickerSelectedLabel(allB)} · all of`,
+    }),
   ).toHaveCount(0);
   await expect(
-    page.getByRole("button", { name: /Edit Tag AllA, AllB · none of/ }),
+    page.getByRole("button", {
+      name: `Edit Tag ${pickerSelectedLabel(allA)}, ${pickerSelectedLabel(allB)} · none of`,
+    }),
   ).toBeVisible();
   await expect
     .poll(() => new URL(page.url()).searchParams.get("filter"))

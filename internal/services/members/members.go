@@ -343,7 +343,7 @@ type memberReferenceState struct {
 }
 
 func (s *Service) loadReferenceCache(ctx context.Context) (map[int64]memberReferenceState, error) {
-	members, err := s.repo.List(ctx, ListOptions{IncludeTombstoned: true})
+	members, err := s.repo.List(ctx, ListOptions{IncludeHidden: true, IncludeTombstoned: true})
 	if err != nil {
 		return nil, err
 	}

@@ -12,7 +12,8 @@
 - Compatibility-changing account updates invalidate the snapshot so server-derived shorthand compatibility is reloaded before reuse.
 - Pages own the `/templates` route, its search URL state, and restructure workflow; the app shell owns the route-independent editor launch. Create and edit drafts are never persisted or URL-backed.
 - Deferred initial focus yields to a control already used in the editor; lookup retries preserve that latest control across recovery.
-- Template records are partial defaults: every field is independently optional, active hidden references already selected on a record remain resolvable, fresh choices exclude hidden references, and tombstoned references are unavailable.
+- Template records are partial defaults: every field is independently optional; entity-specific backend picker contexts retain active hidden selections, exclude hidden fresh choices, and omit tombstoned references.
+- A failed broader lookup snapshot does not block saving picker-backed reference IDs; entity-specific picker APIs independently load and validate those choices.
 - Transaction capture maps active records in response order and copies only account, category, member, currency, native amount, tags, and memo; dates and transaction-only metadata never enter the draft.
 - Create recurring copies each active template record's supplied defaults into a new definition draft without filling absent partial values.
 - Edit preserves the FQN; hierarchy changes remain owned by restructure.

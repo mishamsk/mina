@@ -1,7 +1,7 @@
 import { Bookmark, Check, Clock, Close, User } from "pixelarticons/react";
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 
-import type { Account, Transaction } from "@/api";
+import type { Transaction } from "@/api";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { focusWithoutTooltip, Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,13 @@ import {
   type EntityOption,
   EntityPicker,
 } from "./entity-picker";
+import {
+  accountPickerLoader,
+  accountPickerOption,
+  categoryPickerLoader,
+  memberPickerLoader,
+  tagPickerLoader,
+} from "./entity-picker-loaders";
 import type { LookupMaps } from "./format";
 import { focusTransactionRowFallback } from "./transaction-row-focus";
 
@@ -41,7 +48,6 @@ export type EditDockUpdate =
 interface EditDockEditorProps {
   readonly action: ReferenceEditDockAction;
   readonly blocked: boolean;
-  readonly maps: LookupMaps;
   readonly onApply: (update: EditDockUpdate) => Promise<void>;
   readonly onCancel: () => void;
   readonly selectedCount: number;
@@ -55,73 +61,9 @@ const actionTitle: Record<EditDockAction, string> = {
   tags: "Tags",
 };
 
-const isBalanceAccountType = (accountType: string): boolean =>
-  accountType === "owned" || accountType === "party";
-
-const accountReplaceOption = (account: Account): EntityOption => ({
-  detail: account.fqn,
-  hidden: account.is_hidden,
-  id: account.account_id,
-  label: account.name,
-  metadata: account.currency
-    ? `${account.currency} · Single-currency`
-    : "Multi-currency",
-  searchLabel: account.fqn,
-});
-
-const categoryOptions = (
-  maps: LookupMaps,
-  includeHidden: boolean,
-): readonly EntityOption[] =>
-  Array.from(maps.categoriesById.values())
-    .filter(
-      (category) =>
-        !category.tombstoned_at && (includeHidden || !category.is_hidden),
-    )
-    .map((category) => ({
-      hidden: category.is_hidden,
-      id: category.category_id,
-      label: category.name,
-      searchLabel: category.fqn,
-    }));
-
-const tagOptions = (
-  maps: LookupMaps,
-  includeHidden: boolean,
-): readonly EntityOption[] =>
-  Array.from(maps.tagsById.values())
-    .filter((tag) => !tag.tombstoned_at && (includeHidden || !tag.is_hidden))
-    .map((tag) => ({
-      hidden: tag.is_hidden,
-      id: tag.tag_id,
-      label: tag.name,
-      searchLabel: tag.fqn,
-    }));
-
-const memberOptions = (
-  maps: LookupMaps,
-  selectedMemberId: number | undefined,
-  includeHidden: boolean,
-): readonly EntityOption[] =>
-  Array.from(maps.membersById.values())
-    .filter(
-      (member) =>
-        !member.tombstoned_at &&
-        (includeHidden ||
-          !member.is_hidden ||
-          member.member_id === selectedMemberId),
-    )
-    .map((member) => ({
-      hidden: member.is_hidden,
-      id: member.member_id,
-      label: member.name,
-      searchLabel: member.name,
-    }));
-
 const EditDockEditor = ({
   action,
   blocked,
-  maps,
   onApply,
   onCancel,
   selectedCount,
@@ -245,7 +187,11 @@ const EditDockEditor = ({
               disabled={saving || blocked}
               id="edit-dock-category"
               label="Category"
-              options={categoryOptions(maps, includeHidden)}
+              loadKey={`record_assignment:${includeHidden}`}
+              loadOptions={categoryPickerLoader({
+                context: "record_assignment",
+                include_hidden: includeHidden,
+              })}
               value={categoryId}
               onChange={setCategoryId}
             />
@@ -281,7 +227,11 @@ const EditDockEditor = ({
                 disabled={saving || blocked}
                 id="edit-dock-tags"
                 label={`Tags to ${tagOperation}`}
-                options={tagOptions(maps, includeHidden)}
+                loadKey={`record_assignment:${includeHidden}`}
+                loadOptions={tagPickerLoader({
+                  context: "record_assignment",
+                  include_hidden: includeHidden,
+                })}
                 value={tagIds}
                 onChange={setTagIds}
               />
@@ -320,7 +270,11 @@ const EditDockEditor = ({
                   hierarchical={false}
                   id="edit-dock-member"
                   label="Member"
-                  options={memberOptions(maps, memberId, includeHidden)}
+                  loadKey={`record_assignment:${includeHidden}`}
+                  loadOptions={memberPickerLoader({
+                    context: "record_assignment",
+                    include_hidden: includeHidden,
+                  })}
                   value={memberId}
                   onChange={setMemberId}
                 />
@@ -391,119 +345,51 @@ const AccountReplaceEditor = ({
   const [errorMessage, setErrorMessage] = useState<string>();
   const [includeHidden, setIncludeHidden] = useState(false);
   const [replacementAccountId, setReplacementAccountId] = useState<number>();
+  const [replacementPickerResetVersion, setReplacementPickerResetVersion] =
+    useState(0);
   const [saving, setSaving] = useState(false);
   const [sourceAccountId, setSourceAccountId] = useState<number>();
-  const [pickerResetVersion, setPickerResetVersion] = useState(0);
+  const [sourcePickerOption, setSourcePickerOption] = useState<EntityOption>();
+  const [replacementPickerOption, setReplacementPickerOption] =
+    useState<EntityOption>();
+  const [sourcePickerResetVersion, setSourcePickerResetVersion] = useState(0);
+  const [sourceOptionCount, setSourceOptionCount] = useState(0);
+  const [validatedReplacementKey, setValidatedReplacementKey] =
+    useState<string>();
+  const [validatedSourceKey, setValidatedSourceKey] = useState<string>();
   const reviewButtonRef = useRef<HTMLButtonElement>(null);
-
-  const commonSourceIds = selectedTransactions.reduce<Set<number>>(
-    (common, transaction, index) => {
-      const transactionAccountIds = new Set(
-        transaction.records.flatMap((record) => {
-          const account = maps.accountsById.get(record.account_id);
-          return account &&
-            !account.tombstoned_at &&
-            account.account_type !== "system"
-            ? [record.account_id]
-            : [];
-        }),
-      );
-      if (index === 0) {
-        return transactionAccountIds;
-      }
-      return new Set(
-        Array.from(common).filter((accountId) =>
-          transactionAccountIds.has(accountId),
-        ),
-      );
-    },
-    new Set<number>(),
+  const transactionIds = selectedTransactions.map(
+    (transaction) => transaction.transaction_id,
   );
+  const transactionIDsKey = transactionIds.join(",");
+  const sourceLoadKey = `bulk_source:${includeHidden}:${transactionIDsKey}`;
+  const replacementLoadKey = `bulk_replacement:${includeHidden}:${transactionIDsKey}:${sourceAccountId ?? ""}`;
   const sourceAccount =
     sourceAccountId === undefined
       ? undefined
       : maps.accountsById.get(sourceAccountId);
-  const sourceIsCommon =
-    sourceAccount !== undefined &&
-    commonSourceIds.has(sourceAccount.account_id);
-  const validSourceAccount = sourceIsCommon ? sourceAccount : undefined;
   const replacementAccount =
     replacementAccountId === undefined
       ? undefined
       : maps.accountsById.get(replacementAccountId);
-  const sourceOptions = Array.from(commonSourceIds).flatMap((accountId) => {
-    const account = maps.accountsById.get(accountId);
-    return account &&
-      (includeHidden || !account.is_hidden || accountId === sourceAccountId)
-      ? [accountReplaceOption(account)]
-      : [];
-  });
-  const affectedCurrencies = new Set(
-    validSourceAccount
-      ? selectedTransactions.flatMap((transaction) =>
-          transaction.records.flatMap((record) =>
-            record.account_id === validSourceAccount.account_id
-              ? [record.currency]
-              : [],
-          ),
-        )
-      : [],
-  );
-  const replacementOptions = validSourceAccount
-    ? Array.from(maps.accountsById.values())
-        .filter(
-          (account) =>
-            !account.tombstoned_at &&
-            account.account_type !== "system" &&
-            account.account_id !== validSourceAccount.account_id &&
-            (includeHidden ||
-              !account.is_hidden ||
-              account.account_id === replacementAccountId) &&
-            (validSourceAccount.account_type === "flow"
-              ? account.account_type === "flow"
-              : isBalanceAccountType(validSourceAccount.account_type) &&
-                isBalanceAccountType(account.account_type)) &&
-            (!account.currency ||
-              Array.from(affectedCurrencies).every(
-                (currency) => currency === account.currency,
-              )),
-        )
-        .map(accountReplaceOption)
-    : [];
-  const replacementIsCompatible =
-    replacementAccount !== undefined &&
-    replacementOptions.some(
-      (option) => option.id === replacementAccount.account_id,
-    );
   const affectedRecordCount =
-    validSourceAccount === undefined
+    sourceAccountId === undefined
       ? 0
       : selectedTransactions.reduce(
           (count, transaction) =>
             count +
             transaction.records.filter(
-              (record) => record.account_id === validSourceAccount.account_id,
+              (record) => record.account_id === sourceAccountId,
             ).length,
           0,
         );
   const canReview =
     !blocked &&
     !saving &&
-    validSourceAccount !== undefined &&
-    replacementIsCompatible;
-
-  const sourceChoiceInvalid = sourceAccountId !== undefined && !sourceIsCommon;
-  const replacementChoiceInvalid =
-    replacementAccountId !== undefined && !replacementIsCompatible;
-  if (sourceChoiceInvalid || replacementChoiceInvalid) {
-    if (sourceChoiceInvalid) {
-      setSourceAccountId(undefined);
-    }
-    setReplacementAccountId(undefined);
-    setConfirmOpen(false);
-    setErrorMessage(undefined);
-    setPickerResetVersion((current) => current + 1);
-  }
+    sourceAccountId !== undefined &&
+    replacementAccountId !== undefined &&
+    validatedSourceKey === sourceLoadKey &&
+    validatedReplacementKey === replacementLoadKey;
 
   const confirm = async () => {
     if (
@@ -578,31 +464,105 @@ const AccountReplaceEditor = ({
           <span className="font-mono text-sm">Include hidden</span>
         </label>
         <EntityPicker
-          key={`source-${pickerResetVersion}`}
           autoFocus
           disabled={saving || blocked}
           id="edit-dock-account-source"
           label="Common source account"
-          options={sourceOptions}
-          value={sourceAccountId}
-          onChange={(accountId) => {
-            setSourceAccountId(accountId);
+          loadKey={sourceLoadKey}
+          loadOptions={accountPickerLoader({
+            context: "bulk_source",
+            include_hidden: includeHidden,
+            transaction_ids: transactionIds,
+          })}
+          options={[...maps.accountsById.values()].map(accountPickerOption)}
+          onLoadedOptions={(options, result) => {
+            setSourceOptionCount(result.eligibleCount ?? options.length);
+            if (sourceAccountId === undefined) {
+              return;
+            }
+            const remainsEligible = result.selectedOptions.some(
+              (option) => option.id === sourceAccountId,
+            );
+            if (remainsEligible) {
+              setSourcePickerOption(
+                options.find((option) => option.id === sourceAccountId),
+              );
+              setValidatedSourceKey(sourceLoadKey);
+              return;
+            }
+            setSourceAccountId(undefined);
+            setSourcePickerOption(undefined);
             setReplacementAccountId(undefined);
+            setReplacementPickerOption(undefined);
+            setValidatedSourceKey(undefined);
+            setValidatedReplacementKey(undefined);
+            setSourcePickerResetVersion((current) => current + 1);
+            setReplacementPickerResetVersion((current) => current + 1);
+          }}
+          key={`source-${sourcePickerResetVersion}`}
+          value={sourceAccountId}
+          onChange={(accountId, option) => {
+            setSourceAccountId(accountId);
+            setSourcePickerOption(option);
+            setValidatedSourceKey(
+              accountId === undefined ? undefined : sourceLoadKey,
+            );
+            setReplacementAccountId(undefined);
+            setReplacementPickerOption(undefined);
+            setValidatedReplacementKey(undefined);
           }}
         />
         <EntityPicker
-          key={`replacement-${sourceAccountId}-${pickerResetVersion}`}
-          disabled={saving || blocked || validSourceAccount === undefined}
+          key={`replacement-${sourceAccountId ?? ""}-${replacementPickerResetVersion}`}
+          disabled={saving || blocked || sourceAccountId === undefined}
           id="edit-dock-account-replacement"
           label="Compatible replacement account"
-          options={replacementOptions}
+          loadKey={replacementLoadKey}
+          loadOptions={
+            sourceAccountId === undefined
+              ? undefined
+              : accountPickerLoader({
+                  context: "bulk_replacement",
+                  include_hidden: includeHidden,
+                  source_account_id: sourceAccountId,
+                  transaction_ids: transactionIds,
+                })
+          }
+          options={[...maps.accountsById.values()].map(accountPickerOption)}
           value={replacementAccountId}
-          onChange={setReplacementAccountId}
+          onLoadedOptions={(_, result) => {
+            if (replacementAccountId === undefined) {
+              return;
+            }
+            const remainsEligible = result.selectedOptions.some(
+              (option) => option.id === replacementAccountId,
+            );
+            if (remainsEligible) {
+              setReplacementPickerOption(
+                result.selectedOptions.find(
+                  (option) => option.id === replacementAccountId,
+                ),
+              );
+              setValidatedReplacementKey(replacementLoadKey);
+              return;
+            }
+            setReplacementAccountId(undefined);
+            setReplacementPickerOption(undefined);
+            setValidatedReplacementKey(undefined);
+            setReplacementPickerResetVersion((current) => current + 1);
+          }}
+          onChange={(accountId, option) => {
+            setReplacementAccountId(accountId);
+            setReplacementPickerOption(option);
+            setValidatedReplacementKey(
+              accountId === undefined ? undefined : replacementLoadKey,
+            );
+          }}
         />
-        {validSourceAccount === undefined ? (
+        {sourceAccountId === undefined ? (
           <p className="font-mono text-xs">
-            {sourceOptions.length} common non-system account
-            {sourceOptions.length === 1 ? "" : "s"} available.
+            {sourceOptionCount} common non-system account
+            {sourceOptionCount === 1 ? "" : "s"} available.
           </p>
         ) : (
           <p
@@ -621,7 +581,7 @@ const AccountReplaceEditor = ({
           label={
             blocked || saving
               ? "Wait for the update to finish"
-              : validSourceAccount === undefined
+              : sourceAccountId === undefined
                 ? "Choose an account common to every selected transaction"
                 : "Choose a replacement compatible with every affected record"
           }
@@ -684,6 +644,10 @@ const AccountReplaceEditor = ({
               account={sourceAccount}
               className="max-w-full align-bottom font-bold"
             />
+          ) : sourcePickerOption ? (
+            <strong>
+              {sourcePickerOption.selectedLabel ?? sourcePickerOption.label}
+            </strong>
           ) : null}{" "}
           with{" "}
           {replacementAccount ? (
@@ -691,6 +655,11 @@ const AccountReplaceEditor = ({
               account={replacementAccount}
               className="max-w-full align-bottom font-bold"
             />
+          ) : replacementPickerOption ? (
+            <strong>
+              {replacementPickerOption.selectedLabel ??
+                replacementPickerOption.label}
+            </strong>
           ) : null}{" "}
           on every matching active record.
         </p>
@@ -926,7 +895,6 @@ export const TransactionEditDock = ({
           key={activeEditor}
           action={activeEditor}
           blocked={blocked}
-          maps={maps}
           onApply={onApply}
           onCancel={closeEditor}
           selectedCount={selectedCount}

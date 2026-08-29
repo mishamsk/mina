@@ -391,6 +391,7 @@ type Repository interface {
 	Create(context.Context, PersistInput) (Transaction, error)
 	Replace(context.Context, int64, PersistInput) (Transaction, error)
 	Get(context.Context, int64) (Transaction, error)
+	TransactionsByIDs(context.Context, []int64) ([]Transaction, error)
 	Cancel(context.Context, int64) (Transaction, error)
 	Restore(context.Context, int64) (Transaction, error)
 	List(context.Context, ListOptions) (ListResult, error)
@@ -1519,6 +1520,70 @@ func (s *Service) BulkReplaceAccount(ctx context.Context, transactionIDs []int64
 	}
 
 	return response, nil
+}
+
+// BulkAccountPickerFacts returns transaction-owned common-source and affected-currency facts for account pickers.
+func (s *Service) BulkAccountPickerFacts(ctx context.Context, transactionIDs []int64, sourceAccountID *int64) (accounts.BulkPickerFacts, error) {
+	if err := validatePositiveUniqueIDs("transaction_ids", transactionIDs); err != nil {
+		return accounts.BulkPickerFacts{}, err
+	}
+	if len(transactionIDs) == 0 {
+		return accounts.BulkPickerFacts{}, services.InvalidRequest("transaction_ids is required")
+	}
+	if sourceAccountID != nil && *sourceAccountID <= 0 {
+		return accounts.BulkPickerFacts{}, services.InvalidRequest("source_account_id must be positive")
+	}
+
+	selectedTransactions, err := s.repo.TransactionsByIDs(ctx, transactionIDs)
+	if err != nil {
+		return accounts.BulkPickerFacts{}, err
+	}
+	if len(selectedTransactions) != len(transactionIDs) {
+		return accounts.BulkPickerFacts{}, services.InvalidRequest("transactions missing or inactive resource")
+	}
+
+	var common map[int64]bool
+	affectedCurrencies := map[string]bool{}
+	for _, transaction := range selectedTransactions {
+		if transaction.LifecycleStatus == LifecycleStatusExpected {
+			return accounts.BulkPickerFacts{}, expectedRecurringMutationError()
+		}
+		if transaction.LifecycleStatus != LifecycleStatusActive {
+			return accounts.BulkPickerFacts{}, services.InvalidRequest("accounts can only change on active transactions")
+		}
+
+		current := map[int64]bool{}
+		for _, record := range transaction.Records {
+			current[record.AccountID] = true
+			if sourceAccountID != nil && record.AccountID == *sourceAccountID {
+				affectedCurrencies[record.Currency] = true
+			}
+		}
+		if common == nil {
+			common = current
+		} else {
+			for id := range common {
+				if !current[id] {
+					delete(common, id)
+				}
+			}
+		}
+	}
+	if sourceAccountID != nil && !common[*sourceAccountID] {
+		return accounts.BulkPickerFacts{}, accountReplaceSourceNotCommonError()
+	}
+
+	commonIDs := make([]int64, 0, len(common))
+	for id := range common {
+		commonIDs = append(commonIDs, id)
+	}
+	slices.Sort(commonIDs)
+	currencies := make([]string, 0, len(affectedCurrencies))
+	for currency := range affectedCurrencies {
+		currencies = append(currencies, currency)
+	}
+	slices.Sort(currencies)
+	return accounts.BulkPickerFacts{CommonSourceIDs: commonIDs, AffectedCurrencies: currencies}, nil
 }
 
 // BulkSetSettlement changes settlement on selected active balance records.

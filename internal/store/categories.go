@@ -30,10 +30,11 @@ func (s *CategoryStore) Create(ctx context.Context, input categories.CreateInput
 	err := s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
 		row := tx.QueryRowContext(
 			ctx,
-			`INSERT INTO `+s.db.accountingName("category")+` (fqn, economic_intent, is_hidden, is_featured)
-VALUES (?, ?, ?, ?)
-RETURNING category_id, fqn, economic_intent, is_hidden, is_featured, parent_fqn, name, level, created_at, updated_at, tombstoned_at`,
+			`INSERT INTO `+s.db.accountingName("category")+` (fqn, display_label, economic_intent, is_hidden, is_featured)
+VALUES (?, ?, ?, ?, ?)
+RETURNING category_id, fqn, display_label, economic_intent, is_hidden, is_featured, parent_fqn, name, level, created_at, updated_at, tombstoned_at`,
 			input.FQN,
+			input.DisplayLabel,
 			enumValue(input.EconomicIntent),
 			input.IsHidden,
 			input.IsFeatured,
@@ -58,7 +59,7 @@ RETURNING category_id, fqn, economic_intent, is_hidden, is_featured, parent_fqn,
 
 // Get returns a category by ID.
 func (s *CategoryStore) Get(ctx context.Context, id int64, includeTombstoned bool) (categories.Category, error) {
-	query := `SELECT category_id, fqn, economic_intent, is_hidden, is_featured, parent_fqn, name, level, created_at, updated_at, tombstoned_at
+	query := `SELECT category_id, fqn, display_label, economic_intent, is_hidden, is_featured, parent_fqn, name, level, created_at, updated_at, tombstoned_at
 FROM ` + s.db.accountingName("category") + `
 WHERE category_id = ?`
 	args := []any{id}
@@ -103,7 +104,7 @@ WHERE 1 = 1`
 		return services.PaginatedList[categories.Category]{}, err
 	}
 
-	query := `SELECT category_id, fqn, economic_intent, is_hidden, is_featured, parent_fqn, name, level, created_at, updated_at, tombstoned_at
+	query := `SELECT category_id, fqn, display_label, economic_intent, is_hidden, is_featured, parent_fqn, name, level, created_at, updated_at, tombstoned_at
 ` + filterQuery
 	query, args = appendServiceListOrderAndPage(query, args, opts.List, categorySortColumns, services.SortKeyFQN, "category_id")
 
@@ -140,6 +141,10 @@ WHERE 1 = 1`
 func (s *CategoryStore) UpdateMutable(ctx context.Context, id int64, input categories.UpdateInput) (categories.Category, error) {
 	setClauses := []string{}
 	args := []any{}
+	if input.DisplayLabel.Specified {
+		setClauses = append(setClauses, "display_label = ?")
+		args = append(args, input.DisplayLabel.Value)
+	}
 	if input.IsHidden != nil {
 		setClauses = append(setClauses, "is_hidden = ?")
 		args = append(args, *input.IsHidden)
@@ -153,7 +158,7 @@ func (s *CategoryStore) UpdateMutable(ctx context.Context, id int64, input categ
 	row := s.db.query().QueryRowContext(ctx, `UPDATE `+s.db.accountingName("category")+`
 SET `+strings.Join(setClauses, ", ")+`, updated_at = CURRENT_TIMESTAMP
 WHERE category_id = ? AND tombstoned_at IS NULL
-RETURNING category_id, fqn, economic_intent, is_hidden, is_featured, parent_fqn, name, level, created_at, updated_at, tombstoned_at`, args...)
+RETURNING category_id, fqn, display_label, economic_intent, is_hidden, is_featured, parent_fqn, name, level, created_at, updated_at, tombstoned_at`, args...)
 	category, err := scanCategory(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return categories.Category{}, services.ErrNotFound
@@ -271,6 +276,7 @@ type categoryScanner interface {
 
 func scanCategory(scanner categoryScanner) (categories.Category, error) {
 	var category categories.Category
+	var displayLabel sql.NullString
 	var economicIntent string
 	var parentFQN sql.NullString
 	var createdAt time.Time
@@ -279,6 +285,7 @@ func scanCategory(scanner categoryScanner) (categories.Category, error) {
 	if err := scanner.Scan(
 		&category.ID,
 		&category.FQN,
+		&displayLabel,
 		&economicIntent,
 		&category.IsHidden,
 		&category.IsFeatured,
@@ -292,6 +299,9 @@ func scanCategory(scanner categoryScanner) (categories.Category, error) {
 		return categories.Category{}, err
 	}
 	category.EconomicIntent = categories.CategoryEconomicIntent(strings.ToLower(economicIntent))
+	if displayLabel.Valid {
+		category.DisplayLabelOverride = &displayLabel.String
+	}
 	category.CreatedAt = createdAt.UTC()
 	category.UpdatedAt = updatedAt.UTC()
 	if parentFQN.Valid {

@@ -24,10 +24,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 
 import { refreshTagsAfterMutation } from "./use-tags-resource";
 
-type TagFormField = "fqn" | "general";
+type TagFormField = "displayLabel" | "fqn" | "general";
 type TagFormErrors = Partial<Record<TagFormField, string>>;
 
 interface TagFormState {
+  readonly displayLabel: string;
   readonly fqn: string;
   readonly isHidden: boolean;
 }
@@ -41,6 +42,7 @@ interface TagsSidePanelProps {
 }
 
 const blankForm = (): TagFormState => ({
+  displayLabel: "",
   fqn: "",
   isHidden: false,
 });
@@ -48,6 +50,7 @@ const blankForm = (): TagFormState => ({
 const formFromTag = (tag: Tag | undefined): TagFormState =>
   tag
     ? {
+        displayLabel: tag.display_label_override ?? "",
         fqn: tag.fqn,
         isHidden: tag.is_hidden,
       }
@@ -55,6 +58,9 @@ const formFromTag = (tag: Tag | undefined): TagFormState =>
 
 const fieldErrorsFromAPI = (message: string): TagFormErrors => {
   const lower = message.toLowerCase();
+  if (lower.includes("display_label")) {
+    return { displayLabel: message };
+  }
   if (lower.includes("fqn") || lower.includes("name")) {
     return { fqn: message };
   }
@@ -72,6 +78,9 @@ const validateForm = (
   if (mode === "create" && !form.fqn.trim()) {
     errors.fqn = "FQN is required.";
   }
+  if (form.displayLabel !== form.displayLabel.trim()) {
+    errors.displayLabel = "Remove leading or trailing whitespace.";
+  }
   return errors;
 };
 
@@ -81,8 +90,18 @@ const validateFormField = (
   field: TagFormField,
 ): string | undefined => validateForm(form, mode)[field];
 
-const FieldError = ({ message }: { readonly message: string | undefined }) =>
-  message ? <p className="text-destructive text-xs">{message}</p> : null;
+const FieldError = ({
+  id,
+  message,
+}: {
+  readonly id?: string;
+  readonly message: string | undefined;
+}) =>
+  message ? (
+    <p id={id} className="text-destructive text-xs">
+      {message}
+    </p>
+  ) : null;
 
 const Field = ({
   children,
@@ -204,14 +223,21 @@ const TagsSidePanelContent = ({
     }
 
     setSaving(true);
+    const displayLabel = form.displayLabel || null;
+    const displayLabelChanged =
+      mode === "edit" &&
+      tag !== undefined &&
+      displayLabel !== tag.display_label_override;
     const result =
       mode === "create"
         ? await createLedgerTag({
+            display_label: displayLabel,
             fqn: form.fqn.trim(),
             is_hidden: form.isHidden,
           } satisfies CreateTagRequest)
         : tag
           ? await updateLedgerTag(tag.tag_id, {
+              ...(displayLabelChanged ? { display_label: displayLabel } : {}),
               is_hidden: form.isHidden,
             } satisfies UpdateTagRequest)
           : undefined;
@@ -320,6 +346,44 @@ const TagsSidePanelContent = ({
               }}
             />
             <FieldError message={fieldErrors.fqn} />
+          </Field>
+
+          <Field htmlFor="tag-display-label" label="Display label (optional)">
+            <input
+              id="tag-display-label"
+              type="text"
+              disabled={saving}
+              aria-describedby={
+                fieldErrors.displayLabel
+                  ? "tag-display-label-help tag-display-label-error"
+                  : "tag-display-label-help"
+              }
+              aria-invalid={fieldErrors.displayLabel ? true : undefined}
+              className="bg-card disabled:bg-muted h-9 border-2 border-[var(--border-ink)] px-2 font-mono text-sm shadow-[var(--shadow-pixel)] disabled:shadow-none"
+              placeholder="Automatic from FQN"
+              value={form.displayLabel}
+              onBlur={() => {
+                setFieldError(
+                  "displayLabel",
+                  validateFormField(form, mode, "displayLabel"),
+                );
+              }}
+              onChange={(event) => {
+                updateForm({ displayLabel: event.target.value });
+                setFieldError("displayLabel", undefined);
+              }}
+            />
+            <p
+              id="tag-display-label-help"
+              className="text-muted-foreground font-body text-xs"
+            >
+              Leave blank to use the final one or two FQN segments
+              automatically.
+            </p>
+            <FieldError
+              id="tag-display-label-error"
+              message={fieldErrors.displayLabel}
+            />
           </Field>
 
           <label className="flex h-9 items-center gap-2 border-2 border-[var(--border-ink)] px-2 font-mono text-sm shadow-[var(--shadow-pixel)]">

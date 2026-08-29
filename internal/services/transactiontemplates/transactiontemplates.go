@@ -271,10 +271,10 @@ func (s *Service) withCompatibleShorthands(ctx context.Context, template Templat
 
 // Restructure atomically rewrites an active transaction template FQN subtree from one path to another.
 func (s *Service) Restructure(ctx context.Context, from string, to string) (int64, error) {
-	if err := validateFQN(from); err != nil {
+	if err := services.ValidateFQN(from); err != nil {
 		return 0, err
 	}
-	if err := validateFQN(to); err != nil {
+	if err := services.ValidateFQN(to); err != nil {
 		return 0, err
 	}
 	if from == to {
@@ -368,7 +368,7 @@ func (s *Service) validateTemplateInput(ctx context.Context, fqn string, records
 }
 
 func validateTemplateInputShape(fqn string, records []TemplateRecordInput) error {
-	if err := validateFQN(fqn); err != nil {
+	if err := services.ValidateFQN(fqn); err != nil {
 		return err
 	}
 	if len(records) == 0 {
@@ -467,10 +467,6 @@ func validateTagIDs(index int, tagIDs []int64) error {
 	}
 
 	return nil
-}
-
-func validateFQN(fqn string) error {
-	return services.ValidateFQN(fqn)
 }
 
 func validateListOptions(opts services.ListOptions) error {

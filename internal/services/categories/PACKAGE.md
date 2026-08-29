@@ -11,9 +11,11 @@
 - Groups derive state from active leaves. Path hide/unhide changes only existing active leaves and invalidates the reference snapshot.
 - Group intent inspection includes every active descendant, including hidden leaves, independently of transaction activity.
 - Restructure rewrites active category leaves and active budget paths in one transaction; a budget-path collision rejects both changes.
+- Display labels are derived at the service boundary through the shared rule; restructure preserves stored overrides while automatic labels follow rewritten FQNs.
 - List deleteability and delete use the same active journal-record, template-record, and recurring-definition dependency check; tombstoned categories are never deletable.
+- Picker reads use the reference snapshot, apply record, expense/income shorthand, or transaction-filter intent eligibility, retain active hidden selections and literal exact-FQN matches, derive navigation-only groups from eligible leaves, and return at most 20 backend-ranked unselected rows; requested selections are returned separately without consuming the result bound.
 
 ## Boundaries
 
-- Owns: category lifecycle rules, hierarchy validation and derivation, economic-intent validation, reference validity, and category error mapping.
-- Does not own: transaction classification, budget persistence, transport DTOs, SQL queries, database row types, or process configuration.
+- Owns: category lifecycle rules, hierarchy validation and derivation, display-label handling, picker contexts and bounds, economic-intent validation, reference validity, and category error mapping.
+- Does not own: fuzzy text primitives, transaction classification, budget persistence, transport DTOs, SQL queries, database row types, or process configuration.

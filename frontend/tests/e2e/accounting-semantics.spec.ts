@@ -21,7 +21,10 @@ const chooseOption = async (
     .first();
   await expect(option).toBeVisible();
   await option.click();
-  await expect(picker).toHaveValue(value);
+  const title = value.split(":").slice(-2).join(":");
+  await expect(picker).toHaveValue(
+    title === value ? value : `${value} (${title})`,
+  );
 };
 
 const openEntry = async (page: Page): Promise<Locator> => {
@@ -177,13 +180,7 @@ test("Refund is money coming back and Exchange shows the server-derived effectiv
     "bank:Chase:joint_checking",
   );
   await exchange.getByLabel("Amount sold").fill("110.00");
-  await chooseOption(
-    page,
-    exchange,
-    "To account",
-    "Fidelity:EUR",
-    "bank:Fidelity:EUR",
-  );
+  await chooseOption(page, exchange, "To account", "EUR", "bank:Fidelity:EUR");
   await exchange.getByLabel("Amount bought").fill("100.00");
   await expect(
     exchange.getByText("1 EUR = 1.10000000 USD", { exact: true }),

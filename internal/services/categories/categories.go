@@ -29,23 +29,26 @@ func ValidCategoryEconomicIntent(value CategoryEconomicIntent) bool {
 
 // Category is a hierarchical category used to classify journal records.
 type Category struct {
-	ID             int64
-	FQN            string
-	EconomicIntent CategoryEconomicIntent
-	IsHidden       bool
-	IsFeatured     bool
-	ParentFQN      *string
-	Name           string
-	Level          int
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
-	TombstonedAt   *time.Time
-	Deletable      *bool
+	ID                   int64
+	FQN                  string
+	DisplayLabel         string
+	DisplayLabelOverride *string
+	EconomicIntent       CategoryEconomicIntent
+	IsHidden             bool
+	IsFeatured           bool
+	ParentFQN            *string
+	Name                 string
+	Level                int
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
+	TombstonedAt         *time.Time
+	Deletable            *bool
 }
 
 // CreateInput contains fields for creating a category.
 type CreateInput struct {
 	FQN            string
+	DisplayLabel   *string
 	EconomicIntent CategoryEconomicIntent
 	IsHidden       bool
 	IsFeatured     bool
@@ -53,8 +56,9 @@ type CreateInput struct {
 
 // UpdateInput contains mutable category fields.
 type UpdateInput struct {
-	IsHidden   *bool
-	IsFeatured *bool
+	DisplayLabel services.OptionalStringUpdate
+	IsHidden     *bool
+	IsFeatured   *bool
 }
 
 // ListOptions controls category list visibility.
@@ -77,10 +81,11 @@ type ReferenceOptions struct {
 
 // Reference is the category data needed to validate write references and classify transactions.
 type Reference struct {
-	ID             int64
-	FQN            string
-	EconomicIntent CategoryEconomicIntent
-	IsHidden       bool
+	ID                   int64
+	FQN                  string
+	DisplayLabelOverride *string
+	EconomicIntent       CategoryEconomicIntent
+	IsHidden             bool
 }
 
 // ActiveUsage reports active resources that reference a category.
@@ -128,7 +133,10 @@ func NewService(repo Repository, refs ReferenceCoordinator) *Service {
 
 // Create validates and creates a category.
 func (s *Service) Create(ctx context.Context, input CreateInput) (Category, error) {
-	if err := validateFQN(input.FQN); err != nil {
+	if err := services.ValidateFQN(input.FQN); err != nil {
+		return Category{}, err
+	}
+	if err := services.ValidateDisplayLabel(input.DisplayLabel); err != nil {
 		return Category{}, err
 	}
 	if !ValidCategoryEconomicIntent(input.EconomicIntent) {
@@ -156,7 +164,7 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (Category, erro
 		return Category{}, err
 	}
 
-	return category, nil
+	return withEffectiveDisplayLabel(category), nil
 }
 
 // ValidateActiveReferences returns active category references keyed by ID.
@@ -234,7 +242,7 @@ func (s *Service) Get(ctx context.Context, id int64, includeTombstoned bool) (Ca
 		return Category{}, err
 	}
 
-	return category, nil
+	return withEffectiveDisplayLabel(category), nil
 }
 
 // List returns categories using default visibility rules unless explicitly overridden.
@@ -251,6 +259,9 @@ func (s *Service) List(ctx context.Context, opts ListOptions) (services.Paginate
 	}
 	if err := s.populateDeleteability(ctx, list.Items); err != nil {
 		return services.PaginatedList[Category]{}, err
+	}
+	for index := range list.Items {
+		list.Items[index] = withEffectiveDisplayLabel(list.Items[index])
 	}
 
 	return list, nil
@@ -302,6 +313,11 @@ func (s *Service) UpdateMutable(ctx context.Context, id int64, input UpdateInput
 	if !input.hasChanges() {
 		return Category{}, services.InvalidRequest("at least one category field is required")
 	}
+	if input.DisplayLabel.Specified {
+		if err := services.ValidateDisplayLabel(input.DisplayLabel.Value); err != nil {
+			return Category{}, err
+		}
+	}
 
 	var category Category
 	if err := s.refs.WithExclusiveLease(ctx, func(ctx context.Context) error {
@@ -320,19 +336,24 @@ func (s *Service) UpdateMutable(ctx context.Context, id int64, input UpdateInput
 		return Category{}, err
 	}
 
-	return category, nil
+	return withEffectiveDisplayLabel(category), nil
 }
 
 func (input UpdateInput) hasChanges() bool {
-	return input.IsHidden != nil || input.IsFeatured != nil
+	return input.DisplayLabel.Specified || input.IsHidden != nil || input.IsFeatured != nil
+}
+
+func withEffectiveDisplayLabel(category Category) Category {
+	category.DisplayLabel = services.EffectiveDisplayLabel(category.FQN, category.DisplayLabelOverride)
+	return category
 }
 
 // Restructure atomically rewrites an active category FQN subtree from one path to another.
 func (s *Service) Restructure(ctx context.Context, from string, to string) (int64, error) {
-	if err := validateFQN(from); err != nil {
+	if err := services.ValidateFQN(from); err != nil {
 		return 0, err
 	}
-	if err := validateFQN(to); err != nil {
+	if err := services.ValidateFQN(to); err != nil {
 		return 0, err
 	}
 	if from == to {
@@ -392,7 +413,7 @@ func (s *Service) Restructure(ctx context.Context, from string, to string) (int6
 
 // SetHiddenByPath sets hidden state on every active category leaf at or under path.
 func (s *Service) SetHiddenByPath(ctx context.Context, path string, hidden bool) (int64, error) {
-	if err := validateFQN(path); err != nil {
+	if err := services.ValidateFQN(path); err != nil {
 		return 0, err
 	}
 
@@ -550,10 +571,11 @@ func (s *Service) cacheActiveReference(category Category) {
 func categoryReferenceStateFromCategory(category Category) categoryReferenceState {
 	return categoryReferenceState{
 		reference: Reference{
-			ID:             category.ID,
-			FQN:            category.FQN,
-			EconomicIntent: category.EconomicIntent,
-			IsHidden:       category.IsHidden,
+			ID:                   category.ID,
+			FQN:                  category.FQN,
+			DisplayLabelOverride: category.DisplayLabelOverride,
+			EconomicIntent:       category.EconomicIntent,
+			IsHidden:             category.IsHidden,
 		},
 		fqn:    category.FQN,
 		active: category.TombstonedAt == nil,
@@ -585,8 +607,4 @@ func deduplicateIDs(ids []int64) []int64 {
 	}
 
 	return uniqueIDs
-}
-
-func validateFQN(fqn string) error {
-	return services.ValidateFQN(fqn)
 }

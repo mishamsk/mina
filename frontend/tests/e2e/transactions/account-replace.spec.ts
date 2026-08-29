@@ -78,8 +78,10 @@ test("edit mode replaces a common account across a changing selection", async ({
   );
   const rows = page.locator("[data-transaction-row='true']");
   await expect(rows).toHaveCount(2);
+  const firstRow = rows.filter({ hasText: `${search} first` });
+  const secondRow = rows.filter({ hasText: `${search} second` });
   await page.getByRole("button", { name: "Edit mode" }).click();
-  await rows.first().click();
+  await firstRow.click();
 
   const dock = page.getByTestId("transaction-edit-dock");
   await dock.getByRole("button", { name: "Replace account" }).click();
@@ -87,20 +89,35 @@ test("edit mode replaces a common account across a changing selection", async ({
   const sourcePicker = editor.getByRole("combobox", {
     name: "Common source account",
   });
-  await sourcePicker.fill(source.fqn);
+  await sourcePicker.fill(firstMerchant.fqn);
   await sourcePicker.press("Enter");
 
   const replacementPicker = editor.getByRole("combobox", {
     name: "Compatible replacement account",
   });
+  await replacementPicker.fill(secondMerchant.fqn);
+  await replacementPicker.press("Enter");
+
+  await secondRow.focus();
+  await secondRow.press("Space");
+  await expect(replacementPicker).toHaveValue("");
+  await expect(editor).toContainText("1 common non-system account available.");
+  await expect(
+    editor.getByRole("button", { name: "Review replacement" }),
+  ).toBeDisabled();
+
+  await sourcePicker.fill(source.fqn);
+  await sourcePicker.press("Enter");
+
   await replacementPicker.fill(replacement.fqn);
   await replacementPicker.press("Enter");
 
-  await rows.nth(1).focus();
-  await rows.nth(1).press("Space");
-  await expect(rows.nth(1)).toBeFocused();
-  await expect(sourcePicker).toHaveValue(source.fqn);
-  await expect(replacementPicker).toHaveValue(replacement.fqn);
+  await expect(sourcePicker).toHaveValue(
+    `${source.fqn} (${source.display_label})`,
+  );
+  await expect(replacementPicker).toHaveValue(
+    `${replacement.fqn} (${replacement.display_label})`,
+  );
   await expect(editor.getByTestId("account-replace-prediction")).toHaveText(
     "2 records across 2 transactions will change.",
   );

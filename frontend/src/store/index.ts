@@ -182,7 +182,6 @@ export {
   useTransactionEntryPanelView,
 } from "./transaction-entry";
 export type {
-  CategoryPickerCategoriesSnapshot,
   FeaturedBalanceRow,
   FeaturedBalancesSnapshot,
   LedgerLookupsSnapshot,
@@ -192,20 +191,13 @@ export type {
   TransactionsPageParams,
 } from "./transactions";
 export {
-  addCategoryPickerCategory,
-  categoryPickerIntentKey,
   clearLedgerLookupsLoading,
   clearTransactionPageLoading,
   getTransactionsSnapshot,
-  invalidateCategoryPickerCategories,
   invalidateTransactionPages,
   invalidateTransactionPagesPreservingSnapshots,
   markOtherTransactionPagesStale,
   markTransactionPageStale,
-  normalizedCategoryPickerIntents,
-  setCategoryPickerCategories,
-  setCategoryPickerCategoriesError,
-  setCategoryPickerCategoriesLoading,
   setFeaturedBalances,
   setFeaturedBalancesError,
   setFeaturedBalancesLoading,
@@ -225,7 +217,6 @@ export {
   transactionPageKey,
   transactionPageRequestKey,
   updateDisplayedTransactionPage,
-  useCategoryPickerCategoriesView,
   useFeaturedBalancesView,
   useLastTransactionsPageSearch,
   useLedgerLookupsView,

@@ -287,7 +287,7 @@ test("template recurring focus follows responsive action placement", async ({
   await deleteTemplate(page, template.transaction_template_id);
 });
 
-test("cold recurring launch reveals seeded references after lookups load", async ({
+test("cold recurring launch keeps seeded picker references while lookups load", async ({
   page,
 }, testInfo) => {
   const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
@@ -340,14 +340,14 @@ test("cold recurring launch reveals seeded references after lookups load", async
     name: "New recurring definition",
   });
   const accountPicker = editor.getByLabel("Account");
-  await expect(accountPicker).toHaveValue("");
-  await expect(editor.getByLabel("Member")).toHaveValue("");
+  const accountLabel = `${accountFqn} (${unique}:Cold recurring account)`;
+  await expect(accountPicker).toHaveValue(accountLabel);
+  await expect(editor.getByLabel("Member")).toHaveValue(memberName);
   await accountPicker.focus();
   releaseAccounts();
-  await expect(accountPicker).toHaveValue(accountFqn);
+  await expect(accountPicker).toHaveValue(accountLabel);
   await expect(editor.getByLabel("Member")).toHaveValue(memberName);
-  await accountPicker.press("Enter");
-  await expect(accountPicker).toHaveValue(accountFqn);
+  await expect(accountPicker).toBeFocused();
 
   await deleteTemplate(page, template.transaction_template_id);
 });
@@ -504,17 +504,15 @@ test("template editor creates and replaces partial defaults without balance vali
     .getByRole("option")
     .filter({ hasText: accountFqn })
     .first();
-  const accountLeaf = accountFqn.split(":").at(-1)!;
-  const accountAncestors = `${accountFqn.split(":")[0]}:…:`;
-  await expect(
-    accountOption.locator(".text-muted-foreground", {
-      hasText: accountAncestors,
-    }),
-  ).toBeVisible();
-  await expect(
-    accountOption.locator(".text-foreground", { hasText: accountLeaf }),
-  ).toBeVisible();
-  await expect(accountOption).toContainText("USD · Single-currency");
+  await expect(accountOption.getByTestId("entity-picker-fqn")).toHaveText(
+    accountFqn,
+  );
+  const accountDisplayTitle = accountOption.getByTestId(
+    "entity-picker-display-title",
+  );
+  await expect(accountDisplayTitle).toHaveText(`(${unique}:Hidden cash)`);
+  await expect(accountDisplayTitle).toHaveClass(/text-muted-foreground/);
+  await expect(accountOption).toContainText("owned · USD · Single-currency");
   await page.keyboard.press("Escape");
   await expect(
     page.getByRole("option").filter({ hasText: accountFqn }),
@@ -641,7 +639,7 @@ test("template editor creates and replaces partial defaults without balance vali
     await clearTarget.click();
   }
   await firstEditRecord
-    .getByRole("button", { name: `Remove ${tagFqn}` })
+    .getByRole("button", { name: `Remove ${tagFqn} (${unique}:Review)` })
     .click();
   await firstEditRecord.getByLabel("Amount (optional)").fill("");
   await firstEditRecord.getByLabel("Currency (optional)").fill("");
@@ -750,8 +748,10 @@ test("template editor rejects uncommitted optional picker searches", async ({
 
   const tagPicker = editor.getByRole("combobox", { name: "Tags (optional)" });
   await tagPicker.fill(tagFqn);
-  await tagPicker.press("Enter");
-  await expect(tagPicker).toHaveValue(`E2E:${unique}:`);
+  await expect(tagPicker).toHaveValue("");
+  await expect(
+    editor.getByTestId("entity-multi-picker-selected"),
+  ).toContainText(tagFqn);
 
   const createResponsePromise = page.waitForResponse((response) => {
     const url = new URL(response.url());
@@ -1642,7 +1642,7 @@ test("late failed refresh preserves a saved edit and newer transaction notice", 
   await deleteTemplate(page, template.transaction_template_id);
 });
 
-test("template editor blocks saves until failed lookups recover", async ({
+test("template editor keeps saving independent of failed lookups", async ({
   page,
 }, testInfo) => {
   const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
@@ -1726,17 +1726,17 @@ test("template editor blocks saves until failed lookups recover", async ({
   const row = page.getByTestId("templates-tree-row").filter({ hasText: fqn });
   await row.getByRole("button", { name: "Edit template" }).click();
   const editor = page.getByRole("dialog", { name: "Edit template" });
-  await expect(editor.getByLabel("Account (optional)")).toHaveValue("");
-  await expect(editor.getByLabel("Category (optional)")).toHaveValue("");
-  await expect(editor.getByLabel("Member (optional)")).toHaveValue("");
+  await expect(editor.getByLabel("Account (optional)")).toHaveValue(
+    `${accountFqn} (${unique}:Cash)`,
+  );
+  await expect(editor.getByLabel("Category (optional)")).toHaveValue(
+    `${categoryFqn} (${unique}:Expense)`,
+  );
+  await expect(editor.getByLabel("Member (optional)")).toHaveValue(memberName);
   await expect(editor.getByText("lookups unavailable")).toBeVisible();
   await editor.getByLabel("Memo (optional)").fill(`Retained ${unique}`);
   const saveButton = editor.getByRole("button", { name: "Save template" });
-  await expect(saveButton).toBeDisabled();
-  await saveButton.locator("..").hover();
-  await expect(page.getByRole("tooltip")).toHaveText(
-    "Retry references before saving.",
-  );
+  await expect(saveButton).toBeEnabled();
 
   const retryButton = editor.getByRole("button", {
     name: "Retry references",
@@ -1749,20 +1749,15 @@ test("template editor blocks saves until failed lookups recover", async ({
   await amount.fill("12.34");
   await expect(amount).toBeFocused();
   releaseRetry?.();
-  await expect(editor.getByLabel("Account (optional)")).toHaveValue(accountFqn);
+  await expect(editor.getByLabel("Account (optional)")).toHaveValue(
+    `${accountFqn} (${unique}:Cash)`,
+  );
   await expect(editor.getByLabel("Category (optional)")).toHaveValue(
-    categoryFqn,
+    `${categoryFqn} (${unique}:Expense)`,
   );
   await expect(editor.getByLabel("Member (optional)")).toHaveValue(memberName);
   await expect(amount).toBeFocused();
-  for (const label of ["Account (optional)", "Category (optional)"]) {
-    await expect(
-      editor
-        .getByRole("combobox", { name: label })
-        .locator("..")
-        .getByLabel("Hidden"),
-    ).toBeVisible();
-  }
+  await expect(editor.getByLabel("Hidden")).toHaveCount(4);
   const selectedTags = editor.getByTestId("entity-multi-picker-selected");
   await expect(
     selectedTags.getByLabel("Hidden", { exact: true }),
@@ -1775,7 +1770,9 @@ test("template editor blocks saves until failed lookups recover", async ({
     )
     .toBe(true);
   await expect(
-    editor.getByRole("button", { name: `Remove ${tagFqn}` }),
+    editor.getByRole("button", {
+      name: `Remove ${tagFqn} (${unique}:Hidden-${"x".repeat(72)})`,
+    }),
   ).toBeVisible();
 
   await editor.getByRole("button", { name: "Add record" }).click();

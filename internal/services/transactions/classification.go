@@ -58,7 +58,7 @@ func ClassifyTransaction(transaction Transaction) (Transaction, error) {
 	records := make([]SemanticRecord, 0, len(transaction.Records))
 	for index := range transaction.Records {
 		record := &transaction.Records[index]
-		record.AccountDisplayLabel = accounts.EffectiveDisplayLabel(
+		record.AccountDisplayLabel = services.EffectiveDisplayLabel(
 			record.AccountFQN,
 			record.AccountDisplayLabelOverride,
 		)

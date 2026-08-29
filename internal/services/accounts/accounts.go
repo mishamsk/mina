@@ -76,10 +76,7 @@ type CreateInput struct {
 }
 
 // OptionalStringUpdate carries a nullable string field for partial updates.
-type OptionalStringUpdate struct {
-	Specified bool
-	Value     *string
-}
+type OptionalStringUpdate = services.OptionalStringUpdate
 
 // UpdateInput contains mutable account fields.
 type UpdateInput struct {
@@ -170,10 +167,11 @@ type TypeChangeValidator interface {
 
 // Service owns account use cases and validation.
 type Service struct {
-	repo                Repository
-	refs                ReferenceCoordinator
-	typeChangeValidator TypeChangeValidator
-	cache               *refcache.Dictionary[int64, accountReferenceState]
+	repo                   Repository
+	refs                   ReferenceCoordinator
+	typeChangeValidator    TypeChangeValidator
+	pickerTransactionFacts PickerTransactionFacts
+	cache                  *refcache.Dictionary[int64, accountReferenceState]
 }
 
 // NewService creates an account service backed by repo.
@@ -190,7 +188,7 @@ func (s *Service) SetTypeChangeValidator(validator TypeChangeValidator) {
 
 // Create validates and creates an account.
 func (s *Service) Create(ctx context.Context, input CreateInput) (Account, error) {
-	if err := validateFQN(input.FQN); err != nil {
+	if err := services.ValidateFQN(input.FQN); err != nil {
 		return Account{}, err
 	}
 	if !ValidAccountType(input.AccountType) {
@@ -202,7 +200,7 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (Account, error
 	if err := validateCurrency(input.Currency); err != nil {
 		return Account{}, err
 	}
-	if err := validateDisplayLabel(input.DisplayLabel); err != nil {
+	if err := services.ValidateDisplayLabel(input.DisplayLabel); err != nil {
 		return Account{}, err
 	}
 	if err := validateExternalIdentifiers(input.ExternalID, input.ExternalSystem); err != nil {
@@ -417,7 +415,7 @@ func (s *Service) UpdateMutable(ctx context.Context, id int64, input UpdateInput
 		}
 	}
 	if input.DisplayLabel.Specified {
-		if err := validateDisplayLabel(input.DisplayLabel.Value); err != nil {
+		if err := services.ValidateDisplayLabel(input.DisplayLabel.Value); err != nil {
 			return Account{}, err
 		}
 	}
@@ -514,10 +512,10 @@ func (s *Service) UpdateMutable(ctx context.Context, id int64, input UpdateInput
 
 // Restructure atomically rewrites an active account FQN subtree from one path to another.
 func (s *Service) Restructure(ctx context.Context, from string, to string) (int64, error) {
-	if err := validateFQN(from); err != nil {
+	if err := services.ValidateFQN(from); err != nil {
 		return 0, err
 	}
-	if err := validateFQN(to); err != nil {
+	if err := services.ValidateFQN(to); err != nil {
 		return 0, err
 	}
 	if from == to {
@@ -580,7 +578,7 @@ func (s *Service) Restructure(ctx context.Context, from string, to string) (int6
 
 // SetHiddenByPath sets hidden state on every active account leaf at or under path.
 func (s *Service) SetHiddenByPath(ctx context.Context, path string, hidden bool) (int64, error) {
-	if err := validateFQN(path); err != nil {
+	if err := services.ValidateFQN(path); err != nil {
 		return 0, err
 	}
 	if services.FQNAtOrUnder(path, "system") {
@@ -791,10 +789,6 @@ func deduplicateIDs(ids []int64) []int64 {
 	return uniqueIDs
 }
 
-func validateFQN(fqn string) error {
-	return services.ValidateFQN(fqn)
-}
-
 func validateCurrency(currency *string) error {
 	if currency == nil {
 		return nil
@@ -806,31 +800,9 @@ func validateCurrency(currency *string) error {
 	return nil
 }
 
-func validateDisplayLabel(label *string) error {
-	if label == nil {
-		return nil
-	}
-	if *label == "" || strings.TrimSpace(*label) != *label {
-		return services.InvalidRequest("display_label must be non-empty without leading or trailing whitespace")
-	}
-	return nil
-}
-
 func withEffectiveDisplayLabel(account Account) Account {
-	account.DisplayLabel = EffectiveDisplayLabel(account.FQN, account.DisplayLabelOverride)
+	account.DisplayLabel = services.EffectiveDisplayLabel(account.FQN, account.DisplayLabelOverride)
 	return account
-}
-
-// EffectiveDisplayLabel returns an account's explicit label or its FQN-derived fallback.
-func EffectiveDisplayLabel(fqn string, override *string) string {
-	if override != nil {
-		return *override
-	}
-	segments := strings.Split(fqn, ":")
-	if len(segments) > 2 {
-		segments = segments[len(segments)-2:]
-	}
-	return strings.Join(segments, ":")
 }
 
 func validateExternalIdentifiers(externalID *string, externalSystem *string) error {

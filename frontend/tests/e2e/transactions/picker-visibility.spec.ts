@@ -17,6 +17,7 @@ import {
   listFixtures,
   type Locator,
   type Page,
+  pickerSelectedLabel,
   waitForLedgerLookups,
 } from "@tests/e2e/transactions/support";
 
@@ -131,10 +132,10 @@ test("multi-picker options paint above selected chips in edit and entry surfaces
   await dockTags.fill(tag.fqn);
   await dockTags.press("Enter");
   const dockSelected = dockEditor.getByTestId("entity-multi-picker-selected");
-  await expect(dockSelected).toContainText(tag.name);
+  await expect(dockSelected).toContainText(tag.display_label);
   const selectedChip = dockSelected.locator(":scope > span").first();
   const removeTag = selectedChip.getByRole("button", {
-    name: `Remove ${tag.name}`,
+    name: `Remove ${pickerSelectedLabel(tag)}`,
   });
   const [chipBox, editorBox, removeBox] = await Promise.all([
     selectedChip.boundingBox(),
@@ -174,7 +175,7 @@ test("multi-picker options paint above selected chips in edit and entry surfaces
   await entryTags.fill(tag.fqn);
   await entryTags.press("Enter");
   const entrySelected = spendPanel.getByTestId("entity-multi-picker-selected");
-  await expect(entrySelected).toContainText(tag.name);
+  await expect(entrySelected).toContainText(tag.display_label);
   await entrySelected.scrollIntoViewIfNeeded();
   await entryTags.press("ArrowDown");
   const entryListbox = page.locator("#spend-tags-options");
@@ -249,7 +250,7 @@ test("edit dock and broader pickers expose explicit hidden-entity controls", asy
   });
   await expect(includeHidden).toBeVisible();
   const categoryPicker = editor.getByRole("combobox", { name: "Category" });
-  await categoryPicker.fill(hiddenCategoryFqn);
+  await categoryPicker.fill("QuietCategory");
   await expect(page.locator("#edit-dock-category-options")).toContainText(
     "No matches",
   );
@@ -264,7 +265,7 @@ test("edit dock and broader pickers expose explicit hidden-entity controls", asy
   await dock.getByRole("button", { name: "Add / remove" }).click();
   editor = page.getByTestId("edit-dock-editor");
   const tagsPicker = editor.getByRole("combobox", { name: "Tags to add" });
-  await tagsPicker.fill(hiddenTagFqn);
+  await tagsPicker.fill("QuietTag");
   await expect(page.locator("#edit-dock-tags-options")).toContainText(
     "No matches",
   );
@@ -302,8 +303,8 @@ test("edit dock and broader pickers expose explicit hidden-entity controls", asy
     page.getByRole("combobox", { name: "Filter operator" }),
   ).toBeFocused();
   const filterTagsPicker = page.getByRole("combobox", { name: "Tags" });
-  await filterTagsPicker.fill(hiddenTagFqn);
-  await expect(filterTagsPicker).toHaveValue(hiddenTagFqn);
+  await filterTagsPicker.fill("QuietTag");
+  await expect(filterTagsPicker).toHaveValue("QuietTag");
   await expect(filterTagsPicker).toBeFocused();
   await expect(filterTagsPicker).toHaveAttribute("aria-expanded", "true");
   await expect(page.locator("#transactions-filter-tag-options")).toContainText(
@@ -327,12 +328,16 @@ test("edit dock and broader pickers expose explicit hidden-entity controls", asy
   const entryTagsPicker = page.getByRole("combobox", { name: "Tags" });
   await expect(entryTagsPicker).toBeVisible();
   await expect(entryTagsPicker).toBeEnabled();
-  await entryTagsPicker.fill(hiddenTagFqn);
-  await expect(entryTagsPicker).toHaveValue(hiddenTagFqn);
-  await expect(page.locator("#spend-tags-options")).toContainText("No matches");
+  await entryTagsPicker.fill("QuietTag");
+  await expect(entryTagsPicker).toHaveValue("QuietTag");
+  await expect(
+    page
+      .locator("#spend-tags-options")
+      .getByRole("option", { name: "Create QuietTag" }),
+  ).toBeVisible();
 });
 
-test("entry category picker requests spend intents and excludes hidden categories", async ({
+test("entry category picker requests spend context and excludes hidden categories", async ({
   page,
 }, testInfo) => {
   const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
@@ -383,26 +388,27 @@ test("entry category picker requests spend intents and excludes hidden categorie
     hiddenCategoryRow.getByText(hiddenCategory.name, { exact: true }),
   ).toBeVisible();
 
-  const categoryRequestPromise = page.waitForRequest((request) => {
-    const url = new URL(request.url());
-    return (
-      url.pathname === "/api/categories" &&
-      url.searchParams.getAll("economic_intent").length > 0
-    );
-  });
-
   await page
     .locator("header")
     .getByRole("button", { name: "New transaction" })
     .click();
+  const categoryPicker = page.getByRole("combobox", { name: "Category" });
+  const categoryRequestPromise = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return (
+      url.pathname === "/api/categories/picker" &&
+      url.searchParams.get("context") === "shorthand_expense"
+    );
+  });
+
+  await categoryPicker.focus();
 
   const categoryRequest = await categoryRequestPromise;
   const categoryRequestUrl = new URL(categoryRequest.url());
-  expect(categoryRequestUrl.searchParams.getAll("economic_intent")).toEqual([
-    "expense",
-  ]);
+  expect(categoryRequestUrl.searchParams.get("context")).toBe(
+    "shorthand_expense",
+  );
   expect(categoryRequestUrl.searchParams.has("include_hidden")).toBe(false);
-  expect(categoryRequestUrl.searchParams.has("include_tombstoned")).toBe(false);
 
   const spendPanel = page.getByRole("tabpanel", { name: "Spend" });
   await chooseOptionByKeyboard(
@@ -414,7 +420,6 @@ test("entry category picker requests spend intents and excludes hidden categorie
       scope: spendPanel,
     },
   );
-  const categoryPicker = page.getByRole("combobox", { name: "Category" });
   await categoryPicker.fill(visibleCategory.name);
   await expect(
     page
@@ -489,17 +494,17 @@ test("filter editors do not inherit hidden choices from other chips", async ({
 
   await page
     .getByRole("button", {
-      name: `Edit Category ${visibleCategory.name} · none of`,
+      name: `Edit Category ${pickerSelectedLabel(visibleCategory)} · none of`,
     })
     .click();
   const picker = page.getByRole("combobox", { name: "Categories" });
   const options = page.locator(
     "#transactions-filter-row-0-category-none-options",
   );
-  await picker.fill(hiddenCategory.fqn);
+  await picker.fill(hiddenCategory.display_label);
   await expect(options).toContainText("No matches");
 
   await page.getByRole("checkbox", { name: "Include hidden" }).click();
   await picker.focus();
-  await expect(options).toContainText(hiddenCategory.name);
+  await expect(options).toContainText(hiddenCategory.display_label);
 });

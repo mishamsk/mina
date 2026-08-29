@@ -524,6 +524,12 @@ func Operations() []Operation {
 					Type:     "object",
 					Properties: []BodyPropertyDescriptor{
 						{
+							Name:        "display_label",
+							Type:        "string",
+							Description: "Optional non-unique presentation label. Custom values must be non-empty without leading or trailing whitespace. Null or omission uses the final one or two FQN segments.",
+							Required:    false,
+						},
+						{
 							Name:        "economic_intent",
 							Type:        "string",
 							Description: "Whether a category describes spending or income.",
@@ -550,7 +556,7 @@ func Operations() []Operation {
 						},
 					},
 					RequiredProperties: []string{"economic_intent", "fqn"},
-					Simple:             true,
+					Simple:             false,
 				},
 			},
 			Invoke: invokeCreateCategory,
@@ -1093,6 +1099,12 @@ func Operations() []Operation {
 					Type:     "object",
 					Properties: []BodyPropertyDescriptor{
 						{
+							Name:        "display_label",
+							Type:        "string",
+							Description: "Optional non-unique presentation label. Custom values must be non-empty without leading or trailing whitespace. Null or omission uses the final one or two FQN segments.",
+							Required:    false,
+						},
+						{
 							Name:        "fqn",
 							Type:        "string",
 							Description: "Colon-separated hierarchical FQN for the tag leaf.",
@@ -1112,7 +1124,7 @@ func Operations() []Operation {
 						},
 					},
 					RequiredProperties: []string{"fqn"},
-					Simple:             true,
+					Simple:             false,
 				},
 			},
 			Invoke: invokeCreateTag,
@@ -3896,6 +3908,12 @@ func Operations() []Operation {
 					Type:     "object",
 					Properties: []BodyPropertyDescriptor{
 						{
+							Name:        "display_label",
+							Type:        "string",
+							Description: "Set a custom non-unique presentation label without leading or trailing whitespace, set null to restore the FQN-derived fallback, or omit to leave unchanged. Custom values must be non-empty.",
+							Required:    false,
+						},
+						{
 							Name:        "is_featured",
 							Type:        "boolean",
 							Description: "Whether the entity is featured in prominent selection and display surfaces.",
@@ -3908,7 +3926,7 @@ func Operations() []Operation {
 							Required:    false,
 						},
 					},
-					Simple: true,
+					Simple: false,
 				},
 			},
 			Invoke: invokeUpdateCategory,
@@ -4037,6 +4055,12 @@ func Operations() []Operation {
 					Type:     "object",
 					Properties: []BodyPropertyDescriptor{
 						{
+							Name:        "display_label",
+							Type:        "string",
+							Description: "Set a custom non-unique presentation label without leading or trailing whitespace, set null to restore the FQN-derived fallback, or omit to leave unchanged. Custom values must be non-empty.",
+							Required:    false,
+						},
+						{
 							Name:        "is_featured",
 							Type:        "boolean",
 							Description: "Whether the entity is featured in prominent selection and display surfaces.",
@@ -4049,7 +4073,7 @@ func Operations() []Operation {
 							Required:    false,
 						},
 					},
-					Simple: true,
+					Simple: false,
 				},
 			},
 			Invoke: invokeUpdateTag,

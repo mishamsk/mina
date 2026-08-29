@@ -14,9 +14,16 @@ import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { focusWithoutTooltip, Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import {
+  accountPickerLoader,
+  accountPickerOption,
+  categoryPickerLoader,
+  categoryPickerOption,
   EntityMultiPicker,
-  type EntityOption,
   EntityPicker,
+  memberPickerLoader,
+  memberPickerOption,
+  tagPickerLoader,
+  tagPickerOption,
 } from "@/features/ledger";
 import type { LedgerLookupsSnapshot, TemplateEditorLaunch } from "@/store";
 
@@ -167,32 +174,6 @@ const FieldError = ({ message }: { readonly message: string | undefined }) =>
     </p>
   ) : null;
 
-const entityOption = (
-  entity: {
-    readonly fqn?: string;
-    readonly is_hidden: boolean;
-    readonly name?: string;
-  },
-  id: number,
-  metadata?: string,
-): EntityOption => ({
-  detail: entity.fqn,
-  hidden: entity.is_hidden,
-  id,
-  label: entity.name ?? entity.fqn ?? "Unknown",
-  metadata,
-  searchLabel: entity.fqn ?? entity.name ?? "Unknown",
-  selectedLabel: entity.fqn,
-});
-
-const optionsRetainingSelected = (
-  options: readonly EntityOption[],
-  selectedIds: readonly (number | undefined)[],
-): readonly EntityOption[] => {
-  const selected = new Set(selectedIds);
-  return options.filter((option) => !option.hidden || selected.has(option.id));
-};
-
 export const TemplateEditorModal = ({
   launch,
   lookups,
@@ -227,24 +208,10 @@ export const TemplateEditorModal = ({
   const dirty = JSON.stringify(draft) !== initialDraftSignature;
   const visibleLookupsErrorMessage =
     lookupsErrorMessage ?? retainedLookupsErrorMessage;
-  const draftUsesReferences = draft.records.some(
-    (record) =>
-      record.accountId !== undefined ||
-      record.categoryId !== undefined ||
-      record.memberId !== undefined ||
-      record.tagIds.length > 0,
-  );
-  const referencesRequired =
-    loadingLookups ||
-    (Boolean(visibleLookupsErrorMessage) && draftUsesReferences);
-  const saveDisabled = saving || referencesRequired;
+  const saveDisabled = saving;
   const saveDisabledReason = saving
     ? "Wait for the template to finish saving."
-    : loadingLookups
-      ? "Wait for references to finish loading."
-      : visibleLookupsErrorMessage && draftUsesReferences
-        ? "Retry references before saving."
-        : "";
+    : "";
 
   const flashAttention = () => {
     setEntranceFinished(true);
@@ -316,36 +283,6 @@ export const TemplateEditorModal = ({
       });
     }
   };
-
-  const options = useMemo(() => {
-    const active = <
-      T extends {
-        readonly tombstoned_at?: string | null;
-      },
-    >(
-      values: readonly T[],
-    ): readonly T[] => values.filter((value) => !value.tombstoned_at);
-    return {
-      accounts: active(lookups?.accounts ?? []).map((account) =>
-        entityOption(
-          account,
-          account.account_id,
-          account.currency
-            ? `${account.currency} · Single-currency`
-            : "Multi-currency",
-        ),
-      ),
-      categories: active(lookups?.categories ?? []).map((category) =>
-        entityOption(category, category.category_id),
-      ),
-      members: active(lookups?.members ?? []).map((member) =>
-        entityOption(member, member.member_id),
-      ),
-      tags: active(lookups?.tags ?? []).map((tag) =>
-        entityOption(tag, tag.tag_id),
-      ),
-    };
-  }, [lookups]);
 
   const patch = (value: Partial<TemplateDraft>) => {
     setDraft((current) => ({ ...current, ...value }));
@@ -818,9 +755,11 @@ export const TemplateEditorModal = ({
                               key={`${record.id}-account-${lookups ? "ready" : "pending"}`}
                               id={`template-record-${index}-account`}
                               label="Account (optional)"
-                              options={optionsRetainingSelected(
-                                options.accounts,
-                                [record.accountId],
+                              loadOptions={accountPickerLoader({
+                                context: "record_assignment",
+                              })}
+                              options={(lookups?.accounts ?? []).map(
+                                accountPickerOption,
                               )}
                               value={record.accountId}
                               disabled={saving || loadingLookups}
@@ -841,9 +780,11 @@ export const TemplateEditorModal = ({
                               key={`${record.id}-category-${lookups ? "ready" : "pending"}`}
                               id={`template-record-${index}-category`}
                               label="Category (optional)"
-                              options={optionsRetainingSelected(
-                                options.categories,
-                                [record.categoryId],
+                              loadOptions={categoryPickerLoader({
+                                context: "record_assignment",
+                              })}
+                              options={(lookups?.categories ?? []).map(
+                                categoryPickerOption,
                               )}
                               value={record.categoryId}
                               disabled={saving || loadingLookups}
@@ -921,9 +862,11 @@ export const TemplateEditorModal = ({
                             <EntityMultiPicker
                               id={`template-record-${index}-tags`}
                               label="Tags (optional)"
-                              options={optionsRetainingSelected(
-                                options.tags,
-                                record.tagIds,
+                              loadOptions={tagPickerLoader({
+                                context: "record_assignment",
+                              })}
+                              options={(lookups?.tags ?? []).map(
+                                tagPickerOption,
                               )}
                               value={record.tagIds}
                               disabled={saving || loadingLookups}
@@ -945,9 +888,11 @@ export const TemplateEditorModal = ({
                               hierarchical={false}
                               id={`template-record-${index}-member`}
                               label="Member (optional)"
-                              options={optionsRetainingSelected(
-                                options.members,
-                                [record.memberId],
+                              loadOptions={memberPickerLoader({
+                                context: "record_assignment",
+                              })}
+                              options={(lookups?.members ?? []).map(
+                                memberPickerOption,
                               )}
                               placeholder="No member default"
                               value={record.memberId}
