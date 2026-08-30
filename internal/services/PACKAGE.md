@@ -2,7 +2,7 @@
 
 ## Purpose
 
-- Provides shared service-layer errors, list values, display-label rules, and fully qualified name (FQN) hierarchy helpers.
+- Provides shared service-layer errors, list values, creation-availability values, display-label rules, and fully qualified name (FQN) hierarchy helpers.
 
 ## Implicit Contracts
 
@@ -12,8 +12,9 @@
 - FQN group state is derived from the supplied active leaves: groups are hidden only when all leaves below them are hidden, hidden groups are omitted unless requested, and results are lexically ordered.
 - Explicit display labels are non-empty and whitespace-exact; account, category, and tag services derive the shared final-one-or-two-FQN-segments fallback only at their service boundaries.
 - `PaginatedList.TotalCount` is populated only when `ListOptions.IncludeTotalCount` is true; a zero value otherwise does not indicate an empty result.
+- Service-owned filtering may request a canonically sorted unpaged repository result, then apply shared pagination so totals describe the filtered membership rather than the persistence predicate alone.
 
 ## Boundaries
 
-- Owns: shared service-layer error vocabulary, list values, and pure FQN and display-label helpers.
+- Owns: shared service-layer error vocabulary, list and creation-availability values, and pure FQN and display-label helpers.
 - Does not own: domain-specific use cases, provider contracts, persistence, transport mapping, or cache lifecycle.

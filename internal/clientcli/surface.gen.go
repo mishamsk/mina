@@ -2306,11 +2306,17 @@ func Operations() []Operation {
 			ID:          "listAccounts",
 			Method:      "GET",
 			Path:        "/api/accounts",
-			Summary:     "List accounts.",
+			Summary:     "List accounts in canonical order, optionally filtered by shared fuzzy membership.",
 			Description: "",
 			CLI:         CLIOperation{Area: "accounts", Name: "list"},
 			Input: InputDescriptor{
 				Query: []ParameterDescriptor{
+					{
+						Name:        "q",
+						Type:        "string",
+						Description: "Filter membership by display title, FQN, segment, or active implicit group; does not change canonical sort order.",
+						Required:    false,
+					},
 					{
 						Name:        "include_hidden",
 						Type:        "boolean",
@@ -2325,9 +2331,11 @@ func Operations() []Operation {
 					},
 					{
 						Name:        "account_type",
-						Type:        "string",
-						Description: "Filter by owned, party, flow, or system account type.",
+						Type:        "array",
+						Description: "Filter by one or more owned, party, flow, or system account types.",
 						Required:    false,
+						Array:       true,
+						ItemType:    "string",
 						Enum:        []string{"owned", "party", "flow", "system"},
 					},
 					{
@@ -2412,11 +2420,17 @@ func Operations() []Operation {
 			ID:          "listCategories",
 			Method:      "GET",
 			Path:        "/api/categories",
-			Summary:     "List categories.",
+			Summary:     "List categories in canonical order, optionally filtered by shared fuzzy membership.",
 			Description: "",
 			CLI:         CLIOperation{Area: "categories", Name: "list"},
 			Input: InputDescriptor{
 				Query: []ParameterDescriptor{
+					{
+						Name:        "q",
+						Type:        "string",
+						Description: "Filter membership by display title, FQN, segment, or active implicit group; does not change canonical sort order.",
+						Required:    false,
+					},
 					{
 						Name:        "include_hidden",
 						Type:        "boolean",
@@ -2656,11 +2670,17 @@ func Operations() []Operation {
 			ID:          "listMembers",
 			Method:      "GET",
 			Path:        "/api/members",
-			Summary:     "List household members.",
+			Summary:     "List household members in canonical order, optionally filtered by shared fuzzy membership.",
 			Description: "",
 			CLI:         CLIOperation{Area: "members", Name: "list"},
 			Input: InputDescriptor{
 				Query: []ParameterDescriptor{
+					{
+						Name:        "q",
+						Type:        "string",
+						Description: "Filter membership by member name under the shared matching policy; does not change canonical sort order.",
+						Required:    false,
+					},
 					{
 						Name:        "include_hidden",
 						Type:        "boolean",
@@ -2819,11 +2839,17 @@ func Operations() []Operation {
 			ID:          "listTags",
 			Method:      "GET",
 			Path:        "/api/tags",
-			Summary:     "List tags.",
+			Summary:     "List tags in canonical order, optionally filtered by shared fuzzy membership.",
 			Description: "",
 			CLI:         CLIOperation{Area: "tags", Name: "list"},
 			Input: InputDescriptor{
 				Query: []ParameterDescriptor{
+					{
+						Name:        "q",
+						Type:        "string",
+						Description: "Filter membership by display title, FQN, segment, or active implicit group; does not change canonical sort order.",
+						Required:    false,
+					},
 					{
 						Name:        "include_hidden",
 						Type:        "boolean",
@@ -3473,6 +3499,130 @@ func Operations() []Operation {
 			Invoke: invokeSearchAccountJournalRecords,
 		},
 		{
+			ID:          "searchAccounts",
+			Method:      "GET",
+			Path:        "/api/accounts/search",
+			Summary:     "Return ranked account candidates for bounded discovery.",
+			Description: "",
+			CLI:         CLIOperation{Area: "accounts", Name: "search"},
+			Input: InputDescriptor{
+				Query: []ParameterDescriptor{
+					{
+						Name:        "context",
+						Type:        "string",
+						Description: "",
+						Required:    true,
+						Enum:        []string{"record_assignment", "shorthand_balance", "shorthand_flow", "exchange", "transaction_filter", "bulk_source", "bulk_replacement", "navigation"},
+					},
+					{
+						Name:        "limit",
+						Type:        "integer",
+						Description: "",
+						Required:    true,
+					},
+					{
+						Name:        "q",
+						Type:        "string",
+						Description: "",
+						Required:    false,
+					},
+					{
+						Name:        "parent_fqn",
+						Type:        "string",
+						Description: "Return only direct children of this hierarchy group; an empty value selects root children.",
+						Required:    false,
+					},
+					{
+						Name:        "include_hidden",
+						Type:        "boolean",
+						Description: "",
+						Required:    false,
+					},
+					{
+						Name:        "exclude_ids",
+						Type:        "array",
+						Description: "Active selected leaf IDs to omit from candidates.",
+						Required:    false,
+						Array:       true,
+						ItemType:    "integer",
+					},
+					{
+						Name:        "excluded_currency",
+						Type:        "string",
+						Description: "Exchange context excludes fixed-currency accounts in this currency.",
+						Required:    false,
+					},
+					{
+						Name:        "transaction_ids",
+						Type:        "array",
+						Description: "Selected transactions for a bulk source or replacement context.",
+						Required:    false,
+						Array:       true,
+						ItemType:    "integer",
+					},
+					{
+						Name:        "source_account_id",
+						Type:        "integer",
+						Description: "Common source account for a bulk replacement context.",
+						Required:    false,
+					},
+				},
+			},
+			Invoke: invokeSearchAccounts,
+		},
+		{
+			ID:          "searchCategories",
+			Method:      "GET",
+			Path:        "/api/categories/search",
+			Summary:     "Return ranked category candidates for bounded discovery.",
+			Description: "",
+			CLI:         CLIOperation{Area: "categories", Name: "search"},
+			Input: InputDescriptor{
+				Query: []ParameterDescriptor{
+					{
+						Name:        "context",
+						Type:        "string",
+						Description: "",
+						Required:    true,
+						Enum:        []string{"record_assignment", "shorthand_expense", "shorthand_income", "transaction_filter", "navigation"},
+					},
+					{
+						Name:        "limit",
+						Type:        "integer",
+						Description: "",
+						Required:    true,
+					},
+					{
+						Name:        "q",
+						Type:        "string",
+						Description: "",
+						Required:    false,
+					},
+					{
+						Name:        "parent_fqn",
+						Type:        "string",
+						Description: "Return only direct children of this hierarchy group; an empty value selects root children.",
+						Required:    false,
+					},
+					{
+						Name:        "include_hidden",
+						Type:        "boolean",
+						Description: "",
+						Required:    false,
+					},
+					{
+						Name:        "exclude_ids",
+						Type:        "array",
+						Description: "Active selected leaf IDs to omit from candidates.",
+						Required:    false,
+						Array:       true,
+						ItemType:    "integer",
+					},
+				},
+			},
+			Invoke: invokeSearchCategories,
+		},
+		{
 			ID:          "searchJournalRecords",
 			Method:      "GET",
 			Path:        "/api/records",
@@ -3634,6 +3784,104 @@ func Operations() []Operation {
 				},
 			},
 			Invoke: invokeSearchJournalRecords,
+		},
+		{
+			ID:          "searchMembers",
+			Method:      "GET",
+			Path:        "/api/members/search",
+			Summary:     "Return ranked member candidates for bounded discovery.",
+			Description: "",
+			CLI:         CLIOperation{Area: "members", Name: "search"},
+			Input: InputDescriptor{
+				Query: []ParameterDescriptor{
+					{
+						Name:        "context",
+						Type:        "string",
+						Description: "",
+						Required:    true,
+						Enum:        []string{"record_assignment", "transaction_filter", "navigation"},
+					},
+					{
+						Name:        "limit",
+						Type:        "integer",
+						Description: "",
+						Required:    true,
+					},
+					{
+						Name:        "q",
+						Type:        "string",
+						Description: "",
+						Required:    false,
+					},
+					{
+						Name:        "include_hidden",
+						Type:        "boolean",
+						Description: "",
+						Required:    false,
+					},
+					{
+						Name:        "exclude_ids",
+						Type:        "array",
+						Description: "Active selected member IDs to omit from candidates.",
+						Required:    false,
+						Array:       true,
+						ItemType:    "integer",
+					},
+				},
+			},
+			Invoke: invokeSearchMembers,
+		},
+		{
+			ID:          "searchTags",
+			Method:      "GET",
+			Path:        "/api/tags/search",
+			Summary:     "Return ranked tag candidates for bounded discovery.",
+			Description: "",
+			CLI:         CLIOperation{Area: "tags", Name: "search"},
+			Input: InputDescriptor{
+				Query: []ParameterDescriptor{
+					{
+						Name:        "context",
+						Type:        "string",
+						Description: "",
+						Required:    true,
+						Enum:        []string{"record_assignment", "transaction_filter", "navigation"},
+					},
+					{
+						Name:        "limit",
+						Type:        "integer",
+						Description: "",
+						Required:    true,
+					},
+					{
+						Name:        "q",
+						Type:        "string",
+						Description: "",
+						Required:    false,
+					},
+					{
+						Name:        "parent_fqn",
+						Type:        "string",
+						Description: "Return only direct children of this hierarchy group; an empty value selects root children.",
+						Required:    false,
+					},
+					{
+						Name:        "include_hidden",
+						Type:        "boolean",
+						Description: "",
+						Required:    false,
+					},
+					{
+						Name:        "exclude_ids",
+						Type:        "array",
+						Description: "Active selected leaf IDs to omit from candidates.",
+						Required:    false,
+						Array:       true,
+						ItemType:    "integer",
+					},
+				},
+			},
+			Invoke: invokeSearchTags,
 		},
 		{
 			ID:          "seedDemo",
@@ -6417,36 +6665,36 @@ func invokeListAccountGroups(ctx context.Context, client httpclient.ClientWithRe
 }
 
 func invokeListAccounts(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, []string{"account_type", "include_hidden", "include_tombstoned", "is_featured", "limit", "offset", "sort", "sort_dir"}, nil, false, false); err != nil {
+	if err := validateInvocationInput(input, nil, []string{"account_type", "include_hidden", "include_tombstoned", "is_featured", "limit", "offset", "q", "sort", "sort_dir"}, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	params := &httpclient.ListAccountsParams{}
-	queryValues0, querySupplied0 := input.Query["include_hidden"]
+	queryValues0, querySupplied0 := input.Query["q"]
 	if querySupplied0 {
 		if len(queryValues0) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "include_hidden",
+				Name:     "q",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues0)),
 			}
 		}
-		var queryValue0 bool
-		if err := parseInvocationValue(queryValues0[0], false, &queryValue0); err != nil {
+		var queryValue0 string
+		if err := parseInvocationValue(queryValues0[0], true, &queryValue0); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "include_hidden",
+				Name:     "q",
 				Value:    queryValues0[0],
 				Err:      err,
 			}
 		}
-		params.IncludeHidden = &queryValue0
+		params.Q = &queryValue0
 	}
-	queryValues1, querySupplied1 := input.Query["include_tombstoned"]
+	queryValues1, querySupplied1 := input.Query["include_hidden"]
 	if querySupplied1 {
 		if len(queryValues1) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "include_tombstoned",
+				Name:     "include_hidden",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues1)),
 			}
 		}
@@ -6454,119 +6702,121 @@ func invokeListAccounts(ctx context.Context, client httpclient.ClientWithRespons
 		if err := parseInvocationValue(queryValues1[0], false, &queryValue1); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "include_tombstoned",
+				Name:     "include_hidden",
 				Value:    queryValues1[0],
 				Err:      err,
 			}
 		}
-		params.IncludeTombstoned = &queryValue1
+		params.IncludeHidden = &queryValue1
 	}
-	queryValues2, querySupplied2 := input.Query["account_type"]
+	queryValues2, querySupplied2 := input.Query["include_tombstoned"]
 	if querySupplied2 {
 		if len(queryValues2) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "account_type",
+				Name:     "include_tombstoned",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues2)),
 			}
 		}
-		var queryValue2 httpclient.AccountType
-		if err := parseInvocationValue(queryValues2[0], true, &queryValue2); err != nil {
+		var queryValue2 bool
+		if err := parseInvocationValue(queryValues2[0], false, &queryValue2); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "account_type",
+				Name:     "include_tombstoned",
 				Value:    queryValues2[0],
 				Err:      err,
 			}
 		}
-		params.AccountType = &queryValue2
+		params.IncludeTombstoned = &queryValue2
 	}
-	queryValues3, querySupplied3 := input.Query["is_featured"]
+	queryValues3, querySupplied3 := input.Query["account_type"]
 	if querySupplied3 {
-		if len(queryValues3) != 1 {
+		if len(queryValues3) == 0 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "is_featured",
-				Err:      fmt.Errorf("got %d values, want 1", len(queryValues3)),
+				Name:     "account_type",
+				Err:      errors.New("value is required"),
 			}
 		}
-		var queryValue3 bool
-		if err := parseInvocationValue(queryValues3[0], false, &queryValue3); err != nil {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "is_featured",
-				Value:    queryValues3[0],
-				Err:      err,
+		queryValue3 := make([]httpclient.AccountType, len(queryValues3))
+		for valueIndex, raw := range queryValues3 {
+			if err := parseInvocationValue(raw, true, &queryValue3[valueIndex]); err != nil {
+				return InvocationResult{}, &InvocationInputError{
+					Location: "query",
+					Name:     "account_type",
+					Value:    raw,
+					Err:      err,
+				}
 			}
 		}
-		params.IsFeatured = &queryValue3
+		params.AccountType = &queryValue3
 	}
-	queryValues4, querySupplied4 := input.Query["sort"]
+	queryValues4, querySupplied4 := input.Query["is_featured"]
 	if querySupplied4 {
 		if len(queryValues4) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "sort",
+				Name:     "is_featured",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues4)),
 			}
 		}
-		var queryValue4 httpclient.ListAccountsParamsSort
-		if err := parseInvocationValue(queryValues4[0], true, &queryValue4); err != nil {
+		var queryValue4 bool
+		if err := parseInvocationValue(queryValues4[0], false, &queryValue4); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "sort",
+				Name:     "is_featured",
 				Value:    queryValues4[0],
 				Err:      err,
 			}
 		}
-		params.Sort = &queryValue4
+		params.IsFeatured = &queryValue4
 	}
-	queryValues5, querySupplied5 := input.Query["sort_dir"]
+	queryValues5, querySupplied5 := input.Query["sort"]
 	if querySupplied5 {
 		if len(queryValues5) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "sort_dir",
+				Name:     "sort",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues5)),
 			}
 		}
-		var queryValue5 httpclient.ListAccountsParamsSortDir
+		var queryValue5 httpclient.ListAccountsParamsSort
 		if err := parseInvocationValue(queryValues5[0], true, &queryValue5); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "sort_dir",
+				Name:     "sort",
 				Value:    queryValues5[0],
 				Err:      err,
 			}
 		}
-		params.SortDir = &queryValue5
+		params.Sort = &queryValue5
 	}
-	queryValues6, querySupplied6 := input.Query["limit"]
+	queryValues6, querySupplied6 := input.Query["sort_dir"]
 	if querySupplied6 {
 		if len(queryValues6) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "limit",
+				Name:     "sort_dir",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues6)),
 			}
 		}
-		var queryValue6 int
-		if err := parseInvocationValue(queryValues6[0], false, &queryValue6); err != nil {
+		var queryValue6 httpclient.ListAccountsParamsSortDir
+		if err := parseInvocationValue(queryValues6[0], true, &queryValue6); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "limit",
+				Name:     "sort_dir",
 				Value:    queryValues6[0],
 				Err:      err,
 			}
 		}
-		params.Limit = &queryValue6
+		params.SortDir = &queryValue6
 	}
-	queryValues7, querySupplied7 := input.Query["offset"]
+	queryValues7, querySupplied7 := input.Query["limit"]
 	if querySupplied7 {
 		if len(queryValues7) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "offset",
+				Name:     "limit",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues7)),
 			}
 		}
@@ -6574,12 +6824,32 @@ func invokeListAccounts(ctx context.Context, client httpclient.ClientWithRespons
 		if err := parseInvocationValue(queryValues7[0], false, &queryValue7); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "offset",
+				Name:     "limit",
 				Value:    queryValues7[0],
 				Err:      err,
 			}
 		}
-		params.Offset = &queryValue7
+		params.Limit = &queryValue7
+	}
+	queryValues8, querySupplied8 := input.Query["offset"]
+	if querySupplied8 {
+		if len(queryValues8) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "offset",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues8)),
+			}
+		}
+		var queryValue8 int
+		if err := parseInvocationValue(queryValues8[0], false, &queryValue8); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "offset",
+				Value:    queryValues8[0],
+				Err:      err,
+			}
+		}
+		params.Offset = &queryValue8
 	}
 	response, err := client.ListAccountsWithResponse(ctx, params)
 	if err != nil {
@@ -6681,36 +6951,36 @@ func invokeListBackgroundOperations(ctx context.Context, client httpclient.Clien
 }
 
 func invokeListCategories(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, []string{"economic_intent", "include_hidden", "include_tombstoned", "is_featured", "limit", "offset", "sort", "sort_dir"}, nil, false, false); err != nil {
+	if err := validateInvocationInput(input, nil, []string{"economic_intent", "include_hidden", "include_tombstoned", "is_featured", "limit", "offset", "q", "sort", "sort_dir"}, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	params := &httpclient.ListCategoriesParams{}
-	queryValues0, querySupplied0 := input.Query["include_hidden"]
+	queryValues0, querySupplied0 := input.Query["q"]
 	if querySupplied0 {
 		if len(queryValues0) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "include_hidden",
+				Name:     "q",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues0)),
 			}
 		}
-		var queryValue0 bool
-		if err := parseInvocationValue(queryValues0[0], false, &queryValue0); err != nil {
+		var queryValue0 string
+		if err := parseInvocationValue(queryValues0[0], true, &queryValue0); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "include_hidden",
+				Name:     "q",
 				Value:    queryValues0[0],
 				Err:      err,
 			}
 		}
-		params.IncludeHidden = &queryValue0
+		params.Q = &queryValue0
 	}
-	queryValues1, querySupplied1 := input.Query["include_tombstoned"]
+	queryValues1, querySupplied1 := input.Query["include_hidden"]
 	if querySupplied1 {
 		if len(queryValues1) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "include_tombstoned",
+				Name:     "include_hidden",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues1)),
 			}
 		}
@@ -6718,19 +6988,19 @@ func invokeListCategories(ctx context.Context, client httpclient.ClientWithRespo
 		if err := parseInvocationValue(queryValues1[0], false, &queryValue1); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "include_tombstoned",
+				Name:     "include_hidden",
 				Value:    queryValues1[0],
 				Err:      err,
 			}
 		}
-		params.IncludeTombstoned = &queryValue1
+		params.IncludeHidden = &queryValue1
 	}
-	queryValues2, querySupplied2 := input.Query["is_featured"]
+	queryValues2, querySupplied2 := input.Query["include_tombstoned"]
 	if querySupplied2 {
 		if len(queryValues2) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "is_featured",
+				Name:     "include_tombstoned",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues2)),
 			}
 		}
@@ -6738,25 +7008,45 @@ func invokeListCategories(ctx context.Context, client httpclient.ClientWithRespo
 		if err := parseInvocationValue(queryValues2[0], false, &queryValue2); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "is_featured",
+				Name:     "include_tombstoned",
 				Value:    queryValues2[0],
 				Err:      err,
 			}
 		}
-		params.IsFeatured = &queryValue2
+		params.IncludeTombstoned = &queryValue2
 	}
-	queryValues3, querySupplied3 := input.Query["economic_intent"]
+	queryValues3, querySupplied3 := input.Query["is_featured"]
 	if querySupplied3 {
-		if len(queryValues3) == 0 {
+		if len(queryValues3) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "is_featured",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues3)),
+			}
+		}
+		var queryValue3 bool
+		if err := parseInvocationValue(queryValues3[0], false, &queryValue3); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "is_featured",
+				Value:    queryValues3[0],
+				Err:      err,
+			}
+		}
+		params.IsFeatured = &queryValue3
+	}
+	queryValues4, querySupplied4 := input.Query["economic_intent"]
+	if querySupplied4 {
+		if len(queryValues4) == 0 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
 				Name:     "economic_intent",
 				Err:      errors.New("value is required"),
 			}
 		}
-		queryValue3 := make([]httpclient.CategoryEconomicIntent, len(queryValues3))
-		for valueIndex, raw := range queryValues3 {
-			if err := parseInvocationValue(raw, true, &queryValue3[valueIndex]); err != nil {
+		queryValue4 := make([]httpclient.CategoryEconomicIntent, len(queryValues4))
+		for valueIndex, raw := range queryValues4 {
+			if err := parseInvocationValue(raw, true, &queryValue4[valueIndex]); err != nil {
 				return InvocationResult{}, &InvocationInputError{
 					Location: "query",
 					Name:     "economic_intent",
@@ -6765,74 +7055,54 @@ func invokeListCategories(ctx context.Context, client httpclient.ClientWithRespo
 				}
 			}
 		}
-		params.EconomicIntent = &queryValue3
+		params.EconomicIntent = &queryValue4
 	}
-	queryValues4, querySupplied4 := input.Query["sort"]
-	if querySupplied4 {
-		if len(queryValues4) != 1 {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "sort",
-				Err:      fmt.Errorf("got %d values, want 1", len(queryValues4)),
-			}
-		}
-		var queryValue4 httpclient.ListCategoriesParamsSort
-		if err := parseInvocationValue(queryValues4[0], true, &queryValue4); err != nil {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "sort",
-				Value:    queryValues4[0],
-				Err:      err,
-			}
-		}
-		params.Sort = &queryValue4
-	}
-	queryValues5, querySupplied5 := input.Query["sort_dir"]
+	queryValues5, querySupplied5 := input.Query["sort"]
 	if querySupplied5 {
 		if len(queryValues5) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "sort_dir",
+				Name:     "sort",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues5)),
 			}
 		}
-		var queryValue5 httpclient.ListCategoriesParamsSortDir
+		var queryValue5 httpclient.ListCategoriesParamsSort
 		if err := parseInvocationValue(queryValues5[0], true, &queryValue5); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "sort_dir",
+				Name:     "sort",
 				Value:    queryValues5[0],
 				Err:      err,
 			}
 		}
-		params.SortDir = &queryValue5
+		params.Sort = &queryValue5
 	}
-	queryValues6, querySupplied6 := input.Query["limit"]
+	queryValues6, querySupplied6 := input.Query["sort_dir"]
 	if querySupplied6 {
 		if len(queryValues6) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "limit",
+				Name:     "sort_dir",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues6)),
 			}
 		}
-		var queryValue6 int
-		if err := parseInvocationValue(queryValues6[0], false, &queryValue6); err != nil {
+		var queryValue6 httpclient.ListCategoriesParamsSortDir
+		if err := parseInvocationValue(queryValues6[0], true, &queryValue6); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "limit",
+				Name:     "sort_dir",
 				Value:    queryValues6[0],
 				Err:      err,
 			}
 		}
-		params.Limit = &queryValue6
+		params.SortDir = &queryValue6
 	}
-	queryValues7, querySupplied7 := input.Query["offset"]
+	queryValues7, querySupplied7 := input.Query["limit"]
 	if querySupplied7 {
 		if len(queryValues7) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "offset",
+				Name:     "limit",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues7)),
 			}
 		}
@@ -6840,12 +7110,32 @@ func invokeListCategories(ctx context.Context, client httpclient.ClientWithRespo
 		if err := parseInvocationValue(queryValues7[0], false, &queryValue7); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "offset",
+				Name:     "limit",
 				Value:    queryValues7[0],
 				Err:      err,
 			}
 		}
-		params.Offset = &queryValue7
+		params.Limit = &queryValue7
+	}
+	queryValues8, querySupplied8 := input.Query["offset"]
+	if querySupplied8 {
+		if len(queryValues8) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "offset",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues8)),
+			}
+		}
+		var queryValue8 int
+		if err := parseInvocationValue(queryValues8[0], false, &queryValue8); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "offset",
+				Value:    queryValues8[0],
+				Err:      err,
+			}
+		}
+		params.Offset = &queryValue8
 	}
 	response, err := client.ListCategoriesWithResponse(ctx, params)
 	if err != nil {
@@ -7307,36 +7597,36 @@ func invokeListExchangeRates(ctx context.Context, client httpclient.ClientWithRe
 }
 
 func invokeListMembers(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, []string{"include_hidden", "include_tombstoned", "limit", "offset", "sort", "sort_dir"}, nil, false, false); err != nil {
+	if err := validateInvocationInput(input, nil, []string{"include_hidden", "include_tombstoned", "limit", "offset", "q", "sort", "sort_dir"}, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	params := &httpclient.ListMembersParams{}
-	queryValues0, querySupplied0 := input.Query["include_hidden"]
+	queryValues0, querySupplied0 := input.Query["q"]
 	if querySupplied0 {
 		if len(queryValues0) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "include_hidden",
+				Name:     "q",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues0)),
 			}
 		}
-		var queryValue0 bool
-		if err := parseInvocationValue(queryValues0[0], false, &queryValue0); err != nil {
+		var queryValue0 string
+		if err := parseInvocationValue(queryValues0[0], true, &queryValue0); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "include_hidden",
+				Name:     "q",
 				Value:    queryValues0[0],
 				Err:      err,
 			}
 		}
-		params.IncludeHidden = &queryValue0
+		params.Q = &queryValue0
 	}
-	queryValues1, querySupplied1 := input.Query["include_tombstoned"]
+	queryValues1, querySupplied1 := input.Query["include_hidden"]
 	if querySupplied1 {
 		if len(queryValues1) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "include_tombstoned",
+				Name:     "include_hidden",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues1)),
 			}
 		}
@@ -7344,79 +7634,79 @@ func invokeListMembers(ctx context.Context, client httpclient.ClientWithResponse
 		if err := parseInvocationValue(queryValues1[0], false, &queryValue1); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "include_tombstoned",
+				Name:     "include_hidden",
 				Value:    queryValues1[0],
 				Err:      err,
 			}
 		}
-		params.IncludeTombstoned = &queryValue1
+		params.IncludeHidden = &queryValue1
 	}
-	queryValues2, querySupplied2 := input.Query["sort"]
+	queryValues2, querySupplied2 := input.Query["include_tombstoned"]
 	if querySupplied2 {
 		if len(queryValues2) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "sort",
+				Name:     "include_tombstoned",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues2)),
 			}
 		}
-		var queryValue2 httpclient.ListMembersParamsSort
-		if err := parseInvocationValue(queryValues2[0], true, &queryValue2); err != nil {
+		var queryValue2 bool
+		if err := parseInvocationValue(queryValues2[0], false, &queryValue2); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "sort",
+				Name:     "include_tombstoned",
 				Value:    queryValues2[0],
 				Err:      err,
 			}
 		}
-		params.Sort = &queryValue2
+		params.IncludeTombstoned = &queryValue2
 	}
-	queryValues3, querySupplied3 := input.Query["sort_dir"]
+	queryValues3, querySupplied3 := input.Query["sort"]
 	if querySupplied3 {
 		if len(queryValues3) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "sort_dir",
+				Name:     "sort",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues3)),
 			}
 		}
-		var queryValue3 httpclient.ListMembersParamsSortDir
+		var queryValue3 httpclient.ListMembersParamsSort
 		if err := parseInvocationValue(queryValues3[0], true, &queryValue3); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "sort_dir",
+				Name:     "sort",
 				Value:    queryValues3[0],
 				Err:      err,
 			}
 		}
-		params.SortDir = &queryValue3
+		params.Sort = &queryValue3
 	}
-	queryValues4, querySupplied4 := input.Query["limit"]
+	queryValues4, querySupplied4 := input.Query["sort_dir"]
 	if querySupplied4 {
 		if len(queryValues4) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "limit",
+				Name:     "sort_dir",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues4)),
 			}
 		}
-		var queryValue4 int
-		if err := parseInvocationValue(queryValues4[0], false, &queryValue4); err != nil {
+		var queryValue4 httpclient.ListMembersParamsSortDir
+		if err := parseInvocationValue(queryValues4[0], true, &queryValue4); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "limit",
+				Name:     "sort_dir",
 				Value:    queryValues4[0],
 				Err:      err,
 			}
 		}
-		params.Limit = &queryValue4
+		params.SortDir = &queryValue4
 	}
-	queryValues5, querySupplied5 := input.Query["offset"]
+	queryValues5, querySupplied5 := input.Query["limit"]
 	if querySupplied5 {
 		if len(queryValues5) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "offset",
+				Name:     "limit",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues5)),
 			}
 		}
@@ -7424,12 +7714,32 @@ func invokeListMembers(ctx context.Context, client httpclient.ClientWithResponse
 		if err := parseInvocationValue(queryValues5[0], false, &queryValue5); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "offset",
+				Name:     "limit",
 				Value:    queryValues5[0],
 				Err:      err,
 			}
 		}
-		params.Offset = &queryValue5
+		params.Limit = &queryValue5
+	}
+	queryValues6, querySupplied6 := input.Query["offset"]
+	if querySupplied6 {
+		if len(queryValues6) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "offset",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues6)),
+			}
+		}
+		var queryValue6 int
+		if err := parseInvocationValue(queryValues6[0], false, &queryValue6); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "offset",
+				Value:    queryValues6[0],
+				Err:      err,
+			}
+		}
+		params.Offset = &queryValue6
 	}
 	response, err := client.ListMembersWithResponse(ctx, params)
 	if err != nil {
@@ -7709,36 +8019,36 @@ func invokeListTagGroups(ctx context.Context, client httpclient.ClientWithRespon
 }
 
 func invokeListTags(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, []string{"include_hidden", "include_tombstoned", "is_featured", "limit", "offset", "sort", "sort_dir"}, nil, false, false); err != nil {
+	if err := validateInvocationInput(input, nil, []string{"include_hidden", "include_tombstoned", "is_featured", "limit", "offset", "q", "sort", "sort_dir"}, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	params := &httpclient.ListTagsParams{}
-	queryValues0, querySupplied0 := input.Query["include_hidden"]
+	queryValues0, querySupplied0 := input.Query["q"]
 	if querySupplied0 {
 		if len(queryValues0) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "include_hidden",
+				Name:     "q",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues0)),
 			}
 		}
-		var queryValue0 bool
-		if err := parseInvocationValue(queryValues0[0], false, &queryValue0); err != nil {
+		var queryValue0 string
+		if err := parseInvocationValue(queryValues0[0], true, &queryValue0); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "include_hidden",
+				Name:     "q",
 				Value:    queryValues0[0],
 				Err:      err,
 			}
 		}
-		params.IncludeHidden = &queryValue0
+		params.Q = &queryValue0
 	}
-	queryValues1, querySupplied1 := input.Query["include_tombstoned"]
+	queryValues1, querySupplied1 := input.Query["include_hidden"]
 	if querySupplied1 {
 		if len(queryValues1) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "include_tombstoned",
+				Name:     "include_hidden",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues1)),
 			}
 		}
@@ -7746,19 +8056,19 @@ func invokeListTags(ctx context.Context, client httpclient.ClientWithResponsesIn
 		if err := parseInvocationValue(queryValues1[0], false, &queryValue1); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "include_tombstoned",
+				Name:     "include_hidden",
 				Value:    queryValues1[0],
 				Err:      err,
 			}
 		}
-		params.IncludeTombstoned = &queryValue1
+		params.IncludeHidden = &queryValue1
 	}
-	queryValues2, querySupplied2 := input.Query["is_featured"]
+	queryValues2, querySupplied2 := input.Query["include_tombstoned"]
 	if querySupplied2 {
 		if len(queryValues2) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "is_featured",
+				Name:     "include_tombstoned",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues2)),
 			}
 		}
@@ -7766,79 +8076,79 @@ func invokeListTags(ctx context.Context, client httpclient.ClientWithResponsesIn
 		if err := parseInvocationValue(queryValues2[0], false, &queryValue2); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "is_featured",
+				Name:     "include_tombstoned",
 				Value:    queryValues2[0],
 				Err:      err,
 			}
 		}
-		params.IsFeatured = &queryValue2
+		params.IncludeTombstoned = &queryValue2
 	}
-	queryValues3, querySupplied3 := input.Query["sort"]
+	queryValues3, querySupplied3 := input.Query["is_featured"]
 	if querySupplied3 {
 		if len(queryValues3) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "sort",
+				Name:     "is_featured",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues3)),
 			}
 		}
-		var queryValue3 httpclient.ListTagsParamsSort
-		if err := parseInvocationValue(queryValues3[0], true, &queryValue3); err != nil {
+		var queryValue3 bool
+		if err := parseInvocationValue(queryValues3[0], false, &queryValue3); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "sort",
+				Name:     "is_featured",
 				Value:    queryValues3[0],
 				Err:      err,
 			}
 		}
-		params.Sort = &queryValue3
+		params.IsFeatured = &queryValue3
 	}
-	queryValues4, querySupplied4 := input.Query["sort_dir"]
+	queryValues4, querySupplied4 := input.Query["sort"]
 	if querySupplied4 {
 		if len(queryValues4) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "sort_dir",
+				Name:     "sort",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues4)),
 			}
 		}
-		var queryValue4 httpclient.ListTagsParamsSortDir
+		var queryValue4 httpclient.ListTagsParamsSort
 		if err := parseInvocationValue(queryValues4[0], true, &queryValue4); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "sort_dir",
+				Name:     "sort",
 				Value:    queryValues4[0],
 				Err:      err,
 			}
 		}
-		params.SortDir = &queryValue4
+		params.Sort = &queryValue4
 	}
-	queryValues5, querySupplied5 := input.Query["limit"]
+	queryValues5, querySupplied5 := input.Query["sort_dir"]
 	if querySupplied5 {
 		if len(queryValues5) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "limit",
+				Name:     "sort_dir",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues5)),
 			}
 		}
-		var queryValue5 int
-		if err := parseInvocationValue(queryValues5[0], false, &queryValue5); err != nil {
+		var queryValue5 httpclient.ListTagsParamsSortDir
+		if err := parseInvocationValue(queryValues5[0], true, &queryValue5); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "limit",
+				Name:     "sort_dir",
 				Value:    queryValues5[0],
 				Err:      err,
 			}
 		}
-		params.Limit = &queryValue5
+		params.SortDir = &queryValue5
 	}
-	queryValues6, querySupplied6 := input.Query["offset"]
+	queryValues6, querySupplied6 := input.Query["limit"]
 	if querySupplied6 {
 		if len(queryValues6) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "offset",
+				Name:     "limit",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues6)),
 			}
 		}
@@ -7846,12 +8156,32 @@ func invokeListTags(ctx context.Context, client httpclient.ClientWithResponsesIn
 		if err := parseInvocationValue(queryValues6[0], false, &queryValue6); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "offset",
+				Name:     "limit",
 				Value:    queryValues6[0],
 				Err:      err,
 			}
 		}
-		params.Offset = &queryValue6
+		params.Limit = &queryValue6
+	}
+	queryValues7, querySupplied7 := input.Query["offset"]
+	if querySupplied7 {
+		if len(queryValues7) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "offset",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues7)),
+			}
+		}
+		var queryValue7 int
+		if err := parseInvocationValue(queryValues7[0], false, &queryValue7); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "offset",
+				Value:    queryValues7[0],
+				Err:      err,
+			}
+		}
+		params.Offset = &queryValue7
 	}
 	response, err := client.ListTagsWithResponse(ctx, params)
 	if err != nil {
@@ -8810,6 +9140,370 @@ func invokeSearchAccountJournalRecords(ctx context.Context, client httpclient.Cl
 	return normalizeInvocationResult(response.Body, response.HTTPResponse)
 }
 
+func invokeSearchAccounts(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
+	if err := validateInvocationInput(input, nil, []string{"context", "exclude_ids", "excluded_currency", "include_hidden", "limit", "parent_fqn", "q", "source_account_id", "transaction_ids"}, nil, false, false); err != nil {
+		return InvocationResult{}, err
+	}
+	params := &httpclient.SearchAccountsParams{}
+	queryValues0, querySupplied0 := input.Query["context"]
+	if !querySupplied0 {
+		return InvocationResult{}, &InvocationInputError{
+			Location: "query",
+			Name:     "context",
+			Err:      errors.New("value is required"),
+		}
+	}
+	if querySupplied0 {
+		if len(queryValues0) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "context",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues0)),
+			}
+		}
+		var queryValue0 httpclient.SearchAccountsParamsContext
+		if err := parseInvocationValue(queryValues0[0], true, &queryValue0); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "context",
+				Value:    queryValues0[0],
+				Err:      err,
+			}
+		}
+		params.Context = queryValue0
+	}
+	queryValues1, querySupplied1 := input.Query["limit"]
+	if !querySupplied1 {
+		return InvocationResult{}, &InvocationInputError{
+			Location: "query",
+			Name:     "limit",
+			Err:      errors.New("value is required"),
+		}
+	}
+	if querySupplied1 {
+		if len(queryValues1) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "limit",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues1)),
+			}
+		}
+		var queryValue1 int
+		if err := parseInvocationValue(queryValues1[0], false, &queryValue1); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "limit",
+				Value:    queryValues1[0],
+				Err:      err,
+			}
+		}
+		params.Limit = queryValue1
+	}
+	queryValues2, querySupplied2 := input.Query["q"]
+	if querySupplied2 {
+		if len(queryValues2) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "q",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues2)),
+			}
+		}
+		var queryValue2 string
+		if err := parseInvocationValue(queryValues2[0], true, &queryValue2); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "q",
+				Value:    queryValues2[0],
+				Err:      err,
+			}
+		}
+		params.Q = &queryValue2
+	}
+	queryValues3, querySupplied3 := input.Query["parent_fqn"]
+	if querySupplied3 {
+		if len(queryValues3) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "parent_fqn",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues3)),
+			}
+		}
+		var queryValue3 string
+		if err := parseInvocationValue(queryValues3[0], true, &queryValue3); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "parent_fqn",
+				Value:    queryValues3[0],
+				Err:      err,
+			}
+		}
+		params.ParentFqn = &queryValue3
+	}
+	queryValues4, querySupplied4 := input.Query["include_hidden"]
+	if querySupplied4 {
+		if len(queryValues4) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "include_hidden",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues4)),
+			}
+		}
+		var queryValue4 bool
+		if err := parseInvocationValue(queryValues4[0], false, &queryValue4); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "include_hidden",
+				Value:    queryValues4[0],
+				Err:      err,
+			}
+		}
+		params.IncludeHidden = &queryValue4
+	}
+	queryValues5, querySupplied5 := input.Query["exclude_ids"]
+	if querySupplied5 {
+		if len(queryValues5) == 0 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "exclude_ids",
+				Err:      errors.New("value is required"),
+			}
+		}
+		queryValue5 := make([]int64, len(queryValues5))
+		for valueIndex, raw := range queryValues5 {
+			if err := parseInvocationValue(raw, false, &queryValue5[valueIndex]); err != nil {
+				return InvocationResult{}, &InvocationInputError{
+					Location: "query",
+					Name:     "exclude_ids",
+					Value:    raw,
+					Err:      err,
+				}
+			}
+		}
+		params.ExcludeIds = &queryValue5
+	}
+	queryValues6, querySupplied6 := input.Query["excluded_currency"]
+	if querySupplied6 {
+		if len(queryValues6) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "excluded_currency",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues6)),
+			}
+		}
+		var queryValue6 string
+		if err := parseInvocationValue(queryValues6[0], true, &queryValue6); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "excluded_currency",
+				Value:    queryValues6[0],
+				Err:      err,
+			}
+		}
+		params.ExcludedCurrency = &queryValue6
+	}
+	queryValues7, querySupplied7 := input.Query["transaction_ids"]
+	if querySupplied7 {
+		if len(queryValues7) == 0 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "transaction_ids",
+				Err:      errors.New("value is required"),
+			}
+		}
+		queryValue7 := make([]int64, len(queryValues7))
+		for valueIndex, raw := range queryValues7 {
+			if err := parseInvocationValue(raw, false, &queryValue7[valueIndex]); err != nil {
+				return InvocationResult{}, &InvocationInputError{
+					Location: "query",
+					Name:     "transaction_ids",
+					Value:    raw,
+					Err:      err,
+				}
+			}
+		}
+		params.TransactionIds = &queryValue7
+	}
+	queryValues8, querySupplied8 := input.Query["source_account_id"]
+	if querySupplied8 {
+		if len(queryValues8) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "source_account_id",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues8)),
+			}
+		}
+		var queryValue8 int64
+		if err := parseInvocationValue(queryValues8[0], false, &queryValue8); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "source_account_id",
+				Value:    queryValues8[0],
+				Err:      err,
+			}
+		}
+		params.SourceAccountId = &queryValue8
+	}
+	response, err := client.SearchAccountsWithResponse(ctx, params)
+	if err != nil {
+		return InvocationResult{}, err
+	}
+	if response == nil {
+		return InvocationResult{}, errors.New("generated client returned no operation response")
+	}
+	return normalizeInvocationResult(response.Body, response.HTTPResponse)
+}
+
+func invokeSearchCategories(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
+	if err := validateInvocationInput(input, nil, []string{"context", "exclude_ids", "include_hidden", "limit", "parent_fqn", "q"}, nil, false, false); err != nil {
+		return InvocationResult{}, err
+	}
+	params := &httpclient.SearchCategoriesParams{}
+	queryValues0, querySupplied0 := input.Query["context"]
+	if !querySupplied0 {
+		return InvocationResult{}, &InvocationInputError{
+			Location: "query",
+			Name:     "context",
+			Err:      errors.New("value is required"),
+		}
+	}
+	if querySupplied0 {
+		if len(queryValues0) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "context",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues0)),
+			}
+		}
+		var queryValue0 httpclient.SearchCategoriesParamsContext
+		if err := parseInvocationValue(queryValues0[0], true, &queryValue0); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "context",
+				Value:    queryValues0[0],
+				Err:      err,
+			}
+		}
+		params.Context = queryValue0
+	}
+	queryValues1, querySupplied1 := input.Query["limit"]
+	if !querySupplied1 {
+		return InvocationResult{}, &InvocationInputError{
+			Location: "query",
+			Name:     "limit",
+			Err:      errors.New("value is required"),
+		}
+	}
+	if querySupplied1 {
+		if len(queryValues1) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "limit",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues1)),
+			}
+		}
+		var queryValue1 int
+		if err := parseInvocationValue(queryValues1[0], false, &queryValue1); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "limit",
+				Value:    queryValues1[0],
+				Err:      err,
+			}
+		}
+		params.Limit = queryValue1
+	}
+	queryValues2, querySupplied2 := input.Query["q"]
+	if querySupplied2 {
+		if len(queryValues2) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "q",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues2)),
+			}
+		}
+		var queryValue2 string
+		if err := parseInvocationValue(queryValues2[0], true, &queryValue2); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "q",
+				Value:    queryValues2[0],
+				Err:      err,
+			}
+		}
+		params.Q = &queryValue2
+	}
+	queryValues3, querySupplied3 := input.Query["parent_fqn"]
+	if querySupplied3 {
+		if len(queryValues3) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "parent_fqn",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues3)),
+			}
+		}
+		var queryValue3 string
+		if err := parseInvocationValue(queryValues3[0], true, &queryValue3); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "parent_fqn",
+				Value:    queryValues3[0],
+				Err:      err,
+			}
+		}
+		params.ParentFqn = &queryValue3
+	}
+	queryValues4, querySupplied4 := input.Query["include_hidden"]
+	if querySupplied4 {
+		if len(queryValues4) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "include_hidden",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues4)),
+			}
+		}
+		var queryValue4 bool
+		if err := parseInvocationValue(queryValues4[0], false, &queryValue4); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "include_hidden",
+				Value:    queryValues4[0],
+				Err:      err,
+			}
+		}
+		params.IncludeHidden = &queryValue4
+	}
+	queryValues5, querySupplied5 := input.Query["exclude_ids"]
+	if querySupplied5 {
+		if len(queryValues5) == 0 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "exclude_ids",
+				Err:      errors.New("value is required"),
+			}
+		}
+		queryValue5 := make([]int64, len(queryValues5))
+		for valueIndex, raw := range queryValues5 {
+			if err := parseInvocationValue(raw, false, &queryValue5[valueIndex]); err != nil {
+				return InvocationResult{}, &InvocationInputError{
+					Location: "query",
+					Name:     "exclude_ids",
+					Value:    raw,
+					Err:      err,
+				}
+			}
+		}
+		params.ExcludeIds = &queryValue5
+	}
+	response, err := client.SearchCategoriesWithResponse(ctx, params)
+	if err != nil {
+		return InvocationResult{}, err
+	}
+	if response == nil {
+		return InvocationResult{}, errors.New("generated client returned no operation response")
+	}
+	return normalizeInvocationResult(response.Body, response.HTTPResponse)
+}
+
 func invokeSearchJournalRecords(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
 	if err := validateInvocationInput(input, nil, []string{"account_fqn_prefix", "account_id", "amount_max", "amount_min", "amount_usd_max", "amount_usd_min", "category_id", "initiated_date_from", "initiated_date_to", "lifecycle_status", "limit", "member_id", "memo_contains", "offset", "pending_date_from", "pending_date_to", "posted_date_from", "posted_date_to", "reconciliation_status", "record_role", "settlement", "sort", "sort_dir", "tag_id"}, nil, false, false); err != nil {
 		return InvocationResult{}, err
@@ -9296,6 +9990,288 @@ func invokeSearchJournalRecords(ctx context.Context, client httpclient.ClientWit
 		params.Offset = &queryValue23
 	}
 	response, err := client.SearchJournalRecordsWithResponse(ctx, params)
+	if err != nil {
+		return InvocationResult{}, err
+	}
+	if response == nil {
+		return InvocationResult{}, errors.New("generated client returned no operation response")
+	}
+	return normalizeInvocationResult(response.Body, response.HTTPResponse)
+}
+
+func invokeSearchMembers(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
+	if err := validateInvocationInput(input, nil, []string{"context", "exclude_ids", "include_hidden", "limit", "q"}, nil, false, false); err != nil {
+		return InvocationResult{}, err
+	}
+	params := &httpclient.SearchMembersParams{}
+	queryValues0, querySupplied0 := input.Query["context"]
+	if !querySupplied0 {
+		return InvocationResult{}, &InvocationInputError{
+			Location: "query",
+			Name:     "context",
+			Err:      errors.New("value is required"),
+		}
+	}
+	if querySupplied0 {
+		if len(queryValues0) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "context",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues0)),
+			}
+		}
+		var queryValue0 httpclient.SearchMembersParamsContext
+		if err := parseInvocationValue(queryValues0[0], true, &queryValue0); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "context",
+				Value:    queryValues0[0],
+				Err:      err,
+			}
+		}
+		params.Context = queryValue0
+	}
+	queryValues1, querySupplied1 := input.Query["limit"]
+	if !querySupplied1 {
+		return InvocationResult{}, &InvocationInputError{
+			Location: "query",
+			Name:     "limit",
+			Err:      errors.New("value is required"),
+		}
+	}
+	if querySupplied1 {
+		if len(queryValues1) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "limit",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues1)),
+			}
+		}
+		var queryValue1 int
+		if err := parseInvocationValue(queryValues1[0], false, &queryValue1); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "limit",
+				Value:    queryValues1[0],
+				Err:      err,
+			}
+		}
+		params.Limit = queryValue1
+	}
+	queryValues2, querySupplied2 := input.Query["q"]
+	if querySupplied2 {
+		if len(queryValues2) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "q",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues2)),
+			}
+		}
+		var queryValue2 string
+		if err := parseInvocationValue(queryValues2[0], true, &queryValue2); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "q",
+				Value:    queryValues2[0],
+				Err:      err,
+			}
+		}
+		params.Q = &queryValue2
+	}
+	queryValues3, querySupplied3 := input.Query["include_hidden"]
+	if querySupplied3 {
+		if len(queryValues3) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "include_hidden",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues3)),
+			}
+		}
+		var queryValue3 bool
+		if err := parseInvocationValue(queryValues3[0], false, &queryValue3); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "include_hidden",
+				Value:    queryValues3[0],
+				Err:      err,
+			}
+		}
+		params.IncludeHidden = &queryValue3
+	}
+	queryValues4, querySupplied4 := input.Query["exclude_ids"]
+	if querySupplied4 {
+		if len(queryValues4) == 0 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "exclude_ids",
+				Err:      errors.New("value is required"),
+			}
+		}
+		queryValue4 := make([]int64, len(queryValues4))
+		for valueIndex, raw := range queryValues4 {
+			if err := parseInvocationValue(raw, false, &queryValue4[valueIndex]); err != nil {
+				return InvocationResult{}, &InvocationInputError{
+					Location: "query",
+					Name:     "exclude_ids",
+					Value:    raw,
+					Err:      err,
+				}
+			}
+		}
+		params.ExcludeIds = &queryValue4
+	}
+	response, err := client.SearchMembersWithResponse(ctx, params)
+	if err != nil {
+		return InvocationResult{}, err
+	}
+	if response == nil {
+		return InvocationResult{}, errors.New("generated client returned no operation response")
+	}
+	return normalizeInvocationResult(response.Body, response.HTTPResponse)
+}
+
+func invokeSearchTags(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
+	if err := validateInvocationInput(input, nil, []string{"context", "exclude_ids", "include_hidden", "limit", "parent_fqn", "q"}, nil, false, false); err != nil {
+		return InvocationResult{}, err
+	}
+	params := &httpclient.SearchTagsParams{}
+	queryValues0, querySupplied0 := input.Query["context"]
+	if !querySupplied0 {
+		return InvocationResult{}, &InvocationInputError{
+			Location: "query",
+			Name:     "context",
+			Err:      errors.New("value is required"),
+		}
+	}
+	if querySupplied0 {
+		if len(queryValues0) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "context",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues0)),
+			}
+		}
+		var queryValue0 httpclient.SearchTagsParamsContext
+		if err := parseInvocationValue(queryValues0[0], true, &queryValue0); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "context",
+				Value:    queryValues0[0],
+				Err:      err,
+			}
+		}
+		params.Context = queryValue0
+	}
+	queryValues1, querySupplied1 := input.Query["limit"]
+	if !querySupplied1 {
+		return InvocationResult{}, &InvocationInputError{
+			Location: "query",
+			Name:     "limit",
+			Err:      errors.New("value is required"),
+		}
+	}
+	if querySupplied1 {
+		if len(queryValues1) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "limit",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues1)),
+			}
+		}
+		var queryValue1 int
+		if err := parseInvocationValue(queryValues1[0], false, &queryValue1); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "limit",
+				Value:    queryValues1[0],
+				Err:      err,
+			}
+		}
+		params.Limit = queryValue1
+	}
+	queryValues2, querySupplied2 := input.Query["q"]
+	if querySupplied2 {
+		if len(queryValues2) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "q",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues2)),
+			}
+		}
+		var queryValue2 string
+		if err := parseInvocationValue(queryValues2[0], true, &queryValue2); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "q",
+				Value:    queryValues2[0],
+				Err:      err,
+			}
+		}
+		params.Q = &queryValue2
+	}
+	queryValues3, querySupplied3 := input.Query["parent_fqn"]
+	if querySupplied3 {
+		if len(queryValues3) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "parent_fqn",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues3)),
+			}
+		}
+		var queryValue3 string
+		if err := parseInvocationValue(queryValues3[0], true, &queryValue3); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "parent_fqn",
+				Value:    queryValues3[0],
+				Err:      err,
+			}
+		}
+		params.ParentFqn = &queryValue3
+	}
+	queryValues4, querySupplied4 := input.Query["include_hidden"]
+	if querySupplied4 {
+		if len(queryValues4) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "include_hidden",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues4)),
+			}
+		}
+		var queryValue4 bool
+		if err := parseInvocationValue(queryValues4[0], false, &queryValue4); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "include_hidden",
+				Value:    queryValues4[0],
+				Err:      err,
+			}
+		}
+		params.IncludeHidden = &queryValue4
+	}
+	queryValues5, querySupplied5 := input.Query["exclude_ids"]
+	if querySupplied5 {
+		if len(queryValues5) == 0 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "exclude_ids",
+				Err:      errors.New("value is required"),
+			}
+		}
+		queryValue5 := make([]int64, len(queryValues5))
+		for valueIndex, raw := range queryValues5 {
+			if err := parseInvocationValue(raw, false, &queryValue5[valueIndex]); err != nil {
+				return InvocationResult{}, &InvocationInputError{
+					Location: "query",
+					Name:     "exclude_ids",
+					Value:    raw,
+					Err:      err,
+				}
+			}
+		}
+		params.ExcludeIds = &queryValue5
+	}
+	response, err := client.SearchTagsWithResponse(ctx, params)
 	if err != nil {
 		return InvocationResult{}, err
 	}

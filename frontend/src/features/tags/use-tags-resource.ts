@@ -1,6 +1,10 @@
 import { useEffect, useRef } from "react";
 
-import { apiErrorMessage, fetchTagsPage } from "@/api";
+import {
+  apiErrorMessage,
+  fetchTagsPage,
+  type TagsManagementParams,
+} from "@/api";
 import { refreshLedgerLookups } from "@/features/ledger";
 import { refreshOverview } from "@/features/overview";
 import {
@@ -9,17 +13,34 @@ import {
   invalidateTransactionPages,
   setTagsPage,
   setTagsPageError,
+  setTagsPageFromCache,
   setTagsPageLoading,
   useTagsPageView,
 } from "@/store";
 
 let tagsPageLoadGeneration = 0;
+const defaultTagsPageParams: TagsManagementParams = {
+  includeHidden: true,
+  q: "",
+};
+let currentTagsPageParams = defaultTagsPageParams;
 const tagsPageRefreshRetryDelayMs = 200;
 const tagsPageRefreshAttempts = 8;
 
-const nextTagsPageLoadGeneration = (): number => {
+const normalizedTagsPageParams = (
+  params: TagsManagementParams,
+): TagsManagementParams => ({
+  includeHidden: params.includeHidden,
+  q: params.q.trim(),
+});
+
+const tagsPageKey = (params: TagsManagementParams): string =>
+  `${params.includeHidden ? "hidden" : "visible"}:${params.q.toLowerCase()}`;
+
+const nextTagsPageLoadGeneration = (params: TagsManagementParams): number => {
   tagsPageLoadGeneration += 1;
-  setTagsPageLoading();
+  currentTagsPageParams = normalizedTagsPageParams(params);
+  setTagsPageLoading(tagsPageKey(currentTagsPageParams));
   return tagsPageLoadGeneration;
 };
 
@@ -36,9 +57,10 @@ const waitForTagsPageRetry = (): Promise<void> =>
   });
 
 const fetchTagsPageWithRetries = async (
+  params: TagsManagementParams,
   shouldContinue: () => boolean,
 ): Promise<Awaited<ReturnType<typeof fetchTagsPage>>> => {
-  let result = await fetchTagsPage();
+  let result = await fetchTagsPage(params, shouldContinue);
   for (
     let attempt = 1;
     attempt < tagsPageRefreshAttempts && !tagsPageLoaded(result);
@@ -48,19 +70,23 @@ const fetchTagsPageWithRetries = async (
       return result;
     }
     await waitForTagsPageRetry();
-    result = await fetchTagsPage();
+    if (!shouldContinue()) {
+      return result;
+    }
+    result = await fetchTagsPage(params, shouldContinue);
   }
   return result;
 };
 
 const loadTagsPage = async (
   generation: number,
+  params: TagsManagementParams,
   shouldCommit: () => boolean = () => true,
 ): Promise<boolean> => {
   const isCurrentLoad = () => isCurrentTagsPageLoad(generation);
   const commitCurrent = () => shouldCommit() && isCurrentLoad();
 
-  const result = await fetchTagsPageWithRetries(commitCurrent);
+  const result = await fetchTagsPageWithRetries(params, commitCurrent);
   if (!commitCurrent()) {
     if (isCurrentLoad()) {
       clearTagsPageLoading();
@@ -80,13 +106,15 @@ const loadTagsPage = async (
 
   setTagsPage({
     groups: result.groups.data.groups,
+    key: tagsPageKey(params),
     tags: result.tags.data.tags,
   });
   return true;
 };
 
 export const refreshTagsPage = async (): Promise<boolean> => {
-  return loadTagsPage(nextTagsPageLoadGeneration());
+  const params = currentTagsPageParams;
+  return loadTagsPage(nextTagsPageLoadGeneration(params), params);
 };
 
 export const refreshTagsAfterMutation = async (options?: {
@@ -100,9 +128,13 @@ export const refreshTagsAfterMutation = async (options?: {
   return tagsRefreshed;
 };
 
-export const useTagsResource = () => {
+export const useTagsResource = (
+  requestedParams: TagsManagementParams = defaultTagsPageParams,
+) => {
   const tagsPage = useTagsPageView();
   const mountedRef = useRef(false);
+  const params = normalizedTagsPageParams(requestedParams);
+  const key = tagsPageKey(params);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -113,22 +145,33 @@ export const useTagsResource = () => {
 
   useEffect(() => {
     const snapshot = getTagsSnapshot();
+    currentTagsPageParams = params;
+    if (snapshot.snapshot?.key === key && !snapshot.stale) {
+      if (
+        snapshot.requestKey !== key &&
+        (snapshot.loading || snapshot.errorMessage)
+      ) {
+        tagsPageLoadGeneration += 1;
+        setTagsPageFromCache(key);
+      }
+      return;
+    }
     if (
-      (snapshot.snapshot && !snapshot.stale) ||
-      snapshot.loading ||
-      snapshot.errorMessage
+      snapshot.requestKey === key &&
+      (snapshot.loading || snapshot.errorMessage)
     ) {
       return;
     }
 
-    const generation = nextTagsPageLoadGeneration();
+    const generation = nextTagsPageLoadGeneration(params);
 
-    void loadTagsPage(generation, () => mountedRef.current);
+    void loadTagsPage(generation, params, () => mountedRef.current);
   }, [
     tagsPage.errorMessage,
     tagsPage.loading,
     tagsPage.snapshot,
     tagsPage.stale,
+    key,
   ]);
 
   return tagsPage;

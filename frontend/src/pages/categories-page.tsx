@@ -55,7 +55,12 @@ const readCategoryEconomicIntent = (
 export const CategoriesPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const economicIntent = readCategoryEconomicIntent(searchParams);
-  const categoriesPage = useCategoriesResource(economicIntent);
+  const { includeHidden, search } = readCategoriesSearchState(searchParams);
+  const categoriesPage = useCategoriesResource({
+    economicIntent,
+    includeHidden,
+    q: search,
+  });
   const [panelMode, setPanelMode] = useState<"create" | "edit" | undefined>();
   const [selectedCategory, setSelectedCategory] = useState<
     Category | undefined
@@ -68,7 +73,6 @@ export const CategoriesPage = () => {
   const createCategoryButtonRef = useRef<HTMLButtonElement | null>(null);
   const panelOpenerRef = useRef<HTMLElement | null>(null);
   const restructureOpenerRef = useRef<HTMLElement | null>(null);
-  const { includeHidden, search } = readCategoriesSearchState(searchParams);
   const categoriesSnapshot = categoriesPage.snapshot;
   const selectedCategoryId = selectedCategory?.category_id;
   const selectedCategoryEconomicIntent = selectedCategory?.economic_intent;
@@ -94,21 +98,23 @@ export const CategoriesPage = () => {
     }
 
     let current = true;
-    void fetchCategoriesForManagement(selectedCategoryEconomicIntent).then(
-      (result) => {
-        const refreshedCategory = result.data?.categories.find(
-          (category) => category.category_id === selectedCategoryId,
-        );
-        if (!current || !refreshedCategory) {
-          return;
-        }
-        setSelectedCategory((category) =>
-          category?.category_id === refreshedCategory.category_id
-            ? { ...category, deletable: refreshedCategory.deletable }
-            : category,
-        );
-      },
-    );
+    void fetchCategoriesForManagement({
+      economicIntent: selectedCategoryEconomicIntent,
+      includeHidden: true,
+      q: "",
+    }).then((result) => {
+      const refreshedCategory = result.data?.categories.find(
+        (category) => category.category_id === selectedCategoryId,
+      );
+      if (!current || !refreshedCategory) {
+        return;
+      }
+      setSelectedCategory((category) =>
+        category?.category_id === refreshedCategory.category_id
+          ? { ...category, deletable: refreshedCategory.deletable }
+          : category,
+      );
+    });
 
     return () => {
       current = false;
@@ -312,7 +318,6 @@ export const CategoriesPage = () => {
         <CategoriesPageContent
           categoriesPage={categoriesPage}
           economicIntent={economicIntent}
-          includeHidden={includeHidden}
           onCategoryDeleted={closeDeletedCategoryEditor}
           onEditCategory={openEditPanel}
           onNotice={showNotice}

@@ -488,7 +488,7 @@ func newAccountingServices(
 		currencyUsageChanged,
 	)
 	accountService.SetTypeChangeValidator(transactionService)
-	accountService.SetPickerTransactionFacts(transactionService)
+	accountService.SetSearchTransactionFacts(transactionService)
 	transactionService.SetFutureProjectionProvider(recurringService)
 	return appServices{
 		Dependencies: httpapi.Dependencies{

@@ -240,7 +240,7 @@ func (b *seedBuilder) seedAccounts(ctx context.Context) error {
 	systemType := accounts.AccountTypeSystem
 	systemAccounts, err := b.services.Accounts.List(ctx, accounts.ListOptions{
 		IncludeHidden: true,
-		AccountType:   &systemType,
+		AccountTypes:  []accounts.AccountType{systemType},
 	})
 	if err != nil {
 		return fmt.Errorf("list fixed system accounts: %w", err)

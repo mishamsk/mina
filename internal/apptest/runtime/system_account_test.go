@@ -17,7 +17,7 @@ func TestFixedSystemAccountCatalogAndProtection(t *testing.T) {
 	systemType := httpclient.AccountTypeSystem
 
 	listed, err := client.REST().ListAccountsWithResponse(ctx, &httpclient.ListAccountsParams{
-		AccountType: &systemType,
+		AccountType: accountTypes(systemType),
 	})
 	requireClientResponse(t, "list fixed system accounts", err, listed.StatusCode(), http.StatusOK, listed.Body)
 	gotFQNs := make([]string, 0, len(listed.JSON200.Accounts))

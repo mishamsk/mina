@@ -70,12 +70,15 @@ const EditDockEditor = ({
   skipSummary,
 }: EditDockEditorProps) => {
   const [categoryId, setCategoryId] = useState<number>();
+  const [categoryOption, setCategoryOption] = useState<EntityOption>();
   const [includeHidden, setIncludeHidden] = useState(false);
   const [memberId, setMemberId] = useState<number>();
+  const [memberOption, setMemberOption] = useState<EntityOption>();
   const [memberOperation, setMemberOperation] = useState<"clear" | "set">(
     "set",
   );
   const [tagIds, setTagIds] = useState<readonly number[]>([]);
+  const [tagOptions, setTagOptions] = useState<readonly EntityOption[]>([]);
   const [tagOperation, setTagOperation] = useState<"add" | "remove">("add");
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string>();
@@ -192,8 +195,12 @@ const EditDockEditor = ({
                 context: "record_assignment",
                 include_hidden: includeHidden,
               })}
+              options={categoryOption ? [categoryOption] : []}
               value={categoryId}
-              onChange={setCategoryId}
+              onChange={(id, option) => {
+                setCategoryId(id);
+                setCategoryOption(option);
+              }}
             />
           ) : null}
           {action === "tags" ? (
@@ -232,8 +239,12 @@ const EditDockEditor = ({
                   context: "record_assignment",
                   include_hidden: includeHidden,
                 })}
+                options={tagOptions}
                 value={tagIds}
-                onChange={setTagIds}
+                onChange={(ids, options) => {
+                  setTagIds(ids);
+                  setTagOptions(options);
+                }}
               />
             </>
           ) : null}
@@ -275,8 +286,12 @@ const EditDockEditor = ({
                     context: "record_assignment",
                     include_hidden: includeHidden,
                   })}
+                  options={memberOption ? [memberOption] : []}
                   value={memberId}
-                  onChange={setMemberId}
+                  onChange={(id, option) => {
+                    setMemberId(id);
+                    setMemberOption(option);
+                  }}
                 />
               ) : (
                 <p className="font-body text-sm">
@@ -345,18 +360,11 @@ const AccountReplaceEditor = ({
   const [errorMessage, setErrorMessage] = useState<string>();
   const [includeHidden, setIncludeHidden] = useState(false);
   const [replacementAccountId, setReplacementAccountId] = useState<number>();
-  const [replacementPickerResetVersion, setReplacementPickerResetVersion] =
-    useState(0);
   const [saving, setSaving] = useState(false);
   const [sourceAccountId, setSourceAccountId] = useState<number>();
   const [sourcePickerOption, setSourcePickerOption] = useState<EntityOption>();
   const [replacementPickerOption, setReplacementPickerOption] =
     useState<EntityOption>();
-  const [sourcePickerResetVersion, setSourcePickerResetVersion] = useState(0);
-  const [sourceOptionCount, setSourceOptionCount] = useState(0);
-  const [validatedReplacementKey, setValidatedReplacementKey] =
-    useState<string>();
-  const [validatedSourceKey, setValidatedSourceKey] = useState<string>();
   const reviewButtonRef = useRef<HTMLButtonElement>(null);
   const transactionIds = selectedTransactions.map(
     (transaction) => transaction.transaction_id,
@@ -387,9 +395,7 @@ const AccountReplaceEditor = ({
     !blocked &&
     !saving &&
     sourceAccountId !== undefined &&
-    replacementAccountId !== undefined &&
-    validatedSourceKey === sourceLoadKey &&
-    validatedReplacementKey === replacementLoadKey;
+    replacementAccountId !== undefined;
 
   const confirm = async () => {
     if (
@@ -474,46 +480,20 @@ const AccountReplaceEditor = ({
             include_hidden: includeHidden,
             transaction_ids: transactionIds,
           })}
-          options={[...maps.accountsById.values()].map(accountPickerOption)}
-          onLoadedOptions={(options, result) => {
-            setSourceOptionCount(result.eligibleCount ?? options.length);
-            if (sourceAccountId === undefined) {
-              return;
-            }
-            const remainsEligible = result.selectedOptions.some(
-              (option) => option.id === sourceAccountId,
-            );
-            if (remainsEligible) {
-              setSourcePickerOption(
-                options.find((option) => option.id === sourceAccountId),
-              );
-              setValidatedSourceKey(sourceLoadKey);
-              return;
-            }
-            setSourceAccountId(undefined);
-            setSourcePickerOption(undefined);
-            setReplacementAccountId(undefined);
-            setReplacementPickerOption(undefined);
-            setValidatedSourceKey(undefined);
-            setValidatedReplacementKey(undefined);
-            setSourcePickerResetVersion((current) => current + 1);
-            setReplacementPickerResetVersion((current) => current + 1);
-          }}
-          key={`source-${sourcePickerResetVersion}`}
+          options={[
+            ...[...maps.accountsById.values()].map(accountPickerOption),
+            ...(sourcePickerOption ? [sourcePickerOption] : []),
+          ]}
           value={sourceAccountId}
           onChange={(accountId, option) => {
             setSourceAccountId(accountId);
             setSourcePickerOption(option);
-            setValidatedSourceKey(
-              accountId === undefined ? undefined : sourceLoadKey,
-            );
             setReplacementAccountId(undefined);
             setReplacementPickerOption(undefined);
-            setValidatedReplacementKey(undefined);
           }}
         />
         <EntityPicker
-          key={`replacement-${sourceAccountId ?? ""}-${replacementPickerResetVersion}`}
+          key={`replacement-${sourceAccountId ?? ""}`}
           disabled={saving || blocked || sourceAccountId === undefined}
           id="edit-dock-account-replacement"
           label="Compatible replacement account"
@@ -528,43 +508,20 @@ const AccountReplaceEditor = ({
                   transaction_ids: transactionIds,
                 })
           }
-          options={[...maps.accountsById.values()].map(accountPickerOption)}
+          options={[
+            ...[...maps.accountsById.values()].map(accountPickerOption),
+            ...(replacementPickerOption ? [replacementPickerOption] : []),
+          ]}
           value={replacementAccountId}
-          onLoadedOptions={(_, result) => {
-            if (replacementAccountId === undefined) {
-              return;
-            }
-            const remainsEligible = result.selectedOptions.some(
-              (option) => option.id === replacementAccountId,
-            );
-            if (remainsEligible) {
-              setReplacementPickerOption(
-                result.selectedOptions.find(
-                  (option) => option.id === replacementAccountId,
-                ),
-              );
-              setValidatedReplacementKey(replacementLoadKey);
-              return;
-            }
-            setReplacementAccountId(undefined);
-            setReplacementPickerOption(undefined);
-            setValidatedReplacementKey(undefined);
-            setReplacementPickerResetVersion((current) => current + 1);
-          }}
           onChange={(accountId, option) => {
             setReplacementAccountId(accountId);
             setReplacementPickerOption(option);
-            setValidatedReplacementKey(
-              accountId === undefined ? undefined : replacementLoadKey,
-            );
           }}
         />
-        {sourceAccountId === undefined ? (
-          <p className="font-mono text-xs">
-            {sourceOptionCount} common non-system account
-            {sourceOptionCount === 1 ? "" : "s"} available.
-          </p>
-        ) : (
+        <p className="font-mono text-xs">
+          Search shows up to 6 common non-system accounts. Type to narrow.
+        </p>
+        {sourceAccountId === undefined ? null : (
           <p
             className="font-mono text-xs"
             data-testid="account-replace-prediction"

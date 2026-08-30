@@ -20,10 +20,15 @@ import {
   categoryPickerOption,
   EntityMultiPicker,
   EntityPicker,
+  loadAccountOptionsByIds,
+  loadCategoryOptionsByIds,
+  loadMemberOptionsByIds,
+  loadTagOptionsByIds,
   memberPickerLoader,
   memberPickerOption,
   tagPickerLoader,
   tagPickerOption,
+  useResolvedEntityOptions,
 } from "@/features/ledger";
 import type { LedgerLookupsSnapshot, TemplateEditorLaunch } from "@/store";
 
@@ -204,6 +209,52 @@ export const TemplateEditorModal = ({
   const [retryingLookups, setRetryingLookups] = useState(false);
   const [saving, setSaving] = useState(false);
   const [discardOpen, setDiscardOpen] = useState(false);
+  const lookupAccountOptions = useMemo(
+    () => (lookups?.accounts ?? []).map(accountPickerOption),
+    [lookups],
+  );
+  const lookupCategoryOptions = useMemo(
+    () => (lookups?.categories ?? []).map(categoryPickerOption),
+    [lookups],
+  );
+  const lookupMemberOptions = useMemo(
+    () => (lookups?.members ?? []).map(memberPickerOption),
+    [lookups],
+  );
+  const lookupTagOptions = useMemo(
+    () => (lookups?.tags ?? []).map(tagPickerOption),
+    [lookups],
+  );
+  const accountOptions = useResolvedEntityOptions(
+    draft.records.flatMap((record) =>
+      record.accountId === undefined ? [] : [record.accountId],
+    ),
+    lookupAccountOptions,
+    loadAccountOptionsByIds,
+    !lookups && !lookupsErrorMessage,
+  );
+  const categoryOptions = useResolvedEntityOptions(
+    draft.records.flatMap((record) =>
+      record.categoryId === undefined ? [] : [record.categoryId],
+    ),
+    lookupCategoryOptions,
+    loadCategoryOptionsByIds,
+    !lookups && !lookupsErrorMessage,
+  );
+  const memberOptions = useResolvedEntityOptions(
+    draft.records.flatMap((record) =>
+      record.memberId === undefined ? [] : [record.memberId],
+    ),
+    lookupMemberOptions,
+    loadMemberOptionsByIds,
+    !lookups && !lookupsErrorMessage,
+  );
+  const tagOptions = useResolvedEntityOptions(
+    draft.records.flatMap((record) => record.tagIds),
+    lookupTagOptions,
+    loadTagOptionsByIds,
+    !lookups && !lookupsErrorMessage,
+  );
   const editing = launch.template !== undefined;
   const dirty = JSON.stringify(draft) !== initialDraftSignature;
   const visibleLookupsErrorMessage =
@@ -758,9 +809,7 @@ export const TemplateEditorModal = ({
                               loadOptions={accountPickerLoader({
                                 context: "record_assignment",
                               })}
-                              options={(lookups?.accounts ?? []).map(
-                                accountPickerOption,
-                              )}
+                              options={accountOptions}
                               value={record.accountId}
                               disabled={saving || loadingLookups}
                               onChange={(accountId) =>
@@ -783,9 +832,7 @@ export const TemplateEditorModal = ({
                               loadOptions={categoryPickerLoader({
                                 context: "record_assignment",
                               })}
-                              options={(lookups?.categories ?? []).map(
-                                categoryPickerOption,
-                              )}
+                              options={categoryOptions}
                               value={record.categoryId}
                               disabled={saving || loadingLookups}
                               onChange={(categoryId) =>
@@ -865,9 +912,7 @@ export const TemplateEditorModal = ({
                               loadOptions={tagPickerLoader({
                                 context: "record_assignment",
                               })}
-                              options={(lookups?.tags ?? []).map(
-                                tagPickerOption,
-                              )}
+                              options={tagOptions}
                               value={record.tagIds}
                               disabled={saving || loadingLookups}
                               onChange={(tagIds) =>
@@ -891,9 +936,7 @@ export const TemplateEditorModal = ({
                               loadOptions={memberPickerLoader({
                                 context: "record_assignment",
                               })}
-                              options={(lookups?.members ?? []).map(
-                                memberPickerOption,
-                              )}
+                              options={memberOptions}
                               placeholder="No member default"
                               value={record.memberId}
                               disabled={saving || loadingLookups}

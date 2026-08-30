@@ -20,8 +20,9 @@ func (s *strictServer) ListAccounts(ctx context.Context, request openapi.ListAcc
 	accountList, err := s.deps.Accounts.List(ctx, accounts.ListOptions{
 		IncludeHidden:     boolParam(params.IncludeHidden),
 		IncludeTombstoned: boolParam(params.IncludeTombstoned),
-		AccountType:       accountTypeParam(params.AccountType),
+		AccountTypes:      accountTypesParam(params.AccountType),
 		IsFeatured:        params.IsFeatured,
+		Query:             optionalStringParam(params.Q),
 		List: listOptionsFromParams(
 			params.Sort,
 			params.SortDir,
@@ -40,14 +41,15 @@ func (s *strictServer) ListAccounts(ctx context.Context, request openapi.ListAcc
 	}, nil
 }
 
-func (s *strictServer) PickAccounts(ctx context.Context, request openapi.PickAccountsRequestObject) (openapi.PickAccountsResponseObject, error) {
+func (s *strictServer) SearchAccounts(ctx context.Context, request openapi.SearchAccountsRequestObject) (openapi.SearchAccountsResponseObject, error) {
 	params := request.Params
-	result, err := s.deps.Accounts.Pick(ctx, accounts.PickerOptions{
-		Context:          accounts.PickerContext(params.Context),
+	result, err := s.deps.Accounts.Search(ctx, accounts.SearchOptions{
+		Context:          accounts.SearchContext(params.Context),
 		Query:            optionalStringParam(params.Q),
 		ParentFQN:        params.ParentFqn,
 		IncludeHidden:    boolParam(params.IncludeHidden),
-		SelectedIDs:      cloneOptionalInt64Slice(params.SelectedIds),
+		ExcludeIDs:       cloneOptionalInt64Slice(params.ExcludeIds),
+		Limit:            params.Limit,
 		ExcludedCurrency: params.ExcludedCurrency,
 		TransactionIDs:   cloneOptionalInt64Slice(params.TransactionIds),
 		SourceAccountID:  params.SourceAccountId,
@@ -55,27 +57,33 @@ func (s *strictServer) PickAccounts(ctx context.Context, request openapi.PickAcc
 	if err != nil {
 		return nil, err
 	}
-	return openapi.PickAccounts200JSONResponse{
-		Items: accountPickerAPIItems(result.Items), SelectedItems: accountPickerAPIItems(result.SelectedItems), CanCreate: result.CanCreate, EligibleCount: result.EligibleCount,
-	}, nil
+	return openapi.SearchAccounts200JSONResponse{Items: accountSearchAPIItems(result.Items), HasMore: result.HasMore}, nil
 }
 
-func accountPickerAPIItems(source []accounts.PickerItem) []openapi.AccountPickerItem {
-	items := make([]openapi.AccountPickerItem, len(source))
+func (s *strictServer) GetAccountCreationAvailability(ctx context.Context, request openapi.GetAccountCreationAvailabilityRequestObject) (openapi.GetAccountCreationAvailabilityResponseObject, error) {
+	availability, err := s.deps.Accounts.CreationAvailability(ctx, request.Params.Fqn)
+	if err != nil {
+		return nil, err
+	}
+	return openapi.GetAccountCreationAvailability200JSONResponse(accountCreationAvailabilityAPIResponse(availability)), nil
+}
+
+func accountSearchAPIItems(source []accounts.SearchItem) []openapi.AccountSearchItem {
+	items := make([]openapi.AccountSearchItem, len(source))
 	for index, item := range source {
 		var accountType *openapi.AccountType
 		if item.AccountType != nil {
 			value := openapi.AccountType(*item.AccountType)
 			accountType = &value
 		}
-		items[index] = openapi.AccountPickerItem{
+		items[index] = openapi.AccountSearchItem{
 			AccountId:   item.ID,
 			AccountType: accountType,
 			ChildCount:  item.ChildCount,
 			Currency:    item.Currency,
 			Fqn:         item.FQN,
 			IsHidden:    item.IsHidden,
-			Kind:        openapi.AccountPickerItemKind(item.Kind),
+			Kind:        openapi.AccountSearchItemKind(item.Kind),
 			Title:       item.Title,
 		}
 	}
@@ -116,12 +124,15 @@ func (s *strictServer) ListAccountGroups(ctx context.Context, request openapi.Li
 	}, nil
 }
 
-func accountTypeParam(value *openapi.AccountType) *accounts.AccountType {
+func accountTypesParam(value *[]openapi.AccountType) []accounts.AccountType {
 	if value == nil {
 		return nil
 	}
-	accountType := accounts.AccountType(*value)
-	return &accountType
+	result := make([]accounts.AccountType, len(*value))
+	for index, accountType := range *value {
+		result[index] = accounts.AccountType(accountType)
+	}
+	return result
 }
 
 func writableAccountTypeParam(value *openapi.WritableAccountType) *accounts.AccountType {
@@ -209,6 +220,7 @@ func (s *strictServer) ListCategories(ctx context.Context, request openapi.ListC
 		IncludeTombstoned: boolParam(params.IncludeTombstoned),
 		EconomicIntents:   categoryEconomicIntentsFromAPI(params.EconomicIntent),
 		IsFeatured:        params.IsFeatured,
+		Query:             optionalStringParam(params.Q),
 		List: listOptionsFromParams(
 			params.Sort,
 			params.SortDir,
@@ -227,38 +239,45 @@ func (s *strictServer) ListCategories(ctx context.Context, request openapi.ListC
 	}, nil
 }
 
-func (s *strictServer) PickCategories(ctx context.Context, request openapi.PickCategoriesRequestObject) (openapi.PickCategoriesResponseObject, error) {
+func (s *strictServer) SearchCategories(ctx context.Context, request openapi.SearchCategoriesRequestObject) (openapi.SearchCategoriesResponseObject, error) {
 	params := request.Params
-	result, err := s.deps.Categories.Pick(ctx, categories.PickerOptions{
-		Context:       categories.PickerContext(params.Context),
+	result, err := s.deps.Categories.Search(ctx, categories.SearchOptions{
+		Context:       categories.SearchContext(params.Context),
 		Query:         optionalStringParam(params.Q),
 		ParentFQN:     params.ParentFqn,
 		IncludeHidden: boolParam(params.IncludeHidden),
-		SelectedIDs:   cloneOptionalInt64Slice(params.SelectedIds),
+		ExcludeIDs:    cloneOptionalInt64Slice(params.ExcludeIds),
+		Limit:         params.Limit,
 	})
 	if err != nil {
 		return nil, err
 	}
-	return openapi.PickCategories200JSONResponse{
-		Items: categoryPickerAPIItems(result.Items), SelectedItems: categoryPickerAPIItems(result.SelectedItems), CanCreate: result.CanCreate,
-	}, nil
+	return openapi.SearchCategories200JSONResponse{Items: categorySearchAPIItems(result.Items), HasMore: result.HasMore}, nil
 }
 
-func categoryPickerAPIItems(source []categories.PickerItem) []openapi.CategoryPickerItem {
-	items := make([]openapi.CategoryPickerItem, len(source))
+func (s *strictServer) GetCategoryCreationAvailability(ctx context.Context, request openapi.GetCategoryCreationAvailabilityRequestObject) (openapi.GetCategoryCreationAvailabilityResponseObject, error) {
+	availability, err := s.deps.Categories.CreationAvailability(ctx, request.Params.Fqn)
+	if err != nil {
+		return nil, err
+	}
+	return openapi.GetCategoryCreationAvailability200JSONResponse(creationAvailabilityAPIResponse(availability)), nil
+}
+
+func categorySearchAPIItems(source []categories.SearchItem) []openapi.CategorySearchItem {
+	items := make([]openapi.CategorySearchItem, len(source))
 	for index, item := range source {
 		var intent *openapi.CategoryEconomicIntent
 		if item.EconomicIntent != nil {
 			value := openapi.CategoryEconomicIntent(*item.EconomicIntent)
 			intent = &value
 		}
-		items[index] = openapi.CategoryPickerItem{
+		items[index] = openapi.CategorySearchItem{
 			CategoryId:     item.ID,
 			ChildCount:     item.ChildCount,
 			EconomicIntent: intent,
 			Fqn:            item.FQN,
 			IsHidden:       item.IsHidden,
-			Kind:           openapi.CategoryPickerItemKind(item.Kind),
+			Kind:           openapi.CategorySearchItemKind(item.Kind),
 			Title:          item.Title,
 		}
 	}
@@ -344,6 +363,7 @@ func (s *strictServer) ListMembers(ctx context.Context, request openapi.ListMemb
 	memberList, err := s.deps.Members.List(ctx, members.ListOptions{
 		IncludeHidden:     boolParam(params.IncludeHidden),
 		IncludeTombstoned: boolParam(params.IncludeTombstoned),
+		Query:             optionalStringParam(params.Q),
 		List: listOptionsFromParams(
 			params.Sort,
 			params.SortDir,
@@ -362,26 +382,23 @@ func (s *strictServer) ListMembers(ctx context.Context, request openapi.ListMemb
 	}, nil
 }
 
-func (s *strictServer) PickMembers(ctx context.Context, request openapi.PickMembersRequestObject) (openapi.PickMembersResponseObject, error) {
+func (s *strictServer) SearchMembers(ctx context.Context, request openapi.SearchMembersRequestObject) (openapi.SearchMembersResponseObject, error) {
 	params := request.Params
-	result, err := s.deps.Members.Pick(ctx, members.PickerOptions{
-		Context:       members.PickerContext(params.Context),
+	result, err := s.deps.Members.Search(ctx, members.SearchOptions{
+		Context:       members.SearchContext(params.Context),
 		Query:         optionalStringParam(params.Q),
 		IncludeHidden: boolParam(params.IncludeHidden),
-		SelectedIDs:   cloneOptionalInt64Slice(params.SelectedIds),
+		ExcludeIDs:    cloneOptionalInt64Slice(params.ExcludeIds),
+		Limit:         params.Limit,
 	})
 	if err != nil {
 		return nil, err
 	}
-	items := make([]openapi.MemberPickerItem, len(result.Items))
+	items := make([]openapi.MemberSearchItem, len(result.Items))
 	for index, item := range result.Items {
-		items[index] = openapi.MemberPickerItem{MemberId: item.ID, Title: item.Title, IsHidden: item.IsHidden}
+		items[index] = openapi.MemberSearchItem{MemberId: item.ID, Title: item.Title, IsHidden: item.IsHidden}
 	}
-	selectedItems := make([]openapi.MemberPickerItem, len(result.SelectedItems))
-	for index, item := range result.SelectedItems {
-		selectedItems[index] = openapi.MemberPickerItem{MemberId: item.ID, Title: item.Title, IsHidden: item.IsHidden}
-	}
-	return openapi.PickMembers200JSONResponse{Items: items, SelectedItems: selectedItems}, nil
+	return openapi.SearchMembers200JSONResponse{Items: items, HasMore: result.HasMore}, nil
 }
 
 func (s *strictServer) CreateMember(ctx context.Context, request openapi.CreateMemberRequestObject) (openapi.CreateMemberResponseObject, error) {
@@ -435,6 +452,7 @@ func (s *strictServer) ListTags(ctx context.Context, request openapi.ListTagsReq
 		IncludeHidden:     boolParam(params.IncludeHidden),
 		IncludeTombstoned: boolParam(params.IncludeTombstoned),
 		IsFeatured:        params.IsFeatured,
+		Query:             optionalStringParam(params.Q),
 		List: listOptionsFromParams(
 			params.Sort,
 			params.SortDir,
@@ -453,36 +471,61 @@ func (s *strictServer) ListTags(ctx context.Context, request openapi.ListTagsReq
 	}, nil
 }
 
-func (s *strictServer) PickTags(ctx context.Context, request openapi.PickTagsRequestObject) (openapi.PickTagsResponseObject, error) {
+func (s *strictServer) SearchTags(ctx context.Context, request openapi.SearchTagsRequestObject) (openapi.SearchTagsResponseObject, error) {
 	params := request.Params
-	result, err := s.deps.Tags.Pick(ctx, tags.PickerOptions{
-		Context:       tags.PickerContext(params.Context),
+	result, err := s.deps.Tags.Search(ctx, tags.SearchOptions{
+		Context:       tags.SearchContext(params.Context),
 		Query:         optionalStringParam(params.Q),
 		ParentFQN:     params.ParentFqn,
 		IncludeHidden: boolParam(params.IncludeHidden),
-		SelectedIDs:   cloneOptionalInt64Slice(params.SelectedIds),
+		ExcludeIDs:    cloneOptionalInt64Slice(params.ExcludeIds),
+		Limit:         params.Limit,
 	})
 	if err != nil {
 		return nil, err
 	}
-	return openapi.PickTags200JSONResponse{
-		Items: tagPickerAPIItems(result.Items), SelectedItems: tagPickerAPIItems(result.SelectedItems), CanCreate: result.CanCreate,
-	}, nil
+	return openapi.SearchTags200JSONResponse{Items: tagSearchAPIItems(result.Items), HasMore: result.HasMore}, nil
 }
 
-func tagPickerAPIItems(source []tags.PickerItem) []openapi.TagPickerItem {
-	items := make([]openapi.TagPickerItem, len(source))
+func (s *strictServer) GetTagCreationAvailability(ctx context.Context, request openapi.GetTagCreationAvailabilityRequestObject) (openapi.GetTagCreationAvailabilityResponseObject, error) {
+	availability, err := s.deps.Tags.CreationAvailability(ctx, request.Params.Fqn)
+	if err != nil {
+		return nil, err
+	}
+	return openapi.GetTagCreationAvailability200JSONResponse(creationAvailabilityAPIResponse(availability)), nil
+}
+
+func tagSearchAPIItems(source []tags.SearchItem) []openapi.TagSearchItem {
+	items := make([]openapi.TagSearchItem, len(source))
 	for index, item := range source {
-		items[index] = openapi.TagPickerItem{
+		items[index] = openapi.TagSearchItem{
 			ChildCount: item.ChildCount,
 			Fqn:        item.FQN,
 			IsHidden:   item.IsHidden,
-			Kind:       openapi.TagPickerItemKind(item.Kind),
+			Kind:       openapi.TagSearchItemKind(item.Kind),
 			TagId:      item.ID,
 			Title:      item.Title,
 		}
 	}
 	return items
+}
+
+func creationAvailabilityAPIResponse(availability services.CreationAvailability) openapi.CreationAvailabilityResponse {
+	var reason *openapi.CreationAvailabilityResponseReason
+	if availability.Reason != nil {
+		value := openapi.CreationAvailabilityResponseReason(*availability.Reason)
+		reason = &value
+	}
+	return openapi.CreationAvailabilityResponse{Available: availability.Available, Reason: reason}
+}
+
+func accountCreationAvailabilityAPIResponse(availability services.CreationAvailability) openapi.AccountCreationAvailabilityResponse {
+	var reason *openapi.AccountCreationAvailabilityResponseReason
+	if availability.Reason != nil {
+		value := openapi.AccountCreationAvailabilityResponseReason(*availability.Reason)
+		reason = &value
+	}
+	return openapi.AccountCreationAvailabilityResponse{Available: availability.Available, Reason: reason}
 }
 
 func (s *strictServer) ListTagGroups(ctx context.Context, request openapi.ListTagGroupsRequestObject) (openapi.ListTagGroupsResponseObject, error) {

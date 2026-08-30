@@ -87,18 +87,39 @@ func (e APIErrorCode) Valid() bool {
 	}
 }
 
-// Defines values for AccountPickerItemKind.
+// Defines values for AccountCreationAvailabilityResponseReason.
 const (
-	AccountPickerItemKindGroup AccountPickerItemKind = "group"
-	AccountPickerItemKindLeaf  AccountPickerItemKind = "leaf"
+	AccountInvalidFQN        AccountCreationAvailabilityResponseReason = "invalid_fqn"
+	AccountPathConflict      AccountCreationAvailabilityResponseReason = "path_conflict"
+	AccountReservedNamespace AccountCreationAvailabilityResponseReason = "reserved_namespace"
 )
 
-// Valid indicates whether the value is a known member of the AccountPickerItemKind enum.
-func (e AccountPickerItemKind) Valid() bool {
+// Valid indicates whether the value is a known member of the AccountCreationAvailabilityResponseReason enum.
+func (e AccountCreationAvailabilityResponseReason) Valid() bool {
 	switch e {
-	case AccountPickerItemKindGroup:
+	case AccountInvalidFQN:
 		return true
-	case AccountPickerItemKindLeaf:
+	case AccountPathConflict:
+		return true
+	case AccountReservedNamespace:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AccountSearchItemKind.
+const (
+	AccountSearchItemKindGroup AccountSearchItemKind = "group"
+	AccountSearchItemKindLeaf  AccountSearchItemKind = "leaf"
+)
+
+// Valid indicates whether the value is a known member of the AccountSearchItemKind enum.
+func (e AccountSearchItemKind) Valid() bool {
+	switch e {
+	case AccountSearchItemKindGroup:
+		return true
+	case AccountSearchItemKindLeaf:
 		return true
 	default:
 		return false
@@ -264,18 +285,36 @@ func (e CategoryEconomicIntent) Valid() bool {
 	}
 }
 
-// Defines values for CategoryPickerItemKind.
+// Defines values for CategorySearchItemKind.
 const (
-	CategoryPickerItemKindGroup CategoryPickerItemKind = "group"
-	CategoryPickerItemKindLeaf  CategoryPickerItemKind = "leaf"
+	CategorySearchItemKindGroup CategorySearchItemKind = "group"
+	CategorySearchItemKindLeaf  CategorySearchItemKind = "leaf"
 )
 
-// Valid indicates whether the value is a known member of the CategoryPickerItemKind enum.
-func (e CategoryPickerItemKind) Valid() bool {
+// Valid indicates whether the value is a known member of the CategorySearchItemKind enum.
+func (e CategorySearchItemKind) Valid() bool {
 	switch e {
-	case CategoryPickerItemKindGroup:
+	case CategorySearchItemKindGroup:
 		return true
-	case CategoryPickerItemKindLeaf:
+	case CategorySearchItemKindLeaf:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CreationAvailabilityResponseReason.
+const (
+	InvalidFqn   CreationAvailabilityResponseReason = "invalid_fqn"
+	PathConflict CreationAvailabilityResponseReason = "path_conflict"
+)
+
+// Valid indicates whether the value is a known member of the CreationAvailabilityResponseReason enum.
+func (e CreationAvailabilityResponseReason) Valid() bool {
+	switch e {
+	case InvalidFqn:
+		return true
+	case PathConflict:
 		return true
 	default:
 		return false
@@ -750,18 +789,18 @@ func (e Source) Valid() bool {
 	}
 }
 
-// Defines values for TagPickerItemKind.
+// Defines values for TagSearchItemKind.
 const (
-	TagPickerItemKindGroup TagPickerItemKind = "group"
-	TagPickerItemKindLeaf  TagPickerItemKind = "leaf"
+	TagSearchItemKindGroup TagSearchItemKind = "group"
+	TagSearchItemKindLeaf  TagSearchItemKind = "leaf"
 )
 
-// Valid indicates whether the value is a known member of the TagPickerItemKind enum.
-func (e TagPickerItemKind) Valid() bool {
+// Valid indicates whether the value is a known member of the TagSearchItemKind enum.
+func (e TagSearchItemKind) Valid() bool {
 	switch e {
-	case TagPickerItemKindGroup:
+	case TagSearchItemKindGroup:
 		return true
-	case TagPickerItemKindLeaf:
+	case TagSearchItemKindLeaf:
 		return true
 	default:
 		return false
@@ -984,33 +1023,36 @@ func (e ListAccountsParamsSortDir) Valid() bool {
 	}
 }
 
-// Defines values for PickAccountsParamsContext.
+// Defines values for SearchAccountsParamsContext.
 const (
-	PickAccountsParamsContextBulkReplacement   PickAccountsParamsContext = "bulk_replacement"
-	PickAccountsParamsContextBulkSource        PickAccountsParamsContext = "bulk_source"
-	PickAccountsParamsContextExchange          PickAccountsParamsContext = "exchange"
-	PickAccountsParamsContextRecordAssignment  PickAccountsParamsContext = "record_assignment"
-	PickAccountsParamsContextShorthandBalance  PickAccountsParamsContext = "shorthand_balance"
-	PickAccountsParamsContextShorthandFlow     PickAccountsParamsContext = "shorthand_flow"
-	PickAccountsParamsContextTransactionFilter PickAccountsParamsContext = "transaction_filter"
+	SearchAccountsParamsContextBulkReplacement   SearchAccountsParamsContext = "bulk_replacement"
+	SearchAccountsParamsContextBulkSource        SearchAccountsParamsContext = "bulk_source"
+	SearchAccountsParamsContextExchange          SearchAccountsParamsContext = "exchange"
+	SearchAccountsParamsContextNavigation        SearchAccountsParamsContext = "navigation"
+	SearchAccountsParamsContextRecordAssignment  SearchAccountsParamsContext = "record_assignment"
+	SearchAccountsParamsContextShorthandBalance  SearchAccountsParamsContext = "shorthand_balance"
+	SearchAccountsParamsContextShorthandFlow     SearchAccountsParamsContext = "shorthand_flow"
+	SearchAccountsParamsContextTransactionFilter SearchAccountsParamsContext = "transaction_filter"
 )
 
-// Valid indicates whether the value is a known member of the PickAccountsParamsContext enum.
-func (e PickAccountsParamsContext) Valid() bool {
+// Valid indicates whether the value is a known member of the SearchAccountsParamsContext enum.
+func (e SearchAccountsParamsContext) Valid() bool {
 	switch e {
-	case PickAccountsParamsContextBulkReplacement:
+	case SearchAccountsParamsContextBulkReplacement:
 		return true
-	case PickAccountsParamsContextBulkSource:
+	case SearchAccountsParamsContextBulkSource:
 		return true
-	case PickAccountsParamsContextExchange:
+	case SearchAccountsParamsContextExchange:
 		return true
-	case PickAccountsParamsContextRecordAssignment:
+	case SearchAccountsParamsContextNavigation:
 		return true
-	case PickAccountsParamsContextShorthandBalance:
+	case SearchAccountsParamsContextRecordAssignment:
 		return true
-	case PickAccountsParamsContextShorthandFlow:
+	case SearchAccountsParamsContextShorthandBalance:
 		return true
-	case PickAccountsParamsContextTransactionFilter:
+	case SearchAccountsParamsContextShorthandFlow:
+		return true
+	case SearchAccountsParamsContextTransactionFilter:
 		return true
 	default:
 		return false
@@ -1128,24 +1170,27 @@ func (e ListCategoriesParamsSortDir) Valid() bool {
 	}
 }
 
-// Defines values for PickCategoriesParamsContext.
+// Defines values for SearchCategoriesParamsContext.
 const (
-	PickCategoriesParamsContextRecordAssignment  PickCategoriesParamsContext = "record_assignment"
-	PickCategoriesParamsContextShorthandExpense  PickCategoriesParamsContext = "shorthand_expense"
-	PickCategoriesParamsContextShorthandIncome   PickCategoriesParamsContext = "shorthand_income"
-	PickCategoriesParamsContextTransactionFilter PickCategoriesParamsContext = "transaction_filter"
+	SearchCategoriesParamsContextNavigation        SearchCategoriesParamsContext = "navigation"
+	SearchCategoriesParamsContextRecordAssignment  SearchCategoriesParamsContext = "record_assignment"
+	SearchCategoriesParamsContextShorthandExpense  SearchCategoriesParamsContext = "shorthand_expense"
+	SearchCategoriesParamsContextShorthandIncome   SearchCategoriesParamsContext = "shorthand_income"
+	SearchCategoriesParamsContextTransactionFilter SearchCategoriesParamsContext = "transaction_filter"
 )
 
-// Valid indicates whether the value is a known member of the PickCategoriesParamsContext enum.
-func (e PickCategoriesParamsContext) Valid() bool {
+// Valid indicates whether the value is a known member of the SearchCategoriesParamsContext enum.
+func (e SearchCategoriesParamsContext) Valid() bool {
 	switch e {
-	case PickCategoriesParamsContextRecordAssignment:
+	case SearchCategoriesParamsContextNavigation:
 		return true
-	case PickCategoriesParamsContextShorthandExpense:
+	case SearchCategoriesParamsContextRecordAssignment:
 		return true
-	case PickCategoriesParamsContextShorthandIncome:
+	case SearchCategoriesParamsContextShorthandExpense:
 		return true
-	case PickCategoriesParamsContextTransactionFilter:
+	case SearchCategoriesParamsContextShorthandIncome:
+		return true
+	case SearchCategoriesParamsContextTransactionFilter:
 		return true
 	default:
 		return false
@@ -1236,18 +1281,21 @@ func (e ListMembersParamsSortDir) Valid() bool {
 	}
 }
 
-// Defines values for PickMembersParamsContext.
+// Defines values for SearchMembersParamsContext.
 const (
-	PickMembersParamsContextRecordAssignment  PickMembersParamsContext = "record_assignment"
-	PickMembersParamsContextTransactionFilter PickMembersParamsContext = "transaction_filter"
+	SearchMembersParamsContextNavigation        SearchMembersParamsContext = "navigation"
+	SearchMembersParamsContextRecordAssignment  SearchMembersParamsContext = "record_assignment"
+	SearchMembersParamsContextTransactionFilter SearchMembersParamsContext = "transaction_filter"
 )
 
-// Valid indicates whether the value is a known member of the PickMembersParamsContext enum.
-func (e PickMembersParamsContext) Valid() bool {
+// Valid indicates whether the value is a known member of the SearchMembersParamsContext enum.
+func (e SearchMembersParamsContext) Valid() bool {
 	switch e {
-	case PickMembersParamsContextRecordAssignment:
+	case SearchMembersParamsContextNavigation:
 		return true
-	case PickMembersParamsContextTransactionFilter:
+	case SearchMembersParamsContextRecordAssignment:
+		return true
+	case SearchMembersParamsContextTransactionFilter:
 		return true
 	default:
 		return false
@@ -1410,18 +1458,21 @@ func (e ListTagsParamsSortDir) Valid() bool {
 	}
 }
 
-// Defines values for PickTagsParamsContext.
+// Defines values for SearchTagsParamsContext.
 const (
-	PickTagsParamsContextRecordAssignment  PickTagsParamsContext = "record_assignment"
-	PickTagsParamsContextTransactionFilter PickTagsParamsContext = "transaction_filter"
+	SearchTagsParamsContextNavigation        SearchTagsParamsContext = "navigation"
+	SearchTagsParamsContextRecordAssignment  SearchTagsParamsContext = "record_assignment"
+	SearchTagsParamsContextTransactionFilter SearchTagsParamsContext = "transaction_filter"
 )
 
-// Valid indicates whether the value is a known member of the PickTagsParamsContext enum.
-func (e PickTagsParamsContext) Valid() bool {
+// Valid indicates whether the value is a known member of the SearchTagsParamsContext enum.
+func (e SearchTagsParamsContext) Valid() bool {
 	switch e {
-	case PickTagsParamsContextRecordAssignment:
+	case SearchTagsParamsContextNavigation:
 		return true
-	case PickTagsParamsContextTransactionFilter:
+	case SearchTagsParamsContextRecordAssignment:
+		return true
+	case SearchTagsParamsContextTransactionFilter:
 		return true
 	default:
 		return false
@@ -1613,6 +1664,17 @@ type AccountBalanceListResponse struct {
 	Balances []AccountBalance `json:"balances"`
 }
 
+// AccountCreationAvailabilityResponse defines model for AccountCreationAvailabilityResponse.
+type AccountCreationAvailabilityResponse struct {
+	Available bool `json:"available"`
+
+	// Reason Stable false reason; absent when available.
+	Reason *AccountCreationAvailabilityResponseReason `json:"reason,omitempty"`
+}
+
+// AccountCreationAvailabilityResponseReason Stable false reason; absent when available.
+type AccountCreationAvailabilityResponseReason string
+
 // AccountListResponse defines model for AccountListResponse.
 type AccountListResponse struct {
 	Accounts []Account `json:"accounts"`
@@ -1621,8 +1683,8 @@ type AccountListResponse struct {
 	TotalCount int64 `json:"total_count"`
 }
 
-// AccountPickerItem defines model for AccountPickerItem.
-type AccountPickerItem struct {
+// AccountSearchItem defines model for AccountSearchItem.
+type AccountSearchItem struct {
 	// AccountId Stable leaf identifier; absent for navigation groups.
 	AccountId *int64 `json:"account_id,omitempty"`
 
@@ -1638,26 +1700,20 @@ type AccountPickerItem struct {
 	// Fqn Complete authoritative account leaf or group path.
 	Fqn      string                `json:"fqn"`
 	IsHidden bool                  `json:"is_hidden"`
-	Kind     AccountPickerItemKind `json:"kind"`
+	Kind     AccountSearchItemKind `json:"kind"`
 
 	// Title Effective account display title for leaves or final FQN segment for groups.
 	Title string `json:"title"`
 }
 
-// AccountPickerItemKind defines model for AccountPickerItem.Kind.
-type AccountPickerItemKind string
+// AccountSearchItemKind defines model for AccountSearchItem.Kind.
+type AccountSearchItemKind string
 
-// AccountPickerResponse defines model for AccountPickerResponse.
-type AccountPickerResponse struct {
-	// CanCreate Whether the current full query can be created through the caller's existing account creation flow.
-	CanCreate bool `json:"can_create"`
-
-	// EligibleCount Complete eligible leaf count for the typed context before query matching, hierarchy scoping, and result bounding.
-	EligibleCount int64               `json:"eligible_count"`
-	Items         []AccountPickerItem `json:"items"`
-
-	// SelectedItems Active selected leaves in request order, independent of query matching and the search result bound.
-	SelectedItems []AccountPickerItem `json:"selected_items"`
+// AccountSearchResponse defines model for AccountSearchResponse.
+type AccountSearchResponse struct {
+	// HasMore Whether more ranked candidates matched beyond the caller's limit.
+	HasMore bool                `json:"has_more"`
+	Items   []AccountSearchItem `json:"items"`
 }
 
 // AccountType Account semantic type. Owned and party accounts hold tracked household state; flow records carry categorized economic activity; system accounts are fixed Mina mechanics.
@@ -1907,8 +1963,8 @@ type CategoryListResponse struct {
 	TotalCount int64 `json:"total_count"`
 }
 
-// CategoryPickerItem defines model for CategoryPickerItem.
-type CategoryPickerItem struct {
+// CategorySearchItem defines model for CategorySearchItem.
+type CategorySearchItem struct {
 	// CategoryId Stable leaf identifier; absent for navigation groups.
 	CategoryId *int64 `json:"category_id,omitempty"`
 
@@ -1921,23 +1977,20 @@ type CategoryPickerItem struct {
 	// Fqn Complete authoritative category leaf or group path.
 	Fqn      string                 `json:"fqn"`
 	IsHidden bool                   `json:"is_hidden"`
-	Kind     CategoryPickerItemKind `json:"kind"`
+	Kind     CategorySearchItemKind `json:"kind"`
 
 	// Title Effective category display title for leaves or final FQN segment for groups.
 	Title string `json:"title"`
 }
 
-// CategoryPickerItemKind defines model for CategoryPickerItem.Kind.
-type CategoryPickerItemKind string
+// CategorySearchItemKind defines model for CategorySearchItem.Kind.
+type CategorySearchItemKind string
 
-// CategoryPickerResponse defines model for CategoryPickerResponse.
-type CategoryPickerResponse struct {
-	// CanCreate Whether the supplied context and current full query are eligible for category creation; the caller independently decides whether to offer a creation flow.
-	CanCreate bool                 `json:"can_create"`
-	Items     []CategoryPickerItem `json:"items"`
-
-	// SelectedItems Active selected leaves in request order, independent of query matching and the search result bound.
-	SelectedItems []CategoryPickerItem `json:"selected_items"`
+// CategorySearchResponse defines model for CategorySearchResponse.
+type CategorySearchResponse struct {
+	// HasMore Whether more ranked candidates matched beyond the caller's limit.
+	HasMore bool                 `json:"has_more"`
+	Items   []CategorySearchItem `json:"items"`
 }
 
 // ClassifiedRecord defines model for ClassifiedRecord.
@@ -2280,6 +2333,17 @@ type CreateTransferTransactionRequest struct {
 	// TagIds Tag identifiers to assign to the journal records.
 	TagIds *[]int64 `json:"tag_ids,omitempty"`
 }
+
+// CreationAvailabilityResponse defines model for CreationAvailabilityResponse.
+type CreationAvailabilityResponse struct {
+	Available bool `json:"available"`
+
+	// Reason Stable false reason; absent when available.
+	Reason *CreationAvailabilityResponseReason `json:"reason,omitempty"`
+}
+
+// CreationAvailabilityResponseReason Stable false reason; absent when available.
+type CreationAvailabilityResponseReason string
 
 // CreditLimitHistory defines model for CreditLimitHistory.
 type CreditLimitHistory struct {
@@ -2700,19 +2764,18 @@ type MemberListResponse struct {
 	TotalCount int64 `json:"total_count"`
 }
 
-// MemberPickerItem defines model for MemberPickerItem.
-type MemberPickerItem struct {
+// MemberSearchItem defines model for MemberSearchItem.
+type MemberSearchItem struct {
 	IsHidden bool   `json:"is_hidden"`
 	MemberId int64  `json:"member_id"`
 	Title    string `json:"title"`
 }
 
-// MemberPickerResponse defines model for MemberPickerResponse.
-type MemberPickerResponse struct {
-	Items []MemberPickerItem `json:"items"`
-
-	// SelectedItems Active selected members in request order, independent of query matching and the search result bound.
-	SelectedItems []MemberPickerItem `json:"selected_items"`
+// MemberSearchResponse defines model for MemberSearchResponse.
+type MemberSearchResponse struct {
+	// HasMore Whether more ranked candidates matched beyond the caller's limit.
+	HasMore bool               `json:"has_more"`
+	Items   []MemberSearchItem `json:"items"`
 }
 
 // OperationRunReferenceResponse defines model for OperationRunReferenceResponse.
@@ -3004,15 +3067,15 @@ type TagListResponse struct {
 	TotalCount int64 `json:"total_count"`
 }
 
-// TagPickerItem defines model for TagPickerItem.
-type TagPickerItem struct {
+// TagSearchItem defines model for TagSearchItem.
+type TagSearchItem struct {
 	// ChildCount Descendant leaf count for navigation groups.
 	ChildCount *int `json:"child_count,omitempty"`
 
 	// Fqn Complete authoritative tag leaf or group path.
 	Fqn      string            `json:"fqn"`
 	IsHidden bool              `json:"is_hidden"`
-	Kind     TagPickerItemKind `json:"kind"`
+	Kind     TagSearchItemKind `json:"kind"`
 
 	// TagId Stable leaf identifier; absent for navigation groups.
 	TagId *int64 `json:"tag_id,omitempty"`
@@ -3021,17 +3084,14 @@ type TagPickerItem struct {
 	Title string `json:"title"`
 }
 
-// TagPickerItemKind defines model for TagPickerItem.Kind.
-type TagPickerItemKind string
+// TagSearchItemKind defines model for TagSearchItem.Kind.
+type TagSearchItemKind string
 
-// TagPickerResponse defines model for TagPickerResponse.
-type TagPickerResponse struct {
-	// CanCreate Whether the supplied context and current full query are eligible for tag creation; the caller independently decides whether to offer a creation flow.
-	CanCreate bool            `json:"can_create"`
-	Items     []TagPickerItem `json:"items"`
-
-	// SelectedItems Active selected leaves in request order, independent of query matching and the search result bound.
-	SelectedItems []TagPickerItem `json:"selected_items"`
+// TagSearchResponse defines model for TagSearchResponse.
+type TagSearchResponse struct {
+	// HasMore Whether more ranked candidates matched beyond the caller's limit.
+	HasMore bool            `json:"has_more"`
+	Items   []TagSearchItem `json:"items"`
 }
 
 // Transaction defines model for Transaction.
@@ -3392,14 +3452,17 @@ type browserSessionContextKey string
 
 // ListAccountsParams defines parameters for ListAccounts.
 type ListAccountsParams struct {
+	// Q Filter membership by display title, FQN, segment, or active implicit group; does not change canonical sort order.
+	Q *string `form:"q,omitempty" json:"q,omitempty"`
+
 	// IncludeHidden Include hidden active entities; defaults to false.
 	IncludeHidden *bool `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
 
 	// IncludeTombstoned Include tombstoned entities; defaults to false.
 	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
 
-	// AccountType Filter by owned, party, flow, or system account type.
-	AccountType *AccountType `form:"account_type,omitempty" json:"account_type,omitempty"`
+	// AccountType Filter by one or more owned, party, flow, or system account types.
+	AccountType *[]AccountType `form:"account_type,omitempty" json:"account_type,omitempty"`
 
 	// IsFeatured Filter by featured state when provided.
 	IsFeatured *bool `form:"is_featured,omitempty" json:"is_featured,omitempty"`
@@ -3432,25 +3495,31 @@ type ListAccountBalancesParams struct {
 	AccountIds *[]int64 `form:"account_ids,omitempty" json:"account_ids,omitempty"`
 }
 
+// GetAccountCreationAvailabilityParams defines parameters for GetAccountCreationAvailability.
+type GetAccountCreationAvailabilityParams struct {
+	Fqn string `form:"fqn" json:"fqn"`
+}
+
 // ListAccountGroupsParams defines parameters for ListAccountGroups.
 type ListAccountGroupsParams struct {
 	// IncludeHidden Include hidden active entities; defaults to false.
 	IncludeHidden *bool `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
 }
 
-// PickAccountsParams defines parameters for PickAccounts.
-type PickAccountsParams struct {
-	Context PickAccountsParamsContext `form:"context" json:"context"`
-	Q       *string                   `form:"q,omitempty" json:"q,omitempty"`
+// SearchAccountsParams defines parameters for SearchAccounts.
+type SearchAccountsParams struct {
+	Context SearchAccountsParamsContext `form:"context" json:"context"`
+	Limit   int                         `form:"limit" json:"limit"`
+	Q       *string                     `form:"q,omitempty" json:"q,omitempty"`
 
 	// ParentFqn Return only direct children of this hierarchy group; an empty value selects root children.
 	ParentFqn     *string `form:"parent_fqn,omitempty" json:"parent_fqn,omitempty"`
 	IncludeHidden *bool   `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
 
-	// SelectedIds Active selections retained even when hidden.
-	SelectedIds *[]int64 `form:"selected_ids,omitempty" json:"selected_ids,omitempty"`
+	// ExcludeIds Active selected leaf IDs to omit from candidates.
+	ExcludeIds *[]int64 `form:"exclude_ids,omitempty" json:"exclude_ids,omitempty"`
 
-	// ExcludedCurrency Exchange context excludes fixed-currency accounts in this currency while retaining current selections.
+	// ExcludedCurrency Exchange context excludes fixed-currency accounts in this currency.
 	ExcludedCurrency *string `form:"excluded_currency,omitempty" json:"excluded_currency,omitempty"`
 
 	// TransactionIds Selected transactions for a bulk source or replacement context.
@@ -3460,8 +3529,8 @@ type PickAccountsParams struct {
 	SourceAccountId *int64 `form:"source_account_id,omitempty" json:"source_account_id,omitempty"`
 }
 
-// PickAccountsParamsContext defines parameters for PickAccounts.
-type PickAccountsParamsContext string
+// SearchAccountsParamsContext defines parameters for SearchAccounts.
+type SearchAccountsParamsContext string
 
 // GetAccountParams defines parameters for GetAccount.
 type GetAccountParams struct {
@@ -3609,6 +3678,9 @@ type ListBackgroundOperationRunEnvelopesParams struct {
 
 // ListCategoriesParams defines parameters for ListCategories.
 type ListCategoriesParams struct {
+	// Q Filter membership by display title, FQN, segment, or active implicit group; does not change canonical sort order.
+	Q *string `form:"q,omitempty" json:"q,omitempty"`
+
 	// IncludeHidden Include hidden active entities; defaults to false.
 	IncludeHidden *bool `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
 
@@ -3639,6 +3711,11 @@ type ListCategoriesParamsSort string
 
 // ListCategoriesParamsSortDir defines parameters for ListCategories.
 type ListCategoriesParamsSortDir string
+
+// GetCategoryCreationAvailabilityParams defines parameters for GetCategoryCreationAvailability.
+type GetCategoryCreationAvailabilityParams struct {
+	Fqn string `form:"fqn" json:"fqn"`
+}
 
 // ListCategoryGroupsParams defines parameters for ListCategoryGroups.
 type ListCategoryGroupsParams struct {
@@ -3673,21 +3750,22 @@ type GetCategoryGroupOverviewParams struct {
 	Trend *HouseholdFlowTrend `form:"trend,omitempty" json:"trend,omitempty"`
 }
 
-// PickCategoriesParams defines parameters for PickCategories.
-type PickCategoriesParams struct {
-	Context PickCategoriesParamsContext `form:"context" json:"context"`
-	Q       *string                     `form:"q,omitempty" json:"q,omitempty"`
+// SearchCategoriesParams defines parameters for SearchCategories.
+type SearchCategoriesParams struct {
+	Context SearchCategoriesParamsContext `form:"context" json:"context"`
+	Limit   int                           `form:"limit" json:"limit"`
+	Q       *string                       `form:"q,omitempty" json:"q,omitempty"`
 
 	// ParentFqn Return only direct children of this hierarchy group; an empty value selects root children.
 	ParentFqn     *string `form:"parent_fqn,omitempty" json:"parent_fqn,omitempty"`
 	IncludeHidden *bool   `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
 
-	// SelectedIds Active selections retained even when hidden.
-	SelectedIds *[]int64 `form:"selected_ids,omitempty" json:"selected_ids,omitempty"`
+	// ExcludeIds Active selected leaf IDs to omit from candidates.
+	ExcludeIds *[]int64 `form:"exclude_ids,omitempty" json:"exclude_ids,omitempty"`
 }
 
-// PickCategoriesParamsContext defines parameters for PickCategories.
-type PickCategoriesParamsContext string
+// SearchCategoriesParamsContext defines parameters for SearchCategories.
+type SearchCategoriesParamsContext string
 
 // GetCategoryParams defines parameters for GetCategory.
 type GetCategoryParams struct {
@@ -3784,6 +3862,9 @@ type GetExchangeRateParams struct {
 
 // ListMembersParams defines parameters for ListMembers.
 type ListMembersParams struct {
+	// Q Filter membership by member name under the shared matching policy; does not change canonical sort order.
+	Q *string `form:"q,omitempty" json:"q,omitempty"`
+
 	// IncludeHidden Include hidden active entities; defaults to false.
 	IncludeHidden *bool `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
 
@@ -3809,18 +3890,19 @@ type ListMembersParamsSort string
 // ListMembersParamsSortDir defines parameters for ListMembers.
 type ListMembersParamsSortDir string
 
-// PickMembersParams defines parameters for PickMembers.
-type PickMembersParams struct {
-	Context       PickMembersParamsContext `form:"context" json:"context"`
-	Q             *string                  `form:"q,omitempty" json:"q,omitempty"`
-	IncludeHidden *bool                    `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
+// SearchMembersParams defines parameters for SearchMembers.
+type SearchMembersParams struct {
+	Context       SearchMembersParamsContext `form:"context" json:"context"`
+	Limit         int                        `form:"limit" json:"limit"`
+	Q             *string                    `form:"q,omitempty" json:"q,omitempty"`
+	IncludeHidden *bool                      `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
 
-	// SelectedIds Active selections retained even when hidden.
-	SelectedIds *[]int64 `form:"selected_ids,omitempty" json:"selected_ids,omitempty"`
+	// ExcludeIds Active selected member IDs to omit from candidates.
+	ExcludeIds *[]int64 `form:"exclude_ids,omitempty" json:"exclude_ids,omitempty"`
 }
 
-// PickMembersParamsContext defines parameters for PickMembers.
-type PickMembersParamsContext string
+// SearchMembersParamsContext defines parameters for SearchMembers.
+type SearchMembersParamsContext string
 
 // GetMemberParams defines parameters for GetMember.
 type GetMemberParams struct {
@@ -3983,6 +4065,9 @@ type ListRecurringOccurrencesParamsSortDir string
 
 // ListTagsParams defines parameters for ListTags.
 type ListTagsParams struct {
+	// Q Filter membership by display title, FQN, segment, or active implicit group; does not change canonical sort order.
+	Q *string `form:"q,omitempty" json:"q,omitempty"`
+
 	// IncludeHidden Include hidden active entities; defaults to false.
 	IncludeHidden *bool `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
 
@@ -4010,6 +4095,11 @@ type ListTagsParamsSort string
 
 // ListTagsParamsSortDir defines parameters for ListTags.
 type ListTagsParamsSortDir string
+
+// GetTagCreationAvailabilityParams defines parameters for GetTagCreationAvailability.
+type GetTagCreationAvailabilityParams struct {
+	Fqn string `form:"fqn" json:"fqn"`
+}
 
 // ListTagGroupsParams defines parameters for ListTagGroups.
 type ListTagGroupsParams struct {
@@ -4044,21 +4134,22 @@ type GetTagGroupOverviewParams struct {
 	Trend *HouseholdFlowTrend `form:"trend,omitempty" json:"trend,omitempty"`
 }
 
-// PickTagsParams defines parameters for PickTags.
-type PickTagsParams struct {
-	Context PickTagsParamsContext `form:"context" json:"context"`
-	Q       *string               `form:"q,omitempty" json:"q,omitempty"`
+// SearchTagsParams defines parameters for SearchTags.
+type SearchTagsParams struct {
+	Context SearchTagsParamsContext `form:"context" json:"context"`
+	Limit   int                     `form:"limit" json:"limit"`
+	Q       *string                 `form:"q,omitempty" json:"q,omitempty"`
 
 	// ParentFqn Return only direct children of this hierarchy group; an empty value selects root children.
 	ParentFqn     *string `form:"parent_fqn,omitempty" json:"parent_fqn,omitempty"`
 	IncludeHidden *bool   `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
 
-	// SelectedIds Active selections retained even when hidden.
-	SelectedIds *[]int64 `form:"selected_ids,omitempty" json:"selected_ids,omitempty"`
+	// ExcludeIds Active selected leaf IDs to omit from candidates.
+	ExcludeIds *[]int64 `form:"exclude_ids,omitempty" json:"exclude_ids,omitempty"`
 }
 
-// PickTagsParamsContext defines parameters for PickTags.
-type PickTagsParamsContext string
+// SearchTagsParamsContext defines parameters for SearchTags.
+type SearchTagsParamsContext string
 
 // GetTagParams defines parameters for GetTag.
 type GetTagParams struct {
@@ -4434,16 +4525,19 @@ type ClientInterface interface {
 	// ListAccountBalances request
 	ListAccountBalances(ctx context.Context, params *ListAccountBalancesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetAccountCreationAvailability request
+	GetAccountCreationAvailability(ctx context.Context, params *GetAccountCreationAvailabilityParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListAccountGroups request
 	ListAccountGroups(ctx context.Context, params *ListAccountGroupsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// PickAccounts request
-	PickAccounts(ctx context.Context, params *PickAccountsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// RestructureAccountsWithBody request with any body
 	RestructureAccountsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	RestructureAccounts(ctx context.Context, body RestructureAccountsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SearchAccounts request
+	SearchAccounts(ctx context.Context, params *SearchAccountsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// SetAccountHiddenByPathWithBody request with any body
 	SetAccountHiddenByPathWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -4530,19 +4624,22 @@ type ClientInterface interface {
 
 	CreateCategory(ctx context.Context, body CreateCategoryJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetCategoryCreationAvailability request
+	GetCategoryCreationAvailability(ctx context.Context, params *GetCategoryCreationAvailabilityParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListCategoryGroups request
 	ListCategoryGroups(ctx context.Context, params *ListCategoryGroupsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetCategoryGroupOverview request
 	GetCategoryGroupOverview(ctx context.Context, params *GetCategoryGroupOverviewParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// PickCategories request
-	PickCategories(ctx context.Context, params *PickCategoriesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
-
 	// RestructureCategoriesWithBody request with any body
 	RestructureCategoriesWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	RestructureCategories(ctx context.Context, body RestructureCategoriesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SearchCategories request
+	SearchCategories(ctx context.Context, params *SearchCategoriesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// SetCategoryHiddenByPathWithBody request with any body
 	SetCategoryHiddenByPathWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -4602,8 +4699,8 @@ type ClientInterface interface {
 
 	CreateMember(ctx context.Context, body CreateMemberJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// PickMembers request
-	PickMembers(ctx context.Context, params *PickMembersParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// SearchMembers request
+	SearchMembers(ctx context.Context, params *SearchMembersParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteMember request
 	DeleteMember(ctx context.Context, memberId int64, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -4717,19 +4814,22 @@ type ClientInterface interface {
 
 	CreateTag(ctx context.Context, body CreateTagJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetTagCreationAvailability request
+	GetTagCreationAvailability(ctx context.Context, params *GetTagCreationAvailabilityParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListTagGroups request
 	ListTagGroups(ctx context.Context, params *ListTagGroupsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetTagGroupOverview request
 	GetTagGroupOverview(ctx context.Context, params *GetTagGroupOverviewParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// PickTags request
-	PickTags(ctx context.Context, params *PickTagsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
-
 	// RestructureTagsWithBody request with any body
 	RestructureTagsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	RestructureTags(ctx context.Context, body RestructureTagsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SearchTags request
+	SearchTags(ctx context.Context, params *SearchTagsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// SetTagHiddenByPathWithBody request with any body
 	SetTagHiddenByPathWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -4910,8 +5010,8 @@ func (c *Client) ListAccountBalances(ctx context.Context, params *ListAccountBal
 	return c.Client.Do(req)
 }
 
-func (c *Client) ListAccountGroups(ctx context.Context, params *ListAccountGroupsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListAccountGroupsRequest(c.Server, params)
+func (c *Client) GetAccountCreationAvailability(ctx context.Context, params *GetAccountCreationAvailabilityParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAccountCreationAvailabilityRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -4922,8 +5022,8 @@ func (c *Client) ListAccountGroups(ctx context.Context, params *ListAccountGroup
 	return c.Client.Do(req)
 }
 
-func (c *Client) PickAccounts(ctx context.Context, params *PickAccountsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPickAccountsRequest(c.Server, params)
+func (c *Client) ListAccountGroups(ctx context.Context, params *ListAccountGroupsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListAccountGroupsRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -4948,6 +5048,18 @@ func (c *Client) RestructureAccountsWithBody(ctx context.Context, contentType st
 
 func (c *Client) RestructureAccounts(ctx context.Context, body RestructureAccountsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewRestructureAccountsRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) SearchAccounts(ctx context.Context, params *SearchAccountsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSearchAccountsRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -5318,6 +5430,18 @@ func (c *Client) CreateCategory(ctx context.Context, body CreateCategoryJSONRequ
 	return c.Client.Do(req)
 }
 
+func (c *Client) GetCategoryCreationAvailability(ctx context.Context, params *GetCategoryCreationAvailabilityParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetCategoryCreationAvailabilityRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) ListCategoryGroups(ctx context.Context, params *ListCategoryGroupsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListCategoryGroupsRequest(c.Server, params)
 	if err != nil {
@@ -5342,18 +5466,6 @@ func (c *Client) GetCategoryGroupOverview(ctx context.Context, params *GetCatego
 	return c.Client.Do(req)
 }
 
-func (c *Client) PickCategories(ctx context.Context, params *PickCategoriesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPickCategoriesRequest(c.Server, params)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
 func (c *Client) RestructureCategoriesWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewRestructureCategoriesRequestWithBody(c.Server, contentType, body)
 	if err != nil {
@@ -5368,6 +5480,18 @@ func (c *Client) RestructureCategoriesWithBody(ctx context.Context, contentType 
 
 func (c *Client) RestructureCategories(ctx context.Context, body RestructureCategoriesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewRestructureCategoriesRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) SearchCategories(ctx context.Context, params *SearchCategoriesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSearchCategoriesRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -5630,8 +5754,8 @@ func (c *Client) CreateMember(ctx context.Context, body CreateMemberJSONRequestB
 	return c.Client.Do(req)
 }
 
-func (c *Client) PickMembers(ctx context.Context, params *PickMembersParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPickMembersRequest(c.Server, params)
+func (c *Client) SearchMembers(ctx context.Context, params *SearchMembersParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSearchMembersRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -6146,6 +6270,18 @@ func (c *Client) CreateTag(ctx context.Context, body CreateTagJSONRequestBody, r
 	return c.Client.Do(req)
 }
 
+func (c *Client) GetTagCreationAvailability(ctx context.Context, params *GetTagCreationAvailabilityParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetTagCreationAvailabilityRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) ListTagGroups(ctx context.Context, params *ListTagGroupsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListTagGroupsRequest(c.Server, params)
 	if err != nil {
@@ -6170,18 +6306,6 @@ func (c *Client) GetTagGroupOverview(ctx context.Context, params *GetTagGroupOve
 	return c.Client.Do(req)
 }
 
-func (c *Client) PickTags(ctx context.Context, params *PickTagsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPickTagsRequest(c.Server, params)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
 func (c *Client) RestructureTagsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewRestructureTagsRequestWithBody(c.Server, contentType, body)
 	if err != nil {
@@ -6196,6 +6320,18 @@ func (c *Client) RestructureTagsWithBody(ctx context.Context, contentType string
 
 func (c *Client) RestructureTags(ctx context.Context, body RestructureTagsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewRestructureTagsRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) SearchTags(ctx context.Context, params *SearchTagsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSearchTagsRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -6768,6 +6904,18 @@ func NewListAccountsRequest(server string, params *ListAccountsParams) (*http.Re
 		// per the OpenAPI spec (e.g. "color=blue,black,brown").
 		var rawQueryFragments []string
 
+		if params.Q != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "q", *params.Q, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if params.IncludeHidden != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_hidden", *params.IncludeHidden, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
@@ -6794,7 +6942,7 @@ func NewListAccountsRequest(server string, params *ListAccountsParams) (*http.Re
 
 		if params.AccountType != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "account_type", *params.AccountType, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "account_type", *params.AccountType, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -6984,6 +7132,56 @@ func NewListAccountBalancesRequest(server string, params *ListAccountBalancesPar
 	return req, nil
 }
 
+// NewGetAccountCreationAvailabilityRequest generates requests for GetAccountCreationAvailability
+func NewGetAccountCreationAvailabilityRequest(server string, params *GetAccountCreationAvailabilityParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/accounts/creation-availability")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "fqn", params.Fqn, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewListAccountGroupsRequest generates requests for ListAccountGroups
 func NewListAccountGroupsRequest(server string, params *ListAccountGroupsParams) (*http.Request, error) {
 	var err error
@@ -7015,140 +7213,6 @@ func NewListAccountGroupsRequest(server string, params *ListAccountGroupsParams)
 		if params.IncludeHidden != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_hidden", *params.IncludeHidden, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if encoded := queryValues.Encode(); encoded != "" {
-			rawQueryFragments = append(rawQueryFragments, encoded)
-		}
-		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
-	}
-
-	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewPickAccountsRequest generates requests for PickAccounts
-func NewPickAccountsRequest(server string, params *PickAccountsParams) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/accounts/picker")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	if params != nil {
-		// queryValues collects non-styled parameters (passthrough, JSON)
-		// that are safe to round-trip through url.Values.Encode().
-		queryValues := queryURL.Query()
-		// rawQueryFragments collects pre-encoded query fragments from
-		// styled parameters, preserving literal commas as delimiters
-		// per the OpenAPI spec (e.g. "color=blue,black,brown").
-		var rawQueryFragments []string
-
-		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "context", params.Context, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
-			return nil, err
-		} else {
-			for _, qp := range strings.Split(queryFrag, "&") {
-				rawQueryFragments = append(rawQueryFragments, qp)
-			}
-		}
-
-		if params.Q != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "q", *params.Q, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if params.ParentFqn != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "parent_fqn", *params.ParentFqn, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if params.IncludeHidden != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_hidden", *params.IncludeHidden, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if params.SelectedIds != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "selected_ids", *params.SelectedIds, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if params.ExcludedCurrency != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "excluded_currency", *params.ExcludedCurrency, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if params.TransactionIds != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "transaction_ids", *params.TransactionIds, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if params.SourceAccountId != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "source_account_id", *params.SourceAccountId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int64"}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -7208,6 +7272,148 @@ func NewRestructureAccountsRequestWithBody(server string, contentType string, bo
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewSearchAccountsRequest generates requests for SearchAccounts
+func NewSearchAccountsRequest(server string, params *SearchAccountsParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/accounts/search")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "context", params.Context, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if params.Q != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "q", *params.Q, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.ParentFqn != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "parent_fqn", *params.ParentFqn, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.IncludeHidden != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_hidden", *params.IncludeHidden, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.ExcludeIds != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "exclude_ids", *params.ExcludeIds, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.ExcludedCurrency != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "excluded_currency", *params.ExcludedCurrency, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.TransactionIds != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "transaction_ids", *params.TransactionIds, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.SourceAccountId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "source_account_id", *params.SourceAccountId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int64"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -8522,6 +8728,18 @@ func NewListCategoriesRequest(server string, params *ListCategoriesParams) (*htt
 		// per the OpenAPI spec (e.g. "color=blue,black,brown").
 		var rawQueryFragments []string
 
+		if params.Q != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "q", *params.Q, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if params.IncludeHidden != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_hidden", *params.IncludeHidden, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
@@ -8668,6 +8886,56 @@ func NewCreateCategoryRequestWithBody(server string, contentType string, body io
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetCategoryCreationAvailabilityRequest generates requests for GetCategoryCreationAvailability
+func NewGetCategoryCreationAvailabilityRequest(server string, params *GetCategoryCreationAvailabilityParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/categories/creation-availability")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "fqn", params.Fqn, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -8860,8 +9128,19 @@ func NewGetCategoryGroupOverviewRequest(server string, params *GetCategoryGroupO
 	return req, nil
 }
 
-// NewPickCategoriesRequest generates requests for PickCategories
-func NewPickCategoriesRequest(server string, params *PickCategoriesParams) (*http.Request, error) {
+// NewRestructureCategoriesRequest calls the generic RestructureCategories builder with application/json body
+func NewRestructureCategoriesRequest(server string, body RestructureCategoriesJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewRestructureCategoriesRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewRestructureCategoriesRequestWithBody generates requests for RestructureCategories with any type of body
+func NewRestructureCategoriesRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -8869,7 +9148,36 @@ func NewPickCategoriesRequest(server string, params *PickCategoriesParams) (*htt
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/api/categories/picker")
+	operationPath := fmt.Sprintf("/api/categories/restructure")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewSearchCategoriesRequest generates requests for SearchCategories
+func NewSearchCategoriesRequest(server string, params *SearchCategoriesParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/categories/search")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -8889,6 +9197,14 @@ func NewPickCategoriesRequest(server string, params *PickCategoriesParams) (*htt
 		var rawQueryFragments []string
 
 		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "context", params.Context, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
 			return nil, err
 		} else {
 			for _, qp := range strings.Split(queryFrag, "&") {
@@ -8932,9 +9248,9 @@ func NewPickCategoriesRequest(server string, params *PickCategoriesParams) (*htt
 
 		}
 
-		if params.SelectedIds != nil {
+		if params.ExcludeIds != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "selected_ids", *params.SelectedIds, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "exclude_ids", *params.ExcludeIds, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -8954,46 +9270,6 @@ func NewPickCategoriesRequest(server string, params *PickCategoriesParams) (*htt
 	if err != nil {
 		return nil, err
 	}
-
-	return req, nil
-}
-
-// NewRestructureCategoriesRequest calls the generic RestructureCategories builder with application/json body
-func NewRestructureCategoriesRequest(server string, body RestructureCategoriesJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewRestructureCategoriesRequestWithBody(server, "application/json", bodyReader)
-}
-
-// NewRestructureCategoriesRequestWithBody generates requests for RestructureCategories with any type of body
-func NewRestructureCategoriesRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/categories/restructure")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -9885,6 +10161,18 @@ func NewListMembersRequest(server string, params *ListMembersParams) (*http.Requ
 		// per the OpenAPI spec (e.g. "color=blue,black,brown").
 		var rawQueryFragments []string
 
+		if params.Q != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "q", *params.Q, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if params.IncludeHidden != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_hidden", *params.IncludeHidden, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
@@ -10011,8 +10299,8 @@ func NewCreateMemberRequestWithBody(server string, contentType string, body io.R
 	return req, nil
 }
 
-// NewPickMembersRequest generates requests for PickMembers
-func NewPickMembersRequest(server string, params *PickMembersParams) (*http.Request, error) {
+// NewSearchMembersRequest generates requests for SearchMembers
+func NewSearchMembersRequest(server string, params *SearchMembersParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -10020,7 +10308,7 @@ func NewPickMembersRequest(server string, params *PickMembersParams) (*http.Requ
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/api/members/picker")
+	operationPath := fmt.Sprintf("/api/members/search")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -10040,6 +10328,14 @@ func NewPickMembersRequest(server string, params *PickMembersParams) (*http.Requ
 		var rawQueryFragments []string
 
 		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "context", params.Context, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
 			return nil, err
 		} else {
 			for _, qp := range strings.Split(queryFrag, "&") {
@@ -10071,9 +10367,9 @@ func NewPickMembersRequest(server string, params *PickMembersParams) (*http.Requ
 
 		}
 
-		if params.SelectedIds != nil {
+		if params.ExcludeIds != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "selected_ids", *params.SelectedIds, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "exclude_ids", *params.ExcludeIds, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -11673,6 +11969,18 @@ func NewListTagsRequest(server string, params *ListTagsParams) (*http.Request, e
 		// per the OpenAPI spec (e.g. "color=blue,black,brown").
 		var rawQueryFragments []string
 
+		if params.Q != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "q", *params.Q, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if params.IncludeHidden != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_hidden", *params.IncludeHidden, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
@@ -11807,6 +12115,56 @@ func NewCreateTagRequestWithBody(server string, contentType string, body io.Read
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetTagCreationAvailabilityRequest generates requests for GetTagCreationAvailability
+func NewGetTagCreationAvailabilityRequest(server string, params *GetTagCreationAvailabilityParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/tags/creation-availability")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "fqn", params.Fqn, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -11999,8 +12357,19 @@ func NewGetTagGroupOverviewRequest(server string, params *GetTagGroupOverviewPar
 	return req, nil
 }
 
-// NewPickTagsRequest generates requests for PickTags
-func NewPickTagsRequest(server string, params *PickTagsParams) (*http.Request, error) {
+// NewRestructureTagsRequest calls the generic RestructureTags builder with application/json body
+func NewRestructureTagsRequest(server string, body RestructureTagsJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewRestructureTagsRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewRestructureTagsRequestWithBody generates requests for RestructureTags with any type of body
+func NewRestructureTagsRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -12008,7 +12377,36 @@ func NewPickTagsRequest(server string, params *PickTagsParams) (*http.Request, e
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/api/tags/picker")
+	operationPath := fmt.Sprintf("/api/tags/restructure")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewSearchTagsRequest generates requests for SearchTags
+func NewSearchTagsRequest(server string, params *SearchTagsParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/tags/search")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -12028,6 +12426,14 @@ func NewPickTagsRequest(server string, params *PickTagsParams) (*http.Request, e
 		var rawQueryFragments []string
 
 		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "context", params.Context, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
 			return nil, err
 		} else {
 			for _, qp := range strings.Split(queryFrag, "&") {
@@ -12071,9 +12477,9 @@ func NewPickTagsRequest(server string, params *PickTagsParams) (*http.Request, e
 
 		}
 
-		if params.SelectedIds != nil {
+		if params.ExcludeIds != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "selected_ids", *params.SelectedIds, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "exclude_ids", *params.ExcludeIds, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -12093,46 +12499,6 @@ func NewPickTagsRequest(server string, params *PickTagsParams) (*http.Request, e
 	if err != nil {
 		return nil, err
 	}
-
-	return req, nil
-}
-
-// NewRestructureTagsRequest calls the generic RestructureTags builder with application/json body
-func NewRestructureTagsRequest(server string, body RestructureTagsJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewRestructureTagsRequestWithBody(server, "application/json", bodyReader)
-}
-
-// NewRestructureTagsRequestWithBody generates requests for RestructureTags with any type of body
-func NewRestructureTagsRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/tags/restructure")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -13501,16 +13867,19 @@ type ClientWithResponsesInterface interface {
 	// ListAccountBalancesWithResponse request
 	ListAccountBalancesWithResponse(ctx context.Context, params *ListAccountBalancesParams, reqEditors ...RequestEditorFn) (*ListAccountBalancesResponse, error)
 
+	// GetAccountCreationAvailabilityWithResponse request
+	GetAccountCreationAvailabilityWithResponse(ctx context.Context, params *GetAccountCreationAvailabilityParams, reqEditors ...RequestEditorFn) (*GetAccountCreationAvailabilityResponse, error)
+
 	// ListAccountGroupsWithResponse request
 	ListAccountGroupsWithResponse(ctx context.Context, params *ListAccountGroupsParams, reqEditors ...RequestEditorFn) (*ListAccountGroupsResponse, error)
-
-	// PickAccountsWithResponse request
-	PickAccountsWithResponse(ctx context.Context, params *PickAccountsParams, reqEditors ...RequestEditorFn) (*PickAccountsResponse, error)
 
 	// RestructureAccountsWithBodyWithResponse request with any body
 	RestructureAccountsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RestructureAccountsResponse, error)
 
 	RestructureAccountsWithResponse(ctx context.Context, body RestructureAccountsJSONRequestBody, reqEditors ...RequestEditorFn) (*RestructureAccountsResponse, error)
+
+	// SearchAccountsWithResponse request
+	SearchAccountsWithResponse(ctx context.Context, params *SearchAccountsParams, reqEditors ...RequestEditorFn) (*SearchAccountsResponse, error)
 
 	// SetAccountHiddenByPathWithBodyWithResponse request with any body
 	SetAccountHiddenByPathWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetAccountHiddenByPathResponse, error)
@@ -13597,19 +13966,22 @@ type ClientWithResponsesInterface interface {
 
 	CreateCategoryWithResponse(ctx context.Context, body CreateCategoryJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateCategoryResponse, error)
 
+	// GetCategoryCreationAvailabilityWithResponse request
+	GetCategoryCreationAvailabilityWithResponse(ctx context.Context, params *GetCategoryCreationAvailabilityParams, reqEditors ...RequestEditorFn) (*GetCategoryCreationAvailabilityResponse, error)
+
 	// ListCategoryGroupsWithResponse request
 	ListCategoryGroupsWithResponse(ctx context.Context, params *ListCategoryGroupsParams, reqEditors ...RequestEditorFn) (*ListCategoryGroupsResponse, error)
 
 	// GetCategoryGroupOverviewWithResponse request
 	GetCategoryGroupOverviewWithResponse(ctx context.Context, params *GetCategoryGroupOverviewParams, reqEditors ...RequestEditorFn) (*GetCategoryGroupOverviewResponse, error)
 
-	// PickCategoriesWithResponse request
-	PickCategoriesWithResponse(ctx context.Context, params *PickCategoriesParams, reqEditors ...RequestEditorFn) (*PickCategoriesResponse, error)
-
 	// RestructureCategoriesWithBodyWithResponse request with any body
 	RestructureCategoriesWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RestructureCategoriesResponse, error)
 
 	RestructureCategoriesWithResponse(ctx context.Context, body RestructureCategoriesJSONRequestBody, reqEditors ...RequestEditorFn) (*RestructureCategoriesResponse, error)
+
+	// SearchCategoriesWithResponse request
+	SearchCategoriesWithResponse(ctx context.Context, params *SearchCategoriesParams, reqEditors ...RequestEditorFn) (*SearchCategoriesResponse, error)
 
 	// SetCategoryHiddenByPathWithBodyWithResponse request with any body
 	SetCategoryHiddenByPathWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetCategoryHiddenByPathResponse, error)
@@ -13669,8 +14041,8 @@ type ClientWithResponsesInterface interface {
 
 	CreateMemberWithResponse(ctx context.Context, body CreateMemberJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateMemberResponse, error)
 
-	// PickMembersWithResponse request
-	PickMembersWithResponse(ctx context.Context, params *PickMembersParams, reqEditors ...RequestEditorFn) (*PickMembersResponse, error)
+	// SearchMembersWithResponse request
+	SearchMembersWithResponse(ctx context.Context, params *SearchMembersParams, reqEditors ...RequestEditorFn) (*SearchMembersResponse, error)
 
 	// DeleteMemberWithResponse request
 	DeleteMemberWithResponse(ctx context.Context, memberId int64, reqEditors ...RequestEditorFn) (*DeleteMemberResponse, error)
@@ -13784,19 +14156,22 @@ type ClientWithResponsesInterface interface {
 
 	CreateTagWithResponse(ctx context.Context, body CreateTagJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateTagResponse, error)
 
+	// GetTagCreationAvailabilityWithResponse request
+	GetTagCreationAvailabilityWithResponse(ctx context.Context, params *GetTagCreationAvailabilityParams, reqEditors ...RequestEditorFn) (*GetTagCreationAvailabilityResponse, error)
+
 	// ListTagGroupsWithResponse request
 	ListTagGroupsWithResponse(ctx context.Context, params *ListTagGroupsParams, reqEditors ...RequestEditorFn) (*ListTagGroupsResponse, error)
 
 	// GetTagGroupOverviewWithResponse request
 	GetTagGroupOverviewWithResponse(ctx context.Context, params *GetTagGroupOverviewParams, reqEditors ...RequestEditorFn) (*GetTagGroupOverviewResponse, error)
 
-	// PickTagsWithResponse request
-	PickTagsWithResponse(ctx context.Context, params *PickTagsParams, reqEditors ...RequestEditorFn) (*PickTagsResponse, error)
-
 	// RestructureTagsWithBodyWithResponse request with any body
 	RestructureTagsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RestructureTagsResponse, error)
 
 	RestructureTagsWithResponse(ctx context.Context, body RestructureTagsJSONRequestBody, reqEditors ...RequestEditorFn) (*RestructureTagsResponse, error)
+
+	// SearchTagsWithResponse request
+	SearchTagsWithResponse(ctx context.Context, params *SearchTagsParams, reqEditors ...RequestEditorFn) (*SearchTagsResponse, error)
 
 	// SetTagHiddenByPathWithBodyWithResponse request with any body
 	SetTagHiddenByPathWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetTagHiddenByPathResponse, error)
@@ -14067,6 +14442,38 @@ func (r ListAccountBalancesResponse) ContentType() string {
 	return ""
 }
 
+type GetAccountCreationAvailabilityResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *AccountCreationAvailabilityResponse
+	JSON400      *InvalidRequest
+	JSON401      *Unauthenticated
+}
+
+// Status returns HTTPResponse.Status
+func (r GetAccountCreationAvailabilityResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetAccountCreationAvailabilityResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetAccountCreationAvailabilityResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type ListAccountGroupsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -14093,38 +14500,6 @@ func (r ListAccountGroupsResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r ListAccountGroupsResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type PickAccountsResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON200      *AccountPickerResponse
-	JSON400      *InvalidRequest
-	JSON401      *Unauthenticated
-}
-
-// Status returns HTTPResponse.Status
-func (r PickAccountsResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r PickAccountsResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r PickAccountsResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -14160,6 +14535,38 @@ func (r RestructureAccountsResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r RestructureAccountsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type SearchAccountsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *AccountSearchResponse
+	JSON400      *InvalidRequest
+	JSON401      *Unauthenticated
+}
+
+// Status returns HTTPResponse.Status
+func (r SearchAccountsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SearchAccountsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SearchAccountsResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -14996,6 +15403,38 @@ func (r CreateCategoryResponse) ContentType() string {
 	return ""
 }
 
+type GetCategoryCreationAvailabilityResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *CreationAvailabilityResponse
+	JSON400      *InvalidRequest
+	JSON401      *Unauthenticated
+}
+
+// Status returns HTTPResponse.Status
+func (r GetCategoryCreationAvailabilityResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetCategoryCreationAvailabilityResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetCategoryCreationAvailabilityResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type ListCategoryGroupsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -15061,38 +15500,6 @@ func (r GetCategoryGroupOverviewResponse) ContentType() string {
 	return ""
 }
 
-type PickCategoriesResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON200      *CategoryPickerResponse
-	JSON400      *InvalidRequest
-	JSON401      *Unauthenticated
-}
-
-// Status returns HTTPResponse.Status
-func (r PickCategoriesResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r PickCategoriesResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r PickCategoriesResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
 type RestructureCategoriesResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -15122,6 +15529,38 @@ func (r RestructureCategoriesResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r RestructureCategoriesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type SearchCategoriesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *CategorySearchResponse
+	JSON400      *InvalidRequest
+	JSON401      *Unauthenticated
+}
+
+// Status returns HTTPResponse.Status
+func (r SearchCategoriesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SearchCategoriesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SearchCategoriesResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -15657,16 +16096,16 @@ func (r CreateMemberResponse) ContentType() string {
 	return ""
 }
 
-type PickMembersResponse struct {
+type SearchMembersResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *MemberPickerResponse
+	JSON200      *MemberSearchResponse
 	JSON400      *InvalidRequest
 	JSON401      *Unauthenticated
 }
 
 // Status returns HTTPResponse.Status
-func (r PickMembersResponse) Status() string {
+func (r SearchMembersResponse) Status() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Status
 	}
@@ -15674,7 +16113,7 @@ func (r PickMembersResponse) Status() string {
 }
 
 // StatusCode returns HTTPResponse.StatusCode
-func (r PickMembersResponse) StatusCode() int {
+func (r SearchMembersResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -15682,7 +16121,7 @@ func (r PickMembersResponse) StatusCode() int {
 }
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r PickMembersResponse) ContentType() string {
+func (r SearchMembersResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -16624,6 +17063,38 @@ func (r CreateTagResponse) ContentType() string {
 	return ""
 }
 
+type GetTagCreationAvailabilityResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *CreationAvailabilityResponse
+	JSON400      *InvalidRequest
+	JSON401      *Unauthenticated
+}
+
+// Status returns HTTPResponse.Status
+func (r GetTagCreationAvailabilityResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetTagCreationAvailabilityResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetTagCreationAvailabilityResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type ListTagGroupsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -16689,38 +17160,6 @@ func (r GetTagGroupOverviewResponse) ContentType() string {
 	return ""
 }
 
-type PickTagsResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON200      *TagPickerResponse
-	JSON400      *InvalidRequest
-	JSON401      *Unauthenticated
-}
-
-// Status returns HTTPResponse.Status
-func (r PickTagsResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r PickTagsResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r PickTagsResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
 type RestructureTagsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -16750,6 +17189,38 @@ func (r RestructureTagsResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r RestructureTagsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type SearchTagsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *TagSearchResponse
+	JSON400      *InvalidRequest
+	JSON401      *Unauthenticated
+}
+
+// Status returns HTTPResponse.Status
+func (r SearchTagsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SearchTagsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SearchTagsResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -17678,6 +18149,15 @@ func (c *ClientWithResponses) ListAccountBalancesWithResponse(ctx context.Contex
 	return ParseListAccountBalancesResponse(rsp)
 }
 
+// GetAccountCreationAvailabilityWithResponse request returning *GetAccountCreationAvailabilityResponse
+func (c *ClientWithResponses) GetAccountCreationAvailabilityWithResponse(ctx context.Context, params *GetAccountCreationAvailabilityParams, reqEditors ...RequestEditorFn) (*GetAccountCreationAvailabilityResponse, error) {
+	rsp, err := c.GetAccountCreationAvailability(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetAccountCreationAvailabilityResponse(rsp)
+}
+
 // ListAccountGroupsWithResponse request returning *ListAccountGroupsResponse
 func (c *ClientWithResponses) ListAccountGroupsWithResponse(ctx context.Context, params *ListAccountGroupsParams, reqEditors ...RequestEditorFn) (*ListAccountGroupsResponse, error) {
 	rsp, err := c.ListAccountGroups(ctx, params, reqEditors...)
@@ -17685,15 +18165,6 @@ func (c *ClientWithResponses) ListAccountGroupsWithResponse(ctx context.Context,
 		return nil, err
 	}
 	return ParseListAccountGroupsResponse(rsp)
-}
-
-// PickAccountsWithResponse request returning *PickAccountsResponse
-func (c *ClientWithResponses) PickAccountsWithResponse(ctx context.Context, params *PickAccountsParams, reqEditors ...RequestEditorFn) (*PickAccountsResponse, error) {
-	rsp, err := c.PickAccounts(ctx, params, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParsePickAccountsResponse(rsp)
 }
 
 // RestructureAccountsWithBodyWithResponse request with arbitrary body returning *RestructureAccountsResponse
@@ -17711,6 +18182,15 @@ func (c *ClientWithResponses) RestructureAccountsWithResponse(ctx context.Contex
 		return nil, err
 	}
 	return ParseRestructureAccountsResponse(rsp)
+}
+
+// SearchAccountsWithResponse request returning *SearchAccountsResponse
+func (c *ClientWithResponses) SearchAccountsWithResponse(ctx context.Context, params *SearchAccountsParams, reqEditors ...RequestEditorFn) (*SearchAccountsResponse, error) {
+	rsp, err := c.SearchAccounts(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSearchAccountsResponse(rsp)
 }
 
 // SetAccountHiddenByPathWithBodyWithResponse request with arbitrary body returning *SetAccountHiddenByPathResponse
@@ -17978,6 +18458,15 @@ func (c *ClientWithResponses) CreateCategoryWithResponse(ctx context.Context, bo
 	return ParseCreateCategoryResponse(rsp)
 }
 
+// GetCategoryCreationAvailabilityWithResponse request returning *GetCategoryCreationAvailabilityResponse
+func (c *ClientWithResponses) GetCategoryCreationAvailabilityWithResponse(ctx context.Context, params *GetCategoryCreationAvailabilityParams, reqEditors ...RequestEditorFn) (*GetCategoryCreationAvailabilityResponse, error) {
+	rsp, err := c.GetCategoryCreationAvailability(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetCategoryCreationAvailabilityResponse(rsp)
+}
+
 // ListCategoryGroupsWithResponse request returning *ListCategoryGroupsResponse
 func (c *ClientWithResponses) ListCategoryGroupsWithResponse(ctx context.Context, params *ListCategoryGroupsParams, reqEditors ...RequestEditorFn) (*ListCategoryGroupsResponse, error) {
 	rsp, err := c.ListCategoryGroups(ctx, params, reqEditors...)
@@ -17996,15 +18485,6 @@ func (c *ClientWithResponses) GetCategoryGroupOverviewWithResponse(ctx context.C
 	return ParseGetCategoryGroupOverviewResponse(rsp)
 }
 
-// PickCategoriesWithResponse request returning *PickCategoriesResponse
-func (c *ClientWithResponses) PickCategoriesWithResponse(ctx context.Context, params *PickCategoriesParams, reqEditors ...RequestEditorFn) (*PickCategoriesResponse, error) {
-	rsp, err := c.PickCategories(ctx, params, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParsePickCategoriesResponse(rsp)
-}
-
 // RestructureCategoriesWithBodyWithResponse request with arbitrary body returning *RestructureCategoriesResponse
 func (c *ClientWithResponses) RestructureCategoriesWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RestructureCategoriesResponse, error) {
 	rsp, err := c.RestructureCategoriesWithBody(ctx, contentType, body, reqEditors...)
@@ -18020,6 +18500,15 @@ func (c *ClientWithResponses) RestructureCategoriesWithResponse(ctx context.Cont
 		return nil, err
 	}
 	return ParseRestructureCategoriesResponse(rsp)
+}
+
+// SearchCategoriesWithResponse request returning *SearchCategoriesResponse
+func (c *ClientWithResponses) SearchCategoriesWithResponse(ctx context.Context, params *SearchCategoriesParams, reqEditors ...RequestEditorFn) (*SearchCategoriesResponse, error) {
+	rsp, err := c.SearchCategories(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSearchCategoriesResponse(rsp)
 }
 
 // SetCategoryHiddenByPathWithBodyWithResponse request with arbitrary body returning *SetCategoryHiddenByPathResponse
@@ -18206,13 +18695,13 @@ func (c *ClientWithResponses) CreateMemberWithResponse(ctx context.Context, body
 	return ParseCreateMemberResponse(rsp)
 }
 
-// PickMembersWithResponse request returning *PickMembersResponse
-func (c *ClientWithResponses) PickMembersWithResponse(ctx context.Context, params *PickMembersParams, reqEditors ...RequestEditorFn) (*PickMembersResponse, error) {
-	rsp, err := c.PickMembers(ctx, params, reqEditors...)
+// SearchMembersWithResponse request returning *SearchMembersResponse
+func (c *ClientWithResponses) SearchMembersWithResponse(ctx context.Context, params *SearchMembersParams, reqEditors ...RequestEditorFn) (*SearchMembersResponse, error) {
+	rsp, err := c.SearchMembers(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParsePickMembersResponse(rsp)
+	return ParseSearchMembersResponse(rsp)
 }
 
 // DeleteMemberWithResponse request returning *DeleteMemberResponse
@@ -18579,6 +19068,15 @@ func (c *ClientWithResponses) CreateTagWithResponse(ctx context.Context, body Cr
 	return ParseCreateTagResponse(rsp)
 }
 
+// GetTagCreationAvailabilityWithResponse request returning *GetTagCreationAvailabilityResponse
+func (c *ClientWithResponses) GetTagCreationAvailabilityWithResponse(ctx context.Context, params *GetTagCreationAvailabilityParams, reqEditors ...RequestEditorFn) (*GetTagCreationAvailabilityResponse, error) {
+	rsp, err := c.GetTagCreationAvailability(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetTagCreationAvailabilityResponse(rsp)
+}
+
 // ListTagGroupsWithResponse request returning *ListTagGroupsResponse
 func (c *ClientWithResponses) ListTagGroupsWithResponse(ctx context.Context, params *ListTagGroupsParams, reqEditors ...RequestEditorFn) (*ListTagGroupsResponse, error) {
 	rsp, err := c.ListTagGroups(ctx, params, reqEditors...)
@@ -18597,15 +19095,6 @@ func (c *ClientWithResponses) GetTagGroupOverviewWithResponse(ctx context.Contex
 	return ParseGetTagGroupOverviewResponse(rsp)
 }
 
-// PickTagsWithResponse request returning *PickTagsResponse
-func (c *ClientWithResponses) PickTagsWithResponse(ctx context.Context, params *PickTagsParams, reqEditors ...RequestEditorFn) (*PickTagsResponse, error) {
-	rsp, err := c.PickTags(ctx, params, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParsePickTagsResponse(rsp)
-}
-
 // RestructureTagsWithBodyWithResponse request with arbitrary body returning *RestructureTagsResponse
 func (c *ClientWithResponses) RestructureTagsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RestructureTagsResponse, error) {
 	rsp, err := c.RestructureTagsWithBody(ctx, contentType, body, reqEditors...)
@@ -18621,6 +19110,15 @@ func (c *ClientWithResponses) RestructureTagsWithResponse(ctx context.Context, b
 		return nil, err
 	}
 	return ParseRestructureTagsResponse(rsp)
+}
+
+// SearchTagsWithResponse request returning *SearchTagsResponse
+func (c *ClientWithResponses) SearchTagsWithResponse(ctx context.Context, params *SearchTagsParams, reqEditors ...RequestEditorFn) (*SearchTagsResponse, error) {
+	rsp, err := c.SearchTags(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSearchTagsResponse(rsp)
 }
 
 // SetTagHiddenByPathWithBodyWithResponse request with arbitrary body returning *SetTagHiddenByPathResponse
@@ -19183,22 +19681,22 @@ func ParseListAccountBalancesResponse(rsp *http.Response) (*ListAccountBalancesR
 	return response, nil
 }
 
-// ParseListAccountGroupsResponse parses an HTTP response from a ListAccountGroupsWithResponse call
-func ParseListAccountGroupsResponse(rsp *http.Response) (*ListAccountGroupsResponse, error) {
+// ParseGetAccountCreationAvailabilityResponse parses an HTTP response from a GetAccountCreationAvailabilityWithResponse call
+func ParseGetAccountCreationAvailabilityResponse(rsp *http.Response) (*GetAccountCreationAvailabilityResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &ListAccountGroupsResponse{
+	response := &GetAccountCreationAvailabilityResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest GroupStateListResponse
+		var dest AccountCreationAvailabilityResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -19223,22 +19721,22 @@ func ParseListAccountGroupsResponse(rsp *http.Response) (*ListAccountGroupsRespo
 	return response, nil
 }
 
-// ParsePickAccountsResponse parses an HTTP response from a PickAccountsWithResponse call
-func ParsePickAccountsResponse(rsp *http.Response) (*PickAccountsResponse, error) {
+// ParseListAccountGroupsResponse parses an HTTP response from a ListAccountGroupsWithResponse call
+func ParseListAccountGroupsResponse(rsp *http.Response) (*ListAccountGroupsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &PickAccountsResponse{
+	response := &ListAccountGroupsResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest AccountPickerResponse
+		var dest GroupStateListResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -19318,6 +19816,46 @@ func ParseRestructureAccountsResponse(rsp *http.Response) (*RestructureAccountsR
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSearchAccountsResponse parses an HTTP response from a SearchAccountsWithResponse call
+func ParseSearchAccountsResponse(rsp *http.Response) (*SearchAccountsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SearchAccountsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AccountSearchResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
 
 	}
 
@@ -20534,6 +21072,46 @@ func ParseCreateCategoryResponse(rsp *http.Response) (*CreateCategoryResponse, e
 	return response, nil
 }
 
+// ParseGetCategoryCreationAvailabilityResponse parses an HTTP response from a GetCategoryCreationAvailabilityWithResponse call
+func ParseGetCategoryCreationAvailabilityResponse(rsp *http.Response) (*GetCategoryCreationAvailabilityResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetCategoryCreationAvailabilityResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest CreationAvailabilityResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseListCategoryGroupsResponse parses an HTTP response from a ListCategoryGroupsWithResponse call
 func ParseListCategoryGroupsResponse(rsp *http.Response) (*ListCategoryGroupsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -20621,46 +21199,6 @@ func ParseGetCategoryGroupOverviewResponse(rsp *http.Response) (*GetCategoryGrou
 	return response, nil
 }
 
-// ParsePickCategoriesResponse parses an HTTP response from a PickCategoriesWithResponse call
-func ParsePickCategoriesResponse(rsp *http.Response) (*PickCategoriesResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &PickCategoriesResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest CategoryPickerResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest InvalidRequest
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest Unauthenticated
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	}
-
-	return response, nil
-}
-
 // ParseRestructureCategoriesResponse parses an HTTP response from a RestructureCategoriesWithResponse call
 func ParseRestructureCategoriesResponse(rsp *http.Response) (*RestructureCategoriesResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -20716,6 +21254,46 @@ func ParseRestructureCategoriesResponse(rsp *http.Response) (*RestructureCategor
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSearchCategoriesResponse parses an HTTP response from a SearchCategoriesWithResponse call
+func ParseSearchCategoriesResponse(rsp *http.Response) (*SearchCategoriesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SearchCategoriesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest CategorySearchResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
 
 	}
 
@@ -21481,22 +22059,22 @@ func ParseCreateMemberResponse(rsp *http.Response) (*CreateMemberResponse, error
 	return response, nil
 }
 
-// ParsePickMembersResponse parses an HTTP response from a PickMembersWithResponse call
-func ParsePickMembersResponse(rsp *http.Response) (*PickMembersResponse, error) {
+// ParseSearchMembersResponse parses an HTTP response from a SearchMembersWithResponse call
+func ParseSearchMembersResponse(rsp *http.Response) (*SearchMembersResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &PickMembersResponse{
+	response := &SearchMembersResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest MemberPickerResponse
+		var dest MemberSearchResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -22914,6 +23492,46 @@ func ParseCreateTagResponse(rsp *http.Response) (*CreateTagResponse, error) {
 	return response, nil
 }
 
+// ParseGetTagCreationAvailabilityResponse parses an HTTP response from a GetTagCreationAvailabilityWithResponse call
+func ParseGetTagCreationAvailabilityResponse(rsp *http.Response) (*GetTagCreationAvailabilityResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetTagCreationAvailabilityResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest CreationAvailabilityResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseListTagGroupsResponse parses an HTTP response from a ListTagGroupsWithResponse call
 func ParseListTagGroupsResponse(rsp *http.Response) (*ListTagGroupsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -23001,46 +23619,6 @@ func ParseGetTagGroupOverviewResponse(rsp *http.Response) (*GetTagGroupOverviewR
 	return response, nil
 }
 
-// ParsePickTagsResponse parses an HTTP response from a PickTagsWithResponse call
-func ParsePickTagsResponse(rsp *http.Response) (*PickTagsResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &PickTagsResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest TagPickerResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest InvalidRequest
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest Unauthenticated
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	}
-
-	return response, nil
-}
-
 // ParseRestructureTagsResponse parses an HTTP response from a RestructureTagsWithResponse call
 func ParseRestructureTagsResponse(rsp *http.Response) (*RestructureTagsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -23096,6 +23674,46 @@ func ParseRestructureTagsResponse(rsp *http.Response) (*RestructureTagsResponse,
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSearchTagsResponse parses an HTTP response from a SearchTagsWithResponse call
+func ParseSearchTagsResponse(rsp *http.Response) (*SearchTagsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SearchTagsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest TagSearchResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
 
 	}
 

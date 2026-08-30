@@ -6,8 +6,8 @@
 
 ## Implicit Contracts
 
-- Load the complete hidden-inclusive tag tree and group state before filtering locally, so hierarchy and the include-hidden control remain consistent.
-- Keep the last loaded tree visible when a refresh fails; only the latest load may replace it.
+- Tag snapshots are keyed by normalized search and hidden visibility; each load follows every server-filtered page in canonical FQN order and derives ancestors only from returned leaves, while group reads supply canonical hidden metadata without creating orphan rows.
+- Keep the last loaded tree visible while another key loads or when refresh fails; only the latest load may replace it.
 - Every successful tag mutation refreshes the tag tree, ledger lookups, and Overview; path restructuring also invalidates transaction-page snapshots.
 - FQN is editable only at creation; move or rename uses the shared hierarchy workflow so a whole subtree moves together.
 - The editor initializes from the stored display-label override and sends blank as null so the backend restores the FQN-derived fallback.

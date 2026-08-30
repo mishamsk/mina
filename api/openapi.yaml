@@ -528,8 +528,14 @@ paths:
       operationId: listCategories
       tags:
         - categories
-      summary: List categories.
+      summary: List categories in canonical order, optionally filtered by shared fuzzy membership.
       parameters:
+        - name: q
+          description: "Filter membership by display title, FQN, segment, or active implicit group; does not change canonical sort order."
+          in: query
+          required: false
+          schema:
+            type: string
         - name: include_hidden
           description: "Include hidden active entities; defaults to false."
           in: query
@@ -663,59 +669,70 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/CategoryFQNConflict"
-  /api/categories/picker:
+  /api/categories/search:
     get:
-      operationId: pickCategories
-      tags:
-        - categories
-      summary: Return ranked category picker options for one Web UI context.
+      operationId: searchCategories
+      tags: [categories]
+      summary: Return ranked category candidates for bounded discovery.
       parameters:
         - name: context
           in: query
           required: true
           schema:
             type: string
-            enum: [record_assignment, shorthand_expense, shorthand_income, transaction_filter]
+            enum: [record_assignment, shorthand_expense, shorthand_income, transaction_filter, navigation]
+        - name: limit
+          in: query
+          required: true
+          schema: {type: integer, minimum: 1, maximum: 500}
         - name: q
           in: query
           required: false
-          schema:
-            type: string
+          schema: {type: string}
         - name: parent_fqn
           description: Return only direct children of this hierarchy group; an empty value selects root children.
           in: query
           required: false
-          schema:
-            type: string
+          schema: {type: string}
         - name: include_hidden
           in: query
           required: false
-          schema:
-            type: boolean
-            default: false
-        - name: selected_ids
-          description: Active selections retained even when hidden.
+          schema: {type: boolean, default: false}
+        - name: exclude_ids
+          description: Active selected leaf IDs to omit from candidates.
           in: query
           required: false
           style: form
           explode: true
           schema:
             type: array
-            items:
-              type: integer
-              format: int64
-              minimum: 1
+            items: {type: integer, format: int64, minimum: 1}
       responses:
-        "401":
-          $ref: "#/components/responses/Unauthenticated"
+        "401": {$ref: "#/components/responses/Unauthenticated"}
         "200":
-          description: Bounded category picker options in backend rank order.
+          description: Ranked category candidates and truncation state.
           content:
             application/json:
-              schema:
-                $ref: "#/components/schemas/CategoryPickerResponse"
-        "400":
-          $ref: "#/components/responses/InvalidRequest"
+              schema: {$ref: "#/components/schemas/CategorySearchResponse"}
+        "400": {$ref: "#/components/responses/InvalidRequest"}
+  /api/categories/creation-availability:
+    get:
+      operationId: getCategoryCreationAvailability
+      tags: [categories]
+      summary: Check whether one proposed category FQN is available to create.
+      parameters:
+        - name: fqn
+          in: query
+          required: true
+          schema: {type: string}
+      responses:
+        "401": {$ref: "#/components/responses/Unauthenticated"}
+        "200":
+          description: Advisory category creation availability.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/CreationAvailabilityResponse"}
+        "400": {$ref: "#/components/responses/InvalidRequest"}
   /api/categories/groups:
     get:
       operationId: listCategoryGroups
@@ -925,8 +942,14 @@ paths:
       operationId: listTags
       tags:
         - tags
-      summary: List tags.
+      summary: List tags in canonical order, optionally filtered by shared fuzzy membership.
       parameters:
+        - name: q
+          description: "Filter membership by display title, FQN, segment, or active implicit group; does not change canonical sort order."
+          in: query
+          required: false
+          schema:
+            type: string
         - name: include_hidden
           description: "Include hidden active entities; defaults to false."
           in: query
@@ -1050,59 +1073,70 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/TagFQNConflict"
-  /api/tags/picker:
+  /api/tags/search:
     get:
-      operationId: pickTags
-      tags:
-        - tags
-      summary: Return ranked tag picker options for one Web UI context.
+      operationId: searchTags
+      tags: [tags]
+      summary: Return ranked tag candidates for bounded discovery.
       parameters:
         - name: context
           in: query
           required: true
           schema:
             type: string
-            enum: [record_assignment, transaction_filter]
+            enum: [record_assignment, transaction_filter, navigation]
+        - name: limit
+          in: query
+          required: true
+          schema: {type: integer, minimum: 1, maximum: 500}
         - name: q
           in: query
           required: false
-          schema:
-            type: string
+          schema: {type: string}
         - name: parent_fqn
           description: Return only direct children of this hierarchy group; an empty value selects root children.
           in: query
           required: false
-          schema:
-            type: string
+          schema: {type: string}
         - name: include_hidden
           in: query
           required: false
-          schema:
-            type: boolean
-            default: false
-        - name: selected_ids
-          description: Active selections retained even when hidden.
+          schema: {type: boolean, default: false}
+        - name: exclude_ids
+          description: Active selected leaf IDs to omit from candidates.
           in: query
           required: false
           style: form
           explode: true
           schema:
             type: array
-            items:
-              type: integer
-              format: int64
-              minimum: 1
+            items: {type: integer, format: int64, minimum: 1}
       responses:
-        "401":
-          $ref: "#/components/responses/Unauthenticated"
+        "401": {$ref: "#/components/responses/Unauthenticated"}
         "200":
-          description: Bounded tag picker options in backend rank order.
+          description: Ranked tag candidates and truncation state.
           content:
             application/json:
-              schema:
-                $ref: "#/components/schemas/TagPickerResponse"
-        "400":
-          $ref: "#/components/responses/InvalidRequest"
+              schema: {$ref: "#/components/schemas/TagSearchResponse"}
+        "400": {$ref: "#/components/responses/InvalidRequest"}
+  /api/tags/creation-availability:
+    get:
+      operationId: getTagCreationAvailability
+      tags: [tags]
+      summary: Check whether one proposed tag FQN is available to create.
+      parameters:
+        - name: fqn
+          in: query
+          required: true
+          schema: {type: string}
+      responses:
+        "401": {$ref: "#/components/responses/Unauthenticated"}
+        "200":
+          description: Advisory tag creation availability.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/CreationAvailabilityResponse"}
+        "400": {$ref: "#/components/responses/InvalidRequest"}
   /api/tags/groups:
     get:
       operationId: listTagGroups
@@ -1312,8 +1346,14 @@ paths:
       operationId: listMembers
       tags:
         - members
-      summary: List household members.
+      summary: List household members in canonical order, optionally filtered by shared fuzzy membership.
       parameters:
+        - name: q
+          description: "Filter membership by member name under the shared matching policy; does not change canonical sort order."
+          in: query
+          required: false
+          schema:
+            type: string
         - name: include_hidden
           description: "Include hidden active entities; defaults to false."
           in: query
@@ -1483,54 +1523,47 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
-  /api/members/picker:
+  /api/members/search:
     get:
-      operationId: pickMembers
-      tags:
-        - members
-      summary: Return ranked member picker options for one Web UI context.
+      operationId: searchMembers
+      tags: [members]
+      summary: Return ranked member candidates for bounded discovery.
       parameters:
         - name: context
           in: query
           required: true
           schema:
             type: string
-            enum: [record_assignment, transaction_filter]
+            enum: [record_assignment, transaction_filter, navigation]
+        - name: limit
+          in: query
+          required: true
+          schema: {type: integer, minimum: 1, maximum: 500}
         - name: q
           in: query
           required: false
-          schema:
-            type: string
-            maxLength: 256
+          schema: {type: string}
         - name: include_hidden
           in: query
           required: false
-          schema:
-            type: boolean
-            default: false
-        - name: selected_ids
-          description: Active selections retained even when hidden.
+          schema: {type: boolean, default: false}
+        - name: exclude_ids
+          description: Active selected member IDs to omit from candidates.
           in: query
           required: false
           style: form
           explode: true
           schema:
             type: array
-            items:
-              type: integer
-              format: int64
-              minimum: 1
+            items: {type: integer, format: int64, minimum: 1}
       responses:
-        "401":
-          $ref: "#/components/responses/Unauthenticated"
+        "401": {$ref: "#/components/responses/Unauthenticated"}
         "200":
-          description: Bounded member picker options in backend rank order.
+          description: Ranked member candidates and truncation state.
           content:
             application/json:
-              schema:
-                $ref: "#/components/schemas/MemberPickerResponse"
-        "400":
-          $ref: "#/components/responses/InvalidRequest"
+              schema: {$ref: "#/components/schemas/MemberSearchResponse"}
+        "400": {$ref: "#/components/responses/InvalidRequest"}
   /api/members/{member_id}/hidden:
     parameters:
       - name: member_id
@@ -1572,8 +1605,14 @@ paths:
       operationId: listAccounts
       tags:
         - accounts
-      summary: List accounts.
+      summary: List accounts in canonical order, optionally filtered by shared fuzzy membership.
       parameters:
+        - name: q
+          description: "Filter membership by display title, FQN, segment, or active implicit group; does not change canonical sort order."
+          in: query
+          required: false
+          schema:
+            type: string
         - name: include_hidden
           description: "Include hidden active entities; defaults to false."
           in: query
@@ -1589,11 +1628,15 @@ paths:
             type: boolean
             default: false
         - name: account_type
-          description: "Filter by owned, party, flow, or system account type."
+          description: "Filter by one or more owned, party, flow, or system account types."
           in: query
           required: false
+          style: form
+          explode: true
           schema:
-            $ref: "#/components/schemas/AccountType"
+            type: array
+            items:
+              $ref: "#/components/schemas/AccountType"
         - name: is_featured
           description: "Filter by featured state when provided."
           in: query
@@ -1704,55 +1747,49 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/AccountFQNConflict"
-  /api/accounts/picker:
+  /api/accounts/search:
     get:
-      operationId: pickAccounts
-      tags:
-        - accounts
-      summary: Return ranked account picker options for one Web UI context.
+      operationId: searchAccounts
+      tags: [accounts]
+      summary: Return ranked account candidates for bounded discovery.
       parameters:
         - name: context
           in: query
           required: true
           schema:
             type: string
-            enum: [record_assignment, shorthand_balance, shorthand_flow, exchange, transaction_filter, bulk_source, bulk_replacement]
+            enum: [record_assignment, shorthand_balance, shorthand_flow, exchange, transaction_filter, bulk_source, bulk_replacement, navigation]
+        - name: limit
+          in: query
+          required: true
+          schema: {type: integer, minimum: 1, maximum: 500}
         - name: q
           in: query
           required: false
-          schema:
-            type: string
+          schema: {type: string}
         - name: parent_fqn
           description: Return only direct children of this hierarchy group; an empty value selects root children.
           in: query
           required: false
-          schema:
-            type: string
+          schema: {type: string}
         - name: include_hidden
           in: query
           required: false
-          schema:
-            type: boolean
-            default: false
-        - name: selected_ids
-          description: Active selections retained even when hidden.
+          schema: {type: boolean, default: false}
+        - name: exclude_ids
+          description: Active selected leaf IDs to omit from candidates.
           in: query
           required: false
           style: form
           explode: true
           schema:
             type: array
-            items:
-              type: integer
-              format: int64
-              minimum: 1
+            items: {type: integer, format: int64, minimum: 1}
         - name: excluded_currency
-          description: Exchange context excludes fixed-currency accounts in this currency while retaining current selections.
+          description: Exchange context excludes fixed-currency accounts in this currency.
           in: query
           required: false
-          schema:
-            type: string
-            pattern: ^([A-Z]{3}|C::.+)$
+          schema: {type: string, pattern: '^([A-Z]{3}|C::.+)$'}
         - name: transaction_ids
           description: Selected transactions for a bulk source or replacement context.
           in: query
@@ -1761,29 +1798,38 @@ paths:
           explode: true
           schema:
             type: array
-            items:
-              type: integer
-              format: int64
-              minimum: 1
+            items: {type: integer, format: int64, minimum: 1}
         - name: source_account_id
           description: Common source account for a bulk replacement context.
           in: query
           required: false
-          schema:
-            type: integer
-            format: int64
-            minimum: 1
+          schema: {type: integer, format: int64, minimum: 1}
       responses:
-        "401":
-          $ref: "#/components/responses/Unauthenticated"
+        "401": {$ref: "#/components/responses/Unauthenticated"}
         "200":
-          description: Bounded account picker options in backend rank order.
+          description: Ranked account candidates and truncation state.
           content:
             application/json:
-              schema:
-                $ref: "#/components/schemas/AccountPickerResponse"
-        "400":
-          $ref: "#/components/responses/InvalidRequest"
+              schema: {$ref: "#/components/schemas/AccountSearchResponse"}
+        "400": {$ref: "#/components/responses/InvalidRequest"}
+  /api/accounts/creation-availability:
+    get:
+      operationId: getAccountCreationAvailability
+      tags: [accounts]
+      summary: Check whether one proposed account FQN is available to create.
+      parameters:
+        - name: fqn
+          in: query
+          required: true
+          schema: {type: string}
+      responses:
+        "401": {$ref: "#/components/responses/Unauthenticated"}
+        "200":
+          description: Advisory account creation availability.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/AccountCreationAvailabilityResponse"}
+        "400": {$ref: "#/components/responses/InvalidRequest"}
   /api/accounts/groups:
     get:
       operationId: listAccountGroups
@@ -4417,30 +4463,19 @@ components:
           format: int64
           minimum: 0
           description: Count of matching accounts before limit and offset are applied.
-    AccountPickerResponse:
+    AccountSearchResponse:
       type: object
       additionalProperties: false
-      required: [items, selected_items, can_create, eligible_count]
+      required: [items, has_more]
       properties:
         items:
           type: array
-          maxItems: 20
-          items:
-            $ref: "#/components/schemas/AccountPickerItem"
-        selected_items:
-          description: Active selected leaves in request order, independent of query matching and the search result bound.
-          type: array
-          items:
-            $ref: "#/components/schemas/AccountPickerItem"
-        can_create:
-          description: Whether the current full query can be created through the caller's existing account creation flow.
+          maxItems: 500
+          items: {$ref: "#/components/schemas/AccountSearchItem"}
+        has_more:
+          description: Whether more ranked candidates matched beyond the caller's limit.
           type: boolean
-        eligible_count:
-          description: Complete eligible leaf count for the typed context before query matching, hierarchy scoping, and result bounding.
-          type: integer
-          format: int64
-          minimum: 0
-    AccountPickerItem:
+    AccountSearchItem:
       type: object
       additionalProperties: false
       required: [kind, title, fqn, is_hidden]
@@ -4448,32 +4483,42 @@ components:
         kind:
           type: string
           enum: [leaf, group]
-          x-enum-varnames: [AccountPickerItemKindLeaf, AccountPickerItemKindGroup]
-        account_id:
-          description: Stable leaf identifier; absent for navigation groups.
-          type: integer
-          format: int64
-          minimum: 1
-        title:
-          description: Effective account display title for leaves or final FQN segment for groups.
-          type: string
-        fqn:
-          description: Complete authoritative account leaf or group path.
-          type: string
-        is_hidden:
-          type: boolean
-        child_count:
-          description: Descendant leaf count for navigation groups.
-          type: integer
-          minimum: 1
+          x-enum-varnames: [AccountSearchItemKindLeaf, AccountSearchItemKindGroup]
+        account_id: {type: integer, format: int64, minimum: 1, description: Stable leaf identifier; absent for navigation groups.}
+        title: {type: string, description: Effective account display title for leaves or final FQN segment for groups.}
+        fqn: {type: string, description: Complete authoritative account leaf or group path.}
+        is_hidden: {type: boolean}
+        child_count: {type: integer, minimum: 1, description: Descendant leaf count for navigation groups.}
         account_type:
           description: Account semantic type; absent for navigation groups.
-          allOf:
-            - $ref: "#/components/schemas/AccountType"
+          allOf: [{$ref: "#/components/schemas/AccountType"}]
         currency:
           description: Fixed account currency, null for a multi-currency leaf, and absent for navigation groups.
           type: string
           nullable: true
+    AccountCreationAvailabilityResponse:
+      type: object
+      additionalProperties: false
+      required: [available]
+      properties:
+        available:
+          type: boolean
+        reason:
+          description: Stable false reason; absent when available.
+          type: string
+          enum: [invalid_fqn, path_conflict, reserved_namespace]
+          x-enum-varnames: [AccountInvalidFQN, AccountPathConflict, AccountReservedNamespace]
+    CreationAvailabilityResponse:
+      type: object
+      additionalProperties: false
+      required: [available]
+      properties:
+        available:
+          type: boolean
+        reason:
+          description: Stable false reason; absent when available.
+          type: string
+          enum: [invalid_fqn, path_conflict]
     GroupState:
       type: object
       additionalProperties: false
@@ -4859,25 +4904,17 @@ components:
           format: int64
           minimum: 0
           description: Count of matching categories before limit and offset are applied.
-    CategoryPickerResponse:
+    CategorySearchResponse:
       type: object
       additionalProperties: false
-      required: [items, selected_items, can_create]
+      required: [items, has_more]
       properties:
         items:
           type: array
-          maxItems: 20
-          items:
-            $ref: "#/components/schemas/CategoryPickerItem"
-        selected_items:
-          description: Active selected leaves in request order, independent of query matching and the search result bound.
-          type: array
-          items:
-            $ref: "#/components/schemas/CategoryPickerItem"
-        can_create:
-          description: Whether the supplied context and current full query are eligible for category creation; the caller independently decides whether to offer a creation flow.
-          type: boolean
-    CategoryPickerItem:
+          maxItems: 500
+          items: {$ref: "#/components/schemas/CategorySearchItem"}
+        has_more: {type: boolean, description: Whether more ranked candidates matched beyond the caller's limit.}
+    CategorySearchItem:
       type: object
       additionalProperties: false
       required: [kind, title, fqn, is_hidden]
@@ -4885,28 +4922,15 @@ components:
         kind:
           type: string
           enum: [leaf, group]
-          x-enum-varnames: [CategoryPickerItemKindLeaf, CategoryPickerItemKindGroup]
-        category_id:
-          description: Stable leaf identifier; absent for navigation groups.
-          type: integer
-          format: int64
-          minimum: 1
-        title:
-          description: Effective category display title for leaves or final FQN segment for groups.
-          type: string
-        fqn:
-          description: Complete authoritative category leaf or group path.
-          type: string
-        is_hidden:
-          type: boolean
-        child_count:
-          description: Descendant leaf count for navigation groups.
-          type: integer
-          minimum: 1
+          x-enum-varnames: [CategorySearchItemKindLeaf, CategorySearchItemKindGroup]
+        category_id: {type: integer, format: int64, minimum: 1, description: Stable leaf identifier; absent for navigation groups.}
+        title: {type: string, description: Effective category display title for leaves or final FQN segment for groups.}
+        fqn: {type: string, description: Complete authoritative category leaf or group path.}
+        is_hidden: {type: boolean}
+        child_count: {type: integer, minimum: 1, description: Descendant leaf count for navigation groups.}
         economic_intent:
           description: Category intent; absent for navigation groups.
-          allOf:
-            - $ref: "#/components/schemas/CategoryEconomicIntent"
+          allOf: [{$ref: "#/components/schemas/CategoryEconomicIntent"}]
     CategoryEconomicIntent:
       description: "Whether a category describes spending or income."
       type: string
@@ -6916,34 +6940,24 @@ components:
           format: int64
           minimum: 0
           description: Count of matching members before limit and offset are applied.
-    MemberPickerResponse:
+    MemberSearchResponse:
       type: object
       additionalProperties: false
-      required: [items, selected_items]
+      required: [items, has_more]
       properties:
         items:
           type: array
-          maxItems: 20
-          items:
-            $ref: "#/components/schemas/MemberPickerItem"
-        selected_items:
-          description: Active selected members in request order, independent of query matching and the search result bound.
-          type: array
-          items:
-            $ref: "#/components/schemas/MemberPickerItem"
-    MemberPickerItem:
+          maxItems: 500
+          items: {$ref: "#/components/schemas/MemberSearchItem"}
+        has_more: {type: boolean, description: Whether more ranked candidates matched beyond the caller's limit.}
+    MemberSearchItem:
       type: object
       additionalProperties: false
       required: [member_id, title, is_hidden]
       properties:
-        member_id:
-          type: integer
-          format: int64
-          minimum: 1
-        title:
-          type: string
-        is_hidden:
-          type: boolean
+        member_id: {type: integer, format: int64, minimum: 1}
+        title: {type: string}
+        is_hidden: {type: boolean}
     JournalRecord:
       type: object
       additionalProperties: false
@@ -7234,25 +7248,17 @@ components:
           format: int64
           minimum: 0
           description: Count of matching tags before limit and offset are applied.
-    TagPickerResponse:
+    TagSearchResponse:
       type: object
       additionalProperties: false
-      required: [items, selected_items, can_create]
+      required: [items, has_more]
       properties:
         items:
           type: array
-          maxItems: 20
-          items:
-            $ref: "#/components/schemas/TagPickerItem"
-        selected_items:
-          description: Active selected leaves in request order, independent of query matching and the search result bound.
-          type: array
-          items:
-            $ref: "#/components/schemas/TagPickerItem"
-        can_create:
-          description: Whether the supplied context and current full query are eligible for tag creation; the caller independently decides whether to offer a creation flow.
-          type: boolean
-    TagPickerItem:
+          maxItems: 500
+          items: {$ref: "#/components/schemas/TagSearchItem"}
+        has_more: {type: boolean, description: Whether more ranked candidates matched beyond the caller's limit.}
+    TagSearchItem:
       type: object
       additionalProperties: false
       required: [kind, title, fqn, is_hidden]
@@ -7260,24 +7266,12 @@ components:
         kind:
           type: string
           enum: [leaf, group]
-          x-enum-varnames: [TagPickerItemKindLeaf, TagPickerItemKindGroup]
-        tag_id:
-          description: Stable leaf identifier; absent for navigation groups.
-          type: integer
-          format: int64
-          minimum: 1
-        title:
-          description: Effective tag display title for leaves or final FQN segment for groups.
-          type: string
-        fqn:
-          description: Complete authoritative tag leaf or group path.
-          type: string
-        is_hidden:
-          type: boolean
-        child_count:
-          description: Descendant leaf count for navigation groups.
-          type: integer
-          minimum: 1
+          x-enum-varnames: [TagSearchItemKindLeaf, TagSearchItemKindGroup]
+        tag_id: {type: integer, format: int64, minimum: 1, description: Stable leaf identifier; absent for navigation groups.}
+        title: {type: string, description: Effective tag display title for leaves or final FQN segment for groups.}
+        fqn: {type: string, description: Complete authoritative tag leaf or group path.}
+        is_hidden: {type: boolean}
+        child_count: {type: integer, minimum: 1, description: Descendant leaf count for navigation groups.}
     TransactionTemplate:
       type: object
       additionalProperties: false

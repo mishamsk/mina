@@ -11,7 +11,7 @@ Hierarchy is encoded only in the colon-separated FQN string of each stored row. 
 - **Prefix-free rule**: among the active rows of one entity type, no FQN may be a path prefix of another FQN. A path prefix means equal segments at a `:` boundary (`Food` is a prefix of `Food:Dining`, not of `Foodie`). A stored row is therefore always a leaf and never also a group.
 - FQN comparison is case-sensitive byte equality. Uniqueness and the prefix-free rule apply to active rows only; tombstoned rows are exempt and keep their historical FQNs.
 - An account, category, or tag may store a non-unique display-label override for presentation. `name` remains the final FQN segment; without an override, the effective display label is the final one or two FQN segments. Restructure preserves overrides and recalculates only fallback labels from rewritten FQNs.
-- Entity-owned picker reads use effective labels, complete FQNs, and individual segments for discovery; services derive navigation-only groups from eligible leaves and keep FQNs and stable leaf IDs authoritative for selection.
+- Entity-owned ranked search uses effective labels, complete FQNs, and individual segments for discovery; services derive navigation-only groups from eligible leaves, while picker forms keep selected leaves locally and use FQNs and stable leaf IDs as authoritative identity.
 
 Two sanctioned exceptions reference group paths by FQN string instead of referencing a leaf row: `budget.category_fqn`, and a possible future featured-groups table. Any such reference is valid while at least one active leaf of the referenced entity type exists at or under the referenced path.
 

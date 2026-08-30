@@ -43,7 +43,6 @@ interface CategoriesPageContentProps {
     readonly snapshot: CategoriesPageSnapshot | undefined;
   };
   readonly economicIntent: CategoryEconomicIntent | undefined;
-  readonly includeHidden: boolean;
   readonly onCategoryDeleted: (categoryId: number) => void;
   readonly onEditCategory: (category: Category, opener: HTMLElement) => void;
   readonly onNotice: (message: string, tone?: "error" | "success") => void;
@@ -66,7 +65,6 @@ const renderCategoryBadge = (row: ReferenceTreeRow<Category, GroupState>) => {
 export const CategoriesPageContent = ({
   categoriesPage,
   economicIntent,
-  includeHidden,
   onCategoryDeleted,
   onEditCategory,
   onNotice,
@@ -336,9 +334,9 @@ export const CategoriesPageContent = ({
           errorMessage={
             categoriesPage.snapshot ? undefined : categoriesPage.errorMessage
           }
+          filtered={economicIntent !== undefined || search.trim() !== ""}
           groups={categoriesPage.snapshot?.groups}
           groupRowsClickable
-          includeHidden={includeHidden}
           leaves={categoriesPage.snapshot?.categories}
           loading={categoriesPage.loading}
           loadErrorTitle="Categories could not be loaded."
@@ -359,7 +357,6 @@ export const CategoriesPageContent = ({
           renderBadge={renderCategoryBadge}
           rowActivationLabel={(row) => `Open category ${row.fqn}`}
           rowTestId="categories-tree-row"
-          search={search}
         />
       </div>
       <ConfirmationDialog

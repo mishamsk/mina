@@ -71,7 +71,7 @@ func TestAccountCreateReadListUpdateDeleteBoundary(t *testing.T) {
 	}
 	accountTypeOwned := httpclient.AccountTypeOwned
 
-	defaultList, err := client.REST().ListAccountsWithResponse(context.Background(), &httpclient.ListAccountsParams{AccountType: &accountTypeOwned})
+	defaultList, err := client.REST().ListAccountsWithResponse(context.Background(), &httpclient.ListAccountsParams{AccountType: accountTypes(accountTypeOwned)})
 	if err != nil {
 		t.Fatalf("default list request: %v", err)
 	}
@@ -86,7 +86,7 @@ func TestAccountCreateReadListUpdateDeleteBoundary(t *testing.T) {
 
 	includeHidden, err := client.REST().ListAccountsWithResponse(context.Background(), &httpclient.ListAccountsParams{
 		IncludeHidden: &hiddenValue,
-		AccountType:   &accountTypeOwned,
+		AccountType:   accountTypes(accountTypeOwned),
 	})
 	if err != nil {
 		t.Fatalf("include hidden request: %v", err)
@@ -155,7 +155,7 @@ func TestAccountCreateReadListUpdateDeleteBoundary(t *testing.T) {
 		t.Fatalf("unfeatured account total_count = %d, want 5", unfeatured.JSON200.TotalCount)
 	}
 
-	balanceAccounts, err := client.REST().ListAccountsWithResponse(context.Background(), &httpclient.ListAccountsParams{AccountType: &accountTypeOwned})
+	balanceAccounts, err := client.REST().ListAccountsWithResponse(context.Background(), &httpclient.ListAccountsParams{AccountType: accountTypes(accountTypeOwned)})
 	if err != nil {
 		t.Fatalf("balance account type list request: %v", err)
 	}
@@ -168,7 +168,7 @@ func TestAccountCreateReadListUpdateDeleteBoundary(t *testing.T) {
 	}
 
 	accountTypeSystem := httpclient.AccountTypeSystem
-	systemAccounts, err := client.REST().ListAccountsWithResponse(context.Background(), &httpclient.ListAccountsParams{AccountType: &accountTypeSystem})
+	systemAccounts, err := client.REST().ListAccountsWithResponse(context.Background(), &httpclient.ListAccountsParams{AccountType: accountTypes(accountTypeSystem)})
 	if err != nil {
 		t.Fatalf("system account type list request: %v", err)
 	}
@@ -180,7 +180,7 @@ func TestAccountCreateReadListUpdateDeleteBoundary(t *testing.T) {
 	}
 
 	accountTypeFlow := httpclient.AccountTypeFlow
-	flowAccounts, err := client.REST().ListAccountsWithResponse(context.Background(), &httpclient.ListAccountsParams{AccountType: &accountTypeFlow})
+	flowAccounts, err := client.REST().ListAccountsWithResponse(context.Background(), &httpclient.ListAccountsParams{AccountType: accountTypes(accountTypeFlow)})
 	if err != nil {
 		t.Fatalf("flow account type list request: %v", err)
 	}
@@ -340,7 +340,7 @@ func TestAccountCreateReadListUpdateDeleteBoundary(t *testing.T) {
 		t.Fatalf("cleared external_system = %v, want nil", clearedExternal.JSON200.ExternalSystem)
 	}
 
-	afterHide, err := client.REST().ListAccountsWithResponse(context.Background(), &httpclient.ListAccountsParams{AccountType: &accountTypeOwned})
+	afterHide, err := client.REST().ListAccountsWithResponse(context.Background(), &httpclient.ListAccountsParams{AccountType: accountTypes(accountTypeOwned)})
 	if err != nil {
 		t.Fatalf("after hide list request: %v", err)
 	}
@@ -367,7 +367,7 @@ func TestAccountCreateReadListUpdateDeleteBoundary(t *testing.T) {
 	if visibleDelete.StatusCode() != http.StatusNoContent {
 		t.Fatalf("visible delete status = %d, want %d; body %s", visibleDelete.StatusCode(), http.StatusNoContent, visibleDelete.Body)
 	}
-	defaultAfterVisibleDelete, err := client.REST().ListAccountsWithResponse(context.Background(), &httpclient.ListAccountsParams{AccountType: &accountTypeOwned})
+	defaultAfterVisibleDelete, err := client.REST().ListAccountsWithResponse(context.Background(), &httpclient.ListAccountsParams{AccountType: accountTypes(accountTypeOwned)})
 	if err != nil {
 		t.Fatalf("default after visible delete request: %v", err)
 	}
@@ -410,7 +410,7 @@ func TestAccountCreateReadListUpdateDeleteBoundary(t *testing.T) {
 	withTombstones, err := client.REST().ListAccountsWithResponse(context.Background(), &httpclient.ListAccountsParams{
 		IncludeHidden:     &hiddenValue,
 		IncludeTombstoned: &includeTombstoned,
-		AccountType:       &accountTypeOwned,
+		AccountType:       accountTypes(accountTypeOwned),
 	})
 	if err != nil {
 		t.Fatalf("include tombstones request: %v", err)
@@ -621,14 +621,14 @@ func TestAccountTypeChangeBoundary(t *testing.T) {
 		t.Fatalf("read changed empty account = %+v, want owned; body %s", emptyRead.JSON200, emptyRead.Body)
 	}
 	accountTypeOwned := httpclient.AccountTypeOwned
-	balanceAccounts, err := client.REST().ListAccountsWithResponse(context.Background(), &httpclient.ListAccountsParams{AccountType: &accountTypeOwned})
+	balanceAccounts, err := client.REST().ListAccountsWithResponse(context.Background(), &httpclient.ListAccountsParams{AccountType: accountTypes(accountTypeOwned)})
 	requireNoTransportError(t, "list changed balance account", err)
 	if balanceAccounts.StatusCode() != http.StatusOK {
 		t.Fatalf("list changed balance account status = %d, want %d; body %s", balanceAccounts.StatusCode(), http.StatusOK, balanceAccounts.Body)
 	}
 	assertAccountIDs(t, balanceAccounts.JSON200.Accounts, []int64{empty.JSON201.AccountId})
 	flowType := httpclient.AccountTypeFlow
-	flowAccounts, err := client.REST().ListAccountsWithResponse(context.Background(), &httpclient.ListAccountsParams{AccountType: &flowType})
+	flowAccounts, err := client.REST().ListAccountsWithResponse(context.Background(), &httpclient.ListAccountsParams{AccountType: accountTypes(flowType)})
 	requireNoTransportError(t, "list changed flow account", err)
 	if flowAccounts.StatusCode() != http.StatusOK {
 		t.Fatalf("list changed flow account status = %d, want %d; body %s", flowAccounts.StatusCode(), http.StatusOK, flowAccounts.Body)
@@ -1506,6 +1506,10 @@ func assertAccountTypes(t *testing.T, accounts []httpclient.Account, want []http
 			t.Fatalf("account type at %d = %q, want %q; accounts = %+v", i, account.AccountType, want[i], accounts)
 		}
 	}
+}
+
+func accountTypes(values ...httpclient.AccountType) *[]httpclient.AccountType {
+	return &values
 }
 
 func assertAccountFeatured(t *testing.T, accounts []httpclient.Account, want []bool) {

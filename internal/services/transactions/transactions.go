@@ -1522,34 +1522,34 @@ func (s *Service) BulkReplaceAccount(ctx context.Context, transactionIDs []int64
 	return response, nil
 }
 
-// BulkAccountPickerFacts returns transaction-owned common-source and affected-currency facts for account pickers.
-func (s *Service) BulkAccountPickerFacts(ctx context.Context, transactionIDs []int64, sourceAccountID *int64) (accounts.BulkPickerFacts, error) {
+// BulkAccountSearchFacts returns transaction-owned common-source and affected-currency facts for account search.
+func (s *Service) BulkAccountSearchFacts(ctx context.Context, transactionIDs []int64, sourceAccountID *int64) (accounts.BulkSearchFacts, error) {
 	if err := validatePositiveUniqueIDs("transaction_ids", transactionIDs); err != nil {
-		return accounts.BulkPickerFacts{}, err
+		return accounts.BulkSearchFacts{}, err
 	}
 	if len(transactionIDs) == 0 {
-		return accounts.BulkPickerFacts{}, services.InvalidRequest("transaction_ids is required")
+		return accounts.BulkSearchFacts{}, services.InvalidRequest("transaction_ids is required")
 	}
 	if sourceAccountID != nil && *sourceAccountID <= 0 {
-		return accounts.BulkPickerFacts{}, services.InvalidRequest("source_account_id must be positive")
+		return accounts.BulkSearchFacts{}, services.InvalidRequest("source_account_id must be positive")
 	}
 
 	selectedTransactions, err := s.repo.TransactionsByIDs(ctx, transactionIDs)
 	if err != nil {
-		return accounts.BulkPickerFacts{}, err
+		return accounts.BulkSearchFacts{}, err
 	}
 	if len(selectedTransactions) != len(transactionIDs) {
-		return accounts.BulkPickerFacts{}, services.InvalidRequest("transactions missing or inactive resource")
+		return accounts.BulkSearchFacts{}, services.InvalidRequest("transactions missing or inactive resource")
 	}
 
 	var common map[int64]bool
 	affectedCurrencies := map[string]bool{}
 	for _, transaction := range selectedTransactions {
 		if transaction.LifecycleStatus == LifecycleStatusExpected {
-			return accounts.BulkPickerFacts{}, expectedRecurringMutationError()
+			return accounts.BulkSearchFacts{}, expectedRecurringMutationError()
 		}
 		if transaction.LifecycleStatus != LifecycleStatusActive {
-			return accounts.BulkPickerFacts{}, services.InvalidRequest("accounts can only change on active transactions")
+			return accounts.BulkSearchFacts{}, services.InvalidRequest("accounts can only change on active transactions")
 		}
 
 		current := map[int64]bool{}
@@ -1570,7 +1570,7 @@ func (s *Service) BulkAccountPickerFacts(ctx context.Context, transactionIDs []i
 		}
 	}
 	if sourceAccountID != nil && !common[*sourceAccountID] {
-		return accounts.BulkPickerFacts{}, accountReplaceSourceNotCommonError()
+		return accounts.BulkSearchFacts{}, accountReplaceSourceNotCommonError()
 	}
 
 	commonIDs := make([]int64, 0, len(common))
@@ -1583,7 +1583,7 @@ func (s *Service) BulkAccountPickerFacts(ctx context.Context, transactionIDs []i
 		currencies = append(currencies, currency)
 	}
 	slices.Sort(currencies)
-	return accounts.BulkPickerFacts{CommonSourceIDs: commonIDs, AffectedCurrencies: currencies}, nil
+	return accounts.BulkSearchFacts{CommonSourceIDs: commonIDs, AffectedCurrencies: currencies}, nil
 }
 
 // BulkSetSettlement changes settlement on selected active balance records.

@@ -1,5 +1,5 @@
 import { Eye, EyeOff, MagicEdit, Reload, Trash } from "pixelarticons/react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import { useNavigate } from "react-router";
 
 import {
@@ -55,10 +55,6 @@ type MemberDeleteTarget = {
   readonly opener: HTMLElement;
 };
 
-const memberSearchMatches = (name: string, search: string): boolean =>
-  search.trim() === "" ||
-  name.toLowerCase().includes(search.trim().toLowerCase());
-
 const memberListClickableRowClassName =
   "cursor-pointer " +
   "hover:bg-[color-mix(in_srgb,var(--band),var(--table-header)_28%)] " +
@@ -112,22 +108,22 @@ const MembersListSkeleton = () => (
 
 const MembersList = ({
   errorMessage,
+  filtered,
   includeHidden,
   loading,
   members,
   onEditMember,
   onMemberDeleted,
   onNotice,
-  search,
 }: {
   readonly errorMessage?: string;
+  readonly filtered: boolean;
   readonly includeHidden: boolean;
   readonly loading: boolean;
   readonly members: readonly Member[] | undefined;
   readonly onEditMember: (member: Member, opener: HTMLElement) => void;
   readonly onMemberDeleted: (memberId: number) => void;
   readonly onNotice: (message: string) => void;
-  readonly search: string;
 }) => {
   const navigate = useNavigate();
   const [deleteTarget, setDeleteTarget] = useState<
@@ -137,13 +133,7 @@ const MembersList = ({
     string | undefined
   >();
   const [deleting, setDeleting] = useState(false);
-  const rows = useMemo(
-    () =>
-      members
-        ? members.filter((member) => memberSearchMatches(member.name, search))
-        : [],
-    [members, search],
-  );
+  const rows = members ?? [];
 
   const closeDeleteDialog = useCallback(() => {
     if (deleting) {
@@ -263,7 +253,6 @@ const MembersList = ({
   }
 
   if (!members || rows.length === 0) {
-    const hasMembers = (members?.length ?? 0) > 0;
     return (
       <div
         className={cn(
@@ -276,7 +265,7 @@ const MembersList = ({
             No members
           </p>
           <p className="font-body text-muted-foreground max-w-prose text-sm">
-            {hasMembers
+            {filtered
               ? "No members match the current search."
               : "The member list will show household members once they exist."}
           </p>
@@ -441,10 +430,7 @@ export const MembersPageContent = ({
   onNotice,
   search,
 }: MembersPageContentProps) => {
-  const currentSnapshot =
-    membersPage.snapshot?.includeHidden === includeHidden
-      ? membersPage.snapshot
-      : undefined;
+  const currentSnapshot = membersPage.snapshot;
   const refreshErrorMessage = currentSnapshot
     ? membersPage.errorMessage
     : undefined;
@@ -478,13 +464,13 @@ export const MembersPageContent = ({
       <div className="min-h-0 flex-1">
         <MembersList
           errorMessage={currentSnapshot ? undefined : membersPage.errorMessage}
+          filtered={search.trim() !== ""}
           includeHidden={includeHidden}
           loading={membersPage.loading}
           members={currentSnapshot?.members}
           onEditMember={onEditMember}
           onMemberDeleted={onMemberDeleted}
           onNotice={onNotice}
-          search={search}
         />
       </div>
     </div>

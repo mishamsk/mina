@@ -423,9 +423,10 @@ for (const table of referenceTableTargets) {
     page,
   }, testInfo) => {
     const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
-    const rowSuffixes = Array.from(
-      { length: longRowCount },
-      (_, index) => `Row${String(index).padStart(2, "0")}`,
+    const rowSuffixes = Array.from({ length: longRowCount }, (_, index) =>
+      index === 0
+        ? "Row00:ExactNeedle"
+        : `Row${String(index).padStart(2, "0")}`,
     );
 
     for (const suffix of rowSuffixes) {
@@ -450,8 +451,8 @@ for (const table of referenceTableTargets) {
 
     await page.setViewportSize({ width: 1200, height: 900 });
     await page.goto(table.path);
-    await page.getByLabel("Search").fill(table.fixtureName(unique, "Row00"));
-    await expect(rows.filter({ hasText: table.rowText })).toBeVisible();
+    await page.getByLabel("Search").fill("ExactNeedle");
+    await expect(rows.filter({ hasText: table.rowText }).first()).toBeVisible();
     await expectShortTableToKeepInsetWithoutOverflow(frame, scroller);
     await expectBlankActionHeaderWithMatchedInset(scroller);
   });

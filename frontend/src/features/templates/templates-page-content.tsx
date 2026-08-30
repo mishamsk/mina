@@ -112,6 +112,11 @@ export const TemplatesPageContent = ({
     ...template,
     is_hidden: false,
   }));
+  const filteredLeaves = leaves.filter(
+    (leaf) =>
+      search.trim() === "" ||
+      leaf.fqn.toLowerCase().includes(search.trim().toLowerCase()),
+  );
   const groups = templateGroups(templates);
 
   const restoreFocus = (opener: HTMLElement | undefined) => {
@@ -288,10 +293,10 @@ export const TemplatesPageContent = ({
               ? undefined
               : templatesResource.errorMessage
           }
+          filtered={search.trim() !== ""}
           groups={groups}
-          includeHidden
           indicatorSlots={["featured", "hidden"]}
-          leaves={templatesResource.snapshot ? leaves : undefined}
+          leaves={templatesResource.snapshot ? filteredLeaves : undefined}
           loading={templatesResource.loading}
           loadErrorTitle="Templates could not be loaded."
           onRetry={() => {
@@ -319,7 +324,6 @@ export const TemplatesPageContent = ({
           }
           rowTestId="templates-tree-row"
           rowActivationLabel={(row) => `Edit template ${row.fqn}`}
-          search={search}
         />
       </div>
       <ConfirmationDialog

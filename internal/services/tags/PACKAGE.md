@@ -14,9 +14,11 @@
 - Path hide/unhide changes active leaves at or below the path and invalidates the reference snapshot.
 - Active journal, template, and recurring records block tombstoning. List deleteability uses the same predicate, and tombstoned tags are never deletable.
 - Display labels are derived at the service boundary through the shared rule; restructure preserves stored overrides while automatic labels follow rewritten FQNs.
-- Picker reads use the reference snapshot, retain active hidden selections and literal exact-FQN matches, derive navigation-only groups from eligible leaves, allow creation only for record assignment, and return at most 20 backend-ranked unselected rows; requested selections are returned separately without consuming the result bound.
+- Tag lists intersect visibility, featured, and shared fuzzy membership filters before totals and pagination, while preserving the requested canonical sort. Matches on active implicit groups retain their eligible descendant leaves; tombstoned rows match only their own terms.
+- Search reads use the reference snapshot, apply navigation, record-assignment, or transaction-filter context, retain literal exact-FQN matches, exclude requested leaf IDs, derive navigation-only groups, and return caller-bounded backend-ranked rows with `has_more`.
+- Creation availability is an advisory read over the same FQN validity and active path-conflict checks repeated authoritatively by Create.
 
 ## Boundaries
 
-- Owns: tag lifecycle rules, FQN hierarchy validation and derivation, display-label handling, picker contexts and bounds, active-reference validation, and tag error mapping.
+- Owns: tag lifecycle rules, FQN hierarchy validation and derivation, display-label handling, ranked search contexts, creation availability, active-reference validation, and tag error mapping.
 - Does not own: fuzzy text primitives, persistence, or transport details.

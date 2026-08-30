@@ -23,7 +23,7 @@ interface Notice {
 export const MembersPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { includeHidden, search } = readMembersSearchState(searchParams);
-  const membersPage = useMembersResource(includeHidden);
+  const membersPage = useMembersResource({ includeHidden, q: search });
   const [panelMode, setPanelMode] = useState<"create" | "edit" | undefined>();
   const [selectedMemberId, setSelectedMemberId] = useState<
     number | undefined

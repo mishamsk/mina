@@ -113,23 +113,15 @@ export type AccountListResponse = {
     total_count: number;
 };
 
-export type AccountPickerResponse = {
-    items: Array<AccountPickerItem>;
+export type AccountSearchResponse = {
+    items: Array<AccountSearchItem>;
     /**
-     * Active selected leaves in request order, independent of query matching and the search result bound.
+     * Whether more ranked candidates matched beyond the caller's limit.
      */
-    selected_items: Array<AccountPickerItem>;
-    /**
-     * Whether the current full query can be created through the caller's existing account creation flow.
-     */
-    can_create: boolean;
-    /**
-     * Complete eligible leaf count for the typed context before query matching, hierarchy scoping, and result bounding.
-     */
-    eligible_count: number;
+    has_more: boolean;
 };
 
-export type AccountPickerItem = {
+export type AccountSearchItem = {
     kind: 'leaf' | 'group';
     /**
      * Stable leaf identifier; absent for navigation groups.
@@ -156,6 +148,22 @@ export type AccountPickerItem = {
      * Fixed account currency, null for a multi-currency leaf, and absent for navigation groups.
      */
     currency?: string | null;
+};
+
+export type AccountCreationAvailabilityResponse = {
+    available: boolean;
+    /**
+     * Stable false reason; absent when available.
+     */
+    reason?: 'invalid_fqn' | 'path_conflict' | 'reserved_namespace';
+};
+
+export type CreationAvailabilityResponse = {
+    available: boolean;
+    /**
+     * Stable false reason; absent when available.
+     */
+    reason?: 'invalid_fqn' | 'path_conflict';
 };
 
 export type GroupState = {
@@ -344,19 +352,15 @@ export type CategoryListResponse = {
     total_count: number;
 };
 
-export type CategoryPickerResponse = {
-    items: Array<CategoryPickerItem>;
+export type CategorySearchResponse = {
+    items: Array<CategorySearchItem>;
     /**
-     * Active selected leaves in request order, independent of query matching and the search result bound.
+     * Whether more ranked candidates matched beyond the caller's limit.
      */
-    selected_items: Array<CategoryPickerItem>;
-    /**
-     * Whether the supplied context and current full query are eligible for category creation; the caller independently decides whether to offer a creation flow.
-     */
-    can_create: boolean;
+    has_more: boolean;
 };
 
-export type CategoryPickerItem = {
+export type CategorySearchItem = {
     kind: 'leaf' | 'group';
     /**
      * Stable leaf identifier; absent for navigation groups.
@@ -1457,15 +1461,15 @@ export type MemberListResponse = {
     total_count: number;
 };
 
-export type MemberPickerResponse = {
-    items: Array<MemberPickerItem>;
+export type MemberSearchResponse = {
+    items: Array<MemberSearchItem>;
     /**
-     * Active selected members in request order, independent of query matching and the search result bound.
+     * Whether more ranked candidates matched beyond the caller's limit.
      */
-    selected_items: Array<MemberPickerItem>;
+    has_more: boolean;
 };
 
-export type MemberPickerItem = {
+export type MemberSearchItem = {
     member_id: number;
     title: string;
     is_hidden: boolean;
@@ -1628,19 +1632,15 @@ export type TagListResponse = {
     total_count: number;
 };
 
-export type TagPickerResponse = {
-    items: Array<TagPickerItem>;
+export type TagSearchResponse = {
+    items: Array<TagSearchItem>;
     /**
-     * Active selected leaves in request order, independent of query matching and the search result bound.
+     * Whether more ranked candidates matched beyond the caller's limit.
      */
-    selected_items: Array<TagPickerItem>;
-    /**
-     * Whether the supplied context and current full query are eligible for tag creation; the caller independently decides whether to offer a creation flow.
-     */
-    can_create: boolean;
+    has_more: boolean;
 };
 
-export type TagPickerItem = {
+export type TagSearchItem = {
     kind: 'leaf' | 'group';
     /**
      * Stable leaf identifier; absent for navigation groups.
@@ -2720,6 +2720,10 @@ export type ListCategoriesData = {
     path?: never;
     query?: {
         /**
+         * Filter membership by display title, FQN, segment, or active implicit group; does not change canonical sort order.
+         */
+        q?: string;
+        /**
          * Include hidden active entities; defaults to false.
          */
         include_hidden?: boolean;
@@ -2855,11 +2859,12 @@ export type RestructureCategoriesResponses = {
 
 export type RestructureCategoriesResponse = RestructureCategoriesResponses[keyof RestructureCategoriesResponses];
 
-export type PickCategoriesData = {
+export type SearchCategoriesData = {
     body?: never;
     path?: never;
     query: {
-        context: 'record_assignment' | 'shorthand_expense' | 'shorthand_income' | 'transaction_filter';
+        context: 'record_assignment' | 'shorthand_expense' | 'shorthand_income' | 'transaction_filter' | 'navigation';
+        limit: number;
         q?: string;
         /**
          * Return only direct children of this hierarchy group; an empty value selects root children.
@@ -2867,14 +2872,14 @@ export type PickCategoriesData = {
         parent_fqn?: string;
         include_hidden?: boolean;
         /**
-         * Active selections retained even when hidden.
+         * Active selected leaf IDs to omit from candidates.
          */
-        selected_ids?: Array<number>;
+        exclude_ids?: Array<number>;
     };
-    url: '/api/categories/picker';
+    url: '/api/categories/search';
 };
 
-export type PickCategoriesErrors = {
+export type SearchCategoriesErrors = {
     /**
      * The request is invalid.
      */
@@ -2885,16 +2890,47 @@ export type PickCategoriesErrors = {
     401: ErrorResponse;
 };
 
-export type PickCategoriesError = PickCategoriesErrors[keyof PickCategoriesErrors];
+export type SearchCategoriesError = SearchCategoriesErrors[keyof SearchCategoriesErrors];
 
-export type PickCategoriesResponses = {
+export type SearchCategoriesResponses = {
     /**
-     * Bounded category picker options in backend rank order.
+     * Ranked category candidates and truncation state.
      */
-    200: CategoryPickerResponse;
+    200: CategorySearchResponse;
 };
 
-export type PickCategoriesResponse = PickCategoriesResponses[keyof PickCategoriesResponses];
+export type SearchCategoriesResponse = SearchCategoriesResponses[keyof SearchCategoriesResponses];
+
+export type GetCategoryCreationAvailabilityData = {
+    body?: never;
+    path?: never;
+    query: {
+        fqn: string;
+    };
+    url: '/api/categories/creation-availability';
+};
+
+export type GetCategoryCreationAvailabilityErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+};
+
+export type GetCategoryCreationAvailabilityError = GetCategoryCreationAvailabilityErrors[keyof GetCategoryCreationAvailabilityErrors];
+
+export type GetCategoryCreationAvailabilityResponses = {
+    /**
+     * Advisory category creation availability.
+     */
+    200: CreationAvailabilityResponse;
+};
+
+export type GetCategoryCreationAvailabilityResponse = GetCategoryCreationAvailabilityResponses[keyof GetCategoryCreationAvailabilityResponses];
 
 export type ListCategoryGroupsData = {
     body?: never;
@@ -3236,6 +3272,10 @@ export type ListTagsData = {
     path?: never;
     query?: {
         /**
+         * Filter membership by display title, FQN, segment, or active implicit group; does not change canonical sort order.
+         */
+        q?: string;
+        /**
          * Include hidden active entities; defaults to false.
          */
         include_hidden?: boolean;
@@ -3367,11 +3407,12 @@ export type RestructureTagsResponses = {
 
 export type RestructureTagsResponse = RestructureTagsResponses[keyof RestructureTagsResponses];
 
-export type PickTagsData = {
+export type SearchTagsData = {
     body?: never;
     path?: never;
     query: {
-        context: 'record_assignment' | 'transaction_filter';
+        context: 'record_assignment' | 'transaction_filter' | 'navigation';
+        limit: number;
         q?: string;
         /**
          * Return only direct children of this hierarchy group; an empty value selects root children.
@@ -3379,14 +3420,14 @@ export type PickTagsData = {
         parent_fqn?: string;
         include_hidden?: boolean;
         /**
-         * Active selections retained even when hidden.
+         * Active selected leaf IDs to omit from candidates.
          */
-        selected_ids?: Array<number>;
+        exclude_ids?: Array<number>;
     };
-    url: '/api/tags/picker';
+    url: '/api/tags/search';
 };
 
-export type PickTagsErrors = {
+export type SearchTagsErrors = {
     /**
      * The request is invalid.
      */
@@ -3397,16 +3438,47 @@ export type PickTagsErrors = {
     401: ErrorResponse;
 };
 
-export type PickTagsError = PickTagsErrors[keyof PickTagsErrors];
+export type SearchTagsError = SearchTagsErrors[keyof SearchTagsErrors];
 
-export type PickTagsResponses = {
+export type SearchTagsResponses = {
     /**
-     * Bounded tag picker options in backend rank order.
+     * Ranked tag candidates and truncation state.
      */
-    200: TagPickerResponse;
+    200: TagSearchResponse;
 };
 
-export type PickTagsResponse = PickTagsResponses[keyof PickTagsResponses];
+export type SearchTagsResponse = SearchTagsResponses[keyof SearchTagsResponses];
+
+export type GetTagCreationAvailabilityData = {
+    body?: never;
+    path?: never;
+    query: {
+        fqn: string;
+    };
+    url: '/api/tags/creation-availability';
+};
+
+export type GetTagCreationAvailabilityErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+};
+
+export type GetTagCreationAvailabilityError = GetTagCreationAvailabilityErrors[keyof GetTagCreationAvailabilityErrors];
+
+export type GetTagCreationAvailabilityResponses = {
+    /**
+     * Advisory tag creation availability.
+     */
+    200: CreationAvailabilityResponse;
+};
+
+export type GetTagCreationAvailabilityResponse = GetTagCreationAvailabilityResponses[keyof GetTagCreationAvailabilityResponses];
 
 export type ListTagGroupsData = {
     body?: never;
@@ -3748,6 +3820,10 @@ export type ListMembersData = {
     path?: never;
     query?: {
         /**
+         * Filter membership by member name under the shared matching policy; does not change canonical sort order.
+         */
+        q?: string;
+        /**
          * Include hidden active entities; defaults to false.
          */
         include_hidden?: boolean;
@@ -3969,22 +4045,23 @@ export type UpdateMemberResponses = {
 
 export type UpdateMemberResponse = UpdateMemberResponses[keyof UpdateMemberResponses];
 
-export type PickMembersData = {
+export type SearchMembersData = {
     body?: never;
     path?: never;
     query: {
-        context: 'record_assignment' | 'transaction_filter';
+        context: 'record_assignment' | 'transaction_filter' | 'navigation';
+        limit: number;
         q?: string;
         include_hidden?: boolean;
         /**
-         * Active selections retained even when hidden.
+         * Active selected member IDs to omit from candidates.
          */
-        selected_ids?: Array<number>;
+        exclude_ids?: Array<number>;
     };
-    url: '/api/members/picker';
+    url: '/api/members/search';
 };
 
-export type PickMembersErrors = {
+export type SearchMembersErrors = {
     /**
      * The request is invalid.
      */
@@ -3995,16 +4072,16 @@ export type PickMembersErrors = {
     401: ErrorResponse;
 };
 
-export type PickMembersError = PickMembersErrors[keyof PickMembersErrors];
+export type SearchMembersError = SearchMembersErrors[keyof SearchMembersErrors];
 
-export type PickMembersResponses = {
+export type SearchMembersResponses = {
     /**
-     * Bounded member picker options in backend rank order.
+     * Ranked member candidates and truncation state.
      */
-    200: MemberPickerResponse;
+    200: MemberSearchResponse;
 };
 
-export type PickMembersResponse = PickMembersResponses[keyof PickMembersResponses];
+export type SearchMembersResponse = SearchMembersResponses[keyof SearchMembersResponses];
 
 export type UpdateMemberHiddenData = {
     body: UpdateMemberHiddenRequest;
@@ -4053,6 +4130,10 @@ export type ListAccountsData = {
     path?: never;
     query?: {
         /**
+         * Filter membership by display title, FQN, segment, or active implicit group; does not change canonical sort order.
+         */
+        q?: string;
+        /**
          * Include hidden active entities; defaults to false.
          */
         include_hidden?: boolean;
@@ -4061,9 +4142,9 @@ export type ListAccountsData = {
          */
         include_tombstoned?: boolean;
         /**
-         * Filter by owned, party, flow, or system account type.
+         * Filter by one or more owned, party, flow, or system account types.
          */
-        account_type?: AccountType;
+        account_type?: Array<AccountType>;
         /**
          * Filter by featured state when provided.
          */
@@ -4188,11 +4269,12 @@ export type RestructureAccountsResponses = {
 
 export type RestructureAccountsResponse = RestructureAccountsResponses[keyof RestructureAccountsResponses];
 
-export type PickAccountsData = {
+export type SearchAccountsData = {
     body?: never;
     path?: never;
     query: {
-        context: 'record_assignment' | 'shorthand_balance' | 'shorthand_flow' | 'exchange' | 'transaction_filter' | 'bulk_source' | 'bulk_replacement';
+        context: 'record_assignment' | 'shorthand_balance' | 'shorthand_flow' | 'exchange' | 'transaction_filter' | 'bulk_source' | 'bulk_replacement' | 'navigation';
+        limit: number;
         q?: string;
         /**
          * Return only direct children of this hierarchy group; an empty value selects root children.
@@ -4200,11 +4282,11 @@ export type PickAccountsData = {
         parent_fqn?: string;
         include_hidden?: boolean;
         /**
-         * Active selections retained even when hidden.
+         * Active selected leaf IDs to omit from candidates.
          */
-        selected_ids?: Array<number>;
+        exclude_ids?: Array<number>;
         /**
-         * Exchange context excludes fixed-currency accounts in this currency while retaining current selections.
+         * Exchange context excludes fixed-currency accounts in this currency.
          */
         excluded_currency?: string;
         /**
@@ -4216,10 +4298,10 @@ export type PickAccountsData = {
          */
         source_account_id?: number;
     };
-    url: '/api/accounts/picker';
+    url: '/api/accounts/search';
 };
 
-export type PickAccountsErrors = {
+export type SearchAccountsErrors = {
     /**
      * The request is invalid.
      */
@@ -4230,16 +4312,47 @@ export type PickAccountsErrors = {
     401: ErrorResponse;
 };
 
-export type PickAccountsError = PickAccountsErrors[keyof PickAccountsErrors];
+export type SearchAccountsError = SearchAccountsErrors[keyof SearchAccountsErrors];
 
-export type PickAccountsResponses = {
+export type SearchAccountsResponses = {
     /**
-     * Bounded account picker options in backend rank order.
+     * Ranked account candidates and truncation state.
      */
-    200: AccountPickerResponse;
+    200: AccountSearchResponse;
 };
 
-export type PickAccountsResponse = PickAccountsResponses[keyof PickAccountsResponses];
+export type SearchAccountsResponse = SearchAccountsResponses[keyof SearchAccountsResponses];
+
+export type GetAccountCreationAvailabilityData = {
+    body?: never;
+    path?: never;
+    query: {
+        fqn: string;
+    };
+    url: '/api/accounts/creation-availability';
+};
+
+export type GetAccountCreationAvailabilityErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+};
+
+export type GetAccountCreationAvailabilityError = GetAccountCreationAvailabilityErrors[keyof GetAccountCreationAvailabilityErrors];
+
+export type GetAccountCreationAvailabilityResponses = {
+    /**
+     * Advisory account creation availability.
+     */
+    200: AccountCreationAvailabilityResponse;
+};
+
+export type GetAccountCreationAvailabilityResponse = GetAccountCreationAvailabilityResponses[keyof GetAccountCreationAvailabilityResponses];
 
 export type ListAccountGroupsData = {
     body?: never;

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/mishamsk/mina/internal/services"
+	"github.com/mishamsk/mina/internal/x/fuzzyrank"
 	"github.com/mishamsk/mina/internal/x/refcache"
 )
 
@@ -67,6 +68,7 @@ type ListOptions struct {
 	IncludeTombstoned bool
 	EconomicIntents   []CategoryEconomicIntent
 	IsFeatured        *bool
+	Query             string
 	List              services.ListOptions
 }
 
@@ -253,18 +255,59 @@ func (s *Service) List(ctx context.Context, opts ListOptions) (services.Paginate
 		}
 	}
 
+	requestedList := opts.List
+	if opts.Query != "" {
+		opts.List = opts.List.Unpaged()
+	}
 	list, err := s.repo.List(ctx, opts)
 	if err != nil {
-		return services.PaginatedList[Category]{}, err
-	}
-	if err := s.populateDeleteability(ctx, list.Items); err != nil {
 		return services.PaginatedList[Category]{}, err
 	}
 	for index := range list.Items {
 		list.Items[index] = withEffectiveDisplayLabel(list.Items[index])
 	}
+	if opts.Query != "" {
+		list = services.Page(filterCategoriesByQuery(list.Items, opts.Query), requestedList)
+	}
+	if err := s.populateDeleteability(ctx, list.Items); err != nil {
+		return services.PaginatedList[Category]{}, err
+	}
 
 	return list, nil
+}
+
+func filterCategoriesByQuery(items []Category, query string) []Category {
+	matchedGroups := map[string]bool{}
+	for _, item := range items {
+		if item.TombstonedAt != nil {
+			continue
+		}
+		for index, value := range item.FQN {
+			if value != ':' {
+				continue
+			}
+			group := item.FQN[:index]
+			if fuzzyrank.Matches(query, fuzzyrank.EntityTerms(searchFQNLeaf(group), group)) {
+				matchedGroups[group] = true
+			}
+		}
+	}
+	matched := make([]Category, 0, len(items))
+	for _, item := range items {
+		if fuzzyrank.Matches(query, fuzzyrank.EntityTerms(item.DisplayLabel, item.FQN)) || categoryHasMatchedAncestor(item.FQN, matchedGroups) {
+			matched = append(matched, item)
+		}
+	}
+	return matched
+}
+
+func categoryHasMatchedAncestor(fqn string, groups map[string]bool) bool {
+	for index, value := range fqn {
+		if value == ':' && groups[fqn[:index]] {
+			return true
+		}
+	}
+	return false
 }
 
 // GroupStates derives implicit category groups from active leaves.
@@ -537,17 +580,17 @@ func (s *Service) ensureFQNAvailable(ctx context.Context, fqn string) error {
 	if err != nil {
 		return err
 	}
-	for _, state := range states {
-		if !state.active || !services.FQNPathConflict(fqn, state.fqn) {
-			continue
-		}
-		if fqn == state.fqn {
-			return services.Conflict("active category fqn already exists")
-		}
+	availability := categoryFQNAvailability(fqn, states)
+	if availability.availability.Available {
+		return nil
+	}
+	if availability.conflictingFQN == fqn {
+		return services.Conflict("active category fqn already exists")
+	}
+	if availability.conflictingFQN != "" {
 		return services.Conflict("active category fqn conflicts with existing category hierarchy")
 	}
-
-	return nil
+	return services.InvalidRequest("invalid category fqn")
 }
 
 func (s *Service) loadReferenceCache(ctx context.Context) (map[int64]categoryReferenceState, error) {

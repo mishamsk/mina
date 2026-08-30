@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 
 import {
   apiErrorMessage,
-  type CategoryEconomicIntent,
+  type CategoriesManagementParams,
   fetchCategoriesPage,
 } from "@/api";
 import { refreshLedgerLookups } from "@/features/ledger";
@@ -21,15 +21,33 @@ import {
 } from "@/store";
 
 let categoriesPageLoadGeneration = 0;
+const defaultCategoriesPageParams: CategoriesManagementParams = {
+  includeHidden: true,
+  q: "",
+};
+let currentCategoriesPageParams = defaultCategoriesPageParams;
 const categoriesPageRefreshRetryDelayMs = 200;
 const categoriesPageRefreshAttempts = 8;
 
-const categoriesPageKey = (
-  economicIntent?: CategoryEconomicIntent,
-): CategoriesPageKey => economicIntent ?? "all";
+const normalizedCategoriesPageParams = (
+  params: CategoriesManagementParams,
+): CategoriesManagementParams => ({
+  economicIntent: params.economicIntent,
+  includeHidden: params.includeHidden,
+  q: params.q.trim(),
+});
 
-const nextCategoriesPageLoadGeneration = (key: CategoriesPageKey): number => {
+const categoriesPageKey = (
+  params: CategoriesManagementParams,
+): CategoriesPageKey =>
+  `${params.includeHidden ? "hidden" : "visible"}:${params.economicIntent ?? "all"}:${params.q.toLowerCase()}`;
+
+const nextCategoriesPageLoadGeneration = (
+  params: CategoriesManagementParams,
+): number => {
   categoriesPageLoadGeneration += 1;
+  currentCategoriesPageParams = normalizedCategoriesPageParams(params);
+  const key = categoriesPageKey(currentCategoriesPageParams);
   setCategoriesPageLoading(key);
   return categoriesPageLoadGeneration;
 };
@@ -47,10 +65,10 @@ const waitForCategoriesPageRetry = (): Promise<void> =>
   });
 
 const fetchCategoriesPageWithRetries = async (
-  economicIntent: CategoryEconomicIntent | undefined,
+  params: CategoriesManagementParams,
   shouldContinue: () => boolean,
 ): Promise<Awaited<ReturnType<typeof fetchCategoriesPage>>> => {
-  let result = await fetchCategoriesPage(economicIntent);
+  let result = await fetchCategoriesPage(params, shouldContinue);
   for (
     let attempt = 1;
     attempt < categoriesPageRefreshAttempts && !categoriesPageLoaded(result);
@@ -63,23 +81,20 @@ const fetchCategoriesPageWithRetries = async (
     if (!shouldContinue()) {
       return result;
     }
-    result = await fetchCategoriesPage(economicIntent);
+    result = await fetchCategoriesPage(params, shouldContinue);
   }
   return result;
 };
 
 const loadCategoriesPage = async (
   generation: number,
-  economicIntent?: CategoryEconomicIntent,
+  params: CategoriesManagementParams,
   shouldCommit: () => boolean = () => true,
 ): Promise<boolean> => {
   const isCurrentLoad = () => isCurrentCategoriesPageLoad(generation);
   const commitCurrent = () => shouldCommit() && isCurrentLoad();
 
-  const result = await fetchCategoriesPageWithRetries(
-    economicIntent,
-    commitCurrent,
-  );
+  const result = await fetchCategoriesPageWithRetries(params, commitCurrent);
   if (!commitCurrent()) {
     if (isCurrentLoad()) {
       clearCategoriesPageLoading();
@@ -100,24 +115,14 @@ const loadCategoriesPage = async (
   setCategoriesPage({
     categories: result.categories.data.categories,
     groups: result.groups.data.groups,
-    key: categoriesPageKey(economicIntent),
+    key: categoriesPageKey(params),
   });
   return true;
 };
 
-const currentCategoriesPageEconomicIntent = () => {
-  const snapshot = getCategoriesSnapshot();
-  const key = snapshot.requestKey ?? snapshot.snapshot?.key;
-  return key === "all" ? undefined : key;
-};
-
 export const refreshCategoriesPage = async (): Promise<boolean> => {
-  const economicIntent = currentCategoriesPageEconomicIntent();
-  const key = categoriesPageKey(economicIntent);
-  return loadCategoriesPage(
-    nextCategoriesPageLoadGeneration(key),
-    economicIntent,
-  );
+  const params = currentCategoriesPageParams;
+  return loadCategoriesPage(nextCategoriesPageLoadGeneration(params), params);
 };
 
 export const refreshCategoriesAfterMutation = async (options?: {
@@ -133,10 +138,12 @@ export const refreshCategoriesAfterMutation = async (options?: {
 };
 
 export const useCategoriesResource = (
-  economicIntent?: CategoryEconomicIntent,
+  requestedParams: CategoriesManagementParams = defaultCategoriesPageParams,
 ) => {
   const categoriesPage = useCategoriesPageView();
   const mountedRef = useRef(false);
+  const params = normalizedCategoriesPageParams(requestedParams);
+  const key = categoriesPageKey(params);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -147,7 +154,7 @@ export const useCategoriesResource = (
 
   useEffect(() => {
     const snapshot = getCategoriesSnapshot();
-    const key = categoriesPageKey(economicIntent);
+    currentCategoriesPageParams = params;
     if (snapshot.snapshot?.key === key && !snapshot.stale) {
       if (
         snapshot.requestKey !== key &&
@@ -165,19 +172,15 @@ export const useCategoriesResource = (
       return;
     }
 
-    const generation = nextCategoriesPageLoadGeneration(key);
+    const generation = nextCategoriesPageLoadGeneration(params);
 
-    void loadCategoriesPage(
-      generation,
-      economicIntent,
-      () => mountedRef.current,
-    );
+    void loadCategoriesPage(generation, params, () => mountedRef.current);
   }, [
     categoriesPage.errorMessage,
     categoriesPage.loading,
     categoriesPage.snapshot,
     categoriesPage.stale,
-    economicIntent,
+    key,
   ]);
 
   return categoriesPage;

@@ -17,7 +17,7 @@
 - Runtime resolves the accounting location, encryption key, and connection limit before delegating database open, migration, and read-only inspection mechanics to `store`.
 - Runtime composes the data-aggregate service's Household, Category, and Tag flow reports from the DuckDB repository, Category/Tag readers, transaction classifier, and runtime clock.
 - Runtime connects recurring's read-only future projection provider to transaction-list composition after both services are constructed.
-- Runtime connects the account service's bulk picker seam to transaction-owned common-source and affected-currency facts after both services are constructed.
+- Runtime connects the account service's bulk-search seam to transaction-owned common-source and affected-currency facts after both services are constructed.
 - Runtime composes portable API audit persistence into trusted and externally protected REST trees so protection rejections are captured; audit insert failures do not change the determined REST outcome.
 - Runtime registers API audit-log compaction for manual execution in every app and schedules it only under long-running automatic-operation policy; compaction uses the shared runtime clock and configured retention.
 - The system clock installs one cancelable timer for each recurring-operation deadline without periodic wakeups.

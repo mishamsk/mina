@@ -11,9 +11,10 @@
 - Successful template mutations update an existing snapshot synchronously, then refresh it; failed refreshes preserve previously loaded choices.
 - Compatibility-changing account updates invalidate the snapshot so server-derived shorthand compatibility is reloaded before reuse.
 - Pages own the `/templates` route, its search URL state, and restructure workflow; the app shell owns the route-independent editor launch. Create and edit drafts are never persisted or URL-backed.
+- Templates retain their own local snapshot search before passing matched leaves to the shared reference tree; server-filtered management-list semantics belong only to the Account, Category, Tag, and Member pages.
 - Deferred initial focus yields to a control already used in the editor; lookup retries preserve that latest control across recovery.
-- Template records are partial defaults: every field is independently optional; entity-specific backend picker contexts retain active hidden selections, exclude hidden fresh choices, and omit tombstoned references.
-- A failed broader lookup snapshot does not block saving picker-backed reference IDs; entity-specific picker APIs independently load and validate those choices.
+- Template records are partial defaults: every field is independently optional; caller-retained selected options keep hidden current values displayable, while entity-specific ranked-search contexts exclude hidden fresh choices and tombstoned references.
+- A failed broader lookup snapshot does not block saving reference IDs; existing per-entity detail reads resolve selected presentation independently, while ordinary mutation validation remains authoritative.
 - Transaction capture maps active records in response order and copies only account, category, member, currency, native amount, tags, and memo; dates and transaction-only metadata never enter the draft.
 - Create recurring copies each active template record's supplied defaults into a new definition draft without filling absent partial values.
 - Edit preserves the FQN; hierarchy changes remain owned by restructure.

@@ -39,17 +39,15 @@ interface AccountsTreeProps {
   readonly accounts: readonly Account[] | undefined;
   readonly balances: readonly AccountBalance[] | undefined;
   readonly errorMessage?: string;
+  readonly filtered: boolean;
   readonly groups: readonly GroupState[] | undefined;
   readonly hideZeroBalances: boolean;
-  readonly includeHidden: boolean;
   readonly loading: boolean;
   readonly onCreateAccount?: (opener: HTMLElement) => void;
   readonly onEditAccount?: (account: Account, opener: HTMLElement) => void;
   readonly onNotice?: (message: string) => void;
   readonly onRestructurePath?: (fqn: string, opener: HTMLElement) => void;
   readonly onRetry?: () => void;
-  readonly search: string;
-  readonly typeFilter: AccountTypeFilter;
 }
 
 interface AccountTreeRow {
@@ -62,16 +60,6 @@ type AccountDeleteTarget = {
   readonly account: Account;
   readonly opener: HTMLElement;
 };
-
-const accountTypeMatches = (
-  account: Account,
-  typeFilter: AccountTypeFilter,
-): boolean =>
-  typeFilter.length === 0 || typeFilter.includes(account.account_type);
-
-const accountSearchMatches = (account: Account, search: string): boolean =>
-  search.trim() === "" ||
-  account.fqn.toLowerCase().includes(search.trim().toLowerCase());
 
 const accountTreeName = (account: Account): string =>
   account.display_label_override
@@ -111,31 +99,22 @@ export const accountTreeRows = (
   {
     balancesByAccountId,
     hideZeroBalances,
-    includeHidden,
-    search,
-    typeFilter,
   }: {
     readonly balancesByAccountId: ReadonlyMap<
       number,
       readonly AccountBalance[]
     >;
     readonly hideZeroBalances: boolean;
-    readonly includeHidden: boolean;
-    readonly search: string;
-    readonly typeFilter: AccountTypeFilter;
   },
 ): readonly AccountTreeRow[] => {
   const visibleAccountByFqn = new Map(
     accounts
       .filter(
         (account) =>
-          (includeHidden || !account.is_hidden) &&
-          accountTypeMatches(account, typeFilter) &&
-          (!hideZeroBalances ||
-            account.account_type === "flow" ||
-            account.account_type === "system" ||
-            accountHasNonZeroStanding(account, balancesByAccountId)) &&
-          accountSearchMatches(account, search),
+          !hideZeroBalances ||
+          account.account_type === "flow" ||
+          account.account_type === "system" ||
+          accountHasNonZeroStanding(account, balancesByAccountId),
       )
       .map((account) => [account.fqn, account]),
   );
@@ -300,17 +279,15 @@ export const AccountsTree = ({
   accounts,
   balances,
   errorMessage,
+  filtered,
   groups,
   hideZeroBalances,
-  includeHidden,
   loading,
   onCreateAccount,
   onEditAccount,
   onNotice,
   onRestructurePath,
   onRetry,
-  search,
-  typeFilter,
 }: AccountsTreeProps) => {
   const navigate = useNavigate();
   const [deleteTarget, setDeleteTarget] = useState<
@@ -331,19 +308,9 @@ export const AccountsTree = ({
         ? accountTreeRows(accounts, {
             balancesByAccountId: accountBalancesById,
             hideZeroBalances,
-            includeHidden,
-            search,
-            typeFilter,
           })
         : [],
-    [
-      accountBalancesById,
-      accounts,
-      hideZeroBalances,
-      includeHidden,
-      search,
-      typeFilter,
-    ],
+    [accountBalancesById, accounts, hideZeroBalances],
   );
   const groupByFqn = useMemo(
     () => new Map((groups ?? []).map((group) => [group.fqn, group])),
@@ -443,9 +410,7 @@ export const AccountsTree = ({
     );
 
     if (result.data !== undefined || !result.error) {
-      await refreshAccountsAfterMutation({
-        removedAccountId: deleteTarget.account.account_id,
-      });
+      await refreshAccountsAfterMutation();
       showNotice("Account deleted.");
       setDeleting(false);
       setDeleteTarget(undefined);
@@ -496,7 +461,6 @@ export const AccountsTree = ({
   }
 
   if (!accounts || rows.length === 0) {
-    const hasAccounts = (accounts?.length ?? 0) > 0;
     return (
       <div className="bg-card flex flex-col items-start gap-3 border-2 border-[var(--border-ink)] p-6 shadow-[var(--shadow-pixel)]">
         <div className="space-y-1">
@@ -504,7 +468,7 @@ export const AccountsTree = ({
             No accounts
           </p>
           <p className="font-body text-muted-foreground max-w-prose text-sm">
-            {hasAccounts
+            {filtered
               ? "No accounts match the current search and filters. The chart will show account paths, types, currencies, balances, and hidden state."
               : "The chart will show account paths, types, currencies, balances, and hidden state once accounts exist."}
           </p>

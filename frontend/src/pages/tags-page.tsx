@@ -32,9 +32,11 @@ const movedTagMessage = (count: number): string =>
 
 export const TagsPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const tagsPage = useTagsResource();
+  const { includeHidden, search } = readTagsSearchState(searchParams);
+  const tagsPage = useTagsResource({ includeHidden, q: search });
   const [panelMode, setPanelMode] = useState<"create" | "edit" | undefined>();
   const [selectedTagId, setSelectedTagId] = useState<number | undefined>();
+  const [openedTag, setOpenedTag] = useState<Tag | undefined>();
   const [restructurePath, setRestructurePath] = useState<string | undefined>();
   const [restructureError, setRestructureError] = useState<
     string | undefined
@@ -43,11 +45,12 @@ export const TagsPage = () => {
   const createTagButtonRef = useRef<HTMLButtonElement | null>(null);
   const panelOpenerRef = useRef<HTMLElement | null>(null);
   const restructureOpenerRef = useRef<HTMLElement | null>(null);
-  const { includeHidden, search } = readTagsSearchState(searchParams);
-  const selectedTag = tagsPage.snapshot?.tags.find(
+  const snapshotTag = tagsPage.snapshot?.tags.find(
     (tag) => tag.tag_id === selectedTagId,
   );
-
+  const selectedTag =
+    snapshotTag ??
+    (openedTag?.tag_id === selectedTagId ? openedTag : undefined);
   const showNotice = (message: string, tone: Notice["tone"] = "success") => {
     setNotice((current) => ({
       id: (current?.id ?? 0) + 1,
@@ -73,6 +76,7 @@ export const TagsPage = () => {
     restructureOpenerRef.current = null;
     panelOpenerRef.current = opener;
     setSelectedTagId(undefined);
+    setOpenedTag(undefined);
     setPanelMode("create");
   };
 
@@ -82,12 +86,14 @@ export const TagsPage = () => {
     restructureOpenerRef.current = null;
     panelOpenerRef.current = opener;
     setSelectedTagId(tag.tag_id);
+    setOpenedTag(tag);
     setPanelMode("edit");
   };
 
   const closePanel = () => {
     setPanelMode(undefined);
     setSelectedTagId(undefined);
+    setOpenedTag(undefined);
     restorePanelOpenerFocus();
   };
 
@@ -100,6 +106,7 @@ export const TagsPage = () => {
   const openRestructureDialog = (fqn: string, opener: HTMLElement) => {
     setPanelMode(undefined);
     setSelectedTagId(undefined);
+    setOpenedTag(undefined);
     panelOpenerRef.current = null;
     restructureOpenerRef.current = opener;
     setRestructureError(undefined);
@@ -195,7 +202,6 @@ export const TagsPage = () => {
 
       <div className="min-h-0 flex-1">
         <TagsPageContent
-          includeHidden={includeHidden}
           onEditTag={openEditPanel}
           onTagDeleted={closeDeletedTagEditor}
           onNotice={showNotice}

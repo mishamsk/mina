@@ -2,11 +2,11 @@ import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 import { useShallow } from "zustand/react/shallow";
 
-import type { Category, CategoryEconomicIntent, GroupState } from "@/api";
+import type { Category, GroupState } from "@/api";
 
 import { createSelectors } from "./selectors";
 
-export type CategoriesPageKey = CategoryEconomicIntent | "all";
+export type CategoriesPageKey = string;
 
 export interface CategoriesPageSnapshot {
   readonly categories: readonly Category[];

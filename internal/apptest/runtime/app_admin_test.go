@@ -599,7 +599,7 @@ func assertSeededFeaturedBalanceAccounts(t *testing.T, client *apptest.Client) {
 	sortBy := httpclient.ListAccountsParamsSortFqn
 	sortDir := httpclient.ListAccountsParamsSortDirAsc
 	accounts, err := client.REST().ListAccountsWithResponse(context.Background(), &httpclient.ListAccountsParams{
-		AccountType: &accountType,
+		AccountType: accountTypes(accountType),
 		IsFeatured:  &isFeatured,
 		Sort:        &sortBy,
 		SortDir:     &sortDir,

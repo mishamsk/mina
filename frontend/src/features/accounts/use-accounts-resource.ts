@@ -1,6 +1,11 @@
 import { useEffect, useRef } from "react";
 
-import { type Account, apiErrorMessage, fetchAccountsPage } from "@/api";
+import {
+  type Account,
+  type AccountsManagementParams,
+  apiErrorMessage,
+  fetchAccountsPage,
+} from "@/api";
 import { refreshFeaturedBalances } from "@/features/featured-balances";
 import { refreshLedgerLookups } from "@/features/ledger";
 import { refreshOverview } from "@/features/overview";
@@ -14,21 +19,40 @@ import {
   invalidateTransactionPages,
   invalidateTransactionTemplates,
   mergeAccountHeaderAccount,
-  mergeAccountsPageAccount,
-  removeAccountsPageAccount,
   setAccountsPage,
   setAccountsPageError,
+  setAccountsPageFromCache,
   setAccountsPageLoading,
   useAccountsPageView,
 } from "@/store";
 
 let accountsPageLoadGeneration = 0;
+const defaultAccountsPageParams: AccountsManagementParams = {
+  accountTypes: [],
+  includeHidden: true,
+  q: "",
+};
+let currentAccountsPageParams = defaultAccountsPageParams;
 const accountsPageRefreshRetryDelayMs = 200;
 const accountsPageRefreshAttempts = 8;
 
-const nextAccountsPageLoadGeneration = (): number => {
+const normalizedAccountsPageParams = (
+  params: AccountsManagementParams,
+): AccountsManagementParams => ({
+  accountTypes: [...params.accountTypes].sort(),
+  includeHidden: params.includeHidden,
+  q: params.q.trim(),
+});
+
+const accountsPageKey = (params: AccountsManagementParams): string =>
+  `${params.includeHidden ? "hidden" : "visible"}:${params.accountTypes.join(",")}:${params.q.toLowerCase()}`;
+
+const nextAccountsPageLoadGeneration = (
+  params: AccountsManagementParams,
+): number => {
   accountsPageLoadGeneration += 1;
-  setAccountsPageLoading();
+  currentAccountsPageParams = normalizedAccountsPageParams(params);
+  setAccountsPageLoading(accountsPageKey(currentAccountsPageParams));
   return accountsPageLoadGeneration;
 };
 
@@ -46,9 +70,10 @@ const waitForAccountsPageRetry = (): Promise<void> =>
   });
 
 const fetchAccountsPageWithRetries = async (
+  params: AccountsManagementParams,
   shouldContinue: () => boolean,
 ): Promise<Awaited<ReturnType<typeof fetchAccountsPage>>> => {
-  let result = await fetchAccountsPage();
+  let result = await fetchAccountsPage(params, shouldContinue);
   for (
     let attempt = 1;
     attempt < accountsPageRefreshAttempts && !accountsPageLoaded(result);
@@ -58,19 +83,23 @@ const fetchAccountsPageWithRetries = async (
       return result;
     }
     await waitForAccountsPageRetry();
-    result = await fetchAccountsPage();
+    if (!shouldContinue()) {
+      return result;
+    }
+    result = await fetchAccountsPage(params, shouldContinue);
   }
   return result;
 };
 
 const loadAccountsPage = async (
   generation: number,
+  params: AccountsManagementParams,
   shouldCommit: () => boolean = () => true,
 ): Promise<void> => {
   const isCurrentLoad = () => isCurrentAccountsPageLoad(generation);
   const commitCurrent = () => shouldCommit() && isCurrentLoad();
 
-  const result = await fetchAccountsPageWithRetries(commitCurrent);
+  const result = await fetchAccountsPageWithRetries(params, commitCurrent);
   if (!commitCurrent()) {
     if (isCurrentLoad()) {
       clearAccountsPageLoading();
@@ -97,11 +126,13 @@ const loadAccountsPage = async (
     accounts: result.accounts.data.accounts,
     balances: result.balances.data.balances,
     groups: result.groups.data.groups,
+    key: accountsPageKey(params),
   });
 };
 
 export const refreshAccountsPage = async (): Promise<void> => {
-  await loadAccountsPage(nextAccountsPageLoadGeneration());
+  const params = currentAccountsPageParams;
+  await loadAccountsPage(nextAccountsPageLoadGeneration(params), params);
 };
 
 export const refreshAccountsAfterMutation = async (options?: {
@@ -109,7 +140,6 @@ export const refreshAccountsAfterMutation = async (options?: {
   readonly bulk?: boolean;
   readonly preserveAccountHeader?: boolean;
   readonly registerAccountId?: number;
-  readonly removedAccountId?: number;
   readonly templateCompatibilityChanged?: boolean;
 }): Promise<void> => {
   if (options?.account && options.preserveAccountHeader) {
@@ -128,12 +158,6 @@ export const refreshAccountsAfterMutation = async (options?: {
     invalidateTransactionTemplates();
   }
   await refreshAccountsPage();
-  if (options?.account) {
-    mergeAccountsPageAccount(options.account);
-  }
-  if (options?.removedAccountId !== undefined) {
-    removeAccountsPageAccount(options.removedAccountId);
-  }
   await Promise.all([
     refreshFeaturedBalances(),
     refreshOverview(),
@@ -141,9 +165,13 @@ export const refreshAccountsAfterMutation = async (options?: {
   ]);
 };
 
-export const useAccountsResource = () => {
+export const useAccountsResource = (
+  requestedParams: AccountsManagementParams = defaultAccountsPageParams,
+) => {
   const accountsPage = useAccountsPageView();
   const mountedRef = useRef(false);
+  const params = normalizedAccountsPageParams(requestedParams);
+  const key = accountsPageKey(params);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -154,22 +182,33 @@ export const useAccountsResource = () => {
 
   useEffect(() => {
     const snapshot = getAccountsSnapshot();
+    currentAccountsPageParams = params;
+    if (snapshot.snapshot?.key === key && !snapshot.stale) {
+      if (
+        snapshot.requestKey !== key &&
+        (snapshot.loading || snapshot.errorMessage)
+      ) {
+        accountsPageLoadGeneration += 1;
+        setAccountsPageFromCache(key);
+      }
+      return;
+    }
     if (
-      (snapshot.snapshot && !snapshot.stale) ||
-      snapshot.loading ||
-      snapshot.errorMessage
+      snapshot.requestKey === key &&
+      (snapshot.loading || snapshot.errorMessage)
     ) {
       return;
     }
 
-    const generation = nextAccountsPageLoadGeneration();
+    const generation = nextAccountsPageLoadGeneration(params);
 
-    void loadAccountsPage(generation, () => mountedRef.current);
+    void loadAccountsPage(generation, params, () => mountedRef.current);
   }, [
     accountsPage.errorMessage,
     accountsPage.loading,
     accountsPage.snapshot,
     accountsPage.stale,
+    key,
   ]);
 
   return accountsPage;

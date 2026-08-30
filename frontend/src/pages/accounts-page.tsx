@@ -32,11 +32,18 @@ interface Notice {
 
 export const AccountsPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const accountsPage = useAccountsResource();
+  const { hideZeroBalances, includeHidden, search, typeFilter } =
+    readAccountsSearchState(searchParams);
+  const accountsPage = useAccountsResource({
+    accountTypes: typeFilter,
+    includeHidden,
+    q: search,
+  });
   const [panelMode, setPanelMode] = useState<"create" | "edit" | undefined>();
   const [selectedAccountId, setSelectedAccountId] = useState<
     number | undefined
   >();
+  const [openedAccount, setOpenedAccount] = useState<Account | undefined>();
   const [restructurePath, setRestructurePath] = useState<string | undefined>();
   const [restructureError, setRestructureError] = useState<
     string | undefined
@@ -45,11 +52,14 @@ export const AccountsPage = () => {
   const createAccountButtonRef = useRef<HTMLButtonElement | null>(null);
   const panelOpenerRef = useRef<HTMLElement | null>(null);
   const restructureOpenerRef = useRef<HTMLElement | null>(null);
-  const { hideZeroBalances, includeHidden, search, typeFilter } =
-    readAccountsSearchState(searchParams);
-  const selectedAccount = accountsPage.snapshot?.accounts.find(
+  const snapshotAccount = accountsPage.snapshot?.accounts.find(
     (account) => account.account_id === selectedAccountId,
   );
+  const selectedAccount =
+    snapshotAccount ??
+    (openedAccount?.account_id === selectedAccountId
+      ? openedAccount
+      : undefined);
   const currencies = useMemo(
     () => [
       ...new Set([
@@ -84,6 +94,7 @@ export const AccountsPage = () => {
     restructureOpenerRef.current = null;
     panelOpenerRef.current = opener;
     setSelectedAccountId(undefined);
+    setOpenedAccount(undefined);
     setPanelMode("create");
   };
 
@@ -93,18 +104,21 @@ export const AccountsPage = () => {
     restructureOpenerRef.current = null;
     panelOpenerRef.current = opener;
     setSelectedAccountId(account.account_id);
+    setOpenedAccount(account);
     setPanelMode("edit");
   };
 
   const closePanel = () => {
     setPanelMode(undefined);
     setSelectedAccountId(undefined);
+    setOpenedAccount(undefined);
     restorePanelOpenerFocus();
   };
 
   const openRestructureDialog = (fqn: string, opener: HTMLElement) => {
     setPanelMode(undefined);
     setSelectedAccountId(undefined);
+    setOpenedAccount(undefined);
     panelOpenerRef.current = null;
     restructureOpenerRef.current = opener;
     setRestructureError(undefined);
@@ -198,7 +212,6 @@ export const AccountsPage = () => {
         <AccountsPageContent
           accountsPage={accountsPage}
           hideZeroBalances={hideZeroBalances}
-          includeHidden={includeHidden}
           onCreateAccount={openCreatePanel}
           onEditAccount={openEditPanel}
           onNotice={showNotice}

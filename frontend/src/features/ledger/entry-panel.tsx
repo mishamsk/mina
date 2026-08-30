@@ -91,12 +91,15 @@ import {
   EntityPicker,
 } from "./entity-picker";
 import {
+  accountCreationAvailabilityLoader,
   accountPickerLoader,
   accountPickerOption,
+  categoryCreationAvailabilityLoader,
   categoryPickerLoader,
   categoryPickerOption,
   memberPickerLoader,
   memberPickerOption,
+  tagCreationAvailabilityLoader,
   tagPickerLoader,
   tagPickerOption,
 } from "./entity-picker-loaders";
@@ -5461,6 +5464,9 @@ export const EntryPanel = ({
                             <EntityMultiPicker
                               key={`${pickerLifecycle}:advanced:${row.draftId}:tags`}
                               createOption={createTagOption}
+                              loadCreationAvailability={
+                                tagCreationAvailabilityLoader
+                              }
                               id={`advanced-record-${rowIndex}-tags`}
                               label={`Record ${rowIndex + 1} tags`}
                               labelClassName="sr-only"
@@ -5970,6 +5976,9 @@ export const EntryPanel = ({
                             <EntityPicker
                               key={`${pickerLifecycle}:${activeTab}:${merchant.draftId}:account`}
                               createOption={createFlowAccountOption}
+                              loadCreationAvailability={
+                                accountCreationAvailabilityLoader
+                              }
                               id={`spend-merchant-${merchantIndex}-account`}
                               label="Merchant account"
                               loadOptions={accountPickerLoader({
@@ -6022,6 +6031,9 @@ export const EntryPanel = ({
                               key={`${pickerLifecycle}:${activeTab}:${merchant.draftId}:category`}
                               createOption={(fqn) =>
                                 createCategoryOption(fqn, "expense")
+                              }
+                              loadCreationAvailability={
+                                categoryCreationAvailabilityLoader
                               }
                               id={`spend-merchant-${merchantIndex}-category`}
                               label="Category"
@@ -6128,6 +6140,12 @@ export const EntryPanel = ({
                           ? createFlowAccountOption
                           : undefined
                       }
+                      loadCreationAvailability={
+                        activeConfig.secondaryAccountOptionSet ===
+                        "flowAccounts"
+                          ? accountCreationAvailabilityLoader
+                          : undefined
+                      }
                       id={`${activeTab}-${activeConfig.secondaryAccountField}`}
                       label={activeConfig.secondaryAccountLabel}
                       loadKey={`${secondaryAccountContext}:${exchangeSoldAccountCurrency ?? ""}`}
@@ -6230,6 +6248,9 @@ export const EntryPanel = ({
                     createOption={(fqn) =>
                       createCategoryOption(fqn, activeCategoryCreationIntent!)
                     }
+                    loadCreationAvailability={
+                      categoryCreationAvailabilityLoader
+                    }
                     id={`${activeTab}-category`}
                     label={
                       activeTab === "refund" ? "Expense category" : "Category"
@@ -6254,6 +6275,7 @@ export const EntryPanel = ({
                 <EntityMultiPicker
                   key={`${pickerLifecycle}:${activeTab}:tags`}
                   createOption={createTagOption}
+                  loadCreationAvailability={tagCreationAvailabilityLoader}
                   id={`${activeTab}-tags`}
                   label="Tags"
                   loadOptions={tagPickerLoader({
@@ -6314,6 +6336,9 @@ export const EntryPanel = ({
                       <EntityPicker
                         key={`${pickerLifecycle}:transfer:charge-account`}
                         createOption={createFlowAccountOption}
+                        loadCreationAvailability={
+                          accountCreationAvailabilityLoader
+                        }
                         id="transfer-charge-account"
                         label="Charge account"
                         loadOptions={accountPickerLoader({
@@ -6353,6 +6378,9 @@ export const EntryPanel = ({
                         key={`${pickerLifecycle}:transfer:charge-category`}
                         createOption={(fqn) =>
                           createCategoryOption(fqn, "expense")
+                        }
+                        loadCreationAvailability={
+                          categoryCreationAvailabilityLoader
                         }
                         id="transfer-charge-category"
                         label="Charge category"

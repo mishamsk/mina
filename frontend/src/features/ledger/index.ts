@@ -15,6 +15,10 @@ export {
   accountPickerOption,
   categoryPickerLoader,
   categoryPickerOption,
+  loadAccountOptionsByIds,
+  loadCategoryOptionsByIds,
+  loadMemberOptionsByIds,
+  loadTagOptionsByIds,
   memberPickerLoader,
   memberPickerOption,
   tagPickerLoader,
@@ -86,6 +90,7 @@ export {
 export { transactionRowFallback } from "./transaction-row-focus";
 export { TransactionSearchInput } from "./transaction-search-input";
 export { useEntityFilterRequestGuard } from "./use-entity-filter-request-guard";
+export { useResolvedEntityOptions } from "./use-resolved-entity-options";
 export { useTransactionBrowserPage } from "./use-transaction-browser-page";
 export { useTransactionDateJump } from "./use-transaction-date-jump";
 export {

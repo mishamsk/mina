@@ -264,14 +264,14 @@ test("accounts page renders tree, URL toolbar state, balances, and sidebar navig
     const url = new URL(response.url());
     return (
       url.pathname === "/api/accounts" &&
-      url.searchParams.get("include_hidden") === "true"
+      url.searchParams.get("include_hidden") === "false"
     );
   });
   const balancesResponse = page.waitForResponse((response) => {
     const url = new URL(response.url());
     return (
       url.pathname === "/api/accounts/balances" &&
-      url.searchParams.get("include_hidden") === "true"
+      url.searchParams.get("include_hidden") === "false"
     );
   });
 
@@ -2247,9 +2247,9 @@ test("accounts tree moves and renames account paths", async ({
   await expect(page.getByText("Moved 2 account(s).")).toBeVisible({
     timeout: 10_000,
   });
-  await expect(page.getByTestId("accounts-tree-row")).toHaveCount(0, {
-    timeout: 10_000,
-  });
+  await expect(
+    page.getByTestId("accounts-tree-row").filter({ hasText: sourcePrefix }),
+  ).toHaveCount(0, { timeout: 10_000 });
 
   await page.getByLabel("Search").fill(destinationPrefix);
   await expect(
@@ -2438,7 +2438,11 @@ test("accounts tree restructure handles conflicts and cancel focus", async ({
   await expect(cancelOpenButton).toBeFocused();
   await expect(cancelRow).toBeVisible();
   await page.getByLabel("Search").fill(cancelDestination);
-  await expect(page.getByTestId("accounts-tree-row")).toHaveCount(0);
+  await expect(
+    page
+      .getByTestId("accounts-tree-row")
+      .filter({ hasText: cancelDestination }),
+  ).toHaveCount(0);
 });
 
 test("accounts tree row quick actions hide feature and delete rows", async ({

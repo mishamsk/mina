@@ -8,7 +8,8 @@
 
 - Route-local query updates preserve parameters owned by other layers; transaction sorting resets pagination while preserving filters and overlays.
 - Categories owns the optional typed `economic_intent` query parameter; omitting it represents the All selection, while a selected intent seeds new-category creation.
-- Categories retains an edited category independently of filtered resource snapshots so toolbar changes cannot invalidate an open editor, while intent-scoped management reads reconcile refreshed API deleteability without replacing its draft.
+- Management routes retain an opened Account, Category, Tag, or Member independently of filtered resource snapshots so a mutation or toolbar change that removes it from current membership cannot invalidate the editor or its focus lifecycle; Categories may reconcile refreshed API deleteability without replacing its draft.
+- Account, Category, Tag, and Member routes pass their URL-owned normalized search, hidden visibility, and applicable typed filters to keyed management resources; only Accounts keeps its nonzero balance presentation filter local.
 - Transaction-filter changes keep an open transaction or entry overlay visible: synchronously replace its background URL before writing the overlay URL, so the browser never renders an overlay-less intermediate state.
 - The Transactions route composes ledger's recurring projection confirm/load/defer adapters; applicability and dialog behavior remain feature-owned.
 - The Recurring route resolves definition fragments from its loaded snapshot and hands linked edits to the app-shell editor; user-visible resolution, overlay ordering, close, and focus behavior follow [Definitions management](../../../docs/webui-design.md#recurring-occurrences-and-definitions).

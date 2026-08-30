@@ -91,20 +91,33 @@ test("edit mode replaces a common account across a changing selection", async ({
   });
   await sourcePicker.fill(firstMerchant.fqn);
   await sourcePicker.press("Enter");
+  await expect(sourcePicker).toHaveValue(
+    `${firstMerchant.fqn} (${firstMerchant.display_label})`,
+  );
 
   const replacementPicker = editor.getByRole("combobox", {
     name: "Compatible replacement account",
   });
   await replacementPicker.fill(secondMerchant.fqn);
   await replacementPicker.press("Enter");
+  await expect(replacementPicker).toHaveValue(
+    `${secondMerchant.fqn} (${secondMerchant.display_label})`,
+  );
 
   await secondRow.focus();
   await secondRow.press("Space");
-  await expect(replacementPicker).toHaveValue("");
-  await expect(editor).toContainText("1 common non-system account available.");
+  await expect(sourcePicker).toHaveValue(
+    `${firstMerchant.fqn} (${firstMerchant.display_label})`,
+  );
+  await expect(replacementPicker).toHaveValue(
+    `${secondMerchant.fqn} (${secondMerchant.display_label})`,
+  );
+  await expect(editor).toContainText(
+    "Search shows up to 6 common non-system accounts. Type to narrow.",
+  );
   await expect(
     editor.getByRole("button", { name: "Review replacement" }),
-  ).toBeDisabled();
+  ).toBeEnabled();
 
   await sourcePicker.fill(source.fqn);
   await sourcePicker.press("Enter");
@@ -163,7 +176,7 @@ test("edit mode replaces a common account across a changing selection", async ({
   ]);
 });
 
-test("account replacement availability follows the hidden source filter", async ({
+test("account replacement bounded search follows the hidden source filter", async ({
   page,
 }, testInfo) => {
   const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
@@ -234,9 +247,21 @@ test("account replacement availability follows the hidden source filter", async 
   const dock = page.getByTestId("transaction-edit-dock");
   await dock.getByRole("button", { name: "Replace account" }).click();
   const editor = page.getByTestId("edit-dock-editor");
-  await expect(editor).toContainText("0 common non-system accounts available.");
+  await expect(editor).toContainText(
+    "Search shows up to 6 common non-system accounts. Type to narrow.",
+  );
+  const hiddenSearchRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return (
+      url.pathname === "/api/accounts/search" &&
+      url.searchParams.get("context") === "bulk_source" &&
+      url.searchParams.get("include_hidden") === "true"
+    );
+  });
   await editor.getByText("Include hidden", { exact: true }).click();
-  await expect(editor).toContainText("1 common non-system account available.");
+  expect(
+    new URL((await hiddenSearchRequest).url()).searchParams.get("limit"),
+  ).toBe("6");
 
   await Promise.all([
     deleteTransaction(page, first),

@@ -93,9 +93,11 @@ WHERE 1 = 1`
 	if !opts.IncludeTombstoned {
 		filterQuery += " AND tombstoned_at IS NULL"
 	}
-	if opts.AccountType != nil {
-		filterQuery += " AND account_type = CAST(? AS " + s.db.accountingName("account_type") + ")"
-		args = append(args, enumValue(*opts.AccountType))
+	if len(opts.AccountTypes) > 0 {
+		filterQuery += " AND account_type IN (" + placeholders(len(opts.AccountTypes)) + ")"
+		for _, accountType := range opts.AccountTypes {
+			args = append(args, enumValue(accountType))
+		}
 	}
 	if opts.IsFeatured != nil {
 		filterQuery += " AND is_featured = ?"

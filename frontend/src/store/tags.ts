@@ -8,6 +8,7 @@ import { createSelectors } from "./selectors";
 
 export interface TagsPageSnapshot {
   readonly groups: readonly GroupState[];
+  readonly key: string;
   readonly loadedAt: string;
   readonly tags: readonly Tag[];
 }
@@ -15,6 +16,7 @@ export interface TagsPageSnapshot {
 interface TagsState {
   readonly errorMessage: string | undefined;
   readonly loading: boolean;
+  readonly requestKey: string | undefined;
   readonly snapshot: TagsPageSnapshot | undefined;
   readonly stale: boolean;
 }
@@ -22,6 +24,7 @@ interface TagsState {
 const initialTagsState: TagsState = {
   errorMessage: undefined,
   loading: false,
+  requestKey: undefined,
   snapshot: undefined,
   stale: false,
 };
@@ -37,6 +40,7 @@ export const useTagsPageView = () =>
     useShallow((state) => ({
       errorMessage: state.errorMessage,
       loading: state.loading,
+      requestKey: state.requestKey,
       snapshot: state.snapshot,
       stale: state.stale,
     })),
@@ -44,11 +48,12 @@ export const useTagsPageView = () =>
 
 export const getTagsSnapshot = (): TagsState => useTagsStore.getState();
 
-export const setTagsPageLoading = (): void => {
+export const setTagsPageLoading = (key: string): void => {
   useTagsStore.setState(
     {
       errorMessage: undefined,
       loading: true,
+      requestKey: key,
     },
     false,
     "TagsStore/setTagsPageLoading",
@@ -59,9 +64,22 @@ export const clearTagsPageLoading = (): void => {
   useTagsStore.setState(
     {
       loading: false,
+      requestKey: undefined,
     },
     false,
     "TagsStore/clearTagsPageLoading",
+  );
+};
+
+export const setTagsPageFromCache = (key: string): void => {
+  useTagsStore.setState(
+    {
+      errorMessage: undefined,
+      loading: false,
+      requestKey: key,
+    },
+    false,
+    "TagsStore/setTagsPageFromCache",
   );
 };
 
@@ -72,6 +90,7 @@ export const setTagsPage = (
     {
       errorMessage: undefined,
       loading: false,
+      requestKey: snapshot.key,
       snapshot: {
         ...snapshot,
         loadedAt: new Date().toISOString(),

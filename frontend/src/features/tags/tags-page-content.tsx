@@ -33,7 +33,6 @@ import { refreshTagsAfterMutation, refreshTagsPage } from "./use-tags-resource";
 export const readTagsSearchState = readReferenceSearchState;
 
 interface TagsPageContentProps {
-  readonly includeHidden: boolean;
   readonly onEditTag: (tag: Tag, opener: HTMLElement) => void;
   readonly onTagDeleted: (tagId: number) => void;
   readonly onNotice: (message: string, tone?: "error" | "success") => void;
@@ -52,7 +51,6 @@ type TagDeleteTarget = {
 };
 
 export const TagsPageContent = ({
-  includeHidden,
   onEditTag,
   onTagDeleted,
   onNotice,
@@ -328,9 +326,9 @@ export const TagsPageContent = ({
           emptyFilteredDescription="No tags match the current search and filters. The tree shows tag paths and hidden state."
           emptyTitle="No tags"
           errorMessage={tagsPage.snapshot ? undefined : tagsPage.errorMessage}
+          filtered={search.trim() !== ""}
           groups={tagsPage.snapshot?.groups}
           groupRowsClickable
-          includeHidden={includeHidden}
           leaves={tagsPage.snapshot?.tags}
           loading={tagsPage.loading}
           loadErrorTitle="Tags could not be loaded."
@@ -350,7 +348,6 @@ export const TagsPageContent = ({
           renderActions={renderActions}
           rowActivationLabel={(row) => `Open tag ${row.fqn}`}
           rowTestId="tags-tree-row"
-          search={search}
         />
       </div>
       <ConfirmationDialog

@@ -841,9 +841,7 @@ const AccountsSidePanelContent = ({
       return;
     }
     if (result.data !== undefined || !result.error) {
-      await refreshAccountsAfterMutation({
-        removedAccountId: account.account_id,
-      });
+      await refreshAccountsAfterMutation();
       onNotice("Account deleted.");
       onClose();
       return;

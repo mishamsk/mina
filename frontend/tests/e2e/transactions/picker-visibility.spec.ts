@@ -396,7 +396,7 @@ test("entry category picker requests spend context and excludes hidden categorie
   const categoryRequestPromise = page.waitForRequest((request) => {
     const url = new URL(request.url());
     return (
-      url.pathname === "/api/categories/picker" &&
+      url.pathname === "/api/categories/search" &&
       url.searchParams.get("context") === "shorthand_expense"
     );
   });

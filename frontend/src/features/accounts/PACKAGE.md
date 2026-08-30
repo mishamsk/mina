@@ -7,7 +7,9 @@
 ## Implicit Contracts
 
 - A failed group-register entity-filter lookup warns without navigating. Leaving the register or unmounting aborts and discards pending lookups; same-route query changes keep them alive.
-- The chart snapshot includes hidden accounts but only its server-sorted first 500 rows; `q`, repeated `type`, `nonzero`, and `hidden` filter that snapshot locally and preserve unrelated URL parameters. Repeated types use any-of matching; no valid type selects all. The modal type picker absorbs its dismissing pointer event so it cannot activate an underlying tree row; its trigger names the current selection and exposes the full summary in a tooltip.
+- Chart snapshots are keyed by normalized `q`, repeated `type`, and `hidden`; each load follows all server-filtered pages in canonical FQN order, and only `nonzero` remains a local balance-presentation filter. Repeated types use any-of matching; no valid type selects all. The modal type picker absorbs its dismissing pointer event so it cannot activate an underlying tree row; its trigger names the current selection and exposes the full summary in a tooltip.
+- A failed chart load replaces any mismatched cached chart with its error and Retry affordance until the requested snapshot loads successfully.
+- Account trees derive ancestor rows only from returned leaves and use group reads solely for canonical hidden metadata; they do not repeat server-owned search or type membership in the browser.
 - The `nonzero` chart filter follows the [Accounts toolbar rules](../../../../docs/webui-design.md#accounts).
 - Register snapshots are keyed by their account or group request. An exact cache miss may keep the last snapshot for that target visible while fetching; request-backed header, register, and transaction cache writes must reject results from an invalidated generation, while authoritative mutation responses may seed the transaction cache after invalidation.
 - A cache-missing account or group register runs one occurrence catch-up per mounted resource before loading records; its record query keeps the API default that excludes expected occurrences.

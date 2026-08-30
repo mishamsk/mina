@@ -37,6 +37,22 @@ type matchedCandidate[T any] struct {
 	Tier      tier
 }
 
+// EntityTerms returns the shared searchable terms for a titled hierarchical entity.
+func EntityTerms(title string, fqn string) []string {
+	terms := []string{title}
+	if fqn == "" {
+		return terms
+	}
+	terms = append(terms, fqn)
+	return append(terms, strings.Split(fqn, ":")...)
+}
+
+// Matches reports whether any term matches query under the shared ranking policy.
+func Matches(query string, terms []string) bool {
+	_, ok := bestTier(normalize(query), terms)
+	return ok
+}
+
 // Rank returns matching candidates ordered by best tier, title, FQN, and stable ID.
 func Rank[T any](query string, candidates []Candidate[T]) []Candidate[T] {
 	normalizedQuery := normalize(query)

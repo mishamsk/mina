@@ -52,3 +52,28 @@ type PaginatedList[T any] struct {
 	Items      []T
 	TotalCount int64
 }
+
+// Page applies list pagination and optional total-count reporting to an already ordered result.
+func Page[T any](items []T, opts ListOptions) PaginatedList[T] {
+	total := int64(0)
+	if opts.IncludeTotalCount {
+		total = int64(len(items))
+	}
+	start := opts.Offset
+	if start > len(items) {
+		start = len(items)
+	}
+	end := len(items)
+	if opts.Limit != nil && start+*opts.Limit < end {
+		end = start + *opts.Limit
+	}
+	return PaginatedList[T]{Items: items[start:end], TotalCount: total}
+}
+
+// Unpaged preserves sorting while disabling pagination and count work.
+func (opts ListOptions) Unpaged() ListOptions {
+	opts.Limit = nil
+	opts.Offset = 0
+	opts.IncludeTotalCount = false
+	return opts
+}

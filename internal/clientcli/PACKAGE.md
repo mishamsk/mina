@@ -7,6 +7,7 @@
 ## Implicit Contracts
 
 - Generated commands, declared REST inputs, and invokers are built only from this package's catalog and call Mina only through `internal/httpclient`; excluded operations cannot leak into the generated CLI surface.
+- Entity list commands provide exhaustive canonical filtering, while generated entity search commands provide bounded ranked discovery; Web-UI-only creation availability is excluded.
 - Generated transaction replacement input exposes retained-record identity separately from creation-time provenance and requires the caller's ETag precondition; it does not infer record matches.
 - CLI header flags are lowercase while invocation maps retain their canonical OpenAPI names for generated HTTP requests.
 - An explicit `--server` selects remote mode; otherwise a configured or explicit `--db` selects local mode. Both explicit selectors are rejected, and an empty local database target is rejected rather than opening ephemeral state.

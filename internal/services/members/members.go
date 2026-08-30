@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/mishamsk/mina/internal/services"
+	"github.com/mishamsk/mina/internal/x/fuzzyrank"
 	"github.com/mishamsk/mina/internal/x/refcache"
 )
 
@@ -35,6 +36,7 @@ type UpdateInput struct {
 type ListOptions struct {
 	IncludeHidden     bool
 	IncludeTombstoned bool
+	Query             string
 	List              services.ListOptions
 }
 
@@ -227,9 +229,22 @@ func (s *Service) Get(ctx context.Context, id int64, includeTombstoned bool) (Me
 
 // List returns household members using default visibility rules unless explicitly overridden.
 func (s *Service) List(ctx context.Context, opts ListOptions) (services.PaginatedList[Member], error) {
+	requestedList := opts.List
+	if opts.Query != "" {
+		opts.List = opts.List.Unpaged()
+	}
 	list, err := s.repo.List(ctx, opts)
 	if err != nil {
 		return services.PaginatedList[Member]{}, err
+	}
+	if opts.Query != "" {
+		matched := make([]Member, 0, len(list.Items))
+		for _, member := range list.Items {
+			if fuzzyrank.Matches(opts.Query, fuzzyrank.EntityTerms(member.Name, "")) {
+				matched = append(matched, member)
+			}
+		}
+		list = services.Page(matched, requestedList)
 	}
 	if err := s.populateDeleteability(ctx, list.Items); err != nil {
 		return services.PaginatedList[Member]{}, err

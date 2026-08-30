@@ -328,7 +328,7 @@ test("recurring quick action finishes lookup loading after navigation", async ({
     releaseAccounts = resolve;
   });
   await page.route(
-    (url) => url.pathname === "/api/accounts/picker",
+    (url) => url.pathname === "/api/accounts/search",
     async (route) => {
       await accountsReleased;
       await route.continue();

@@ -188,14 +188,14 @@ test("categories page renders demo hierarchy, intent badges, URL search, and hid
     const url = new URL(response.url());
     return (
       url.pathname === "/api/categories" &&
-      url.searchParams.get("include_hidden") === "true"
+      url.searchParams.get("include_hidden") === "false"
     );
   });
   const groupsResponse = page.waitForResponse((response) => {
     const url = new URL(response.url());
     return (
       url.pathname === "/api/categories/groups" &&
-      url.searchParams.get("include_hidden") === "true"
+      url.searchParams.get("include_hidden") === "false"
     );
   });
 
@@ -963,9 +963,9 @@ test("categories row actions hide groups and move renamed paths into transaction
   await expect(page.getByText("Moved 2 categories.")).toBeVisible({
     timeout: 10_000,
   });
-  await expect(page.getByTestId("categories-tree-row")).toHaveCount(0, {
-    timeout: 10_000,
-  });
+  await expect(
+    page.getByTestId("categories-tree-row").filter({ hasText: moveSource }),
+  ).toHaveCount(0, { timeout: 10_000 });
   await expect(moveDialog).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "New category" }),

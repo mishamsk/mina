@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { BulkCategorizeJournalRecordsData, BulkCategorizeJournalRecordsErrors, BulkCategorizeJournalRecordsResponses, BulkReassignJournalRecordAccountData, BulkReassignJournalRecordAccountErrors, BulkReassignJournalRecordAccountResponses, BulkReplaceTransactionAccountData, BulkReplaceTransactionAccountErrors, BulkReplaceTransactionAccountResponses, BulkSetJournalRecordMemberData, BulkSetJournalRecordMemberErrors, BulkSetJournalRecordMemberResponses, BulkSetJournalRecordReconciliationData, BulkSetJournalRecordReconciliationErrors, BulkSetJournalRecordReconciliationResponses, BulkSetJournalRecordSettlementData, BulkSetJournalRecordSettlementErrors, BulkSetJournalRecordSettlementResponses, BulkUpdateJournalRecordTagsData, BulkUpdateJournalRecordTagsErrors, BulkUpdateJournalRecordTagsResponses, CancelTransactionData, CancelTransactionErrors, CancelTransactionResponses, ClassifyTransactionData, ClassifyTransactionErrors, ClassifyTransactionResponses, ConfirmNextRecurringDefinitionData, ConfirmNextRecurringDefinitionErrors, ConfirmNextRecurringDefinitionResponses, ConfirmRecurringOccurrenceData, ConfirmRecurringOccurrenceErrors, ConfirmRecurringOccurrenceResponses, CreateAccountData, CreateAccountErrors, CreateAccountResponses, CreateCategoryData, CreateCategoryErrors, CreateCategoryResponses, CreateCreditLimitHistoryData, CreateCreditLimitHistoryErrors, CreateCreditLimitHistoryResponses, CreateExchangeRateData, CreateExchangeRateErrors, CreateExchangeRateResponses, CreateExchangeTransactionData, CreateExchangeTransactionErrors, CreateExchangeTransactionResponses, CreateIncomeTransactionData, CreateIncomeTransactionErrors, CreateIncomeTransactionResponses, CreateMemberData, CreateMemberErrors, CreateMemberResponses, CreateRecurringDefinitionData, CreateRecurringDefinitionErrors, CreateRecurringDefinitionResponses, CreateRefundTransactionData, CreateRefundTransactionErrors, CreateRefundTransactionResponses, CreateSpendTransactionData, CreateSpendTransactionErrors, CreateSpendTransactionResponses, CreateTagData, CreateTagErrors, CreateTagResponses, CreateTransactionData, CreateTransactionErrors, CreateTransactionResponses, CreateTransactionTemplateData, CreateTransactionTemplateErrors, CreateTransactionTemplateResponses, CreateTransferTransactionData, CreateTransferTransactionErrors, CreateTransferTransactionResponses, DeferRecurringDefinitionData, DeferRecurringDefinitionErrors, DeferRecurringDefinitionResponses, DeleteAccountData, DeleteAccountErrors, DeleteAccountResponses, DeleteCategoryData, DeleteCategoryErrors, DeleteCategoryResponses, DeleteCreditLimitHistoryData, DeleteCreditLimitHistoryErrors, DeleteCreditLimitHistoryResponses, DeleteExchangeRateData, DeleteExchangeRateErrors, DeleteExchangeRateResponses, DeleteMemberData, DeleteMemberErrors, DeleteMemberResponses, DeleteRecurringDefinitionData, DeleteRecurringDefinitionErrors, DeleteRecurringDefinitionResponses, DeleteTagData, DeleteTagErrors, DeleteTagResponses, DeleteTransactionData, DeleteTransactionErrors, DeleteTransactionResponses, DeleteTransactionTemplateData, DeleteTransactionTemplateErrors, DeleteTransactionTemplateResponses, DismissRecurringOccurrenceData, DismissRecurringOccurrenceErrors, DismissRecurringOccurrenceResponses, GetAccountData, GetAccountErrors, GetAccountingHistoryRangeData, GetAccountingHistoryRangeErrors, GetAccountingHistoryRangeResponses, GetAccountingSchemaData, GetAccountingSchemaErrors, GetAccountingSchemaResponses, GetAccountResponses, GetAuditLogCompactionRunData, GetAuditLogCompactionRunErrors, GetAuditLogCompactionRunResponses, GetAuditLogCompactionStatusData, GetAuditLogCompactionStatusErrors, GetAuditLogCompactionStatusResponses, GetAuthenticationStatusData, GetAuthenticationStatusErrors, GetAuthenticationStatusResponses, GetCategoryData, GetCategoryErrors, GetCategoryGroupOverviewData, GetCategoryGroupOverviewErrors, GetCategoryGroupOverviewResponses, GetCategoryOverviewData, GetCategoryOverviewErrors, GetCategoryOverviewResponses, GetCategoryResponses, GetCreditLimitHistoryData, GetCreditLimitHistoryErrors, GetCreditLimitHistoryResponses, GetDatabaseBackupRunData, GetDatabaseBackupRunErrors, GetDatabaseBackupRunResponses, GetDatabaseBackupStatusData, GetDatabaseBackupStatusErrors, GetDatabaseBackupStatusResponses, GetExchangeRateData, GetExchangeRateErrors, GetExchangeRateLoadingRunData, GetExchangeRateLoadingRunErrors, GetExchangeRateLoadingRunResponses, GetExchangeRateLoadingStatusData, GetExchangeRateLoadingStatusErrors, GetExchangeRateLoadingStatusResponses, GetExchangeRateResponses, GetHealthData, GetHealthErrors, GetHealthResponses, GetHouseholdFlowReportData, GetHouseholdFlowReportErrors, GetHouseholdFlowReportResponses, GetMemberData, GetMemberErrors, GetMemberResponses, GetRecurringDefinitionData, GetRecurringDefinitionErrors, GetRecurringDefinitionResponses, GetRecurringOccurrenceData, GetRecurringOccurrenceErrors, GetRecurringOccurrenceResponses, GetSettingsData, GetSettingsErrors, GetSettingsResponses, GetTagData, GetTagErrors, GetTagGroupOverviewData, GetTagGroupOverviewErrors, GetTagGroupOverviewResponses, GetTagOverviewData, GetTagOverviewErrors, GetTagOverviewResponses, GetTagResponses, GetTransactionData, GetTransactionErrors, GetTransactionMonthTotalsData, GetTransactionMonthTotalsErrors, GetTransactionMonthTotalsResponses, GetTransactionResponses, GetTransactionTemplateData, GetTransactionTemplateErrors, GetTransactionTemplateResponses, ListAccountBalancesData, ListAccountBalancesErrors, ListAccountBalancesResponses, ListAccountGroupsData, ListAccountGroupsErrors, ListAccountGroupsResponses, ListAccountsData, ListAccountsErrors, ListAccountsResponses, ListApiAuditEntriesData, ListApiAuditEntriesErrors, ListApiAuditEntriesResponses, ListBackgroundOperationRunEnvelopesData, ListBackgroundOperationRunEnvelopesErrors, ListBackgroundOperationRunEnvelopesResponses, ListBackgroundOperationsData, ListBackgroundOperationsErrors, ListBackgroundOperationsResponses, ListCategoriesData, ListCategoriesErrors, ListCategoriesResponses, ListCategoryGroupsData, ListCategoryGroupsErrors, ListCategoryGroupsResponses, ListCreditLimitHistoryData, ListCreditLimitHistoryErrors, ListCreditLimitHistoryResponses, ListDailyExchangeRatesData, ListDailyExchangeRatesErrors, ListDailyExchangeRatesResponses, ListExchangeRatesData, ListExchangeRatesErrors, ListExchangeRatesResponses, ListMembersData, ListMembersErrors, ListMembersResponses, ListRecurringDefinitionsData, ListRecurringDefinitionsErrors, ListRecurringDefinitionsResponses, ListRecurringOccurrencesData, ListRecurringOccurrencesErrors, ListRecurringOccurrencesResponses, ListTagGroupsData, ListTagGroupsErrors, ListTagGroupsResponses, ListTagsData, ListTagsErrors, ListTagsResponses, ListTransactionsData, ListTransactionsErrors, ListTransactionsResponses, ListTransactionTemplatesData, ListTransactionTemplatesErrors, ListTransactionTemplatesResponses, LoginData, LoginErrors, LoginResponses, LogoutData, LogoutErrors, LogoutResponses, PauseRecurringDefinitionData, PauseRecurringDefinitionErrors, PauseRecurringDefinitionResponses, PickAccountsData, PickAccountsErrors, PickAccountsResponses, PickCategoriesData, PickCategoriesErrors, PickCategoriesResponses, PickMembersData, PickMembersErrors, PickMembersResponses, PickTagsData, PickTagsErrors, PickTagsResponses, ReplaceRecurringDefinitionData, ReplaceRecurringDefinitionErrors, ReplaceRecurringDefinitionResponses, ReplaceTransactionData, ReplaceTransactionErrors, ReplaceTransactionResponses, ReplaceTransactionTemplateData, ReplaceTransactionTemplateErrors, ReplaceTransactionTemplateResponses, RestoreTransactionData, RestoreTransactionErrors, RestoreTransactionResponses, RestructureAccountsData, RestructureAccountsErrors, RestructureAccountsResponses, RestructureCategoriesData, RestructureCategoriesErrors, RestructureCategoriesResponses, RestructureTagsData, RestructureTagsErrors, RestructureTagsResponses, RestructureTransactionTemplatesData, RestructureTransactionTemplatesErrors, RestructureTransactionTemplatesResponses, ResumeRecurringDefinitionData, ResumeRecurringDefinitionErrors, ResumeRecurringDefinitionResponses, SearchAccountJournalRecordsData, SearchAccountJournalRecordsErrors, SearchAccountJournalRecordsResponses, SearchJournalRecordsData, SearchJournalRecordsErrors, SearchJournalRecordsResponses, SeedDemoData, SeedDemoErrors, SeedDemoResponses, SetAccountHiddenByPathData, SetAccountHiddenByPathErrors, SetAccountHiddenByPathResponses, SetCategoryHiddenByPathData, SetCategoryHiddenByPathErrors, SetCategoryHiddenByPathResponses, SetTagHiddenByPathData, SetTagHiddenByPathErrors, SetTagHiddenByPathResponses, StartAuditLogCompactionRunData, StartAuditLogCompactionRunErrors, StartAuditLogCompactionRunResponses, StartDatabaseBackupRunData, StartDatabaseBackupRunErrors, StartDatabaseBackupRunResponses, StartExchangeRateLoadingRunData, StartExchangeRateLoadingRunErrors, StartExchangeRateLoadingRunResponses, UpdateAccountData, UpdateAccountErrors, UpdateAccountResponses, UpdateCategoryData, UpdateCategoryErrors, UpdateCategoryResponses, UpdateExchangeRateData, UpdateExchangeRateErrors, UpdateExchangeRateResponses, UpdateMemberData, UpdateMemberErrors, UpdateMemberHiddenData, UpdateMemberHiddenErrors, UpdateMemberHiddenResponses, UpdateMemberResponses, UpdateTagData, UpdateTagErrors, UpdateTagResponses } from './types.gen';
+import type { BulkCategorizeJournalRecordsData, BulkCategorizeJournalRecordsErrors, BulkCategorizeJournalRecordsResponses, BulkReassignJournalRecordAccountData, BulkReassignJournalRecordAccountErrors, BulkReassignJournalRecordAccountResponses, BulkReplaceTransactionAccountData, BulkReplaceTransactionAccountErrors, BulkReplaceTransactionAccountResponses, BulkSetJournalRecordMemberData, BulkSetJournalRecordMemberErrors, BulkSetJournalRecordMemberResponses, BulkSetJournalRecordReconciliationData, BulkSetJournalRecordReconciliationErrors, BulkSetJournalRecordReconciliationResponses, BulkSetJournalRecordSettlementData, BulkSetJournalRecordSettlementErrors, BulkSetJournalRecordSettlementResponses, BulkUpdateJournalRecordTagsData, BulkUpdateJournalRecordTagsErrors, BulkUpdateJournalRecordTagsResponses, CancelTransactionData, CancelTransactionErrors, CancelTransactionResponses, ClassifyTransactionData, ClassifyTransactionErrors, ClassifyTransactionResponses, ConfirmNextRecurringDefinitionData, ConfirmNextRecurringDefinitionErrors, ConfirmNextRecurringDefinitionResponses, ConfirmRecurringOccurrenceData, ConfirmRecurringOccurrenceErrors, ConfirmRecurringOccurrenceResponses, CreateAccountData, CreateAccountErrors, CreateAccountResponses, CreateCategoryData, CreateCategoryErrors, CreateCategoryResponses, CreateCreditLimitHistoryData, CreateCreditLimitHistoryErrors, CreateCreditLimitHistoryResponses, CreateExchangeRateData, CreateExchangeRateErrors, CreateExchangeRateResponses, CreateExchangeTransactionData, CreateExchangeTransactionErrors, CreateExchangeTransactionResponses, CreateIncomeTransactionData, CreateIncomeTransactionErrors, CreateIncomeTransactionResponses, CreateMemberData, CreateMemberErrors, CreateMemberResponses, CreateRecurringDefinitionData, CreateRecurringDefinitionErrors, CreateRecurringDefinitionResponses, CreateRefundTransactionData, CreateRefundTransactionErrors, CreateRefundTransactionResponses, CreateSpendTransactionData, CreateSpendTransactionErrors, CreateSpendTransactionResponses, CreateTagData, CreateTagErrors, CreateTagResponses, CreateTransactionData, CreateTransactionErrors, CreateTransactionResponses, CreateTransactionTemplateData, CreateTransactionTemplateErrors, CreateTransactionTemplateResponses, CreateTransferTransactionData, CreateTransferTransactionErrors, CreateTransferTransactionResponses, DeferRecurringDefinitionData, DeferRecurringDefinitionErrors, DeferRecurringDefinitionResponses, DeleteAccountData, DeleteAccountErrors, DeleteAccountResponses, DeleteCategoryData, DeleteCategoryErrors, DeleteCategoryResponses, DeleteCreditLimitHistoryData, DeleteCreditLimitHistoryErrors, DeleteCreditLimitHistoryResponses, DeleteExchangeRateData, DeleteExchangeRateErrors, DeleteExchangeRateResponses, DeleteMemberData, DeleteMemberErrors, DeleteMemberResponses, DeleteRecurringDefinitionData, DeleteRecurringDefinitionErrors, DeleteRecurringDefinitionResponses, DeleteTagData, DeleteTagErrors, DeleteTagResponses, DeleteTransactionData, DeleteTransactionErrors, DeleteTransactionResponses, DeleteTransactionTemplateData, DeleteTransactionTemplateErrors, DeleteTransactionTemplateResponses, DismissRecurringOccurrenceData, DismissRecurringOccurrenceErrors, DismissRecurringOccurrenceResponses, GetAccountCreationAvailabilityData, GetAccountCreationAvailabilityErrors, GetAccountCreationAvailabilityResponses, GetAccountData, GetAccountErrors, GetAccountingHistoryRangeData, GetAccountingHistoryRangeErrors, GetAccountingHistoryRangeResponses, GetAccountingSchemaData, GetAccountingSchemaErrors, GetAccountingSchemaResponses, GetAccountResponses, GetAuditLogCompactionRunData, GetAuditLogCompactionRunErrors, GetAuditLogCompactionRunResponses, GetAuditLogCompactionStatusData, GetAuditLogCompactionStatusErrors, GetAuditLogCompactionStatusResponses, GetAuthenticationStatusData, GetAuthenticationStatusErrors, GetAuthenticationStatusResponses, GetCategoryCreationAvailabilityData, GetCategoryCreationAvailabilityErrors, GetCategoryCreationAvailabilityResponses, GetCategoryData, GetCategoryErrors, GetCategoryGroupOverviewData, GetCategoryGroupOverviewErrors, GetCategoryGroupOverviewResponses, GetCategoryOverviewData, GetCategoryOverviewErrors, GetCategoryOverviewResponses, GetCategoryResponses, GetCreditLimitHistoryData, GetCreditLimitHistoryErrors, GetCreditLimitHistoryResponses, GetDatabaseBackupRunData, GetDatabaseBackupRunErrors, GetDatabaseBackupRunResponses, GetDatabaseBackupStatusData, GetDatabaseBackupStatusErrors, GetDatabaseBackupStatusResponses, GetExchangeRateData, GetExchangeRateErrors, GetExchangeRateLoadingRunData, GetExchangeRateLoadingRunErrors, GetExchangeRateLoadingRunResponses, GetExchangeRateLoadingStatusData, GetExchangeRateLoadingStatusErrors, GetExchangeRateLoadingStatusResponses, GetExchangeRateResponses, GetHealthData, GetHealthErrors, GetHealthResponses, GetHouseholdFlowReportData, GetHouseholdFlowReportErrors, GetHouseholdFlowReportResponses, GetMemberData, GetMemberErrors, GetMemberResponses, GetRecurringDefinitionData, GetRecurringDefinitionErrors, GetRecurringDefinitionResponses, GetRecurringOccurrenceData, GetRecurringOccurrenceErrors, GetRecurringOccurrenceResponses, GetSettingsData, GetSettingsErrors, GetSettingsResponses, GetTagCreationAvailabilityData, GetTagCreationAvailabilityErrors, GetTagCreationAvailabilityResponses, GetTagData, GetTagErrors, GetTagGroupOverviewData, GetTagGroupOverviewErrors, GetTagGroupOverviewResponses, GetTagOverviewData, GetTagOverviewErrors, GetTagOverviewResponses, GetTagResponses, GetTransactionData, GetTransactionErrors, GetTransactionMonthTotalsData, GetTransactionMonthTotalsErrors, GetTransactionMonthTotalsResponses, GetTransactionResponses, GetTransactionTemplateData, GetTransactionTemplateErrors, GetTransactionTemplateResponses, ListAccountBalancesData, ListAccountBalancesErrors, ListAccountBalancesResponses, ListAccountGroupsData, ListAccountGroupsErrors, ListAccountGroupsResponses, ListAccountsData, ListAccountsErrors, ListAccountsResponses, ListApiAuditEntriesData, ListApiAuditEntriesErrors, ListApiAuditEntriesResponses, ListBackgroundOperationRunEnvelopesData, ListBackgroundOperationRunEnvelopesErrors, ListBackgroundOperationRunEnvelopesResponses, ListBackgroundOperationsData, ListBackgroundOperationsErrors, ListBackgroundOperationsResponses, ListCategoriesData, ListCategoriesErrors, ListCategoriesResponses, ListCategoryGroupsData, ListCategoryGroupsErrors, ListCategoryGroupsResponses, ListCreditLimitHistoryData, ListCreditLimitHistoryErrors, ListCreditLimitHistoryResponses, ListDailyExchangeRatesData, ListDailyExchangeRatesErrors, ListDailyExchangeRatesResponses, ListExchangeRatesData, ListExchangeRatesErrors, ListExchangeRatesResponses, ListMembersData, ListMembersErrors, ListMembersResponses, ListRecurringDefinitionsData, ListRecurringDefinitionsErrors, ListRecurringDefinitionsResponses, ListRecurringOccurrencesData, ListRecurringOccurrencesErrors, ListRecurringOccurrencesResponses, ListTagGroupsData, ListTagGroupsErrors, ListTagGroupsResponses, ListTagsData, ListTagsErrors, ListTagsResponses, ListTransactionsData, ListTransactionsErrors, ListTransactionsResponses, ListTransactionTemplatesData, ListTransactionTemplatesErrors, ListTransactionTemplatesResponses, LoginData, LoginErrors, LoginResponses, LogoutData, LogoutErrors, LogoutResponses, PauseRecurringDefinitionData, PauseRecurringDefinitionErrors, PauseRecurringDefinitionResponses, ReplaceRecurringDefinitionData, ReplaceRecurringDefinitionErrors, ReplaceRecurringDefinitionResponses, ReplaceTransactionData, ReplaceTransactionErrors, ReplaceTransactionResponses, ReplaceTransactionTemplateData, ReplaceTransactionTemplateErrors, ReplaceTransactionTemplateResponses, RestoreTransactionData, RestoreTransactionErrors, RestoreTransactionResponses, RestructureAccountsData, RestructureAccountsErrors, RestructureAccountsResponses, RestructureCategoriesData, RestructureCategoriesErrors, RestructureCategoriesResponses, RestructureTagsData, RestructureTagsErrors, RestructureTagsResponses, RestructureTransactionTemplatesData, RestructureTransactionTemplatesErrors, RestructureTransactionTemplatesResponses, ResumeRecurringDefinitionData, ResumeRecurringDefinitionErrors, ResumeRecurringDefinitionResponses, SearchAccountJournalRecordsData, SearchAccountJournalRecordsErrors, SearchAccountJournalRecordsResponses, SearchAccountsData, SearchAccountsErrors, SearchAccountsResponses, SearchCategoriesData, SearchCategoriesErrors, SearchCategoriesResponses, SearchJournalRecordsData, SearchJournalRecordsErrors, SearchJournalRecordsResponses, SearchMembersData, SearchMembersErrors, SearchMembersResponses, SearchTagsData, SearchTagsErrors, SearchTagsResponses, SeedDemoData, SeedDemoErrors, SeedDemoResponses, SetAccountHiddenByPathData, SetAccountHiddenByPathErrors, SetAccountHiddenByPathResponses, SetCategoryHiddenByPathData, SetCategoryHiddenByPathErrors, SetCategoryHiddenByPathResponses, SetTagHiddenByPathData, SetTagHiddenByPathErrors, SetTagHiddenByPathResponses, StartAuditLogCompactionRunData, StartAuditLogCompactionRunErrors, StartAuditLogCompactionRunResponses, StartDatabaseBackupRunData, StartDatabaseBackupRunErrors, StartDatabaseBackupRunResponses, StartExchangeRateLoadingRunData, StartExchangeRateLoadingRunErrors, StartExchangeRateLoadingRunResponses, UpdateAccountData, UpdateAccountErrors, UpdateAccountResponses, UpdateCategoryData, UpdateCategoryErrors, UpdateCategoryResponses, UpdateExchangeRateData, UpdateExchangeRateErrors, UpdateExchangeRateResponses, UpdateMemberData, UpdateMemberErrors, UpdateMemberHiddenData, UpdateMemberHiddenErrors, UpdateMemberHiddenResponses, UpdateMemberResponses, UpdateTagData, UpdateTagErrors, UpdateTagResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -273,7 +273,7 @@ export const getAuditLogCompactionRun = <ThrowOnError extends boolean = false>(o
 });
 
 /**
- * List categories.
+ * List categories in canonical order, optionally filtered by shared fuzzy membership.
  */
 export const listCategories = <ThrowOnError extends boolean = false>(options?: Options<ListCategoriesData, ThrowOnError>): RequestResult<ListCategoriesResponses, ListCategoriesErrors, ThrowOnError> => (options?.client ?? client).get<ListCategoriesResponses, ListCategoriesErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }, {
@@ -322,15 +322,28 @@ export const restructureCategories = <ThrowOnError extends boolean = false>(opti
 });
 
 /**
- * Return ranked category picker options for one Web UI context.
+ * Return ranked category candidates for bounded discovery.
  */
-export const pickCategories = <ThrowOnError extends boolean = false>(options: Options<PickCategoriesData, ThrowOnError>): RequestResult<PickCategoriesResponses, PickCategoriesErrors, ThrowOnError> => (options.client ?? client).get<PickCategoriesResponses, PickCategoriesErrors, ThrowOnError>({
+export const searchCategories = <ThrowOnError extends boolean = false>(options: Options<SearchCategoriesData, ThrowOnError>): RequestResult<SearchCategoriesResponses, SearchCategoriesErrors, ThrowOnError> => (options.client ?? client).get<SearchCategoriesResponses, SearchCategoriesErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }, {
             in: 'cookie',
             name: 'mina_session',
             type: 'apiKey'
         }],
-    url: '/api/categories/picker',
+    url: '/api/categories/search',
+    ...options
+});
+
+/**
+ * Check whether one proposed category FQN is available to create.
+ */
+export const getCategoryCreationAvailability = <ThrowOnError extends boolean = false>(options: Options<GetCategoryCreationAvailabilityData, ThrowOnError>): RequestResult<GetCategoryCreationAvailabilityResponses, GetCategoryCreationAvailabilityErrors, ThrowOnError> => (options.client ?? client).get<GetCategoryCreationAvailabilityResponses, GetCategoryCreationAvailabilityErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/categories/creation-availability',
     ...options
 });
 
@@ -438,7 +451,7 @@ export const getCategoryOverview = <ThrowOnError extends boolean = false>(option
 });
 
 /**
- * List tags.
+ * List tags in canonical order, optionally filtered by shared fuzzy membership.
  */
 export const listTags = <ThrowOnError extends boolean = false>(options?: Options<ListTagsData, ThrowOnError>): RequestResult<ListTagsResponses, ListTagsErrors, ThrowOnError> => (options?.client ?? client).get<ListTagsResponses, ListTagsErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }, {
@@ -487,15 +500,28 @@ export const restructureTags = <ThrowOnError extends boolean = false>(options: O
 });
 
 /**
- * Return ranked tag picker options for one Web UI context.
+ * Return ranked tag candidates for bounded discovery.
  */
-export const pickTags = <ThrowOnError extends boolean = false>(options: Options<PickTagsData, ThrowOnError>): RequestResult<PickTagsResponses, PickTagsErrors, ThrowOnError> => (options.client ?? client).get<PickTagsResponses, PickTagsErrors, ThrowOnError>({
+export const searchTags = <ThrowOnError extends boolean = false>(options: Options<SearchTagsData, ThrowOnError>): RequestResult<SearchTagsResponses, SearchTagsErrors, ThrowOnError> => (options.client ?? client).get<SearchTagsResponses, SearchTagsErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }, {
             in: 'cookie',
             name: 'mina_session',
             type: 'apiKey'
         }],
-    url: '/api/tags/picker',
+    url: '/api/tags/search',
+    ...options
+});
+
+/**
+ * Check whether one proposed tag FQN is available to create.
+ */
+export const getTagCreationAvailability = <ThrowOnError extends boolean = false>(options: Options<GetTagCreationAvailabilityData, ThrowOnError>): RequestResult<GetTagCreationAvailabilityResponses, GetTagCreationAvailabilityErrors, ThrowOnError> => (options.client ?? client).get<GetTagCreationAvailabilityResponses, GetTagCreationAvailabilityErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/tags/creation-availability',
     ...options
 });
 
@@ -603,7 +629,7 @@ export const getTagOverview = <ThrowOnError extends boolean = false>(options: Op
 });
 
 /**
- * List household members.
+ * List household members in canonical order, optionally filtered by shared fuzzy membership.
  */
 export const listMembers = <ThrowOnError extends boolean = false>(options?: Options<ListMembersData, ThrowOnError>): RequestResult<ListMembersResponses, ListMembersErrors, ThrowOnError> => (options?.client ?? client).get<ListMembersResponses, ListMembersErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }, {
@@ -676,15 +702,15 @@ export const updateMember = <ThrowOnError extends boolean = false>(options: Opti
 });
 
 /**
- * Return ranked member picker options for one Web UI context.
+ * Return ranked member candidates for bounded discovery.
  */
-export const pickMembers = <ThrowOnError extends boolean = false>(options: Options<PickMembersData, ThrowOnError>): RequestResult<PickMembersResponses, PickMembersErrors, ThrowOnError> => (options.client ?? client).get<PickMembersResponses, PickMembersErrors, ThrowOnError>({
+export const searchMembers = <ThrowOnError extends boolean = false>(options: Options<SearchMembersData, ThrowOnError>): RequestResult<SearchMembersResponses, SearchMembersErrors, ThrowOnError> => (options.client ?? client).get<SearchMembersResponses, SearchMembersErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }, {
             in: 'cookie',
             name: 'mina_session',
             type: 'apiKey'
         }],
-    url: '/api/members/picker',
+    url: '/api/members/search',
     ...options
 });
 
@@ -706,7 +732,7 @@ export const updateMemberHidden = <ThrowOnError extends boolean = false>(options
 });
 
 /**
- * List accounts.
+ * List accounts in canonical order, optionally filtered by shared fuzzy membership.
  */
 export const listAccounts = <ThrowOnError extends boolean = false>(options?: Options<ListAccountsData, ThrowOnError>): RequestResult<ListAccountsResponses, ListAccountsErrors, ThrowOnError> => (options?.client ?? client).get<ListAccountsResponses, ListAccountsErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }, {
@@ -757,15 +783,28 @@ export const restructureAccounts = <ThrowOnError extends boolean = false>(option
 });
 
 /**
- * Return ranked account picker options for one Web UI context.
+ * Return ranked account candidates for bounded discovery.
  */
-export const pickAccounts = <ThrowOnError extends boolean = false>(options: Options<PickAccountsData, ThrowOnError>): RequestResult<PickAccountsResponses, PickAccountsErrors, ThrowOnError> => (options.client ?? client).get<PickAccountsResponses, PickAccountsErrors, ThrowOnError>({
+export const searchAccounts = <ThrowOnError extends boolean = false>(options: Options<SearchAccountsData, ThrowOnError>): RequestResult<SearchAccountsResponses, SearchAccountsErrors, ThrowOnError> => (options.client ?? client).get<SearchAccountsResponses, SearchAccountsErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }, {
             in: 'cookie',
             name: 'mina_session',
             type: 'apiKey'
         }],
-    url: '/api/accounts/picker',
+    url: '/api/accounts/search',
+    ...options
+});
+
+/**
+ * Check whether one proposed account FQN is available to create.
+ */
+export const getAccountCreationAvailability = <ThrowOnError extends boolean = false>(options: Options<GetAccountCreationAvailabilityData, ThrowOnError>): RequestResult<GetAccountCreationAvailabilityResponses, GetAccountCreationAvailabilityErrors, ThrowOnError> => (options.client ?? client).get<GetAccountCreationAvailabilityResponses, GetAccountCreationAvailabilityErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, {
+            in: 'cookie',
+            name: 'mina_session',
+            type: 'apiKey'
+        }],
+    url: '/api/accounts/creation-availability',
     ...options
 });
 

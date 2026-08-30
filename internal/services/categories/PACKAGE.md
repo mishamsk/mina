@@ -13,9 +13,11 @@
 - Restructure rewrites active category leaves and active budget paths in one transaction; a budget-path collision rejects both changes.
 - Display labels are derived at the service boundary through the shared rule; restructure preserves stored overrides while automatic labels follow rewritten FQNs.
 - List deleteability and delete use the same active journal-record, template-record, and recurring-definition dependency check; tombstoned categories are never deletable.
-- Picker reads use the reference snapshot, apply record, expense/income shorthand, or transaction-filter intent eligibility, retain active hidden selections and literal exact-FQN matches, derive navigation-only groups from eligible leaves, and return at most 20 backend-ranked unselected rows; requested selections are returned separately without consuming the result bound.
+- Category lists intersect economic-intent, visibility, featured, and shared fuzzy membership filters before totals and pagination, while preserving the requested canonical sort. Matches on active implicit groups retain their eligible descendant leaves; tombstoned rows match only their own terms.
+- Search reads use the reference snapshot, apply navigation, record, expense/income shorthand, or transaction-filter intent eligibility, retain literal exact-FQN matches, exclude requested leaf IDs, derive navigation-only groups, and return caller-bounded backend-ranked rows with `has_more`.
+- Creation availability is an advisory read over the same FQN validity and active path-conflict checks repeated authoritatively by Create.
 
 ## Boundaries
 
-- Owns: category lifecycle rules, hierarchy validation and derivation, display-label handling, picker contexts and bounds, economic-intent validation, reference validity, and category error mapping.
+- Owns: category lifecycle rules, hierarchy validation and derivation, display-label handling, ranked search contexts, creation availability, economic-intent validation, reference validity, and category error mapping.
 - Does not own: fuzzy text primitives, transaction classification, budget persistence, transport DTOs, SQL queries, database row types, or process configuration.

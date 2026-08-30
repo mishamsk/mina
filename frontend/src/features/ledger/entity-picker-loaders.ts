@@ -2,19 +2,27 @@ import {
   type Account,
   apiErrorMessage,
   type Category,
+  getAccount,
+  getAccountCreationAvailability,
+  getCategory,
+  getCategoryCreationAvailability,
+  getMember,
+  getTag,
+  getTagCreationAvailability,
   type Member,
-  pickAccounts,
-  type PickAccountsData,
-  pickCategories,
-  type PickCategoriesData,
-  pickMembers,
-  type PickMembersData,
-  pickTags,
-  type PickTagsData,
+  searchAccounts,
+  type SearchAccountsData,
+  searchCategories,
+  type SearchCategoriesData,
+  searchMembers,
+  type SearchMembersData,
+  searchTags,
+  type SearchTagsData,
   type Tag,
 } from "@/api";
 
 import type {
+  EntityCreationAvailabilityLoader,
   EntityOption,
   EntityOptionLoader,
   EntityPickerLoadRequest,
@@ -22,37 +30,42 @@ import type {
   EntityPickerRow,
 } from "./entity-picker";
 
-type AccountPickerQuery = PickAccountsData["query"];
-type CategoryPickerQuery = PickCategoriesData["query"];
-type MemberPickerQuery = PickMembersData["query"];
-type TagPickerQuery = PickTagsData["query"];
+type AccountPickerQuery = SearchAccountsData["query"];
+type CategoryPickerQuery = SearchCategoriesData["query"];
+type MemberPickerQuery = SearchMembersData["query"];
+type TagPickerQuery = SearchTagsData["query"];
 
 type AccountPickerBase = Omit<
   AccountPickerQuery,
-  "parent_fqn" | "q" | "selected_ids"
+  "exclude_ids" | "limit" | "parent_fqn" | "q"
 > & {
-  readonly selected_ids?: readonly number[];
+  readonly exclude_ids?: readonly number[];
 };
 type CategoryPickerBase = Omit<
   CategoryPickerQuery,
-  "parent_fqn" | "q" | "selected_ids"
+  "exclude_ids" | "limit" | "parent_fqn" | "q"
 > & {
-  readonly selected_ids?: readonly number[];
+  readonly exclude_ids?: readonly number[];
 };
-type MemberPickerBase = Omit<MemberPickerQuery, "q" | "selected_ids"> & {
-  readonly selected_ids?: readonly number[];
+type MemberPickerBase = Omit<
+  MemberPickerQuery,
+  "exclude_ids" | "limit" | "q"
+> & {
+  readonly exclude_ids?: readonly number[];
 };
 type TagPickerBase = Omit<
   TagPickerQuery,
-  "parent_fqn" | "q" | "selected_ids"
+  "exclude_ids" | "limit" | "parent_fqn" | "q"
 > & {
-  readonly selected_ids?: readonly number[];
+  readonly exclude_ids?: readonly number[];
 };
 
-const selectedIDs = (
+const excludedIDs = (
   base: readonly number[] | undefined,
   request: EntityPickerLoadRequest,
-): number[] => [...new Set([...(base ?? []), ...request.selectedIds])];
+): number[] => [...new Set([...(base ?? []), ...request.excludedIds])];
+
+const pickerResultLimit = 6;
 
 const selectedLabel = (title: string, fqn: string): string =>
   title === fqn ? fqn : `${fqn} (${title})`;
@@ -95,6 +108,70 @@ export const memberPickerOption = (member: Member): EntityOption => ({
   searchLabel: member.name,
   selectedLabel: member.name,
 });
+
+export const loadAccountOptionsByIds = async (
+  ids: readonly number[],
+): Promise<readonly EntityOption[]> => {
+  const results = await Promise.all(
+    [...new Set(ids)].map((accountId) =>
+      getAccount({
+        path: { account_id: accountId },
+        query: { include_tombstoned: true },
+      }),
+    ),
+  );
+  return results.flatMap((result) =>
+    result.data ? [accountPickerOption(result.data)] : [],
+  );
+};
+
+export const loadCategoryOptionsByIds = async (
+  ids: readonly number[],
+): Promise<readonly EntityOption[]> => {
+  const results = await Promise.all(
+    [...new Set(ids)].map((categoryId) =>
+      getCategory({
+        path: { category_id: categoryId },
+        query: { include_tombstoned: true },
+      }),
+    ),
+  );
+  return results.flatMap((result) =>
+    result.data ? [categoryPickerOption(result.data)] : [],
+  );
+};
+
+export const loadMemberOptionsByIds = async (
+  ids: readonly number[],
+): Promise<readonly EntityOption[]> => {
+  const results = await Promise.all(
+    [...new Set(ids)].map((memberId) =>
+      getMember({
+        path: { member_id: memberId },
+        query: { include_tombstoned: true },
+      }),
+    ),
+  );
+  return results.flatMap((result) =>
+    result.data ? [memberPickerOption(result.data)] : [],
+  );
+};
+
+export const loadTagOptionsByIds = async (
+  ids: readonly number[],
+): Promise<readonly EntityOption[]> => {
+  const results = await Promise.all(
+    [...new Set(ids)].map((tagId) =>
+      getTag({
+        path: { tag_id: tagId },
+        query: { include_tombstoned: true },
+      }),
+    ),
+  );
+  return results.flatMap((result) =>
+    result.data ? [tagPickerOption(result.data)] : [],
+  );
+};
 
 const hierarchicalRows = (
   items: readonly {
@@ -152,33 +229,27 @@ const hierarchicalRows = (
     ];
   });
 
-const leafOptions = (rows: readonly EntityPickerRow[]): EntityOption[] =>
-  rows.flatMap((row) => (row.kind === "leaf" ? [row.option] : []));
-
 const hierarchyResult = (
   items: Parameters<typeof hierarchicalRows>[0],
-  selectedItems: Parameters<typeof hierarchicalRows>[0],
-  canCreate: boolean,
-  eligibleCount?: number,
+  hasMore: boolean,
 ): EntityPickerLoadResult => {
   const rows = hierarchicalRows(items);
   return {
-    canCreate,
-    eligibleCount,
+    hasMore,
     rows,
-    selectedOptions: leafOptions(hierarchicalRows(selectedItems)),
   };
 };
 
 export const accountPickerLoader =
   (base: AccountPickerBase): EntityOptionLoader =>
   async (request) => {
-    const result = await pickAccounts({
+    const result = await searchAccounts({
       query: {
         ...base,
+        exclude_ids: excludedIDs(base.exclude_ids, request),
+        limit: pickerResultLimit,
         q: request.query,
         parent_fqn: request.parentFqn,
-        selected_ids: selectedIDs(base.selected_ids, request),
       },
     });
     if (!result.data) {
@@ -186,23 +257,19 @@ export const accountPickerLoader =
         apiErrorMessage(result.error, "Accounts could not be loaded."),
       );
     }
-    return hierarchyResult(
-      result.data.items,
-      result.data.selected_items,
-      result.data.can_create,
-      result.data.eligible_count,
-    );
+    return hierarchyResult(result.data.items, result.data.has_more);
   };
 
 export const categoryPickerLoader =
   (base: CategoryPickerBase): EntityOptionLoader =>
   async (request) => {
-    const result = await pickCategories({
+    const result = await searchCategories({
       query: {
         ...base,
+        exclude_ids: excludedIDs(base.exclude_ids, request),
+        limit: pickerResultLimit,
         q: request.query,
         parent_fqn: request.parentFqn,
-        selected_ids: selectedIDs(base.selected_ids, request),
       },
     });
     if (!result.data) {
@@ -210,22 +277,19 @@ export const categoryPickerLoader =
         apiErrorMessage(result.error, "Categories could not be loaded."),
       );
     }
-    return hierarchyResult(
-      result.data.items,
-      result.data.selected_items,
-      result.data.can_create,
-    );
+    return hierarchyResult(result.data.items, result.data.has_more);
   };
 
 export const tagPickerLoader =
   (base: TagPickerBase): EntityOptionLoader =>
   async (request) => {
-    const result = await pickTags({
+    const result = await searchTags({
       query: {
         ...base,
+        exclude_ids: excludedIDs(base.exclude_ids, request),
+        limit: pickerResultLimit,
         q: request.query,
         parent_fqn: request.parentFqn,
-        selected_ids: selectedIDs(base.selected_ids, request),
       },
     });
     if (!result.data) {
@@ -233,21 +297,18 @@ export const tagPickerLoader =
         apiErrorMessage(result.error, "Tags could not be loaded."),
       );
     }
-    return hierarchyResult(
-      result.data.items,
-      result.data.selected_items,
-      result.data.can_create,
-    );
+    return hierarchyResult(result.data.items, result.data.has_more);
   };
 
 export const memberPickerLoader =
   (base: MemberPickerBase): EntityOptionLoader =>
   async (request) => {
-    const result = await pickMembers({
+    const result = await searchMembers({
       query: {
         ...base,
+        exclude_ids: excludedIDs(base.exclude_ids, request),
+        limit: pickerResultLimit,
         q: request.query,
-        selected_ids: selectedIDs(base.selected_ids, request),
       },
     });
     if (!result.data) {
@@ -265,13 +326,38 @@ export const memberPickerLoader =
       },
     }));
     return {
-      canCreate: false,
+      hasMore: result.data.has_more,
       rows,
-      selectedOptions: result.data.selected_items.map((item) => ({
-        hidden: item.is_hidden,
-        id: item.member_id,
-        label: item.title,
-        searchLabel: item.title,
-      })),
     };
   };
+
+const creationAvailability =
+  (
+    load: (fqn: string) => Promise<{
+      readonly data?: { readonly available: boolean };
+      readonly error?: unknown;
+    }>,
+    fallbackMessage: string,
+  ): EntityCreationAvailabilityLoader =>
+  async (fqn) => {
+    const result = await load(fqn);
+    if (!result.data) {
+      throw new Error(apiErrorMessage(result.error, fallbackMessage));
+    }
+    return result.data.available;
+  };
+
+export const accountCreationAvailabilityLoader = creationAvailability(
+  (fqn) => getAccountCreationAvailability({ query: { fqn } }),
+  "Account creation availability could not be loaded.",
+);
+
+export const categoryCreationAvailabilityLoader = creationAvailability(
+  (fqn) => getCategoryCreationAvailability({ query: { fqn } }),
+  "Category creation availability could not be loaded.",
+);
+
+export const tagCreationAvailabilityLoader = creationAvailability(
+  (fqn) => getTagCreationAvailability({ query: { fqn } }),
+  "Tag creation availability could not be loaded.",
+);

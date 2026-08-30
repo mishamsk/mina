@@ -1,6 +1,10 @@
 import { useEffect, useRef } from "react";
 
-import { apiErrorMessage, fetchMembersPage } from "@/api";
+import {
+  apiErrorMessage,
+  fetchMembersPage,
+  type MembersManagementParams,
+} from "@/api";
 import { refreshLedgerLookups } from "@/features/ledger";
 import {
   clearMembersPageLoading,
@@ -8,19 +12,36 @@ import {
   invalidateTransactionPages,
   setMembersPage,
   setMembersPageError,
+  setMembersPageFromCache,
   setMembersPageLoading,
   useMembersPageView,
 } from "@/store";
 
 let membersPageLoadGeneration = 0;
-let membersPageLoadIncludeHidden: boolean | undefined;
+const defaultMembersPageParams: MembersManagementParams = {
+  includeHidden: false,
+  q: "",
+};
+let currentMembersPageParams = defaultMembersPageParams;
 const membersPageRefreshRetryDelayMs = 200;
 const membersPageRefreshAttempts = 8;
 
-const nextMembersPageLoadGeneration = (includeHidden: boolean): number => {
+const normalizedMembersPageParams = (
+  params: MembersManagementParams,
+): MembersManagementParams => ({
+  includeHidden: params.includeHidden,
+  q: params.q.trim(),
+});
+
+const membersPageKey = (params: MembersManagementParams): string =>
+  `${params.includeHidden ? "hidden" : "visible"}:${params.q.toLowerCase()}`;
+
+const nextMembersPageLoadGeneration = (
+  params: MembersManagementParams,
+): number => {
   membersPageLoadGeneration += 1;
-  membersPageLoadIncludeHidden = includeHidden;
-  setMembersPageLoading();
+  currentMembersPageParams = normalizedMembersPageParams(params);
+  setMembersPageLoading(membersPageKey(currentMembersPageParams));
   return membersPageLoadGeneration;
 };
 
@@ -33,10 +54,10 @@ const waitForMembersPageRetry = (): Promise<void> =>
   });
 
 const fetchMembersPageWithRetries = async (
-  includeHidden: boolean,
+  params: MembersManagementParams,
   shouldContinue: () => boolean,
 ): Promise<Awaited<ReturnType<typeof fetchMembersPage>>> => {
-  let result = await fetchMembersPage(includeHidden);
+  let result = await fetchMembersPage(params, shouldContinue);
   for (
     let attempt = 1;
     attempt < membersPageRefreshAttempts && !result.data;
@@ -46,23 +67,23 @@ const fetchMembersPageWithRetries = async (
       return result;
     }
     await waitForMembersPageRetry();
-    result = await fetchMembersPage(includeHidden);
+    if (!shouldContinue()) {
+      return result;
+    }
+    result = await fetchMembersPage(params, shouldContinue);
   }
   return result;
 };
 
 const loadMembersPage = async (
   generation: number,
-  includeHidden: boolean,
+  params: MembersManagementParams,
   shouldCommit: () => boolean = () => true,
 ): Promise<boolean> => {
   const isCurrentLoad = () => isCurrentMembersPageLoad(generation);
   const commitCurrent = () => shouldCommit() && isCurrentLoad();
 
-  const result = await fetchMembersPageWithRetries(
-    includeHidden,
-    commitCurrent,
-  );
+  const result = await fetchMembersPageWithRetries(params, commitCurrent);
   if (!commitCurrent()) {
     if (isCurrentLoad()) {
       clearMembersPageLoading();
@@ -76,19 +97,21 @@ const loadMembersPage = async (
   }
 
   setMembersPage({
-    includeHidden,
+    includeHidden: params.includeHidden,
+    key: membersPageKey(params),
     members: result.data.members,
   });
   return true;
 };
 
 export const refreshMembersPage = async (
-  includeHidden = false,
+  includeHidden = currentMembersPageParams.includeHidden,
 ): Promise<boolean> => {
-  return loadMembersPage(
-    nextMembersPageLoadGeneration(includeHidden),
+  const params = {
+    ...currentMembersPageParams,
     includeHidden,
-  );
+  };
+  return loadMembersPage(nextMembersPageLoadGeneration(params), params);
 };
 
 export const refreshMembersAfterMutation = async (options?: {
@@ -103,9 +126,13 @@ export const refreshMembersAfterMutation = async (options?: {
   return membersRefreshed;
 };
 
-export const useMembersResource = (includeHidden = false) => {
+export const useMembersResource = (
+  requestedParams: MembersManagementParams = defaultMembersPageParams,
+) => {
   const membersPage = useMembersPageView();
   const mountedRef = useRef(false);
+  const params = normalizedMembersPageParams(requestedParams);
+  const key = membersPageKey(params);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -116,19 +143,29 @@ export const useMembersResource = (includeHidden = false) => {
 
   useEffect(() => {
     const snapshot = getMembersSnapshot();
+    currentMembersPageParams = params;
+    if (snapshot.snapshot?.key === key && !snapshot.stale) {
+      if (
+        snapshot.requestKey !== key &&
+        (snapshot.loading || snapshot.errorMessage)
+      ) {
+        membersPageLoadGeneration += 1;
+        setMembersPageFromCache(key);
+      }
+      return;
+    }
     if (
-      (snapshot.snapshot?.includeHidden === includeHidden && !snapshot.stale) ||
-      (membersPageLoadIncludeHidden === includeHidden &&
-        (snapshot.loading || snapshot.errorMessage))
+      snapshot.requestKey === key &&
+      (snapshot.loading || snapshot.errorMessage)
     ) {
       return;
     }
 
-    const generation = nextMembersPageLoadGeneration(includeHidden);
+    const generation = nextMembersPageLoadGeneration(params);
 
-    void loadMembersPage(generation, includeHidden, () => mountedRef.current);
+    void loadMembersPage(generation, params, () => mountedRef.current);
   }, [
-    includeHidden,
+    key,
     membersPage.errorMessage,
     membersPage.loading,
     membersPage.snapshot,

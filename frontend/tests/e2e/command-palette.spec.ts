@@ -779,6 +779,260 @@ const createHiddenAccount = async (
   return (await response.json()) as AccountFixture;
 };
 
+test("command palette composes ranked entity surfaces within its viewport bound", async ({
+  page,
+}) => {
+  await page.setViewportSize({ height: 1000, width: 900 });
+  const requests = new Map<string, URLSearchParams>();
+  const longMemberName = `RankedNeedle${"X".repeat(200)}`;
+  const itemsBySurface = {
+    accounts: [
+      {
+        child_count: 2,
+        fqn: "RankedNeedle:AccountGroup",
+        is_hidden: false,
+        kind: "group",
+        title: "AccountGroup",
+      },
+      {
+        account_id: 9101,
+        account_type: "owned",
+        currency: "USD",
+        fqn: "RankedNeedle:AccountLeaf",
+        is_hidden: false,
+        kind: "leaf",
+        title: "AccountLeaf",
+      },
+    ],
+    categories: [
+      {
+        child_count: 2,
+        fqn: "RankedNeedle:CategoryGroup",
+        is_hidden: false,
+        kind: "group",
+        title: "CategoryGroup",
+      },
+      {
+        category_id: 9201,
+        economic_intent: "expense",
+        fqn: "RankedNeedle:CategoryLeaf",
+        is_hidden: true,
+        kind: "leaf",
+        title: "CategoryLeaf",
+      },
+    ],
+    tags: [
+      {
+        child_count: 2,
+        fqn: "RankedNeedle:TagGroup",
+        is_hidden: false,
+        kind: "group",
+        title: "TagGroup",
+      },
+      {
+        fqn: "RankedNeedle:TagLeaf",
+        is_hidden: true,
+        kind: "leaf",
+        tag_id: 9301,
+        title: "TagLeaf",
+      },
+    ],
+    members: Array.from({ length: 20 }, (_, index) => ({
+      is_hidden: index === 0,
+      member_id: 9401 + index,
+      title:
+        index === 0
+          ? longMemberName
+          : `RankedNeedle Member ${String(index + 1).padStart(2, "0")}`,
+    })),
+  } as const;
+
+  await page.route(
+    /\/api\/(accounts|categories|tags|members)\/search/,
+    async (route) => {
+      const url = new URL(route.request().url());
+      const surface = url.pathname.split("/").at(-2);
+      if (!surface || !(surface in itemsBySurface)) {
+        await route.fallback();
+        return;
+      }
+      requests.set(surface, url.searchParams);
+      const limit = Number(url.searchParams.get("limit"));
+      const items = itemsBySurface[surface as keyof typeof itemsBySurface];
+      await route.fulfill({
+        body: JSON.stringify({
+          has_more: items.length > limit,
+          items: items.slice(0, limit),
+        }),
+        contentType: "application/json",
+        status: 200,
+      });
+    },
+  );
+
+  await page.goto("/overview");
+  await openPalette(page);
+  const dialog = page.getByRole("dialog", { name: "Command Palette" });
+  const search = dialog.getByRole("combobox", { name: "Command search" });
+  await search.fill("RankedNeedle");
+
+  await expect.poll(() => requests.size).toBe(4);
+  const limits = [...requests.values()].map((params) => {
+    expect(params.get("context")).toBe("navigation");
+    expect(params.get("include_hidden")).toBe("true");
+    expect(params.get("q")).toBe("RankedNeedle");
+    return Number(params.get("limit"));
+  });
+  expect(new Set(limits).size).toBe(1);
+  const bound = limits[0] ?? 0;
+  const viewportHeight = await dialog
+    .getByTestId("command-palette-results-viewport")
+    .evaluate((element) => element.clientHeight);
+  expect(bound).toBe(Math.max(1, Math.floor((viewportHeight - 16) / 44)));
+  expect(bound).toBeGreaterThan(6);
+
+  const listbox = dialog.getByRole("listbox", { name: "Command results" });
+  await expect(listbox.getByRole("option")).toHaveCount(bound);
+  const accountOptions = dialog
+    .getByRole("group", { name: "Accounts" })
+    .getByRole("option");
+  await expect(accountOptions).toHaveCount(2);
+  expect(
+    await accountOptions.evaluateAll((options) =>
+      options.map((option) => option.getAttribute("aria-label")),
+    ),
+  ).toEqual([
+    "Account group RankedNeedle:AccountGroup",
+    "Account RankedNeedle:AccountLeaf",
+  ]);
+  const categoryOptions = dialog
+    .getByRole("group", { name: "Categories" })
+    .getByRole("option");
+  await expect(categoryOptions).toHaveCount(2);
+  expect(
+    await categoryOptions.evaluateAll((options) =>
+      options.map((option) => option.getAttribute("aria-label")),
+    ),
+  ).toEqual([
+    "Category group RankedNeedle:CategoryGroup",
+    "Category RankedNeedle:CategoryLeaf, hidden",
+  ]);
+  const tagOptions = dialog
+    .getByRole("group", { name: "Tags" })
+    .getByRole("option");
+  await expect(tagOptions).toHaveCount(2);
+  expect(
+    await tagOptions.evaluateAll((options) =>
+      options.map((option) => option.getAttribute("aria-label")),
+    ),
+  ).toEqual([
+    "Tag group RankedNeedle:TagGroup",
+    "Tag RankedNeedle:TagLeaf, hidden",
+  ]);
+  const longMemberOption = dialog.getByRole("option", {
+    name: `Member ${longMemberName}, hidden`,
+  });
+  await expect(longMemberOption).toBeVisible();
+  await expect(
+    longMemberOption.locator("[aria-label='Hidden member']"),
+  ).toBeVisible();
+  expect(
+    await longMemberOption
+      .locator("span.min-w-0.flex-1")
+      .evaluate((element) => {
+        const style = window.getComputedStyle(element);
+        return {
+          overflowX: style.overflowX,
+          textOverflow: style.textOverflow,
+        };
+      }),
+  ).toEqual({ overflowX: "hidden", textOverflow: "ellipsis" });
+
+  await expect(search).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/\/accounts\/9101$/);
+});
+
+test("command palette entity search discards stale results and reports empty and error states", async ({
+  page,
+}) => {
+  let releaseSlow: (() => void) | undefined;
+  const slowSearch = new Promise<void>((resolve) => {
+    releaseSlow = resolve;
+  });
+  await page.route(
+    /\/api\/(accounts|categories|tags|members)\/search/,
+    async (route) => {
+      const url = new URL(route.request().url());
+      const surface = url.pathname.split("/").at(-2);
+      const query = url.searchParams.get("q");
+      if (query === "PaletteSlow") {
+        await slowSearch;
+      }
+      if (query === "PaletteError") {
+        await route.fulfill({
+          body: JSON.stringify({
+            code: "unavailable",
+            message: "Entity search unavailable.",
+          }),
+          contentType: "application/json",
+          status: 500,
+        });
+        return;
+      }
+      const items =
+        surface === "accounts" && query !== "PaletteEmpty"
+          ? [
+              {
+                account_id: query === "PaletteSlow" ? 9501 : 9502,
+                account_type: "owned",
+                currency: "USD",
+                fqn:
+                  query === "PaletteSlow"
+                    ? "PaletteSlow:Stale"
+                    : "PaletteFresh:Winner",
+                is_hidden: false,
+                kind: "leaf",
+                title: query === "PaletteSlow" ? "Stale" : "Winner",
+              },
+            ]
+          : [];
+      await route.fulfill({
+        body: JSON.stringify({ has_more: false, items }),
+        contentType: "application/json",
+        status: 200,
+      });
+    },
+  );
+
+  await page.goto("/overview");
+  await openPalette(page);
+  const dialog = page.getByRole("dialog", { name: "Command Palette" });
+  const search = dialog.getByRole("combobox", { name: "Command search" });
+
+  await search.fill("PaletteSlow");
+  await expect(
+    dialog.getByRole("status", { name: "Loading command results" }),
+  ).toBeVisible();
+  await search.fill("PaletteFresh");
+  await expect(
+    dialog.getByRole("option", { name: "Account PaletteFresh:Winner" }),
+  ).toBeVisible();
+  releaseSlow?.();
+  await expect(
+    dialog.getByRole("option", { name: "Account PaletteSlow:Stale" }),
+  ).toHaveCount(0);
+
+  await search.fill("PaletteEmpty");
+  await expect(dialog.getByText("No commands found.")).toBeVisible();
+  await search.fill("PaletteError");
+  await expect(dialog.getByRole("alert")).toContainText(
+    "Some entity results are unavailable",
+  );
+  await expect(search).toBeFocused();
+});
+
 test("command palette navigates to account and account group matches", async ({
   browserName,
   page,

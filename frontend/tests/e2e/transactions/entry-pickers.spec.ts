@@ -143,7 +143,7 @@ test("picker debounces search and retains stable rows until replacement", async 
   });
   const requestedQueries: string[] = [];
   await page.route(
-    (url) => url.pathname === "/api/categories/picker",
+    (url) => url.pathname === "/api/categories/search",
     async (route) => {
       const query = new URL(route.request().url()).searchParams.get("q") ?? "";
       requestedQueries.push(query);
@@ -159,7 +159,6 @@ test("picker debounces search and retains stable rows until replacement", async 
   await categoryPicker.pressSequentially(targetLabel, { delay: 10 });
   await targetRequest;
   await expect(baselineOption).toBeVisible();
-  await expect(baselineCreateOption).toBeVisible();
   await expect(baselineOption).toHaveAttribute("class", stableClass!);
 
   releaseTarget();
@@ -167,6 +166,182 @@ test("picker debounces search and retains stable rows until replacement", async 
     options.locator(`#spend-merchant-0-category-option-${target.category_id}`),
   ).toBeVisible();
   expect(requestedQueries).toEqual([targetLabel]);
+});
+
+test("entity picker composes bounded search, local selection, and creation availability", async ({
+  page,
+}) => {
+  const selectedTagID = 9_000_001;
+  const searchRequests: URL[] = [];
+  const availabilityQueries: string[] = [];
+  let releaseAvailability: (() => void) | undefined;
+  const availabilityReleased = new Promise<void>((resolve) => {
+    releaseAvailability = resolve;
+  });
+  let markAvailabilityRequested: (() => void) | undefined;
+  const availabilityRequested = new Promise<void>((resolve) => {
+    markAvailabilityRequested = resolve;
+  });
+  let releaseAgain: (() => void) | undefined;
+  const againReleased = new Promise<void>((resolve) => {
+    releaseAgain = resolve;
+  });
+  let markAgainRequested: (() => void) | undefined;
+  const againRequested = new Promise<void>((resolve) => {
+    markAgainRequested = resolve;
+  });
+  await page.route(
+    (url) => url.pathname === "/api/tags/search",
+    async (route) => {
+      const url = new URL(route.request().url());
+      searchRequests.push(url);
+      const excludedIDs = url.searchParams.getAll("exclude_ids").map(Number);
+      const query = url.searchParams.get("q") ?? "";
+      if (query === "Again") {
+        markAgainRequested?.();
+        await againReleased;
+        await route.fulfill({
+          contentType: "application/json",
+          json: {
+            has_more: false,
+            items: [
+              {
+                fqn: "E2E:Bounded:Replacement",
+                is_hidden: false,
+                kind: "leaf",
+                tag_id: selectedTagID + 100,
+                title: "E2E:Bounded:Replacement",
+              },
+            ],
+          },
+        });
+        return;
+      }
+      await route.fulfill({
+        contentType: "application/json",
+        json: {
+          has_more: true,
+          items: Array.from({ length: 6 }, (_, index) => ({
+            fqn: `E2E:Bounded:Tag${index + 1}`,
+            is_hidden: index === 0,
+            kind: "leaf",
+            tag_id: selectedTagID + index,
+            title: `E2E:Bounded:Tag${index + 1}`,
+          })).filter((item) => !excludedIDs.includes(item.tag_id)),
+        },
+      });
+    },
+  );
+  await page.route(
+    (url) => url.pathname === "/api/tags/creation-availability",
+    async (route) => {
+      const fqn = new URL(route.request().url()).searchParams.get("fqn") ?? "";
+      availabilityQueries.push(fqn);
+      if (fqn === "Bounded") {
+        markAvailabilityRequested?.();
+        await availabilityReleased;
+      }
+      await route.fulfill({
+        contentType: "application/json",
+        json: { available: true },
+      });
+    },
+  );
+
+  await page.goto("/transactions?page=1&pageSize=25");
+  await page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" })
+    .click();
+  const picker = page.getByRole("combobox", { name: "Tags" });
+  await picker.fill("Bounded");
+  const options = page.locator("#spend-tags-options");
+  await availabilityRequested;
+  await expect(options.getByRole("option")).toHaveCount(6);
+  await expect(
+    options.locator(`#spend-tags-option-${selectedTagID}`),
+  ).toBeEnabled();
+  releaseAvailability?.();
+  await expect(options.getByRole("option")).toHaveCount(7);
+  await expect(page.getByTestId("spend-tags-type-to-narrow")).toHaveText(
+    "More matches available. Type to narrow.",
+  );
+  await expect(
+    options.getByRole("option", { name: "Create Bounded" }),
+  ).toBeVisible();
+  expect(searchRequests.at(-1)?.searchParams.get("limit")).toBe("6");
+  expect(availabilityQueries).toContain("Bounded");
+
+  await options.locator(`#spend-tags-option-${selectedTagID}`).click();
+  await expect(page.getByTestId("entity-multi-picker-selected")).toContainText(
+    "E2E:Bounded:Tag1",
+  );
+  await picker.fill("Again");
+  await againRequested;
+  await expect(page.getByTestId("spend-tags-type-to-narrow")).toBeVisible();
+  await expect(
+    options.locator(`#spend-tags-option-${selectedTagID + 1}`),
+  ).toBeVisible();
+  releaseAgain?.();
+  await expect(
+    options.locator(`#spend-tags-option-${selectedTagID + 100}`),
+  ).toBeVisible();
+  await expect(page.getByTestId("spend-tags-type-to-narrow")).toHaveCount(0);
+  await expect
+    .poll(() =>
+      searchRequests.some((request) =>
+        request.searchParams.getAll("exclude_ids").includes(`${selectedTagID}`),
+      ),
+    )
+    .toBe(true);
+  await expect(
+    options.locator(`#spend-tags-option-${selectedTagID}`),
+  ).toHaveCount(0);
+});
+
+test("entity picker retries failed creation availability", async ({ page }) => {
+  let availabilityRequests = 0;
+  let availabilityShouldFail = true;
+  await page.route(
+    (url) => url.pathname === "/api/tags/search",
+    async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        json: { has_more: false, items: [] },
+      });
+    },
+  );
+  await page.route(
+    (url) => url.pathname === "/api/tags/creation-availability",
+    async (route) => {
+      availabilityRequests += 1;
+      if (availabilityShouldFail) {
+        await route.fulfill({ status: 503 });
+        return;
+      }
+      await route.fulfill({
+        contentType: "application/json",
+        json: { available: true },
+      });
+    },
+  );
+
+  await page.goto("/transactions?page=1&pageSize=25");
+  await page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" })
+    .click();
+  const picker = page.getByRole("combobox", { name: "Tags" });
+  await picker.fill("AvailabilityRetry");
+  const options = page.locator("#spend-tags-options");
+  await expect(options.getByRole("alert")).toBeVisible();
+  const failedRequestCount = availabilityRequests;
+  availabilityShouldFail = false;
+  await options.getByRole("button", { name: "Retry" }).click();
+  await expect(
+    options.getByRole("option", { name: "Create AvailabilityRetry" }),
+  ).toBeVisible();
+  expect(availabilityRequests).toBeGreaterThan(failedRequestCount);
 });
 
 test("template picker constrains long paths and exposes the full path", async ({
@@ -787,7 +962,7 @@ test("late category creation preserves newer shorthand edits", async ({
     page
       .locator("#spend-merchant-0-category-options")
       .getByRole("option", { selected: true }),
-  ).toContainText(createdFqn.split(":").at(-1)!);
+  ).toHaveCount(0);
 });
 
 test("late category creation failures remain visible after blur", async ({

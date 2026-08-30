@@ -1125,7 +1125,7 @@ func fixedSystemAccounts(t *testing.T, client *apptest.Client) map[string]httpcl
 	t.Helper()
 	accountType := httpclient.AccountTypeSystem
 	response, err := client.REST().ListAccountsWithResponse(context.Background(), &httpclient.ListAccountsParams{
-		AccountType: &accountType,
+		AccountType: accountTypes(accountType),
 	})
 	requireClientResponse(t, "list fixed system accounts", err, response.StatusCode(), http.StatusOK, response.Body)
 	accounts := make(map[string]httpclient.Account, len(response.JSON200.Accounts))

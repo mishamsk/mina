@@ -281,7 +281,6 @@ interface AccountsPageContentProps {
     readonly snapshot: AccountsPageSnapshot | undefined;
   };
   readonly hideZeroBalances: boolean;
-  readonly includeHidden: boolean;
   readonly onCreateAccount: (opener: HTMLElement) => void;
   readonly onEditAccount: (account: Account, opener: HTMLElement) => void;
   readonly onNotice?: (message: string) => void;
@@ -293,7 +292,6 @@ interface AccountsPageContentProps {
 export const AccountsPageContent = ({
   accountsPage,
   hideZeroBalances,
-  includeHidden,
   onCreateAccount,
   onEditAccount,
   onNotice,
@@ -305,10 +303,10 @@ export const AccountsPageContent = ({
     <AccountsTree
       accounts={accountsPage.snapshot?.accounts}
       balances={accountsPage.snapshot?.balances}
-      errorMessage={
-        accountsPage.snapshot ? undefined : accountsPage.errorMessage
+      errorMessage={accountsPage.errorMessage}
+      filtered={
+        hideZeroBalances || search.trim() !== "" || typeFilter.length > 0
       }
-      includeHidden={includeHidden}
       hideZeroBalances={hideZeroBalances}
       loading={accountsPage.loading}
       groups={accountsPage.snapshot?.groups}
@@ -319,8 +317,6 @@ export const AccountsPageContent = ({
       onRetry={() => {
         void refreshAccountsPage();
       }}
-      search={search}
-      typeFilter={typeFilter}
     />
   );
 };

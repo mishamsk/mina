@@ -22,11 +22,16 @@ import {
   EntityMultiPicker,
   type EntityOption,
   EntityPicker,
+  loadAccountOptionsByIds,
+  loadCategoryOptionsByIds,
+  loadMemberOptionsByIds,
+  loadTagOptionsByIds,
   memberPickerLoader,
   memberPickerOption,
   tagPickerLoader,
   tagPickerOption,
   useLedgerLookupsResource,
+  useResolvedEntityOptions,
 } from "@/features/ledger";
 import { cn } from "@/lib/utils";
 import { localTodayISODate } from "@/utils/date";
@@ -363,6 +368,39 @@ export const DefinitionEditorPanel = ({
     () => (lookups.snapshot?.tags ?? []).map(tagPickerOption),
     [lookups.snapshot],
   );
+  const accountOptions = useResolvedEntityOptions(
+    draft.records.flatMap((row) =>
+      row.accountId === undefined ? [] : [row.accountId],
+    ),
+    useMemo(
+      () => [...fallbackAccountOptions, ...accountPickerOptionsById.values()],
+      [accountPickerOptionsById, fallbackAccountOptions],
+    ),
+    loadAccountOptionsByIds,
+    !lookups.snapshot && !lookups.errorMessage,
+  );
+  const categoryOptions = useResolvedEntityOptions(
+    draft.records.flatMap((row) =>
+      row.categoryId === undefined ? [] : [row.categoryId],
+    ),
+    fallbackCategoryOptions,
+    loadCategoryOptionsByIds,
+    !lookups.snapshot && !lookups.errorMessage,
+  );
+  const memberOptions = useResolvedEntityOptions(
+    draft.records.flatMap((row) =>
+      row.memberId === undefined ? [] : [row.memberId],
+    ),
+    fallbackMemberOptions,
+    loadMemberOptionsByIds,
+    !lookups.snapshot && !lookups.errorMessage,
+  );
+  const tagOptions = useResolvedEntityOptions(
+    draft.records.flatMap((row) => row.tagIds),
+    fallbackTagOptions,
+    loadTagOptionsByIds,
+    !lookups.snapshot && !lookups.errorMessage,
+  );
 
   const balances = useMemo(() => {
     const values = new Map<string, bigint>();
@@ -410,7 +448,8 @@ export const DefinitionEditorPanel = ({
         lookups.snapshot?.accounts.find(
           (account) => account.account_id === row.accountId,
         )?.account_type ??
-        accountPickerOptionsById.get(row.accountId ?? -1)?.accountType;
+        accountOptions.find((option) => option.id === row.accountId)
+          ?.accountType;
       if (accountType === "flow" && !row.categoryId)
         next[recordErrorKey(index, "category")] = "Category is required.";
       if (accountType && accountType !== "flow" && row.categoryId)
@@ -718,7 +757,7 @@ export const DefinitionEditorPanel = ({
                         loadOptions={accountPickerLoader({
                           context: "record_assignment",
                         })}
-                        options={fallbackAccountOptions}
+                        options={accountOptions}
                         onLoadedOptions={(options) => {
                           setAccountPickerOptionsById((current) => {
                             const next = new Map(current);
@@ -793,15 +832,16 @@ export const DefinitionEditorPanel = ({
                       {(lookups.snapshot?.accounts.find(
                         (account) => account.account_id === row.accountId,
                       )?.account_type ??
-                        accountPickerOptionsById.get(row.accountId ?? -1)
-                          ?.accountType) === "flow" ? (
+                        accountOptions.find(
+                          (option) => option.id === row.accountId,
+                        )?.accountType) === "flow" ? (
                         <EntityPicker
                           id={`recurring-record-${row.id}-category`}
                           label="Category"
                           loadOptions={categoryPickerLoader({
                             context: "record_assignment",
                           })}
-                          options={fallbackCategoryOptions}
+                          options={categoryOptions}
                           value={row.categoryId}
                           onChange={(categoryId) =>
                             patchRow(index, { categoryId })
@@ -851,7 +891,7 @@ export const DefinitionEditorPanel = ({
                         loadOptions={tagPickerLoader({
                           context: "record_assignment",
                         })}
-                        options={fallbackTagOptions}
+                        options={tagOptions}
                         value={row.tagIds}
                         onChange={(tagIds) => patchRow(index, { tagIds })}
                       />
@@ -863,7 +903,7 @@ export const DefinitionEditorPanel = ({
                       loadOptions={memberPickerLoader({
                         context: "record_assignment",
                       })}
-                      options={fallbackMemberOptions}
+                      options={memberOptions}
                       placeholder="Whole household"
                       value={row.memberId}
                       onChange={(memberId) => patchRow(index, { memberId })}

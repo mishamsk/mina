@@ -152,6 +152,101 @@ func TestSharedListQueryCompositeSortDirection(t *testing.T) {
 	assertExchangeRateIDs(t, offsetPage.JSON200.ExchangeRates, []int64{eurLate.ExchangeRateId, gbpEarly.ExchangeRateId})
 }
 
+func TestEntityListsUseSharedMembershipBeforeCanonicalPagination(t *testing.T) {
+	client := newSharedClient(t)
+	ctx := context.Background()
+
+	client.Scenario().Category("Household:Transportation:Rail")
+	road := client.Scenario().Category("Household:Transportation:Road")
+	hidden := true
+	hiddenIncome, err := client.REST().CreateCategoryWithResponse(ctx, httpclient.CreateCategoryRequest{
+		Fqn: "Household:Transportation:Air", EconomicIntent: httpclient.CategoryEconomicIntentIncome, IsHidden: &hidden,
+	})
+	requireClientResponse(t, "create hidden income category", err, hiddenIncome.StatusCode(), http.StatusCreated, hiddenIncome.Body)
+	label := "Favorite fare"
+	labeled, err := client.REST().CreateCategoryWithResponse(ctx, httpclient.CreateCategoryRequest{
+		Fqn: "Household:Food:Dining", DisplayLabel: &label, EconomicIntent: httpclient.CategoryEconomicIntentExpense,
+	})
+	requireClientResponse(t, "create labeled category", err, labeled.StatusCode(), http.StatusCreated, labeled.Body)
+	archived := client.Scenario().Category("Archived:Nested:Leaf")
+	deleted, err := client.REST().DeleteCategoryWithResponse(ctx, archived.CategoryId)
+	requireClientResponse(t, "delete archived category", err, deleted.StatusCode(), http.StatusNoContent, deleted.Body)
+
+	query := "Household:Transportatio"
+	expense := []httpclient.CategoryEconomicIntent{httpclient.CategoryEconomicIntentExpense}
+	limit := 1
+	offset := 1
+	page, err := client.REST().ListCategoriesWithResponse(ctx, &httpclient.ListCategoriesParams{
+		Q: &query, EconomicIntent: &expense, Limit: &limit, Offset: &offset,
+	})
+	requireClientResponse(t, "filter categories by implicit group", err, page.StatusCode(), http.StatusOK, page.Body)
+	assertCategoryIDs(t, page.JSON200.Categories, []int64{road.CategoryId})
+	if page.JSON200.TotalCount != 2 {
+		t.Fatalf("group-filtered total_count = %d, want 2", page.JSON200.TotalCount)
+	}
+
+	desc := httpclient.ListCategoriesParamsSortDirDesc
+	descPage, err := client.REST().ListCategoriesWithResponse(ctx, &httpclient.ListCategoriesParams{
+		Q: &query, EconomicIntent: &expense, SortDir: &desc, Limit: &limit,
+	})
+	requireClientResponse(t, "filter categories descending", err, descPage.StatusCode(), http.StatusOK, descPage.Body)
+	assertCategoryIDs(t, descPage.JSON200.Categories, []int64{road.CategoryId})
+
+	titleQuery := "favorite"
+	titleMatch, err := client.REST().ListCategoriesWithResponse(ctx, &httpclient.ListCategoriesParams{Q: &titleQuery})
+	requireClientResponse(t, "filter categories by effective title", err, titleMatch.StatusCode(), http.StatusOK, titleMatch.Body)
+	assertCategoryIDs(t, titleMatch.JSON200.Categories, []int64{labeled.JSON201.CategoryId})
+
+	income := []httpclient.CategoryEconomicIntent{httpclient.CategoryEconomicIntentIncome}
+	hiddenExcluded, err := client.REST().ListCategoriesWithResponse(ctx, &httpclient.ListCategoriesParams{Q: &query, EconomicIntent: &income})
+	requireClientResponse(t, "intersect category query with visibility", err, hiddenExcluded.StatusCode(), http.StatusOK, hiddenExcluded.Body)
+	assertCategoryIDs(t, hiddenExcluded.JSON200.Categories, nil)
+	includeHidden := true
+	hiddenIncluded, err := client.REST().ListCategoriesWithResponse(ctx, &httpclient.ListCategoriesParams{
+		Q: &query, EconomicIntent: &income, IncludeHidden: &includeHidden,
+	})
+	requireClientResponse(t, "include hidden category query", err, hiddenIncluded.StatusCode(), http.StatusOK, hiddenIncluded.Body)
+	assertCategoryIDs(t, hiddenIncluded.JSON200.Categories, []int64{hiddenIncome.JSON201.CategoryId})
+
+	includeTombstoned := true
+	archivedGroupQuery := "Xrchived:Nested"
+	tombstoneMatch, err := client.REST().ListCategoriesWithResponse(ctx, &httpclient.ListCategoriesParams{
+		Q: &archivedGroupQuery, IncludeTombstoned: &includeTombstoned,
+	})
+	requireClientResponse(t, "exclude tombstone-derived group expansion", err, tombstoneMatch.StatusCode(), http.StatusOK, tombstoneMatch.Body)
+	assertCategoryIDs(t, tombstoneMatch.JSON200.Categories, nil)
+}
+
+func TestEntityListMembershipIntersectsEntityFilters(t *testing.T) {
+	client := newSharedClient(t)
+	ctx := context.Background()
+
+	owned := client.Scenario().AccountWithType("Shared:Wallet", httpclient.WritableAccountTypeOwned)
+	flow := client.Scenario().AccountWithType("Shared:Expense", httpclient.WritableAccountTypeFlow)
+	client.Scenario().AccountWithType("Other:Party", httpclient.WritableAccountTypeParty)
+	query := "shared"
+	types := []httpclient.AccountType{httpclient.AccountTypeOwned, httpclient.AccountTypeFlow}
+	accounts, err := client.REST().ListAccountsWithResponse(ctx, &httpclient.ListAccountsParams{Q: &query, AccountType: &types})
+	requireClientResponse(t, "filter multiple account types", err, accounts.StatusCode(), http.StatusOK, accounts.Body)
+	assertAccountIDs(t, accounts.JSON200.Accounts, []int64{flow.AccountId, owned.AccountId})
+	if accounts.JSON200.TotalCount != 2 {
+		t.Fatalf("filtered account total_count = %d, want 2", accounts.JSON200.TotalCount)
+	}
+
+	tag := client.Scenario().Tag("Trips:Summer")
+	tagQuery := "sumer"
+	tags, err := client.REST().ListTagsWithResponse(ctx, &httpclient.ListTagsParams{Q: &tagQuery})
+	requireClientResponse(t, "filter tags by shared typo membership", err, tags.StatusCode(), http.StatusOK, tags.Body)
+	assertTagIDs(t, tags.JSON200.Tags, []int64{tag.TagId})
+
+	member := client.Scenario().Member("Alexandra")
+	client.Scenario().Member("Blair")
+	memberQuery := "alex"
+	members, err := client.REST().ListMembersWithResponse(ctx, &httpclient.ListMembersParams{Q: &memberQuery})
+	requireClientResponse(t, "filter members by shared name membership", err, members.StatusCode(), http.StatusOK, members.Body)
+	assertMemberIDs(t, members.JSON200.Members, []int64{member.MemberId})
+}
+
 func createListQueryCategory(t *testing.T, client *apptest.Client, fqn string, hidden bool) httpclient.Category {
 	t.Helper()
 

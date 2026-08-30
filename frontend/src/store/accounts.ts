@@ -19,6 +19,7 @@ export interface AccountsPageSnapshot {
   readonly accounts: readonly Account[];
   readonly balances: readonly AccountBalance[];
   readonly groups: readonly GroupState[];
+  readonly key: string;
   readonly loadedAt: string;
 }
 
@@ -67,6 +68,7 @@ interface AccountsState {
   >;
   readonly errorMessage: string | undefined;
   readonly loading: boolean;
+  readonly requestKey: string | undefined;
   readonly snapshot: AccountsPageSnapshot | undefined;
   readonly stale: boolean;
   readonly transactionCacheGeneration: number;
@@ -90,6 +92,7 @@ const initialAccountsState: AccountsState = {
   registerPages: {},
   errorMessage: undefined,
   loading: false,
+  requestKey: undefined,
   snapshot: undefined,
   stale: false,
   transactionCacheGeneration: 1,
@@ -109,6 +112,7 @@ export const useAccountsPageView = () =>
     useShallow((state) => ({
       errorMessage: state.errorMessage,
       loading: state.loading,
+      requestKey: state.requestKey,
       snapshot: state.snapshot,
       stale: state.stale,
     })),
@@ -193,11 +197,12 @@ export const useAccountTransactionCacheView = () =>
 export const getAccountsSnapshot = (): AccountsState =>
   useAccountsStore.getState();
 
-export const setAccountsPageLoading = (): void => {
+export const setAccountsPageLoading = (key: string): void => {
   useAccountsStore.setState(
     {
       errorMessage: undefined,
       loading: true,
+      requestKey: key,
     },
     false,
     "AccountsStore/setAccountsPageLoading",
@@ -208,9 +213,22 @@ export const clearAccountsPageLoading = (): void => {
   useAccountsStore.setState(
     {
       loading: false,
+      requestKey: undefined,
     },
     false,
     "AccountsStore/clearAccountsPageLoading",
+  );
+};
+
+export const setAccountsPageFromCache = (key: string): void => {
+  useAccountsStore.setState(
+    {
+      errorMessage: undefined,
+      loading: false,
+      requestKey: key,
+    },
+    false,
+    "AccountsStore/setAccountsPageFromCache",
   );
 };
 
@@ -221,6 +239,7 @@ export const setAccountsPage = (
     {
       errorMessage: undefined,
       loading: false,
+      requestKey: snapshot.key,
       snapshot: {
         ...snapshot,
         loadedAt: new Date().toISOString(),
@@ -403,67 +422,6 @@ export const mergeAccountHeaderAccount = (account: Account): void => {
     },
     false,
     "AccountsStore/mergeAccountHeaderAccount",
-  );
-};
-
-export const mergeAccountsPageAccount = (account: Account): void => {
-  useAccountsStore.setState(
-    (state) => {
-      if (!state.snapshot) {
-        return state;
-      }
-
-      const accountsById = new Map(
-        state.snapshot.accounts.map((snapshotAccount) => [
-          snapshotAccount.account_id,
-          snapshotAccount,
-        ]),
-      );
-      const existingAccount = accountsById.get(account.account_id);
-      accountsById.set(account.account_id, {
-        ...account,
-        deletable: account.deletable ?? existingAccount?.deletable,
-        has_credit_limit_history:
-          account.has_credit_limit_history ??
-          existingAccount?.has_credit_limit_history,
-      });
-
-      return {
-        errorMessage: undefined,
-        snapshot: {
-          ...state.snapshot,
-          accounts: [...accountsById.values()].sort((left, right) =>
-            left.fqn.localeCompare(right.fqn),
-          ),
-          loadedAt: new Date().toISOString(),
-        },
-      };
-    },
-    false,
-    "AccountsStore/mergeAccountsPageAccount",
-  );
-};
-
-export const removeAccountsPageAccount = (accountId: number): void => {
-  useAccountsStore.setState(
-    (state) => {
-      if (!state.snapshot) {
-        return state;
-      }
-
-      return {
-        errorMessage: undefined,
-        snapshot: {
-          ...state.snapshot,
-          accounts: state.snapshot.accounts.filter(
-            (account) => account.account_id !== accountId,
-          ),
-          loadedAt: new Date().toISOString(),
-        },
-      };
-    },
-    false,
-    "AccountsStore/removeAccountsPageAccount",
   );
 };
 

@@ -58,34 +58,15 @@ export const compareFqnPath = (left: string, right: string): number => {
   return 0;
 };
 
-const fqnSearchMatches = (fqn: string, search: string): boolean =>
-  search.trim() === "" ||
-  fqn.toLowerCase().includes(search.trim().toLowerCase());
-
 export const referenceTreeRows = <
   TLeaf extends ReferenceLeaf,
   TGroup extends ReferenceGroup,
 >(
   leaves: readonly TLeaf[],
   groups: readonly TGroup[],
-  {
-    includeHidden,
-    search,
-  }: {
-    readonly includeHidden: boolean;
-    readonly search: string;
-  },
 ): readonly ReferenceTreeRow<TLeaf, TGroup>[] => {
   const groupByFqn = new Map(groups.map((group) => [group.fqn, group]));
-  const visibleLeafByFqn = new Map(
-    leaves
-      .filter(
-        (leaf) =>
-          (includeHidden || !leaf.is_hidden) &&
-          fqnSearchMatches(leaf.fqn, search),
-      )
-      .map((leaf) => [leaf.fqn, leaf]),
-  );
+  const visibleLeafByFqn = new Map(leaves.map((leaf) => [leaf.fqn, leaf]));
   const visibleNodeFqns = new Set<string>();
 
   for (const leaf of visibleLeafByFqn.values()) {
@@ -218,9 +199,9 @@ interface ReferenceTreeProps<TLeaf extends ReferenceLeaf, TGroup> {
   readonly emptySprite?: ReactNode;
   readonly emptyTitle: string;
   readonly errorMessage?: string;
+  readonly filtered: boolean;
   readonly groups: readonly TGroup[] | undefined;
   readonly groupRowsClickable?: boolean;
-  readonly includeHidden: boolean;
   readonly indicatorSlots?: readonly RowActionIndicatorSlot[];
   readonly leaves: readonly TLeaf[] | undefined;
   readonly loading: boolean;
@@ -238,7 +219,6 @@ interface ReferenceTreeProps<TLeaf extends ReferenceLeaf, TGroup> {
   ) => readonly RowAction[];
   readonly renderBadge?: (row: ReferenceTreeRow<TLeaf, TGroup>) => ReactNode;
   readonly rowTestId?: string;
-  readonly search: string;
 }
 
 const interactiveTargetSelector =
@@ -271,9 +251,9 @@ export const ReferenceTree = <
   emptySprite,
   emptyTitle,
   errorMessage,
+  filtered,
   groups,
   groupRowsClickable = false,
-  includeHidden,
   indicatorSlots,
   leaves,
   loading,
@@ -284,15 +264,11 @@ export const ReferenceTree = <
   renderActions,
   renderBadge,
   rowTestId = "reference-tree-row",
-  search,
 }: ReferenceTreeProps<TLeaf, TGroup>) => {
   const hasBadgeColumn = Boolean(badgeHeader);
   const rows = useMemo(
-    () =>
-      leaves
-        ? referenceTreeRows(leaves, groups ?? [], { includeHidden, search })
-        : [],
-    [groups, includeHidden, leaves, search],
+    () => (leaves ? referenceTreeRows(leaves, groups ?? []) : []),
+    [groups, leaves],
   );
 
   if (loading && !leaves) {
@@ -347,7 +323,6 @@ export const ReferenceTree = <
   }
 
   if (!leaves || rows.length === 0) {
-    const hasLeaves = (leaves?.length ?? 0) > 0;
     return (
       <div
         className={cn(
@@ -361,7 +336,7 @@ export const ReferenceTree = <
             {emptyTitle}
           </p>
           <p className="font-body text-muted-foreground max-w-prose text-sm">
-            {hasLeaves ? emptyFilteredDescription : emptyDescription}
+            {filtered ? emptyFilteredDescription : emptyDescription}
           </p>
         </div>
         {emptyAction}

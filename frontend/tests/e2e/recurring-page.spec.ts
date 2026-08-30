@@ -137,6 +137,40 @@ test("recurring definitions table renders seeded definitions and schedule detail
   await expect(table.getByRole("columnheader", { name: "Next" })).toBeVisible();
 });
 
+test("recurring editor reuses selected entities from loaded lookups", async ({
+  page,
+}) => {
+  await page.goto("/recurring");
+  const definition = await definitionByFqn(page, "Household:Mortgage");
+  const detailRequests: string[] = [];
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (
+      request.method() === "GET" &&
+      /^\/api\/(accounts|categories|members|tags)\/\d+$/.test(url.pathname)
+    ) {
+      detailRequests.push(url.pathname);
+    }
+  });
+
+  await selectDefinitionAction(
+    page,
+    definitionRow(page, definition),
+    "Edit definition",
+  );
+  const editor = page.getByRole("complementary", {
+    name: "Edit recurring definition",
+  });
+  await expect(editor.getByLabel("Account").first()).toHaveValue(
+    /^bank:Chase:joint_checking/,
+  );
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
+  );
+  expect(detailRequests).toEqual([]);
+});
+
 test("recurring definition row actions unfold at desktop width and fold when constrained", async ({
   page,
 }) => {

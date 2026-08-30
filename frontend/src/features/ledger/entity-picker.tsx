@@ -50,21 +50,23 @@ export interface EntityPickerGroupRow {
 export type EntityPickerRow = EntityPickerLeafRow | EntityPickerGroupRow;
 
 export interface EntityPickerLoadRequest {
+  readonly excludedIds: readonly number[];
   readonly parentFqn: string | undefined;
   readonly query: string;
-  readonly selectedIds: readonly number[];
 }
 
 export interface EntityPickerLoadResult {
-  readonly canCreate: boolean;
-  readonly eligibleCount?: number;
+  readonly hasMore: boolean;
   readonly rows: readonly EntityPickerRow[];
-  readonly selectedOptions: readonly EntityOption[];
 }
 
 export type EntityOptionLoader = (
   request: EntityPickerLoadRequest,
 ) => Promise<EntityPickerLoadResult>;
+
+export type EntityCreationAvailabilityLoader = (
+  fqn: string,
+) => Promise<boolean>;
 
 type CreateEntityOption = (fqn: string) => Promise<EntityOption>;
 
@@ -79,16 +81,15 @@ interface EntityPickerProps {
   readonly label: string;
   readonly labelClassName?: string;
   readonly loadKey?: string | number;
+  readonly loadCreationAvailability?: EntityCreationAvailabilityLoader;
   readonly loadOptions?: EntityOptionLoader;
   readonly onChange: (id: number | undefined, option?: EntityOption) => void;
-  readonly onLoadedOptions?: (
-    options: readonly EntityOption[],
-    result: EntityPickerLoadResult,
-  ) => void;
+  readonly onLoadedOptions?: (options: readonly EntityOption[]) => void;
   readonly onOpenChange?: (open: boolean) => void;
   readonly openOnFocus?: boolean;
   readonly options?: readonly EntityOption[];
   readonly placeholder?: string;
+  readonly preferredSide?: "bottom" | "top";
   readonly value: number | undefined;
   readonly selectedIds?: readonly number[];
 }
@@ -110,8 +111,16 @@ interface QueryModel {
   readonly levelMode: boolean;
 }
 
-const searchLimit = 8;
+interface LoadedSearchSnapshot {
+  readonly hasMore: boolean;
+  readonly query: string;
+  readonly requestKey: string;
+  readonly rows: readonly EntityPickerRow[];
+}
+
 const searchDebounceMilliseconds = 200;
+const searchLimit = 6;
+const noLoadedRows: readonly EntityPickerRow[] = [];
 const noSelectedIds: readonly number[] = [];
 
 const normalized = (value: string): string => value.trim().toLocaleLowerCase();
@@ -378,6 +387,7 @@ export const EntityPicker = ({
   label,
   labelClassName,
   loadKey,
+  loadCreationAvailability,
   loadOptions,
   onChange,
   onLoadedOptions,
@@ -385,28 +395,39 @@ export const EntityPicker = ({
   openOnFocus = true,
   options = [],
   placeholder = "Search",
+  preferredSide = "bottom",
   value,
   selectedIds = noSelectedIds,
 }: EntityPickerProps) => {
   const [createdOptions, setCreatedOptions] = useState<readonly EntityOption[]>(
     [],
   );
-  const [loadedRows, setLoadedRows] = useState<readonly EntityPickerRow[]>([]);
-  const [loadedRequestKey, setLoadedRequestKey] = useState<string>();
+  const [loadedSearch, setLoadedSearch] = useState<LoadedSearchSnapshot>();
   const [loadedOptions, setLoadedOptions] = useState<readonly EntityOption[]>(
     [],
   );
   const [loadError, setLoadError] = useState<string>();
   const [loading, setLoading] = useState(false);
   const [reloadVersion, setReloadVersion] = useState(0);
-  const [loadedCanCreate, setLoadedCanCreate] = useState(false);
-  const [loadedQuery, setLoadedQuery] = useState<string>();
+  const loadedRows = loadedSearch?.rows ?? noLoadedRows;
+  const loadedRequestKey = loadedSearch?.requestKey;
+  const loadedHasMore = loadedSearch?.hasMore ?? false;
+  const loadedQuery = loadedSearch?.query;
+  const [availabilityFailure, setAvailabilityFailure] = useState<{
+    readonly message: string;
+    readonly query: string;
+  }>();
+  const [creationAvailable, setCreationAvailable] = useState(false);
+  const [availabilityQuery, setAvailabilityQuery] = useState<string>();
   const [remoteParentFqn, setRemoteParentFqn] = useState<string>();
   const loadOptionsRef = useRef(loadOptions);
   const onLoadedOptionsRef = useRef(onLoadedOptions);
   const loadVersionRef = useRef(0);
   const lastIssuedSearchKeyRef = useRef<string | undefined>(undefined);
   const flushPendingLoadRef = useRef<(() => void) | undefined>(undefined);
+  const flushPendingAvailabilityRef = useRef<(() => void) | undefined>(
+    undefined,
+  );
   const pendingEnterRef = useRef(false);
   useEffect(() => {
     loadOptionsRef.current = loadOptions;
@@ -442,10 +463,11 @@ export const EntityPicker = ({
     remoteParentFqn,
     requestedSelectedIds,
   ]);
-  const requestPending = Boolean(
+  const searchRequestPending = Boolean(
     loadOptions && loadedRequestKey !== loadRequestKey,
   );
   const [open, setOpen] = useState(false);
+  const requestPending = searchRequestPending;
   const selectedPresentation = selected
     ? (selected.selectedLabel ?? optionPresentation(selected))
     : undefined;
@@ -484,15 +506,12 @@ export const EntityPicker = ({
     if (!loader) {
       setLoading(false);
       setLoadError(undefined);
-      setLoadedRows([]);
-      setLoadedRequestKey(undefined);
-      setLoadedCanCreate(false);
-      setLoadedQuery(undefined);
+      setLoadedSearch(undefined);
       lastIssuedSearchKeyRef.current = undefined;
       flushPendingLoadRef.current = undefined;
       return;
     }
-    if (!open && !autoFocus && requestedSelectedIds.length === 0) {
+    if (!open && !autoFocus) {
       return;
     }
 
@@ -515,29 +534,25 @@ export const EntityPicker = ({
       flushPendingLoadRef.current = undefined;
       lastIssuedSearchKeyRef.current = searchKey;
       void loader({
+        excludedIds: requestedSelectedIds,
         parentFqn: remoteParentFqn,
         query,
-        selectedIds: requestedSelectedIds,
       })
         .then((result) => {
           if (loadVersionRef.current !== version) {
             return;
           }
-          setLoadedRows(result.rows);
-          setLoadedRequestKey(loadRequestKey);
-          setLoadedCanCreate(result.canCreate);
-          setLoadedQuery(query);
-          const returnedOptions = mergeOptions(
-            [],
-            [
-              ...result.rows.flatMap((row) =>
-                row.kind === "leaf" ? [row.option] : [],
-              ),
-              ...result.selectedOptions,
-            ],
+          setLoadedSearch({
+            hasMore: result.hasMore,
+            query,
+            requestKey: loadRequestKey,
+            rows: result.rows,
+          });
+          const returnedOptions = result.rows.flatMap((row) =>
+            row.kind === "leaf" ? [row.option] : [],
           );
           setLoadedOptions(returnedOptions);
-          onLoadedOptionsRef.current?.(returnedOptions, result);
+          onLoadedOptionsRef.current?.(returnedOptions);
           setLoading(false);
         })
         .catch((error: unknown) => {
@@ -582,6 +597,62 @@ export const EntityPicker = ({
     requestedSelectedIds,
   ]);
 
+  useEffect(() => {
+    if (
+      !open ||
+      !createOption ||
+      !loadCreationAvailability ||
+      query.length === 0 ||
+      query.endsWith(":")
+    ) {
+      flushPendingAvailabilityRef.current = undefined;
+      return;
+    }
+    let active = true;
+    let loadStarted = false;
+    const load = () => {
+      if (loadStarted) {
+        return;
+      }
+      loadStarted = true;
+      window.clearTimeout(timer);
+      flushPendingAvailabilityRef.current = undefined;
+      setAvailabilityFailure(undefined);
+      void loadCreationAvailability(query)
+        .then((available) => {
+          if (!active) {
+            return;
+          }
+          setCreationAvailable(available);
+          setAvailabilityQuery(query);
+          setAvailabilityFailure(undefined);
+        })
+        .catch((error: unknown) => {
+          if (!active) {
+            return;
+          }
+          setCreationAvailable(false);
+          setAvailabilityQuery(query);
+          setAvailabilityFailure({
+            message:
+              error instanceof Error
+                ? error.message
+                : "Creation availability could not be loaded.",
+            query,
+          });
+        });
+    };
+    const timer = window.setTimeout(load, searchDebounceMilliseconds);
+    flushPendingAvailabilityRef.current = load;
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+      if (flushPendingAvailabilityRef.current === load) {
+        flushPendingAvailabilityRef.current = undefined;
+      }
+    };
+  }, [createOption, loadCreationAvailability, open, query, reloadVersion]);
+
   const groups = useMemo(
     () =>
       loadOptions
@@ -595,7 +666,7 @@ export const EntityPicker = ({
     () => new Set(groups.map((group) => group.fqn)),
     [groups],
   );
-  const model = useMemo(() => {
+  const model = useMemo<QueryModel>(() => {
     if (!loadOptions) {
       return deriveQueryModel(query, groupFqns);
     }
@@ -609,36 +680,6 @@ export const EntityPicker = ({
     };
   }, [groupFqns, loadOptions, query, remoteParentFqn]);
   const retainedPrefixRef = useRef(model.committedPrefix);
-  useEffect(() => {
-    if (
-      !loadOptions ||
-      !hierarchical ||
-      remoteParentFqn ||
-      !open ||
-      requestPending ||
-      !query.endsWith(":")
-    ) {
-      return;
-    }
-    const typedParent = query.slice(0, -1);
-    if (!fqnIsValid(typedParent) || !groupFqns.has(typedParent)) {
-      return;
-    }
-    const frame = window.requestAnimationFrame(() => {
-      retainedPrefixRef.current = typedParent;
-      setRemoteParentFqn(typedParent);
-      setAnnouncement(`Browsing under ${typedParent}`);
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [
-    groupFqns,
-    hierarchical,
-    loadOptions,
-    open,
-    query,
-    remoteParentFqn,
-    requestPending,
-  ]);
   const optionRows = useMemo(() => {
     if (!loadOptions) {
       return rowsForQuery(effectiveOptions, groups, model);
@@ -647,16 +688,7 @@ export const EntityPicker = ({
       (row) =>
         row.kind === "group" || !excludedOptionIds.includes(row.option.id),
     );
-    if (
-      !selected ||
-      excludedOptionIds.includes(selected.id) ||
-      returnedRows.some(
-        (row) => row.kind === "leaf" && row.option.id === selected.id,
-      )
-    ) {
-      return returnedRows;
-    }
-    return [{ kind: "leaf" as const, option: selected }, ...returnedRows];
+    return returnedRows;
   }, [
     effectiveOptions,
     excludedOptionIds,
@@ -664,7 +696,6 @@ export const EntityPicker = ({
     loadOptions,
     loadedRows,
     model,
-    selected,
   ]);
   const updateOpen = useCallback(
     (nextOpen: boolean, typedSession = false) => {
@@ -716,6 +747,7 @@ export const EntityPicker = ({
       !loadOptions ||
       requestPending ||
       !open ||
+      pendingEnterRef.current ||
       !typedThisSessionRef.current
     ) {
       return;
@@ -732,8 +764,17 @@ export const EntityPicker = ({
     return () => window.cancelAnimationFrame(frame);
   }, [loadOptions, open, optionRows, query, requestPending, selectOption]);
   const createAllowed = Boolean(
-    loadOptions && createOption && loadedCanCreate && loadedQuery !== undefined,
+    loadOptions &&
+    createOption &&
+    creationAvailable &&
+    loadedQuery === query &&
+    availabilityQuery === query,
   );
+  const requestError =
+    loadError ??
+    (availabilityFailure?.query === query
+      ? availabilityFailure.message
+      : undefined);
   const rows = useMemo<readonly PickerRow[]>(() => {
     if (!createAllowed || loadedQuery === undefined) {
       return optionRows;
@@ -756,29 +797,30 @@ export const EntityPicker = ({
       return;
     }
     inputRef.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
-    if (!activeOptionId) {
-      return;
-    }
-    listboxRef.current
-      ?.querySelector<HTMLElement>(`#${CSS.escape(activeOptionId)}`)
-      ?.scrollIntoView({ block: "nearest" });
-  }, [activeOptionId, open]);
+  }, [open]);
 
   useEffect(() => {
     if (requestPending || !open || !pendingEnterRef.current) {
       return;
     }
+    const exact = optionRows.find(
+      (row) => row.kind === "leaf" && row.option.searchLabel === query,
+    );
     const frame = window.requestAnimationFrame(() => {
       if (!pendingEnterRef.current) {
         return;
       }
       pendingEnterRef.current = false;
+      if (exact?.kind === "leaf") {
+        selectOption(exact.option);
+        return;
+      }
       inputRef.current?.dispatchEvent(
         new KeyboardEvent("keydown", { bubbles: true, key: "Enter" }),
       );
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [open, requestPending]);
+  }, [open, optionRows, query, requestPending, selectOption]);
 
   const updatePopoverOpen = (nextOpen: boolean) => {
     window.cancelAnimationFrame(deferredCloseFrameRef.current ?? 0);
@@ -971,9 +1013,7 @@ export const EntityPicker = ({
                     : undefined;
                 const nextRemoteParent = retainsRemotePrefix
                   ? remoteParentFqn
-                  : typedRemoteParent &&
-                      fqnIsValid(typedRemoteParent) &&
-                      groupFqns.has(typedRemoteParent)
+                  : typedRemoteParent && fqnIsValid(typedRemoteParent)
                     ? typedRemoteParent
                     : undefined;
                 const nextModel = loadOptions
@@ -1086,6 +1126,7 @@ export const EntityPicker = ({
                   event.preventDefault();
                   pendingEnterRef.current = true;
                   flushPendingLoadRef.current?.();
+                  flushPendingAvailabilityRef.current?.();
                   return;
                 }
 
@@ -1104,7 +1145,7 @@ export const EntityPicker = ({
                   event.key === "Tab" &&
                   !event.shiftKey &&
                   open &&
-                  loadError
+                  requestError
                 ) {
                   event.preventDefault();
                   retryButtonRef.current?.focus();
@@ -1247,10 +1288,11 @@ export const EntityPicker = ({
             data-picker-mode={model.levelMode ? "level" : "search"}
             align="start"
             collisionPadding={4}
+            side={preferredSide}
             sideOffset={4}
             sticky="always"
             updatePositionStrategy="always"
-            className="max-h-[min(14rem,var(--radix-popover-content-available-height))] w-[var(--radix-popover-trigger-width)] overflow-auto p-0"
+            className="w-[var(--radix-popover-trigger-width)] overflow-hidden p-0"
             onCloseAutoFocus={(event) => event.preventDefault()}
             onEscapeKeyDown={(event) => {
               event.preventDefault();
@@ -1330,12 +1372,12 @@ export const EntityPicker = ({
                 Loading options…
               </span>
             ) : null}
-            {loadError ? (
+            {requestError ? (
               <div
                 className="border-destructive text-destructive flex items-center justify-between gap-2 border-b px-2 py-1 text-xs"
                 role="alert"
               >
-                <span>{loadError}</span>
+                <span>{requestError}</span>
                 <Button
                   ref={retryButtonRef}
                   type="button"
@@ -1538,6 +1580,15 @@ export const EntityPicker = ({
                   : "No matches"}
               </div>
             )}
+            {loadedHasMore && !requestError ? (
+              <div
+                className="text-muted-foreground border-t border-[var(--hairline)] px-2 py-2 font-mono text-xs"
+                data-testid={`${id}-type-to-narrow`}
+                role="status"
+              >
+                More matches available. Type to narrow.
+              </div>
+            ) : null}
           </PopoverContent>
         ) : null}
         {createError ? (
@@ -1559,6 +1610,7 @@ interface EntityMultiPickerProps {
   readonly label: string;
   readonly labelClassName?: string;
   readonly loadKey?: string | number;
+  readonly loadCreationAvailability?: EntityCreationAvailabilityLoader;
   readonly loadOptions: EntityOptionLoader;
   readonly onChange: (
     ids: readonly number[],
@@ -1579,6 +1631,7 @@ export const EntityMultiPicker = ({
   label,
   labelClassName,
   loadKey,
+  loadCreationAvailability,
   loadOptions,
   onChange,
   onOpenChange,
@@ -1624,12 +1677,14 @@ export const EntityMultiPicker = ({
         label={label}
         labelClassName={labelClassName}
         loadKey={loadKey}
+        loadCreationAvailability={loadCreationAvailability}
         loadOptions={loadOptions}
         onLoadedOptions={(returned) => {
           setLoadedOptions(returned);
         }}
         onOpenChange={onOpenChange}
         placeholder={placeholder}
+        preferredSide="top"
         options={options}
         selectedIds={value}
         value={undefined}

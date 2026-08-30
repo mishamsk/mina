@@ -8,6 +8,7 @@ import (
 
 	"github.com/mishamsk/mina/internal/services"
 	"github.com/mishamsk/mina/internal/services/values"
+	"github.com/mishamsk/mina/internal/x/fuzzyrank"
 	"github.com/mishamsk/mina/internal/x/refcache"
 )
 
@@ -93,8 +94,9 @@ type UpdateInput struct {
 type ListOptions struct {
 	IncludeHidden     bool
 	IncludeTombstoned bool
-	AccountType       *AccountType
+	AccountTypes      []AccountType
 	IsFeatured        *bool
+	Query             string
 	List              services.ListOptions
 }
 
@@ -170,7 +172,7 @@ type Service struct {
 	repo                   Repository
 	refs                   ReferenceCoordinator
 	typeChangeValidator    TypeChangeValidator
-	pickerTransactionFacts PickerTransactionFacts
+	searchTransactionFacts SearchTransactionFacts
 	cache                  *refcache.Dictionary[int64, accountReferenceState]
 }
 
@@ -338,22 +340,65 @@ func (s *Service) Get(ctx context.Context, id int64, includeTombstoned bool) (Ac
 
 // List returns accounts using default visibility rules unless explicitly overridden.
 func (s *Service) List(ctx context.Context, opts ListOptions) (services.PaginatedList[Account], error) {
-	if opts.AccountType != nil && !ValidAccountType(*opts.AccountType) {
-		return services.PaginatedList[Account]{}, services.InvalidRequest("account_type must be one of owned, party, flow, or system")
+	for _, accountType := range opts.AccountTypes {
+		if !ValidAccountType(accountType) {
+			return services.PaginatedList[Account]{}, services.InvalidRequest("account_type must be one of owned, party, flow, or system")
+		}
 	}
 
+	requestedList := opts.List
+	if opts.Query != "" {
+		opts.List = opts.List.Unpaged()
+	}
 	list, err := s.repo.List(ctx, opts)
 	if err != nil {
-		return services.PaginatedList[Account]{}, err
-	}
-	if err := s.populateDeleteability(ctx, list.Items); err != nil {
 		return services.PaginatedList[Account]{}, err
 	}
 	for index := range list.Items {
 		list.Items[index] = withEffectiveDisplayLabel(list.Items[index])
 	}
+	if opts.Query != "" {
+		list = services.Page(filterAccountsByQuery(list.Items, opts.Query), requestedList)
+	}
+	if err := s.populateDeleteability(ctx, list.Items); err != nil {
+		return services.PaginatedList[Account]{}, err
+	}
 
 	return list, nil
+}
+
+func filterAccountsByQuery(items []Account, query string) []Account {
+	matchedGroups := map[string]bool{}
+	for _, item := range items {
+		if item.TombstonedAt != nil {
+			continue
+		}
+		for index, value := range item.FQN {
+			if value != ':' {
+				continue
+			}
+			group := item.FQN[:index]
+			if fuzzyrank.Matches(query, fuzzyrank.EntityTerms(searchFQNLeaf(group), group)) {
+				matchedGroups[group] = true
+			}
+		}
+	}
+	matched := make([]Account, 0, len(items))
+	for _, item := range items {
+		if fuzzyrank.Matches(query, fuzzyrank.EntityTerms(item.DisplayLabel, item.FQN)) || hasMatchedFQNAncestor(item.FQN, matchedGroups) {
+			matched = append(matched, item)
+		}
+	}
+	return matched
+}
+
+func hasMatchedFQNAncestor(fqn string, groups map[string]bool) bool {
+	for index, value := range fqn {
+		if value == ':' && groups[fqn[:index]] {
+			return true
+		}
+	}
+	return false
 }
 
 // ListBalances returns server-computed balances for active balance accounts.
@@ -716,17 +761,20 @@ func (s *Service) ensureFQNAvailable(ctx context.Context, fqn string) error {
 	if err != nil {
 		return err
 	}
-	for _, state := range states {
-		if !state.active || !services.FQNPathConflict(fqn, state.reference.FQN) {
-			continue
-		}
-		if fqn == state.reference.FQN {
-			return services.Conflict("active account fqn already exists")
-		}
+	availability := accountFQNAvailability(fqn, states)
+	if availability.availability.Available {
+		return nil
+	}
+	if availability.availability.Reason != nil && *availability.availability.Reason == services.CreationUnavailableReservedNamespace {
+		return services.InvalidRequest("system accounts are installed and managed by Mina")
+	}
+	if availability.conflictingFQN == fqn {
+		return services.Conflict("active account fqn already exists")
+	}
+	if availability.conflictingFQN != "" {
 		return services.Conflict("active account fqn conflicts with existing account hierarchy")
 	}
-
-	return nil
+	return services.InvalidRequest("invalid account fqn")
 }
 
 func (s *Service) loadReferenceCache(ctx context.Context) (map[int64]accountReferenceState, error) {

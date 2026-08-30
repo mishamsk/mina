@@ -207,14 +207,14 @@ test("tags page renders demo hierarchy, URL search, and hidden toggle", async ({
     const url = new URL(response.url());
     return (
       url.pathname === "/api/tags" &&
-      url.searchParams.get("include_hidden") === "true"
+      url.searchParams.get("include_hidden") === "false"
     );
   });
   const groupsResponse = page.waitForResponse((response) => {
     const url = new URL(response.url());
     return (
       url.pathname === "/api/tags/groups" &&
-      url.searchParams.get("include_hidden") === "true"
+      url.searchParams.get("include_hidden") === "false"
     );
   });
 
@@ -386,9 +386,9 @@ test("tags row actions hide groups and move renamed paths into transaction filte
   await expect(page.getByText("Moved 2 tags.")).toBeVisible({
     timeout: 10_000,
   });
-  await expect(page.getByTestId("tags-tree-row")).toHaveCount(0, {
-    timeout: 10_000,
-  });
+  await expect(
+    page.getByTestId("tags-tree-row").filter({ hasText: moveSource }),
+  ).toHaveCount(0, { timeout: 10_000 });
   await expect(moveDialog).toHaveCount(0);
   await expect(page.getByRole("button", { name: "New tag" })).toBeFocused();
   await page.getByLabel("Search").fill(moveDestination);

@@ -6,7 +6,8 @@
 
 ## Implicit Contracts
 
-- Show a list snapshot only when its `includeHidden` value matches the current URL state; retain that matching snapshot with a refresh error instead of replacing it with an error screen.
+- Member snapshots are keyed by normalized search and hidden visibility; each load follows every server-filtered page in canonical name order without browser substring matching.
+- Keep the last loaded member list visible while a different key loads, and retain the matching snapshot with a refresh error instead of replacing it with an error screen; late responses cannot replace a newer request.
 - Every successful member mutation refreshes the member list and ledger lookups; a rename also invalidates transaction snapshots so cached member labels cannot persist.
 - Creating a hidden member is a create followed by a hidden-state update; if the second request fails, refresh the list before reporting the partial failure.
 - Delete affordances trust only the API `deletable` signal; dependency rules remain backend-owned.

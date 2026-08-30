@@ -28,13 +28,18 @@ import {
 import { type To, useLocation, useNavigate } from "react-router";
 
 import {
-  type Account,
+  type AccountSearchItem,
   apiErrorMessage,
-  fetchAccountGroupsForLookups,
+  type CategorySearchItem,
   fetchTransactionPage,
-  type GroupState,
+  type MemberSearchItem,
+  searchAccounts,
+  searchCategories,
+  searchMembers,
+  searchTags,
   startDatabaseBackupRun,
   startExchangeRateLoadingRun,
+  type TagSearchItem,
   type Transaction,
 } from "@/api";
 import { Toast, toastDurationMs } from "@/components/toast";
@@ -84,7 +89,13 @@ import { currencyDisplayMarker } from "@/utils/currency";
 type PixelIcon = ComponentType<SVGProps<SVGSVGElement>>;
 
 type CommandGroup =
-  "Account groups" | "Accounts" | "Actions" | "Navigation" | "New transaction";
+  | "Accounts"
+  | "Actions"
+  | "Categories"
+  | "Members"
+  | "Navigation"
+  | "New transaction"
+  | "Tags";
 
 interface CommandItem {
   readonly accessibleLabel?: string;
@@ -97,6 +108,7 @@ interface CommandItem {
   readonly keywords?: readonly string[];
   readonly label: string;
   readonly renderLabel?: ReactNode;
+  readonly serverRanked?: boolean;
   readonly to?: To;
 }
 
@@ -116,10 +128,15 @@ interface PaletteNotice {
   readonly message: string;
 }
 
-interface AccountGroupLookupState {
+interface EntitySearchState {
+  readonly accounts: readonly AccountSearchItem[];
+  readonly categories: readonly CategorySearchItem[];
   readonly errorMessage: string | undefined;
-  readonly groups: readonly GroupState[] | undefined;
+  readonly limit: number;
   readonly loading: boolean;
+  readonly members: readonly MemberSearchItem[];
+  readonly query: string;
+  readonly tags: readonly TagSearchItem[];
 }
 
 interface TransactionSearchState {
@@ -133,10 +150,15 @@ const commandGroups: readonly CommandGroup[] = [
   "Navigation",
   "New transaction",
   "Accounts",
-  "Account groups",
+  "Categories",
+  "Tags",
+  "Members",
   "Actions",
 ];
-const entityResultLimit = 8;
+const defaultEntityResultLimit = 8;
+const entityResultRowHeightPx = 44;
+const entitySearchDebounceMs = 180;
+const maxEntityResultLimit = 500;
 const transactionResultLimit = 20;
 const transactionSearchDebounceMs = 180;
 const commandSkeletonRows = [0, 1, 2, 3] as const;
@@ -168,6 +190,9 @@ const normalizePathname = (pathname: string): string =>
   pathname === "/" ? pathname : pathname.replace(/\/+$/, "");
 
 const commandMatches = (command: CommandItem, query: string): boolean => {
+  if (command.serverRanked) {
+    return true;
+  }
   if (!query) {
     return true;
   }
@@ -178,8 +203,6 @@ const commandMatches = (command: CommandItem, query: string): boolean => {
   return haystack.includes(query);
 };
 
-const leafName = (fqn: string): string => fqn.split(":").at(-1) ?? fqn;
-
 const transactionDetailSearch = (
   transactionId: number,
   search: string,
@@ -189,55 +212,10 @@ const transactionDetailSearch = (
   return `?${params.toString()}`;
 };
 
-const fqnMatchScore = (fqn: string, query: string): number | undefined => {
-  if (!query) {
-    return undefined;
-  }
-
-  const normalizedFqn = fqn.toLocaleLowerCase();
-  const normalizedLeaf = leafName(fqn).toLocaleLowerCase();
-  if (normalizedFqn === query) {
-    return 0;
-  }
-  if (normalizedLeaf === query) {
-    return 1;
-  }
-  if (normalizedLeaf.startsWith(query)) {
-    return 2;
-  }
-  if (normalizedFqn.startsWith(query)) {
-    return 3;
-  }
-  if (normalizedLeaf.includes(query)) {
-    return 4;
-  }
-  if (normalizedFqn.includes(query)) {
-    return 5;
-  }
-  return undefined;
-};
-
-const sortFqnMatches = <T extends { readonly fqn: string }>(
-  items: readonly T[],
-  query: string,
-): readonly T[] =>
-  items
-    .map((item) => ({
-      item,
-      score: fqnMatchScore(item.fqn, query),
-    }))
-    .filter(
-      (match): match is { readonly item: T; readonly score: number } =>
-        match.score !== undefined,
-    )
-    .sort(
-      (left, right) =>
-        left.score - right.score ||
-        left.item.fqn.length - right.item.fqn.length ||
-        left.item.fqn.localeCompare(right.item.fqn),
-    )
-    .slice(0, entityResultLimit)
-    .map((match) => match.item);
+const applyEntityResultLimit = (
+  groups: readonly (readonly CommandItem[])[],
+  limit: number,
+): readonly CommandItem[] => groups.flat().slice(0, limit);
 
 const groupCommands = (
   commands: readonly CommandItem[],
@@ -404,19 +382,26 @@ export const CommandPalette = () => {
   const openCycleRef = useRef(0);
   const wasOpenRef = useRef(false);
   const lookupRefreshCycleRef = useRef<number | undefined>(undefined);
-  const accountGroupRefreshCycleRef = useRef<number | undefined>(undefined);
+  const entitySearchRequestRef = useRef(0);
   const transactionSearchRequestRef = useRef(0);
   const [searchState, setSearchState] = useState<PaletteSearchState>({
     activeIndex: 0,
     query: "",
   });
   const [notice, setNotice] = useState<PaletteNotice | undefined>();
-  const [accountGroupLookups, setAccountGroupLookups] =
-    useState<AccountGroupLookupState>({
-      errorMessage: undefined,
-      groups: undefined,
-      loading: false,
-    });
+  const [entityResultLimit, setEntityResultLimit] = useState(
+    defaultEntityResultLimit,
+  );
+  const [entitySearch, setEntitySearch] = useState<EntitySearchState>({
+    accounts: [],
+    categories: [],
+    errorMessage: undefined,
+    limit: defaultEntityResultLimit,
+    loading: false,
+    members: [],
+    query: "",
+    tags: [],
+  });
   const [transactionSearch, setTransactionSearch] =
     useState<TransactionSearchState>({
       errorMessage: undefined,
@@ -684,7 +669,7 @@ export const CommandPalette = () => {
     ];
 
     const normalizedQuery = normalizeSearch(query);
-    if (!normalizedQuery || !lookups.snapshot) {
+    if (!normalizedQuery) {
       return [
         ...pageCommands,
         ...entryCommands,
@@ -693,57 +678,133 @@ export const CommandPalette = () => {
       ];
     }
 
-    const accountCommands = sortFqnMatches<Account>(
-      lookups.snapshot.accounts.filter((account) => !account.tombstoned_at),
-      normalizedQuery,
-    ).map<CommandItem>((account) => ({
-      accessibleLabel: `Account ${account.fqn}`,
-      detail: "Account",
+    const entitySearchCurrent =
+      entitySearch.query === query && entitySearch.limit === entityResultLimit;
+    const accountCommands = (
+      entitySearchCurrent ? entitySearch.accounts : []
+    ).map<CommandItem>((item) => ({
+      accessibleLabel:
+        item.kind === "leaf"
+          ? `Account ${item.fqn}`
+          : `Account group ${item.fqn}`,
+      detail: item.kind === "leaf" ? "Account" : "Account group",
       group: "Accounts",
-      hiddenLabel: account.is_hidden ? "Hidden account" : undefined,
-      icon: Wallet,
-      id: `account-${account.account_id}`,
-      keywords: [account.fqn, leafName(account.fqn)],
-      label: account.fqn,
+      hiddenLabel: item.is_hidden
+        ? item.kind === "leaf"
+          ? "Hidden account"
+          : "Hidden account group"
+        : undefined,
+      icon: item.kind === "leaf" ? Wallet : Folder,
+      id:
+        item.kind === "leaf"
+          ? `account-${item.account_id}`
+          : `account-group-${domIdPart(item.fqn)}`,
+      label: item.fqn,
       renderLabel: (
-        <FqnPath value={account.fqn} focusable={false} className="text-sm" />
+        <FqnPath value={item.fqn} focusable={false} className="text-sm" />
       ),
-      to: `/accounts/${account.account_id}`,
+      serverRanked: true,
+      to:
+        item.kind === "leaf"
+          ? `/accounts/${item.account_id}`
+          : {
+              pathname: "/accounts/group",
+              search: `?prefix=${encodeURIComponent(item.fqn)}`,
+            },
     }));
-
-    const groupCommands = sortFqnMatches<GroupState>(
-      accountGroupLookups.groups ?? [],
-      normalizedQuery,
-    ).map<CommandItem>((group) => ({
-      accessibleLabel: `Account group ${group.fqn}`,
-      detail: "Account group",
-      group: "Account groups",
-      hiddenLabel: group.is_hidden ? "Hidden account group" : undefined,
+    const categoryCommands = (
+      entitySearchCurrent ? entitySearch.categories : []
+    ).map<CommandItem>((item) => ({
+      accessibleLabel:
+        item.kind === "leaf"
+          ? `Category ${item.fqn}${item.is_hidden ? ", hidden" : ""}`
+          : `Category group ${item.fqn}${item.is_hidden ? ", hidden" : ""}`,
+      detail: item.kind === "leaf" ? "Category" : "Category group",
+      group: "Categories",
+      hiddenLabel: item.is_hidden
+        ? item.kind === "leaf"
+          ? "Hidden category"
+          : "Hidden category group"
+        : undefined,
       icon: Folder,
-      id: `account-group-${domIdPart(group.fqn)}`,
-      keywords: [group.fqn, leafName(group.fqn)],
-      label: group.fqn,
+      id:
+        item.kind === "leaf"
+          ? `category-${item.category_id}`
+          : `category-group-${domIdPart(item.fqn)}`,
+      label: item.fqn,
       renderLabel: (
-        <FqnPath value={group.fqn} focusable={false} className="text-sm" />
+        <FqnPath value={item.fqn} focusable={false} className="text-sm" />
       ),
-      to: {
-        pathname: "/accounts/group",
-        search: `?prefix=${encodeURIComponent(group.fqn)}`,
-      },
+      serverRanked: true,
+      to:
+        item.kind === "leaf"
+          ? `/categories/${item.category_id}`
+          : {
+              pathname: "/categories/group",
+              search: `?prefix=${encodeURIComponent(item.fqn)}`,
+            },
     }));
+    const tagCommands = (
+      entitySearchCurrent ? entitySearch.tags : []
+    ).map<CommandItem>((item) => ({
+      accessibleLabel:
+        item.kind === "leaf"
+          ? `Tag ${item.fqn}${item.is_hidden ? ", hidden" : ""}`
+          : `Tag group ${item.fqn}${item.is_hidden ? ", hidden" : ""}`,
+      detail: item.kind === "leaf" ? "Tag" : "Tag group",
+      group: "Tags",
+      hiddenLabel: item.is_hidden
+        ? item.kind === "leaf"
+          ? "Hidden tag"
+          : "Hidden tag group"
+        : undefined,
+      icon: item.kind === "leaf" ? Hash : Folder,
+      id:
+        item.kind === "leaf"
+          ? `tag-${item.tag_id}`
+          : `tag-group-${domIdPart(item.fqn)}`,
+      label: item.fqn,
+      renderLabel: (
+        <FqnPath value={item.fqn} focusable={false} className="text-sm" />
+      ),
+      serverRanked: true,
+      to:
+        item.kind === "leaf"
+          ? `/tags/${item.tag_id}`
+          : {
+              pathname: "/tags/group",
+              search: `?prefix=${encodeURIComponent(item.fqn)}`,
+            },
+    }));
+    const memberCommands = (
+      entitySearchCurrent ? entitySearch.members : []
+    ).map<CommandItem>((item) => ({
+      accessibleLabel: `Member ${item.title}${item.is_hidden ? ", hidden" : ""}`,
+      detail: "Member",
+      group: "Members",
+      hiddenLabel: item.is_hidden ? "Hidden member" : undefined,
+      icon: User,
+      id: `member-${item.member_id}`,
+      label: item.title,
+      serverRanked: true,
+      to: `/members/${item.member_id}`,
+    }));
+    const entityCommands = applyEntityResultLimit(
+      [accountCommands, categoryCommands, tagCommands, memberCommands],
+      entityResultLimit,
+    );
 
     return [
       ...pageCommands,
       ...entryCommands,
       ...templateCommands,
-      ...accountCommands,
-      ...groupCommands,
+      ...entityCommands,
       ...actionCommands,
     ];
   }, [
-    accountGroupLookups.groups,
+    entityResultLimit,
+    entitySearch,
     lastTransactionsPageSearch,
-    lookups.snapshot,
     openEntryCommand,
     query,
     runDatabaseBackup,
@@ -763,6 +824,15 @@ export const CommandPalette = () => {
       commandMatches(command, normalizedQuery),
     );
   }, [commands, query, transactionSearchMode]);
+  const entitySearchCurrent =
+    entitySearch.query === query && entitySearch.limit === entityResultLimit;
+  const entitySearchLoading =
+    Boolean(query.trim()) &&
+    !transactionSearchMode &&
+    (!entitySearchCurrent || entitySearch.loading);
+  const entitySearchErrorMessage = entitySearchCurrent
+    ? entitySearch.errorMessage
+    : undefined;
   const transactionSearchCurrent = transactionSearch.query === transactionQuery;
   const transactionSearchLoading =
     Boolean(transactionQuery.trim()) &&
@@ -802,9 +872,6 @@ export const CommandPalette = () => {
   const hasPaletteResults = transactionSearchMode
     ? hasTransactionResults
     : hasCommandResults;
-  const lookupErrorMessage = lookups.snapshot
-    ? accountGroupLookups.errorMessage
-    : (lookups.errorMessage ?? accountGroupLookups.errorMessage);
 
   const close = useCallback(() => {
     closeCommandPalette();
@@ -887,6 +954,16 @@ export const CommandPalette = () => {
         activeIndex: 0,
         query: "",
       });
+      setEntitySearch({
+        accounts: [],
+        categories: [],
+        errorMessage: undefined,
+        limit: entityResultLimit,
+        loading: false,
+        members: [],
+        query: "",
+        tags: [],
+      });
       setTransactionSearch({
         errorMessage: undefined,
         loading: false,
@@ -895,7 +972,128 @@ export const CommandPalette = () => {
       });
     }
     wasOpenRef.current = open;
+  }, [entityResultLimit, open]);
+
+  useLayoutEffect(() => {
+    if (!open || !resultsViewportRef.current) {
+      return;
+    }
+
+    const viewport = resultsViewportRef.current;
+    const updateLimit = () => {
+      const contentHeight = Math.max(0, viewport.clientHeight - 16);
+      if (contentHeight === 0) {
+        return;
+      }
+      const nextLimit = Math.min(
+        maxEntityResultLimit,
+        Math.max(1, Math.floor(contentHeight / entityResultRowHeightPx)),
+      );
+      setEntityResultLimit((current) =>
+        current === nextLimit ? current : nextLimit,
+      );
+    };
+
+    updateLimit();
+    const observer = new ResizeObserver(updateLimit);
+    observer.observe(viewport);
+    return () => {
+      observer.disconnect();
+    };
   }, [open]);
+
+  useEffect(() => {
+    const trimmedQuery = query.trim();
+    if (!open || transactionSearchMode || !trimmedQuery) {
+      entitySearchRequestRef.current += 1;
+      return;
+    }
+
+    const requestId = entitySearchRequestRef.current + 1;
+    entitySearchRequestRef.current = requestId;
+    const timer = window.setTimeout(() => {
+      if (entitySearchRequestRef.current !== requestId) {
+        return;
+      }
+
+      setEntitySearch((current) => ({
+        accounts:
+          current.query === query && current.limit === entityResultLimit
+            ? current.accounts
+            : [],
+        categories:
+          current.query === query && current.limit === entityResultLimit
+            ? current.categories
+            : [],
+        errorMessage: undefined,
+        limit: entityResultLimit,
+        loading: true,
+        members:
+          current.query === query && current.limit === entityResultLimit
+            ? current.members
+            : [],
+        query,
+        tags:
+          current.query === query && current.limit === entityResultLimit
+            ? current.tags
+            : [],
+      }));
+
+      const searchQuery = {
+        context: "navigation" as const,
+        include_hidden: true,
+        limit: entityResultLimit,
+        q: trimmedQuery,
+      };
+      void Promise.all([
+        searchAccounts({ query: searchQuery }),
+        searchCategories({ query: searchQuery }),
+        searchTags({ query: searchQuery }),
+        searchMembers({ query: searchQuery }),
+      ])
+        .then(([accounts, categories, tags, members]) => {
+          if (entitySearchRequestRef.current !== requestId) {
+            return;
+          }
+
+          const errorMessages = [accounts, categories, tags, members]
+            .filter((result) => !result.data)
+            .map((result) => apiErrorMessage(result.error));
+          setEntitySearch({
+            accounts: accounts.data?.items ?? [],
+            categories: categories.data?.items ?? [],
+            errorMessage:
+              errorMessages.length > 0
+                ? `Some entity results are unavailable: ${[...new Set(errorMessages)].join(" ")}`
+                : undefined,
+            limit: entityResultLimit,
+            loading: false,
+            members: members.data?.items ?? [],
+            query,
+            tags: tags.data?.items ?? [],
+          });
+        })
+        .catch(() => {
+          if (entitySearchRequestRef.current !== requestId) {
+            return;
+          }
+          setEntitySearch({
+            accounts: [],
+            categories: [],
+            errorMessage: "Unable to search entities.",
+            limit: entityResultLimit,
+            loading: false,
+            members: [],
+            query,
+            tags: [],
+          });
+        });
+    }, entitySearchDebounceMs);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [entityResultLimit, open, query, transactionSearchMode]);
 
   useEffect(() => {
     if (!open || !transactionSearchMode) {
@@ -976,6 +1174,7 @@ export const CommandPalette = () => {
   useEffect(() => {
     if (
       !open ||
+      !transactionSearchMode ||
       lookups.snapshot ||
       lookups.loading ||
       lookupRefreshCycleRef.current === openCycleRef.current
@@ -985,47 +1184,7 @@ export const CommandPalette = () => {
 
     lookupRefreshCycleRef.current = openCycleRef.current;
     void refreshLedgerLookups();
-  }, [lookups.loading, lookups.snapshot, open]);
-
-  useEffect(() => {
-    if (
-      !open ||
-      accountGroupLookups.loading ||
-      accountGroupRefreshCycleRef.current === openCycleRef.current
-    ) {
-      return;
-    }
-
-    const refreshCycle = openCycleRef.current;
-    const currentGroups = accountGroupLookups.groups;
-    accountGroupRefreshCycleRef.current = refreshCycle;
-    setAccountGroupLookups({
-      errorMessage: undefined,
-      groups: currentGroups,
-      loading: true,
-    });
-
-    void fetchAccountGroupsForLookups().then((result) => {
-      if (accountGroupRefreshCycleRef.current !== refreshCycle) {
-        return;
-      }
-
-      if (result.data) {
-        setAccountGroupLookups({
-          errorMessage: undefined,
-          groups: result.data.groups,
-          loading: false,
-        });
-        return;
-      }
-
-      setAccountGroupLookups({
-        errorMessage: apiErrorMessage(result.error),
-        groups: currentGroups,
-        loading: false,
-      });
-    });
-  }, [accountGroupLookups.groups, accountGroupLookups.loading, open]);
+  }, [lookups.loading, lookups.snapshot, open, transactionSearchMode]);
 
   useEffect(() => {
     if (!open) {
@@ -1166,7 +1325,7 @@ export const CommandPalette = () => {
             role="dialog"
             aria-modal="true"
             aria-labelledby="command-palette-title"
-            className="bg-card text-foreground flex max-h-[min(38rem,76svh)] w-full max-w-2xl flex-col border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]"
+            className="bg-card text-foreground flex h-[min(38rem,76svh)] w-full max-w-2xl flex-col border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]"
             onKeyDownCapture={handleDialogKeyDownCapture}
           >
             <div className="bg-card sticky top-0 z-10 flex flex-col gap-3 border-b-2 border-[var(--border-ink)] p-4">
@@ -1212,7 +1371,8 @@ export const CommandPalette = () => {
             </div>
             <div
               ref={resultsViewportRef}
-              className="min-h-0 overflow-y-auto p-2"
+              className="min-h-0 flex-1 overflow-y-auto p-2"
+              data-testid="command-palette-results-viewport"
             >
               {transactionSearchMode ? (
                 <>
@@ -1353,19 +1513,19 @@ export const CommandPalette = () => {
                   )}
                 </>
               ) : groupedCommands.length === 0 ? (
-                lookups.loading || accountGroupLookups.loading ? (
+                entitySearchLoading ? (
                   <CommandPaletteResultsSkeleton />
                 ) : (
                   <div
                     className={cn(
                       "bg-muted px-3 py-4 font-mono text-sm",
-                      lookupErrorMessage
+                      entitySearchErrorMessage
                         ? "text-destructive"
                         : "text-muted-foreground",
                     )}
-                    role={lookupErrorMessage ? "alert" : undefined}
+                    role={entitySearchErrorMessage ? "alert" : undefined}
                   >
-                    {lookupErrorMessage ?? "No commands found."}
+                    {entitySearchErrorMessage ?? "No commands found."}
                   </div>
                 )
               ) : (
@@ -1421,7 +1581,7 @@ export const CommandPalette = () => {
                                   className="size-4 shrink-0"
                                   aria-hidden="true"
                                 />
-                                <span className="min-w-0 flex-1 font-semibold">
+                                <span className="min-w-0 flex-1 truncate font-semibold">
                                   {command.renderLabel ?? command.label}
                                 </span>
                                 {command.hiddenLabel ? (
@@ -1458,12 +1618,20 @@ export const CommandPalette = () => {
                       </div>
                     ))}
                   </div>
-                  {lookupErrorMessage ? (
+                  {entitySearchLoading ? (
+                    <div
+                      className="bg-muted text-muted-foreground mt-3 px-3 py-2 font-mono text-sm"
+                      role="status"
+                    >
+                      Searching entities…
+                    </div>
+                  ) : null}
+                  {entitySearchErrorMessage ? (
                     <div
                       className="bg-muted text-destructive mt-3 px-3 py-2 font-mono text-sm"
                       role="alert"
                     >
-                      {lookupErrorMessage}
+                      {entitySearchErrorMessage}
                     </div>
                   ) : null}
                 </>

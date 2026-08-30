@@ -9,6 +9,7 @@ import type {
 
 import type {
   AccountingHistoryRange,
+  AccountType,
   CategoryEconomicIntent,
   ClassifyTransactionRequest,
   CreateAccountRequest,
@@ -604,7 +605,7 @@ export const fetchFeaturedAccountBalances = async () => {
   const [ownedAccounts, partyAccounts] = await Promise.all([
     listAccounts({
       query: {
-        account_type: "owned",
+        account_type: ["owned"],
         is_featured: true,
         limit: lookupLimit,
         offset: 0,
@@ -614,7 +615,7 @@ export const fetchFeaturedAccountBalances = async () => {
     }),
     listAccounts({
       query: {
-        account_type: "party",
+        account_type: ["party"],
         is_featured: true,
         limit: lookupLimit,
         offset: 0,
@@ -649,25 +650,94 @@ export const fetchFeaturedAccountBalances = async () => {
   return { accounts, balances };
 };
 
-export const fetchAccountsPage = async () => {
+export interface AccountsManagementParams {
+  readonly accountTypes: readonly AccountType[];
+  readonly includeHidden: boolean;
+  readonly q: string;
+}
+
+export interface CategoriesManagementParams {
+  readonly economicIntent?: CategoryEconomicIntent;
+  readonly includeHidden: boolean;
+  readonly q: string;
+}
+
+export interface TagsManagementParams {
+  readonly includeHidden: boolean;
+  readonly q: string;
+}
+
+export interface MembersManagementParams {
+  readonly includeHidden: boolean;
+  readonly q: string;
+}
+
+const listAccountsPageForManagement = (
+  offset: number,
+  params: AccountsManagementParams,
+) =>
+  listAccounts({
+    query: {
+      account_type:
+        params.accountTypes.length > 0 ? [...params.accountTypes] : undefined,
+      include_hidden: params.includeHidden,
+      limit: lookupLimit,
+      offset,
+      q: params.q || undefined,
+      sort: "fqn",
+      sort_dir: "asc",
+    },
+  });
+
+const listAllAccountsForManagement = async (
+  params: AccountsManagementParams,
+  shouldContinue: () => boolean,
+) => {
+  const firstPage = await listAccountsPageForManagement(0, params);
+  if (
+    !firstPage.data ||
+    firstPage.data.accounts.length >= firstPage.data.total_count
+  ) {
+    return firstPage;
+  }
+  const accounts = [...firstPage.data.accounts];
+  for (
+    let offset = lookupLimit;
+    offset < firstPage.data.total_count;
+    offset += lookupLimit
+  ) {
+    if (!shouldContinue()) {
+      return firstPage;
+    }
+    const page = await listAccountsPageForManagement(offset, params);
+    if (!page.data) {
+      return page;
+    }
+    accounts.push(...page.data.accounts);
+  }
+  return {
+    ...firstPage,
+    data: {
+      ...firstPage.data,
+      accounts,
+    },
+  };
+};
+
+export const fetchAccountsPage = async (
+  params: AccountsManagementParams,
+  shouldContinue: () => boolean = () => true,
+) => {
   const [accounts, balances, groups] = await Promise.all([
-    listAccounts({
-      query: {
-        include_hidden: true,
-        limit: lookupLimit,
-        offset: 0,
-        sort: "fqn",
-        sort_dir: "asc",
-      },
-    }),
+    listAllAccountsForManagement(params, shouldContinue),
     listAccountBalances({
       query: {
-        include_hidden: true,
+        include_hidden: params.includeHidden,
       },
     }),
     listAccountGroups({
       query: {
-        include_hidden: true,
+        include_hidden: params.includeHidden,
       },
     }),
   ]);
@@ -677,23 +747,27 @@ export const fetchAccountsPage = async () => {
 
 const listCategoriesPageForManagement = (
   offset: number,
-  economicIntent?: CategoryEconomicIntent,
+  params: CategoriesManagementParams,
 ) =>
   listCategories({
     query: {
-      economic_intent: economicIntent ? [economicIntent] : undefined,
-      include_hidden: true,
+      economic_intent: params.economicIntent
+        ? [params.economicIntent]
+        : undefined,
+      include_hidden: params.includeHidden,
       limit: lookupLimit,
       offset,
+      q: params.q || undefined,
       sort: "fqn",
       sort_dir: "asc",
     },
   });
 
 export const fetchCategoriesForManagement = async (
-  economicIntent?: CategoryEconomicIntent,
+  params: CategoriesManagementParams,
+  shouldContinue: () => boolean = () => true,
 ) => {
-  const firstPage = await listCategoriesPageForManagement(0, economicIntent);
+  const firstPage = await listCategoriesPageForManagement(0, params);
   if (
     !firstPage.data ||
     firstPage.data.categories.length >= firstPage.data.total_count
@@ -707,7 +781,10 @@ export const fetchCategoriesForManagement = async (
     offset < firstPage.data.total_count;
     offset += lookupLimit
   ) {
-    const page = await listCategoriesPageForManagement(offset, economicIntent);
+    if (!shouldContinue()) {
+      return firstPage;
+    }
+    const page = await listCategoriesPageForManagement(offset, params);
     if (!page.data) {
       return page;
     }
@@ -724,13 +801,14 @@ export const fetchCategoriesForManagement = async (
 };
 
 export const fetchCategoriesPage = async (
-  economicIntent?: CategoryEconomicIntent,
+  params: CategoriesManagementParams,
+  shouldContinue: () => boolean = () => true,
 ) => {
   const [categories, groups] = await Promise.all([
-    fetchCategoriesForManagement(economicIntent),
+    fetchCategoriesForManagement(params, shouldContinue),
     listCategoryGroups({
       query: {
-        include_hidden: true,
+        include_hidden: params.includeHidden,
       },
     }),
   ]);
@@ -738,19 +816,26 @@ export const fetchCategoriesPage = async (
   return { categories, groups };
 };
 
-const listTagsPageForManagement = (offset: number) =>
+const listTagsPageForManagement = (
+  offset: number,
+  params: TagsManagementParams,
+) =>
   listTags({
     query: {
-      include_hidden: true,
+      include_hidden: params.includeHidden,
       limit: lookupLimit,
       offset,
+      q: params.q || undefined,
       sort: "fqn",
       sort_dir: "asc",
     },
   });
 
-const listAllTagsForManagement = async () => {
-  const firstPage = await listTagsPageForManagement(0);
+const listAllTagsForManagement = async (
+  params: TagsManagementParams,
+  shouldContinue: () => boolean,
+) => {
+  const firstPage = await listTagsPageForManagement(0, params);
   if (
     !firstPage.data ||
     firstPage.data.tags.length >= firstPage.data.total_count
@@ -764,7 +849,10 @@ const listAllTagsForManagement = async () => {
     offset < firstPage.data.total_count;
     offset += lookupLimit
   ) {
-    const page = await listTagsPageForManagement(offset);
+    if (!shouldContinue()) {
+      return firstPage;
+    }
+    const page = await listTagsPageForManagement(offset, params);
     if (!page.data) {
       return page;
     }
@@ -780,12 +868,15 @@ const listAllTagsForManagement = async () => {
   };
 };
 
-export const fetchTagsPage = async () => {
+export const fetchTagsPage = async (
+  params: TagsManagementParams,
+  shouldContinue: () => boolean = () => true,
+) => {
   const [tags, groups] = await Promise.all([
-    listAllTagsForManagement(),
+    listAllTagsForManagement(params, shouldContinue),
     listTagGroups({
       query: {
-        include_hidden: true,
+        include_hidden: params.includeHidden,
       },
     }),
   ]);
@@ -793,19 +884,26 @@ export const fetchTagsPage = async () => {
   return { groups, tags };
 };
 
-const listMembersPageForManagement = (offset: number, includeHidden: boolean) =>
+const listMembersPageForManagement = (
+  offset: number,
+  params: MembersManagementParams,
+) =>
   listMembers({
     query: {
-      include_hidden: includeHidden,
+      include_hidden: params.includeHidden,
       limit: lookupLimit,
       offset,
+      q: params.q || undefined,
       sort: "name",
       sort_dir: "asc",
     },
   });
 
-const listAllMembersForManagement = async (includeHidden: boolean) => {
-  const firstPage = await listMembersPageForManagement(0, includeHidden);
+const listAllMembersForManagement = async (
+  params: MembersManagementParams,
+  shouldContinue: () => boolean,
+) => {
+  const firstPage = await listMembersPageForManagement(0, params);
   if (
     !firstPage.data ||
     firstPage.data.members.length >= firstPage.data.total_count
@@ -819,7 +917,10 @@ const listAllMembersForManagement = async (includeHidden: boolean) => {
     offset < firstPage.data.total_count;
     offset += lookupLimit
   ) {
-    const page = await listMembersPageForManagement(offset, includeHidden);
+    if (!shouldContinue()) {
+      return firstPage;
+    }
+    const page = await listMembersPageForManagement(offset, params);
     if (!page.data) {
       return page;
     }
@@ -835,8 +936,10 @@ const listAllMembersForManagement = async (includeHidden: boolean) => {
   };
 };
 
-export const fetchMembersPage = (includeHidden = false) =>
-  listAllMembersForManagement(includeHidden);
+export const fetchMembersPage = (
+  params: MembersManagementParams,
+  shouldContinue: () => boolean = () => true,
+) => listAllMembersForManagement(params, shouldContinue);
 
 const listExpectedRecurringOccurrencesPage = (offset: number) =>
   listRecurringOccurrences({
