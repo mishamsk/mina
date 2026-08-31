@@ -2,6 +2,7 @@ import { expect, type Locator, type Page } from "@playwright/test";
 import { test } from "@tests/e2e/test";
 
 const longRowCount = 32;
+const filteredOutRowText = "Row31";
 
 interface ReferenceTableTarget {
   readonly compactMaxWidth?: number;
@@ -452,6 +453,7 @@ for (const table of referenceTableTargets) {
     await page.setViewportSize({ width: 1200, height: 900 });
     await page.goto(table.path);
     await page.getByLabel("Search").fill("ExactNeedle");
+    await expect(rows.filter({ hasText: filteredOutRowText })).toHaveCount(0);
     await expect(rows.filter({ hasText: table.rowText }).first()).toBeVisible();
     await expectShortTableToKeepInsetWithoutOverflow(frame, scroller);
     await expectBlankActionHeaderWithMatchedInset(scroller);

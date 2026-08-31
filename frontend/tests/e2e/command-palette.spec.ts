@@ -27,6 +27,9 @@ interface TransactionFixture {
 }
 
 const openPalette = async (page: Page) => {
+  await expect(
+    page.getByRole("button", { name: "Command palette" }),
+  ).toBeVisible();
   await page.keyboard.press("Control+K");
   await expect(
     page.getByRole("dialog", { name: "Command Palette" }),

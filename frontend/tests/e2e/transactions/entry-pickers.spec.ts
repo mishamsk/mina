@@ -941,6 +941,9 @@ test("late category creation preserves newer shorthand edits", async ({
   const categoryPicker = page.getByRole("combobox", { name: "Category" });
   await expect(categoryPicker).toBeEnabled();
   await categoryPicker.fill(createdFqn);
+  await expect(
+    page.getByRole("option", { name: `Create ${createdFqn}` }),
+  ).toBeVisible();
   await categoryPicker.press("Enter");
   await createStarted;
 
@@ -997,6 +1000,9 @@ test("late category creation failures remain visible after blur", async ({
 
   const categoryPicker = page.getByRole("combobox", { name: "Category" });
   await categoryPicker.fill(createdFqn);
+  await expect(
+    page.getByRole("option", { name: `Create ${createdFqn}` }),
+  ).toBeVisible();
   await categoryPicker.press("Enter");
   await createStarted;
 
@@ -1145,6 +1151,9 @@ test("late inline tag creation preserves a newer selection", async ({
   const tagsPicker = page.getByRole("combobox", { name: "Tags" });
   const createdFqn = `E2ELateCreate:${unique}:Created`;
   await tagsPicker.fill(createdFqn);
+  await expect(
+    page.getByRole("option", { name: `Create ${createdFqn}` }),
+  ).toBeVisible();
   await tagsPicker.press("Enter");
   await createStarted;
 
