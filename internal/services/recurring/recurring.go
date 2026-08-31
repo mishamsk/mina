@@ -20,6 +20,7 @@ import (
 	"github.com/mishamsk/mina/internal/services/transactions"
 	"github.com/mishamsk/mina/internal/services/transactiontemplates"
 	"github.com/mishamsk/mina/internal/services/values"
+	"github.com/mishamsk/mina/internal/x/fuzzyrank"
 	"github.com/mishamsk/mina/internal/x/lease"
 )
 
@@ -86,6 +87,12 @@ type WriteInput struct {
 	AnchorDate   values.CivilDate
 	TemplateID   *int64
 	Records      []RecordInput
+}
+
+// DefinitionListOptions controls recurring-definition filtering, sorting, and pagination.
+type DefinitionListOptions struct {
+	Query string
+	List  services.ListOptions
 }
 
 // RecordInput is one possibly-template-seeded record shape in a write request.
@@ -400,17 +407,19 @@ func (s *Service) Get(ctx context.Context, id int64) (Definition, error) {
 }
 
 // List returns active recurring definitions with nested active record shapes.
-func (s *Service) List(ctx context.Context, opts services.ListOptions) (services.PaginatedList[Definition], error) {
-	if err := validateListOptions(opts); err != nil {
+func (s *Service) List(ctx context.Context, opts DefinitionListOptions) (services.PaginatedList[Definition], error) {
+	if err := validateListOptions(opts.List); err != nil {
 		return services.PaginatedList[Definition]{}, err
 	}
 
-	repoOpts := opts
-	if opts.SortKey == services.SortKeyNextDueDate {
+	requestedList := opts.List
+	repoOpts := opts.List
+	if opts.Query != "" || opts.List.SortKey == services.SortKeyNextDueDate {
+		repoOpts = repoOpts.Unpaged()
+	}
+	if opts.List.SortKey == services.SortKeyNextDueDate {
 		repoOpts.SortKey = services.SortKeyFQN
 		repoOpts.SortDirection = services.SortDirectionAsc
-		repoOpts.Limit = nil
-		repoOpts.Offset = 0
 	}
 	var result services.PaginatedList[Definition]
 	if err := s.occurrences.WithSharedLease(ctx, func(ctx context.Context) error {
@@ -418,12 +427,17 @@ func (s *Service) List(ctx context.Context, opts services.ListOptions) (services
 		if err != nil {
 			return err
 		}
+		if opts.Query != "" {
+			list.Items = filterDefinitionsByQuery(list.Items, opts.Query)
+		}
 		if err := s.withListNextDueDates(ctx, list.Items); err != nil {
 			return err
 		}
-		if opts.SortKey == services.SortKeyNextDueDate {
-			sortDefinitionsByNextDueDate(list.Items, opts.SortDirection)
-			list.Items = paginateDefinitions(list.Items, opts.Limit, opts.Offset)
+		if opts.List.SortKey == services.SortKeyNextDueDate {
+			sortDefinitionsByNextDueDate(list.Items, opts.List.SortDirection)
+		}
+		if opts.Query != "" || opts.List.SortKey == services.SortKeyNextDueDate {
+			list = services.Page(list.Items, requestedList)
 		}
 		if err := s.withListDisplayAmounts(ctx, list.Items); err != nil {
 			return err
@@ -435,6 +449,37 @@ func (s *Service) List(ctx context.Context, opts services.ListOptions) (services
 	}
 
 	return result, nil
+}
+
+func filterDefinitionsByQuery(items []Definition, query string) []Definition {
+	matchedGroups := map[string]bool{}
+	for _, item := range items {
+		for index, value := range item.FQN {
+			if value != ':' {
+				continue
+			}
+			group := item.FQN[:index]
+			if fuzzyrank.Matches(query, fuzzyrank.EntityTerms(services.FQNLeaf(group), group)) {
+				matchedGroups[group] = true
+			}
+		}
+	}
+	matched := make([]Definition, 0, len(items))
+	for _, item := range items {
+		if fuzzyrank.Matches(query, fuzzyrank.EntityTerms(item.Name, item.FQN)) || definitionHasMatchedAncestor(item.FQN, matchedGroups) {
+			matched = append(matched, item)
+		}
+	}
+	return matched
+}
+
+func definitionHasMatchedAncestor(fqn string, groups map[string]bool) bool {
+	for index, value := range fqn {
+		if value == ':' && groups[fqn[:index]] {
+			return true
+		}
+	}
+	return false
 }
 
 // GetOccurrence returns one permanent recurring occurrence by ID.
@@ -1709,17 +1754,6 @@ func sortDefinitionsByNextDueDate(definitions []Definition, direction services.S
 			return 0
 		}
 	})
-}
-
-func paginateDefinitions(definitions []Definition, limit *int, offset int) []Definition {
-	if offset >= len(definitions) {
-		return definitions[:0]
-	}
-	end := len(definitions)
-	if limit != nil && *limit < end-offset {
-		end = offset + *limit
-	}
-	return definitions[offset:end]
 }
 
 // DueSlotsUntil returns every schedule slot between anchor and today inclusive.

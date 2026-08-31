@@ -10,13 +10,16 @@ import (
 
 func (s *strictServer) ListTransactionTemplates(ctx context.Context, request openapi.ListTransactionTemplatesRequestObject) (openapi.ListTransactionTemplatesResponseObject, error) {
 	params := request.Params
-	templateList, err := s.deps.Templates.List(ctx, listOptionsFromParams(
-		params.Sort,
-		params.SortDir,
-		params.Limit,
-		params.Offset,
-		services.SortKeyFQN,
-	))
+	templateList, err := s.deps.Templates.List(ctx, transactiontemplates.ListOptions{
+		Query: optionalStringParam(params.Q),
+		List: listOptionsFromParams(
+			params.Sort,
+			params.SortDir,
+			params.Limit,
+			params.Offset,
+			services.SortKeyFQN,
+		),
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -29,6 +32,44 @@ func (s *strictServer) ListTransactionTemplates(ctx context.Context, request ope
 		TransactionTemplates: responses,
 		TotalCount:           templateList.TotalCount,
 	}, nil
+}
+
+func (s *strictServer) SearchTransactionTemplates(ctx context.Context, request openapi.SearchTransactionTemplatesRequestObject) (openapi.SearchTransactionTemplatesResponseObject, error) {
+	params := request.Params
+	var compatibleShorthand *transactiontemplates.TemplateShorthandType
+	if params.CompatibleShorthand != nil {
+		value := transactiontemplates.TemplateShorthandType(*params.CompatibleShorthand)
+		compatibleShorthand = &value
+	}
+	result, err := s.deps.Templates.Search(ctx, transactiontemplates.SearchOptions{
+		Context:             transactiontemplates.SearchContext(params.Context),
+		Query:               optionalStringParam(params.Q),
+		ParentFQN:           params.ParentFqn,
+		ExcludeIDs:          cloneOptionalInt64Slice(params.ExcludeIds),
+		Limit:               params.Limit,
+		CompatibleShorthand: compatibleShorthand,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return openapi.SearchTransactionTemplates200JSONResponse{
+		Items:   transactionTemplateSearchAPIItems(result.Items),
+		HasMore: result.HasMore,
+	}, nil
+}
+
+func transactionTemplateSearchAPIItems(source []transactiontemplates.SearchItem) []openapi.TransactionTemplateSearchItem {
+	items := make([]openapi.TransactionTemplateSearchItem, len(source))
+	for index, item := range source {
+		items[index] = openapi.TransactionTemplateSearchItem{
+			ChildCount:            item.ChildCount,
+			Fqn:                   item.FQN,
+			Kind:                  openapi.TransactionTemplateSearchItemKind(item.Kind),
+			Title:                 item.Title,
+			TransactionTemplateId: item.ID,
+		}
+	}
+	return items
 }
 
 func (s *strictServer) CreateTransactionTemplate(ctx context.Context, request openapi.CreateTransactionTemplateRequestObject) (openapi.CreateTransactionTemplateResponseObject, error) {

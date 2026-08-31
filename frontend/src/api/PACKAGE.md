@@ -20,9 +20,9 @@
 - Complete transaction replacement passes the caller's ETag through `If-Match`; response helpers retain the canonical response ETag, and normalized failures preserve 412 so ledger workflows can recover stale drafts.
 - Flow-report helpers pass the shared typed anchor/window configuration without transforming report values; the accounting-history-range helper remains a separate generated read.
 - Status consumes generated paged audit-entry DTO metadata and their JSON-presence flags without a persistent frontend cache; its thin response helper retains each JSON field's transport source for exact evidence formatting without JavaScript number coercion.
-- Entity picker consumers compose the generated Account, Category, Tag, and Member search operations with existing per-entity detail reads for selected presentation and separate Account, Category, and Tag creation-availability reads where creation is enabled; handwritten API code does not add a generic picker contract or reinterpret returned order.
-- Generated Account, Category, Tag, and Member list operations accept backend-owned fuzzy membership; callers retain canonical sorting and typed filters rather than matching list responses locally.
-- Generated Account, Category, Tag, and Member search operations expose separate typed ranked discovery with caller bounds and `has_more`; callers such as the command palette compose those generated operations directly without a cross-entity API union, and creation availability remains a separate Account, Category, and Tag read.
+- Entity picker consumers compose the generated Account, Category, Tag, Member, and Transaction Template search operations with existing per-entity detail reads for selected presentation or template application and separate Account, Category, and Tag creation-availability reads where creation is enabled; handwritten API code does not add a generic picker contract or reinterpret returned order.
+- Generated Account, Category, Tag, Member, Transaction Template, and Recurring Definition list operations accept backend-owned fuzzy membership; callers retain requested sorting and typed filters rather than matching list responses locally.
+- Generated Account, Category, Tag, Member, Transaction Template, and Recurring Definition search operations expose separate typed ranked discovery with caller bounds and `has_more`; callers such as the command palette compose those generated operations directly without a cross-entity API union, and creation availability remains a separate Account, Category, and Tag read.
 
 ## Boundaries
 

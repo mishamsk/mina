@@ -16,13 +16,16 @@ import (
 
 func (s *strictServer) ListRecurringDefinitions(ctx context.Context, request openapi.ListRecurringDefinitionsRequestObject) (openapi.ListRecurringDefinitionsResponseObject, error) {
 	params := request.Params
-	definitionList, err := s.deps.Recurring.List(ctx, listOptionsFromParams(
-		params.Sort,
-		params.SortDir,
-		params.Limit,
-		params.Offset,
-		services.SortKeyFQN,
-	))
+	definitionList, err := s.deps.Recurring.List(ctx, recurring.DefinitionListOptions{
+		Query: optionalStringParam(params.Q),
+		List: listOptionsFromParams(
+			params.Sort,
+			params.SortDir,
+			params.Limit,
+			params.Offset,
+			services.SortKeyFQN,
+		),
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -31,6 +34,38 @@ func (s *strictServer) ListRecurringDefinitions(ctx context.Context, request ope
 		RecurringDefinitions: recurringDefinitionAPIResponses(definitionList.Items),
 		TotalCount:           definitionList.TotalCount,
 	}, nil
+}
+
+func (s *strictServer) SearchRecurringDefinitions(ctx context.Context, request openapi.SearchRecurringDefinitionsRequestObject) (openapi.SearchRecurringDefinitionsResponseObject, error) {
+	params := request.Params
+	result, err := s.deps.Recurring.Search(ctx, recurring.SearchOptions{
+		Context:    recurring.SearchContext(params.Context),
+		Query:      optionalStringParam(params.Q),
+		ParentFQN:  params.ParentFqn,
+		ExcludeIDs: cloneOptionalInt64Slice(params.ExcludeIds),
+		Limit:      params.Limit,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return openapi.SearchRecurringDefinitions200JSONResponse{
+		Items:   recurringDefinitionSearchAPIItems(result.Items),
+		HasMore: result.HasMore,
+	}, nil
+}
+
+func recurringDefinitionSearchAPIItems(source []recurring.SearchItem) []openapi.RecurringDefinitionSearchItem {
+	items := make([]openapi.RecurringDefinitionSearchItem, len(source))
+	for index, item := range source {
+		items[index] = openapi.RecurringDefinitionSearchItem{
+			ChildCount:            item.ChildCount,
+			Fqn:                   item.FQN,
+			Kind:                  openapi.RecurringDefinitionSearchItemKind(item.Kind),
+			RecurringDefinitionId: item.ID,
+			Title:                 item.Title,
+		}
+	}
+	return items
 }
 
 func (s *strictServer) CreateRecurringDefinition(ctx context.Context, request openapi.CreateRecurringDefinitionRequestObject) (openapi.CreateRecurringDefinitionResponseObject, error) {

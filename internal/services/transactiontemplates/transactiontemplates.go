@@ -13,6 +13,7 @@ import (
 	"github.com/mishamsk/mina/internal/services/members"
 	"github.com/mishamsk/mina/internal/services/tags"
 	"github.com/mishamsk/mina/internal/services/values"
+	"github.com/mishamsk/mina/internal/x/fuzzyrank"
 )
 
 // Template is a hierarchical, date-free set of reusable transaction record defaults.
@@ -55,6 +56,12 @@ type TemplateRecord struct {
 type WriteInput struct {
 	FQN     string
 	Records []TemplateRecordInput
+}
+
+// ListOptions controls transaction-template filtering, sorting, and pagination.
+type ListOptions struct {
+	Query string
+	List  services.ListOptions
 }
 
 // TemplateRecordInput is one record default inside a transaction template write request.
@@ -181,14 +188,21 @@ func (s *Service) Get(ctx context.Context, id int64) (Template, error) {
 }
 
 // List returns active transaction templates with nested active record defaults.
-func (s *Service) List(ctx context.Context, opts services.ListOptions) (services.PaginatedList[Template], error) {
-	if err := validateListOptions(opts); err != nil {
+func (s *Service) List(ctx context.Context, opts ListOptions) (services.PaginatedList[Template], error) {
+	if err := validateListOptions(opts.List); err != nil {
 		return services.PaginatedList[Template]{}, err
 	}
 
-	list, err := s.repo.List(ctx, opts)
+	requestedList := opts.List
+	if opts.Query != "" {
+		opts.List = opts.List.Unpaged()
+	}
+	list, err := s.repo.List(ctx, opts.List)
 	if err != nil {
 		return services.PaginatedList[Template]{}, err
+	}
+	if opts.Query != "" {
+		list = services.Page(filterTemplatesByQuery(list.Items, opts.Query), requestedList)
 	}
 	for index := range list.Items {
 		list.Items[index], err = s.withCompatibleShorthands(ctx, list.Items[index])
@@ -197,6 +211,37 @@ func (s *Service) List(ctx context.Context, opts services.ListOptions) (services
 		}
 	}
 	return list, nil
+}
+
+func filterTemplatesByQuery(items []Template, query string) []Template {
+	matchedGroups := map[string]bool{}
+	for _, item := range items {
+		for index, value := range item.FQN {
+			if value != ':' {
+				continue
+			}
+			group := item.FQN[:index]
+			if fuzzyrank.Matches(query, fuzzyrank.EntityTerms(services.FQNLeaf(group), group)) {
+				matchedGroups[group] = true
+			}
+		}
+	}
+	matched := make([]Template, 0, len(items))
+	for _, item := range items {
+		if fuzzyrank.Matches(query, fuzzyrank.EntityTerms(item.Name, item.FQN)) || templateHasMatchedAncestor(item.FQN, matchedGroups) {
+			matched = append(matched, item)
+		}
+	}
+	return matched
+}
+
+func templateHasMatchedAncestor(fqn string, groups map[string]bool) bool {
+	for index, value := range fqn {
+		if value == ':' && groups[fqn[:index]] {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Service) ensureFQNAvailable(ctx context.Context, fqn string) error {

@@ -1705,6 +1705,34 @@ export type TransactionTemplateRecord = {
 
 export type TransactionTemplateShorthandType = 'spend' | 'income' | 'refund' | 'transfer';
 
+export type TransactionTemplateSearchResponse = {
+    items: Array<TransactionTemplateSearchItem>;
+    /**
+     * Whether more ranked candidates matched beyond the caller's limit.
+     */
+    has_more: boolean;
+};
+
+export type TransactionTemplateSearchItem = {
+    kind: 'leaf' | 'group';
+    /**
+     * Stable leaf identifier; absent for navigation groups.
+     */
+    transaction_template_id?: number;
+    /**
+     * Final FQN segment for leaves and navigation groups.
+     */
+    title: string;
+    /**
+     * Complete authoritative transaction-template leaf or group path.
+     */
+    fqn: string;
+    /**
+     * Descendant leaf count for navigation groups.
+     */
+    child_count?: number;
+};
+
 export type TransactionTemplateListResponse = {
     transaction_templates: Array<TransactionTemplate>;
     /**
@@ -1762,6 +1790,34 @@ export type RecurringDefinitionListResponse = {
      * Count of matching recurring definitions before limit and offset are applied.
      */
     total_count: number;
+};
+
+export type RecurringDefinitionSearchResponse = {
+    items: Array<RecurringDefinitionSearchItem>;
+    /**
+     * Whether more ranked candidates matched beyond the caller's limit.
+     */
+    has_more: boolean;
+};
+
+export type RecurringDefinitionSearchItem = {
+    kind: 'leaf' | 'group';
+    /**
+     * Stable leaf identifier; absent for navigation groups.
+     */
+    recurring_definition_id?: number;
+    /**
+     * Final FQN segment for leaves and navigation groups.
+     */
+    title: string;
+    /**
+     * Complete authoritative recurring-definition leaf or group path.
+     */
+    fqn: string;
+    /**
+     * Descendant leaf count for navigation groups.
+     */
+    child_count?: number;
 };
 
 export type RecurringOccurrenceStatus = 'expected' | 'confirmed' | 'dismissed' | 'deferred';
@@ -5077,6 +5133,10 @@ export type ListTransactionTemplatesData = {
     path?: never;
     query?: {
         /**
+         * Case-insensitive fuzzy membership over template names, complete FQNs, FQN segments, and matching implicit-group descendants; the caller-requested sort is preserved, defaulting to ascending FQN.
+         */
+        q?: string;
+        /**
          * Field used to sort matching results; defaults to `fqn`.
          */
         sort?: 'fqn' | 'created_at' | 'updated_at';
@@ -5195,6 +5255,51 @@ export type RestructureTransactionTemplatesResponses = {
 };
 
 export type RestructureTransactionTemplatesResponse = RestructureTransactionTemplatesResponses[keyof RestructureTransactionTemplatesResponses];
+
+export type SearchTransactionTemplatesData = {
+    body?: never;
+    path?: never;
+    query: {
+        context: 'navigation' | 'transaction_entry';
+        limit: number;
+        q?: string;
+        /**
+         * Return only direct children of this hierarchy group; an empty value selects root children.
+         */
+        parent_fqn?: string;
+        /**
+         * Active selected leaf IDs to omit from candidates.
+         */
+        exclude_ids?: Array<number>;
+        /**
+         * Restrict transaction-entry candidates to templates compatible with this shorthand; omit for advanced entry.
+         */
+        compatible_shorthand?: TransactionTemplateShorthandType;
+    };
+    url: '/api/transaction-templates/search';
+};
+
+export type SearchTransactionTemplatesErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+};
+
+export type SearchTransactionTemplatesError = SearchTransactionTemplatesErrors[keyof SearchTransactionTemplatesErrors];
+
+export type SearchTransactionTemplatesResponses = {
+    /**
+     * Ranked transaction-template candidates and truncation state.
+     */
+    200: TransactionTemplateSearchResponse;
+};
+
+export type SearchTransactionTemplatesResponse = SearchTransactionTemplatesResponses[keyof SearchTransactionTemplatesResponses];
 
 export type DeleteTransactionTemplateData = {
     body?: never;
@@ -5323,6 +5428,10 @@ export type ListRecurringDefinitionsData = {
     path?: never;
     query?: {
         /**
+         * Case-insensitive fuzzy membership over definition names, complete FQNs, FQN segments, and matching implicit-group descendants; requested sort order is preserved.
+         */
+        q?: string;
+        /**
          * Field used to sort matching results; defaults to `fqn`. `next_due_date` keeps missing dates last and uses ascending FQN and definition ID tie-breakers.
          */
         sort?: 'fqn' | 'next_due_date' | 'created_at' | 'updated_at';
@@ -5400,6 +5509,47 @@ export type CreateRecurringDefinitionResponses = {
 };
 
 export type CreateRecurringDefinitionResponse = CreateRecurringDefinitionResponses[keyof CreateRecurringDefinitionResponses];
+
+export type SearchRecurringDefinitionsData = {
+    body?: never;
+    path?: never;
+    query: {
+        context: 'navigation';
+        limit: number;
+        q?: string;
+        /**
+         * Return only direct children of this hierarchy group; an empty value selects root children.
+         */
+        parent_fqn?: string;
+        /**
+         * Active selected leaf IDs to omit from candidates.
+         */
+        exclude_ids?: Array<number>;
+    };
+    url: '/api/recurring-definitions/search';
+};
+
+export type SearchRecurringDefinitionsErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+};
+
+export type SearchRecurringDefinitionsError = SearchRecurringDefinitionsErrors[keyof SearchRecurringDefinitionsErrors];
+
+export type SearchRecurringDefinitionsResponses = {
+    /**
+     * Ranked recurring-definition candidates and truncation state.
+     */
+    200: RecurringDefinitionSearchResponse;
+};
+
+export type SearchRecurringDefinitionsResponse = SearchRecurringDefinitionsResponses[keyof SearchRecurringDefinitionsResponses];
 
 export type DeleteRecurringDefinitionData = {
     body?: never;

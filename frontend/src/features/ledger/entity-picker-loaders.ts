@@ -18,6 +18,8 @@ import {
   type SearchMembersData,
   searchTags,
   type SearchTagsData,
+  searchTransactionTemplates,
+  type SearchTransactionTemplatesData,
   type Tag,
 } from "@/api";
 
@@ -34,6 +36,7 @@ type AccountPickerQuery = SearchAccountsData["query"];
 type CategoryPickerQuery = SearchCategoriesData["query"];
 type MemberPickerQuery = SearchMembersData["query"];
 type TagPickerQuery = SearchTagsData["query"];
+type TransactionTemplatePickerQuery = SearchTransactionTemplatesData["query"];
 
 type AccountPickerBase = Omit<
   AccountPickerQuery,
@@ -55,6 +58,12 @@ type MemberPickerBase = Omit<
 };
 type TagPickerBase = Omit<
   TagPickerQuery,
+  "exclude_ids" | "limit" | "parent_fqn" | "q"
+> & {
+  readonly exclude_ids?: readonly number[];
+};
+type TransactionTemplatePickerBase = Omit<
+  TransactionTemplatePickerQuery,
   "exclude_ids" | "limit" | "parent_fqn" | "q"
 > & {
   readonly exclude_ids?: readonly number[];
@@ -178,11 +187,12 @@ const hierarchicalRows = (
     readonly kind: "group" | "leaf";
     readonly title: string;
     readonly fqn: string;
-    readonly is_hidden: boolean;
+    readonly is_hidden?: boolean;
     readonly child_count?: number;
     readonly account_id?: number;
     readonly category_id?: number;
     readonly tag_id?: number;
+    readonly transaction_template_id?: number;
     readonly account_type?: string;
     readonly currency?: string | null;
     readonly economic_intent?: string;
@@ -204,7 +214,11 @@ const hierarchicalRows = (
         },
       ];
     }
-    const id = item.account_id ?? item.category_id ?? item.tag_id;
+    const id =
+      item.account_id ??
+      item.category_id ??
+      item.tag_id ??
+      item.transaction_template_id;
     if (id === undefined) {
       return [];
     }
@@ -218,7 +232,7 @@ const hierarchicalRows = (
           ...(item.account_type ? { accountType: item.account_type } : {}),
           ...(item.account_type ? { currency: item.currency } : {}),
           detail: item.fqn,
-          hidden: item.is_hidden,
+          hidden: item.is_hidden ?? false,
           id,
           label: item.title,
           ...(metadata ? { metadata } : {}),
@@ -295,6 +309,26 @@ export const tagPickerLoader =
     if (!result.data) {
       throw new Error(
         apiErrorMessage(result.error, "Tags could not be loaded."),
+      );
+    }
+    return hierarchyResult(result.data.items, result.data.has_more);
+  };
+
+export const transactionTemplatePickerLoader =
+  (base: TransactionTemplatePickerBase): EntityOptionLoader =>
+  async (request) => {
+    const result = await searchTransactionTemplates({
+      query: {
+        ...base,
+        exclude_ids: excludedIDs(base.exclude_ids, request),
+        limit: pickerResultLimit,
+        q: request.query,
+        parent_fqn: request.parentFqn,
+      },
+    });
+    if (!result.data) {
+      throw new Error(
+        apiErrorMessage(result.error, "Templates could not be loaded."),
       );
     }
     return hierarchyResult(result.data.items, result.data.has_more);

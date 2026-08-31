@@ -33,6 +33,7 @@ interface ReferenceToolbarProps {
   readonly extraControls?: ReactNode;
   readonly includeHidden: boolean;
   readonly search: string;
+  readonly searchDraftResetVersion?: number;
   readonly searchInputId: string;
   readonly searchPlaceholder: string;
   readonly setSearchParams: SetURLSearchParams;
@@ -46,6 +47,7 @@ export const ReferenceToolbar = ({
   extraControls,
   includeHidden,
   search,
+  searchDraftResetVersion = 0,
   searchInputId,
   searchPlaceholder,
   setSearchParams,
@@ -54,31 +56,41 @@ export const ReferenceToolbar = ({
   toggleOffTooltip,
   toggleOnTooltip,
 }: ReferenceToolbarProps) => {
-  const [searchInputDraft, setSearchInputDraft] = useState<
-    string | undefined
-  >();
-  const searchInputValue = searchInputDraft ?? search;
+  const [searchInputDraft, setSearchInputDraft] = useState<{
+    readonly resetVersion: number;
+    readonly value: string | undefined;
+  }>({ resetVersion: searchDraftResetVersion, value: undefined });
+  const searchInputValue =
+    searchInputDraft.resetVersion === searchDraftResetVersion
+      ? (searchInputDraft.value ?? search)
+      : search;
 
   const setSearch = useCallback(
     (nextSearch: string) => {
       const normalizedSearch = nextSearch.trim();
-      setSearchInputDraft(nextSearch);
+      setSearchInputDraft({
+        resetVersion: searchDraftResetVersion,
+        value: nextSearch,
+      });
       setSearchParams((current) =>
         updateReferenceSearchParam(current, "q", normalizedSearch || undefined),
       );
     },
-    [setSearchParams],
+    [searchDraftResetVersion, setSearchParams],
   );
 
   const commitSearch = useCallback(
     (nextSearch: string) => {
       const normalizedSearch = nextSearch.trim();
-      setSearchInputDraft(undefined);
+      setSearchInputDraft({
+        resetVersion: searchDraftResetVersion,
+        value: undefined,
+      });
       setSearchParams((current) =>
         updateReferenceSearchParam(current, "q", normalizedSearch || undefined),
       );
     },
-    [setSearchParams],
+    [searchDraftResetVersion, setSearchParams],
   );
 
   const setIncludeHidden = useCallback(
@@ -119,7 +131,10 @@ export const ReferenceToolbar = ({
             placeholder={searchPlaceholder}
             value={searchInputValue}
             onFocus={(event) => {
-              setSearchInputDraft(event.currentTarget.value);
+              setSearchInputDraft({
+                resetVersion: searchDraftResetVersion,
+                value: event.currentTarget.value,
+              });
             }}
             onBlur={(event) => {
               commitSearch(event.currentTarget.value);

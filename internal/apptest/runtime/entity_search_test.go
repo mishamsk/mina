@@ -15,12 +15,190 @@ func TestEntitySearchAPIBoundaries(t *testing.T) {
 	t.Run("ranked hierarchy search", testRankedHierarchySearch)
 	t.Run("account exact group ranking", testAccountExactGroupRanking)
 	t.Run("tag exact group ranking", testTagExactGroupRanking)
+	t.Run("template ranked search and list membership", testTransactionTemplateSearch)
+	t.Run("recurring definition ranked search and list membership", testRecurringDefinitionSearch)
 	t.Run("entity contexts and visibility", testEntitySearchContextsAndVisibility)
 	t.Run("per-entity advanced policy", testEntitySearchAdvancedPolicy)
 	t.Run("bulk account facts", testBulkAccountSearchFacts)
 	t.Run("creation availability", testEntityCreationAvailability)
 	t.Run("long FQN inputs", testLongEntitySearchInputs)
 	t.Run("standard errors", testEntitySearchErrors)
+}
+
+func testTransactionTemplateSearch(t *testing.T) {
+	client := newSharedClient(t)
+	ctx := context.Background()
+	fixture := newSemanticFixture(t, client)
+	currency := "USD"
+	debit := "-10"
+	credit := "10"
+	spendRecords := []httpclient.TransactionTemplateRecordRequest{
+		{AccountId: &fixture.checking.AccountId, Currency: &currency, Amount: &debit},
+		{AccountId: &fixture.restaurant.AccountId, CategoryId: &fixture.expense.CategoryId, Currency: &currency, Amount: &credit},
+	}
+	spend := createTransactionTemplate(t, client, httpclient.TransactionTemplateWriteRequest{
+		Fqn:     "SearchTemplate:Branch:RankedSpend",
+		Records: spendRecords,
+	})
+	other := createTransactionTemplate(t, client, httpclient.TransactionTemplateWriteRequest{
+		Fqn:     "SearchTemplate:Branch:Other",
+		Records: []httpclient.TransactionTemplateRecordRequest{{CategoryId: &fixture.expense.CategoryId}},
+	})
+	createTransactionTemplate(t, client, httpclient.TransactionTemplateWriteRequest{
+		Fqn:     "SearchTemplate:Elsewhere:RankedSpendExtra",
+		Records: spendRecords,
+	})
+
+	query := "rankedspend"
+	shorthand := httpclient.Spend
+	result, err := client.REST().SearchTransactionTemplatesWithResponse(ctx, &httpclient.SearchTransactionTemplatesParams{
+		Context: httpclient.SearchTransactionTemplatesParamsContextTransactionEntry, Limit: 1, Q: &query, CompatibleShorthand: &shorthand,
+	})
+	requireClientResponse(t, "search compatible templates", err, result.StatusCode(), http.StatusOK, result.Body)
+	if !result.JSON200.HasMore || len(result.JSON200.Items) != 1 || result.JSON200.Items[0].TransactionTemplateId == nil || *result.JSON200.Items[0].TransactionTemplateId != spend.JSON201.TransactionTemplateId {
+		t.Fatalf("compatible template search = %+v, want ranked spend template %d with more matches", result.JSON200, spend.JSON201.TransactionTemplateId)
+	}
+	if result.JSON200.Items[0].Kind != httpclient.TransactionTemplateSearchItemKindLeaf || result.JSON200.Items[0].Fqn != spend.JSON201.Fqn || result.JSON200.Items[0].Title != "RankedSpend" {
+		t.Fatalf("compatible template leaf = %+v, want authoritative RankedSpend leaf", result.JSON200.Items[0])
+	}
+	incompatibleQuery := "Other"
+	incompatible, err := client.REST().SearchTransactionTemplatesWithResponse(ctx, &httpclient.SearchTransactionTemplatesParams{
+		Context: httpclient.SearchTransactionTemplatesParamsContextTransactionEntry, Limit: 20, Q: &incompatibleQuery, CompatibleShorthand: &shorthand,
+	})
+	requireClientResponse(t, "exclude incompatible template", err, incompatible.StatusCode(), http.StatusOK, incompatible.Body)
+	if incompatible.JSON200.HasMore || len(incompatible.JSON200.Items) != 0 {
+		t.Fatalf("incompatible template search = %+v, want no spend-compatible matches", incompatible.JSON200)
+	}
+
+	root := ""
+	rootBrowse, err := client.REST().SearchTransactionTemplatesWithResponse(ctx, &httpclient.SearchTransactionTemplatesParams{
+		Context: httpclient.SearchTransactionTemplatesParamsContextNavigation, Limit: 20, ParentFqn: &root,
+	})
+	requireClientResponse(t, "browse root template groups", err, rootBrowse.StatusCode(), http.StatusOK, rootBrowse.Body)
+	if len(rootBrowse.JSON200.Items) != 1 || rootBrowse.JSON200.Items[0].Kind != httpclient.TransactionTemplateSearchItemKindGroup || rootBrowse.JSON200.Items[0].Fqn != "SearchTemplate" || rootBrowse.JSON200.Items[0].Title != "SearchTemplate" || rootBrowse.JSON200.Items[0].ChildCount == nil || *rootBrowse.JSON200.Items[0].ChildCount != 3 {
+		t.Fatalf("root template search = %+v, want only SearchTemplate navigation group with three descendants", rootBrowse.JSON200.Items)
+	}
+
+	parent := "SearchTemplate"
+	groupQuery := "SearchTemplate:Branch"
+	rankedGroup, err := client.REST().SearchTransactionTemplatesWithResponse(ctx, &httpclient.SearchTransactionTemplatesParams{
+		Context: httpclient.SearchTransactionTemplatesParamsContextNavigation, Limit: 20, Q: &groupQuery,
+	})
+	requireClientResponse(t, "rank exact template group", err, rankedGroup.StatusCode(), http.StatusOK, rankedGroup.Body)
+	if len(rankedGroup.JSON200.Items) == 0 || rankedGroup.JSON200.Items[0].Kind != httpclient.TransactionTemplateSearchItemKindGroup || rankedGroup.JSON200.Items[0].Fqn != groupQuery || rankedGroup.JSON200.Items[0].Title != "Branch" {
+		t.Fatalf("ranked template group search = %+v, want exact Branch group first", rankedGroup.JSON200.Items)
+	}
+
+	browse, err := client.REST().SearchTransactionTemplatesWithResponse(ctx, &httpclient.SearchTransactionTemplatesParams{
+		Context: httpclient.SearchTransactionTemplatesParamsContextNavigation, Limit: 20, ParentFqn: &parent,
+	})
+	requireClientResponse(t, "browse template groups", err, browse.StatusCode(), http.StatusOK, browse.Body)
+	if len(browse.JSON200.Items) != 2 || browse.JSON200.Items[0].Kind != httpclient.TransactionTemplateSearchItemKindGroup || browse.JSON200.Items[0].Fqn != "SearchTemplate:Branch" || browse.JSON200.Items[0].Title != "Branch" || browse.JSON200.Items[0].ChildCount == nil || *browse.JSON200.Items[0].ChildCount != 2 {
+		t.Fatalf("template group search = %+v, want Branch navigation group with two descendants", browse.JSON200.Items)
+	}
+
+	excluded := []int64{spend.JSON201.TransactionTemplateId}
+	branch := browse.JSON200.Items[0].Fqn
+	children, err := client.REST().SearchTransactionTemplatesWithResponse(ctx, &httpclient.SearchTransactionTemplatesParams{
+		Context: httpclient.SearchTransactionTemplatesParamsContextNavigation, Limit: 20, ParentFqn: &branch, ExcludeIds: &excluded,
+	})
+	requireClientResponse(t, "exclude template leaf", err, children.StatusCode(), http.StatusOK, children.Body)
+	if len(children.JSON200.Items) != 1 || children.JSON200.Items[0].TransactionTemplateId == nil || *children.JSON200.Items[0].TransactionTemplateId != other.JSON201.TransactionTemplateId {
+		t.Fatalf("excluded template search = %+v, want template %d", children.JSON200.Items, other.JSON201.TransactionTemplateId)
+	}
+	if children.JSON200.Items[0].Kind != httpclient.TransactionTemplateSearchItemKindLeaf || children.JSON200.Items[0].Fqn != other.JSON201.Fqn || children.JSON200.Items[0].Title != "Other" {
+		t.Fatalf("template child leaf = %+v, want authoritative Other leaf", children.JSON200.Items[0])
+	}
+
+	listQuery := "SearchTemplate:Brancx"
+	limit := 1
+	offset := 1
+	sortDirection := httpclient.Desc
+	listed, err := client.REST().ListTransactionTemplatesWithResponse(ctx, &httpclient.ListTransactionTemplatesParams{Q: &listQuery, SortDir: &sortDirection, Limit: &limit, Offset: &offset})
+	requireClientResponse(t, "filter template list by fuzzy-matched group", err, listed.StatusCode(), http.StatusOK, listed.Body)
+	if listed.JSON200.TotalCount != 2 || len(listed.JSON200.TransactionTemplates) != 1 || listed.JSON200.TransactionTemplates[0].TransactionTemplateId != other.JSON201.TransactionTemplateId {
+		t.Fatalf("filtered descending template list = %+v, want second leaf %d of total 2", listed.JSON200, other.JSON201.TransactionTemplateId)
+	}
+}
+
+func testRecurringDefinitionSearch(t *testing.T) {
+	client := newSharedClient(t, apptest.WithClock(apptest.NewFakeClock(apptest.Timestamp("2024-01-01T12:00:00Z"))))
+	ctx := context.Background()
+	refs := createRecurringDefinitionRefs(t, client, "RecurringSearchRefs")
+	alpha := createRecurringDefinition(t, client, recurringDefinitionRequest("SearchRecurring:Branch:Alpha", refs, "-10", "10", intervalRule(1, "MONTH"), "2024-01-15"))
+	beta := createRecurringDefinition(t, client, recurringDefinitionRequest("SearchRecurring:Branch:Beta", refs, "-11", "11", intervalRule(1, "MONTH"), "2024-02-15"))
+	createRecurringDefinition(t, client, recurringDefinitionRequest("SearchRecurring:Elsewhere:AlphaExtra", refs, "-12", "12", intervalRule(1, "MONTH"), "2024-01-15"))
+
+	query := alpha.JSON201.Fqn
+	result, err := client.REST().SearchRecurringDefinitionsWithResponse(ctx, &httpclient.SearchRecurringDefinitionsParams{
+		Context: httpclient.SearchRecurringDefinitionsParamsContextNavigation, Limit: 1, Q: &query,
+	})
+	requireClientResponse(t, "search exact recurring definition", err, result.StatusCode(), http.StatusOK, result.Body)
+	if result.JSON200.HasMore || len(result.JSON200.Items) != 1 || result.JSON200.Items[0].RecurringDefinitionId == nil || *result.JSON200.Items[0].RecurringDefinitionId != alpha.JSON201.RecurringDefinitionId {
+		t.Fatalf("exact recurring search = %+v, want definition %d retained within bound", result.JSON200, alpha.JSON201.RecurringDefinitionId)
+	}
+	if result.JSON200.Items[0].Kind != httpclient.RecurringDefinitionSearchItemKindLeaf || result.JSON200.Items[0].Fqn != alpha.JSON201.Fqn || result.JSON200.Items[0].Title != "Alpha" {
+		t.Fatalf("exact recurring leaf = %+v, want authoritative Alpha leaf", result.JSON200.Items[0])
+	}
+	shortQuery := "Alpha"
+	limited, err := client.REST().SearchRecurringDefinitionsWithResponse(ctx, &httpclient.SearchRecurringDefinitionsParams{
+		Context: httpclient.SearchRecurringDefinitionsParamsContextNavigation, Limit: 1, Q: &shortQuery,
+	})
+	requireClientResponse(t, "limit recurring definition search", err, limited.StatusCode(), http.StatusOK, limited.Body)
+	if !limited.JSON200.HasMore || len(limited.JSON200.Items) != 1 || limited.JSON200.Items[0].RecurringDefinitionId == nil || *limited.JSON200.Items[0].RecurringDefinitionId != alpha.JSON201.RecurringDefinitionId {
+		t.Fatalf("limited recurring search = %+v, want first definition %d and has_more", limited.JSON200, alpha.JSON201.RecurringDefinitionId)
+	}
+
+	root := ""
+	rootBrowse, err := client.REST().SearchRecurringDefinitionsWithResponse(ctx, &httpclient.SearchRecurringDefinitionsParams{
+		Context: httpclient.SearchRecurringDefinitionsParamsContextNavigation, Limit: 20, ParentFqn: &root,
+	})
+	requireClientResponse(t, "browse root recurring groups", err, rootBrowse.StatusCode(), http.StatusOK, rootBrowse.Body)
+	if len(rootBrowse.JSON200.Items) != 1 || rootBrowse.JSON200.Items[0].Kind != httpclient.RecurringDefinitionSearchItemKindGroup || rootBrowse.JSON200.Items[0].Fqn != "SearchRecurring" || rootBrowse.JSON200.Items[0].Title != "SearchRecurring" || rootBrowse.JSON200.Items[0].ChildCount == nil || *rootBrowse.JSON200.Items[0].ChildCount != 3 {
+		t.Fatalf("root recurring search = %+v, want only SearchRecurring navigation group with three descendants", rootBrowse.JSON200.Items)
+	}
+
+	parent := "SearchRecurring"
+	groupQuery := "SearchRecurring:Branch"
+	rankedGroup, err := client.REST().SearchRecurringDefinitionsWithResponse(ctx, &httpclient.SearchRecurringDefinitionsParams{
+		Context: httpclient.SearchRecurringDefinitionsParamsContextNavigation, Limit: 20, Q: &groupQuery,
+	})
+	requireClientResponse(t, "rank exact recurring group", err, rankedGroup.StatusCode(), http.StatusOK, rankedGroup.Body)
+	if len(rankedGroup.JSON200.Items) == 0 || rankedGroup.JSON200.Items[0].Kind != httpclient.RecurringDefinitionSearchItemKindGroup || rankedGroup.JSON200.Items[0].Fqn != groupQuery || rankedGroup.JSON200.Items[0].Title != "Branch" {
+		t.Fatalf("ranked recurring group search = %+v, want exact Branch group first", rankedGroup.JSON200.Items)
+	}
+
+	browse, err := client.REST().SearchRecurringDefinitionsWithResponse(ctx, &httpclient.SearchRecurringDefinitionsParams{
+		Context: httpclient.SearchRecurringDefinitionsParamsContextNavigation, Limit: 20, ParentFqn: &parent,
+	})
+	requireClientResponse(t, "browse recurring groups", err, browse.StatusCode(), http.StatusOK, browse.Body)
+	if len(browse.JSON200.Items) != 2 || browse.JSON200.Items[0].Kind != httpclient.RecurringDefinitionSearchItemKindGroup || browse.JSON200.Items[0].Fqn != "SearchRecurring:Branch" || browse.JSON200.Items[0].Title != "Branch" || browse.JSON200.Items[0].ChildCount == nil || *browse.JSON200.Items[0].ChildCount != 2 {
+		t.Fatalf("recurring group search = %+v, want Branch navigation group with two descendants", browse.JSON200.Items)
+	}
+
+	excluded := []int64{alpha.JSON201.RecurringDefinitionId}
+	branch := browse.JSON200.Items[0].Fqn
+	children, err := client.REST().SearchRecurringDefinitionsWithResponse(ctx, &httpclient.SearchRecurringDefinitionsParams{
+		Context: httpclient.SearchRecurringDefinitionsParamsContextNavigation, Limit: 20, ParentFqn: &branch, ExcludeIds: &excluded,
+	})
+	requireClientResponse(t, "exclude recurring definition leaf", err, children.StatusCode(), http.StatusOK, children.Body)
+	if len(children.JSON200.Items) != 1 || children.JSON200.Items[0].RecurringDefinitionId == nil || *children.JSON200.Items[0].RecurringDefinitionId != beta.JSON201.RecurringDefinitionId {
+		t.Fatalf("excluded recurring search = %+v, want definition %d", children.JSON200.Items, beta.JSON201.RecurringDefinitionId)
+	}
+	if children.JSON200.Items[0].Kind != httpclient.RecurringDefinitionSearchItemKindLeaf || children.JSON200.Items[0].Fqn != beta.JSON201.Fqn || children.JSON200.Items[0].Title != "Beta" {
+		t.Fatalf("recurring child leaf = %+v, want authoritative Beta leaf", children.JSON200.Items[0])
+	}
+
+	listQuery := "SearchRecurring:Brancx"
+	limit := 1
+	offset := 1
+	sort := httpclient.ListRecurringDefinitionsParamsSortNextDueDate
+	sortDirection := httpclient.ListRecurringDefinitionsParamsSortDirAsc
+	listed, err := client.REST().ListRecurringDefinitionsWithResponse(ctx, &httpclient.ListRecurringDefinitionsParams{Q: &listQuery, Sort: &sort, SortDir: &sortDirection, Limit: &limit, Offset: &offset})
+	requireClientResponse(t, "filter and next-due sort recurring list by fuzzy-matched group", err, listed.StatusCode(), http.StatusOK, listed.Body)
+	if listed.JSON200.TotalCount != 2 || len(listed.JSON200.RecurringDefinitions) != 1 || listed.JSON200.RecurringDefinitions[0].RecurringDefinitionId != beta.JSON201.RecurringDefinitionId {
+		t.Fatalf("filtered recurring list = %+v, want canonical second leaf %d of total 2", listed.JSON200, beta.JSON201.RecurringDefinitionId)
+	}
 }
 
 func testEntitySearchAdvancedPolicy(t *testing.T) {

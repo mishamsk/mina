@@ -137,18 +137,19 @@ export interface GroupRecordsPageParams {
 
 const lookupLimit = 500;
 
-const listTransactionTemplatesPage = (offset: number) =>
+const listTransactionTemplatesPage = (offset: number, q?: string) =>
   listTransactionTemplates({
     query: {
       limit: lookupLimit,
       offset,
+      q,
       sort: "fqn",
       sort_dir: "asc",
     },
   });
 
-export const fetchAllTransactionTemplates = async () => {
-  const firstPage = await listTransactionTemplatesPage(0);
+export const fetchAllTransactionTemplates = async (q?: string) => {
+  const firstPage = await listTransactionTemplatesPage(0, q);
   if (
     !firstPage.data ||
     firstPage.data.transaction_templates.length >= firstPage.data.total_count
@@ -162,7 +163,7 @@ export const fetchAllTransactionTemplates = async () => {
     offset < firstPage.data.total_count;
     offset += lookupLimit
   ) {
-    const page = await listTransactionTemplatesPage(offset);
+    const page = await listTransactionTemplatesPage(offset, q);
     if (!page.data) {
       return page;
     }

@@ -378,7 +378,7 @@ func filterAccountsByQuery(items []Account, query string) []Account {
 				continue
 			}
 			group := item.FQN[:index]
-			if fuzzyrank.Matches(query, fuzzyrank.EntityTerms(searchFQNLeaf(group), group)) {
+			if fuzzyrank.Matches(query, fuzzyrank.EntityTerms(services.FQNLeaf(group), group)) {
 				matchedGroups[group] = true
 			}
 		}

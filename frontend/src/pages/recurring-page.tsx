@@ -1,8 +1,18 @@
 import { Plus } from "pixelarticons/react";
-import { useEffect, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  createSearchParams,
+  type SetURLSearchParams,
+  useLocation,
+  useNavigate,
+  useSearchParams,
+} from "react-router";
 
-import type { RecurringDefinition } from "@/api";
+import {
+  apiErrorMessage,
+  getRecurringDefinition,
+  type RecurringDefinition,
+} from "@/api";
 import { PageHelp } from "@/components/page-help";
 import { Toast, toastDurationMs } from "@/components/toast";
 import { Button } from "@/components/ui/button";
@@ -14,6 +24,10 @@ import {
   revealRecurringDefinitionActionRow,
   useRecurringDefinitionsResource,
 } from "@/features/recurring";
+import {
+  readReferenceSearchState,
+  ReferenceToolbar,
+} from "@/features/reference";
 import {
   openEditRecurringDefinitionEditor,
   takeConsumedRecurringDefinitionFragmentNavigation,
@@ -34,6 +48,11 @@ interface EditorTarget {
   readonly opener: HTMLElement | undefined;
 }
 
+interface FragmentLookupFailure {
+  readonly fragmentNavigation: string;
+  readonly message: string;
+}
+
 const definitionIdFromFragment = (hash: string): number | undefined => {
   const match = /^#definition-([1-9][0-9]*)$/.exec(hash);
   return match ? Number(match[1]) : undefined;
@@ -42,15 +61,38 @@ const definitionIdFromFragment = (hash: string): number | undefined => {
 export const RecurringPage = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const recurringDefinitions = useRecurringDefinitionsResource();
+  const [searchParams] = useSearchParams();
+  const { search } = readReferenceSearchState(searchParams);
+  const [searchToolbarGeneration, setSearchToolbarGeneration] = useState(0);
+  const recurringDefinitions = useRecurringDefinitionsResource(search);
   const commandPaletteOpen = useCommandPaletteOpen();
   const recurringDefinitionEditor = useRecurringDefinitionEditorView();
   const templateEditor = useTemplateEditorView();
   const [notice, setNotice] = useState<Notice | undefined>();
   const [editorTarget, setEditorTarget] = useState<EditorTarget>();
+  const [fragmentLookupFailure, setFragmentLookupFailure] =
+    useState<FragmentLookupFailure>();
+  const [fragmentLookupRetryVersion, setFragmentLookupRetryVersion] =
+    useState(0);
   const handledFragmentNavigationRef = useRef<string | undefined>(undefined);
   const deferredFragmentNavigationRef = useRef<string | undefined>(undefined);
   const newDefinitionButtonRef = useRef<HTMLButtonElement>(null);
+  const setSearchParamsPreservingFragment = useCallback<SetURLSearchParams>(
+    (nextInit, navigateOptions) => {
+      const nextSearchParams = createSearchParams(
+        typeof nextInit === "function" ? nextInit(searchParams) : nextInit,
+      );
+      void navigate(
+        {
+          hash: location.hash,
+          pathname: location.pathname,
+          search: nextSearchParams.toString(),
+        },
+        navigateOptions,
+      );
+    },
+    [location.hash, location.pathname, navigate, searchParams],
+  );
 
   useEffect(() => {
     const definitionId = definitionIdFromFragment(location.hash);
@@ -92,13 +134,17 @@ export const RecurringPage = () => {
     if (!recurringDefinitions.snapshot) {
       return;
     }
-    const definition = recurringDefinitions.snapshot.definitions.find(
+    const snapshotDefinition = recurringDefinitions.snapshot.definitions.find(
       (candidate) => candidate.recurring_definition_id === definitionId,
     );
-    if (!definition) {
+    let active = true;
+    let frame: number | undefined;
+    let deferredFrame: number | undefined;
+    const showUnavailableDefinition = () => {
       handledFragmentNavigationRef.current = fragmentNavigation;
       deferredFragmentNavigationRef.current = undefined;
-      const frame = window.requestAnimationFrame(() => {
+      frame = window.requestAnimationFrame(() => {
+        setFragmentLookupFailure(undefined);
         setNotice((current) => ({
           id: (current?.id ?? 0) + 1,
           message: "Recurring definition is no longer available.",
@@ -109,33 +155,66 @@ export const RecurringPage = () => {
           { replace: true },
         );
       });
-      return () => {
-        window.cancelAnimationFrame(frame);
-      };
-    }
-    const openLinkedEditor = () => {
-      const opener = document.getElementById(`definition-${definitionId}`);
-      if (opener instanceof HTMLElement) {
-        revealRecurringDefinitionActionRow(opener);
-      }
-      handledFragmentNavigationRef.current = fragmentNavigation;
-      deferredFragmentNavigationRef.current = undefined;
-      openEditRecurringDefinitionEditor(
-        definition,
-        opener instanceof HTMLElement ? opener : undefined,
-        fragmentNavigation,
-      );
     };
-    let deferredFrame: number | undefined;
-    const frame = window.requestAnimationFrame(() => {
-      if (deferredFragmentNavigationRef.current === fragmentNavigation) {
-        deferredFrame = window.requestAnimationFrame(openLinkedEditor);
-        return;
-      }
-      openLinkedEditor();
-    });
+    const scheduleLinkedEditor = (definition: RecurringDefinition) => {
+      const openLinkedEditor = () => {
+        if (!active) {
+          return;
+        }
+        setFragmentLookupFailure(undefined);
+        const opener = document.getElementById(`definition-${definitionId}`);
+        if (opener instanceof HTMLElement) {
+          revealRecurringDefinitionActionRow(opener);
+        }
+        handledFragmentNavigationRef.current = fragmentNavigation;
+        deferredFragmentNavigationRef.current = undefined;
+        openEditRecurringDefinitionEditor(
+          definition,
+          opener instanceof HTMLElement ? opener : undefined,
+          fragmentNavigation,
+        );
+      };
+      frame = window.requestAnimationFrame(() => {
+        if (deferredFragmentNavigationRef.current === fragmentNavigation) {
+          deferredFrame = window.requestAnimationFrame(openLinkedEditor);
+          return;
+        }
+        openLinkedEditor();
+      });
+    };
+    if (snapshotDefinition) {
+      scheduleLinkedEditor(snapshotDefinition);
+    } else if (!search.trim()) {
+      showUnavailableDefinition();
+    } else {
+      void getRecurringDefinition({
+        path: { recurring_definition_id: definitionId },
+      }).then((result) => {
+        if (!active) {
+          return;
+        }
+        if (!result.data && result.response?.status === 404) {
+          showUnavailableDefinition();
+          return;
+        }
+        if (!result.data) {
+          setFragmentLookupFailure({
+            fragmentNavigation,
+            message: apiErrorMessage(
+              result.error,
+              "Recurring definition could not be loaded.",
+            ),
+          });
+          return;
+        }
+        scheduleLinkedEditor(result.data);
+      });
+    }
     return () => {
-      window.cancelAnimationFrame(frame);
+      active = false;
+      if (frame !== undefined) {
+        window.cancelAnimationFrame(frame);
+      }
       if (deferredFrame !== undefined) {
         window.cancelAnimationFrame(deferredFrame);
       }
@@ -150,6 +229,8 @@ export const RecurringPage = () => {
     navigate,
     recurringDefinitionEditor.open,
     recurringDefinitions.snapshot,
+    fragmentLookupRetryVersion,
+    search,
     templateEditor.open,
   ]);
 
@@ -157,6 +238,7 @@ export const RecurringPage = () => {
     if (definitionIdFromFragment(location.hash) === undefined) {
       return;
     }
+    setFragmentLookupFailure(undefined);
     void navigate(
       { pathname: location.pathname, search: location.search },
       { replace: true },
@@ -203,11 +285,62 @@ export const RecurringPage = () => {
             appear inline in Transactions.
           </PageHelp>
         }
+        toolbar={
+          <ReferenceToolbar
+            includeHidden={false}
+            search={search}
+            searchDraftResetVersion={searchToolbarGeneration}
+            searchInputId="recurring-search"
+            searchPlaceholder="Full definition path"
+            setSearchParams={setSearchParamsPreservingFragment}
+            showIncludeHiddenToggle={false}
+          />
+        }
       />
+      {fragmentLookupFailure?.fragmentNavigation ===
+      `${location.key}:${location.hash}` ? (
+        <div
+          className="border-destructive bg-card flex flex-wrap items-center justify-between gap-3 border-2 p-3 shadow-[var(--shadow-pixel)]"
+          role="alert"
+        >
+          <div>
+            <p className="text-destructive font-semibold">
+              Recurring definition could not be loaded.
+            </p>
+            <p className="text-muted-foreground text-sm">
+              {fragmentLookupFailure.message}
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              setFragmentLookupFailure(undefined);
+              setFragmentLookupRetryVersion((current) => current + 1);
+            }}
+          >
+            Retry
+          </Button>
+        </div>
+      ) : null}
       <div className="min-h-0 flex-1">
         <RecurringPageContent
           errorMessage={recurringDefinitions.errorMessage}
+          filtered={search.trim() !== ""}
           loading={recurringDefinitions.loading}
+          onClearFilter={() => {
+            setSearchParamsPreservingFragment((current) => {
+              const next = new URLSearchParams(current);
+              next.delete("q");
+              return next;
+            });
+            setSearchToolbarGeneration((current) => current + 1);
+            window.requestAnimationFrame(() => {
+              document.getElementById("recurring-search")?.focus({
+                preventScroll: true,
+              });
+            });
+          }}
           onEdit={(definition, opener) => {
             clearDefinitionFragment();
             setEditorTarget({

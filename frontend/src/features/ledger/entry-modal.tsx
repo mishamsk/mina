@@ -8,7 +8,7 @@ import {
   useState,
 } from "react";
 
-import type { Transaction } from "@/api";
+import type { Transaction, TransactionTemplate } from "@/api";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { Toast } from "@/components/toast";
 import { focusWithoutTooltip } from "@/components/tooltip";
@@ -31,7 +31,7 @@ interface EntryModalProps {
   readonly errorMessage?: string;
   readonly globalNotice?: string;
   readonly initialTab?: TransactionEntryType;
-  readonly initialTemplateId?: number;
+  readonly initialTemplate?: TransactionTemplate;
   readonly launch?: EntryPanelLaunch;
   readonly lookups: LedgerLookupsSnapshot | undefined;
   readonly lookupsErrorMessage?: string;
@@ -135,7 +135,7 @@ export const EntryModal = ({
   errorMessage,
   globalNotice,
   initialTab,
-  initialTemplateId,
+  initialTemplate,
   launch,
   lookups,
   lookupsErrorMessage,
@@ -501,7 +501,7 @@ export const EntryModal = ({
               <EntryPanel
                 closeRequestRef={closeRequestRef}
                 initialTab={initialTab}
-                initialTemplateId={initialTemplateId}
+                initialTemplate={initialTemplate}
                 launch={launch}
                 lookups={lookups}
                 onClose={onClose}

@@ -8,7 +8,7 @@
 
 - The registry registers only the generated `Operations()` catalog before supplied extensions; malformed or duplicate tool registrations fail server construction rather than shadowing another tool.
 - Generated tools preserve their operations' declared REST inputs and invoke Mina only through their supplied generated `httpclient` REST client; MCP does not bypass REST validation or behavior.
-- Entity list tools provide exhaustive canonical filtering, while entity search tools provide bounded ranked discovery; Web-UI-only creation availability is excluded.
+- Hierarchical entity and Member list tools provide exhaustive canonical filtering, while entity search tools provide bounded ranked discovery; Web-UI-only creation availability is excluded.
 - Generated transaction replacement input exposes retained-record identity separately from creation-time provenance and requires the caller's ETag precondition; it does not infer record matches.
 - Tool results expose the REST status and decoded JSON body as structured content. Non-2xx responses remain MCP tool errors and expose the raw REST error body.
 - Streamable HTTP dispatches through an in-process REST client backed by exactly the handler supplied by its caller; authentication and outer HTTP composition remain the caller's responsibility.

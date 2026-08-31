@@ -1,4 +1,4 @@
-import { Check, Clock, Close, Plus, Reload, Trash } from "pixelarticons/react";
+import { Check, Clock, Close, Plus, Trash } from "pixelarticons/react";
 import {
   type MutableRefObject,
   type ReactNode,
@@ -33,6 +33,7 @@ import {
   createTransfer,
   type CreateTransferTransactionRequest,
   fetchTransactionById,
+  getTransactionTemplate,
   type JournalRecord,
   replaceLedgerTransaction,
   restoreTransactionById,
@@ -53,11 +54,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
-import {
-  refreshTransactionTemplates,
-  useTransactionTemplatesResource,
-} from "@/features/templates/use-transaction-templates-resource";
 import type {
   AdvancedTransactionEntryDraft,
   JournalRecordRowDraft,
@@ -107,6 +103,7 @@ import {
   tagCreationAvailabilityLoader,
   tagPickerLoader,
   tagPickerOption,
+  transactionTemplatePickerLoader,
 } from "./entity-picker-loaders";
 import { captureTransactionEntryLaunchContext } from "./entry-launch-context";
 import {
@@ -134,7 +131,7 @@ import { refreshLedgerLookups } from "./use-transactions-resource";
 export interface EntryPanelProps {
   readonly closeRequestRef?: MutableRefObject<(() => void) | null>;
   readonly initialTab?: TransactionEntryType;
-  readonly initialTemplateId?: number;
+  readonly initialTemplate?: TransactionTemplate;
   readonly launch?: EntryPanelLaunch;
   readonly lookups: LedgerLookupsSnapshot | undefined;
   readonly onClose: () => void;
@@ -2960,7 +2957,7 @@ const isRegisterSummary = (
 export const EntryPanel = ({
   closeRequestRef,
   initialTab,
-  initialTemplateId,
+  initialTemplate,
   launch,
   lookups: lookupSnapshot,
   onClose,
@@ -2994,20 +2991,12 @@ export const EntryPanel = ({
     readonly Transaction[]
   >([]);
   const appliedInitialTemplateRef = useRef<number | undefined>(undefined);
+  const templateApplicationRequestGenerationRef = useRef(0);
   const [replacement, setReplacement] = useState<
     ReplacementContext | undefined
   >();
   const [replacementRefreshRequired, setReplacementRefreshRequired] =
     useState(false);
-  const templatesResource = useTransactionTemplatesResource(
-    open && !replacement,
-  );
-  const templatesColdLoading =
-    templatesResource.loading && !templatesResource.snapshot;
-  const templates = useMemo(
-    () => templatesResource.snapshot?.templates ?? [],
-    [templatesResource.snapshot],
-  );
   const [pendingLaunchDraft, setPendingLaunchDraft] = useState<
     PendingLaunchDraft | undefined
   >();
@@ -3121,7 +3110,6 @@ export const EntryPanel = ({
   const ordinaryBaselineMustPersistRef = useRef(false);
   const ordinaryDraftStoredRef = useRef(false);
   const lastStoredDraftFingerprintRef = useRef<string | undefined>(undefined);
-  const templateFocusDeferredRef = useRef(false);
   const cancelledConflictSavePendingRef = useRef(false);
   const preserveFocusOnReplacementChangeRef = useRef(false);
 
@@ -3220,26 +3208,16 @@ export const EntryPanel = ({
     ? tabConfigs[activeShorthandTab]
     : undefined;
   const activeCategoryCreationIntent = activeConfig?.categoryIntents[0];
-  const availableTemplates = useMemo(
+  const templateOptionLoader = useMemo(
     () =>
-      activeTab === "advanced"
-        ? templates
-        : activeTab === "exchange"
-          ? []
-          : templates.filter((template) =>
-              template.compatible_shorthands.includes(activeTab),
-            ),
-    [activeTab, templates],
-  );
-  const templateOptions = useMemo<readonly EntityOption[]>(
-    () =>
-      availableTemplates.map((template) => ({
-        detail: template.fqn,
-        id: template.transaction_template_id,
-        label: template.name,
-        searchLabel: template.fqn,
-      })),
-    [availableTemplates],
+      activeTab === "exchange"
+        ? undefined
+        : transactionTemplatePickerLoader({
+            context: "transaction_entry",
+            compatible_shorthand:
+              activeTab === "advanced" ? undefined : activeTab,
+          }),
+    [activeTab],
   );
   const launchKey = launch
     ? `${launch.type}:${launch.transaction.transaction_id}`
@@ -3350,7 +3328,7 @@ export const EntryPanel = ({
             ? getUiPreferencesSnapshot().transactionEntryActiveTab
             : migratedDraft.activeTab;
         const launchInitialTab =
-          initialTemplateId === undefined ? initialTab : undefined;
+          initialTemplate === undefined ? initialTab : undefined;
         const ordinaryDraft = launchInitialTab
           ? {
               ...migratedDraft,
@@ -3431,7 +3409,7 @@ export const EntryPanel = ({
     };
   }, [
     initialTab,
-    initialTemplateId,
+    initialTemplate,
     launch,
     launchKey,
     launchLookupsReady,
@@ -3484,7 +3462,6 @@ export const EntryPanel = ({
 
   useEffect(() => {
     if (!open) {
-      templateFocusDeferredRef.current = false;
       return;
     }
     if (!currentDraftReady) {
@@ -3494,18 +3471,11 @@ export const EntryPanel = ({
       preserveFocusOnReplacementChangeRef.current = false;
       return;
     }
-    if (!replacement && templatesColdLoading) {
-      templateFocusDeferredRef.current = true;
-      return;
-    }
-
-    const templateFocusWasDeferred = templateFocusDeferredRef.current;
-    templateFocusDeferredRef.current = false;
     const activeElement = document.activeElement;
     const animationFrame = window.requestAnimationFrame(() => {
       if (
         entryPanelRef.current?.contains(document.activeElement) &&
-        (templateFocusWasDeferred || document.activeElement !== activeElement)
+        document.activeElement !== activeElement
       ) {
         return;
       }
@@ -3520,7 +3490,7 @@ export const EntryPanel = ({
     return () => {
       window.cancelAnimationFrame(animationFrame);
     };
-  }, [currentDraftReady, open, replacement, templatesColdLoading]);
+  }, [currentDraftReady, open, replacement]);
 
   const currencies = useMemo(() => lookupCurrencies(lookups), [lookups]);
   const createFlowAccountOption = async (fqn: string) => {
@@ -4074,6 +4044,7 @@ export const EntryPanel = ({
     if (!activeShorthandTab || !activeTabDraft) {
       return;
     }
+    templateApplicationRequestGenerationRef.current += 1;
 
     let advancedDraft = shorthandDraftToAdvanced(
       activeShorthandTab,
@@ -4111,6 +4082,7 @@ export const EntryPanel = ({
     if (!tabIsAvailable(entryType)) {
       return;
     }
+    templateApplicationRequestGenerationRef.current += 1;
     if (
       entryType === "advanced" &&
       replacement &&
@@ -4164,6 +4136,52 @@ export const EntryPanel = ({
     [applyTemplate, draft],
   );
 
+  const requestTemplateApplicationByID = useCallback(
+    async (templateID: number, targetTab: TransactionEntryType) => {
+      templateApplicationRequestGenerationRef.current += 1;
+      const requestGeneration = templateApplicationRequestGenerationRef.current;
+      const editorSessionGeneration = editorSessionRef.current.generation;
+      const result = await getTransactionTemplate({
+        path: { transaction_template_id: templateID },
+      });
+      if (
+        requestGeneration !== templateApplicationRequestGenerationRef.current ||
+        editorSessionGeneration !== editorSessionRef.current.generation
+      ) {
+        return;
+      }
+      if (!result.data) {
+        setGeneralError(
+          apiErrorMessage(
+            result.error,
+            "The selected template could not be loaded.",
+          ),
+        );
+        focusTemplatePicker();
+        return;
+      }
+      const template = result.data;
+      if (
+        targetTab !== "advanced" &&
+        targetTab !== "exchange" &&
+        !template.compatible_shorthands.includes(targetTab)
+      ) {
+        setGeneralError(
+          "The selected template no longer fits this entry type.",
+        );
+        focusTemplatePicker();
+        return;
+      }
+      if (draftHasUserInput(latestDraftRef.current, defaultDraft())) {
+        setPendingTemplateApplication({ targetTab, template });
+        setConfirmTemplateReplaceOpen(true);
+        return;
+      }
+      applyTemplate(template, targetTab);
+    },
+    [applyTemplate, focusTemplatePicker],
+  );
+
   const confirmTemplateApplication = useCallback(() => {
     if (!pendingTemplateApplication) {
       return;
@@ -4180,6 +4198,7 @@ export const EntryPanel = ({
     if (clearingDraft) {
       return;
     }
+    templateApplicationRequestGenerationRef.current += 1;
     setClearingDraft(true);
     setClearDraftError(undefined);
     try {
@@ -4220,6 +4239,7 @@ export const EntryPanel = ({
   }, [clearingDraft, focusTemplatePicker]);
 
   const requestClearDraft = useCallback(() => {
+    templateApplicationRequestGenerationRef.current += 1;
     setClearDraftError(undefined);
     if (draftHasUserInput(draft, defaultDraft())) {
       setConfirmClearDraftOpen(true);
@@ -4239,19 +4259,15 @@ export const EntryPanel = ({
       !open ||
       !currentDraftReady ||
       replacement ||
-      initialTemplateId === undefined ||
-      appliedInitialTemplateRef.current === initialTemplateId
+      initialTemplate === undefined ||
+      appliedInitialTemplateRef.current ===
+        initialTemplate.transaction_template_id
     ) {
       return;
     }
-    const initialTemplate = templates.find(
-      (template) => template.transaction_template_id === initialTemplateId,
-    );
-    if (!initialTemplate) {
-      return;
-    }
     const timeoutId = window.setTimeout(() => {
-      appliedInitialTemplateRef.current = initialTemplateId;
+      appliedInitialTemplateRef.current =
+        initialTemplate.transaction_template_id;
       requestTemplateApplication(
         initialTemplate,
         templateEntryType(initialTemplate),
@@ -4262,11 +4278,10 @@ export const EntryPanel = ({
     };
   }, [
     currentDraftReady,
-    initialTemplateId,
+    initialTemplate,
     open,
     replacement,
     requestTemplateApplication,
-    templates,
   ]);
 
   const validateField = useCallback(
@@ -4297,6 +4312,7 @@ export const EntryPanel = ({
       if (!canSubmit) {
         return;
       }
+      templateApplicationRequestGenerationRef.current += 1;
 
       if (replacement) {
         let body: UpdateTransactionRequest | undefined;
@@ -5135,67 +5151,25 @@ export const EntryPanel = ({
           className="border-b-2 border-[var(--border-ink)] bg-[var(--band)] px-4 py-3"
         >
           <div className="mx-auto flex w-full max-w-[560px] flex-col gap-1">
-            {templatesColdLoading ? (
-              <div className="flex flex-col gap-1">
-                <span className="text-sm font-semibold">
-                  Start from a template
-                </span>
-                <Skeleton
-                  className="h-9 w-full"
-                  data-testid="entry-template-loading"
-                />
-                <span className="sr-only" role="status">
-                  Loading template choices
-                </span>
-              </div>
-            ) : (
-              <EntityPicker
-                key={`entry-template-${pickerLifecycle}`}
-                id="entry-template"
-                clearOnSelect
-                disabled={!currentDraftReady || clearingDraft}
-                label="Start from a template"
-                openOnFocus={templatePickerOpenOnFocus}
-                options={templateOptions}
-                placeholder="Type a template name or skip"
-                value={undefined}
-                onChange={(templateId) => {
-                  if (templateId === undefined) {
-                    return;
-                  }
-                  const template = availableTemplates.find(
-                    (candidate) =>
-                      candidate.transaction_template_id === templateId,
-                  );
-                  if (template) {
-                    requestTemplateApplication(template, activeTab);
-                  }
-                }}
-              />
-            )}
-            {templatesResource.errorMessage ? (
-              <div
-                className="border-destructive text-destructive mt-1 flex items-center justify-between gap-2 border-2 px-2 py-1 text-xs"
-                role="alert"
-              >
-                <span>
-                  {templatesResource.snapshot
-                    ? "Template choices could not be refreshed."
-                    : "Templates could not be loaded."}
-                </span>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    void refreshTransactionTemplates();
-                  }}
-                >
-                  <Reload aria-hidden="true" />
-                  Retry
-                </Button>
-              </div>
-            ) : null}
+            <EntityPicker
+              key={`entry-template-${activeTab}-${pickerLifecycle}`}
+              id="entry-template"
+              clearOnSelect
+              disabled={!currentDraftReady || clearingDraft || saving}
+              hierarchical
+              label="Start from a template"
+              loadKey={activeTab}
+              loadOptions={templateOptionLoader}
+              openOnFocus={templatePickerOpenOnFocus}
+              placeholder="Type a template name or skip"
+              value={undefined}
+              onChange={(templateId) => {
+                if (templateId === undefined) {
+                  return;
+                }
+                void requestTemplateApplicationByID(templateId, activeTab);
+              }}
+            />
           </div>
         </div>
       ) : null}

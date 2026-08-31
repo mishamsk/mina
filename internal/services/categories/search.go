@@ -3,7 +3,6 @@ package categories
 import (
 	"context"
 	"strconv"
-	"strings"
 
 	"github.com/mishamsk/mina/internal/services"
 	"github.com/mishamsk/mina/internal/x/fuzzyrank"
@@ -76,7 +75,7 @@ func (s *Service) Search(ctx context.Context, opts SearchOptions) (SearchResult,
 	}
 	candidates := make([]fuzzyrank.Candidate[SearchItem], 0, len(leaves)*2)
 	for _, leaf := range leaves {
-		if !searchFQNInScope(leaf.FQN, opts.ParentFQN) || excluded.Contains(leaf.ID) {
+		if !services.SearchFQNInScope(leaf.FQN, opts.ParentFQN) || excluded.Contains(leaf.ID) {
 			continue
 		}
 		id := leaf.ID
@@ -86,14 +85,14 @@ func (s *Service) Search(ctx context.Context, opts SearchOptions) (SearchResult,
 		candidates = append(candidates, searchCandidate("leaf:"+strconv.FormatInt(id, 10), title, leaf.FQN, item))
 	}
 	for _, group := range deriveSearchGroups(leaves) {
-		if !searchFQNInScope(group.FQN, opts.ParentFQN) {
+		if !services.SearchFQNInScope(group.FQN, opts.ParentFQN) {
 			continue
 		}
 		count := group.ChildCount
-		item := SearchItem{Kind: SearchItemKindGroup, Title: searchFQNLeaf(group.FQN), FQN: group.FQN, IsHidden: group.IsHidden, ChildCount: &count}
+		item := SearchItem{Kind: SearchItemKindGroup, Title: services.FQNLeaf(group.FQN), FQN: group.FQN, IsHidden: group.IsHidden, ChildCount: &count}
 		candidates = append(candidates, searchCandidate("group:"+group.FQN, item.Title, group.FQN, item))
 	}
-	ordered := fuzzyrank.Rank(searchRankQuery(opts.Query, opts.ParentFQN), candidates)
+	ordered := fuzzyrank.Rank(services.SearchRankQuery(opts.Query, opts.ParentFQN), candidates)
 	hasMore := len(ordered) > opts.Limit
 	ordered = fuzzyrank.Limit(opts.Query, ordered, opts.Limit)
 	items := make([]SearchItem, len(ordered))
@@ -170,30 +169,4 @@ func deriveSearchGroups(leaves []Reference) []searchGroup {
 
 func searchCandidate(id, title, fqn string, value SearchItem) fuzzyrank.Candidate[SearchItem] {
 	return fuzzyrank.Candidate[SearchItem]{ID: id, Title: title, FQN: fqn, Terms: fuzzyrank.EntityTerms(title, fqn), Value: value}
-}
-
-func searchFQNInScope(fqn string, parent *string) bool {
-	if parent == nil {
-		return true
-	}
-	index := strings.LastIndex(fqn, ":")
-	actual := ""
-	if index >= 0 {
-		actual = fqn[:index]
-	}
-	return actual == *parent
-}
-
-func searchRankQuery(query string, parent *string) string {
-	if parent == nil || *parent == "" {
-		return query
-	}
-	return strings.TrimPrefix(query, *parent+":")
-}
-
-func searchFQNLeaf(fqn string) string {
-	if index := strings.LastIndex(fqn, ":"); index >= 0 {
-		return fqn[index+1:]
-	}
-	return fqn
 }

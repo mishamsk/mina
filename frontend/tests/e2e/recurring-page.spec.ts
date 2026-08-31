@@ -135,6 +135,76 @@ test("recurring definitions table renders seeded definitions and schedule detail
   await expect(table).toContainText("Every 1 month");
   await expect(table).toContainText("Active");
   await expect(table.getByRole("columnheader", { name: "Next" })).toBeVisible();
+  const search = page.getByRole("searchbox", { name: "Search" });
+  const filteredRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return (
+      url.pathname === "/api/recurring-definitions" &&
+      url.searchParams.get("q") === "Mortgage"
+    );
+  });
+  await search.fill("Mortgage");
+  const filteredURL = new URL((await filteredRequest).url());
+  expect(filteredURL.searchParams.get("sort")).toBe("next_due_date");
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first()).toContainText("Household:Mortgage");
+  await search.fill("NoSuchRecurringDefinition");
+  const emptyState = page.getByTestId("recurring-definitions-empty-state");
+  await expect(emptyState).toContainText("No matching recurring definitions");
+  let releaseUnfilteredRequest: () => void = () => undefined;
+  const unfilteredRequestGate = new Promise<void>((resolve) => {
+    releaseUnfilteredRequest = resolve;
+  });
+  await page.route("**/api/recurring-definitions?**", async (route) => {
+    const url = new URL(route.request().url());
+    if (!url.searchParams.has("q")) {
+      await unfilteredRequestGate;
+    }
+    await route.continue();
+  });
+  await emptyState.getByRole("button", { name: "Clear search" }).click();
+  await expect(search).toHaveValue("");
+  await expect(page.getByLabel("Loading recurring definitions")).toBeVisible();
+  await expect(emptyState).toHaveCount(0);
+  releaseUnfilteredRequest();
+  await expect(rows).toHaveCount(4);
+});
+
+test("recurring search restores focus when its result removes the focused row", async ({
+  page,
+}) => {
+  await page.goto("/recurring");
+  const rows = page.getByTestId("recurring-definition-row");
+  await expect(rows).toHaveCount(4);
+  let releaseSearch = () => {};
+  const searchGate = new Promise<void>((resolve) => {
+    releaseSearch = resolve;
+  });
+  let markSearchStarted = () => {};
+  const searchStarted = new Promise<void>((resolve) => {
+    markSearchStarted = resolve;
+  });
+  await page.route("**/api/recurring-definitions?**", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.get("q") !== "Mortgage") {
+      await route.continue();
+      return;
+    }
+    markSearchStarted();
+    await searchGate;
+    await route.continue();
+  });
+
+  const search = page.getByRole("searchbox", { name: "Search" });
+  await search.fill("Mortgage");
+  await searchStarted;
+  const excludedRow = rows.filter({ hasText: "Subscriptions:Netflix" });
+  await excludedRow.focus();
+  await expect(excludedRow).toBeFocused();
+  releaseSearch();
+
+  await expect(excludedRow).toHaveCount(0);
+  await expect(search).toBeFocused();
 });
 
 test("recurring editor reuses selected entities from loaded lookups", async ({
@@ -281,6 +351,67 @@ test("missing definition fragments clear with feedback", async ({ page }) => {
   await expect(
     page.getByRole("complementary", { name: "Edit recurring definition" }),
   ).toHaveCount(0);
+});
+
+test("filtered definition fragments survive search edits after transient exact-read failures", async ({
+  page,
+}) => {
+  const definition = await definitionByFqn(page, "Household:Mortgage");
+  let exactReadCount = 0;
+  await page.route(
+    `**/api/recurring-definitions/${definition.recurring_definition_id}`,
+    async (route) => {
+      if (route.request().method() !== "GET") {
+        await route.continue();
+        return;
+      }
+      exactReadCount += 1;
+      if (exactReadCount === 1) {
+        await route.fulfill({
+          body: JSON.stringify({
+            error: {
+              code: "internal_error",
+              message: "Definition temporarily unavailable.",
+            },
+          }),
+          contentType: "application/json",
+          status: 503,
+        });
+        return;
+      }
+      await route.continue();
+    },
+  );
+
+  await page.goto(
+    `/recurring?q=NoMatch#definition-${definition.recurring_definition_id}`,
+  );
+  const lookupError = page.getByRole("alert").filter({
+    hasText: "Recurring definition could not be loaded.",
+  });
+  await expect(lookupError).toContainText(
+    "Definition temporarily unavailable.",
+  );
+  await expect(page).toHaveURL(
+    new RegExp(`#definition-${definition.recurring_definition_id}$`),
+  );
+  await expect(
+    page.getByText("Recurring definition is no longer available."),
+  ).toHaveCount(0);
+
+  await page.getByRole("searchbox", { name: "Search" }).fill("StillNoMatch");
+  await expect(page).toHaveURL(
+    new RegExp(
+      `\\?q=StillNoMatch#definition-${definition.recurring_definition_id}$`,
+    ),
+  );
+
+  const editor = page.getByRole("complementary", {
+    name: "Edit recurring definition",
+  });
+  await expect(editor).toBeVisible();
+  await expect(editor.getByLabel("Definition FQN")).toHaveValue(definition.fqn);
+  expect(exactReadCount).toBe(2);
 });
 
 test("pausing a reordered definition restores its visible button focus", async ({

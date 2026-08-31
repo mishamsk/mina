@@ -16,19 +16,23 @@ import {
   waitForLedgerLookups,
 } from "@tests/e2e/transactions/support";
 
-test("template cold load preserves focus in an edited field", async ({
+test("template picker stays available while its initial search loads", async ({
   page,
 }) => {
-  let releaseTemplates: (() => void) | undefined;
-  const templatesRequested = new Promise<void>((resolve) => {
+  let releaseSearch: (() => void) | undefined;
+  const searchRequested = new Promise<void>((resolve) => {
     void page.route("**/api/transaction-templates**", async (route) => {
-      if (route.request().method() !== "GET") {
+      const url = new URL(route.request().url());
+      if (
+        route.request().method() !== "GET" ||
+        url.pathname !== "/api/transaction-templates/search"
+      ) {
         await route.continue();
         return;
       }
       resolve();
       await new Promise<void>((release) => {
-        releaseTemplates = release;
+        releaseSearch = release;
       });
       await route.continue();
     });
@@ -39,40 +43,35 @@ test("template cold load preserves focus in an edited field", async ({
     .locator("header")
     .getByRole("button", { name: "New transaction" })
     .click();
-  await templatesRequested;
-  const loadingSkeleton = page.getByTestId("entry-template-loading");
-  await expect(loadingSkeleton).toBeVisible();
-  await expect(page.getByText("Loading templates…")).toHaveCount(0);
-  const amount = page
-    .getByRole("group", { name: "Merchant 1" })
-    .getByLabel("Amount");
-  await amount.fill("12.34");
-  await expect(amount).toBeFocused();
-
-  releaseTemplates?.();
+  await searchRequested;
   const templatePicker = page.getByRole("combobox", {
     name: "Start from a template",
   });
   await expect(templatePicker).toBeVisible();
-  await expect(amount).toBeFocused();
-  await expect(amount).toHaveValue("12.34");
+  await expect(templatePicker).toBeFocused();
+  await expect(
+    page.getByText("Loading options…", { exact: true }),
+  ).toBeVisible();
+  releaseSearch?.();
 });
 
-test("template cold load focuses the picker when the dialog remains idle", async ({
-  page,
-}) => {
-  let releaseTemplates: (() => void) | undefined;
-  const templatesRequested = new Promise<void>((resolve) => {
+test("template picker reports initial search failures", async ({ page }) => {
+  const searchRequested = new Promise<void>((resolve) => {
     void page.route("**/api/transaction-templates**", async (route) => {
-      if (route.request().method() !== "GET") {
+      const url = new URL(route.request().url());
+      if (
+        route.request().method() !== "GET" ||
+        url.pathname !== "/api/transaction-templates/search"
+      ) {
         await route.continue();
         return;
       }
       resolve();
-      await new Promise<void>((release) => {
-        releaseTemplates = release;
+      await route.fulfill({
+        contentType: "application/json",
+        status: 500,
+        body: JSON.stringify({ code: "internal", message: "unavailable" }),
       });
-      await route.continue();
     });
   });
 
@@ -81,13 +80,13 @@ test("template cold load focuses the picker when the dialog remains idle", async
     .locator("header")
     .getByRole("button", { name: "New transaction" })
     .click();
-  await templatesRequested;
-  await expect(page.getByTestId("entry-template-loading")).toBeVisible();
-
-  releaseTemplates?.();
+  await searchRequested;
   await expect(
     page.getByRole("combobox", { name: "Start from a template" }),
   ).toBeFocused();
+  await expect(page.getByRole("alert")).toContainText(
+    "Templates could not be loaded.",
+  );
 });
 
 test("picker debounces search and retains stable rows until replacement", async ({
@@ -350,13 +349,6 @@ test("template picker constrains long paths and exposes the full path", async ({
   const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
   const leaf = "UnbrokenTemplateSegment".repeat(12);
   const fqn = `E2E:${unique}:${leaf}`;
-  const response = await page.request.post("/api/transaction-templates", {
-    data: { fqn, records: [{}] },
-  });
-  expect(response.ok(), await response.text()).toBe(true);
-  const templateId = (
-    (await response.json()) as { transaction_template_id: number }
-  ).transaction_template_id;
 
   await page.goto("/transactions?page=1&pageSize=25");
   await page
@@ -365,11 +357,39 @@ test("template picker constrains long paths and exposes the full path", async ({
     .click();
   const editor = page.getByRole("dialog", { name: "Transaction editor" });
   await editor.getByRole("tab", { name: "Advanced" }).click();
-  await editor
-    .getByRole("combobox", { name: "Start from a template" })
-    .fill(unique);
+  const templatePicker = editor.getByRole("combobox", {
+    name: "Start from a template",
+  });
+  await expect(templatePicker).toBeVisible();
+  const response = await page.request.post("/api/transaction-templates", {
+    data: { fqn, records: [{ memo: unique }] },
+  });
+  expect(response.ok(), await response.text()).toBe(true);
+  const templateId = (
+    (await response.json()) as { transaction_template_id: number }
+  ).transaction_template_id;
+  const rankedTemplateRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return (
+      url.pathname === "/api/transaction-templates/search" &&
+      url.searchParams.get("q") === unique
+    );
+  });
+  await templatePicker.fill(unique);
+  const rankedTemplateURL = new URL((await rankedTemplateRequest).url());
+  expect(rankedTemplateURL.searchParams.get("context")).toBe(
+    "transaction_entry",
+  );
+  expect(rankedTemplateURL.searchParams.get("limit")).toBe("6");
+  expect(rankedTemplateURL.searchParams.get("compatible_shorthand")).toBeNull();
   const option = page.getByRole("option").filter({ hasText: fqn });
   await expect(option).toBeVisible();
+  const optionId = await option.getAttribute("id");
+  await templatePicker.press("ArrowDown");
+  await expect(templatePicker).toHaveAttribute(
+    "aria-activedescendant",
+    optionId!,
+  );
   const activeLabel = option.getByTestId("entity-picker-fqn");
   await expect(activeLabel).toHaveText(fqn);
   await expect(activeLabel).toHaveCSS("white-space", "normal");
@@ -389,6 +409,102 @@ test("template picker constrains long paths and exposes the full path", async ({
     .toBe(true);
   await option.locator("[data-slot='tooltip-trigger']").last().hover();
   await expect(page.getByRole("tooltip")).toHaveText(`${fqn} (${leaf})`);
+  const exactTemplateRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === `/api/transaction-templates/${templateId}`;
+  });
+  await option.click();
+  await exactTemplateRequest;
+  await expect(journalRecord(page, 1).getByLabel("Memo")).toHaveValue(unique);
+
+  const deleted = await page.request.delete(
+    `/api/transaction-templates/${templateId}`,
+  );
+  expect(deleted.ok(), await deleted.text()).toBe(true);
+});
+
+test("clear and tab changes discard pending template reads", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const fqn = `E2E:${unique}:Delayed template`;
+  const created = await page.request.post("/api/transaction-templates", {
+    data: { fqn, records: [{ memo: unique }] },
+  });
+  expect(created.ok(), await created.text()).toBe(true);
+  const templateId = (
+    (await created.json()) as { transaction_template_id: number }
+  ).transaction_template_id;
+  const releaseReads: (() => void)[] = [];
+  const readGates = [0, 1].map(
+    () =>
+      new Promise<void>((resolve) => {
+        releaseReads.push(resolve);
+      }),
+  );
+  const markReadStarted: (() => void)[] = [];
+  const readsStarted = [0, 1].map(
+    () =>
+      new Promise<void>((resolve) => {
+        markReadStarted.push(resolve);
+      }),
+  );
+  const markReadFinished: (() => void)[] = [];
+  const readsFinished = [0, 1].map(
+    () =>
+      new Promise<void>((resolve) => {
+        markReadFinished.push(resolve);
+      }),
+  );
+  let readCount = 0;
+  await page.route(
+    `**/api/transaction-templates/${templateId}`,
+    async (route) => {
+      const readIndex = readCount;
+      readCount += 1;
+      markReadStarted[readIndex]?.();
+      await readGates[readIndex];
+      const response = await route.fetch();
+      await route.fulfill({ response });
+      markReadFinished[readIndex]?.();
+    },
+  );
+
+  await page.goto("/transactions?page=1&pageSize=25");
+  await page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" })
+    .click();
+  const editor = page.getByRole("dialog", { name: "Transaction editor" });
+  const picker = editor.getByRole("combobox", {
+    name: "Start from a template",
+  });
+  await editor.getByRole("tab", { name: "Advanced" }).click();
+  await picker.fill(unique);
+  await page.getByRole("option").filter({ hasText: fqn }).click();
+  await readsStarted[0];
+  await editor.getByRole("button", { name: "Clear draft" }).click();
+  await expect(picker).toBeFocused();
+  releaseReads[0]!();
+  await readsFinished[0];
+  await expect(editor.getByRole("tab", { name: "Spend" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(editor.getByLabel("Memo")).toHaveValue("");
+
+  await editor.getByRole("tab", { name: "Advanced" }).click();
+  await picker.fill(unique);
+  await page.getByRole("option").filter({ hasText: fqn }).click();
+  await readsStarted[1];
+  await editor.getByRole("tab", { name: "Income" }).click();
+  releaseReads[1]!();
+  await readsFinished[1];
+  await expect(editor.getByRole("tab", { name: "Income" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(editor.getByLabel("Memo")).toHaveValue("");
 
   const deleted = await page.request.delete(
     `/api/transaction-templates/${templateId}`,

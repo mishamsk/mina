@@ -908,7 +908,7 @@ export const AppShell = ({ children }: AppShellProps) => {
         errorMessage={entryModal.errorMessage}
         globalNotice={logoutError}
         initialTab={entryModal.initialTab}
-        initialTemplateId={entryModal.initialTemplateId}
+        initialTemplate={entryModal.initialTemplate}
         launch={entryModal.launch}
         loading={entryModal.loading}
         loadingCreate={entryModal.requestedEntry?.startsWith("duplicate:")}

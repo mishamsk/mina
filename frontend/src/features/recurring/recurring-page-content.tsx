@@ -58,7 +58,9 @@ import type { RecurringDefinitionsSnapshot } from "./use-recurring-definitions-r
 
 interface RecurringPageContentProps {
   readonly errorMessage: string | undefined;
+  readonly filtered: boolean;
   readonly loading: boolean;
+  readonly onClearFilter: () => void;
   readonly onEdit: (
     definition: RecurringDefinition,
     opener: HTMLElement,
@@ -323,7 +325,9 @@ const RecurringDefinitionsSkeleton = () => (
 
 export const RecurringPageContent = ({
   errorMessage,
+  filtered,
   loading,
+  onClearFilter,
   onEdit,
   onNotice,
   refresh,
@@ -492,12 +496,28 @@ export const RecurringPageContent = ({
         />
         <div className="space-y-1">
           <p className="font-heading text-base font-semibold uppercase">
-            No recurring definitions
+            {filtered
+              ? "No matching recurring definitions"
+              : "No recurring definitions"}
           </p>
           <p className="font-body text-muted-foreground max-w-prose text-sm">
-            Create a definition to schedule a complete balanced transaction.
+            {filtered
+              ? "Clear the search to see every scheduled definition."
+              : "Create a definition to schedule a complete balanced transaction."}
           </p>
         </div>
+        {filtered ? (
+          <Button
+            type="button"
+            variant="outline"
+            onMouseDown={(event) => {
+              event.preventDefault();
+            }}
+            onClick={onClearFilter}
+          >
+            Clear search
+          </Button>
+        ) : null}
       </div>
     );
   }

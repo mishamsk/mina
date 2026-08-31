@@ -15,6 +15,7 @@ interface TransactionTemplatesState {
   readonly errorMessage: string | undefined;
   readonly invalidationVersion: number;
   readonly loading: boolean;
+  readonly mutationVersion: number;
   readonly snapshot: TransactionTemplatesSnapshot | undefined;
 }
 
@@ -22,6 +23,7 @@ const initialTransactionTemplatesState: TransactionTemplatesState = {
   errorMessage: undefined,
   invalidationVersion: 0,
   loading: false,
+  mutationVersion: 0,
   snapshot: undefined,
 };
 
@@ -43,6 +45,7 @@ export const useTransactionTemplatesView = () =>
       errorMessage: state.errorMessage,
       invalidationVersion: state.invalidationVersion,
       loading: state.loading,
+      mutationVersion: state.mutationVersion,
       snapshot: state.snapshot,
     })),
   );
@@ -114,16 +117,16 @@ const updateTransactionTemplates = (
   action: string,
 ): void => {
   useTransactionTemplatesStore.setState(
-    (state) =>
-      state.snapshot
+    (state) => ({
+      errorMessage: undefined,
+      mutationVersion: state.mutationVersion + 1,
+      snapshot: state.snapshot
         ? {
-            errorMessage: undefined,
-            snapshot: {
-              loadedAt: new Date().toISOString(),
-              templates: update(state.snapshot.templates),
-            },
+            loadedAt: new Date().toISOString(),
+            templates: update(state.snapshot.templates),
           }
-        : state,
+        : undefined,
+    }),
     false,
     action,
   );

@@ -2404,8 +2404,13 @@ paths:
       operationId: listTransactionTemplates
       tags:
         - transaction-templates
-      summary: List transaction templates.
+      summary: List transaction templates in canonical order, optionally filtered by shared fuzzy membership.
       parameters:
+        - name: q
+          description: Case-insensitive fuzzy membership over template names, complete FQNs, FQN segments, and matching implicit-group descendants; the caller-requested sort is preserved, defaulting to ascending FQN.
+          in: query
+          required: false
+          schema: {type: string}
         - name: sort
           description: "Field used to sort matching results; defaults to `fqn`."
           in: query
@@ -2516,6 +2521,53 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/TransactionTemplateFQNConflict"
+  /api/transaction-templates/search:
+    get:
+      operationId: searchTransactionTemplates
+      tags: [transaction-templates]
+      summary: Return ranked transaction-template candidates for bounded discovery.
+      parameters:
+        - name: context
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [navigation, transaction_entry]
+        - name: limit
+          in: query
+          required: true
+          schema: {type: integer, minimum: 1, maximum: 500}
+        - name: q
+          in: query
+          required: false
+          schema: {type: string}
+        - name: parent_fqn
+          description: Return only direct children of this hierarchy group; an empty value selects root children.
+          in: query
+          required: false
+          schema: {type: string}
+        - name: exclude_ids
+          description: Active selected leaf IDs to omit from candidates.
+          in: query
+          required: false
+          style: form
+          explode: true
+          schema:
+            type: array
+            items: {type: integer, format: int64, minimum: 1}
+        - name: compatible_shorthand
+          description: Restrict transaction-entry candidates to templates compatible with this shorthand; omit for advanced entry.
+          in: query
+          required: false
+          schema: {$ref: "#/components/schemas/TransactionTemplateShorthandType"}
+      responses:
+        "401": {$ref: "#/components/responses/Unauthenticated"}
+        "200":
+          description: Ranked transaction-template candidates and truncation state.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/TransactionTemplateSearchResponse"}
+        "400": {$ref: "#/components/responses/InvalidRequest"}
   /api/transaction-templates/{transaction_template_id}:
     parameters:
       - name: transaction_template_id
@@ -2592,8 +2644,13 @@ paths:
       operationId: listRecurringDefinitions
       tags:
         - recurring
-      summary: List recurring definitions.
+      summary: List recurring definitions in canonical order, optionally filtered by shared fuzzy membership.
       parameters:
+        - name: q
+          description: Case-insensitive fuzzy membership over definition names, complete FQNs, FQN segments, and matching implicit-group descendants; requested sort order is preserved.
+          in: query
+          required: false
+          schema: {type: string}
         - name: sort
           description: "Field used to sort matching results; defaults to `fqn`. `next_due_date` keeps missing dates last and uses ascending FQN and definition ID tie-breakers."
           in: query
@@ -2676,6 +2733,48 @@ paths:
           $ref: "#/components/responses/InvalidRequest"
         "409":
           $ref: "#/components/responses/Conflict"
+  /api/recurring-definitions/search:
+    get:
+      operationId: searchRecurringDefinitions
+      tags: [recurring]
+      summary: Return ranked recurring-definition candidates for bounded discovery.
+      parameters:
+        - name: context
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [navigation]
+        - name: limit
+          in: query
+          required: true
+          schema: {type: integer, minimum: 1, maximum: 500}
+        - name: q
+          in: query
+          required: false
+          schema: {type: string}
+        - name: parent_fqn
+          description: Return only direct children of this hierarchy group; an empty value selects root children.
+          in: query
+          required: false
+          schema: {type: string}
+        - name: exclude_ids
+          description: Active selected leaf IDs to omit from candidates.
+          in: query
+          required: false
+          style: form
+          explode: true
+          schema:
+            type: array
+            items: {type: integer, format: int64, minimum: 1}
+      responses:
+        "401": {$ref: "#/components/responses/Unauthenticated"}
+        "200":
+          description: Ranked recurring-definition candidates and truncation state.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/RecurringDefinitionSearchResponse"}
+        "400": {$ref: "#/components/responses/InvalidRequest"}
   /api/recurring-definitions/{recurring_definition_id}:
     parameters:
       - name: recurring_definition_id
@@ -7393,6 +7492,29 @@ components:
     TransactionTemplateShorthandType:
       type: string
       enum: [spend, income, refund, transfer]
+    TransactionTemplateSearchResponse:
+      type: object
+      additionalProperties: false
+      required: [items, has_more]
+      properties:
+        items:
+          type: array
+          maxItems: 500
+          items: {$ref: "#/components/schemas/TransactionTemplateSearchItem"}
+        has_more: {type: boolean, description: Whether more ranked candidates matched beyond the caller's limit.}
+    TransactionTemplateSearchItem:
+      type: object
+      additionalProperties: false
+      required: [kind, title, fqn]
+      properties:
+        kind:
+          type: string
+          enum: [leaf, group]
+          x-enum-varnames: [TransactionTemplateSearchItemKindLeaf, TransactionTemplateSearchItemKindGroup]
+        transaction_template_id: {type: integer, format: int64, minimum: 1, description: Stable leaf identifier; absent for navigation groups.}
+        title: {type: string, description: Final FQN segment for leaves and navigation groups.}
+        fqn: {type: string, description: Complete authoritative transaction-template leaf or group path.}
+        child_count: {type: integer, minimum: 1, description: Descendant leaf count for navigation groups.}
     TransactionTemplateListResponse:
       type: object
       additionalProperties: false
@@ -7564,6 +7686,29 @@ components:
           format: int64
           minimum: 0
           description: Count of matching recurring definitions before limit and offset are applied.
+    RecurringDefinitionSearchResponse:
+      type: object
+      additionalProperties: false
+      required: [items, has_more]
+      properties:
+        items:
+          type: array
+          maxItems: 500
+          items: {$ref: "#/components/schemas/RecurringDefinitionSearchItem"}
+        has_more: {type: boolean, description: Whether more ranked candidates matched beyond the caller's limit.}
+    RecurringDefinitionSearchItem:
+      type: object
+      additionalProperties: false
+      required: [kind, title, fqn]
+      properties:
+        kind:
+          type: string
+          enum: [leaf, group]
+          x-enum-varnames: [RecurringDefinitionSearchItemKindLeaf, RecurringDefinitionSearchItemKindGroup]
+        recurring_definition_id: {type: integer, format: int64, minimum: 1, description: Stable leaf identifier; absent for navigation groups.}
+        title: {type: string, description: Final FQN segment for leaves and navigation groups.}
+        fqn: {type: string, description: Complete authoritative recurring-definition leaf or group path.}
+        child_count: {type: integer, minimum: 1, description: Descendant leaf count for navigation groups.}
     RecurringOccurrenceStatus:
       type: string
       enum:

@@ -235,6 +235,111 @@ test("long template paths stay within the narrow command palette", async ({
   expect(deleteResponse.ok(), await deleteResponse.text()).toBe(true);
 });
 
+test("command palette applies a ranked template newer than its complete snapshot", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const fqn = `E2E:PaletteSnapshot:${unique}`;
+  await page.goto("/overview");
+  const initialTemplates = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/transaction-templates" &&
+      response.request().method() === "GET"
+    );
+  });
+  await openPalette(page);
+  await initialTemplates;
+  await page.keyboard.press("Escape");
+
+  const created = await page.request.post("/api/transaction-templates", {
+    data: { fqn, records: [{ memo: unique }] },
+  });
+  expect(created.ok(), await created.text()).toBe(true);
+  const templateID = (
+    (await created.json()) as { transaction_template_id: number }
+  ).transaction_template_id;
+
+  await openPalette(page);
+  await page.getByRole("combobox", { name: "Command search" }).fill(unique);
+  const option = page.getByRole("option", { name: `Use ${fqn}` });
+  await expect(option).toBeVisible();
+  const exactTemplateRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === `/api/transaction-templates/${templateID}`;
+  });
+  await option.click();
+  await exactTemplateRequest;
+  const editor = page.getByRole("dialog", { name: "Transaction editor" });
+  await expect(editor).toBeVisible();
+  await expect(editor.getByLabel("Memo")).toHaveValue(unique);
+  await editor
+    .getByRole("button", { name: "Close transaction editor" })
+    .click();
+
+  const deleted = await page.request.delete(
+    `/api/transaction-templates/${templateID}`,
+  );
+  expect(deleted.ok(), await deleted.text()).toBe(true);
+});
+
+test("reopening the command palette discards a pending template activation", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const fqn = `E2E:PaletteReopen:${unique}`;
+  const created = await page.request.post("/api/transaction-templates", {
+    data: { fqn, records: [{ memo: unique }] },
+  });
+  expect(created.ok(), await created.text()).toBe(true);
+  const templateID = (
+    (await created.json()) as { transaction_template_id: number }
+  ).transaction_template_id;
+  let releaseRead = () => {};
+  const readGate = new Promise<void>((resolve) => {
+    releaseRead = resolve;
+  });
+  let markReadStarted = () => {};
+  const readStarted = new Promise<void>((resolve) => {
+    markReadStarted = resolve;
+  });
+  let markReadFinished = () => {};
+  const readFinished = new Promise<void>((resolve) => {
+    markReadFinished = resolve;
+  });
+  await page.route(
+    `**/api/transaction-templates/${templateID}`,
+    async (route) => {
+      markReadStarted();
+      await readGate;
+      const response = await route.fetch();
+      await route.fulfill({ response });
+      markReadFinished();
+    },
+  );
+
+  await page.goto("/overview");
+  await openPalette(page);
+  await page.getByRole("combobox", { name: "Command search" }).fill(unique);
+  await page.getByRole("option", { name: `Use ${fqn}` }).click();
+  await readStarted;
+  await openPalette(page);
+  releaseRead();
+  await readFinished;
+
+  await expect(
+    page.getByRole("dialog", { name: "Command Palette" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("dialog", { name: "Transaction editor" }),
+  ).toHaveCount(0);
+
+  const deleted = await page.request.delete(
+    `/api/transaction-templates/${templateID}`,
+  );
+  expect(deleted.ok(), await deleted.text()).toBe(true);
+});
+
 test("command palette toggles transaction edit-mode mode", async ({ page }) => {
   await page.goto("/transactions");
   await expect(page.getByText("Description")).toBeVisible();
@@ -786,6 +891,20 @@ test("command palette composes ranked entity surfaces within its viewport bound"
   page,
 }) => {
   await page.setViewportSize({ height: 1000, width: 900 });
+  const templateSecond = await page.request.post("/api/transaction-templates", {
+    data: { fqn: "RankedNeedle:TemplateSecond", records: [{}] },
+  });
+  const templateFirst = await page.request.post("/api/transaction-templates", {
+    data: { fqn: "RankedNeedle:TemplateFirst", records: [{}] },
+  });
+  expect(templateSecond.ok(), await templateSecond.text()).toBe(true);
+  expect(templateFirst.ok(), await templateFirst.text()).toBe(true);
+  const templateSecondID = (
+    (await templateSecond.json()) as { transaction_template_id: number }
+  ).transaction_template_id;
+  const templateFirstID = (
+    (await templateFirst.json()) as { transaction_template_id: number }
+  ).transaction_template_id;
   const requests = new Map<string, URLSearchParams>();
   const longMemberName = `RankedNeedle${"X".repeat(200)}`;
   const itemsBySurface = {
@@ -848,10 +967,24 @@ test("command palette composes ranked entity surfaces within its viewport bound"
           ? longMemberName
           : `RankedNeedle Member ${String(index + 1).padStart(2, "0")}`,
     })),
+    "transaction-templates": [
+      {
+        fqn: "RankedNeedle:TemplateSecond",
+        kind: "leaf",
+        title: "TemplateSecond",
+        transaction_template_id: templateSecondID,
+      },
+      {
+        fqn: "RankedNeedle:TemplateFirst",
+        kind: "leaf",
+        title: "TemplateFirst",
+        transaction_template_id: templateFirstID,
+      },
+    ],
   } as const;
 
   await page.route(
-    /\/api\/(accounts|categories|tags|members)\/search/,
+    /\/api\/(accounts|categories|tags|members|transaction-templates)\/search/,
     async (route) => {
       const url = new URL(route.request().url());
       const surface = url.pathname.split("/").at(-2);
@@ -879,10 +1012,12 @@ test("command palette composes ranked entity surfaces within its viewport bound"
   const search = dialog.getByRole("combobox", { name: "Command search" });
   await search.fill("RankedNeedle");
 
-  await expect.poll(() => requests.size).toBe(4);
-  const limits = [...requests.values()].map((params) => {
+  await expect.poll(() => requests.size).toBe(5);
+  const limits = [...requests.entries()].map(([surface, params]) => {
     expect(params.get("context")).toBe("navigation");
-    expect(params.get("include_hidden")).toBe("true");
+    expect(params.get("include_hidden")).toBe(
+      surface === "transaction-templates" ? null : "true",
+    );
     expect(params.get("q")).toBe("RankedNeedle");
     return Number(params.get("limit"));
   });
@@ -895,7 +1030,19 @@ test("command palette composes ranked entity surfaces within its viewport bound"
   expect(bound).toBeGreaterThan(6);
 
   const listbox = dialog.getByRole("listbox", { name: "Command results" });
-  await expect(listbox.getByRole("option")).toHaveCount(bound);
+  await expect(listbox.getByRole("option")).toHaveCount(bound + 2);
+  const templateOptions = dialog
+    .getByRole("group", { name: "New transaction" })
+    .getByRole("option");
+  await expect(templateOptions).toHaveCount(2);
+  expect(
+    await templateOptions.evaluateAll((options) =>
+      options.map((option) => option.getAttribute("aria-label")),
+    ),
+  ).toEqual([
+    "Use RankedNeedle:TemplateSecond",
+    "Use RankedNeedle:TemplateFirst",
+  ]);
   const accountOptions = dialog
     .getByRole("group", { name: "Accounts" })
     .getByRole("option");
@@ -952,8 +1099,10 @@ test("command palette composes ranked entity surfaces within its viewport bound"
   ).toEqual({ overflowX: "hidden", textOverflow: "ellipsis" });
 
   await expect(search).toBeFocused();
-  await page.keyboard.press("ArrowDown");
-  await page.keyboard.press("Enter");
+  await search.press("ArrowDown");
+  await search.press("ArrowDown");
+  await search.press("ArrowDown");
+  await search.press("Enter");
   await expect(page).toHaveURL(/\/accounts\/9101$/);
 });
 

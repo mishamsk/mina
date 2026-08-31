@@ -6,10 +6,15 @@ import {
   Repeat,
   Trash,
 } from "pixelarticons/react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { TransactionTemplate } from "@/api";
-import { apiErrorMessage, deleteTransactionTemplateById } from "@/api";
+import {
+  apiErrorDetails,
+  apiErrorMessage,
+  deleteTransactionTemplateById,
+  fetchAllTransactionTemplates,
+} from "@/api";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { ReferenceEntityDeleteDescription } from "@/components/reference-entity-delete-description";
 import type { RowAction } from "@/components/row-actions";
@@ -53,6 +58,14 @@ type DeleteTarget = {
   readonly opener: HTMLElement;
   readonly template: TransactionTemplate;
 };
+
+interface FilteredTemplatesState {
+  readonly errorMessage: string | undefined;
+  readonly mutationVersion: number;
+  readonly query: string;
+  readonly retryVersion: number;
+  readonly templates: readonly TransactionTemplate[] | undefined;
+}
 
 const templateGroups = (
   templates: readonly TransactionTemplate[],
@@ -102,22 +115,101 @@ export const TemplatesPageContent = ({
   onRestructurePath,
   search,
 }: TemplatesPageContentProps) => {
-  const templatesResource = useTransactionTemplatesResource();
+  const normalizedSearch = search.trim();
+  const templatesResource = useTransactionTemplatesResource(
+    normalizedSearch === "",
+  );
   const focusFallbackRef = useRef<HTMLDivElement | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget>();
   const [deleteErrorMessage, setDeleteErrorMessage] = useState<string>();
   const [deleting, setDeleting] = useState(false);
+  const filteredLoadGenerationRef = useRef(0);
+  const [filteredRetryVersion, setFilteredRetryVersion] = useState(0);
+  const [filteredState, setFilteredState] = useState<FilteredTemplatesState>({
+    errorMessage: undefined,
+    mutationVersion: 0,
+    query: "",
+    retryVersion: 0,
+    templates: undefined,
+  });
   const templates = templatesResource.snapshot?.templates ?? [];
-  const leaves: readonly TemplateTreeLeaf[] = templates.map((template) => ({
-    ...template,
-    is_hidden: false,
-  }));
-  const filteredLeaves = leaves.filter(
-    (leaf) =>
-      search.trim() === "" ||
-      leaf.fqn.toLowerCase().includes(search.trim().toLowerCase()),
+  useEffect(() => {
+    filteredLoadGenerationRef.current += 1;
+    const generation = filteredLoadGenerationRef.current;
+    if (!normalizedSearch) {
+      return;
+    }
+    void fetchAllTransactionTemplates(normalizedSearch).then((result) => {
+      if (filteredLoadGenerationRef.current !== generation) {
+        return;
+      }
+      if (!result.data) {
+        setFilteredState((current) => ({
+          errorMessage: apiErrorDetails(
+            result.error,
+            "Templates could not be searched.",
+          ),
+          mutationVersion: current.mutationVersion,
+          query: normalizedSearch,
+          retryVersion: filteredRetryVersion,
+          templates: current.templates,
+        }));
+        return;
+      }
+      const focusedElement =
+        document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : undefined;
+      setFilteredState({
+        errorMessage: undefined,
+        mutationVersion: templatesResource.mutationVersion,
+        query: normalizedSearch,
+        retryVersion: filteredRetryVersion,
+        templates: result.data.transaction_templates,
+      });
+      window.requestAnimationFrame(() => {
+        if (
+          focusedElement?.isConnected ||
+          (document.activeElement !== document.body &&
+            document.activeElement !== document.documentElement)
+        ) {
+          return;
+        }
+        const searchField = document.getElementById("templates-search");
+        focusWithoutTooltip(
+          searchField instanceof HTMLElement
+            ? searchField
+            : focusFallbackRef.current,
+          { preventScroll: true },
+        );
+      });
+    });
+  }, [
+    filteredRetryVersion,
+    normalizedSearch,
+    templatesResource.mutationVersion,
+  ]);
+  const filteredStateMatchesQuery = filteredState.query === normalizedSearch;
+  const filteredRequestIsCurrent =
+    filteredStateMatchesQuery &&
+    filteredState.retryVersion === filteredRetryVersion;
+  const filteredStateIsCurrent =
+    filteredRequestIsCurrent &&
+    filteredState.mutationVersion === templatesResource.mutationVersion;
+  const filteredRequestFailed =
+    filteredRequestIsCurrent && filteredState.errorMessage !== undefined;
+  const filteredRowsAreCurrent =
+    filteredState.mutationVersion === templatesResource.mutationVersion;
+  const displayedTemplates = normalizedSearch
+    ? (filteredState.templates ?? [])
+    : templates;
+  const leaves: readonly TemplateTreeLeaf[] = displayedTemplates.map(
+    (template) => ({
+      ...template,
+      is_hidden: false,
+    }),
   );
-  const groups = templateGroups(templates);
+  const groups = templateGroups(displayedTemplates);
 
   const restoreFocus = (opener: HTMLElement | undefined) => {
     window.requestAnimationFrame(() => {
@@ -220,9 +312,34 @@ export const TemplatesPageContent = ({
     ];
   };
 
-  const refreshErrorMessage = templatesResource.snapshot
-    ? templatesResource.errorMessage
-    : undefined;
+  const refreshErrorMessage = normalizedSearch
+    ? filteredRequestIsCurrent && filteredState.templates !== undefined
+      ? filteredState.errorMessage
+      : undefined
+    : templatesResource.snapshot
+      ? templatesResource.errorMessage
+      : undefined;
+  const loadErrorMessage = normalizedSearch
+    ? filteredRequestIsCurrent && filteredState.templates === undefined
+      ? filteredState.errorMessage
+      : undefined
+    : templatesResource.snapshot
+      ? undefined
+      : templatesResource.errorMessage;
+  const retryTemplates = () => {
+    const searchField = document.getElementById("templates-search");
+    focusWithoutTooltip(
+      searchField instanceof HTMLElement
+        ? searchField
+        : focusFallbackRef.current,
+      { preventScroll: true },
+    );
+    if (normalizedSearch) {
+      setFilteredRetryVersion((current) => current + 1);
+      return;
+    }
+    void refreshTransactionTemplates();
+  };
 
   return (
     <div
@@ -251,20 +368,7 @@ export const TemplatesPageContent = ({
               </pre>
             </details>
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              const searchField = document.getElementById("templates-search");
-              focusWithoutTooltip(
-                searchField instanceof HTMLElement
-                  ? searchField
-                  : focusFallbackRef.current,
-                { preventScroll: true },
-              );
-              void refreshTransactionTemplates();
-            }}
-          >
+          <Button type="button" variant="outline" onClick={retryTemplates}>
             Retry
           </Button>
         </div>
@@ -288,33 +392,40 @@ export const TemplatesPageContent = ({
               New template
             </Button>
           }
-          errorMessage={
-            templatesResource.snapshot
-              ? undefined
-              : templatesResource.errorMessage
-          }
-          filtered={search.trim() !== ""}
+          errorMessage={loadErrorMessage}
+          filtered={normalizedSearch !== ""}
           groups={groups}
           indicatorSlots={["featured", "hidden"]}
-          leaves={templatesResource.snapshot ? filteredLeaves : undefined}
-          loading={templatesResource.loading}
+          leaves={
+            normalizedSearch
+              ? filteredState.templates !== undefined
+                ? leaves
+                : undefined
+              : templatesResource.snapshot
+                ? leaves
+                : undefined
+          }
+          loading={
+            normalizedSearch
+              ? !filteredStateIsCurrent && !filteredRequestFailed
+              : templatesResource.loading
+          }
           loadErrorTitle="Templates could not be loaded."
-          onRetry={() => {
-            const searchField = document.getElementById("templates-search");
-            focusWithoutTooltip(
-              searchField instanceof HTMLElement
-                ? searchField
-                : focusFallbackRef.current,
-              { preventScroll: true },
-            );
-            void refreshTransactionTemplates();
-          }}
-          onRowClick={(row, opener) => {
-            if (row.leaf) {
-              onEditTemplate(row.leaf, opener);
-            }
-          }}
-          renderActions={renderActions}
+          onRetry={retryTemplates}
+          onRowClick={
+            normalizedSearch && !filteredRowsAreCurrent
+              ? undefined
+              : (row, opener) => {
+                  if (row.leaf) {
+                    onEditTemplate(row.leaf, opener);
+                  }
+                }
+          }
+          renderActions={
+            normalizedSearch && !filteredRowsAreCurrent
+              ? undefined
+              : renderActions
+          }
           renderBadge={(row) =>
             row.leaf ? (
               <span className="font-mono text-xs">

@@ -660,6 +660,24 @@ func (e RecurringDefinitionDeferRequestUnit) Valid() bool {
 	}
 }
 
+// Defines values for RecurringDefinitionSearchItemKind.
+const (
+	RecurringDefinitionSearchItemKindGroup RecurringDefinitionSearchItemKind = "group"
+	RecurringDefinitionSearchItemKindLeaf  RecurringDefinitionSearchItemKind = "leaf"
+)
+
+// Valid indicates whether the value is a known member of the RecurringDefinitionSearchItemKind enum.
+func (e RecurringDefinitionSearchItemKind) Valid() bool {
+	switch e {
+	case RecurringDefinitionSearchItemKindGroup:
+		return true
+	case RecurringDefinitionSearchItemKindLeaf:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RecurringOccurrenceStatus.
 const (
 	RecurringOccurrenceStatusConfirmed RecurringOccurrenceStatus = "confirmed"
@@ -915,6 +933,24 @@ func (e TransactionShapeType) Valid() bool {
 	case TransactionShapeTypeSpend:
 		return true
 	case TransactionShapeTypeTransfer:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TransactionTemplateSearchItemKind.
+const (
+	TransactionTemplateSearchItemKindGroup TransactionTemplateSearchItemKind = "group"
+	TransactionTemplateSearchItemKindLeaf  TransactionTemplateSearchItemKind = "leaf"
+)
+
+// Valid indicates whether the value is a known member of the TransactionTemplateSearchItemKind enum.
+func (e TransactionTemplateSearchItemKind) Valid() bool {
+	switch e {
+	case TransactionTemplateSearchItemKindGroup:
+		return true
+	case TransactionTemplateSearchItemKindLeaf:
 		return true
 	default:
 		return false
@@ -1380,6 +1416,21 @@ func (e ListRecurringDefinitionsParamsSortDir) Valid() bool {
 	}
 }
 
+// Defines values for SearchRecurringDefinitionsParamsContext.
+const (
+	SearchRecurringDefinitionsParamsContextNavigation SearchRecurringDefinitionsParamsContext = "navigation"
+)
+
+// Valid indicates whether the value is a known member of the SearchRecurringDefinitionsParamsContext enum.
+func (e SearchRecurringDefinitionsParamsContext) Valid() bool {
+	switch e {
+	case SearchRecurringDefinitionsParamsContextNavigation:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListRecurringOccurrencesParamsSort.
 const (
 	ListRecurringOccurrencesParamsSortCreatedAt     ListRecurringOccurrencesParamsSort = "created_at"
@@ -1512,6 +1563,24 @@ func (e ListTransactionTemplatesParamsSortDir) Valid() bool {
 	case Asc:
 		return true
 	case Desc:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SearchTransactionTemplatesParamsContext.
+const (
+	SearchTransactionTemplatesParamsContextNavigation       SearchTransactionTemplatesParamsContext = "navigation"
+	SearchTransactionTemplatesParamsContextTransactionEntry SearchTransactionTemplatesParamsContext = "transaction_entry"
+)
+
+// Valid indicates whether the value is a known member of the SearchTransactionTemplatesParamsContext enum.
+func (e SearchTransactionTemplatesParamsContext) Valid() bool {
+	switch e {
+	case SearchTransactionTemplatesParamsContextNavigation:
+		return true
+	case SearchTransactionTemplatesParamsContextTransactionEntry:
 		return true
 	default:
 		return false
@@ -2887,6 +2956,32 @@ type RecurringDefinitionRecordRequest struct {
 	TagIds *[]int64 `json:"tag_ids,omitempty"`
 }
 
+// RecurringDefinitionSearchItem defines model for RecurringDefinitionSearchItem.
+type RecurringDefinitionSearchItem struct {
+	// ChildCount Descendant leaf count for navigation groups.
+	ChildCount *int `json:"child_count,omitempty"`
+
+	// Fqn Complete authoritative recurring-definition leaf or group path.
+	Fqn  string                            `json:"fqn"`
+	Kind RecurringDefinitionSearchItemKind `json:"kind"`
+
+	// RecurringDefinitionId Stable leaf identifier; absent for navigation groups.
+	RecurringDefinitionId *int64 `json:"recurring_definition_id,omitempty"`
+
+	// Title Final FQN segment for leaves and navigation groups.
+	Title string `json:"title"`
+}
+
+// RecurringDefinitionSearchItemKind defines model for RecurringDefinitionSearchItem.Kind.
+type RecurringDefinitionSearchItemKind string
+
+// RecurringDefinitionSearchResponse defines model for RecurringDefinitionSearchResponse.
+type RecurringDefinitionSearchResponse struct {
+	// HasMore Whether more ranked candidates matched beyond the caller's limit.
+	HasMore bool                            `json:"has_more"`
+	Items   []RecurringDefinitionSearchItem `json:"items"`
+}
+
 // RecurringDefinitionWriteRequest defines model for RecurringDefinitionWriteRequest.
 type RecurringDefinitionWriteRequest struct {
 	// AnchorDate Schedule floor in YYYY-MM-DD format. The next occurrence is the first unoccupied schedule slot on or after this date. Creation accepts historical anchors for backfill; replacement accepts a changed anchor only on or after the server's current civil date, while an unchanged historical anchor remains valid.
@@ -3257,6 +3352,32 @@ type TransactionTemplateRecordRequest struct {
 
 	// TagIds Tag identifiers to assign to the journal records.
 	TagIds *[]int64 `json:"tag_ids,omitempty"`
+}
+
+// TransactionTemplateSearchItem defines model for TransactionTemplateSearchItem.
+type TransactionTemplateSearchItem struct {
+	// ChildCount Descendant leaf count for navigation groups.
+	ChildCount *int `json:"child_count,omitempty"`
+
+	// Fqn Complete authoritative transaction-template leaf or group path.
+	Fqn  string                            `json:"fqn"`
+	Kind TransactionTemplateSearchItemKind `json:"kind"`
+
+	// Title Final FQN segment for leaves and navigation groups.
+	Title string `json:"title"`
+
+	// TransactionTemplateId Stable leaf identifier; absent for navigation groups.
+	TransactionTemplateId *int64 `json:"transaction_template_id,omitempty"`
+}
+
+// TransactionTemplateSearchItemKind defines model for TransactionTemplateSearchItem.Kind.
+type TransactionTemplateSearchItemKind string
+
+// TransactionTemplateSearchResponse defines model for TransactionTemplateSearchResponse.
+type TransactionTemplateSearchResponse struct {
+	// HasMore Whether more ranked candidates matched beyond the caller's limit.
+	HasMore bool                            `json:"has_more"`
+	Items   []TransactionTemplateSearchItem `json:"items"`
 }
 
 // TransactionTemplateShorthandType defines model for TransactionTemplateShorthandType.
@@ -4023,6 +4144,9 @@ type SearchJournalRecordsParamsSortDir string
 
 // ListRecurringDefinitionsParams defines parameters for ListRecurringDefinitions.
 type ListRecurringDefinitionsParams struct {
+	// Q Case-insensitive fuzzy membership over definition names, complete FQNs, FQN segments, and matching implicit-group descendants; requested sort order is preserved.
+	Q *string `form:"q,omitempty" json:"q,omitempty"`
+
 	// Sort Field used to sort matching results; defaults to `fqn`. `next_due_date` keeps missing dates last and uses ascending FQN and definition ID tie-breakers.
 	Sort *ListRecurringDefinitionsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
 
@@ -4041,6 +4165,22 @@ type ListRecurringDefinitionsParamsSort string
 
 // ListRecurringDefinitionsParamsSortDir defines parameters for ListRecurringDefinitions.
 type ListRecurringDefinitionsParamsSortDir string
+
+// SearchRecurringDefinitionsParams defines parameters for SearchRecurringDefinitions.
+type SearchRecurringDefinitionsParams struct {
+	Context SearchRecurringDefinitionsParamsContext `form:"context" json:"context"`
+	Limit   int                                     `form:"limit" json:"limit"`
+	Q       *string                                 `form:"q,omitempty" json:"q,omitempty"`
+
+	// ParentFqn Return only direct children of this hierarchy group; an empty value selects root children.
+	ParentFqn *string `form:"parent_fqn,omitempty" json:"parent_fqn,omitempty"`
+
+	// ExcludeIds Active selected leaf IDs to omit from candidates.
+	ExcludeIds *[]int64 `form:"exclude_ids,omitempty" json:"exclude_ids,omitempty"`
+}
+
+// SearchRecurringDefinitionsParamsContext defines parameters for SearchRecurringDefinitions.
+type SearchRecurringDefinitionsParamsContext string
 
 // ListRecurringOccurrencesParams defines parameters for ListRecurringOccurrences.
 type ListRecurringOccurrencesParams struct {
@@ -4189,6 +4329,9 @@ type GetTagOverviewParams struct {
 
 // ListTransactionTemplatesParams defines parameters for ListTransactionTemplates.
 type ListTransactionTemplatesParams struct {
+	// Q Case-insensitive fuzzy membership over template names, complete FQNs, FQN segments, and matching implicit-group descendants; the caller-requested sort is preserved, defaulting to ascending FQN.
+	Q *string `form:"q,omitempty" json:"q,omitempty"`
+
 	// Sort Field used to sort matching results; defaults to `fqn`.
 	Sort *ListTransactionTemplatesParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
 
@@ -4207,6 +4350,25 @@ type ListTransactionTemplatesParamsSort string
 
 // ListTransactionTemplatesParamsSortDir defines parameters for ListTransactionTemplates.
 type ListTransactionTemplatesParamsSortDir string
+
+// SearchTransactionTemplatesParams defines parameters for SearchTransactionTemplates.
+type SearchTransactionTemplatesParams struct {
+	Context SearchTransactionTemplatesParamsContext `form:"context" json:"context"`
+	Limit   int                                     `form:"limit" json:"limit"`
+	Q       *string                                 `form:"q,omitempty" json:"q,omitempty"`
+
+	// ParentFqn Return only direct children of this hierarchy group; an empty value selects root children.
+	ParentFqn *string `form:"parent_fqn,omitempty" json:"parent_fqn,omitempty"`
+
+	// ExcludeIds Active selected leaf IDs to omit from candidates.
+	ExcludeIds *[]int64 `form:"exclude_ids,omitempty" json:"exclude_ids,omitempty"`
+
+	// CompatibleShorthand Restrict transaction-entry candidates to templates compatible with this shorthand; omit for advanced entry.
+	CompatibleShorthand *TransactionTemplateShorthandType `form:"compatible_shorthand,omitempty" json:"compatible_shorthand,omitempty"`
+}
+
+// SearchTransactionTemplatesParamsContext defines parameters for SearchTransactionTemplates.
+type SearchTransactionTemplatesParamsContext string
 
 // ListTransactionsParams defines parameters for ListTransactions.
 type ListTransactionsParams struct {
@@ -4768,6 +4930,9 @@ type ClientInterface interface {
 
 	CreateRecurringDefinition(ctx context.Context, body CreateRecurringDefinitionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// SearchRecurringDefinitions request
+	SearchRecurringDefinitions(ctx context.Context, params *SearchRecurringDefinitionsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// DeleteRecurringDefinition request
 	DeleteRecurringDefinition(ctx context.Context, recurringDefinitionId int64, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -4868,6 +5033,9 @@ type ClientInterface interface {
 	RestructureTransactionTemplatesWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	RestructureTransactionTemplates(ctx context.Context, body RestructureTransactionTemplatesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SearchTransactionTemplates request
+	SearchTransactionTemplates(ctx context.Context, params *SearchTransactionTemplatesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteTransactionTemplate request
 	DeleteTransactionTemplate(ctx context.Context, transactionTemplateId int64, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -6048,6 +6216,18 @@ func (c *Client) CreateRecurringDefinition(ctx context.Context, body CreateRecur
 	return c.Client.Do(req)
 }
 
+func (c *Client) SearchRecurringDefinitions(ctx context.Context, params *SearchRecurringDefinitionsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSearchRecurringDefinitionsRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) DeleteRecurringDefinition(ctx context.Context, recurringDefinitionId int64, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewDeleteRecurringDefinitionRequest(c.Server, recurringDefinitionId)
 	if err != nil {
@@ -6482,6 +6662,18 @@ func (c *Client) RestructureTransactionTemplatesWithBody(ctx context.Context, co
 
 func (c *Client) RestructureTransactionTemplates(ctx context.Context, body RestructureTransactionTemplatesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewRestructureTransactionTemplatesRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) SearchTransactionTemplates(ctx context.Context, params *SearchTransactionTemplatesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSearchTransactionTemplatesRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -11312,6 +11504,18 @@ func NewListRecurringDefinitionsRequest(server string, params *ListRecurringDefi
 		// per the OpenAPI spec (e.g. "color=blue,black,brown").
 		var rawQueryFragments []string
 
+		if params.Q != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "q", *params.Q, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if params.Sort != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
@@ -11410,6 +11614,100 @@ func NewCreateRecurringDefinitionRequestWithBody(server string, contentType stri
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewSearchRecurringDefinitionsRequest generates requests for SearchRecurringDefinitions
+func NewSearchRecurringDefinitionsRequest(server string, params *SearchRecurringDefinitionsParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/recurring-definitions/search")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "context", params.Context, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if params.Q != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "q", *params.Q, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.ParentFqn != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "parent_fqn", *params.ParentFqn, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.ExcludeIds != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "exclude_ids", *params.ExcludeIds, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -12852,6 +13150,18 @@ func NewListTransactionTemplatesRequest(server string, params *ListTransactionTe
 		// per the OpenAPI spec (e.g. "color=blue,black,brown").
 		var rawQueryFragments []string
 
+		if params.Q != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "q", *params.Q, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if params.Sort != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
@@ -12990,6 +13300,112 @@ func NewRestructureTransactionTemplatesRequestWithBody(server string, contentTyp
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewSearchTransactionTemplatesRequest generates requests for SearchTransactionTemplates
+func NewSearchTransactionTemplatesRequest(server string, params *SearchTransactionTemplatesParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/transaction-templates/search")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "context", params.Context, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if params.Q != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "q", *params.Q, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.ParentFqn != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "parent_fqn", *params.ParentFqn, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.ExcludeIds != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "exclude_ids", *params.ExcludeIds, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.CompatibleShorthand != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "compatible_shorthand", *params.CompatibleShorthand, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -14110,6 +14526,9 @@ type ClientWithResponsesInterface interface {
 
 	CreateRecurringDefinitionWithResponse(ctx context.Context, body CreateRecurringDefinitionJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateRecurringDefinitionResponse, error)
 
+	// SearchRecurringDefinitionsWithResponse request
+	SearchRecurringDefinitionsWithResponse(ctx context.Context, params *SearchRecurringDefinitionsParams, reqEditors ...RequestEditorFn) (*SearchRecurringDefinitionsResponse, error)
+
 	// DeleteRecurringDefinitionWithResponse request
 	DeleteRecurringDefinitionWithResponse(ctx context.Context, recurringDefinitionId int64, reqEditors ...RequestEditorFn) (*DeleteRecurringDefinitionResponse, error)
 
@@ -14210,6 +14629,9 @@ type ClientWithResponsesInterface interface {
 	RestructureTransactionTemplatesWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RestructureTransactionTemplatesResponse, error)
 
 	RestructureTransactionTemplatesWithResponse(ctx context.Context, body RestructureTransactionTemplatesJSONRequestBody, reqEditors ...RequestEditorFn) (*RestructureTransactionTemplatesResponse, error)
+
+	// SearchTransactionTemplatesWithResponse request
+	SearchTransactionTemplatesWithResponse(ctx context.Context, params *SearchTransactionTemplatesParams, reqEditors ...RequestEditorFn) (*SearchTransactionTemplatesResponse, error)
 
 	// DeleteTransactionTemplateWithResponse request
 	DeleteTransactionTemplateWithResponse(ctx context.Context, transactionTemplateId int64, reqEditors ...RequestEditorFn) (*DeleteTransactionTemplateResponse, error)
@@ -16599,6 +17021,38 @@ func (r CreateRecurringDefinitionResponse) ContentType() string {
 	return ""
 }
 
+type SearchRecurringDefinitionsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RecurringDefinitionSearchResponse
+	JSON400      *InvalidRequest
+	JSON401      *Unauthenticated
+}
+
+// Status returns HTTPResponse.Status
+func (r SearchRecurringDefinitionsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SearchRecurringDefinitionsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SearchRecurringDefinitionsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type DeleteRecurringDefinitionResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -17496,6 +17950,38 @@ func (r RestructureTransactionTemplatesResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r RestructureTransactionTemplatesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type SearchTransactionTemplatesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *TransactionTemplateSearchResponse
+	JSON400      *InvalidRequest
+	JSON401      *Unauthenticated
+}
+
+// Status returns HTTPResponse.Status
+func (r SearchTransactionTemplatesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SearchTransactionTemplatesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SearchTransactionTemplatesResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -18908,6 +19394,15 @@ func (c *ClientWithResponses) CreateRecurringDefinitionWithResponse(ctx context.
 	return ParseCreateRecurringDefinitionResponse(rsp)
 }
 
+// SearchRecurringDefinitionsWithResponse request returning *SearchRecurringDefinitionsResponse
+func (c *ClientWithResponses) SearchRecurringDefinitionsWithResponse(ctx context.Context, params *SearchRecurringDefinitionsParams, reqEditors ...RequestEditorFn) (*SearchRecurringDefinitionsResponse, error) {
+	rsp, err := c.SearchRecurringDefinitions(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSearchRecurringDefinitionsResponse(rsp)
+}
+
 // DeleteRecurringDefinitionWithResponse request returning *DeleteRecurringDefinitionResponse
 func (c *ClientWithResponses) DeleteRecurringDefinitionWithResponse(ctx context.Context, recurringDefinitionId int64, reqEditors ...RequestEditorFn) (*DeleteRecurringDefinitionResponse, error) {
 	rsp, err := c.DeleteRecurringDefinition(ctx, recurringDefinitionId, reqEditors...)
@@ -19229,6 +19724,15 @@ func (c *ClientWithResponses) RestructureTransactionTemplatesWithResponse(ctx co
 		return nil, err
 	}
 	return ParseRestructureTransactionTemplatesResponse(rsp)
+}
+
+// SearchTransactionTemplatesWithResponse request returning *SearchTransactionTemplatesResponse
+func (c *ClientWithResponses) SearchTransactionTemplatesWithResponse(ctx context.Context, params *SearchTransactionTemplatesParams, reqEditors ...RequestEditorFn) (*SearchTransactionTemplatesResponse, error) {
+	rsp, err := c.SearchTransactionTemplates(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSearchTransactionTemplatesResponse(rsp)
 }
 
 // DeleteTransactionTemplateWithResponse request returning *DeleteTransactionTemplateResponse
@@ -22784,6 +23288,46 @@ func ParseCreateRecurringDefinitionResponse(rsp *http.Response) (*CreateRecurrin
 	return response, nil
 }
 
+// ParseSearchRecurringDefinitionsResponse parses an HTTP response from a SearchRecurringDefinitionsWithResponse call
+func ParseSearchRecurringDefinitionsResponse(rsp *http.Response) (*SearchRecurringDefinitionsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SearchRecurringDefinitionsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RecurringDefinitionSearchResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseDeleteRecurringDefinitionResponse parses an HTTP response from a DeleteRecurringDefinitionWithResponse call
 func ParseDeleteRecurringDefinitionResponse(rsp *http.Response) (*DeleteRecurringDefinitionResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -24131,6 +24675,46 @@ func ParseRestructureTransactionTemplatesResponse(rsp *http.Response) (*Restruct
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSearchTransactionTemplatesResponse parses an HTTP response from a SearchTransactionTemplatesWithResponse call
+func ParseSearchTransactionTemplatesResponse(rsp *http.Response) (*SearchTransactionTemplatesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SearchTransactionTemplatesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest TransactionTemplateSearchResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
 
 	}
 

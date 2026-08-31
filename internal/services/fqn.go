@@ -24,6 +24,36 @@ func FQNAtOrUnder(fqn string, path string) bool {
 	return fqn == path || strings.HasPrefix(fqn, path+":")
 }
 
+// SearchFQNInScope reports whether fqn is a direct child of parent, or whether
+// any FQN is eligible when parent is nil.
+func SearchFQNInScope(fqn string, parent *string) bool {
+	if parent == nil {
+		return true
+	}
+	index := strings.LastIndex(fqn, ":")
+	actual := ""
+	if index >= 0 {
+		actual = fqn[:index]
+	}
+	return actual == *parent
+}
+
+// SearchRankQuery removes the active parent path from a scoped search query.
+func SearchRankQuery(query string, parent *string) string {
+	if parent == nil || *parent == "" {
+		return query
+	}
+	return strings.TrimPrefix(query, *parent+":")
+}
+
+// FQNLeaf returns the final segment of a colon-separated FQN.
+func FQNLeaf(fqn string) string {
+	if index := strings.LastIndex(fqn, ":"); index >= 0 {
+		return fqn[index+1:]
+	}
+	return fqn
+}
+
 func fqnGroupPrefixes(fqn string) []string {
 	prefixes := []string{}
 	for index, value := range fqn {

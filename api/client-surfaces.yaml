@@ -527,12 +527,19 @@ operations:
       description: Tombstone one exchange-rate entry by exact ID. This is destructive and requires explicit user intent.
       annotations: {read_only: false, destructive: true, idempotent: true, open_world: false}
 
+  searchTransactionTemplates:
+    cli: {state: exposed, name: search}
+    mcp:
+      state: exposed
+      name: search
+      description: Ranked, caller-bounded transaction-template discovery for entry selection or navigation. Supply a typed context and limit; use transaction_templates_list for exhaustive canonical filtering, full defaults, totals, and pagination.
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   listTransactionTemplates:
     cli: {state: exposed, name: list}
     mcp:
       state: exposed
       name: list
-      description: Use to discover date-free reusable partial entry defaults or resolve template IDs. Supply limit (1-500) and offset; defaults sort by FQN ascending. Templates have no schedule and need not balance; recurring definitions are scheduled and complete.
+      description: Use for exhaustive transaction-template discovery, full date-free defaults, or resolving template IDs. Keep results bounded with limit (1-500) and offset; q matches names, complete FQNs, FQN segments, and implicit-group descendants while preserving the requested sort, which defaults to ascending FQN. Use transaction_templates_search for relevance-ranked discovery.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   createTransactionTemplate:
     cli: {state: exposed, name: create}
@@ -570,12 +577,19 @@ operations:
       description: Tombstone one transaction template and its record defaults without touching transactions already created from it. This is destructive and requires explicit user intent.
       annotations: {read_only: false, destructive: true, idempotent: true, open_world: false}
 
+  searchRecurringDefinitions:
+    cli: {state: exposed, name: search-definitions}
+    mcp:
+      state: exposed
+      name: search_definitions
+      description: Ranked, caller-bounded recurring-definition discovery for navigation. Supply context=navigation and a limit; use recurring_list_definitions for exhaustive canonical filtering, schedules, totals, and pagination.
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   listRecurringDefinitions:
     cli: {state: exposed, name: list-definitions}
     mcp:
       state: exposed
       name: list_definitions
-      description: Use to discover scheduled complete transaction definitions or resolve definition IDs. Supply limit (1-500) and offset; sort by next_due_date ascending for the nearest active schedules, with definitions that have no next date last. Defaults sort by FQN ascending. Use transaction_templates_list for unscheduled partial defaults.
+      description: Use for exhaustive recurring-definition discovery, complete schedules, or resolving definition IDs. Keep results bounded with limit (1-500) and offset; q matches names, complete FQNs, FQN segments, and implicit-group descendants while preserving the requested sort. Use recurring_search_definitions for relevance-ranked discovery.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   createRecurringDefinition:
     cli: {state: exposed, name: create-definition}

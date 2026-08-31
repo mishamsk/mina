@@ -32,15 +32,18 @@ import {
   apiErrorMessage,
   type CategorySearchItem,
   fetchTransactionPage,
+  getTransactionTemplate,
   type MemberSearchItem,
   searchAccounts,
   searchCategories,
   searchMembers,
   searchTags,
+  searchTransactionTemplates,
   startDatabaseBackupRun,
   startExchangeRateLoadingRun,
   type TagSearchItem,
   type Transaction,
+  type TransactionTemplateSearchItem,
 } from "@/api";
 import { Toast, toastDurationMs } from "@/components/toast";
 import { focusWithoutTooltip, Tooltip } from "@/components/tooltip";
@@ -75,6 +78,7 @@ import {
 import type { TransactionEntryType } from "@/models/ui-state";
 import {
   closeCommandPalette,
+  getTransactionEntryPanelSnapshot,
   openTransactionEntryPanel,
   openTransactionEntryTemplate,
   setTransactionEditModeEnabled,
@@ -137,6 +141,7 @@ interface EntitySearchState {
   readonly members: readonly MemberSearchItem[];
   readonly query: string;
   readonly tags: readonly TagSearchItem[];
+  readonly templates: readonly TransactionTemplateSearchItem[];
 }
 
 interface TransactionSearchState {
@@ -145,6 +150,16 @@ interface TransactionSearchState {
   readonly query: string;
   readonly transactions: readonly Transaction[];
 }
+
+type RankedTemplateLeaf = TransactionTemplateSearchItem & {
+  readonly kind: "leaf";
+  readonly transaction_template_id: number;
+};
+
+const isRankedTemplateLeaf = (
+  item: TransactionTemplateSearchItem,
+): item is RankedTemplateLeaf =>
+  item.kind === "leaf" && item.transaction_template_id !== undefined;
 
 const commandGroups: readonly CommandGroup[] = [
   "Navigation",
@@ -384,6 +399,7 @@ export const CommandPalette = () => {
   const lookupRefreshCycleRef = useRef<number | undefined>(undefined);
   const entitySearchRequestRef = useRef(0);
   const transactionSearchRequestRef = useRef(0);
+  const activationGenerationRef = useRef(0);
   const [searchState, setSearchState] = useState<PaletteSearchState>({
     activeIndex: 0,
     query: "",
@@ -401,6 +417,7 @@ export const CommandPalette = () => {
     members: [],
     query: "",
     tags: [],
+    templates: [],
   });
   const [transactionSearch, setTransactionSearch] =
     useState<TransactionSearchState>({
@@ -443,6 +460,32 @@ export const CommandPalette = () => {
       captureTransactionEntryLaunchContext(),
     );
   }, []);
+
+  const openTemplateCommand = useCallback(
+    async (templateID: number) => {
+      const activationGeneration = activationGenerationRef.current;
+      const entrySnapshot = getTransactionEntryPanelSnapshot();
+      const launchContext = captureTransactionEntryLaunchContext();
+      const result = await getTransactionTemplate({
+        path: { transaction_template_id: templateID },
+      });
+      if (
+        activationGeneration !== activationGenerationRef.current ||
+        entrySnapshot !== getTransactionEntryPanelSnapshot()
+      ) {
+        return;
+      }
+      if (!result.data) {
+        showNotice(
+          `Template could not be opened: ${apiErrorMessage(result.error)}`,
+          "error",
+        );
+        return;
+      }
+      openTransactionEntryTemplate(result.data, launchContext);
+    },
+    [showNotice],
+  );
 
   const runDatabaseBackup = useCallback(async () => {
     const result = await startDatabaseBackupRun();
@@ -605,32 +648,46 @@ export const CommandPalette = () => {
         label: "New exchange",
       },
     ];
-    const templateCommands: readonly CommandItem[] = templates.map(
-      (template) => ({
-        accessibleLabel: `Use ${template.fqn}`,
-        action: () => {
-          openTransactionEntryTemplate(
-            template,
-            captureTransactionEntryLaunchContext(),
-          );
-        },
-        detail: "Template",
-        group: "New transaction",
-        icon: Plus,
-        id: `entry-template-${template.transaction_template_id}`,
-        keywords: [template.fqn, template.name, "template"],
-        label: `Use ${template.fqn}`,
-        renderLabel: (
-          <span className="flex min-w-0 items-center">
-            <span className="shrink-0">Use&nbsp;</span>
-            <FqnPath
-              value={template.fqn}
-              focusable={false}
-              className="min-w-0 flex-1 text-sm"
-            />
-          </span>
-        ),
-      }),
+    const normalizedQuery = normalizeSearch(query);
+    const entitySearchCurrent =
+      entitySearch.query === query && entitySearch.limit === entityResultLimit;
+    const rankedTemplateItems = normalizedQuery
+      ? entitySearchCurrent
+        ? entitySearch.templates.filter(isRankedTemplateLeaf)
+        : []
+      : templates.map<RankedTemplateLeaf>((template) => ({
+          fqn: template.fqn,
+          kind: "leaf",
+          title: template.name,
+          transaction_template_id: template.transaction_template_id,
+        }));
+    const templateCommands: readonly CommandItem[] = rankedTemplateItems.map(
+      (item) => {
+        const templateID = item.transaction_template_id;
+        return {
+          accessibleLabel: `Use ${item.fqn}`,
+          action: () => {
+            void openTemplateCommand(templateID);
+          },
+          detail: "Template",
+          group: "New transaction",
+          icon: Plus,
+          id: `entry-template-${templateID}`,
+          keywords: [item.fqn, item.title, "template"],
+          label: `Use ${item.fqn}`,
+          renderLabel: (
+            <span className="flex min-w-0 items-center">
+              <span className="shrink-0">Use&nbsp;</span>
+              <FqnPath
+                value={item.fqn}
+                focusable={false}
+                className="min-w-0 flex-1 text-sm"
+              />
+            </span>
+          ),
+          serverRanked: Boolean(normalizedQuery),
+        };
+      },
     );
 
     const actionCommands: readonly CommandItem[] = [
@@ -668,7 +725,6 @@ export const CommandPalette = () => {
       },
     ];
 
-    const normalizedQuery = normalizeSearch(query);
     if (!normalizedQuery) {
       return [
         ...pageCommands,
@@ -678,8 +734,6 @@ export const CommandPalette = () => {
       ];
     }
 
-    const entitySearchCurrent =
-      entitySearch.query === query && entitySearch.limit === entityResultLimit;
     const accountCommands = (
       entitySearchCurrent ? entitySearch.accounts : []
     ).map<CommandItem>((item) => ({
@@ -806,6 +860,7 @@ export const CommandPalette = () => {
     entitySearch,
     lastTransactionsPageSearch,
     openEntryCommand,
+    openTemplateCommand,
     query,
     runDatabaseBackup,
     runExchangeRateLoading,
@@ -895,11 +950,16 @@ export const CommandPalette = () => {
     [location.pathname, location.search],
   );
 
+  useLayoutEffect(() => {
+    activationGenerationRef.current += 1;
+  }, [location.key]);
+
   const activateCommand = useCallback(
     (command: CommandItem | undefined) => {
       if (!command) {
         return;
       }
+      activationGenerationRef.current += 1;
 
       if (command.action) {
         closeCommandPalette();
@@ -929,6 +989,7 @@ export const CommandPalette = () => {
         return;
       }
 
+      activationGenerationRef.current += 1;
       restoreFocusRef.current = null;
       closeCommandPalette();
       setTransactionEditModeEnabled(false);
@@ -949,6 +1010,7 @@ export const CommandPalette = () => {
 
   useEffect(() => {
     if (open && !wasOpenRef.current) {
+      activationGenerationRef.current += 1;
       openCycleRef.current += 1;
       setSearchState({
         activeIndex: 0,
@@ -963,6 +1025,7 @@ export const CommandPalette = () => {
         members: [],
         query: "",
         tags: [],
+        templates: [],
       });
       setTransactionSearch({
         errorMessage: undefined,
@@ -1037,6 +1100,10 @@ export const CommandPalette = () => {
           current.query === query && current.limit === entityResultLimit
             ? current.tags
             : [],
+        templates:
+          current.query === query && current.limit === entityResultLimit
+            ? current.templates
+            : [],
       }));
 
       const searchQuery = {
@@ -1050,13 +1117,26 @@ export const CommandPalette = () => {
         searchCategories({ query: searchQuery }),
         searchTags({ query: searchQuery }),
         searchMembers({ query: searchQuery }),
+        searchTransactionTemplates({
+          query: {
+            context: "navigation",
+            limit: entityResultLimit,
+            q: trimmedQuery,
+          },
+        }),
       ])
-        .then(([accounts, categories, tags, members]) => {
+        .then(([accounts, categories, tags, members, templateResults]) => {
           if (entitySearchRequestRef.current !== requestId) {
             return;
           }
 
-          const errorMessages = [accounts, categories, tags, members]
+          const errorMessages = [
+            accounts,
+            categories,
+            tags,
+            members,
+            templateResults,
+          ]
             .filter((result) => !result.data)
             .map((result) => apiErrorMessage(result.error));
           setEntitySearch({
@@ -1071,6 +1151,7 @@ export const CommandPalette = () => {
             members: members.data?.items ?? [],
             query,
             tags: tags.data?.items ?? [],
+            templates: templateResults.data?.items ?? [],
           });
         })
         .catch(() => {
@@ -1086,6 +1167,7 @@ export const CommandPalette = () => {
             members: [],
             query,
             tags: [],
+            templates: [],
           });
         });
     }, entitySearchDebounceMs);

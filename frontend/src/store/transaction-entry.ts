@@ -41,7 +41,7 @@ export interface TransactionEntryLaunch {
 interface TransactionEntryModalState {
   readonly errorMessage: string | undefined;
   readonly initialTab: TransactionEntryType | undefined;
-  readonly initialTemplateId: number | undefined;
+  readonly initialTemplate: TransactionTemplate | undefined;
   readonly launch: TransactionEntryLaunch | undefined;
   readonly loading: boolean;
   readonly open: boolean;
@@ -52,7 +52,7 @@ interface TransactionEntryModalState {
 const initialTransactionEntryModalState: TransactionEntryModalState = {
   errorMessage: undefined,
   initialTab: undefined,
-  initialTemplateId: undefined,
+  initialTemplate: undefined,
   launch: undefined,
   loading: false,
   open: false,
@@ -73,7 +73,7 @@ export const useTransactionEntryPanelView = (): TransactionEntryModalState =>
     useShallow((state) => ({
       errorMessage: state.errorMessage,
       initialTab: state.initialTab,
-      initialTemplateId: state.initialTemplateId,
+      initialTemplate: state.initialTemplate,
       launch: state.launch,
       loading: state.loading,
       open: state.open,
@@ -101,7 +101,7 @@ export const openTransactionEntryPanel = (
       {
         errorMessage: undefined,
         initialTab,
-        initialTemplateId: undefined,
+        initialTemplate: undefined,
         launch: undefined,
         loading: false,
         open: true,
@@ -125,7 +125,7 @@ export const openTransactionEntryLaunch = (
       {
         errorMessage: undefined,
         initialTab: undefined,
-        initialTemplateId: undefined,
+        initialTemplate: undefined,
         launch,
         loading: false,
         open: true,
@@ -148,7 +148,7 @@ export const loadTransactionEntryRoute = (
       {
         errorMessage: undefined,
         initialTab: undefined,
-        initialTemplateId: undefined,
+        initialTemplate: undefined,
         launch: undefined,
         loading: true,
         open: true,
@@ -204,7 +204,7 @@ export const openTransactionEntryRoute = (
       {
         errorMessage: undefined,
         initialTab,
-        initialTemplateId: undefined,
+        initialTemplate: undefined,
         launch: undefined,
         loading: false,
         open: true,
@@ -230,7 +230,7 @@ export const openTransactionEntryTemplate = (
       {
         errorMessage: undefined,
         initialTab,
-        initialTemplateId: template.transaction_template_id,
+        initialTemplate: template,
         launch: undefined,
         loading: false,
         open: true,
@@ -249,7 +249,7 @@ export const closeTransactionEntryPanel = (): void => {
     {
       errorMessage: undefined,
       initialTab: undefined,
-      initialTemplateId: undefined,
+      initialTemplate: undefined,
       launch: undefined,
       loading: false,
       open: false,

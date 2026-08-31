@@ -287,7 +287,7 @@ func filterCategoriesByQuery(items []Category, query string) []Category {
 				continue
 			}
 			group := item.FQN[:index]
-			if fuzzyrank.Matches(query, fuzzyrank.EntityTerms(searchFQNLeaf(group), group)) {
+			if fuzzyrank.Matches(query, fuzzyrank.EntityTerms(services.FQNLeaf(group), group)) {
 				matchedGroups[group] = true
 			}
 		}
