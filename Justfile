@@ -585,6 +585,7 @@ kata-open-issues:
             | unique) as $parents
         | .[0].issues
         | map(select((.short_id as $id | $parents | index($id) | not)))
+        | group_by(.priority // 5)[]
         | sort_by(.updated_at)
         | reverse[]
         | [
