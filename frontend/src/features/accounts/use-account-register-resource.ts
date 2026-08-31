@@ -7,10 +7,8 @@ import {
   fetchAccountRecordsPage,
   fetchGroupRecordsPage,
   fetchLedgerLookups,
-  fetchTransactionById,
   type GroupRecordsPageParams,
   type JournalRecord,
-  type Transaction,
   triggerRecurringOccurrenceCatchup,
 } from "@/api";
 import {
@@ -30,9 +28,6 @@ import {
   setAccountRegisterPage,
   setAccountRegisterPageError,
   setAccountRegisterPageLoading,
-  setAccountTransactionCache,
-  setAccountTransactionCacheError,
-  setAccountTransactionCacheLoading,
   setGroupRegisterPage,
   setGroupRegisterPageError,
   setGroupRegisterPageLoading,
@@ -169,35 +164,6 @@ export const refreshGroupRegisterPage = async (
   setGroupRegisterPageError(params, apiErrorMessage(result.error), generation);
 };
 
-const ensureTransactions = async (
-  transactionIds: readonly number[],
-): Promise<void> => {
-  const snapshot = getAccountsSnapshot();
-  const missingIds = [...new Set(transactionIds)].filter(
-    (transactionId) =>
-      !snapshot.transactionCache[transactionId] &&
-      snapshot.transactionCacheLoading[transactionId] === undefined &&
-      !snapshot.transactionCacheErrors[transactionId],
-  );
-
-  // A cache slot accepts only its currently registered request.
-  await Promise.all(
-    missingIds.map(async (transactionId) => {
-      const generation = setAccountTransactionCacheLoading(transactionId);
-      const result = await fetchTransactionById(transactionId);
-      if (result.data) {
-        setAccountTransactionCache(result.data, generation);
-        return;
-      }
-      setAccountTransactionCacheError(
-        transactionId,
-        apiErrorMessage(result.error),
-        generation,
-      );
-    }),
-  );
-};
-
 const fetchAccountRegisterPage = (
   params: AccountRegisterParams,
 ): Promise<RegisterFetchResult> =>
@@ -227,14 +193,11 @@ const useRegisterPageResource = <Params>({
   const transactionCache = useAccountTransactionCacheView();
   const transactions = useMemo(
     () =>
-      Object.fromEntries(
-        [...new Set(transactionIds)]
-          .map((transactionId) => [
-            transactionId,
-            transactionCache.transactionCache[transactionId]?.transaction,
-          ])
-          .filter(([, transaction]) => transaction),
-      ) as Readonly<Record<number, Transaction>>,
+      [...new Set(transactionIds)].flatMap((transactionId) => {
+        const transaction =
+          transactionCache.transactionCache[transactionId]?.transaction;
+        return transaction ? [transaction] : [];
+      }),
     [transactionCache.transactionCache, transactionIds],
   );
 
@@ -306,21 +269,10 @@ const useRegisterPageResource = <Params>({
     };
   }, []);
 
-  useEffect(() => {
-    if (transactionIds.length === 0) {
-      return;
-    }
-
-    void ensureTransactions(transactionIds);
-  }, [transactionIds]);
-
   return {
     lookups,
     register,
-    transactions: {
-      errors: transactionCache.transactionCacheErrors,
-      transactions,
-    },
+    transactions,
   };
 };
 

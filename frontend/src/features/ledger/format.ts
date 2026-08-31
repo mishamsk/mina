@@ -104,8 +104,9 @@ export const buildLookupMaps = (
   tagsById: new Map(lookups?.tags.map((tag) => [tag.tag_id, tag]) ?? []),
 });
 
-export const transactionAccountFqnContext = (
-  transaction: Transaction,
+export const transactionTitleAccountFqnContext = (
+  displayTitle: string,
+  accountIds: readonly number[],
   maps: Pick<LookupMaps, "accountsById">,
   options: {
     readonly includeDisplayTitle?: boolean;
@@ -113,8 +114,8 @@ export const transactionAccountFqnContext = (
 ): string => {
   const fqns = Array.from(
     new Set(
-      transaction.records.flatMap((record) => {
-        const account = maps.accountsById.get(record.account_id);
+      accountIds.flatMap((accountId) => {
+        const account = maps.accountsById.get(accountId);
         return account ? [account.fqn] : [];
       }),
     ),
@@ -124,9 +125,22 @@ export const transactionAccountFqnContext = (
   if (options.includeDisplayTitle === false) {
     return accountContext ?? "";
   }
-  return accountContext
-    ? `${transaction.display_title}. ${accountContext}`
-    : transaction.display_title;
+  return accountContext ? `${displayTitle}. ${accountContext}` : displayTitle;
+};
+
+export const transactionAccountFqnContext = (
+  transaction: Transaction,
+  maps: Pick<LookupMaps, "accountsById">,
+  options: {
+    readonly includeDisplayTitle?: boolean;
+  } = {},
+): string => {
+  return transactionTitleAccountFqnContext(
+    transaction.display_title,
+    transaction.records.map((record) => record.account_id),
+    maps,
+    options,
+  );
 };
 
 export const formatInitiatedDate = (value: string): string => {

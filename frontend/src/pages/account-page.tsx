@@ -131,17 +131,13 @@ const AccountPageContent = ({ accountId }: { readonly accountId: number }) => {
     [accountId, page, pageSize],
   );
   const resource = useAccountRegisterResource(params);
-  const transactions = useMemo(
-    () => Object.values(resource.transactions.transactions),
-    [resource.transactions.transactions],
-  );
   const registerDetail = useAccountRegisterTransactionDetail({
     lookupsLoaded: Boolean(
       resource.lookups.snapshot || resource.lookups.errorMessage,
     ),
     searchParams,
     setSearchParams,
-    transactions,
+    transactions: resource.transactions,
   });
   const maps = useMemo(
     () => buildLookupMaps(resource.lookups.snapshot),
@@ -333,8 +329,6 @@ const AccountPageContent = ({ accountId }: { readonly accountId: number }) => {
           records={registerSnapshot?.records}
           selectedTransactionId={registerDetail.detail.selectedTransactionId}
           totalCount={registerSnapshot?.totalCount}
-          transactionErrorsById={resource.transactions.errors}
-          transactionsById={resource.transactions.transactions}
         />
       </div>
       <Toast

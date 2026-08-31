@@ -1479,6 +1479,14 @@ export type JournalRecord = {
     record_id: number;
     transaction_id: number;
     /**
+     * Server-derived transaction title. Present on journal-record search responses so record browsers can render complete rows without fetching each transaction.
+     */
+    transaction_display_title?: string;
+    /**
+     * Distinct transaction account identifiers in record order. Present on journal-record search responses for transaction-title context.
+     */
+    transaction_account_ids?: Array<number>;
+    /**
      * Human-facing transaction date in YYYY-MM-DD format.
      */
     initiated_date: string;

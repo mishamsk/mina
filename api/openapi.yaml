@@ -6986,6 +6986,16 @@ components:
         transaction_id:
           type: integer
           format: int64
+        transaction_display_title:
+          type: string
+          minLength: 1
+          description: Server-derived transaction title. Present on journal-record search responses so record browsers can render complete rows without fetching each transaction.
+        transaction_account_ids:
+          type: array
+          description: Distinct transaction account identifiers in record order. Present on journal-record search responses for transaction-title context.
+          items:
+            type: integer
+            format: int64
         initiated_date:
           description: "Human-facing transaction date in YYYY-MM-DD format."
           type: string

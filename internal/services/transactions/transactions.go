@@ -106,6 +106,8 @@ type Transaction struct {
 type JournalRecord struct {
 	ID                          int64
 	TransactionID               int64
+	TransactionDisplayTitle     *string
+	TransactionAccountIDs       *[]int64
 	InitiatedDate               values.CivilDate
 	AccountID                   int64
 	AccountDisplayLabel         string
@@ -399,6 +401,7 @@ type Repository interface {
 	MonthTotals(context.Context, MonthTotalsRange) (MonthActivityTotals, error)
 	Tombstone(context.Context, int64) error
 	SearchRecords(context.Context, RecordSearchOptions) (services.PaginatedList[JournalRecord], error)
+	RecordsByTransactionIDs(context.Context, []int64) (map[int64][]JournalRecord, error)
 	TransactionsByRecordIDs(context.Context, []int64) ([]Transaction, error)
 	TransactionsByAccountID(context.Context, int64) ([]Transaction, error)
 	BulkCategorize(context.Context, []int64, int64) (int, error)
@@ -1183,7 +1186,7 @@ func (s *Service) SearchRecords(ctx context.Context, opts RecordSearchOptions) (
 	if err != nil {
 		return services.PaginatedList[JournalRecord]{}, err
 	}
-	return classifySearchedRecords(records)
+	return s.prepareSearchedRecords(ctx, records)
 }
 
 // SearchAccountRecords returns journal records for one active account target.
@@ -1210,6 +1213,52 @@ func (s *Service) SearchAccountRecords(ctx context.Context, accountID int64, opt
 	if err != nil {
 		return services.PaginatedList[JournalRecord]{}, err
 	}
+	return s.prepareSearchedRecords(ctx, records)
+}
+
+func (s *Service) prepareSearchedRecords(ctx context.Context, records services.PaginatedList[JournalRecord]) (services.PaginatedList[JournalRecord], error) {
+	transactionIDs := make([]int64, 0, len(records.Items))
+	seenTransactionIDs := make(map[int64]struct{}, len(records.Items))
+	for _, record := range records.Items {
+		if _, seen := seenTransactionIDs[record.TransactionID]; seen {
+			continue
+		}
+		seenTransactionIDs[record.TransactionID] = struct{}{}
+		transactionIDs = append(transactionIDs, record.TransactionID)
+	}
+
+	recordsByTransactionID, err := s.repo.RecordsByTransactionIDs(ctx, transactionIDs)
+	if err != nil {
+		return services.PaginatedList[JournalRecord]{}, err
+	}
+	type transactionPresentation struct {
+		displayTitle string
+		accountIDs   []int64
+	}
+	presentations := make(map[int64]*transactionPresentation, len(transactionIDs))
+	for _, transactionID := range transactionIDs {
+		titleRecords := recordsByTransactionID[transactionID]
+		if len(titleRecords) == 0 {
+			continue
+		}
+		title, err := deriveTransactionDisplayTitle(titleRecords)
+		if err != nil {
+			return services.PaginatedList[JournalRecord]{}, err
+		}
+		presentations[transactionID] = &transactionPresentation{
+			displayTitle: title,
+			accountIDs:   distinctTransactionAccountIDs(titleRecords),
+		}
+	}
+	for index := range records.Items {
+		presentation := presentations[records.Items[index].TransactionID]
+		if presentation == nil {
+			continue
+		}
+		records.Items[index].TransactionDisplayTitle = &presentation.displayTitle
+		records.Items[index].TransactionAccountIDs = &presentation.accountIDs
+	}
+
 	return classifySearchedRecords(records)
 }
 
@@ -1235,6 +1284,19 @@ func classifySearchedRecords(records services.PaginatedList[JournalRecord]) (ser
 		record.Settlement = settlement
 	}
 	return records, nil
+}
+
+func distinctTransactionAccountIDs(records []JournalRecord) []int64 {
+	accountIDs := make([]int64, 0, len(records))
+	seen := make(map[int64]struct{}, len(records))
+	for _, record := range records {
+		if _, ok := seen[record.AccountID]; ok {
+			continue
+		}
+		seen[record.AccountID] = struct{}{}
+		accountIDs = append(accountIDs, record.AccountID)
+	}
+	return accountIDs
 }
 
 // BulkCategorize assigns one category to selected journal records.

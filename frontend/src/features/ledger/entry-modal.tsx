@@ -16,7 +16,10 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { TransactionEntryType } from "@/models/ui-state";
 import { deleteTransactionEntryDraft } from "@/services/indexeddb";
-import type { LedgerLookupsSnapshot } from "@/store";
+import type {
+  LedgerLookupsSnapshot,
+  TransactionEntryRecentTransaction,
+} from "@/store";
 
 import {
   EntryPanel,
@@ -48,7 +51,7 @@ interface EntryModalProps {
   };
   readonly onNoticeDismiss: () => void;
   readonly open: boolean;
-  readonly recentTransactions?: readonly Transaction[];
+  readonly recentTransactions?: readonly TransactionEntryRecentTransaction[];
   readonly requestCloseRef?: MutableRefObject<(() => void) | null>;
   readonly returnFocusTo?: HTMLElement;
 }

@@ -55,24 +55,7 @@ func LineDisplayAmountsForSemanticRecords(records []SemanticRecord) (Transaction
 
 // ClassifyTransaction validates and derives transaction presentation fields.
 func ClassifyTransaction(transaction Transaction) (Transaction, error) {
-	records := make([]SemanticRecord, 0, len(transaction.Records))
-	for index := range transaction.Records {
-		record := &transaction.Records[index]
-		record.AccountDisplayLabel = services.EffectiveDisplayLabel(
-			record.AccountFQN,
-			record.AccountDisplayLabelOverride,
-		)
-		records = append(records, SemanticRecord{
-			Currency:       record.Currency,
-			Amount:         record.Amount,
-			AmountUSD:      record.AmountUSD,
-			AccountFQN:     record.AccountFQN,
-			AccountType:    record.AccountType,
-			CategoryID:     record.CategoryID,
-			EconomicIntent: record.EconomicIntent,
-		})
-	}
-	classified, err := ClassifySemanticRecords(records)
+	classified, err := classifyTransactionRecords(transaction.Records)
 	if err != nil {
 		return Transaction{}, err
 	}
@@ -91,6 +74,42 @@ func ClassifyTransaction(transaction Transaction) (Transaction, error) {
 	transaction.PrimaryAmounts = classified.PrimaryAmounts
 	transaction.Shapes = classified.Shapes
 	return transaction, nil
+}
+
+func deriveTransactionDisplayTitle(records []JournalRecord) (string, error) {
+	records = slices.Clone(records)
+	classified, err := classifyTransactionRecords(records)
+	if err != nil {
+		return "", err
+	}
+	for index := range records {
+		records[index].Role = classified.Roles[index]
+	}
+	return transactionDisplayTitle(Transaction{
+		Class:   classified.Class,
+		Records: records,
+	}), nil
+}
+
+func classifyTransactionRecords(records []JournalRecord) (Classification, error) {
+	semanticRecords := make([]SemanticRecord, 0, len(records))
+	for index := range records {
+		record := &records[index]
+		record.AccountDisplayLabel = services.EffectiveDisplayLabel(
+			record.AccountFQN,
+			record.AccountDisplayLabelOverride,
+		)
+		semanticRecords = append(semanticRecords, SemanticRecord{
+			Currency:       record.Currency,
+			Amount:         record.Amount,
+			AmountUSD:      record.AmountUSD,
+			AccountFQN:     record.AccountFQN,
+			AccountType:    record.AccountType,
+			CategoryID:     record.CategoryID,
+			EconomicIntent: record.EconomicIntent,
+		})
+	}
+	return ClassifySemanticRecords(semanticRecords)
 }
 
 func deriveTransactionSettlement(transaction Transaction) (SettlementSummary, error) {

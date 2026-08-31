@@ -49,6 +49,7 @@ export {
   transactionAccountFqnContext,
   transactionClassLabel,
   transactionHasMoreParts,
+  transactionTitleAccountFqnContext,
 } from "./format";
 export { FqnPath } from "./fqn-path";
 export { ClassIcon, StatusIcon } from "./line-icons";

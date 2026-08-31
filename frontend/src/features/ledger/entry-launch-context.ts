@@ -1,9 +1,44 @@
-import type { Transaction } from "@/api";
 import {
   getAccountsSnapshot,
   getTransactionsSnapshot,
   type TransactionEntryLaunchContext,
+  type TransactionEntryRecentTransaction,
 } from "@/store";
+
+const currentRegisterRecords = () => {
+  const accountsSnapshot = getAccountsSnapshot();
+  const registerPages = Object.values(accountsSnapshot.registerPages);
+  const pathname = window.location.pathname.replace(/\/+$/, "");
+  if (pathname === "/accounts/group") {
+    const prefix = new URLSearchParams(window.location.search)
+      .get("prefix")
+      ?.trim();
+    return {
+      accountsSnapshot,
+      records: prefix
+        ? registerPages.flatMap((page) =>
+            "accountFqnPrefix" in page.params &&
+            page.params.accountFqnPrefix === prefix
+              ? page.records
+              : [],
+          )
+        : [],
+    };
+  }
+
+  const accountMatch = /^\/accounts\/(\d+)$/.exec(pathname);
+  const accountId = accountMatch ? Number(accountMatch[1]) : undefined;
+  return {
+    accountsSnapshot,
+    records: accountId
+      ? registerPages.flatMap((page) =>
+          "accountId" in page.params && page.params.accountId === accountId
+            ? page.records
+            : [],
+        )
+      : [],
+  };
+};
 
 export const captureTransactionEntryLaunchContext =
   (): TransactionEntryLaunchContext => {
@@ -27,15 +62,34 @@ export const captureTransactionEntryLaunchContext =
       ),
     ];
     if (registerTransactionIds.length > 0) {
-      const accountsSnapshot = getAccountsSnapshot();
+      const { accountsSnapshot, records } = currentRegisterRecords();
+      const recordsByTransactionId = new Map(
+        records.map((record) => [record.transaction_id, record] as const),
+      );
       return {
         recentTransactions: registerTransactionIds
           .map(
-            (transactionId) =>
-              accountsSnapshot.transactionCache[transactionId]?.transaction,
+            (transactionId): TransactionEntryRecentTransaction | undefined => {
+              const cached =
+                accountsSnapshot.transactionCache[transactionId]?.transaction;
+              if (cached) {
+                return cached;
+              }
+              const record = recordsByTransactionId.get(transactionId);
+              if (!record?.transaction_display_title) {
+                return undefined;
+              }
+              return {
+                accountIds: record.transaction_account_ids ?? [],
+                displayTitle: record.transaction_display_title,
+                initiatedDate: record.initiated_date,
+                kind: "register-summary",
+                transactionId,
+              };
+            },
           )
           .filter(
-            (transaction): transaction is Transaction =>
+            (transaction): transaction is TransactionEntryRecentTransaction =>
               transaction !== undefined,
           )
           .slice(0, 12),

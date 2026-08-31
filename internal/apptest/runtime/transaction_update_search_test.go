@@ -940,6 +940,9 @@ func TestRecordSearchFiltersBoundary(t *testing.T) {
 	if accountRecords.JSON200.Records[0].TransactionId != first.JSON201.TransactionId {
 		t.Fatalf("account record transaction_id = %d, want %d", accountRecords.JSON200.Records[0].TransactionId, first.JSON201.TransactionId)
 	}
+	if title := accountRecords.JSON200.Records[0].TransactionDisplayTitle; title == nil || *title != first.JSON201.DisplayTitle {
+		t.Fatalf("account record transaction_display_title = %v, want %q", title, first.JSON201.DisplayTitle)
+	}
 	if got := accountRecords.JSON200.Records[0].InitiatedDate.String(); got != "2024-03-10" {
 		t.Fatalf("account record initiated_date = %q, want 2024-03-10", got)
 	}
@@ -1217,7 +1220,12 @@ func TestRecordSearchPaginationBoundary(t *testing.T) {
 	refs := createSearchRefs(t, client)
 	third := createTransactionForDate(t, client, refs.transactionRefs, "2024-01-03", "Third")
 	first := createTransactionForDate(t, client, refs.transactionRefs, "2024-01-01", "First")
-	second := createTransactionForDate(t, client, refs.transactionRefs, "2024-01-02", "Second")
+	secondMerchant := client.Scenario().Account("expense:Pagination:SecondMerchant")
+	secondRequest := balancedTransactionRequest(refs.transactionRefs)
+	secondRequest.InitiatedDate = apptest.Date("2024-01-02")
+	secondRequest.Records[0].Memo = apptest.StringPtr("Second")
+	secondRequest.Records[1].AccountId = secondMerchant.AccountId
+	second := createTransaction(t, client, secondRequest)
 
 	limitThree := 3
 	offsetOne := 1
@@ -1234,6 +1242,24 @@ func TestRecordSearchPaginationBoundary(t *testing.T) {
 		second.JSON201.Records[0].RecordId,
 		second.JSON201.Records[1].RecordId,
 	})
+	globalPresentations := []struct {
+		title      string
+		accountIDs []int64
+	}{
+		{title: first.JSON201.DisplayTitle, accountIDs: []int64{refs.CheckingAccountId, refs.MerchantAccountId}},
+		{title: second.JSON201.DisplayTitle, accountIDs: []int64{refs.CheckingAccountId, secondMerchant.AccountId}},
+		{title: second.JSON201.DisplayTitle, accountIDs: []int64{refs.CheckingAccountId, secondMerchant.AccountId}},
+	}
+	for index, record := range allRecordsPage.JSON200.Records {
+		want := globalPresentations[index]
+		if record.TransactionDisplayTitle == nil || *record.TransactionDisplayTitle != want.title {
+			t.Fatalf("global record %d transaction_display_title = %v, want %q", index, record.TransactionDisplayTitle, want.title)
+		}
+		if record.TransactionAccountIds == nil {
+			t.Fatalf("global record %d transaction_account_ids = nil, want %v", index, want.accountIDs)
+		}
+		assertInt64s(t, *record.TransactionAccountIds, want.accountIDs)
+	}
 	if allRecordsPage.JSON200.TotalCount != 6 {
 		t.Fatalf("search records page total_count = %d, want 6", allRecordsPage.JSON200.TotalCount)
 	}
@@ -1269,6 +1295,23 @@ func TestRecordSearchPaginationBoundary(t *testing.T) {
 		second.JSON201.Records[0].RecordId,
 		third.JSON201.Records[0].RecordId,
 	})
+	wantPresentations := []struct {
+		title      string
+		accountIDs []int64
+	}{
+		{title: second.JSON201.DisplayTitle, accountIDs: []int64{refs.CheckingAccountId, secondMerchant.AccountId}},
+		{title: third.JSON201.DisplayTitle, accountIDs: []int64{refs.CheckingAccountId, refs.MerchantAccountId}},
+	}
+	for index, record := range accountRecordsPage.JSON200.Records {
+		want := wantPresentations[index]
+		if record.TransactionDisplayTitle == nil || *record.TransactionDisplayTitle != want.title {
+			t.Fatalf("account record %d transaction_display_title = %v, want %q", index, record.TransactionDisplayTitle, want.title)
+		}
+		if record.TransactionAccountIds == nil {
+			t.Fatalf("account record %d transaction_account_ids = nil, want %v", index, want.accountIDs)
+		}
+		assertInt64s(t, *record.TransactionAccountIds, want.accountIDs)
+	}
 	if accountRecordsPage.JSON200.TotalCount != 3 {
 		t.Fatalf("search account records page total_count = %d, want 3", accountRecordsPage.JSON200.TotalCount)
 	}
@@ -1326,6 +1369,55 @@ func TestRecordSearchPaginationBoundary(t *testing.T) {
 	assertInvalidAccountRecordSearchQuery(t, client, refs.CheckingAccountId, "offset=-1")
 	assertInvalidAccountRecordSearchQuery(t, client, refs.CheckingAccountId, "sort=created_at")
 	assertInvalidAccountRecordSearchQuery(t, client, refs.CheckingAccountId, "sort_dir=sideways")
+
+	exchangeDestination := client.Scenario().AccountWithCurrency("cash:Pagination:EUR", "EUR")
+	exchangeMemo := "Repeated exchange account"
+	exchange, err := client.REST().CreateExchangeTransactionWithResponse(context.Background(), httpclient.CreateExchangeTransactionRequest{
+		InitiatedDate:   apptest.Date("2024-01-04"),
+		SoldAccountId:   refs.CheckingAccountId,
+		BoughtAccountId: exchangeDestination.AccountId,
+		SoldAmount:      "110.00",
+		BoughtAmount:    "100.00",
+		Memo:            &exchangeMemo,
+	})
+	requireNoTransportError(t, "create exchange for account IDs", err)
+	if exchange.StatusCode() != http.StatusCreated {
+		t.Fatalf("create exchange for account IDs status = %d, want %d; body %s", exchange.StatusCode(), http.StatusCreated, exchange.Body)
+	}
+	exchangeRoleRecords := make([]httpclient.JournalRecord, 0, 2)
+	wantTransactionAccountIDs := make([]int64, 0, len(exchange.JSON201.Records))
+	seenAccountIDs := make(map[int64]struct{}, len(exchange.JSON201.Records))
+	for _, record := range exchange.JSON201.Records {
+		if _, seen := seenAccountIDs[record.AccountId]; !seen {
+			seenAccountIDs[record.AccountId] = struct{}{}
+			wantTransactionAccountIDs = append(wantTransactionAccountIDs, record.AccountId)
+		}
+		if record.RecordRole == httpclient.RecordRoleExchange {
+			exchangeRoleRecords = append(exchangeRoleRecords, record)
+		}
+	}
+	if len(exchangeRoleRecords) != 2 || exchangeRoleRecords[0].AccountId != exchangeRoleRecords[1].AccountId {
+		t.Fatalf("exchange records = %+v, want two exchange-role records for one account", exchange.JSON201.Records)
+	}
+
+	repeatedAccountID := exchangeRoleRecords[0].AccountId
+	exchangeRecords, err := client.REST().SearchAccountJournalRecordsWithResponse(context.Background(), repeatedAccountID, &httpclient.SearchAccountJournalRecordsParams{
+		MemoContains: &exchangeMemo,
+	})
+	requireNoTransportError(t, "search repeated exchange account records", err)
+	if exchangeRecords.StatusCode() != http.StatusOK {
+		t.Fatalf("search repeated exchange account records status = %d, want %d; body %s", exchangeRecords.StatusCode(), http.StatusOK, exchangeRecords.Body)
+	}
+	assertSameInt64Set(t, recordIDs(exchangeRecords.JSON200.Records), recordIDs(exchangeRoleRecords))
+	for index, record := range exchangeRecords.JSON200.Records {
+		if record.TransactionDisplayTitle == nil || *record.TransactionDisplayTitle != exchange.JSON201.DisplayTitle {
+			t.Fatalf("exchange account record %d transaction_display_title = %v, want %q", index, record.TransactionDisplayTitle, exchange.JSON201.DisplayTitle)
+		}
+		if record.TransactionAccountIds == nil {
+			t.Fatalf("exchange account record %d transaction_account_ids = nil", index)
+		}
+		assertInt64s(t, *record.TransactionAccountIds, wantTransactionAccountIDs)
+	}
 }
 
 func TestRecordSearchUpdatedAtOrderingBoundary(t *testing.T) {

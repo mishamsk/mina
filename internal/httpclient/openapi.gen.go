@@ -2721,12 +2721,18 @@ type JournalRecord struct {
 	RunningBalance *string `json:"running_balance,omitempty"`
 
 	// Settlement Server-derived settlement for owned and party records; null for flow and system records and date-free expected records.
-	Settlement    *SettlementStatus `json:"settlement"`
-	Source        Source            `json:"source"`
-	TagIds        []int64           `json:"tag_ids"`
-	TombstonedAt  *time.Time        `json:"tombstoned_at,omitempty"`
-	TransactionId int64             `json:"transaction_id"`
-	UpdatedAt     time.Time         `json:"updated_at"`
+	Settlement   *SettlementStatus `json:"settlement"`
+	Source       Source            `json:"source"`
+	TagIds       []int64           `json:"tag_ids"`
+	TombstonedAt *time.Time        `json:"tombstoned_at,omitempty"`
+
+	// TransactionAccountIds Distinct transaction account identifiers in record order. Present on journal-record search responses for transaction-title context.
+	TransactionAccountIds *[]int64 `json:"transaction_account_ids,omitempty"`
+
+	// TransactionDisplayTitle Server-derived transaction title. Present on journal-record search responses so record browsers can render complete rows without fetching each transaction.
+	TransactionDisplayTitle *string   `json:"transaction_display_title,omitempty"`
+	TransactionId           int64     `json:"transaction_id"`
+	UpdatedAt               time.Time `json:"updated_at"`
 }
 
 // JournalRecordSearchResponse defines model for JournalRecordSearchResponse.

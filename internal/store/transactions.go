@@ -355,7 +355,7 @@ WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 		return transactions.Transaction{}, fmt.Errorf("get transaction: %w", err)
 	}
 
-	records, err := s.recordsByTransactionIDs(ctx, []int64{id})
+	records, err := s.RecordsByTransactionIDs(ctx, []int64{id})
 	if err != nil {
 		return transactions.Transaction{}, err
 	}
@@ -396,7 +396,7 @@ WHERE transaction_id IN (`+placeholders(len(transactionIDs))+`) AND tombstoned_a
 		return nil, fmt.Errorf("close transactions by IDs: %w", err)
 	}
 
-	records, err := s.recordsByTransactionIDs(ctx, transactionIDs)
+	records, err := s.RecordsByTransactionIDs(ctx, transactionIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -465,7 +465,7 @@ func (s *TransactionStore) List(ctx context.Context, opts transactions.ListOptio
 		return transactions.ListResult{}, fmt.Errorf("close transactions rows: %w", err)
 	}
 
-	records, err := s.recordsByTransactionIDs(ctx, transactionIDs)
+	records, err := s.RecordsByTransactionIDs(ctx, transactionIDs)
 	if err != nil {
 		return transactions.ListResult{}, err
 	}
@@ -2045,7 +2045,8 @@ ORDER BY jr.transaction_id ASC, jr.record_id ASC`,
 	return recordsByTransactionID, nil
 }
 
-func (s *TransactionStore) recordsByTransactionIDs(ctx context.Context, transactionIDs []int64) (map[int64][]transactions.JournalRecord, error) {
+// RecordsByTransactionIDs returns active journal records grouped by transaction ID.
+func (s *TransactionStore) RecordsByTransactionIDs(ctx context.Context, transactionIDs []int64) (map[int64][]transactions.JournalRecord, error) {
 	return recordsByTransactionIDs(ctx, s.db.query(), s.db, transactionIDs)
 }
 

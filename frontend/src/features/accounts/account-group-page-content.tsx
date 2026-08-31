@@ -242,17 +242,13 @@ const GroupRegister = ({ prefix }: { readonly prefix: string }) => {
     [page, pageSize, prefix],
   );
   const resource = useGroupRegisterResource(params);
-  const transactions = useMemo(
-    () => Object.values(resource.transactions.transactions),
-    [resource.transactions.transactions],
-  );
   const registerDetail = useAccountRegisterTransactionDetail({
     lookupsLoaded: Boolean(
       resource.lookups.snapshot || resource.lookups.errorMessage,
     ),
     searchParams,
     setSearchParams,
-    transactions,
+    transactions: resource.transactions,
   });
   const maps = useMemo(
     () => buildLookupMaps(resource.lookups.snapshot),
@@ -360,8 +356,6 @@ const GroupRegister = ({ prefix }: { readonly prefix: string }) => {
         showAccount
         showRunningBalance={false}
         totalCount={registerSnapshot?.totalCount}
-        transactionErrorsById={resource.transactions.errors}
-        transactionsById={resource.transactions.transactions}
       />
       <Toast
         key={filterNotice ?? "empty-filter-notice"}

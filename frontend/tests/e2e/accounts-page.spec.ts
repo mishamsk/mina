@@ -44,6 +44,8 @@ interface JournalRecordFixture {
   readonly record_id: number;
   readonly running_balance?: string | null;
   readonly remaining_credit?: string;
+  readonly transaction_account_ids?: readonly number[];
+  readonly transaction_display_title?: string;
   readonly transaction_id: number;
 }
 
@@ -1168,6 +1170,16 @@ test("register and transaction detail recover after lookup failures", async ({
 
   const detailPanel = page.getByTestId("transaction-detail-panel");
   await expect(
+    detailPanel.getByRole("heading", { name: "Transaction unavailable" }),
+  ).toBeVisible();
+  await detailPanel
+    .getByRole("button", { name: "Close transaction detail" })
+    .click();
+  await page
+    .getByTestId("account-register-row")
+    .filter({ hasText: memo })
+    .click();
+  await expect(
     detailPanel.getByRole("heading", { name: transaction.display_title }),
   ).toBeVisible();
   await expect(
@@ -1181,17 +1193,6 @@ test("register and transaction detail recover after lookup failures", async ({
       .getByTestId("account-register-row")
       .filter({ hasText: transaction.display_title }),
   ).toBeVisible();
-  await detailPanel
-    .getByRole("button", { name: "Close transaction detail" })
-    .click();
-  await page
-    .getByTestId("account-register-row")
-    .filter({ hasText: memo })
-    .click();
-  await expect(
-    detailPanel.getByRole("heading", { name: transaction.display_title }),
-  ).toBeVisible();
-  expect(transactionFetchCount).toBe(2);
 
   await page.goto(`/transactions?transaction=${transaction.transaction_id}`);
   const transactionDetailPanel = page.getByTestId("transaction-detail-panel");
@@ -1227,7 +1228,7 @@ test("register and transaction detail recover after lookup failures", async ({
   ).toHaveCount(0);
 });
 
-test("register lifecycle refresh keeps cached transaction detail visible", async ({
+test("register renders final titles before loading transaction detail", async ({
   browserName,
   page,
 }) => {
@@ -1260,18 +1261,6 @@ test("register lifecycle refresh keeps cached transaction detail visible", async
   expect(transactionResponse.ok()).toBe(true);
   const transaction = (await transactionResponse.json()) as TransactionFixture;
 
-  let releaseStaleFetch: (() => void) | undefined;
-  const staleFetchReleased = new Promise<void>((resolve) => {
-    releaseStaleFetch = resolve;
-  });
-  let markStaleFetchStarted: (() => void) | undefined;
-  const staleFetchStarted = new Promise<void>((resolve) => {
-    markStaleFetchStarted = resolve;
-  });
-  let markStaleFetchSettled: (() => void) | undefined;
-  const staleFetchSettled = new Promise<void>((resolve) => {
-    markStaleFetchSettled = resolve;
-  });
   let transactionFetchCount = 0;
   await page.route(
     `**/api/transactions/${transaction.transaction_id}`,
@@ -1281,30 +1270,38 @@ test("register lifecycle refresh keeps cached transaction detail visible", async
         return;
       }
       transactionFetchCount += 1;
-      if (transactionFetchCount !== 1) {
-        await route.continue();
-        return;
-      }
-
-      const staleResponse = await route.fetch();
-      markStaleFetchStarted?.();
-      await staleFetchReleased;
-      await route.fulfill({ response: staleResponse });
-      markStaleFetchSettled?.();
+      await route.continue();
     },
   );
 
-  await page.goto(`/accounts/${account.account_id}`);
-  await staleFetchStarted;
+  await page.goto(`/accounts/${account.account_id}/`);
   const row = page
     .getByTestId("account-register-row")
     .filter({ hasText: memo });
-  await expect(row).toContainText("Resolving transaction");
+  await expect(row).toContainText(transaction.display_title);
+  await expect(row).not.toContainText("Resolving transaction");
+  expect(transactionFetchCount).toBe(0);
+
+  await page.keyboard.press("n");
+  const entryRail = page.getByRole("complementary", {
+    name: "Transaction entry context",
+  });
+  const recentTransaction = entryRail.getByLabel("Recent transaction");
+  await expect(recentTransaction).toContainText(transaction.display_title);
+  await expect(recentTransaction).toHaveAttribute(
+    "aria-label",
+    new RegExp(`${escapeRegExp(account.fqn)}.*${escapeRegExp(merchant.fqn)}`),
+  );
+  expect(transactionFetchCount).toBe(0);
+  await page.getByRole("button", { name: "Close transaction editor" }).click();
+  await expect(entryRail).toBeHidden();
+
   await row.click();
   const detailPanel = page.getByTestId("transaction-detail-panel");
   await expect(
     detailPanel.getByRole("heading", { name: transaction.display_title }),
   ).toBeVisible();
+  expect(transactionFetchCount).toBe(1);
 
   let releaseRefresh: (() => void) | undefined;
   const refreshReleased = new Promise<void>((resolve) => {
@@ -1351,13 +1348,11 @@ test("register lifecycle refresh keeps cached transaction detail visible", async
   await expect(
     detailPanel.getByRole("heading", { name: "Loading transaction" }),
   ).toHaveCount(0);
-  expect(transactionFetchCount).toBe(2);
+  expect(transactionFetchCount).toBe(1);
 
   releaseRefresh?.();
   await expect(page.getByText("Transaction cancelled.")).toBeVisible();
 
-  releaseStaleFetch?.();
-  await staleFetchSettled;
   await detailPanel
     .getByRole("button", { name: "Close transaction detail" })
     .click();
@@ -1366,7 +1361,7 @@ test("register lifecycle refresh keeps cached transaction detail visible", async
   await expect(
     detailPanel.getByRole("button", { name: "Restore" }),
   ).toBeVisible();
-  expect(transactionFetchCount).toBe(2);
+  expect(transactionFetchCount).toBe(1);
 
   await detailPanel.getByRole("button", { name: "Restore" }).click();
   await expect(page.getByText("Transaction restored.")).toBeVisible();
@@ -1917,7 +1912,7 @@ test("account group page renders subtotals and combined prefix register", async 
   });
   expect(siblingResponse.ok()).toBe(true);
 
-  const groupUrl = `/accounts/group?prefix=${encodeURIComponent(prefix)}&page=1&pageSize=25`;
+  const groupUrl = `/accounts/group?prefix=${encodeURIComponent(` ${prefix} `)}&page=1&pageSize=25`;
   const recordsRequest = page.waitForRequest((request) => {
     const url = new URL(request.url());
     return (
@@ -2005,6 +2000,16 @@ test("account group page renders subtotals and combined prefix register", async 
   await expect(
     page.getByTestId("account-register-pagination-footer"),
   ).toContainText("Page 1 of 2");
+
+  await page.keyboard.press("n");
+  const entryRail = page.getByRole("complementary", {
+    name: "Transaction entry context",
+  });
+  await expect(entryRail.getByLabel("Recent transaction")).toContainText(
+    groupTransaction.display_title,
+  );
+  await page.getByRole("button", { name: "Close transaction editor" }).click();
+  await expect(entryRail).toBeHidden();
 
   const firstRow = page.locator(`[data-record-id="${firstRecord.record_id}"]`);
   const secondRow = page.locator(

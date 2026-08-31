@@ -13,8 +13,19 @@ import {
 export type TransactionEntryLaunchType = "duplicate" | "edit" | "split";
 export const transactionEntryWillOpenEvent = "mina:transaction-entry-will-open";
 
+export interface TransactionEntryRegisterSummary {
+  readonly accountIds: readonly number[];
+  readonly displayTitle: string;
+  readonly initiatedDate: string;
+  readonly kind: "register-summary";
+  readonly transactionId: number;
+}
+
+export type TransactionEntryRecentTransaction =
+  Transaction | TransactionEntryRegisterSummary;
+
 export interface TransactionEntryLaunchContext {
-  readonly recentTransactions: readonly Transaction[];
+  readonly recentTransactions: readonly TransactionEntryRecentTransaction[];
 }
 
 export interface TransactionEntryLaunch {
@@ -34,7 +45,7 @@ interface TransactionEntryModalState {
   readonly launch: TransactionEntryLaunch | undefined;
   readonly loading: boolean;
   readonly open: boolean;
-  readonly recentTransactions: readonly Transaction[];
+  readonly recentTransactions: readonly TransactionEntryRecentTransaction[];
   readonly requestedEntry: string | undefined;
 }
 

@@ -71,7 +71,12 @@ import {
   readTransactionEntryDraft,
   writeTransactionEntryDraft,
 } from "@/services/indexeddb";
-import { getTransactionsSnapshot, type LedgerLookupsSnapshot } from "@/store";
+import {
+  getTransactionsSnapshot,
+  type LedgerLookupsSnapshot,
+  type TransactionEntryRecentTransaction,
+  type TransactionEntryRegisterSummary,
+} from "@/store";
 import {
   getUiPreferencesSnapshot,
   invalidateAccountsPage,
@@ -113,6 +118,7 @@ import {
   recordRoleLabel,
   transactionAccountFqnContext,
   transactionHasMoreParts,
+  transactionTitleAccountFqnContext,
 } from "./format";
 import { ClassIcon } from "./line-icons";
 import {
@@ -137,7 +143,7 @@ export interface EntryPanelProps {
     context: EntryPanelSaveContext,
   ) => Promise<void>;
   readonly open: boolean;
-  readonly recentTransactions?: readonly Transaction[];
+  readonly recentTransactions?: readonly TransactionEntryRecentTransaction[];
 }
 
 export type EntryPanelLaunch = {
@@ -2916,6 +2922,40 @@ const EntryRailRow = ({
     </div>
   );
 };
+
+const RegisterSummaryRailRow = ({
+  maps,
+  summary,
+}: {
+  readonly maps: Pick<LookupMaps, "accountsById">;
+  readonly summary: TransactionEntryRegisterSummary;
+}) => {
+  const displayTitleContext = transactionTitleAccountFqnContext(
+    summary.displayTitle,
+    summary.accountIds,
+    maps,
+  );
+  return (
+    <div className="flex items-center gap-1 px-2 py-1 font-mono text-xs">
+      <span className="text-muted-foreground shrink-0">
+        {formatInitiatedDate(summary.initiatedDate)}
+      </span>
+      <Tooltip
+        label={displayTitleContext}
+        className="min-w-0 flex-1"
+        focusable={false}
+        triggerLabel={`Recent transaction ${displayTitleContext}`}
+      >
+        <span className="block truncate">{summary.displayTitle}</span>
+      </Tooltip>
+    </div>
+  );
+};
+
+const isRegisterSummary = (
+  transaction: TransactionEntryRecentTransaction,
+): transaction is TransactionEntryRegisterSummary =>
+  "kind" in transaction && transaction.kind === "register-summary";
 
 export const EntryPanel = ({
   closeRequestRef,
@@ -6611,14 +6651,22 @@ export const EntryPanel = ({
                 <h3 className="font-heading text-xs font-bold uppercase">
                   Recent
                 </h3>
-                {recentTransactions.map((transaction) => (
-                  <EntryRailRow
-                    key={transaction.transaction_id}
-                    editable={false}
-                    maps={lookupMaps}
-                    transaction={transaction}
-                  />
-                ))}
+                {recentTransactions.map((transaction) =>
+                  isRegisterSummary(transaction) ? (
+                    <RegisterSummaryRailRow
+                      key={transaction.transactionId}
+                      maps={lookupMaps}
+                      summary={transaction}
+                    />
+                  ) : (
+                    <EntryRailRow
+                      key={transaction.transaction_id}
+                      editable={false}
+                      maps={lookupMaps}
+                      transaction={transaction}
+                    />
+                  ),
+                )}
               </section>
             ) : null}
           </aside>

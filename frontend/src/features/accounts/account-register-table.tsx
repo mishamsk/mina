@@ -1,7 +1,7 @@
 import { Reload } from "pixelarticons/react";
 import { type KeyboardEvent, useRef } from "react";
 
-import type { JournalRecord, Transaction } from "@/api";
+import type { JournalRecord } from "@/api";
 import { Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,7 +20,7 @@ import {
   type LookupMaps,
   recordStatus,
   StatusIcon,
-  transactionAccountFqnContext,
+  transactionTitleAccountFqnContext,
 } from "@/features/ledger";
 import { cn } from "@/lib/utils";
 import { formatLocalCivilDateParts } from "@/utils/date";
@@ -45,8 +45,6 @@ interface AccountRegisterTableProps {
   readonly showAccount?: boolean;
   readonly showRunningBalance?: boolean;
   readonly totalCount: number | undefined;
-  readonly transactionErrorsById: Readonly<Record<number, string>>;
-  readonly transactionsById: Readonly<Record<number, Transaction>>;
 }
 
 const interactiveTargetSelector =
@@ -170,8 +168,6 @@ export const AccountRegisterTable = ({
   showAccount = false,
   showRunningBalance = true,
   totalCount,
-  transactionErrorsById,
-  transactionsById,
 }: AccountRegisterTableProps) => {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const showRemainingCredit =
@@ -352,10 +348,8 @@ export const AccountRegisterTable = ({
           </thead>
           <tbody>
             {records.map((record, index) => {
-              const transaction = transactionsById[record.transaction_id];
               const date = formatLocalCivilDateParts(record.initiated_date);
-              const transactionError =
-                transactionErrorsById[record.transaction_id];
+              const transactionTitle = record.transaction_display_title;
               const account = maps.accountsById.get(record.account_id);
               const category =
                 record.category_id === null
@@ -462,25 +456,22 @@ export const AccountRegisterTable = ({
                     </td>
                   ) : null}
                   <td className="account-register-counterparty-column px-3 py-2">
-                    {transaction ? (
+                    {transactionTitle ? (
                       <Tooltip
-                        label={transactionAccountFqnContext(transaction, maps)}
+                        label={transactionTitleAccountFqnContext(
+                          transactionTitle,
+                          record.transaction_account_ids ?? [],
+                          maps,
+                        )}
                         className="block min-w-0"
                       >
                         <div className="truncate font-medium">
-                          {transaction.display_title}
+                          {transactionTitle}
                         </div>
                       </Tooltip>
                     ) : (
-                      <div
-                        className={cn(
-                          "truncate font-medium",
-                          transactionError && "text-muted-foreground",
-                        )}
-                      >
-                        {transactionError
-                          ? "Transaction unavailable"
-                          : "Resolving transaction"}
+                      <div className="text-muted-foreground truncate font-medium">
+                        Transaction unavailable
                       </div>
                     )}
                   </td>

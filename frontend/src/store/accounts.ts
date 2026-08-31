@@ -71,12 +71,9 @@ interface AccountsState {
   readonly requestKey: string | undefined;
   readonly snapshot: AccountsPageSnapshot | undefined;
   readonly stale: boolean;
-  readonly transactionCacheGeneration: number;
   readonly transactionCache: Readonly<
     Record<number, AccountTransactionSnapshot>
   >;
-  readonly transactionCacheErrors: Readonly<Record<number, string>>;
-  readonly transactionCacheLoading: Readonly<Record<number, number>>;
 }
 
 const initialAccountsState: AccountsState = {
@@ -95,10 +92,7 @@ const initialAccountsState: AccountsState = {
   requestKey: undefined,
   snapshot: undefined,
   stale: false,
-  transactionCacheGeneration: 1,
   transactionCache: {},
-  transactionCacheErrors: {},
-  transactionCacheLoading: {},
 };
 
 const accountsStore = create<AccountsState>()(
@@ -190,7 +184,6 @@ export const useAccountTransactionCacheView = () =>
   useAccountsStore(
     useShallow((state) => ({
       transactionCache: state.transactionCache,
-      transactionCacheErrors: state.transactionCacheErrors,
     })),
   );
 
@@ -726,12 +719,9 @@ export const invalidateAllAccountRegisterPages = (): void => {
 
 export const invalidateAllAccountTransactionCache = (): void => {
   useAccountsStore.setState(
-    (state) => ({
-      transactionCacheGeneration: state.transactionCacheGeneration + 1,
+    {
       transactionCache: {},
-      transactionCacheErrors: {},
-      transactionCacheLoading: {},
-    }),
+    },
     false,
     "AccountsStore/invalidateAllAccountTransactionCache",
   );
@@ -743,16 +733,9 @@ export const invalidateAccountTransactionCache = (
   useAccountsStore.setState(
     (state) => {
       const transactionCache = { ...state.transactionCache };
-      const transactionCacheErrors = { ...state.transactionCacheErrors };
-      const transactionCacheLoading = { ...state.transactionCacheLoading };
       delete transactionCache[transactionId];
-      delete transactionCacheErrors[transactionId];
-      delete transactionCacheLoading[transactionId];
       return {
-        transactionCacheGeneration: state.transactionCacheGeneration + 1,
         transactionCache,
-        transactionCacheErrors,
-        transactionCacheLoading,
       };
     },
     false,
@@ -760,107 +743,18 @@ export const invalidateAccountTransactionCache = (
   );
 };
 
-export const setAccountTransactionCacheLoading = (
-  transactionId: number,
-): number => {
-  let generation = 0;
-  useAccountsStore.setState(
-    (state) => {
-      generation = state.transactionCacheGeneration + 1;
-      const transactionCacheErrors = { ...state.transactionCacheErrors };
-      delete transactionCacheErrors[transactionId];
-      return {
-        transactionCacheGeneration: generation,
-        transactionCacheErrors,
-        transactionCacheLoading: {
-          ...state.transactionCacheLoading,
-          [transactionId]: generation,
-        },
-      };
-    },
-    false,
-    "AccountsStore/setAccountTransactionCacheLoading",
-  );
-  return generation;
-};
-
-export const setAccountTransactionCache = (
-  transaction: Transaction,
-  generation: number,
-): void => {
-  useAccountsStore.setState(
-    (state) => {
-      if (
-        state.transactionCacheLoading[transaction.transaction_id] !== generation
-      ) {
-        return state;
-      }
-      const transactionCacheErrors = { ...state.transactionCacheErrors };
-      const transactionCacheLoading = { ...state.transactionCacheLoading };
-      delete transactionCacheErrors[transaction.transaction_id];
-      delete transactionCacheLoading[transaction.transaction_id];
-      return {
-        transactionCache: {
-          ...state.transactionCache,
-          [transaction.transaction_id]: {
-            loadedAt: new Date().toISOString(),
-            transaction,
-          },
-        },
-        transactionCacheErrors,
-        transactionCacheLoading,
-      };
-    },
-    false,
-    "AccountsStore/setAccountTransactionCache",
-  );
-};
-
 export const seedAccountTransactionCache = (transaction: Transaction): void => {
   useAccountsStore.setState(
-    (state) => {
-      const transactionCacheErrors = { ...state.transactionCacheErrors };
-      const transactionCacheLoading = { ...state.transactionCacheLoading };
-      delete transactionCacheErrors[transaction.transaction_id];
-      delete transactionCacheLoading[transaction.transaction_id];
-      return {
-        transactionCache: {
-          ...state.transactionCache,
-          [transaction.transaction_id]: {
-            loadedAt: new Date().toISOString(),
-            transaction,
-          },
+    (state) => ({
+      transactionCache: {
+        ...state.transactionCache,
+        [transaction.transaction_id]: {
+          loadedAt: new Date().toISOString(),
+          transaction,
         },
-        transactionCacheErrors,
-        transactionCacheLoading,
-      };
-    },
+      },
+    }),
     false,
     "AccountsStore/seedAccountTransactionCache",
-  );
-};
-
-export const setAccountTransactionCacheError = (
-  transactionId: number,
-  errorMessage: string,
-  generation: number,
-): void => {
-  useAccountsStore.setState(
-    (state) => {
-      if (state.transactionCacheLoading[transactionId] !== generation) {
-        return state;
-      }
-      const transactionCacheLoading = { ...state.transactionCacheLoading };
-      delete transactionCacheLoading[transactionId];
-      return {
-        transactionCacheErrors: {
-          ...state.transactionCacheErrors,
-          [transactionId]: errorMessage,
-        },
-        transactionCacheLoading,
-      };
-    },
-    false,
-    "AccountsStore/setAccountTransactionCacheError",
   );
 };
