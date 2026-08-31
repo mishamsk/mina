@@ -217,6 +217,44 @@ test("default empty management pages preserve first-use guidance", async ({
   }
 });
 
+test("account search retains a trailing space while keeping its query canonical", async ({
+  page,
+}) => {
+  await page.goto("/accounts");
+  const search = page.getByRole("searchbox", { name: "Search" });
+
+  await search.fill("cash");
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get("q"))
+    .toBe("cash");
+  await search.press("End");
+  await search.press("Space");
+
+  await expect(search).toHaveValue("cash ");
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get("q"))
+    .toBe("cash");
+
+  await search.fill("savings");
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get("q"))
+    .toBe("savings");
+  await page.goBack();
+  await expect(search).toBeFocused();
+  await expect(search).toHaveValue("cash");
+  await page.goForward();
+  await expect(search).toBeFocused();
+  await expect(search).toHaveValue("savings");
+
+  await search.blur();
+  await page.goBack();
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get("q"))
+    .toBe("cash");
+  await page.goBack();
+  await expect.poll(() => new URL(page.url()).searchParams.get("q")).toBeNull();
+});
+
 test("account management lists page server-filtered results and discard stale responses", async ({
   page,
 }, testInfo) => {

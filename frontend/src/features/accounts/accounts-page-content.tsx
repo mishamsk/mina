@@ -6,7 +6,7 @@ import {
   EyeOff,
   Search,
 } from "pixelarticons/react";
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { SetURLSearchParams } from "react-router";
 
 import type { Account, AccountType } from "@/api";
@@ -84,10 +84,51 @@ export const AccountsToolbar = ({
   setSearchParams,
   typeFilter,
 }: AccountsToolbarProps) => {
+  const [searchInputDraft, setSearchInputDraft] = useState<
+    string | undefined
+  >();
+  const requestedSearchRef = useRef(search);
+  const searchInputValue = searchInputDraft ?? search;
+
+  useEffect(() => {
+    requestedSearchRef.current = search;
+  }, [search]);
+
+  useEffect(() => {
+    const releaseSearchInputDraft = () => {
+      setSearchInputDraft(undefined);
+    };
+    window.addEventListener("popstate", releaseSearchInputDraft);
+    return () => {
+      window.removeEventListener("popstate", releaseSearchInputDraft);
+    };
+  }, []);
+
   const setSearch = useCallback(
     (nextSearch: string) => {
+      const normalizedSearch = nextSearch.trim();
+      setSearchInputDraft(nextSearch);
+      if (normalizedSearch === requestedSearchRef.current) {
+        return;
+      }
+      requestedSearchRef.current = normalizedSearch;
       setSearchParams((current) =>
-        updateAccountsSearchParam(current, "q", nextSearch.trim() || undefined),
+        updateAccountsSearchParam(current, "q", normalizedSearch || undefined),
+      );
+    },
+    [setSearchParams],
+  );
+
+  const commitSearch = useCallback(
+    (nextSearch: string) => {
+      const normalizedSearch = nextSearch.trim();
+      setSearchInputDraft(undefined);
+      if (normalizedSearch === requestedSearchRef.current) {
+        return;
+      }
+      requestedSearchRef.current = normalizedSearch;
+      setSearchParams((current) =>
+        updateAccountsSearchParam(current, "q", normalizedSearch || undefined),
       );
     },
     [setSearchParams],
@@ -162,7 +203,13 @@ export const AccountsToolbar = ({
             type="search"
             className="bg-card text-foreground placeholder:text-muted-foreground h-9 w-full border-2 border-[var(--border-ink)] px-8 font-mono text-sm shadow-[var(--shadow-pixel)]"
             placeholder="Full account path"
-            value={search}
+            value={searchInputValue}
+            onFocus={(event) => {
+              setSearchInputDraft(event.currentTarget.value);
+            }}
+            onBlur={(event) => {
+              commitSearch(event.currentTarget.value);
+            }}
             onChange={(event) => {
               setSearch(event.target.value);
             }}
