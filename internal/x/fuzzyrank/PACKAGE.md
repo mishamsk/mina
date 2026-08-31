@@ -8,7 +8,7 @@
 
 - Queries and terms are trimmed and case-folded for exact, prefix, substring, and edit-distance comparison; subsequence matching additionally uses the wrapped library's Unicode normalization.
 - Typo tolerance grows with normalized query length: one edit through four runes, two edits from five through eight runes, and three edits from nine runes onward.
-- Entity terms consist of the effective title plus, for hierarchical entities, the complete FQN and each segment. Ranked search and unordered list membership use the same best tier across those terms: exact, prefix, substring, ascending accepted edit distance, then normalized case-folded subsequence. Multi-token subsequences match distinct whitespace-delimited words or FQN segments in order; empty queries retain every candidate.
+- Entity terms consist of the effective title plus, for hierarchical entities, the complete FQN and each segment. Ranked search reserves the shared exact tier for a candidate's title, complete FQN, or final relevant FQN segment; equality through an older ancestor segment follows that tier before prefix matches. Unordered list membership uses the best match across every term. Remaining tiers are prefix, substring, ascending accepted edit distance, then normalized case-folded subsequence. Multi-token subsequences match distinct whitespace-delimited words or FQN segments in order; empty queries retain every candidate.
 - Equal tiers order by title, qualified name, then stable string ID; bounded results retain a literal exact-FQN candidate even when equal-tier ordering would otherwise truncate it.
 
 ## Boundaries

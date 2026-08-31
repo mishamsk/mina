@@ -13,6 +13,8 @@ import (
 
 func TestEntitySearchAPIBoundaries(t *testing.T) {
 	t.Run("ranked hierarchy search", testRankedHierarchySearch)
+	t.Run("account exact group ranking", testAccountExactGroupRanking)
+	t.Run("tag exact group ranking", testTagExactGroupRanking)
 	t.Run("entity contexts and visibility", testEntitySearchContextsAndVisibility)
 	t.Run("per-entity advanced policy", testEntitySearchAdvancedPolicy)
 	t.Run("bulk account facts", testBulkAccountSearchFacts)
@@ -149,6 +151,42 @@ func testRankedHierarchySearch(t *testing.T) {
 		t.Fatalf("ranked category FQNs = %v, want %v", got, want)
 	}
 
+	create("search-group-rank:A-exact", "Bank", false)
+	create("search-group-rank:Bank:checking", "Z ancestor candidate", false)
+	create("search-group-rank:Banking", "A prefix candidate", false)
+	create("search-group-rank:other:Bank", "Z exact leaf", false)
+	groupQuery := "  bAnK  "
+	groupRanked, err := client.REST().SearchCategoriesWithResponse(ctx, &httpclient.SearchCategoriesParams{
+		Context: httpclient.SearchCategoriesParamsContextNavigation, Limit: 20, Q: &groupQuery,
+	})
+	requireClientResponse(t, "rank exact category group", err, groupRanked.StatusCode(), http.StatusOK, groupRanked.Body)
+	groupRankedFQNs := make([]string, 0, len(groupRanked.JSON200.Items))
+	for _, item := range groupRanked.JSON200.Items {
+		groupRankedFQNs = append(groupRankedFQNs, item.Fqn)
+	}
+	wantGroupRankedFQNs := []string{
+		"search-group-rank:A-exact",
+		"search-group-rank:Bank",
+		"search-group-rank:other:Bank",
+		"search-group-rank:Bank:checking",
+		"search-group-rank:Banking",
+	}
+	if !reflect.DeepEqual(groupRankedFQNs, wantGroupRankedFQNs) {
+		t.Fatalf("exact-group category FQNs = %v, want %v", groupRankedFQNs, wantGroupRankedFQNs)
+	}
+	if groupRanked.JSON200.Items[1].Kind != httpclient.CategorySearchItemKindGroup || groupRanked.JSON200.Items[1].CategoryId != nil {
+		t.Fatalf("exact category group = %+v, want navigation-only group", groupRanked.JSON200.Items[1])
+	}
+	create("search-group-rank:full-fqn-competitor", "search-group-rank:Bank", false)
+	fullGroupQuery := "  SEARCH-GROUP-RANK:BANK  "
+	fullGroupRanked, err := client.REST().SearchCategoriesWithResponse(ctx, &httpclient.SearchCategoriesParams{
+		Context: httpclient.SearchCategoriesParamsContextNavigation, Limit: 20, Q: &fullGroupQuery,
+	})
+	requireClientResponse(t, "rank exact category group FQN", err, fullGroupRanked.StatusCode(), http.StatusOK, fullGroupRanked.Body)
+	if len(fullGroupRanked.JSON200.Items) < 2 || fullGroupRanked.JSON200.Items[0].Kind != httpclient.CategorySearchItemKindGroup || fullGroupRanked.JSON200.Items[0].Fqn != "search-group-rank:Bank" || fullGroupRanked.JSON200.Items[1].Fqn != "search-group-rank:full-fqn-competitor" {
+		t.Fatalf("exact-FQN category group results = %+v, want navigation group before exact-title leaf", fullGroupRanked.JSON200.Items)
+	}
+
 	limited, err := client.REST().SearchCategoriesWithResponse(ctx, &httpclient.SearchCategoriesParams{
 		Context: httpclient.SearchCategoriesParamsContextRecordAssignment, Limit: 1, Q: &query,
 	})
@@ -201,6 +239,42 @@ func testRankedHierarchySearch(t *testing.T) {
 	})
 	requireClientResponse(t, "include hidden category", err, children.StatusCode(), http.StatusOK, children.Body)
 	assertContainsSearchID(t, "hidden category child", categorySearchLeafIDs(children.JSON200.Items), hiddenID)
+}
+
+func testAccountExactGroupRanking(t *testing.T) {
+	client := newSharedClient(t)
+	ctx := context.Background()
+	client.Scenario().AccountWithDisplayLabel("search-account-group:Bank:checking", "A fuzzy account", httpclient.WritableAccountTypeOwned)
+
+	query := "bank"
+	response, err := client.REST().SearchAccountsWithResponse(ctx, &httpclient.SearchAccountsParams{
+		Context: httpclient.SearchAccountsParamsContextNavigation, Limit: 20, Q: &query,
+	})
+	requireClientResponse(t, "rank exact account group", err, response.StatusCode(), http.StatusOK, response.Body)
+	if len(response.JSON200.Items) < 2 || response.JSON200.Items[0].Kind != httpclient.AccountSearchItemKindGroup || response.JSON200.Items[0].Fqn != "search-account-group:Bank" || response.JSON200.Items[1].Fqn != "search-account-group:Bank:checking" {
+		t.Fatalf("exact-group account results = %+v, want navigation group before fuzzy leaf", response.JSON200.Items)
+	}
+}
+
+func testTagExactGroupRanking(t *testing.T) {
+	client := newSharedClient(t)
+	ctx := context.Background()
+	create := func(fqn, title string) {
+		t.Helper()
+		response, err := client.REST().CreateTagWithResponse(ctx, httpclient.CreateTagRequest{Fqn: fqn, DisplayLabel: &title})
+		requireClientResponse(t, "create tag search candidate", err, response.StatusCode(), http.StatusCreated, response.Body)
+	}
+	create("search-tag-group:A-exact", "Bank")
+	create("search-tag-group:Bank:checking", "A fuzzy tag")
+
+	query := "  BANK  "
+	response, err := client.REST().SearchTagsWithResponse(ctx, &httpclient.SearchTagsParams{
+		Context: httpclient.SearchTagsParamsContextNavigation, Limit: 20, Q: &query,
+	})
+	requireClientResponse(t, "rank exact tag group", err, response.StatusCode(), http.StatusOK, response.Body)
+	if len(response.JSON200.Items) < 3 || response.JSON200.Items[0].Fqn != "search-tag-group:A-exact" || response.JSON200.Items[1].Kind != httpclient.TagSearchItemKindGroup || response.JSON200.Items[1].TagId != nil || response.JSON200.Items[1].Fqn != "search-tag-group:Bank" || response.JSON200.Items[2].Fqn != "search-tag-group:Bank:checking" {
+		t.Fatalf("exact-group tag results = %+v, want exact leaf then navigation group before fuzzy leaf", response.JSON200.Items)
+	}
 }
 
 func testEntitySearchContextsAndVisibility(t *testing.T) {

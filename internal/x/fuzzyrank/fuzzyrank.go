@@ -15,6 +15,7 @@ type tier uint8
 const (
 	tierAll tier = iota
 	tierExact
+	tierRelatedExact
 	tierPrefix
 	tierSubstring
 	tierOneEdit
@@ -62,6 +63,9 @@ func Rank[T any](query string, candidates []Candidate[T]) []Candidate[T] {
 		if !ok {
 			continue
 		}
+		if tier == tierExact && !candidateIsExact(normalizedQuery, candidate) {
+			tier = tierRelatedExact
+		}
 		matches = append(matches, matchedCandidate[T]{Candidate: candidate, Tier: tier})
 	}
 
@@ -79,6 +83,16 @@ func Rank[T any](query string, candidates []Candidate[T]) []Candidate[T] {
 		ordered[index] = match.Candidate
 	}
 	return ordered
+}
+
+func candidateIsExact[T any](normalizedQuery string, candidate Candidate[T]) bool {
+	if normalize(candidate.Title) == normalizedQuery || normalize(candidate.FQN) == normalizedQuery {
+		return true
+	}
+	if index := strings.LastIndex(candidate.FQN, ":"); index >= 0 {
+		return normalize(candidate.FQN[index+1:]) == normalizedQuery
+	}
+	return false
 }
 
 // Limit bounds ranked candidates while retaining a literal exact-FQN match.
