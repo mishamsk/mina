@@ -570,7 +570,7 @@ codex-goal-fleet plan_file="":
 
     command codex -m gpt-5.6-sol -c model_reasoning_effort=xhigh --dangerously-bypass-approvals-and-sandbox "/goal Operate @${plan_file}. The plan's completion criteria define when the goal is complete."
 
-# List currently actionable parent Kata issues as tab-separated rows.
+# List currently actionable, unclaimed parent Kata issues as tab-separated rows.
 [private]
 kata-open-issues:
     #!/usr/bin/env bash
@@ -594,7 +594,7 @@ kata-open-issues:
             .title
         ]
         | @tsv
-    ' <(kata ready --json --limit 0) <(kata list --status all --limit 1000 --json)
+    ' <(kata ready --unowned --json --limit 0) <(kata list --status all --limit 1000 --json)
 
 # Start a kata plan-only worktree through Codex.
 [group('agents')]
@@ -648,6 +648,7 @@ kata-implement:
     fi
     [ -n "$selected" ] || { echo "no kata issue selected" >&2; exit 1; }
     issue="${selected%%$'\t'*}"
+    kata claim "$issue" --agent
 
     if ! agent_model_thinking="$(
         printf '%s\n' {{ quote(agent_model_thinking_levels) }} | fzf --prompt='Agent model / thinking> '
