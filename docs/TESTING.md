@@ -168,22 +168,25 @@ Use them only for one primary, user-visible journey through a distinct core work
 An eligible frontend e2e test must satisfy every condition:
 
 - It proves a key happy-path user experience that needs a real browser.
-- It interacts through normal browser controls and asserts the visible user result (or URL navigation).
+- The behavior under test uses normal browser controls and asserts the visible user result or URL navigation.
 - It is short, focused on one journey, and does not duplicate an existing frontend e2e journey.
+
+Concise API setup and cleanup may arrange test-owned state when it keeps an otherwise eligible journey short and isolated. Fixture plumbing may fail on an unsuccessful request and retain identifiers needed for cleanup, but it must not assert response semantics or payload shape, synchronize the journey on request activity, or serve as the action or evidence under test.
 
 Do not use `frontend-e2e-tests` for:
 
-- REST capability, response, validation, data-state, or error-path coverage; `app-tests` own this coverage, including exhaustive cases and concurrency.
-- Direct REST calls, REST request or response assertions, or API-based fixture setup or verification.
+- REST capability, response, validation, domain data-state, or backend error-path coverage; `app-tests` own this coverage, including exhaustive cases and concurrency.
+- Direct REST calls for the action or verification under test, REST contract assertions beyond fixture success guards, or API verification.
 - Route interception except as a last resort to make an otherwise eligible core happy-path browser test stable and non-flaky when normal browser behavior cannot do so. It must not assert REST behavior or turn the test into a REST, failure, timing, or concurrency scenario.
 - Polling, waiting for requests or responses, fixed delays, or other synchronization on implementation activity; use Playwright's web-first assertions for the visible result.
 - Artificial latency, injected failures, retries, rapid typing, rapid repeated actions, multi-tab behavior, races, concurrency, or other unrealistic timing scenarios for Mina's local single-household use.
+- Browser-only loading, empty, error, focus, or stale-result states unless one is indispensable to the selected core journey. `app-tests` cannot cover browser presentation, so omitting these states is an intentional coverage tradeoff rather than transferred coverage.
 - Targeted tests for isolated regressions, exhaustive frontend state combinations, visual-detail matrices, or small implementation details.
 - Direct database, service, store, handler, or private-helper assertions.
 
-Frontend e2e tests prove a few essential browser experiences. Keep the suite and every spec intentionally small: add a test only when it covers an uncovered core happy-path journey, and keep only the single most valuable outcome assertion for that journey.
+Frontend e2e tests prove a few essential browser experiences. Keep the suite and every spec intentionally small: add a test only when it covers an uncovered core happy-path journey, and use only the few visible outcome assertions needed to establish that the journey succeeded.
 
-- Keep each frontend e2e spec file under 25 tests; split growing suites by user workflow.
+- A frontend e2e spec file must not contain more than 25 tests; split growing suites by user workflow.
 
 ## Docker-Lifecycle-Tests
 
