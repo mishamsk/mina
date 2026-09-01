@@ -35,8 +35,10 @@ operations:
   getHealth:
     cli: {state: exposed, name: status}
     mcp:
-      state: excluded
-      reason: Transport liveness is a deployment diagnostic and provides no household accounting value to an agent.
+      state: exposed
+      name: status
+      description: Reports process health and metadata such as version or build details.
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   getAccountingSchema:
     cli:
       state: excluded

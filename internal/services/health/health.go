@@ -12,12 +12,19 @@ const (
 	StatusOK Status = "ok"
 )
 
+// DevelopmentBuild identifies a development build from the Mina source repository.
+type DevelopmentBuild struct {
+	CommitSHA string
+	RepoURL   string
+}
+
 // Health describes process availability and migrated accounting state.
 type Health struct {
 	DatabaseEncrypted     bool
 	DatabaseFileSizeBytes *int64
 	Status                Status
 	SchemaVersion         int64
+	Version               DevelopmentBuild
 }
 
 // Repository reads health-related state.
@@ -29,12 +36,13 @@ type Repository interface {
 
 // Service owns health use cases.
 type Service struct {
-	repo Repository
+	repo    Repository
+	version DevelopmentBuild
 }
 
-// NewService creates a health service backed by repo.
-func NewService(repo Repository) *Service {
-	return &Service{repo: repo}
+// NewService creates a health service backed by repo with immutable development-build metadata.
+func NewService(repo Repository, version DevelopmentBuild) *Service {
+	return &Service{repo: repo, version: version}
 }
 
 // Check returns the current process health.
@@ -54,5 +62,6 @@ func (s *Service) Check(ctx context.Context) (Health, error) {
 		DatabaseFileSizeBytes: fileSize,
 		Status:                StatusOK,
 		SchemaVersion:         version,
+		Version:               s.version,
 	}, nil
 }

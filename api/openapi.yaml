@@ -6884,6 +6884,7 @@ components:
         - database_file_size_bytes
         - status
         - schema_version
+        - version
       properties:
         database_encrypted:
           type: boolean
@@ -6902,6 +6903,35 @@ components:
           type: integer
           format: int64
           minimum: 0
+        version:
+          $ref: "#/components/schemas/Version"
+    Version:
+      oneOf:
+        - $ref: "#/components/schemas/DevelopmentBuild"
+      discriminator:
+        propertyName: type
+        mapping:
+          development: "#/components/schemas/DevelopmentBuild"
+    DevelopmentBuild:
+      type: object
+      additionalProperties: false
+      required:
+        - commit_sha
+        - repo_url
+        - type
+      properties:
+        commit_sha:
+          type: string
+          minLength: 1
+          description: Source commit SHA for the running Mina build; the literal string `unknown` when no build-time commit stamp is available.
+        repo_url:
+          type: string
+          minLength: 1
+          description: Source repository URL stamped into the running Mina build; the literal string `unknown` when no build-time repository remote is available.
+        type:
+          type: string
+          enum:
+            - development
     AccountingSchemaResponse:
       type: object
       additionalProperties: false

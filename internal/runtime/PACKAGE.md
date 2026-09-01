@@ -22,6 +22,7 @@
 - Runtime registers API audit-log compaction for manual execution in every app and schedules it only under long-running automatic-operation policy; compaction uses the shared runtime clock and configured retention.
 - The system clock installs one cancelable timer for each recurring-operation deadline without periodic wakeups.
 - The offline schema command reads the embedded target DDL through a static accessor; constructing an app still follows the normal database lifecycle.
+- Runtime resolves one immutable build-metadata record for direct process commands and composed health; development metadata includes linker-supplied source-repository and commit-SHA values that each fall back to `unknown`.
 
 ## Boundaries
 

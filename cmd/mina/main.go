@@ -22,8 +22,6 @@ import (
 	"github.com/mishamsk/mina/internal/runtime"
 )
 
-const version = "0.0.0-dev"
-
 var portFlagErrorPattern = regexp.MustCompile(`invalid argument "([^"]+)" for "--port" flag`)
 
 func main() {
@@ -79,7 +77,7 @@ func newRootCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.
 	root.SetOut(stdout)
 	root.SetErr(stderr)
 	root.SetVersionTemplate("mina {{.Version}}\n")
-	root.Version = version
+	root.Version = versionDisplay()
 	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
 		return normalizeFlagError(err)
 	})
@@ -112,10 +110,15 @@ func newVersionCommand(stdout io.Writer) *cobra.Command {
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(_ *cobra.Command, _ []string) error {
-			_, err := fmt.Fprintf(stdout, "mina %s\n", version)
+			_, err := fmt.Fprintf(stdout, "mina %s\n", versionDisplay())
 			return err
 		},
 	}
+}
+
+func versionDisplay() string {
+	build := runtime.CurrentBuildMetadata()
+	return fmt.Sprintf("%s (commit %s)", build.Version, build.CommitSHA)
 }
 
 func newLocalClientSessionFactory(stdin io.Reader, stderr io.Writer) clientcli.LocalSessionFactory {
@@ -478,7 +481,7 @@ func serve(
 		HTTP: runtime.HTTPConfig{
 			AccessLog:  accessLog,
 			ErrorLog:   stderr,
-			MCPVersion: version,
+			MCPVersion: runtime.CurrentBuildMetadata().Version,
 		},
 		Operations: runtime.OperationConfig{
 			Enabled:    true,

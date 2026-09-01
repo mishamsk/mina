@@ -2029,6 +2029,20 @@ func Operations() []Operation {
 			Invoke: invokeGetExchangeRateLoadingStatus,
 		},
 		{
+			ID:          "getHealth",
+			Method:      "GET",
+			Path:        "/api/health",
+			Summary:     "Report process health.",
+			Description: "Reports process health and metadata such as version or build details.",
+			MCP: MCPOperation{
+				Group: "health", Name: "status",
+				ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{},\"type\":\"object\"}"),
+			},
+			Input:  InputDescriptor{},
+			Invoke: invokeGetHealth,
+		},
+		{
 			ID:          "getHouseholdFlowReport",
 			Method:      "GET",
 			Path:        "/api/overview/flow",
@@ -6122,6 +6136,20 @@ func invokeGetExchangeRateLoadingStatus(ctx context.Context, client httpclient.C
 		return InvocationResult{}, err
 	}
 	response, err := client.GetExchangeRateLoadingStatusWithResponse(ctx)
+	if err != nil {
+		return InvocationResult{}, err
+	}
+	if response == nil {
+		return InvocationResult{}, errors.New("generated client returned no operation response")
+	}
+	return normalizeInvocationResult(response.Body, response.HTTPResponse)
+}
+
+func invokeGetHealth(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
+	if err := validateInvocationInput(input, nil, nil, nil, false, false); err != nil {
+		return InvocationResult{}, err
+	}
+	response, err := client.GetHealthWithResponse(ctx)
 	if err != nil {
 		return InvocationResult{}, err
 	}

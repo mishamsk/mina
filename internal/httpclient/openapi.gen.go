@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -363,6 +364,21 @@ func (e DatabaseBackupStatusResponseState) Valid() bool {
 	case DatabaseBackupStatusResponseStateIdle:
 		return true
 	case DatabaseBackupStatusResponseStateRunning:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DevelopmentBuildType.
+const (
+	Development DevelopmentBuildType = "development"
+)
+
+// Valid indicates whether the value is a known member of the DevelopmentBuildType enum.
+func (e DevelopmentBuildType) Valid() bool {
+	switch e {
+	case Development:
 		return true
 	default:
 		return false
@@ -2505,6 +2521,19 @@ type DemoSeedResponse struct {
 	Transactions         int `json:"transactions"`
 }
 
+// DevelopmentBuild defines model for DevelopmentBuild.
+type DevelopmentBuild struct {
+	// CommitSha Source commit SHA for the running Mina build; the literal string `unknown` when no build-time commit stamp is available.
+	CommitSha string `json:"commit_sha"`
+
+	// RepoUrl Source repository URL stamped into the running Mina build; the literal string `unknown` when no build-time repository remote is available.
+	RepoUrl string               `json:"repo_url"`
+	Type    DevelopmentBuildType `json:"type"`
+}
+
+// DevelopmentBuildType defines model for DevelopmentBuild.Type.
+type DevelopmentBuildType string
+
 // DisplayAmount defines model for DisplayAmount.
 type DisplayAmount struct {
 	// Amount JSON string, not a JSON number. Signed DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
@@ -2608,6 +2637,7 @@ type HealthResponse struct {
 	DatabaseFileSizeBytes *int64               `json:"database_file_size_bytes"`
 	SchemaVersion         int64                `json:"schema_version"`
 	Status                HealthResponseStatus `json:"status"`
+	Version               Version              `json:"version"`
 }
 
 // HealthResponseStatus defines model for HealthResponse.Status.
@@ -3508,6 +3538,11 @@ type UpdateTransactionRequest struct {
 
 // UpdateTransactionRequest_Records_Item defines model for UpdateTransactionRequest.records.Item.
 type UpdateTransactionRequest_Records_Item struct {
+	union json.RawMessage
+}
+
+// Version defines model for Version.
+type Version struct {
 	union json.RawMessage
 }
 
@@ -4599,6 +4634,65 @@ func (t UpdateTransactionRequest_Records_Item) MarshalJSON() ([]byte, error) {
 }
 
 func (t *UpdateTransactionRequest_Records_Item) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsDevelopmentBuild returns the union data inside the Version as a DevelopmentBuild
+func (t Version) AsDevelopmentBuild() (DevelopmentBuild, error) {
+	var body DevelopmentBuild
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromDevelopmentBuild overwrites any union data inside the Version as the provided DevelopmentBuild
+func (t *Version) FromDevelopmentBuild(v DevelopmentBuild) error {
+	v.Type = "development"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeDevelopmentBuild performs a merge with any union data inside the Version, using the provided DevelopmentBuild
+func (t *Version) MergeDevelopmentBuild(v DevelopmentBuild) error {
+	v.Type = "development"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t Version) Discriminator() (string, error) {
+	var discriminator struct {
+		Discriminator string `json:"type"`
+	}
+	err := json.Unmarshal(t.union, &discriminator)
+	return discriminator.Discriminator, err
+}
+
+func (t Version) ValueByDiscriminator() (interface{}, error) {
+	discriminator, err := t.Discriminator()
+	if err != nil {
+		return nil, err
+	}
+	switch discriminator {
+	case "development":
+		return t.AsDevelopmentBuild()
+	default:
+		return nil, errors.New("unknown discriminator value: " + discriminator)
+	}
+}
+
+func (t Version) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *Version) UnmarshalJSON(b []byte) error {
 	err := t.union.UnmarshalJSON(b)
 	return err
 }

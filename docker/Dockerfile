@@ -21,9 +21,12 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 COPY --from=frontend-builder /src/internal/webui/dist ./internal/webui/dist
-RUN CGO_ENABLED=1 GOOS="${TARGETOS}" GOARCH="${TARGETARCH:-$(go env GOARCH)}" \
+ARG REVISION
+ARG SOURCE
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=1 GOOS="${TARGETOS}" GOARCH="${TARGETARCH:-$(go env GOARCH)}" \
     go build -trimpath \
-      -ldflags="-s -w -X github.com/mishamsk/mina/internal/runtime.bundledHTTPFSExtensionPath=/usr/local/lib/mina/duckdb/httpfs.duckdb_extension" \
+      -ldflags="-s -w -X github.com/mishamsk/mina/internal/runtime.bundledHTTPFSExtensionPath=/usr/local/lib/mina/duckdb/httpfs.duckdb_extension -X github.com/mishamsk/mina/internal/runtime.buildCommitHash=${REVISION} -X github.com/mishamsk/mina/internal/runtime.buildRepositoryURL=${SOURCE}" \
       -o /out/mina ./cmd/mina
 
 FROM debian:${DEBIAN_VERSION}-slim AS runtime
@@ -59,7 +62,7 @@ RUN chmod 0755 /usr/local/bin/mina /usr/local/bin/mina-container-init /usr/local
 
 ARG CREATED
 ARG REVISION
-ARG SOURCE="https://github.com/mishamsk/mina"
+ARG SOURCE
 ARG VERSION="0.0.0-dev"
 LABEL org.opencontainers.image.title="Mina" \
       org.opencontainers.image.description="Local-first personal finance API and web UI" \

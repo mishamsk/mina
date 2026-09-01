@@ -23,6 +23,7 @@
 - Hierarchical entity and Member lists forward shared fuzzy membership and typed filters without transport-side matching; Account type is repeated so one or several values use the same contract.
 - Recurring-occurrence lists materialize only through the server's current civil date, while exact reads return permanent provenance and definition availability without catch-up; future-positioned transaction responses mark non-persisted recurring projections explicitly.
 - Accounting-schema inspection maps the embedded service artifact directly and never reads the opened database or its catalog.
+- Health maps runtime-supplied development-build metadata into the version subtype alongside database status without deriving build information in transport.
 - Background-operation discovery maps every closed-registry ID to concrete status, start, typed-run, and filtered-history links.
 - Audit response mapping preserves stored JSON number text instead of converting it through binary floating-point values.
 - Audit response presence flags distinguish a captured JSON `null` value from an absent or invalid body.

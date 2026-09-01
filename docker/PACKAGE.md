@@ -33,6 +33,7 @@
 ## Image and Compose Contract
 
 - The image defaults to non-root `10001:10001`, contains Mina, Docker initialization commands, a health check, and a target-architecture DuckDB `httpfs` extension used without a runtime download for encrypted writes. Build from the repository root with `docker/Dockerfile`.
+- The image `REVISION` and `SOURCE` build arguments stamp the Mina binary's development-build metadata and matching OCI labels; the separate OCI version label does not define Mina release-version behavior.
 - The entrypoint ends with `exec mina`, so Mina receives stop signals directly.
 - The base Compose deployment defaults to `ghcr.io/mishamsk/mina:main`, publishes only to `127.0.0.1` by default, and fixes the database path to `/data/mina.duckdb`; schema and database-path overrides are deliberately absent.
 - The main service is read-only, drops all capabilities, forbids privilege escalation, and uses a bounded `/tmp` tmpfs. Do not add privileged mode, Docker socket access, or broad host mounts to the base deployment.

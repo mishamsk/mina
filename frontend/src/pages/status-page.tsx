@@ -1,5 +1,5 @@
 import { RefreshCw } from "lucide-react";
-import { Lock } from "pixelarticons/react";
+import { Database, ExternalLink, Lock, Server } from "pixelarticons/react";
 import { Tabs } from "radix-ui";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router";
@@ -8,8 +8,11 @@ import { getHealth, type HealthResponse, isNetworkFailure } from "../api";
 import { PageHelp } from "../components/page-help";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
-import { Card, CardContent, CardHeader } from "../components/ui/card";
-import { Skeleton } from "../components/ui/skeleton";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "../components/ui/popover";
 import { PageHeader } from "../features/app-shell";
 import { StatusAuditLog, StatusOperations } from "../features/status";
 
@@ -87,6 +90,215 @@ const formatDatabaseFileSize = (bytes: number | null): string => {
   }).format(value)} ${units[exponent]}`;
 };
 
+const browserRepositoryURL = (repoURL: string): string | undefined => {
+  if (repoURL === "unknown") {
+    return undefined;
+  }
+  try {
+    const parsed = new URL(repoURL);
+    return parsed.protocol === "http:" || parsed.protocol === "https:"
+      ? parsed.toString()
+      : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+const buildCommitURL = (
+  repoURL: string,
+  commitSHA: string,
+): string | undefined => {
+  const repositoryURL = browserRepositoryURL(repoURL);
+  if (!repositoryURL || commitSHA === "unknown") {
+    return undefined;
+  }
+  return `${repositoryURL.replace(/\/?\.git\/?$/, "").replace(/\/$/, "")}/commit/${encodeURIComponent(commitSHA)}`;
+};
+
+interface ServerInfoPopoverProps {
+  readonly health: HealthResponse | undefined;
+  readonly serverTime: string | undefined;
+}
+
+const ServerInfoPopover = ({ health, serverTime }: ServerInfoPopoverProps) => {
+  const repositoryURL = health
+    ? browserRepositoryURL(health.version.repo_url)
+    : undefined;
+  const commitURL = health
+    ? buildCommitURL(health.version.repo_url, health.version.commit_sha)
+    : undefined;
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button type="button" variant="outline" disabled={!health}>
+          <Server aria-hidden="true" />
+          Server info
+        </Button>
+      </PopoverTrigger>
+      {health ? (
+        <PopoverContent
+          align="end"
+          sideOffset={10}
+          aria-label="Server info"
+          className="w-[min(36rem,calc(100vw-2rem))] p-0"
+        >
+          <header className="flex items-start justify-between gap-4 border-b-2 border-[var(--border-ink)] bg-[var(--color-interactive-bright)] p-4">
+            <div className="flex min-w-0 items-start gap-3">
+              <Server aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
+              <div className="min-w-0">
+                <h2 className="font-heading text-base font-bold uppercase">
+                  Server info
+                </h2>
+                <p className="font-body mt-1 text-sm">
+                  Runtime, database, and source provenance.
+                </p>
+              </div>
+            </div>
+            <Badge
+              variant="outline"
+              className="bg-[var(--color-status-posted-bright)] text-[var(--color-status-posted-ink)]"
+            >
+              {health.status}
+            </Badge>
+          </header>
+
+          <div className="max-h-[min(32rem,calc(100dvh-8rem))] overflow-y-auto">
+            <section aria-labelledby="server-runtime-heading" className="p-4">
+              <h3
+                id="server-runtime-heading"
+                className="font-heading text-muted-foreground text-xs font-bold uppercase"
+              >
+                Runtime
+              </h3>
+              <dl className="mt-2 divide-y divide-[var(--hairline)] border-y border-[var(--hairline)]">
+                <div className="grid gap-1 py-2 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-baseline">
+                  <dt className="text-muted-foreground font-mono text-xs">
+                    Server time
+                  </dt>
+                  <dd className="font-mono text-sm font-semibold sm:text-right sm:whitespace-nowrap">
+                    {formatServerTime(serverTime)}
+                  </dd>
+                </div>
+              </dl>
+            </section>
+
+            <section
+              aria-labelledby="server-database-heading"
+              className="border-t-2 border-[var(--border-ink)] bg-[var(--band)] p-4"
+            >
+              <h3
+                id="server-database-heading"
+                className="font-heading flex items-center gap-2 text-xs font-bold uppercase"
+              >
+                <Database aria-hidden="true" className="size-4" />
+                Database
+              </h3>
+              <dl className="mt-2 divide-y divide-[var(--hairline)] border-y border-[var(--hairline)]">
+                <div className="grid gap-1 py-2 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-baseline">
+                  <dt className="text-muted-foreground font-mono text-xs">
+                    Schema version
+                  </dt>
+                  <dd className="font-mono text-sm font-semibold sm:text-right">
+                    {health.schema_version}
+                  </dd>
+                </div>
+                <div className="grid gap-1 py-2 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-baseline">
+                  <dt className="text-muted-foreground font-mono text-xs">
+                    Database file size
+                  </dt>
+                  <dd className="font-mono text-sm font-semibold sm:text-right">
+                    {formatDatabaseFileSize(health.database_file_size_bytes)}
+                  </dd>
+                </div>
+                <div className="grid gap-1 py-2 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-baseline">
+                  <dt className="text-muted-foreground font-mono text-xs">
+                    Database encryption
+                  </dt>
+                  <dd className="flex items-center gap-2 font-mono text-sm font-semibold sm:justify-end">
+                    {health.database_encrypted ? (
+                      <Lock aria-hidden="true" className="size-4 shrink-0" />
+                    ) : null}
+                    {health.database_encrypted ? "Encrypted" : "Not encrypted"}
+                  </dd>
+                </div>
+              </dl>
+            </section>
+
+            <section
+              aria-labelledby="server-build-heading"
+              className="border-t-2 border-[var(--border-ink)] p-4"
+            >
+              <h3
+                id="server-build-heading"
+                className="font-heading text-muted-foreground text-xs font-bold uppercase"
+              >
+                Build
+              </h3>
+              <dl className="mt-2 divide-y divide-[var(--hairline)] border-y border-[var(--hairline)]">
+                <div className="grid gap-1 py-2 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-baseline">
+                  <dt className="text-muted-foreground font-mono text-xs">
+                    Build type
+                  </dt>
+                  <dd className="font-mono text-sm font-semibold capitalize sm:text-right">
+                    {health.version.type}
+                  </dd>
+                </div>
+                <div className="grid gap-1 py-2 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-start">
+                  <dt className="text-muted-foreground font-mono text-xs">
+                    Commit SHA
+                  </dt>
+                  <dd className="min-w-0 font-mono text-xs font-semibold break-all sm:text-right">
+                    {commitURL ? (
+                      <a
+                        href={commitURL}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center justify-end gap-1 text-[var(--color-interactive-ink)] underline decoration-2 underline-offset-2"
+                      >
+                        {health.version.commit_sha}
+                        <ExternalLink
+                          aria-hidden="true"
+                          className="size-3 shrink-0"
+                        />
+                      </a>
+                    ) : (
+                      health.version.commit_sha
+                    )}
+                  </dd>
+                </div>
+                <div className="grid gap-1 py-2 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-start">
+                  <dt className="text-muted-foreground font-mono text-xs">
+                    Source repository
+                  </dt>
+                  <dd className="min-w-0 font-mono text-xs font-semibold break-all sm:text-right">
+                    {repositoryURL ? (
+                      <a
+                        href={repositoryURL}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-start justify-end gap-1 text-[var(--color-interactive-ink)] underline decoration-2 underline-offset-2"
+                      >
+                        {health.version.repo_url}
+                        <ExternalLink
+                          aria-hidden="true"
+                          className="mt-px size-3 shrink-0"
+                        />
+                      </a>
+                    ) : (
+                      health.version.repo_url
+                    )}
+                  </dd>
+                </div>
+              </dl>
+            </section>
+          </div>
+        </PopoverContent>
+      ) : null}
+    </Popover>
+  );
+};
+
 export const StatusPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [health, setHealth] = useState<HealthState>(initialHealthState);
@@ -143,7 +355,7 @@ export const StatusPage = () => {
   }, [refreshRevision]);
 
   return (
-    <section className="flex flex-col gap-6" aria-labelledby="status-title">
+    <section className="flex flex-col gap-4" aria-labelledby="status-title">
       <PageHeader
         title="Status"
         titleId="status-title"
@@ -155,32 +367,25 @@ export const StatusPage = () => {
           </PageHelp>
         }
         actions={
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              setRefreshRevision((revision) => revision + 1);
-            }}
-            disabled={health.loading}
-          >
-            <RefreshCw aria-hidden="true" />
-            Refresh
-          </Button>
+          <>
+            <ServerInfoPopover
+              health={health.data}
+              serverTime={health.serverTime}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setRefreshRevision((revision) => revision + 1);
+              }}
+              disabled={health.loading}
+            >
+              <RefreshCw aria-hidden="true" />
+              Refresh
+            </Button>
+          </>
         }
       />
-
-      {health.loading ? (
-        <div
-          className="grid gap-3 md:grid-cols-2 xl:grid-cols-5"
-          aria-label="Loading status"
-        >
-          <Skeleton className="h-28" />
-          <Skeleton className="h-28" />
-          <Skeleton className="h-28" />
-          <Skeleton className="h-28" />
-          <Skeleton className="h-28" />
-        </div>
-      ) : null}
 
       {health.errorDetails ? (
         <div className="border-destructive bg-card border-2 p-4" role="alert">
@@ -195,68 +400,6 @@ export const StatusPage = () => {
               {health.errorDetails}
             </pre>
           </details>
-        </div>
-      ) : null}
-
-      {health.data ? (
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-          <Card size="sm">
-            <CardHeader>
-              <p className="text-muted-foreground text-sm">API status</p>
-            </CardHeader>
-            <CardContent>
-              <p>
-                <Badge variant="secondary">{health.data.status}</Badge>
-              </p>
-            </CardContent>
-          </Card>
-          <Card size="sm">
-            <CardHeader>
-              <p className="text-muted-foreground text-sm">Schema version</p>
-            </CardHeader>
-            <CardContent>
-              <p className="text-lg font-semibold">
-                {health.data.schema_version}
-              </p>
-            </CardContent>
-          </Card>
-          <Card size="sm">
-            <CardHeader>
-              <p className="text-muted-foreground text-sm">Server time</p>
-            </CardHeader>
-            <CardContent>
-              <p className="text-lg font-semibold break-words">
-                {formatServerTime(health.serverTime)}
-              </p>
-            </CardContent>
-          </Card>
-          <Card size="sm">
-            <CardHeader>
-              <p className="text-muted-foreground text-sm">
-                Database file size
-              </p>
-            </CardHeader>
-            <CardContent>
-              <p className="text-lg font-semibold">
-                {formatDatabaseFileSize(health.data.database_file_size_bytes)}
-              </p>
-            </CardContent>
-          </Card>
-          <Card size="sm">
-            <CardHeader>
-              <p className="text-muted-foreground text-sm">
-                Database encryption
-              </p>
-            </CardHeader>
-            <CardContent>
-              <p className="flex items-center gap-2 text-lg font-semibold">
-                {health.data.database_encrypted ? (
-                  <Lock aria-hidden="true" className="size-4 shrink-0" />
-                ) : null}
-                {health.data.database_encrypted ? "Encrypted" : "Not encrypted"}
-              </p>
-            </CardContent>
-          </Card>
         </div>
       ) : null}
 
@@ -281,10 +424,10 @@ export const StatusPage = () => {
             Audit log
           </Tabs.Trigger>
         </Tabs.List>
-        <Tabs.Content value="operations" className="mt-6">
+        <Tabs.Content value="operations" className="mt-4">
           <StatusOperations refreshRevision={refreshRevision} />
         </Tabs.Content>
-        <Tabs.Content value="audit-log" className="mt-6">
+        <Tabs.Content value="audit-log" className="mt-4">
           <StatusAuditLog refreshRevision={refreshRevision} />
         </Tabs.Content>
       </Tabs.Root>

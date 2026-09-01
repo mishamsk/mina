@@ -18,7 +18,7 @@
 - A page that coordinates a local panel or restructure dialog retains its opener and restores focus on close; use the page's primary action as the fallback when that opener no longer exists.
 - Category and Tag group routes use canonical `/categories/group?prefix=FQN` and `/tags/group?prefix=FQN` forms; leaf routes retain numeric IDs.
 - The member drill-down reads the exact member by stable route ID before applying its current name as a transaction scope; route changes abort obsolete reads without reacting to query-only list-state changes.
-- Status owns the `tab` query parameter and keeps health cards mounted above its Background operations and Audit log feature views.
+- Status owns the `tab` query parameter, places its Background operations and Audit log feature views directly below the header, and exposes REST-backed runtime, database, and development-build metadata through the Server info popup.
 - Status tabs use roving focus with arrow, Home, and End navigation and label their shared tab panel.
 
 ## Boundaries

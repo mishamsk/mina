@@ -184,7 +184,7 @@ frontend-openapi-check:
 build-go:
     test -f internal/webui/dist/index.html || { echo 'missing embedded frontend assets; run `just frontend-build` or `just build`' >&2; exit 1; }
     mkdir -p bin
-    go build -o bin/mina ./cmd/mina
+    go build -buildvcs=false -ldflags="-X github.com/mishamsk/mina/internal/runtime.buildCommitHash=$(git rev-parse --verify HEAD 2>/dev/null || true) -X github.com/mishamsk/mina/internal/runtime.buildRepositoryURL=$(git remote get-url origin 2>/dev/null || true)" -o bin/mina ./cmd/mina
 
 # Build frontend assets and the mina binary.
 [group('dev-tooling')]

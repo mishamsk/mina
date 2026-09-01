@@ -274,14 +274,15 @@ ensure_image_available() {
 }
 
 build_image() {
-    local tag="$1"
+    local source tag="$1"
     local revision="$2"
+    source="$(git -C "$ROOT_DIR" remote get-url origin 2>/dev/null || true)"
     docker build \
         -f "$ROOT_DIR/docker/Dockerfile" \
         -t "$tag" \
         --build-arg VERSION="$revision" \
         --build-arg REVISION="$revision" \
-        --build-arg SOURCE="https://github.com/mishamsk/mina" \
+        --build-arg SOURCE="$source" \
         --build-arg CREATED="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
         "$ROOT_DIR"
     OWNED_IMAGES="${OWNED_IMAGES}${tag}"$'\n'
@@ -1261,7 +1262,7 @@ assert_encrypted_database_file() {
 }
 
 smoke_non_native_platform() {
-    local native target smoke_image output
+    local native target smoke_image output source
     native="$(docker image inspect "$INITIAL_IMAGE" --format '{{.Architecture}}')"
     case "$native" in
         amd64) target=arm64 ;;
@@ -1279,12 +1280,14 @@ smoke_non_native_platform() {
     fi
 
     smoke_image="mina:docker-service-test-${RUN_ID_SLUG}-${target}"
+    source="$(git -C "$ROOT_DIR" remote get-url origin 2>/dev/null || true)"
     docker build \
         --platform "linux/$target" \
         -f "$ROOT_DIR/docker/Dockerfile" \
         -t "$smoke_image" \
         --build-arg VERSION="docker-service-test-${RUN_ID}-${target}" \
         --build-arg REVISION="docker-service-test-${RUN_ID}-${target}" \
+        --build-arg SOURCE="$source" \
         "$ROOT_DIR"
     OWNED_IMAGES="${OWNED_IMAGES}${smoke_image}"$'\n'
     docker run --rm --platform "linux/$target" \

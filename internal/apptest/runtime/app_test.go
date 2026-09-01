@@ -23,6 +23,13 @@ func TestAppReportsHealth(t *testing.T) {
 	if response.JSON200.SchemaVersion == 0 {
 		t.Fatalf("schema_version = 0, want migrated schema version")
 	}
+	version, err := response.JSON200.Version.AsDevelopmentBuild()
+	if err != nil {
+		t.Fatalf("decode development version: %v", err)
+	}
+	if version.CommitSha == "" {
+		t.Fatal("version.commit_sha is empty")
+	}
 	if response.JSON200.DatabaseEncrypted {
 		t.Fatal("database_encrypted = true, want false for in-memory database")
 	}

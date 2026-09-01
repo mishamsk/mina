@@ -309,7 +309,8 @@ Each screen below defines its purpose, layout, behavior, and primary data source
 
 ### Status and Settings
 
-- Status keeps backend health, schema, server-time, database-file-size, and database-encryption cards above URL-addressable Background operations and Audit log tabs; there is no Details preference or backend-route disclosure.
+- Status places its URL-addressable Background operations and Audit log tables directly below the header; a Server info action beside Refresh opens an anchored popup containing backend health, build provenance, schema, server time, database file size, and database encryption without backend-route disclosure.
+- Server info groups runtime, database, and build values as compact labeled rows; a browser-addressable source repository links both the repository and known commit SHA to their source destinations.
 - Database file size renders in human-readable binary units, or as `Unavailable` when no size is reported.
 - Operation navigation: an operation selector drills into a shared runs table showing the common run envelope — paged, newest first; columns: started, finished/duration, outcome, trigger. Selecting a run opens its detail.
 - Shared building blocks (selector, envelope runs table, run-detail frame) are common to all operations; each operation type ships a dedicated frontend module owning its run-detail rendering and operation-specific controls through that operation's named concrete APIs. There are no generic fallback renderers.
@@ -317,7 +318,7 @@ Each screen below defines its purpose, layout, behavior, and primary data source
 - Audit log: newest-first backend pagination with method, operation-ID, and client-surface filters; rows show timestamp, surface, method, operation/request URI, status, and duration. Selecting a row reveals all metadata plus formatted request and response JSON or a clear absent-body state.
 - Status tab, operation/run selection, audit filters, pagination, and selected audit entry are URL-owned and preserve parameters belonging to the other view.
 - Settings is a server-driven read-only view of the operational configuration loaded for the running process. It renders backend-provided groups, labels, help, active values, and the resolved config-file location without setting-key-specific UI code. Bare indicators beside each label mark non-default values and identify CLI or environment overrides; config-file origin is implicit.
-- Status reports whether database encryption is active as a labeled health card; the encrypted state includes a supporting lock icon.
+- Status reports whether database encryption is active as a labeled Server info row; the encrypted state includes a supporting lock icon.
 - Configuration is loaded once at startup; this screen does not mutate runtime state, write the config file, or predict values for a later process.
 - Browser-local UI preferences remain persisted per `docs/frontend-architecture.md` and do not appear in the server settings manifest; they include table density, default landing screen, and theme selection.
 

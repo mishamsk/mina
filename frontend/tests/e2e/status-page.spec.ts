@@ -136,14 +136,19 @@ const chooseOptionByKeyboard = async (
 const databaseFileSizeValue = (page: Page) =>
   page
     .getByText("Database file size", { exact: true })
-    .locator("../..")
-    .locator('[data-slot="card-content"] > p');
+    .locator("..")
+    .locator("dd");
+
+const openServerInfo = async (page: Page) => {
+  await page.getByRole("button", { name: "Server info" }).click();
+  await expect(page.getByRole("dialog", { name: "Server info" })).toBeVisible();
+};
 
 test("status page reports backend health", async ({ page }) => {
   await page.goto("/status");
 
   await expect(page.getByRole("heading", { name: "Status" })).toBeVisible();
-  await expect(page.getByText("API status")).toBeVisible();
+  await openServerInfo(page);
   await expect(page.getByText("ok")).toBeVisible();
   await expect(page.getByText("Schema version")).toBeVisible();
   await expect(page.getByText("Server time")).toBeVisible();
@@ -181,6 +186,11 @@ test("status page reports an encrypted database", async ({ page }) => {
         database_file_size_bytes: 1048575,
         schema_version: 1,
         status: "ok",
+        version: {
+          commit_sha: "test",
+          repo_url: "https://github.com/mishamsk/mina",
+          type: "development",
+        },
       }),
       contentType: "application/json",
       status: 200,
@@ -189,6 +199,7 @@ test("status page reports an encrypted database", async ({ page }) => {
 
   await page.goto("/status");
 
+  await openServerInfo(page);
   await expect(page.getByText("Database encryption")).toBeVisible();
   await expect(page.getByText("Encrypted", { exact: true })).toBeVisible();
   await expect(page.getByText("Not encrypted")).toHaveCount(0);
@@ -205,6 +216,11 @@ test("status page reports an unavailable database file size", async ({
         database_file_size_bytes: null,
         schema_version: 1,
         status: "ok",
+        version: {
+          commit_sha: "test",
+          repo_url: "https://github.com/mishamsk/mina",
+          type: "development",
+        },
       }),
       contentType: "application/json",
       status: 200,
@@ -213,6 +229,7 @@ test("status page reports an unavailable database file size", async ({
 
   await page.goto("/status");
 
+  await openServerInfo(page);
   await expect(databaseFileSizeValue(page)).toHaveText("Unavailable");
   await expect(page.getByText("ok", { exact: true })).toBeVisible();
 });

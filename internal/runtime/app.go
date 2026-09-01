@@ -32,7 +32,6 @@ import (
 	"github.com/mishamsk/mina/internal/services/exchangeratecache"
 	"github.com/mishamsk/mina/internal/services/exchangerateloading"
 	"github.com/mishamsk/mina/internal/services/exchangerates"
-	"github.com/mishamsk/mina/internal/services/health"
 	"github.com/mishamsk/mina/internal/services/members"
 	"github.com/mishamsk/mina/internal/services/operationruns"
 	"github.com/mishamsk/mina/internal/services/recurring"
@@ -494,7 +493,7 @@ func newAccountingServices(
 		Dependencies: httpapi.Dependencies{
 			AccountingSchema: accountingschema.NewService(),
 			APIAudit:         apiAuditService,
-			Health:           health.NewService(store.NewHealthStore(appDB)),
+			Health:           newHealthService(store.NewHealthStore(appDB)),
 			Operations:       operationRuns,
 			Categories:       categoryService,
 			Tags:             tagService,

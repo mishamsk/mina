@@ -8,6 +8,7 @@ import (
 
 	"github.com/mishamsk/mina/internal/appconfig"
 	"github.com/mishamsk/mina/internal/mcpserver"
+	"github.com/mishamsk/mina/internal/runtime"
 )
 
 func newMCPCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Command {
@@ -35,7 +36,7 @@ func newMCPStdioCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer) *co
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			apiKey := appconfig.APIKeyFromEnvironment()
 			server, err := mcpserver.NewRemote(serverURL, mcpserver.Options{
-				Version:     version,
+				Version:     runtime.CurrentBuildMetadata().Version,
 				Diagnostics: stderr,
 				APIKey:      apiKey,
 			})

@@ -1397,6 +1397,21 @@ export type HealthResponse = {
     database_file_size_bytes: number | null;
     status: 'ok';
     schema_version: number;
+    version: Version;
+};
+
+export type Version = DevelopmentBuild;
+
+export type DevelopmentBuild = {
+    /**
+     * Source commit SHA for the running Mina build; the literal string `unknown` when no build-time commit stamp is available.
+     */
+    commit_sha: string;
+    /**
+     * Source repository URL stamped into the running Mina build; the literal string `unknown` when no build-time repository remote is available.
+     */
+    repo_url: string;
+    type: 'development';
 };
 
 export type AccountingSchemaResponse = {
