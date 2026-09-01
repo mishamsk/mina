@@ -161,23 +161,27 @@ Do not duplicate `app-test` scenario coverage in `e2e-tests`. `e2e-tests` prove 
 
 ## Frontend-E2E-Tests
 
-`frontend-e2e-tests` run only through Playwright and are not run by default.
+`frontend-e2e-tests` run only through Playwright and are not run by default. They are a deliberately small set of happy-path UX smoke tests for the embedded browser UI, not a second application suite.
 
-Use them as a small smoke suite for embedded browser UI wiring:
+Use them only for one primary, user-visible journey through a distinct core workflow, including the browser rendering, built `mina` binary, embedded Vite assets, local listener wiring, and UI-only browser persistence that the journey needs.
 
-- Browser rendering.
-- Built `mina` binary startup.
-- Embedded Vite assets.
-- Real local network listener wiring.
-- Browser persistence for UI-only IndexedDB state.
+An eligible frontend e2e test must satisfy every condition:
+
+- It proves a key happy-path user experience that needs a real browser.
+- It interacts through normal browser controls and asserts the visible user result (or URL navigation).
+- It is short, focused on one journey, and does not duplicate an existing frontend e2e journey.
 
 Do not use `frontend-e2e-tests` for:
 
-- REST scenario coverage already covered by `app-tests`.
-- Exhaustive frontend state combinations.
-- Direct database, service, store, or handler assertions.
+- REST capability, response, validation, data-state, or error-path coverage; `app-tests` own this coverage, including exhaustive cases and concurrency.
+- Direct REST calls, REST request or response assertions, or API-based fixture setup or verification.
+- Route interception except as a last resort to make an otherwise eligible core happy-path browser test stable and non-flaky when normal browser behavior cannot do so. It must not assert REST behavior or turn the test into a REST, failure, timing, or concurrency scenario.
+- Polling, waiting for requests or responses, fixed delays, or other synchronization on implementation activity; use Playwright's web-first assertions for the visible result.
+- Artificial latency, injected failures, retries, rapid typing, rapid repeated actions, multi-tab behavior, races, concurrency, or other unrealistic timing scenarios for Mina's local single-household use.
+- Targeted tests for isolated regressions, exhaustive frontend state combinations, visual-detail matrices, or small implementation details.
+- Direct database, service, store, handler, or private-helper assertions.
 
-Frontend e2e tests prove browser, binary, embedded assets, and listener wiring. They must not duplicate REST scenario coverage.
+Frontend e2e tests prove a few essential browser experiences. Keep the suite and every spec intentionally small: add a test only when it covers an uncovered core happy-path journey, and keep only the single most valuable outcome assertion for that journey.
 
 - Keep each frontend e2e spec file under 25 tests; split growing suites by user workflow.
 

@@ -8,11 +8,11 @@ Review whether the frontend implementation achieves the stated goal/requirement.
 
 3. Wiring and integration - is everything connected properly? Routes registered, components mounted and exported, providers wired at the right level, generated client operations used instead of handwritten endpoint paths or DTO shapes.
 
-4. Completeness - are there missing pieces that would prevent the feature from working? Missing loading, empty, and error states for new data fetches; unwired keyboard access for new mouse affordances; missing e2e coverage for the new user-visible behavior.
+4. Completeness - are there missing pieces that would prevent the primary supported workflow from working? Missing loading and empty states for new data fetches or unwired keyboard access for new mouse affordances. Do not request frontend e2e coverage for ordinary changes, error paths, edge cases, or regressions; `docs/TESTING.md` limits it to a few uncovered core happy-path journeys.
 
 5. Data flow - does data flow correctly from API response to render? Shareable table query state (filters, search, sort, page) belongs in the URL; unbounded accounting data uses backend pagination and filtering; after create, update, delete, or bulk operations the affected resource snapshots are refetched or invalidated. Accounting data copied from REST responses must never be persisted in IndexedDB - snapshots are disposable views, not a source of truth.
 
-6. Supported edge cases - are boundary conditions handled for supported inputs: empty result sets, long content, deep links to missing or removed resources, realistic error responses?
+6. Supported edge cases - are boundary conditions handled for normal supported inputs: empty result sets, long content, and supported deep links. Do not expand the frontend into defensive handling for artificial timing, concurrent browser actions, or unlikely local-single-household failures.
 
 Do not flag import-boundary violations; ESLint owns package boundaries. Focus on correctness of approach, not code style.
 

@@ -1,4 +1,4 @@
-Review testing only. First read and internalize `docs/TESTING.md`.
+Review backend `app-tests` and launched-process `e2e-tests` only. First read and internalize `docs/TESTING.md`.
 
 Use `app-tests` and `e2e-tests` in review comments.
 
