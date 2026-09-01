@@ -9,6 +9,7 @@
 - A failed group-register entity-filter lookup warns without navigating. Leaving the register or unmounting aborts and discards pending lookups; same-route query changes keep them alive.
 - Chart snapshots are keyed by normalized `q`, repeated `type`, and `hidden`; each load follows all server-filtered pages in canonical FQN order, and only `nonzero` remains a local balance-presentation filter. Repeated types use any-of matching; no valid type selects all. The modal type picker absorbs its dismissing pointer event so it cannot activate an underlying tree row; its trigger names the current selection and exposes the full summary in a tooltip.
 - The focused account search field retains its raw draft, including trailing whitespace; its URL query normalizes on each change without navigating for normalized no-ops, and blur or browser history navigation releases the draft.
+- The account search field opts out of browser value-history suggestions so Mina's server-filtered search remains the only search experience.
 - A failed chart load replaces any mismatched cached chart with its error and Retry affordance until the requested snapshot loads successfully.
 - Account trees derive ancestor rows only from returned leaves and use group reads solely for canonical hidden metadata; they do not repeat server-owned search or type membership in the browser.
 - The `nonzero` chart filter follows the [Accounts toolbar rules](../../../../docs/webui-design.md#accounts).

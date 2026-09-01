@@ -201,6 +201,7 @@ export const AccountsToolbar = ({
           <input
             id="accounts-search"
             type="search"
+            autoComplete="off"
             className="bg-card text-foreground placeholder:text-muted-foreground h-9 w-full border-2 border-[var(--border-ink)] px-8 font-mono text-sm shadow-[var(--shadow-pixel)]"
             placeholder="Full account path"
             value={searchInputValue}

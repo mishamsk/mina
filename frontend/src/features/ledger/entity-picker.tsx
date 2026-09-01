@@ -967,6 +967,7 @@ export const EntityPicker = ({
               ref={inputRef}
               id={id}
               type="text"
+              autoComplete="off"
               autoFocus={autoFocus}
               role="combobox"
               aria-controls={`${id}-options`}

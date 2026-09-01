@@ -1425,6 +1425,7 @@ export const CommandPalette = () => {
               <input
                 ref={inputRef}
                 type="search"
+                autoComplete="off"
                 role="combobox"
                 aria-label="Command search"
                 aria-autocomplete="list"

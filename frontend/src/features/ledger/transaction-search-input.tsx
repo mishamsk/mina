@@ -33,6 +33,7 @@ export const TransactionSearchInput = ({
     <input
       id={id}
       type="search"
+      autoComplete="off"
       className="bg-card text-foreground placeholder:text-muted-foreground h-9 border-2 border-[var(--border-ink)] px-2 font-mono text-sm shadow-[var(--shadow-pixel)]"
       placeholder="Memo or counterparty"
       value={draft}
