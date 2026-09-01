@@ -508,11 +508,39 @@ review-loop mode context branch_or_commit="" base_ref="" max_iterations="" claud
         set -- "$@" --claude-review-percent "$claude_review_percent"
     fi
 
+    log_dir="build/review-loop"
+    mkdir -p "$log_dir"
+    log_file="$log_dir/review-loop-$(date -u +%Y%m%dT%H%M%SZ)-$$.log"
+    echo "review loop log: $log_file"
+
+    review_command=(go run ./internal/tools/reviewloop "$@" {{ quote(mode) }} {{ quote(context) }})
     if [ -n "$branch_or_commit" ]; then
-        go run ./internal/tools/reviewloop "$@" {{ quote(mode) }} {{ quote(context) }} "$branch_or_commit"
-    else
-        go run ./internal/tools/reviewloop "$@" {{ quote(mode) }} {{ quote(context) }}
+        review_command+=("$branch_or_commit")
     fi
+    "${review_command[@]}" 2>&1 | tee "$log_file"
+
+# Tail the most recently updated review-loop log with optional tail arguments.
+[group('agents')]
+[positional-arguments]
+review-loop-tail *tail_args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    log_dir="build/review-loop"
+    latest_log=""
+    shopt -s nullglob
+    for log_file in "$log_dir"/review-loop-*.log; do
+        if [ -z "$latest_log" ] || [ "$log_file" -nt "$latest_log" ]; then
+            latest_log="$log_file"
+        fi
+    done
+    if [ -z "$latest_log" ]; then
+        echo "no review-loop logs found in $log_dir" >&2
+        exit 1
+    fi
+
+    echo "tailing review loop log: $latest_log"
+    tail "$@" "$latest_log"
 
 # Run Codex against an implementation plan.
 [group('agents')]
