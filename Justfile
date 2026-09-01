@@ -21,9 +21,10 @@ init:
     mise exec -- prek install --hook-type pre-commit
 
 # Validate GitHub Actions workflow syntax.
+# TODO: Move actionlint back to go.mod's tool block after actionlint supports yaml/v4 rc.6 (https://github.com/rhysd/actionlint/pull/730); the versioned go run isolates actionlint v1.7.12's yaml/v4 rc.3 dependency from golangci-lint v2.13.2's gosec dependency on rc.6.
 [group('dev-tooling')]
 workflow-check:
-    go tool actionlint
+    go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
 
 # Format Go source files.
 [group('dev-tooling')]
