@@ -1454,7 +1454,6 @@ export const CommandPalette = () => {
             <div
               ref={resultsViewportRef}
               className="min-h-0 flex-1 overflow-y-auto p-2"
-              data-testid="command-palette-results-viewport"
             >
               {transactionSearchMode ? (
                 <>

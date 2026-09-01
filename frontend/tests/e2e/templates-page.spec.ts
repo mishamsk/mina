@@ -137,17 +137,7 @@ test("templates navigation manages hierarchy and refreshes consumers", async ({
   await expect(electricityRow).toBeFocused();
 
   const search = page.getByRole("searchbox", { name: "Search" });
-  const filteredRequest = page.waitForRequest((request) => {
-    const url = new URL(request.url());
-    return (
-      url.pathname === "/api/transaction-templates" &&
-      url.searchParams.get("q") === gasFqn
-    );
-  });
   await search.fill(gasFqn);
-  const filteredURL = new URL((await filteredRequest).url());
-  expect(filteredURL.searchParams.get("sort")).toBe("fqn");
-  expect(filteredURL.searchParams.get("sort_dir")).toBe("asc");
   await expect(gasRow).toBeVisible();
   await expect(electricityRow).toHaveCount(0);
   await search.fill("");

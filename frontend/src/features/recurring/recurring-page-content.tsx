@@ -487,7 +487,6 @@ export const RecurringPageContent = ({
       <div
         ref={focusFallbackRef}
         className="bg-card flex h-full min-h-64 flex-col items-start justify-center gap-3 border-2 border-[var(--border-ink)] p-6 shadow-[var(--shadow-pixel)]"
-        data-testid="recurring-definitions-empty-state"
         tabIndex={-1}
       >
         <Repeat
