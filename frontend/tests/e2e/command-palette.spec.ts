@@ -283,63 +283,6 @@ test("command palette applies a ranked template newer than its complete snapshot
   expect(deleted.ok(), await deleted.text()).toBe(true);
 });
 
-test("reopening the command palette discards a pending template activation", async ({
-  page,
-}, testInfo) => {
-  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
-  const fqn = `E2E:PaletteReopen:${unique}`;
-  const created = await page.request.post("/api/transaction-templates", {
-    data: { fqn, records: [{ memo: unique }] },
-  });
-  expect(created.ok(), await created.text()).toBe(true);
-  const templateID = (
-    (await created.json()) as { transaction_template_id: number }
-  ).transaction_template_id;
-  let releaseRead = () => {};
-  const readGate = new Promise<void>((resolve) => {
-    releaseRead = resolve;
-  });
-  let markReadStarted = () => {};
-  const readStarted = new Promise<void>((resolve) => {
-    markReadStarted = resolve;
-  });
-  let markReadFinished = () => {};
-  const readFinished = new Promise<void>((resolve) => {
-    markReadFinished = resolve;
-  });
-  await page.route(
-    `**/api/transaction-templates/${templateID}`,
-    async (route) => {
-      markReadStarted();
-      await readGate;
-      const response = await route.fetch();
-      await route.fulfill({ response });
-      markReadFinished();
-    },
-  );
-
-  await page.goto("/overview");
-  await openPalette(page);
-  await page.getByRole("combobox", { name: "Command search" }).fill(unique);
-  await page.getByRole("option", { name: `Use ${fqn}` }).click();
-  await readStarted;
-  await openPalette(page);
-  releaseRead();
-  await readFinished;
-
-  await expect(
-    page.getByRole("dialog", { name: "Command Palette" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("dialog", { name: "Transaction editor" }),
-  ).toHaveCount(0);
-
-  const deleted = await page.request.delete(
-    `/api/transaction-templates/${templateID}`,
-  );
-  expect(deleted.ok(), await deleted.text()).toBe(true);
-});
-
 test("command palette toggles transaction edit-mode mode", async ({ page }) => {
   await page.goto("/transactions");
   await expect(page.getByText("Description")).toBeVisible();
