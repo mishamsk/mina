@@ -313,7 +313,7 @@ test("tags row actions hide groups and move renamed paths into transaction filte
   ).toBeVisible();
   await tagPicker.press("Enter");
   await expect(page.locator("#transactions-filter-tag-options")).toContainText(
-    `${moveSource}:Alpha`,
+    "Old:Alpha",
   );
 
   await page.goto("/tags");
@@ -411,7 +411,7 @@ test("tags row actions hide groups and move renamed paths into transaction filte
   ).toBeVisible();
   await refreshedTagPicker.press("Enter");
   await expect(page.locator("#transactions-filter-tag-options")).toContainText(
-    `${moveDestination}:Alpha`,
+    "New:Alpha",
   );
 });
 

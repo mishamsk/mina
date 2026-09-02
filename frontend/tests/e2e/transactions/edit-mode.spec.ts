@@ -11,7 +11,6 @@ import {
   findByFqn,
   getTransactionDetail,
   listFixtures,
-  pickerSelectedLabel,
   type Route,
   type TransactionDetailFixture,
   type TransactionFixture,
@@ -204,9 +203,11 @@ test("edit dock applies explicit tag and member operations", async ({
   await addTagsInput.press("Enter");
   const selectedTag = editor
     .getByTestId("entity-multi-picker-selected")
-    .getByText(pickerSelectedLabel(tag), { exact: true });
+    .getByText(tag.display_label, { exact: true });
   await selectedTag.hover();
-  await expect(page.getByRole("tooltip")).toHaveText(pickerSelectedLabel(tag));
+  await expect(page.getByRole("tooltip")).toHaveText(
+    `${tag.display_label} · ${tag.fqn}`,
+  );
   await editor.getByRole("button", { name: "Apply" }).click();
   await expect(editor).toHaveCount(0);
   detail = await getTransactionDetail(page, transaction);

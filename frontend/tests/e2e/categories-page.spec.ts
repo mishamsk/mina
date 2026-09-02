@@ -891,7 +891,7 @@ test("categories row actions hide groups and move renamed paths into transaction
   await categoryPicker.press("Enter");
   await expect(
     page.locator("#transactions-filter-category-options"),
-  ).toContainText(`${moveSource}:Alpha`, { timeout: 10_000 });
+  ).toContainText("Old:Alpha", { timeout: 10_000 });
 
   await page.goto("/categories");
   await page.getByLabel("Search").fill(leafFqn);
@@ -996,7 +996,7 @@ test("categories row actions hide groups and move renamed paths into transaction
   await refreshedCategoryPicker.press("Enter");
   await expect(
     page.locator("#transactions-filter-category-options"),
-  ).toContainText(`${moveDestination}:Alpha`);
+  ).toContainText("New:Alpha");
 });
 
 test("category delete row actions respect the API deleteability signal", async ({
@@ -1420,5 +1420,5 @@ test("category creation refreshes the entry category picker after navigation", a
     .click();
   const categoryPicker = page.getByRole("combobox", { name: "Category" });
   await categoryPicker.fill(fqn);
-  await expect(categoryPicker).toHaveValue(`${fqn} (${unique}:${name})`);
+  await expect(categoryPicker).toHaveValue(`${unique}:${name}`);
 });

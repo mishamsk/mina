@@ -144,7 +144,7 @@ test("recurring editor reuses selected entities from loaded lookups", async ({
     name: "Edit recurring definition",
   });
   await expect(editor.getByLabel("Account").first()).toHaveValue(
-    /^bank:Chase:joint_checking/,
+    "Chase:joint_checking",
   );
   await page.evaluate(
     () =>

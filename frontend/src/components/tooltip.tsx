@@ -23,6 +23,7 @@ interface TooltipProps {
   readonly forceOpen?: boolean;
   readonly label: string;
   readonly onEscape?: () => void;
+  readonly persistentForceOpen?: boolean;
   readonly redispatchEscape?: boolean;
   readonly triggerLabel?: string;
 }
@@ -63,6 +64,7 @@ export const Tooltip = ({
   forceOpen = false,
   label,
   onEscape,
+  persistentForceOpen = false,
   redispatchEscape = true,
   triggerLabel,
 }: TooltipProps) => {
@@ -130,7 +132,7 @@ export const Tooltip = ({
 
     if (nextOpen) {
       setForcedOpenState({ dismissed: false, source: forceOpen });
-    } else if (forceOpen) {
+    } else if (forceOpen && !persistentForceOpen) {
       setForcedOpenState({ dismissed: true, source: forceOpen });
     }
 
@@ -146,6 +148,9 @@ export const Tooltip = ({
     // tooltip unmounts so exactly one interactive ladder level handles it.
     event.stopPropagation();
     forwardEscapeTargetRef.current = redispatchEscape ? event.target : null;
+    if (forceOpen && persistentForceOpen) {
+      setForcedOpenState({ dismissed: true, source: forceOpen });
+    }
     onEscape?.();
   };
 

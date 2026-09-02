@@ -29,7 +29,6 @@ import {
   openRowActionsMenu,
   openUrlTransactionDetail,
   type Page,
-  pickerSelectedLabel,
   readStoredTransactionEntryDraft,
   type Route,
   type TransactionDetailFixture,
@@ -363,11 +362,11 @@ test("a captured BlueCash Target spend without amounts is offered for Spend and 
     entryEditor.getByRole("heading", { name: "New spend" }),
   ).toBeVisible();
   await expect(entryEditor.getByLabel("Funding account")).toHaveValue(
-    pickerSelectedLabel(blueCash),
+    blueCash.display_label,
   );
   const merchant = entryEditor.getByRole("group", { name: "Merchant 1" });
   await expect(merchant.getByLabel("Merchant account")).toHaveValue(
-    pickerSelectedLabel(target),
+    target.display_label,
   );
   await expect(merchant.getByLabel("Category")).toHaveValue(
     "Shopping:Household",
@@ -390,10 +389,10 @@ test("a captured BlueCash Target spend without amounts is offered for Spend and 
     entryEditor.getByRole("heading", { name: "New refund" }),
   ).toBeVisible();
   await expect(entryEditor.getByLabel("Destination account")).toHaveValue(
-    pickerSelectedLabel(blueCash),
+    blueCash.display_label,
   );
   await expect(entryEditor.getByLabel("Merchant", { exact: true })).toHaveValue(
-    pickerSelectedLabel(target),
+    target.display_label,
   );
   await expect(entryEditor.getByLabel("Category")).toHaveValue(
     "Shopping:Household",
@@ -492,7 +491,7 @@ test("transaction rows and detail create date-free template drafts", async ({
   await expect(editorRecords).toHaveCount(3);
   await expect(
     editorRecords.nth(0).getByLabel("Account (optional)"),
-  ).toHaveValue(pickerSelectedLabel(fundingAccount));
+  ).toHaveValue(fundingAccount.display_label);
   await expect(
     editorRecords.nth(0).getByLabel("Amount (optional)"),
   ).toHaveValue("-30");
@@ -508,7 +507,7 @@ test("transaction rows and detail create date-free template drafts", async ({
   await expect(editorRecords.nth(0)).toContainText(tag.name);
   await expect(
     editorRecords.nth(1).getByLabel("Category (optional)"),
-  ).toHaveValue(pickerSelectedLabel(category));
+  ).toHaveValue(category.display_label);
 
   await editor.getByRole("button", { name: "Cancel" }).click();
   await expect(editor).toHaveCount(0);
@@ -1807,7 +1806,10 @@ test("Escape closes filter popover before transaction detail panel", async ({
     name: "Categories",
   });
   await categoryPicker.fill(category.name);
-  await page.getByRole("option").filter({ hasText: category.fqn }).click();
+  await page
+    .getByRole("option")
+    .filter({ hasText: category.display_label })
+    .click();
   await expect(panel).toBeVisible();
   await expect
     .poll(() => new URL(page.url()).searchParams.get("filter"))
@@ -2864,10 +2866,10 @@ test("transaction detail split opens journal replacement and surfaces replace er
   expect(accountOptionsId).not.toBeNull();
   const splitAccountOption = page
     .locator(`#${accountOptionsId}`)
-    .getByRole("option", { name: splitAccount.fqn });
+    .getByRole("option", { name: splitAccount.display_label });
   await expect(splitAccountOption).toBeVisible();
   await splitAccountOption.click();
-  await expect(accountPicker).toHaveValue(pickerSelectedLabel(splitAccount));
+  await expect(accountPicker).toHaveValue(splitAccount.display_label);
   await chooseOptionByKeyboard(
     page,
     "Category",

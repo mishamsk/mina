@@ -91,27 +91,19 @@ test("edit mode replaces a common account across a changing selection", async ({
   });
   await sourcePicker.fill(firstMerchant.fqn);
   await sourcePicker.press("Enter");
-  await expect(sourcePicker).toHaveValue(
-    `${firstMerchant.fqn} (${firstMerchant.display_label})`,
-  );
+  await expect(sourcePicker).toHaveValue(firstMerchant.display_label);
 
   const replacementPicker = editor.getByRole("combobox", {
     name: "Compatible replacement account",
   });
   await replacementPicker.fill(secondMerchant.fqn);
   await replacementPicker.press("Enter");
-  await expect(replacementPicker).toHaveValue(
-    `${secondMerchant.fqn} (${secondMerchant.display_label})`,
-  );
+  await expect(replacementPicker).toHaveValue(secondMerchant.display_label);
 
   await secondRow.focus();
   await secondRow.press("Space");
-  await expect(sourcePicker).toHaveValue(
-    `${firstMerchant.fqn} (${firstMerchant.display_label})`,
-  );
-  await expect(replacementPicker).toHaveValue(
-    `${secondMerchant.fqn} (${secondMerchant.display_label})`,
-  );
+  await expect(sourcePicker).toHaveValue(firstMerchant.display_label);
+  await expect(replacementPicker).toHaveValue(secondMerchant.display_label);
   await expect(editor).toContainText(
     "Search shows up to 6 common non-system accounts. Type to narrow.",
   );
@@ -125,12 +117,8 @@ test("edit mode replaces a common account across a changing selection", async ({
   await replacementPicker.fill(replacement.fqn);
   await replacementPicker.press("Enter");
 
-  await expect(sourcePicker).toHaveValue(
-    `${source.fqn} (${source.display_label})`,
-  );
-  await expect(replacementPicker).toHaveValue(
-    `${replacement.fqn} (${replacement.display_label})`,
-  );
+  await expect(sourcePicker).toHaveValue(source.display_label);
+  await expect(replacementPicker).toHaveValue(replacement.display_label);
   await expect(editor.getByTestId("account-replace-prediction")).toHaveText(
     "2 records across 2 transactions will change.",
   );

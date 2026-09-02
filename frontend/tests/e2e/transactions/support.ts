@@ -1146,6 +1146,7 @@ const chooseOptionByKeyboard = async (
   } = {},
 ) => {
   const arrowDownPresses = options.arrowDownPresses ?? 0;
+  const displayValue = optionValue.split(":").slice(-2).join(":");
   const pickerScope = options.scope ?? page;
   const picker = pickerScope.getByRole("combobox", { name: label });
   await picker.click();
@@ -1159,7 +1160,7 @@ const chooseOptionByKeyboard = async (
       }))
       .toEqual({
         expanded: "false",
-        value: expect.stringContaining(optionValue),
+        value: displayValue,
       });
     return;
   }
@@ -1173,7 +1174,7 @@ const chooseOptionByKeyboard = async (
   const optionList = page.locator(`#${optionListId}`);
   const option = optionList
     .getByRole("option")
-    .filter({ hasText: optionValue })
+    .filter({ hasText: displayValue })
     .first();
   await expect(option).toBeVisible({ timeout: 10000 });
   const optionId = await option.evaluate((element) => element.id);
@@ -1189,7 +1190,7 @@ const chooseOptionByKeyboard = async (
   }
   await expect(picker).toHaveAttribute("aria-activedescendant", optionId);
   await picker.press("Enter");
-  await expect.poll(async () => picker.inputValue()).toContain(optionValue);
+  await expect(picker).toHaveValue(displayValue);
   await expect(picker).toHaveAttribute("aria-expanded", "false");
 };
 

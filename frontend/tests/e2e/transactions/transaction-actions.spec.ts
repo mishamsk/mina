@@ -177,13 +177,13 @@ test("recurring quick action shows retained hidden references", async ({
   });
   const records = editor.getByLabel("Definition records").locator("section");
   await expect(records.nth(0).getByLabel("Account")).toHaveValue(
-    pickerSelectedLabel(wallet),
+    wallet.display_label,
   );
   await expect(records.nth(1).getByLabel("Account")).toHaveValue(
-    pickerSelectedLabel(counterparty),
+    counterparty.display_label,
   );
   await expect(records.nth(1).getByLabel("Category")).toHaveValue(
-    pickerSelectedLabel(category),
+    category.display_label,
   );
   await expect(records.nth(0).getByLabel("Member")).toHaveValue(member.name);
   await expect(
@@ -350,11 +350,11 @@ test("recurring quick action finishes lookup loading after navigation", async ({
     name: "New recurring definition",
   });
   const accountPicker = editor.getByLabel("Account").first();
-  await expect(accountPicker).toHaveValue(pickerSelectedLabel(wallet));
+  await expect(accountPicker).toHaveValue(wallet.display_label);
   await page.getByRole("link", { exact: true, name: "Status" }).click();
   releaseAccounts();
 
-  await expect(accountPicker).toHaveValue(pickerSelectedLabel(wallet));
+  await expect(accountPicker).toHaveValue(wallet.display_label);
 });
 
 test("recurring save preserves transaction rows when refresh fails", async ({

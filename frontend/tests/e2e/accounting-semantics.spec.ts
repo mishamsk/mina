@@ -12,19 +12,17 @@ const chooseOption = async (
   await picker.selectText();
   await picker.pressSequentially(search);
   await expect(picker).toHaveValue(search);
+  const title = value.split(":").slice(-2).join(":");
   const optionsId = await picker.getAttribute("aria-controls");
   expect(optionsId).not.toBeNull();
   const option = page
     .locator(`#${optionsId}`)
     .getByRole("option")
-    .filter({ hasText: value })
+    .filter({ hasText: title })
     .first();
   await expect(option).toBeVisible();
   await option.click();
-  const title = value.split(":").slice(-2).join(":");
-  await expect(picker).toHaveValue(
-    title === value ? value : `${value} (${title})`,
-  );
+  await expect(picker).toHaveValue(title);
 };
 
 const openEntry = async (page: Page): Promise<Locator> => {
@@ -232,7 +230,7 @@ test("Exchange excludes destination accounts in the sold currency", async ({
     page
       .locator(`#${optionsId}`)
       .getByRole("option")
-      .filter({ hasText: "bank:Fidelity:USD" }),
+      .filter({ hasText: "Fidelity:USD" }),
   ).toHaveCount(0);
 
   await destination.fill("Fidelity:EUR");
@@ -240,7 +238,7 @@ test("Exchange excludes destination accounts in the sold currency", async ({
     page
       .locator(`#${optionsId}`)
       .getByRole("option")
-      .filter({ hasText: "bank:Fidelity:EUR" }),
+      .filter({ hasText: "Fidelity:EUR" }),
   ).toBeVisible();
 });
 

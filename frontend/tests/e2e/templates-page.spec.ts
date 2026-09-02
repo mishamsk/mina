@@ -53,12 +53,13 @@ const choosePickerOption = async (
   optionText: string,
   hidden = false,
 ): Promise<void> => {
+  const displayTitle = optionText.split(":").slice(-2).join(":");
   const picker = dialog.getByRole("combobox", { name: label });
   await picker.fill(query);
   await picker.press("ArrowDown");
   const option = page
     .getByRole("option")
-    .filter({ hasText: optionText })
+    .filter({ hasText: displayTitle })
     .first();
   await expect(option).toBeVisible();
   if (hidden) {
@@ -340,7 +341,7 @@ test("cold recurring launch keeps seeded picker references while lookups load", 
     name: "New recurring definition",
   });
   const accountPicker = editor.getByLabel("Account");
-  const accountLabel = `${accountFqn} (${unique}:Cold recurring account)`;
+  const accountLabel = `${unique}:Cold recurring account`;
   await expect(accountPicker).toHaveValue(accountLabel);
   await expect(editor.getByLabel("Member")).toHaveValue(memberName);
   await accountPicker.focus();
@@ -498,24 +499,20 @@ test("template editor creates and replaces partial defaults without balance vali
   });
   await accountPicker.fill(unique);
   await expect(
-    page.getByRole("option").filter({ hasText: accountFqn }),
+    page.getByRole("option").filter({ hasText: `${unique}:Hidden cash` }),
   ).toBeVisible();
   const accountOption = page
     .getByRole("option")
-    .filter({ hasText: accountFqn })
+    .filter({ hasText: `${unique}:Hidden cash` })
     .first();
-  await expect(accountOption.getByTestId("entity-picker-fqn")).toHaveText(
-    accountFqn,
-  );
   const accountDisplayTitle = accountOption.getByTestId(
     "entity-picker-display-title",
   );
-  await expect(accountDisplayTitle).toHaveText(`(${unique}:Hidden cash)`);
-  await expect(accountDisplayTitle).toHaveClass(/text-muted-foreground/);
+  await expect(accountDisplayTitle).toHaveText(`${unique}:Hidden cash`);
   await expect(accountOption).toContainText("owned · USD · Single-currency");
   await page.keyboard.press("Escape");
   await expect(
-    page.getByRole("option").filter({ hasText: accountFqn }),
+    page.getByRole("option").filter({ hasText: `${unique}:Hidden cash` }),
   ).toHaveCount(0);
   await expect(editor).toBeVisible();
 
@@ -549,12 +546,13 @@ test("template editor creates and replaces partial defaults without balance vali
   await expect
     .poll(() =>
       memberLabel.evaluate(
-        (element) => element.scrollWidth <= element.clientWidth,
+        (element) => element.scrollWidth > element.clientWidth,
       ),
     )
     .toBe(true);
-  await memberLabel.hover();
+  await page.keyboard.down("Meta");
   await expect(page.getByRole("tooltip")).toHaveText(memberName);
+  await page.keyboard.up("Meta");
   await memberOption.click();
   await editor.getByLabel("Memo (optional)").fill(`Initial ${unique}`);
   await editor.getByRole("button", { name: "Add record" }).click();
@@ -751,7 +749,7 @@ test("template editor rejects uncommitted optional picker searches", async ({
   await expect(tagPicker).toHaveValue("");
   await expect(
     editor.getByTestId("entity-multi-picker-selected"),
-  ).toContainText(tagFqn);
+  ).toContainText(tagFqn.split(":").slice(-2).join(":"));
 
   const createResponsePromise = page.waitForResponse((response) => {
     const url = new URL(response.url());
@@ -1727,10 +1725,10 @@ test("template editor keeps saving independent of failed lookups", async ({
   await row.getByRole("button", { name: "Edit template" }).click();
   const editor = page.getByRole("dialog", { name: "Edit template" });
   await expect(editor.getByLabel("Account (optional)")).toHaveValue(
-    `${accountFqn} (${unique}:Cash)`,
+    `${unique}:Cash`,
   );
   await expect(editor.getByLabel("Category (optional)")).toHaveValue(
-    `${categoryFqn} (${unique}:Expense)`,
+    `${unique}:Expense`,
   );
   await expect(editor.getByLabel("Member (optional)")).toHaveValue(memberName);
   await expect(editor.getByText("lookups unavailable")).toBeVisible();
@@ -1750,10 +1748,10 @@ test("template editor keeps saving independent of failed lookups", async ({
   await expect(amount).toBeFocused();
   releaseRetry?.();
   await expect(editor.getByLabel("Account (optional)")).toHaveValue(
-    `${accountFqn} (${unique}:Cash)`,
+    `${unique}:Cash`,
   );
   await expect(editor.getByLabel("Category (optional)")).toHaveValue(
-    `${categoryFqn} (${unique}:Expense)`,
+    `${unique}:Expense`,
   );
   await expect(editor.getByLabel("Member (optional)")).toHaveValue(memberName);
   await expect(amount).toBeFocused();

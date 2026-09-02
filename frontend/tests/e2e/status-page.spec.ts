@@ -117,9 +117,10 @@ const chooseOptionByKeyboard = async (
   const optionListId = await picker.getAttribute("aria-controls");
   expect(optionListId).not.toBeNull();
   const optionList = page.locator(`#${optionListId}`);
+  const displayTitle = optionValue.split(":").slice(-2).join(":");
   const optionByValue = optionList
     .getByRole("option")
-    .filter({ hasText: optionValue });
+    .filter({ hasText: displayTitle });
   await expect
     .poll(async () => await optionByValue.count(), { timeout: 10000 })
     .toBeGreaterThan(0);

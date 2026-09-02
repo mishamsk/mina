@@ -56,7 +56,7 @@ const fillAndExpectValue = async (
     .toBe(value);
 };
 
-test("contextual account labels disambiguate while account controls keep FQNs", async ({
+test("contextual account and picker labels use display titles with FQN context", async ({
   page,
 }) => {
   test.slow();
@@ -267,9 +267,12 @@ test("contextual account labels disambiguate while account controls keep FQNs", 
   await page.getByRole("button", { name: "Account", exact: true }).click();
   const accountFilter = page.getByRole("combobox", { name: "Accounts" });
   await fillAndExpectValue(accountFilter, "merchant:Amazon:flo");
+  const filterFlowOption = page.locator(
+    `#transactions-filter-account-option-${flow.account_id}`,
+  );
   await expect(
-    page.locator("#transactions-filter-account-options"),
-  ).toContainText(flow.fqn);
+    filterFlowOption.getByTestId("entity-picker-display-title"),
+  ).toHaveText(flow.display_label);
 
   await page.goto("/transactions?page=1&pageSize=25");
   await page
@@ -283,7 +286,12 @@ test("contextual account labels disambiguate while account controls keep FQNs", 
   await merchantPicker.fill("merchant:Amazon:flo");
   const merchantOptionsId = await merchantPicker.getAttribute("aria-controls");
   expect(merchantOptionsId).not.toBeNull();
-  await expect(page.locator(`#${merchantOptionsId}`)).toContainText(flow.fqn);
+  const merchantFlowOption = page
+    .locator(`#${merchantOptionsId}`)
+    .locator(`[id$="-option-${flow.account_id}"]`);
+  await expect(
+    merchantFlowOption.getByTestId("entity-picker-display-title"),
+  ).toHaveText(flow.display_label);
   await page.getByRole("button", { name: "Close transaction editor" }).click();
 
   await page.keyboard.press("Control+K");

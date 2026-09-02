@@ -96,6 +96,10 @@ interface EntityPickerProps {
   readonly selectedGroupFqns?: readonly string[];
 }
 
+interface EntityPickerContentProps extends EntityPickerProps {
+  readonly metaKeyPressed: boolean;
+}
+
 type HierarchyGroup = EntityPickerGroup;
 type PickerLeafRow = EntityPickerLeafRow;
 type PickerGroupRow = EntityPickerGroupRow;
@@ -133,49 +137,73 @@ const noSelectedIds: readonly number[] = [];
 
 const normalized = (value: string): string => value.trim().toLocaleLowerCase();
 
-const optionPresentation = (option: EntityOption): string =>
+const optionTooltipLabel = (option: EntityOption): string =>
   option.label === option.searchLabel
     ? option.searchLabel
-    : `${option.searchLabel} (${option.label})`;
+    : `${option.label} · ${option.searchLabel}`;
+
+const optionAccessibleLabel = (option: EntityOption): string =>
+  [
+    option.hidden ? "Hidden" : undefined,
+    optionTooltipLabel(option),
+    option.detail && option.detail !== option.searchLabel
+      ? option.detail
+      : undefined,
+    option.metadata,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+const useMetaKeyPressed = (): boolean => {
+  const [pressed, setPressed] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Meta") {
+        setPressed(true);
+      }
+    };
+    const handleKeyUp = (event: KeyboardEvent) => {
+      if (event.key === "Meta") {
+        setPressed(false);
+      }
+    };
+    const clearPressed = () => {
+      setPressed(false);
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    window.addEventListener("blur", clearPressed);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+      window.removeEventListener("blur", clearPressed);
+    };
+  }, []);
+
+  return pressed;
+};
 
 interface EntityOptionPresentationProps {
   readonly className?: string;
-  readonly expanded?: boolean;
   readonly option: EntityOption;
+  readonly showFqn: boolean;
 }
 
 const EntityOptionPresentation = ({
   className,
-  expanded = false,
   option,
+  showFqn,
 }: EntityOptionPresentationProps) => (
   <span
+    data-testid={showFqn ? "entity-picker-fqn" : "entity-picker-display-title"}
     className={cn(
-      "inline-flex max-w-full min-w-0 items-center font-mono",
-      expanded && "flex-wrap",
+      "text-foreground inline-block max-w-full min-w-0 truncate font-mono font-medium",
       className,
     )}
   >
-    <span
-      data-testid="entity-picker-fqn"
-      className={cn(
-        "text-foreground min-w-0 font-medium",
-        expanded ? "break-all whitespace-normal" : "truncate",
-      )}
-    >
-      {option.searchLabel}
-    </span>
-    {option.label !== option.searchLabel ? (
-      <span
-        data-testid="entity-picker-display-title"
-        className={cn(
-          "text-muted-foreground min-w-0",
-          expanded ? "break-all whitespace-normal" : "truncate",
-        )}
-      >
-        {` (${option.label})`}
-      </span>
-    ) : null}
+    {showFqn ? option.searchLabel : option.label}
   </span>
 );
 
@@ -183,40 +211,12 @@ const queryAfterPresentationEdit = (
   presentation: string,
   searchLabel: string,
   editedValue: string,
+  preserveIdentity: boolean,
 ): string => {
-  if (!presentation.startsWith(searchLabel)) {
-    return editedValue;
+  if (preserveIdentity && editedValue.startsWith(presentation)) {
+    return `${searchLabel}${editedValue.slice(presentation.length)}`;
   }
-  let unchangedPrefixLength = 0;
-  while (
-    unchangedPrefixLength < presentation.length &&
-    presentation[unchangedPrefixLength] === editedValue[unchangedPrefixLength]
-  ) {
-    unchangedPrefixLength += 1;
-  }
-  if (unchangedPrefixLength >= searchLabel.length) {
-    return searchLabel;
-  }
-  let unchangedSuffixLength = 0;
-  while (
-    unchangedSuffixLength < presentation.length - unchangedPrefixLength &&
-    unchangedSuffixLength < editedValue.length - unchangedPrefixLength &&
-    presentation[presentation.length - unchangedSuffixLength - 1] ===
-      editedValue[editedValue.length - unchangedSuffixLength - 1]
-  ) {
-    unchangedSuffixLength += 1;
-  }
-  const searchEditEnd = Math.min(
-    searchLabel.length,
-    Math.max(
-      unchangedPrefixLength,
-      presentation.length - unchangedSuffixLength,
-    ),
-  );
-  return `${searchLabel.slice(0, unchangedPrefixLength)}${editedValue.slice(
-    unchangedPrefixLength,
-    editedValue.length - unchangedSuffixLength,
-  )}${searchLabel.slice(searchEditEnd)}`;
+  return editedValue;
 };
 
 const optionParentFqn = (option: EntityOption): string => {
@@ -393,7 +393,7 @@ const retainedPrefixAfterPick = (
   return committedPrefix ? `${committedPrefix}:` : "";
 };
 
-export const EntityPicker = ({
+const EntityPickerContent = ({
   autoFocus = false,
   clearOnSelect = false,
   createOption,
@@ -417,7 +417,8 @@ export const EntityPicker = ({
   value,
   selectedIds = noSelectedIds,
   selectedGroupFqns = [],
-}: EntityPickerProps) => {
+  metaKeyPressed,
+}: EntityPickerContentProps) => {
   const [createdOptions, setCreatedOptions] = useState<readonly EntityOption[]>(
     [],
   );
@@ -491,9 +492,15 @@ export const EntityPicker = ({
     loadOptions && loadedRequestKey !== loadRequestKey,
   );
   const [open, setOpen] = useState(false);
+  const [inputFocused, setInputFocused] = useState(false);
   const requestPending = searchRequestPending;
-  const selectedPresentation = selected
-    ? (selected.selectedLabel ?? optionPresentation(selected))
+  const selectedPresentation = selected?.label;
+  const selectedIdentityDescription =
+    selected && selected.label !== selected.searchLabel
+      ? `Selected full name: ${selected.searchLabel}`
+      : undefined;
+  const selectedIdentityDescriptionId = selectedIdentityDescription
+    ? `${id}-selected-identity`
     : undefined;
   const showSelectedPresentation = Boolean(
     selectedPresentation && (!open || !typedThisSession),
@@ -1051,10 +1058,13 @@ export const EntityPicker = ({
           {label}
         </label>
         <Tooltip
+          asChild
           className="w-full"
           disabled={!selected}
           focusable={false}
-          label={selected ? optionPresentation(selected) : ""}
+          forceOpen={metaKeyPressed && inputFocused}
+          label={selected ? optionTooltipLabel(selected) : ""}
+          persistentForceOpen
         >
           <PopoverAnchor asChild>
             <input
@@ -1065,7 +1075,11 @@ export const EntityPicker = ({
               autoFocus={autoFocus}
               role="combobox"
               aria-controls={`${id}-options`}
-              aria-describedby={`${id}-context`}
+              aria-describedby={`${id}-context${
+                selectedIdentityDescriptionId
+                  ? ` ${selectedIdentityDescriptionId}`
+                  : ""
+              }`}
               aria-expanded={open && !disabled}
               aria-autocomplete="list"
               aria-activedescendant={activeOptionId}
@@ -1090,6 +1104,8 @@ export const EntityPicker = ({
                         selectedPresentation,
                         selected.searchLabel,
                         editedValue,
+                        (event.nativeEvent as InputEvent).inputType !==
+                          "insertFromPaste",
                       )
                     : editedValue;
                 const exactOption = loadOptions
@@ -1169,6 +1185,7 @@ export const EntityPicker = ({
                 }
               }}
               onFocus={() => {
+                setInputFocused(true);
                 if (disabled || !openOnFocus) {
                   return;
                 }
@@ -1192,6 +1209,9 @@ export const EntityPicker = ({
                   (row) => row.kind === "leaf" && row.option.id === value,
                 );
                 setActiveIndex(value === undefined ? 0 : selectedIndex);
+              }}
+              onBlur={() => {
+                setInputFocused(false);
               }}
               onKeyDown={(event) => {
                 if (disabled) {
@@ -1365,7 +1385,11 @@ export const EntityPicker = ({
               selected.hidden ? "right-8" : "right-2",
             )}
           >
-            <EntityOptionPresentation className="w-full" option={selected} />
+            <EntityOptionPresentation
+              className="w-full"
+              option={selected}
+              showFqn={metaKeyPressed}
+            />
           </span>
         ) : null}
         {selected?.hidden ? (
@@ -1380,6 +1404,11 @@ export const EntityPicker = ({
         <span id={`${id}-context`} className="sr-only">
           {contextText}
         </span>
+        {selectedIdentityDescriptionId ? (
+          <span id={selectedIdentityDescriptionId} className="sr-only">
+            {selectedIdentityDescription}
+          </span>
+        ) : null}
         <span
           id={`${id}-announcement`}
           className="sr-only"
@@ -1532,7 +1561,7 @@ export const EntityPicker = ({
                           ? `Select entire group ${row.fqn}`
                           : row.kind === "create"
                             ? `Create ${row.fqn}`
-                            : undefined
+                            : optionAccessibleLabel(row.option)
                     }
                     aria-selected={
                       row.kind === "leaf"
@@ -1573,11 +1602,15 @@ export const EntityPicker = ({
                           <Tooltip
                             className="min-w-0"
                             focusable={false}
-                            label={optionPresentation(row.option)}
+                            forceOpen={
+                              metaKeyPressed && rowIndex === clampedActiveIndex
+                            }
+                            label={optionTooltipLabel(row.option)}
+                            persistentForceOpen
                           >
                             <EntityOptionPresentation
-                              expanded={rowIndex === clampedActiveIndex}
                               option={row.option}
+                              showFqn={metaKeyPressed}
                             />
                           </Tooltip>
                         </span>
@@ -1588,12 +1621,7 @@ export const EntityPicker = ({
                             {row.option.detail &&
                             row.option.detail !== row.option.searchLabel ? (
                               <Tooltip
-                                className={cn(
-                                  "text-muted-foreground block min-w-0 flex-1 font-mono text-xs",
-                                  rowIndex === clampedActiveIndex
-                                    ? "break-all whitespace-normal"
-                                    : "truncate",
-                                )}
+                                className="text-muted-foreground block min-w-0 flex-1 truncate font-mono text-xs"
                                 focusable={false}
                                 label={row.option.detail}
                               >
@@ -1613,14 +1641,11 @@ export const EntityPicker = ({
                             {row.option.metadata ? (
                               <Tooltip
                                 className={cn(
-                                  "text-muted-foreground block min-w-0 font-mono text-xs",
+                                  "text-muted-foreground block min-w-0 truncate font-mono text-xs",
                                   row.option.detail &&
                                     row.option.detail !== row.option.searchLabel
                                     ? "max-w-[45%] shrink-0"
                                     : "max-w-full flex-1",
-                                  rowIndex === clampedActiveIndex
-                                    ? "break-all whitespace-normal"
-                                    : "truncate",
                                 )}
                                 focusable={false}
                                 label={row.option.metadata}
@@ -1729,6 +1754,11 @@ export const EntityPicker = ({
   );
 };
 
+export const EntityPicker = (props: EntityPickerProps) => {
+  const metaKeyPressed = useMetaKeyPressed();
+  return <EntityPickerContent {...props} metaKeyPressed={metaKeyPressed} />;
+};
+
 interface EntityMultiPickerProps {
   readonly autoFocus?: boolean;
   readonly createOption?: CreateEntityOption;
@@ -1771,6 +1801,8 @@ export const EntityMultiPicker = ({
   placeholder = "Search",
   value,
 }: EntityMultiPickerProps) => {
+  const metaKeyPressed = useMetaKeyPressed();
+  const [focusedSelectedId, setFocusedSelectedId] = useState<number>();
   const [createdOptions, setCreatedOptions] = useState<readonly EntityOption[]>(
     [],
   );
@@ -1814,7 +1846,7 @@ export const EntityMultiPicker = ({
   }, [groupValuesKey]);
   return (
     <div ref={pickerRef} className="flex min-w-0 flex-col gap-2">
-      <EntityPicker
+      <EntityPickerContent
         autoFocus={autoFocus}
         clearOnSelect
         createOption={
@@ -1832,6 +1864,7 @@ export const EntityMultiPicker = ({
         id={id}
         label={label}
         labelClassName={labelClassName}
+        metaKeyPressed={metaKeyPressed}
         loadKey={loadKey}
         loadCreationAvailability={loadCreationAvailability}
         loadOptions={loadOptions}
@@ -1881,12 +1914,19 @@ export const EntityMultiPicker = ({
           data-testid="entity-multi-picker-selected"
         >
           {selectedOptions.map((option) => {
-            const selectedLabel =
-              option.selectedLabel ?? optionPresentation(option);
+            const selectedLabel = option.selectedLabel ?? option.label;
             return (
               <span
                 key={option.id}
                 className="bg-muted inline-flex h-7 max-w-full min-w-0 items-center gap-1 border border-[var(--border-ink)] px-2 font-mono text-xs shadow-[var(--shadow-chip)]"
+                onBlur={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget)) {
+                    setFocusedSelectedId(undefined);
+                  }
+                }}
+                onFocus={() => {
+                  setFocusedSelectedId(option.id);
+                }}
               >
                 {option.hidden ? (
                   <EyeOff aria-label="Hidden" className="size-3 shrink-0" />
@@ -1894,9 +1934,14 @@ export const EntityMultiPicker = ({
                 <Tooltip
                   className="min-w-0 flex-1"
                   focusable={false}
-                  label={selectedLabel}
+                  forceOpen={metaKeyPressed && focusedSelectedId === option.id}
+                  label={optionTooltipLabel(option)}
+                  persistentForceOpen
                 >
-                  <EntityOptionPresentation option={option} />
+                  <EntityOptionPresentation
+                    option={option}
+                    showFqn={metaKeyPressed}
+                  />
                 </Tooltip>
                 <Button
                   type="button"
@@ -1906,6 +1951,9 @@ export const EntityMultiPicker = ({
                   aria-label={`Remove ${selectedLabel}`}
                   disabled={disabled}
                   onClick={() => {
+                    setFocusedSelectedId((current) =>
+                      current === option.id ? undefined : current,
+                    );
                     const nextValue = valueRef.current.filter(
                       (idValue) => idValue !== option.id,
                     );

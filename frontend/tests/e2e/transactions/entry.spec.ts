@@ -24,7 +24,6 @@ import {
   hideAccount,
   journalRecord,
   listFixtures,
-  pickerSelectedLabel,
   readStoredTransactionEntryDraft,
   seedStoredPristineTransactionEntryDefaults,
   type TransactionDetailFixture,
@@ -2277,14 +2276,11 @@ test("advanced journal account picker keeps suggestions filtered but resolves ex
   const correctionOption = page
     .locator("#advanced-record-1-account-options")
     .getByRole("option")
-    .filter({ hasText: correctionAccount.fqn });
+    .filter({ hasText: correctionAccount.display_label });
   await expect(correctionOption).toBeVisible();
-  await expect(correctionOption.getByTestId("entity-picker-fqn")).toHaveText(
-    correctionAccount.fqn,
-  );
   await expect(
     correctionOption.getByTestId("entity-picker-display-title"),
-  ).toHaveCount(0);
+  ).toHaveText(correctionAccount.display_label);
   await chooseOptionByKeyboard(
     page,
     "Account",
@@ -2311,9 +2307,7 @@ test("advanced journal account picker keeps suggestions filtered but resolves ex
     page.locator("#advanced-record-3-account-options"),
   ).toContainText("No matches");
   await hiddenAccountPicker.fill(hiddenFlowFqn);
-  await expect(hiddenAccountPicker).toHaveValue(
-    pickerSelectedLabel(hiddenFlow),
-  );
+  await expect(hiddenAccountPicker).toHaveValue(hiddenFlow.display_label);
   const hiddenMarker = fourthRecord.getByLabel("Hidden", { exact: true });
   await expect(hiddenMarker).toBeVisible();
   const [pickerBox, markerBox] = await Promise.all([

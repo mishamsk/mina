@@ -7,6 +7,7 @@
 ## Implicit Contracts
 
 - Tooltip Escape dismisses the tooltip, then forwards one Escape to the original target so the active overlay's Escape ladder can continue.
+- Persistent forced tooltips ignore hover-close transitions but retain ordinary Escape dismissal and forwarding.
 - Focusable tooltip wrapper triggers must supply an accessible trigger label.
 - Use `focusWithoutTooltip` for programmatic focus recovery when a focus tooltip must not flash.
 - Confirmation dialogs close on Escape only while idle; pending actions keep the dialog open, while an independently disabled confirm action never disables Cancel or Escape and can expose its caller-supplied reason through the shared tooltip. They suppress automatic close-focus restoration, so callers recover focus, and keep their title and action row visible while oversized body content scrolls.

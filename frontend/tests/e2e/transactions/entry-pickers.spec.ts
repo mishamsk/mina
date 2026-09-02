@@ -427,22 +427,20 @@ test("template picker filters server matches, browses hierarchy, and applies wit
     "Food",
   );
   await expect(
-    page.getByRole("option").filter({ hasText: coffeeFqn }),
+    page.locator(`#entry-template-option-${coffeeId}`),
   ).toBeVisible();
-  await expect(
-    page.getByRole("option").filter({ hasText: partialFqn }),
-  ).toHaveCount(0);
+  await expect(page.locator(`#entry-template-option-${partialId}`)).toHaveCount(
+    0,
+  );
 
   await templatePicker.fill(unique);
   await expect(
-    page.getByRole("option").filter({ hasText: coffeeFqn }),
+    page.locator(`#entry-template-option-${coffeeId}`),
   ).toBeVisible();
-  await expect(
-    page.getByRole("option").filter({ hasText: teaFqn }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("option").filter({ hasText: partialFqn }),
-  ).toHaveCount(0);
+  await expect(page.locator(`#entry-template-option-${teaId}`)).toBeVisible();
+  await expect(page.locator(`#entry-template-option-${partialId}`)).toHaveCount(
+    0,
+  );
   await templatePicker.fill("Coffee");
   await templatePicker.press("Enter");
 
@@ -455,12 +453,12 @@ test("template picker filters server matches, browses hierarchy, and applies wit
   );
   await expect(
     editor.getByRole("combobox", { name: "Funding account" }),
-  ).toHaveValue(funding.fqn);
+  ).toHaveValue(funding.display_label);
   await expect(editor.getByRole("combobox", { name: "Merchant" })).toHaveValue(
-    merchant.fqn,
+    merchant.display_label,
   );
   await expect(editor.getByRole("combobox", { name: "Category" })).toHaveValue(
-    category.fqn,
+    category.display_label,
   );
   await expect(
     editor.getByRole("group", { name: "Merchant 1" }).getByLabel("Amount"),
@@ -469,19 +467,19 @@ test("template picker filters server matches, browses hierarchy, and applies wit
 
   await editor.getByRole("tab", { name: "Income" }).click();
   await templatePicker.fill(unique);
-  await expect(
-    page.getByRole("option").filter({ hasText: coffeeFqn }),
-  ).toHaveCount(0);
-  await expect(
-    page.getByRole("option").filter({ hasText: partialFqn }),
-  ).toHaveCount(0);
+  await expect(page.locator(`#entry-template-option-${coffeeId}`)).toHaveCount(
+    0,
+  );
+  await expect(page.locator(`#entry-template-option-${partialId}`)).toHaveCount(
+    0,
+  );
   await editor.getByRole("tab", { name: "Advanced" }).click();
   await templatePicker.fill(unique);
   await expect(
-    page.getByRole("option").filter({ hasText: coffeeFqn }),
+    page.locator(`#entry-template-option-${coffeeId}`),
   ).toBeVisible();
   await expect(
-    page.getByRole("option").filter({ hasText: partialFqn }),
+    page.locator(`#entry-template-option-${partialId}`),
   ).toBeVisible();
   await editor.getByRole("tab", { name: "Spend" }).click();
   await expect(editor.getByLabel("Memo")).toHaveValue(`Coffee ${unique}`);
@@ -675,7 +673,7 @@ test("entry category picker completes hierarchy segments and preserves full-path
   ).toBeVisible();
 
   await categoryPicker.fill(diningFqn);
-  await expect(categoryPicker).toHaveValue(`${diningFqn} (Food:Dining)`);
+  await expect(categoryPicker).toHaveValue("Food:Dining");
   await expect(categoryPicker).toHaveAttribute("aria-expanded", "false");
 
   await categoryPicker.fill(`${base}:Food:Pan`);
@@ -690,7 +688,7 @@ test("entry category picker completes hierarchy segments and preserves full-path
   await categoryPicker.pressSequentially("n");
   await expect(categoryPicker).toHaveAttribute("aria-expanded", "true");
   const pantryOption = categoryOptions.getByRole("option", {
-    name: new RegExp(`${pantryFqn}.*Pantry Pick`),
+    name: /Pantry Pick/,
   });
   await expect(pantryOption).toBeVisible();
   const pantryOptionId = await pantryOption.evaluate((option) => option.id);
@@ -699,22 +697,22 @@ test("entry category picker completes hierarchy segments and preserves full-path
     pantryOptionId,
   );
   await categoryPicker.press("Tab");
-  await expect(categoryPicker).toHaveValue(`${pantryFqn} (Pantry Pick)`);
+  await expect(categoryPicker).toHaveValue("Pantry Pick");
   await expect(categoryPicker).toHaveAttribute("aria-expanded", "false");
   await categoryPicker.press("Tab");
   await expect(categoryPicker).not.toBeFocused();
-  await expect(categoryPicker).toHaveValue(`${pantryFqn} (Pantry Pick)`);
+  await expect(categoryPicker).toHaveValue("Pantry Pick");
   await page.getByRole("combobox", { name: "Funding account" }).focus();
   await categoryPicker.focus();
   await expect(categoryPicker).toHaveAttribute("aria-expanded", "true");
   await categoryPicker.press("Tab");
   await expect(categoryPicker).not.toBeFocused();
-  await expect(categoryPicker).toHaveValue(`${pantryFqn} (Pantry Pick)`);
+  await expect(categoryPicker).toHaveValue("Pantry Pick");
   await expect(categoryPicker).toHaveAttribute("aria-expanded", "false");
   await page.mouse.move(0, 0);
   await categoryPicker.hover();
   await expect(page.getByRole("tooltip")).toHaveText(
-    `${pantryFqn} (Pantry Pick)`,
+    `Pantry Pick · ${pantryFqn}`,
   );
 
   const createdFqn = `${base}:Food:New:Bakery`;
@@ -743,11 +741,11 @@ test("entry category picker completes hierarchy segments and preserves full-path
   const createdCategory = (await createResponse.json()) as CategoryFixture;
   expect(createdCategory.fqn).toBe(createdFqn);
   expect(createdCategory.economic_intent).toBe("expense");
-  await expect(categoryPicker).toHaveValue(`${createdFqn} (New:Bakery)`);
+  await expect(categoryPicker).toHaveValue("New:Bakery");
   await expect(categoryPicker).toBeFocused();
   await categoryPicker.press("Tab");
   await expect(categoryPicker).not.toBeFocused();
-  await expect(categoryPicker).toHaveValue(`${createdFqn} (New:Bakery)`);
+  await expect(categoryPicker).toHaveValue("New:Bakery");
   await accountRefreshPromise;
   await page.evaluate(
     () =>
@@ -765,12 +763,12 @@ test("entry category picker completes hierarchy segments and preserves full-path
   });
   await fundingPicker.fill("merchant");
   await expect(page.locator("#spend-fundingAccountId-options")).toContainText(
-    "merchant:Amazon:gift_card",
+    "Amazon:gift_card",
   );
   await expect(
-    page
-      .locator("#spend-fundingAccountId-options")
-      .getByRole("option", { name: /merchant:Amazon:flow/i }),
+    page.locator("#spend-fundingAccountId-options").getByRole("option", {
+      name: /^Amazon flow · merchant:Amazon:flow · flow · USD · Single-currency$/i,
+    }),
   ).toHaveCount(0);
 
   const merchantPicker = page.getByRole("combobox", { name: "Merchant" });
@@ -916,16 +914,10 @@ test("tags multi-picker retains its prefix for sibling batching", async ({
   const rootSearchOptionId = `spend-tags-option-${rootSearchTag.tag_id}`;
   const rootSearchOption = tagsOptions.locator(`#${rootSearchOptionId}`);
   await expect(rootSearchOption).toBeVisible();
-  await expect(rootSearchOption.getByTestId("entity-picker-fqn")).toHaveText(
-    rootSearchTag.fqn,
-  );
   const rootSearchDisplayTitle = rootSearchOption.getByTestId(
     "entity-picker-display-title",
   );
-  await expect(rootSearchDisplayTitle).toHaveText(
-    `(${rootSearchTag.display_label})`,
-  );
-  await expect(rootSearchDisplayTitle).toHaveClass(/text-muted-foreground/);
+  await expect(rootSearchDisplayTitle).toHaveText(rootSearchTag.display_label);
   await expect(tagsPicker).toHaveAttribute(
     "aria-activedescendant",
     rootSearchOptionId,
@@ -1266,7 +1258,7 @@ test("keyboard spend entry creates a transaction and keeps sticky fields", async
   await expect(dateInput).toHaveValue("2026-05-31");
   await expect(
     page.getByRole("combobox", { name: "Funding account" }),
-  ).toHaveValue("bank:Chase:Sapphire (Chase:Sapphire)");
+  ).toHaveValue("Chase:Sapphire");
   await expect(page.getByLabel("Amount")).toHaveValue("");
 
   await page.getByRole("button", { name: "Clear draft" }).click();
