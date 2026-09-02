@@ -1389,7 +1389,7 @@ test("transactions page collapses low-priority columns instead of scrolling hori
       };
     });
 
-  await page.setViewportSize({ width: 1000, height: 720 });
+  await page.setViewportSize({ width: 1000, height: 900 });
   await page.goto("/transactions?page=1&pageSize=100");
 
   await expect(page.getByText(/Page 1 of \d+/)).toBeVisible();
@@ -1421,7 +1421,7 @@ test("transactions page collapses low-priority columns instead of scrolling hori
   for (const width of [
     1600, 1440, 1280, 1249, 1150, 1000, 900, 820, 800, 700, 640,
   ]) {
-    await page.setViewportSize({ width, height: 720 });
+    await page.setViewportSize({ width, height: 900 });
     const tableState = await measureTableState();
 
     expect(tableState.hasHorizontalOverflow).toBe(false);

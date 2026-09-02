@@ -14,6 +14,7 @@
 - Editing changes hidden state and the optional display-label override: blank clears to the backend-derived fallback; FQN moves or renames use the hierarchy workflow, and economic intent is fixed when the category is created.
 - Create mode adopts a route-provided economic intent as its initial selection; an unfiltered route leaves intent unselected.
 - Use only the API `deletable` signal to enable deletion; the backend owns dependency rules.
+- Successful list deletion restores focus to the visible search field or the compact Controls trigger.
 - The side panel focuses on open and delegates close focus recovery to its route; nested dismissible controls consume Escape before the panel, and delete confirmation returns focus to the panel delete control.
 
 ## Boundaries

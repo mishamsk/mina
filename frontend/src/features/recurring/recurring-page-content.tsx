@@ -486,7 +486,7 @@ export const RecurringPageContent = ({
     return (
       <div
         ref={focusFallbackRef}
-        className="bg-card flex h-full min-h-64 flex-col items-start justify-center gap-3 border-2 border-[var(--border-ink)] p-6 shadow-[var(--shadow-pixel)]"
+        className="bg-card roomy-shell:h-full roomy-shell:min-h-64 flex flex-col items-start justify-center gap-3 border-2 border-[var(--border-ink)] p-6 shadow-[var(--shadow-pixel)]"
         tabIndex={-1}
       >
         <Repeat
@@ -523,7 +523,7 @@ export const RecurringPageContent = ({
 
   return (
     <>
-      <div className="flex h-full min-h-0 flex-col gap-3">
+      <div className="roomy-shell:h-full flex h-auto min-h-0 flex-col gap-3">
         {actionErrorMessage ? (
           <div
             className="border-destructive bg-card border-2 p-3 shadow-[var(--shadow-pixel)]"
@@ -539,13 +539,13 @@ export const RecurringPageContent = ({
         ) : null}
         <div
           ref={focusFallbackRef}
-          className="bg-card flex min-h-0 flex-1 flex-col overflow-hidden border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]"
+          className="bg-card roomy-shell:overflow-hidden flex min-h-0 flex-1 flex-col overflow-visible border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]"
           data-testid="recurring-definitions-table"
           tabIndex={-1}
         >
-          <div className="min-h-0 flex-1 overflow-auto">
+          <div className="roomy-shell:overflow-auto min-h-0 flex-1 overflow-visible">
             <table className="recurring-review-table w-full table-fixed border-collapse text-sm">
-              <thead className="text-foreground sticky top-0 z-10 bg-[var(--table-header)]">
+              <thead className="text-foreground roomy-shell:sticky roomy-shell:top-0 roomy-shell:z-10 bg-[var(--table-header)]">
                 <tr className="font-heading text-left text-xs font-semibold uppercase">
                   <th scope="col" className="w-[22%] px-3 py-2">
                     Definition

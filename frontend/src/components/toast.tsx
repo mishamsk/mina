@@ -50,7 +50,7 @@ export const Toast = ({
   return (
     <div
       className={cn(
-        "fixed right-4 bottom-4 z-[70] max-w-sm",
+        "compact-shell:bottom-[calc(4.75rem+env(safe-area-inset-bottom))] fixed right-4 bottom-4 z-[70] max-w-sm",
         containerClassName,
       )}
       style={{

@@ -685,7 +685,15 @@ export const TransactionEditDock = ({
     const closing = activeEditor;
     onEditorChange(undefined);
     window.setTimeout(() => {
-      const browser = dockRef.current?.parentElement ?? null;
+      const compactSheet = dockRef.current?.closest(
+        "[data-mobile-parent-sheet]",
+      );
+      const browser =
+        dockRef.current?.closest<HTMLElement>(
+          "[data-transaction-browser='true']",
+        ) ??
+        dockRef.current?.parentElement ??
+        null;
       const target =
         closing === "account"
           ? accountButtonRef.current
@@ -695,10 +703,13 @@ export const TransactionEditDock = ({
               ? tagsButtonRef.current
               : memberButtonRef.current;
       if (
-        !restoreFocusToRow &&
         target?.isConnected &&
         !target.disabled &&
-        browser?.querySelector("[data-transaction-row][aria-selected='true']")
+        (compactSheet ||
+          (!restoreFocusToRow &&
+            browser?.querySelector(
+              "[data-transaction-row][aria-selected='true']",
+            )))
       ) {
         focusWithoutTooltip(target, { preventScroll: true });
         return;
@@ -736,7 +747,7 @@ export const TransactionEditDock = ({
     <section
       ref={dockRef}
       aria-label="Transaction edit dock"
-      className="bg-card h-full min-h-0 overflow-y-auto border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]"
+      className="bg-card roomy-shell:h-full roomy-shell:overflow-y-auto h-auto min-h-0 overflow-y-visible border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]"
       data-transaction-browser-edit-controls
       data-testid="transaction-edit-dock"
     >

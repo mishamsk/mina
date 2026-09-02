@@ -255,7 +255,7 @@ export const RecurringPage = () => {
 
   return (
     <section
-      className="flex h-[calc(100svh-2.5rem)] min-h-0 flex-col gap-6"
+      className="roomy-shell:h-[calc(100svh-2.5rem)] flex min-h-0 flex-col gap-6"
       aria-labelledby="recurring-title"
     >
       <PageHeader
@@ -336,9 +336,14 @@ export const RecurringPage = () => {
             });
             setSearchToolbarGeneration((current) => current + 1);
             window.requestAnimationFrame(() => {
-              document.getElementById("recurring-search")?.focus({
-                preventScroll: true,
-              });
+              const searchField = document.getElementById("recurring-search");
+              const target =
+                searchField && searchField.getClientRects().length > 0
+                  ? searchField
+                  : document.querySelector<HTMLElement>(
+                      "[data-mobile-table-controls-trigger]",
+                    );
+              target?.focus({ preventScroll: true });
             });
           }}
           onEdit={(definition, opener) => {

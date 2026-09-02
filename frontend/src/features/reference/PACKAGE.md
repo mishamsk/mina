@@ -16,6 +16,7 @@
 - When a drill-down search changes with a transaction or entry overlay open, update the background and overlay URL states synchronously; do not briefly render the overlay-less background.
 - Selecting a member from a transaction routes to that member's drill-down and replaces the scoped filter; selecting another entity kind re-reads it by stable ID through REST to obtain its current FQN before adding an ordinary transaction filter, and only while the browser filter is row-renderable. Delayed entity lookups preserve live URL state such as a newer page-size selection.
 - The member drill-down route owns the identity header; Category and Tag leaf/group routes use the household-flow report feature.
+- Full-page reference trees and member transaction drill-downs use the shared compact-shell Controls/document-scrolling contract; report previews and bounded overlay tables do not.
 
 ## Boundaries
 

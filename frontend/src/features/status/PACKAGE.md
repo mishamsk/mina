@@ -18,6 +18,7 @@
 - Completed non-`GET` browser requests refresh the mounted audit browser so mutations from global UI surfaces become visible in place.
 - Audit pages beyond the server-reported range replace-navigate to the last available page and clear an unavailable selection.
 - A URL-selected audit entry absent from the loaded page renders an unavailable state instead of silently removing detail.
+- The active Status browser contributes its filters and pagination to the shared compact Controls surface; compact audit filters stack within that overlay, compact cards drop padding vacated by relocated controls, the Background operations title and primary Run now action remain inline, and audit rows relinquish their sticky internal viewport while roomy geometry stays bounded.
 
 ## Boundaries
 

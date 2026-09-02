@@ -360,7 +360,11 @@ const GroupRegister = ({ prefix }: { readonly prefix: string }) => {
       <Toast
         key={filterNotice ?? "empty-filter-notice"}
         className="text-[var(--color-class-adjustment-ink)]"
-        containerClassName={registerDetail.notice ? "bottom-16" : undefined}
+        containerClassName={
+          registerDetail.notice
+            ? "compact-shell:bottom-[calc(7.75rem+env(safe-area-inset-bottom))] bottom-16"
+            : undefined
+        }
         durationMs={toastDurationMs}
         message={filterNotice}
         onDismiss={() => {
@@ -438,7 +442,7 @@ export const AccountGroupPageContent = ({
 
   return (
     <section
-      className="flex h-[calc(100svh-2.5rem)] min-h-0 flex-col gap-6"
+      className="roomy-shell:h-[calc(100svh-2.5rem)] flex min-h-0 flex-col gap-6"
       aria-labelledby="account-group-title"
     >
       <PageHeader

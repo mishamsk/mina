@@ -242,6 +242,7 @@ export const AccountsToolbar = ({
             </PopoverTrigger>
           </Tooltip>
           <PopoverContent
+            compactBack
             aria-label="Account types"
             className="w-48 space-y-1 p-2"
           >

@@ -679,28 +679,6 @@ test("register headers fit display labels while group headers retain FQNs", asyn
       )
       .toBe(true);
   };
-  const expectMiddleTruncation = async (path: Locator, value: string) => {
-    const ancestors = path.locator(":scope > span").first();
-    const leaf = path.locator(":scope > span").last();
-    await expect
-      .poll(() =>
-        ancestors.evaluate((element) => ({
-          hasVisibleWidth: element.clientWidth > 1,
-          isTruncated: element.scrollWidth > element.clientWidth + 1,
-        })),
-      )
-      .toEqual({ hasVisibleWidth: true, isTruncated: true });
-    await expect
-      .poll(() =>
-        leaf.evaluate(
-          (element) => element.scrollWidth <= element.clientWidth + 1,
-        ),
-      )
-      .toBe(true);
-    await path.hover();
-    await expect(page.getByRole("tooltip")).toHaveText(value);
-    await page.mouse.move(0, 0);
-  };
   const expectLongLeafTruncation = async (path: Locator, value: string) => {
     const ancestors = path.locator(":scope > span").first();
     const leaf = path.locator(":scope > span").last();
@@ -793,7 +771,7 @@ test("register headers fit display labels while group headers retain FQNs", asyn
   await expectNoHeaderOverflow(groupHeader);
 
   await page.setViewportSize({ width: 480, height: 900 });
-  await expectMiddleTruncation(groupPath, groupFqn);
+  await expectFullPath(groupPath, groupFqn);
   await expectNoHeaderOverflow(groupHeader);
 
   await page.goto(`/accounts/${longAccount.account_id}?page=1&pageSize=25`);
@@ -945,7 +923,7 @@ test("register standing cells stay single-line through the collapse ladder", asy
           .toEqual({
             amountCount: 3,
             amountsContained: true,
-            overflowX: "hidden",
+            overflowX: "clip",
           });
         await expect
           .poll(() =>

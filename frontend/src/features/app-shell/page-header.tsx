@@ -1,5 +1,6 @@
 import type { ReactNode, Ref } from "react";
 
+import { MobileTableControls } from "@/components/mobile-table-controls";
 import { cn } from "@/lib/utils";
 
 interface PageHeaderProps {
@@ -52,10 +53,11 @@ export const PageHeader = ({
     <div
       className={cn(
         "min-h-0",
-        toolbar ? "border-t-2 border-[var(--border-ink)] pt-4" : "",
+        toolbar &&
+          "roomy-shell:border-t-2 roomy-shell:border-[var(--border-ink)] roomy-shell:pt-4",
       )}
     >
-      {toolbar}
+      {toolbar ? <MobileTableControls>{toolbar}</MobileTableControls> : null}
     </div>
   </header>
 );

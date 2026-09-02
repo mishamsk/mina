@@ -349,8 +349,14 @@ test("transactions contain long amount chips and align the pagination footer", a
     ),
   ).toBeLessThanOrEqual(1);
 
-  for (const width of [1600, 1100, 1000, 700, 390]) {
-    await page.setViewportSize({ width, height: 720 });
+  for (const { height, width } of [
+    { height: 720, width: 1600 },
+    { height: 900, width: 1100 },
+    { height: 900, width: 1000 },
+    { height: 720, width: 700 },
+    { height: 720, width: 390 },
+  ]) {
+    await page.setViewportSize({ width, height });
     const longAmountRow = page.getByRole("row").filter({ hasText: memo });
     await expect(longAmountRow).toBeVisible();
     await expect(
@@ -383,7 +389,7 @@ test("transactions contain long amount chips and align the pagination footer", a
     ).toBe(false);
   }
 
-  await page.setViewportSize({ width: 1100, height: 720 });
+  await page.setViewportSize({ width: 1100, height: 900 });
   const mediumWidthGeometry = await page
     .getByRole("row")
     .filter({ hasText: memo })
@@ -412,7 +418,7 @@ test("transactions contain long amount chips and align the pagination footer", a
     mediumWidthGeometry.amountCellLeft,
   );
 
-  await page.setViewportSize({ width: 1000, height: 720 });
+  await page.setViewportSize({ width: 1000, height: 900 });
   const fullAmountLabel = "-9,999,999,999.12 $";
   const longAmountRow = page.getByRole("row").filter({ hasText: memo });
   await page.getByRole("button", { name: "Collapse sidebar" }).click();
@@ -430,7 +436,7 @@ test("transactions contain long amount chips and align the pagination footer", a
   await longAmountChip.hover();
   await expect(longAmountTooltip).toBeVisible();
 
-  await page.setViewportSize({ width: 1000, height: 720 });
+  await page.setViewportSize({ width: 1000, height: 900 });
   await page.getByRole("button", { name: "Edit mode" }).click();
   const bulkFooterBox = await page
     .getByTestId("transactions-pagination-footer")
@@ -469,23 +475,14 @@ test("transactions contain long amount chips and align the pagination footer", a
   await expect(editModeAmountInput).toHaveValue("9999999999.12345678");
   await page.setViewportSize({ width: 390, height: 720 });
   await expect(editModeAmountInput).toBeVisible();
-  const narrowLayout = page.getByTestId("transaction-browser-layout");
   const narrowDock = page.getByTestId("transaction-edit-dock");
-  const narrowGeometry = await narrowLayout.evaluate((layout) => {
-    const tableRegion = layout.firstElementChild;
-    const dock = layout.lastElementChild;
-    return {
-      dockWidth: dock?.getBoundingClientRect().width ?? 0,
-      layoutClientWidth: layout.clientWidth,
-      layoutScrollWidth: layout.scrollWidth,
-      tableRegionWidth: tableRegion?.getBoundingClientRect().width ?? 0,
-    };
+  const mobileEditTrigger = page.getByRole("button", {
+    name: "Edit transactions",
   });
-  expect(narrowGeometry.tableRegionWidth).toBeGreaterThanOrEqual(368);
-  expect(narrowGeometry.dockWidth).toBeGreaterThanOrEqual(256);
-  expect(narrowGeometry.layoutScrollWidth).toBeGreaterThan(
-    narrowGeometry.layoutClientWidth,
-  );
+  await expect(mobileEditTrigger).toBeVisible();
+  await expect(narrowDock).toBeHidden();
+  await mobileEditTrigger.click();
+  await expect(narrowDock).toBeVisible();
   const narrowDockAction = narrowDock.getByRole("button", {
     name: "Set / clear",
   });
@@ -494,6 +491,10 @@ test("transactions contain long amount chips and align the pagination footer", a
   await expect(
     narrowDock.evaluate((dock) => dock.scrollWidth <= dock.clientWidth + 1),
   ).resolves.toBe(true);
+  await page
+    .getByRole("button", { name: "Close transaction edit controls" })
+    .click();
+  await expect(narrowDock).toBeHidden();
   const amountInputWidth = await editModeAmountInput.evaluate((input) => ({
     client: input.clientWidth,
     scroll: input.scrollWidth,

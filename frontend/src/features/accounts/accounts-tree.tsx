@@ -334,7 +334,11 @@ export const AccountsTree = ({
   const focusDeleteSuccessFallback = useCallback(() => {
     window.requestAnimationFrame(() => {
       const searchField = document.getElementById("accounts-search");
-      if (searchField instanceof HTMLElement && searchField.isConnected) {
+      if (
+        searchField instanceof HTMLElement &&
+        searchField.isConnected &&
+        searchField.getClientRects().length > 0
+      ) {
         focusWithoutTooltip(searchField, { preventScroll: true });
         return;
       }
@@ -496,12 +500,12 @@ export const AccountsTree = ({
       >
         <div
           ref={accountsTableScrollRef}
-          className="accounts-table-scroll min-h-0 flex-1 overflow-auto"
+          className="accounts-table-scroll roomy-shell:overflow-auto min-h-0 flex-1 overflow-visible"
           data-testid="accounts-table-scroll"
           tabIndex={-1}
         >
           <table className="accounts-table w-full table-fixed border-collapse text-sm">
-            <thead className="text-foreground sticky top-0 z-10 bg-[var(--table-header)]">
+            <thead className="text-foreground roomy-shell:sticky roomy-shell:top-0 roomy-shell:z-10 bg-[var(--table-header)]">
               <tr className="font-heading text-left text-xs font-semibold uppercase">
                 <th
                   scope="col"

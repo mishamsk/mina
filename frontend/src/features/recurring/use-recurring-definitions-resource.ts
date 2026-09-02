@@ -30,6 +30,17 @@ const definitionsLoadAttemptLimit = 3;
 let definitionsLoadGeneration = 0;
 let mountedRefresh: (() => Promise<boolean>) | undefined;
 
+const visibleRecurringSearchTarget = (): HTMLElement | null => {
+  const searchField = document.getElementById("recurring-search");
+  if (searchField?.getClientRects().length) {
+    return searchField;
+  }
+  const controlsTrigger = document.querySelector<HTMLElement>(
+    "[data-mobile-table-controls-trigger]",
+  );
+  return controlsTrigger?.getClientRects().length ? controlsTrigger : null;
+};
+
 const nextDefinitionsLoadGeneration = (): number => {
   definitionsLoadGeneration += 1;
   return definitionsLoadGeneration;
@@ -139,7 +150,7 @@ const loadRecurringDefinitions = async (
         if (focusedElement?.isConnected) {
           return;
         }
-        focusWithoutTooltip(document.getElementById("recurring-search"), {
+        focusWithoutTooltip(visibleRecurringSearchTarget(), {
           preventScroll: true,
         });
       });

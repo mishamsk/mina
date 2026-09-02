@@ -32,6 +32,11 @@ import type {
   Transaction,
 } from "@/api";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
+import { MobileTableControls } from "@/components/mobile-table-controls";
+import {
+  MobileTableEditPanel,
+  useOpenMobileTableEditPanel,
+} from "@/components/mobile-table-edit-panel";
 import { RowActions } from "@/components/row-actions";
 import { focusWithoutTooltip, Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
@@ -242,16 +247,16 @@ const LoadingRows = () => (
     {Array.from({ length: 6 }).map((_, index) => (
       <div
         key={index}
-        className="grid grid-cols-[5fr_10fr_31fr_13fr_15fr_7fr_14fr_5fr] gap-3 border-b border-[var(--hairline)] p-3 last:border-b-0"
+        className="transaction-loading-row grid grid-cols-[5fr_10fr_31fr_13fr_15fr_7fr_14fr_5fr] gap-3 border-b border-[var(--hairline)] p-3 last:border-b-0"
       >
-        <Skeleton className="h-6" />
-        <Skeleton className="h-6" />
-        <Skeleton className="h-6" />
-        <Skeleton className="h-6" />
-        <Skeleton className="h-6" />
-        <Skeleton className="h-6" />
-        <Skeleton className="h-6" />
-        <Skeleton className="h-6" />
+        <Skeleton className="transaction-loading-class h-6" />
+        <Skeleton className="transaction-loading-date h-6" />
+        <Skeleton className="transaction-loading-description h-6" />
+        <Skeleton className="transaction-loading-category h-6" />
+        <Skeleton className="transaction-loading-tags h-6" />
+        <Skeleton className="transaction-loading-member h-6" />
+        <Skeleton className="transaction-loading-amount h-6" />
+        <Skeleton className="transaction-loading-actions h-6" />
       </div>
     ))}
   </div>
@@ -570,6 +575,7 @@ export const TransactionBrowser = ({
   totalCount,
   transactions,
 }: TransactionBrowserProps) => {
+  const openMobileTableEditPanel = useOpenMobileTableEditPanel();
   const [deleteDialog, setDeleteDialog] = useState<{
     readonly opener: HTMLElement;
     readonly rowIndex: number;
@@ -1337,43 +1343,46 @@ export const TransactionBrowser = ({
   }, [dateJumpAnchor, page, transactions]);
 
   const editDockSurface = editMode ? (
-    <TransactionEditDock
-      activeEditor={activeEditDock}
-      accountReplaceBlocked={amountDraftRetained}
-      blocked={amountSaveBlocksDock || pendingDockTransactionIds.size > 0}
-      maps={maps}
-      onApply={applyEditDockUpdate}
-      onEditorChange={changeActiveEditDock}
-      onSetReconciliation={(value) =>
-        runDockMutation(selectedTransactions, () =>
-          onUpdateTransactionsEditRecordState(selectedTransactions, {
-            kind: "reconciliation",
-            value,
-          }),
-        )
-      }
-      onSetSettlement={(value) =>
-        runDockMutation(selectedTransactions, () =>
-          onUpdateTransactionsEditRecordState(selectedTransactions, {
-            kind: "settlement",
-            value,
-          }),
-        )
-      }
-      selectedCount={selectedCount}
-      selectedTransactions={selectedTransactions}
-      selectedRowIndex={selectedRowFocusIndex}
-      restoreFocusToRow={editDockOpenedFromRow}
-      skipSummary={skipSummaryByAction}
-    />
+    <MobileTableEditPanel>
+      <TransactionEditDock
+        activeEditor={activeEditDock}
+        accountReplaceBlocked={amountDraftRetained}
+        blocked={amountSaveBlocksDock || pendingDockTransactionIds.size > 0}
+        maps={maps}
+        onApply={applyEditDockUpdate}
+        onEditorChange={changeActiveEditDock}
+        onSetReconciliation={(value) =>
+          runDockMutation(selectedTransactions, () =>
+            onUpdateTransactionsEditRecordState(selectedTransactions, {
+              kind: "reconciliation",
+              value,
+            }),
+          )
+        }
+        onSetSettlement={(value) =>
+          runDockMutation(selectedTransactions, () =>
+            onUpdateTransactionsEditRecordState(selectedTransactions, {
+              kind: "settlement",
+              value,
+            }),
+          )
+        }
+        selectedCount={selectedCount}
+        selectedTransactions={selectedTransactions}
+        selectedRowIndex={selectedRowFocusIndex}
+        restoreFocusToRow={editDockOpenedFromRow}
+        skipSummary={skipSummaryByAction}
+      />
+    </MobileTableEditPanel>
   ) : null;
 
   if (loading && !transactions) {
     return (
       <div
         className={cn(
-          "grid h-full min-h-0 min-w-0 gap-3 overflow-x-auto",
-          editMode && "grid-cols-[minmax(23rem,1fr)_minmax(16rem,20rem)]",
+          "roomy-shell:h-full grid h-auto min-h-0 min-w-0 gap-3 overflow-x-auto",
+          editMode &&
+            "roomy-shell:grid-cols-[minmax(23rem,1fr)_minmax(16rem,20rem)]",
         )}
       >
         <div className="min-h-0 min-w-0">
@@ -1388,8 +1397,9 @@ export const TransactionBrowser = ({
     return (
       <div
         className={cn(
-          "grid h-full min-h-0 min-w-0 gap-3 overflow-x-auto",
-          editMode && "grid-cols-[minmax(23rem,1fr)_minmax(16rem,20rem)]",
+          "roomy-shell:h-full grid h-auto min-h-0 min-w-0 gap-3 overflow-x-auto",
+          editMode &&
+            "roomy-shell:grid-cols-[minmax(23rem,1fr)_minmax(16rem,20rem)]",
         )}
       >
         <div className="min-h-0 min-w-0">
@@ -1410,8 +1420,9 @@ export const TransactionBrowser = ({
       <div
         ref={rootRef}
         className={cn(
-          "grid h-full min-h-0 min-w-0 gap-3 overflow-x-auto",
-          editMode && "grid-cols-[minmax(23rem,1fr)_minmax(16rem,20rem)]",
+          "roomy-shell:h-full grid h-auto min-h-0 min-w-0 gap-3 overflow-x-auto",
+          editMode &&
+            "roomy-shell:grid-cols-[minmax(23rem,1fr)_minmax(16rem,20rem)]",
         )}
       >
         <div className="flex min-h-0 min-w-0 flex-col gap-3">
@@ -1451,7 +1462,10 @@ export const TransactionBrowser = ({
   return (
     <div
       ref={rootRef}
-      className={cn("flex min-h-0 flex-col gap-3", !preview && "h-full")}
+      className={cn(
+        "flex min-h-0 flex-col gap-3",
+        !preview && "roomy-shell:h-full h-auto",
+      )}
       aria-busy={loading ? "true" : undefined}
       data-transaction-browser="true"
       data-transaction-refresh-pending={
@@ -1462,8 +1476,9 @@ export const TransactionBrowser = ({
         className={cn(
           "grid min-h-0 min-w-0 gap-3",
           preview ? "overflow-visible" : "overflow-x-auto",
-          !preview && "flex-1",
-          editMode && "grid-cols-[minmax(23rem,1fr)_minmax(16rem,20rem)]",
+          !preview && "roomy-shell:flex-1",
+          editMode &&
+            "roomy-shell:grid-cols-[minmax(23rem,1fr)_minmax(16rem,20rem)]",
         )}
         data-testid="transaction-browser-layout"
       >
@@ -1479,7 +1494,9 @@ export const TransactionBrowser = ({
           <div
             className={cn(
               "transactions-table-scroll bg-card min-h-0 flex-1 border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]",
-              preview ? "overflow-visible" : "overflow-auto",
+              preview
+                ? "overflow-visible"
+                : "roomy-shell:overflow-auto overflow-visible",
             )}
             data-testid="transactions-table-scroll"
           >
@@ -1487,8 +1504,10 @@ export const TransactionBrowser = ({
               aria-multiselectable={editMode ? true : undefined}
               className={cn(
                 "transactions-table w-full table-fixed border-collapse text-sm",
-                editMode && "transactions-table--edit-mode min-w-[23rem]",
-                preview && "[&_.transactions-actions-column]:hidden",
+                editMode &&
+                  "transactions-table--edit-mode roomy-shell:min-w-[23rem]",
+                preview &&
+                  "transactions-table--preview [&_.transactions-actions-column]:hidden",
               )}
             >
               <colgroup>
@@ -1507,7 +1526,8 @@ export const TransactionBrowser = ({
               <thead
                 className={cn(
                   "bg-[var(--table-header)]",
-                  !preview && "sticky top-0 z-10",
+                  !preview &&
+                    "roomy-shell:sticky roomy-shell:top-0 roomy-shell:z-10",
                 )}
               >
                 <tr className="font-heading text-foreground border-b-2 border-[var(--border-ink)] text-left text-xs font-semibold uppercase">
@@ -1666,7 +1686,7 @@ export const TransactionBrowser = ({
                     <tr
                       key={transaction.transaction_id}
                       className={cn(
-                        "border-b border-[var(--hairline)] align-middle focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--ring)]",
+                        "compact-shell:scroll-mb-[calc(5.5rem+env(safe-area-inset-bottom))] border-b border-[var(--hairline)] align-middle focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--ring)]",
                         transactionIndex % 2 === 0
                           ? "bg-card"
                           : "bg-[var(--band)]",
@@ -1747,7 +1767,13 @@ export const TransactionBrowser = ({
                           event.preventDefault();
                           setSelectedRowFocusIndex(transactionIndex);
                           setEditDockOpenedFromRow(true);
-                          setActiveEditDock(editShortcut);
+                          if (openMobileTableEditPanel()) {
+                            window.requestAnimationFrame(() => {
+                              setActiveEditDock(editShortcut);
+                            });
+                          } else {
+                            setActiveEditDock(editShortcut);
+                          }
                           return;
                         }
 
@@ -1823,9 +1849,9 @@ export const TransactionBrowser = ({
                         </div>
                       </td>
                       <td className="transactions-description-column px-3 py-2">
-                        <div className="flex min-w-0 items-center gap-1">
+                        <div className="transaction-description-layout min-w-0 items-center gap-1 min-[40rem]:flex">
                           <div
-                            className="min-w-0 flex-1"
+                            className="transaction-description-text min-w-0 flex-1"
                             data-testid="transaction-description-text"
                           >
                             <Tooltip
@@ -1843,19 +1869,27 @@ export const TransactionBrowser = ({
                               </div>
                             </Tooltip>
                             {memo ? (
-                              <Tooltip label={memo} className="block min-w-0">
-                                <div
-                                  className="text-muted-foreground truncate text-xs"
-                                  data-testid="transaction-line-memo"
+                              <>
+                                <span
+                                  className="transaction-description-separator text-[var(--muted-foreground)] min-[40rem]:hidden"
+                                  aria-hidden="true"
                                 >
-                                  {memo}
-                                </div>
-                              </Tooltip>
+                                  ·
+                                </span>
+                                <Tooltip label={memo} className="block min-w-0">
+                                  <div
+                                    className="text-muted-foreground truncate text-xs"
+                                    data-testid="transaction-line-memo"
+                                  >
+                                    {memo}
+                                  </div>
+                                </Tooltip>
+                              </>
                             ) : null}
                           </div>
                           {displayStatus ? (
                             <div
-                              className="flex shrink-0 items-center gap-1 whitespace-nowrap"
+                              className="transaction-status-indicators flex shrink-0 items-center gap-1 whitespace-nowrap"
                               data-display-status={displayStatus}
                               data-testid="transaction-status-indicators"
                             >
@@ -2476,91 +2510,96 @@ export const TransactionBrowser = ({
           ) : null}
 
           {!preview ? (
-            <div
-              className="bg-card flex shrink-0 flex-col gap-3 border-2 border-[var(--border-ink)] p-3 shadow-[var(--shadow-pixel)] sm:flex-row sm:items-center sm:justify-between"
-              data-testid="transactions-pagination-footer"
-              tabIndex={-1}
-            >
-              <div className="flex items-center gap-2 text-sm">
-                <label htmlFor="transactions-page-size" className="font-medium">
-                  Rows
-                </label>
-                <Tooltip
-                  disabled={!amountDraftRetained}
-                  focusable={amountDraftRetained}
-                  label="Resolve or discard the inline amount conflict before changing pagination."
-                  redispatchEscape={false}
-                >
-                  <Select
-                    disabled={amountDraftRetained}
-                    value={String(pageSize)}
-                    onValueChange={(value) => {
-                      onPageSizeChange(Number(value));
-                    }}
+            <MobileTableControls order="pagination">
+              <div
+                className="bg-card flex shrink-0 flex-col gap-3 border-2 border-[var(--border-ink)] p-3 shadow-[var(--shadow-pixel)] sm:flex-row sm:items-center sm:justify-between"
+                data-testid="transactions-pagination-footer"
+                tabIndex={-1}
+              >
+                <div className="flex items-center gap-2 text-sm">
+                  <label
+                    htmlFor="transactions-page-size"
+                    className="font-medium"
                   >
-                    <SelectTrigger id="transactions-page-size" size="compact">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {transactionPageSizeOptions.map((option) => (
-                        <SelectItem key={option} value={String(option)}>
-                          {option}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </Tooltip>
-              </div>
-              <div className="flex items-center gap-3">
-                {loading ? (
-                  <span
-                    className="text-muted-foreground font-mono text-xs"
-                    data-testid="transactions-page-busy"
-                    role="status"
+                    Rows
+                  </label>
+                  <Tooltip
+                    disabled={!amountDraftRetained}
+                    focusable={amountDraftRetained}
+                    label="Resolve or discard the inline amount conflict before changing pagination."
+                    redispatchEscape={false}
                   >
-                    Loading
+                    <Select
+                      disabled={amountDraftRetained}
+                      value={String(pageSize)}
+                      onValueChange={(value) => {
+                        onPageSizeChange(Number(value));
+                      }}
+                    >
+                      <SelectTrigger id="transactions-page-size" size="compact">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {transactionPageSizeOptions.map((option) => (
+                          <SelectItem key={option} value={String(option)}>
+                            {option}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Tooltip>
+                </div>
+                <div className="flex items-center gap-3">
+                  {loading ? (
+                    <span
+                      className="text-muted-foreground font-mono text-xs"
+                      data-testid="transactions-page-busy"
+                      role="status"
+                    >
+                      Loading
+                    </span>
+                  ) : null}
+                  <span className="text-muted-foreground font-mono text-sm">
+                    Page {page}
+                    {totalCount === undefined
+                      ? ""
+                      : ` of ${Math.max(1, Math.ceil(totalCount / pageSize))}`}
                   </span>
-                ) : null}
-                <span className="text-muted-foreground font-mono text-sm">
-                  Page {page}
-                  {totalCount === undefined
-                    ? ""
-                    : ` of ${Math.max(1, Math.ceil(totalCount / pageSize))}`}
-                </span>
-                <Tooltip
-                  disabled={!amountDraftRetained}
-                  focusable={amountDraftRetained}
-                  label="Resolve or discard the inline amount conflict before changing pagination."
-                  redispatchEscape={false}
-                >
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={onPreviousPage}
-                    disabled={amountDraftRetained || page <= 1}
+                  <Tooltip
+                    disabled={!amountDraftRetained}
+                    focusable={amountDraftRetained}
+                    label="Resolve or discard the inline amount conflict before changing pagination."
+                    redispatchEscape={false}
                   >
-                    Previous
-                  </Button>
-                </Tooltip>
-                <Tooltip
-                  disabled={!amountDraftRetained}
-                  focusable={amountDraftRetained}
-                  label="Resolve or discard the inline amount conflict before changing pagination."
-                  redispatchEscape={false}
-                >
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={onNextPage}
-                    disabled={amountDraftRetained || !hasNextPage}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={onPreviousPage}
+                      disabled={amountDraftRetained || page <= 1}
+                    >
+                      Previous
+                    </Button>
+                  </Tooltip>
+                  <Tooltip
+                    disabled={!amountDraftRetained}
+                    focusable={amountDraftRetained}
+                    label="Resolve or discard the inline amount conflict before changing pagination."
+                    redispatchEscape={false}
                   >
-                    Next
-                  </Button>
-                </Tooltip>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={onNextPage}
+                      disabled={amountDraftRetained || !hasNextPage}
+                    >
+                      Next
+                    </Button>
+                  </Tooltip>
+                </div>
               </div>
-            </div>
+            </MobileTableControls>
           ) : null}
         </div>
         {editDockSurface}

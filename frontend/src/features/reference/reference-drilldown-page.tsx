@@ -9,6 +9,7 @@ import {
   type JournalRecord,
   type Transaction,
 } from "@/api";
+import { MobileTableControls } from "@/components/mobile-table-controls";
 import { Toast, toastDurationMs } from "@/components/toast";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -41,7 +42,10 @@ export interface ReferenceDrilldownPageProps {
 }
 
 export const ReferenceDrilldownSkeleton = () => (
-  <div className="flex h-full min-h-0 flex-col" aria-hidden="true">
+  <div
+    className="roomy-shell:h-full flex h-auto min-h-0 flex-col"
+    aria-hidden="true"
+  >
     <div className="min-h-0 flex-1">
       <div className="bg-card border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]">
         {Array.from({ length: 6 }).map((_, index) => (
@@ -328,43 +332,45 @@ export const ReferenceDrilldownPage = ({
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-6">
-      <TransactionBrowserToolbar
-        amountDisplayMode={browser.amountDisplayMode}
-        amountSavePending={browser.pendingAmountSave}
-        editMode={browser.editMode}
-        dateJumpEnabled={browser.dateJumpEnabled}
-        dateJumpLoading={browser.dateJumpLoading}
-        dateJumpValue={browser.dateJumpValue}
-        onDateJumpToday={browser.jumpToCurrentDate}
-        filterControls={
-          <TransactionFilterControls
-            filters={pageFilters}
-            hiddenDimensions={["member"]}
-            lookups={browser.lookups.snapshot}
-            onChange={setTransactionFilters}
-          />
-        }
-        hasActiveFilterChips={hasActiveTransactionFilterChips(pageFilters)}
-        filters={pageFilters}
-        idPrefix="reference-transactions"
-        onClearFilterChips={clearFilterChips}
-        onClearSelection={browser.clearTransactionSelection}
-        onDateJumpNext={browser.jumpToNextDate}
-        onDateJumpPrevious={browser.jumpToPreviousDate}
-        onDateJumpValueChange={browser.changeDateJumpValue}
-        onSelectPage={browser.selectPageTransactions}
-        onSearchChange={setSearchFilter}
-        onSetEditMode={browser.setEditMode}
-        onSortChange={browser.setSort}
-        onSortDirectionChange={browser.setSortDirection}
-        onToggleAmountDisplayMode={browser.toggleAmountDisplayMode}
-        onTransactionClassesChange={setTransactionClassFilters}
-        selectableCount={browser.selectableTransactionCount}
-        selectedCount={browser.selectedTransactionIds.size}
-        sort={browser.sort}
-        sortDirection={browser.sortDirection}
-      />
+    <div className="roomy-shell:h-full flex h-auto min-h-0 flex-col gap-6">
+      <MobileTableControls>
+        <TransactionBrowserToolbar
+          amountDisplayMode={browser.amountDisplayMode}
+          amountSavePending={browser.pendingAmountSave}
+          editMode={browser.editMode}
+          dateJumpEnabled={browser.dateJumpEnabled}
+          dateJumpLoading={browser.dateJumpLoading}
+          dateJumpValue={browser.dateJumpValue}
+          onDateJumpToday={browser.jumpToCurrentDate}
+          filterControls={
+            <TransactionFilterControls
+              filters={pageFilters}
+              hiddenDimensions={["member"]}
+              lookups={browser.lookups.snapshot}
+              onChange={setTransactionFilters}
+            />
+          }
+          hasActiveFilterChips={hasActiveTransactionFilterChips(pageFilters)}
+          filters={pageFilters}
+          idPrefix="reference-transactions"
+          onClearFilterChips={clearFilterChips}
+          onClearSelection={browser.clearTransactionSelection}
+          onDateJumpNext={browser.jumpToNextDate}
+          onDateJumpPrevious={browser.jumpToPreviousDate}
+          onDateJumpValueChange={browser.changeDateJumpValue}
+          onSelectPage={browser.selectPageTransactions}
+          onSearchChange={setSearchFilter}
+          onSetEditMode={browser.setEditMode}
+          onSortChange={browser.setSort}
+          onSortDirectionChange={browser.setSortDirection}
+          onToggleAmountDisplayMode={browser.toggleAmountDisplayMode}
+          onTransactionClassesChange={setTransactionClassFilters}
+          selectableCount={browser.selectableTransactionCount}
+          selectedCount={browser.selectedTransactionIds.size}
+          sort={browser.sort}
+          sortDirection={browser.sortDirection}
+        />
+      </MobileTableControls>
       <div
         className="min-h-0 flex-1"
         data-transaction-detail-restore-target

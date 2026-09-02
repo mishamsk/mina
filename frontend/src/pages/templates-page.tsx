@@ -55,13 +55,19 @@ export const TemplatesPage = () => {
     const opener = restructureOpenerRef.current;
     restructureOpenerRef.current = null;
     const searchField = document.getElementById("templates-search");
+    const controlsTrigger = document.querySelector<HTMLElement>(
+      "[data-mobile-table-controls-trigger]",
+    );
     window.requestAnimationFrame(() => {
       focusWithoutTooltip(
-        opener?.isConnected
+        opener?.isConnected && opener.getClientRects().length
           ? opener
-          : searchField instanceof HTMLElement
+          : searchField instanceof HTMLElement &&
+              searchField.getClientRects().length
             ? searchField
-            : null,
+            : controlsTrigger?.getClientRects().length
+              ? controlsTrigger
+              : null,
         { preventScroll: true },
       );
     });
@@ -98,7 +104,7 @@ export const TemplatesPage = () => {
 
   return (
     <section
-      className="flex h-[calc(100svh-2.5rem)] min-h-0 flex-col gap-6"
+      className="roomy-shell:h-[calc(100svh-2.5rem)] flex min-h-0 flex-col gap-6"
       aria-labelledby="templates-title"
     >
       <PageHeader

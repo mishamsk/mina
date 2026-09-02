@@ -17,6 +17,7 @@ import {
   formatAuditJSONSource,
   listApiAuditEntriesForDisplay,
 } from "@/api";
+import { MobileTableControls } from "@/components/mobile-table-controls";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -365,38 +366,43 @@ export const StatusAuditLog = ({
   };
 
   return (
-    <Card className="min-h-0" data-testid="status-audit-log">
-      <CardHeader>
-        <div className="grid gap-3 md:grid-cols-[auto_auto_minmax(14rem,1fr)]">
-          <FilterSelect
-            label="Method"
-            value={method ?? "all"}
-            onValueChange={(value) =>
-              updateFilter("auditMethod", value === "all" ? undefined : value)
-            }
-            options={auditMethods}
-          />
-          <FilterSelect
-            label="Surface"
-            value={surface ?? "all"}
-            onValueChange={(value) =>
-              updateFilter("auditSurface", value === "all" ? undefined : value)
-            }
-            options={auditSurfaces}
-          />
-          <OperationFilterForm
-            operationId={operationId}
-            onApply={(value) => updateFilter("auditOperation", value)}
-          />
-        </div>
-      </CardHeader>
+    <Card className="compact-shell:py-0 min-h-0" data-testid="status-audit-log">
+      <MobileTableControls>
+        <CardHeader>
+          <div className="roomy-shell:grid-cols-[auto_auto_minmax(14rem,1fr)] grid gap-3">
+            <FilterSelect
+              label="Method"
+              value={method ?? "all"}
+              onValueChange={(value) =>
+                updateFilter("auditMethod", value === "all" ? undefined : value)
+              }
+              options={auditMethods}
+            />
+            <FilterSelect
+              label="Surface"
+              value={surface ?? "all"}
+              onValueChange={(value) =>
+                updateFilter(
+                  "auditSurface",
+                  value === "all" ? undefined : value,
+                )
+              }
+              options={auditSurfaces}
+            />
+            <OperationFilterForm
+              operationId={operationId}
+              onApply={(value) => updateFilter("auditOperation", value)}
+            />
+          </div>
+        </CardHeader>
+      </MobileTableControls>
 
-      <div className="max-h-[calc(100vh-24rem)] min-h-64 overflow-auto border-y-2 border-[var(--border-ink)]">
+      <div className="roomy-shell:max-h-[calc(100vh-24rem)] roomy-shell:min-h-64 roomy-shell:overflow-auto overflow-visible border-y-2 border-[var(--border-ink)]">
         <table
           className="w-full max-w-full table-fixed text-left text-sm"
           data-testid="audit-log-table"
         >
-          <thead className="font-heading sticky top-0 z-10 bg-[var(--table-header)] text-xs uppercase">
+          <thead className="font-heading roomy-shell:sticky roomy-shell:top-0 roomy-shell:z-10 bg-[var(--table-header)] text-xs uppercase">
             <tr>
               <th className="w-[34%] px-3 py-2 md:w-[23%]">Timestamp</th>
               <th className="hidden w-[11%] px-3 py-2 md:table-cell">
@@ -484,72 +490,74 @@ export const StatusAuditLog = ({
           <AuditError message={auditEntries.errorMessage} />
         </CardContent>
       ) : null}
-      <CardContent className="flex flex-col gap-3 pt-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2 text-sm">
-          <label htmlFor="audit-page-size" className="font-medium">
-            Rows
-          </label>
-          <Select
-            value={String(pageSize)}
-            onValueChange={(value) => setPageSize(Number(value))}
-          >
-            <SelectTrigger
-              id="audit-page-size"
-              size="compact"
-              aria-label="Audit rows per page"
+      <MobileTableControls order="pagination">
+        <CardContent className="flex flex-col gap-3 pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2 text-sm">
+            <label htmlFor="audit-page-size" className="font-medium">
+              Rows
+            </label>
+            <Select
+              value={String(pageSize)}
+              onValueChange={(value) => setPageSize(Number(value))}
             >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {auditPageSizes.map((option) => (
-                <SelectItem key={option} value={String(option)}>
-                  {option}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex items-center gap-3">
-          {auditEntries.loading ? (
-            <span
-              className="text-muted-foreground font-mono text-xs"
-              role="status"
-            >
-              Loading
+              <SelectTrigger
+                id="audit-page-size"
+                size="compact"
+                aria-label="Audit rows per page"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {auditPageSizes.map((option) => (
+                  <SelectItem key={option} value={String(option)}>
+                    {option}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center gap-3">
+            {auditEntries.loading ? (
+              <span
+                className="text-muted-foreground font-mono text-xs"
+                role="status"
+              >
+                Loading
+              </span>
+            ) : null}
+            <span className="text-muted-foreground font-mono text-sm">
+              Page {page} of {currentPageCount}
             </span>
-          ) : null}
-          <span className="text-muted-foreground font-mono text-sm">
-            Page {page} of {currentPageCount}
-          </span>
-          <Button
-            ref={previousPageRef}
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={page <= 1}
-            onClick={() =>
-              setPage(page - 1, page - 1 <= 1 ? "next" : "previous")
-            }
-          >
-            Previous
-          </Button>
-          <Button
-            ref={nextPageRef}
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={page >= currentPageCount}
-            onClick={() =>
-              setPage(
-                page + 1,
-                page + 1 >= currentPageCount ? "previous" : "next",
-              )
-            }
-          >
-            Next
-          </Button>
-        </div>
-      </CardContent>
+            <Button
+              ref={previousPageRef}
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={page <= 1}
+              onClick={() =>
+                setPage(page - 1, page - 1 <= 1 ? "next" : "previous")
+              }
+            >
+              Previous
+            </Button>
+            <Button
+              ref={nextPageRef}
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={page >= currentPageCount}
+              onClick={() =>
+                setPage(
+                  page + 1,
+                  page + 1 >= currentPageCount ? "previous" : "next",
+                )
+              }
+            >
+              Next
+            </Button>
+          </div>
+        </CardContent>
+      </MobileTableControls>
 
       {selectedEntry ? (
         <CardContent ref={detailRef} tabIndex={-1} className="scroll-mt-4 pt-0">

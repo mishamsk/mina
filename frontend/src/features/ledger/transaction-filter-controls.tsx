@@ -1945,6 +1945,7 @@ export const TransactionFilterControls = ({
                 </PopoverTrigger>
               </AppTooltip>
               <PopoverContent
+                compactBack
                 className="max-w-[calc(100vw-1rem)]"
                 onOpenAutoFocus={(event) => {
                   if (!activeEditor?.dimension) return;

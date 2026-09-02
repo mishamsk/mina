@@ -14,8 +14,9 @@
 - Preserve `[data-slot='confirmation-dialog-content']` and `[data-page-help-content]`; overlays use them as outside-pointer dismissal exclusions.
 - Foldable `RowActions` keeps designated low-frequency buttons in persistent overflow and switches that menu to the complete action set when the direct cluster folds for fit, including while the menu is open; `alwaysOverflow` requires `foldable`, and if unfolding removes the focused action, focus moves to the first remaining action after render.
 - Closing `RowActions` restores its overflow trigger only while focus remains in the closing menu; a selected action that moved focus to another surface retains it.
+- `MobileTableControls` keeps each control source mounted while moving it between its roomy inline slot and the app-shell compact Controls sheet, exposes a source-aware trigger for the shared bottom toolbar with an explanatory tooltip when unavailable, closes when that trigger leaves the rendered layout, and hands focus between the trigger and visible inline controls whenever the shell mode changes. Compact nested popovers and selects overlay without dismissing their parent Controls or Edit sheet, retain the parent combobox and its draft, reveal the parent on dismissal, and keep iOS form text at 16px to avoid focus zoom. The transaction Edit dock uses the same registered-source contract for its conditional compact toolbar action, closes its compact sheet when returning to the roomy shell, and restores the dock in layout without losing focus. Global toasts clear the compact toolbar.
 
 ## Boundaries
 
-- Owns: shared presentation and app-specific wrappers around `components/ui` primitives.
+- Owns: shared presentation, responsive full-page table frames and controls, and app-specific wrappers around `components/ui` primitives.
 - Does not own: route behavior, Mina-specific workflows, API access, URL state, or browser persistence.

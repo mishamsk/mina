@@ -103,9 +103,14 @@ export const TagsPageContent = ({
       setDeleteTarget(undefined);
       window.requestAnimationFrame(() => {
         const searchField = document.getElementById("tags-search");
-        if (searchField instanceof HTMLElement && searchField.isConnected) {
-          focusWithoutTooltip(searchField, { preventScroll: true });
-        }
+        const focusTarget =
+          searchField instanceof HTMLElement &&
+          searchField.getClientRects().length > 0
+            ? searchField
+            : document.querySelector<HTMLElement>(
+                "[data-mobile-table-controls-trigger]",
+              );
+        focusWithoutTooltip(focusTarget, { preventScroll: true });
       });
       return;
     }

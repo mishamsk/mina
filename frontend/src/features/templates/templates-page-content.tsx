@@ -67,6 +67,19 @@ interface FilteredTemplatesState {
   readonly templates: readonly TransactionTemplate[] | undefined;
 }
 
+const visibleTemplatesFocusTarget = (
+  fallback: HTMLElement | null,
+): HTMLElement | null => {
+  const searchField = document.getElementById("templates-search");
+  if (searchField?.getClientRects().length) {
+    return searchField;
+  }
+  const controlsTrigger = document.querySelector<HTMLElement>(
+    "[data-mobile-table-controls-trigger]",
+  );
+  return controlsTrigger?.getClientRects().length ? controlsTrigger : fallback;
+};
+
 const templateGroups = (
   templates: readonly TransactionTemplate[],
 ): readonly TemplateTreeGroup[] => {
@@ -175,11 +188,8 @@ export const TemplatesPageContent = ({
         ) {
           return;
         }
-        const searchField = document.getElementById("templates-search");
         focusWithoutTooltip(
-          searchField instanceof HTMLElement
-            ? searchField
-            : focusFallbackRef.current,
+          visibleTemplatesFocusTarget(focusFallbackRef.current),
           { preventScroll: true },
         );
       });
@@ -214,7 +224,9 @@ export const TemplatesPageContent = ({
   const restoreFocus = (opener: HTMLElement | undefined) => {
     window.requestAnimationFrame(() => {
       focusWithoutTooltip(
-        opener?.isConnected ? opener : focusFallbackRef.current,
+        opener?.isConnected && opener.getClientRects().length
+          ? opener
+          : visibleTemplatesFocusTarget(focusFallbackRef.current),
         { preventScroll: true },
       );
     });
@@ -327,13 +339,9 @@ export const TemplatesPageContent = ({
       ? undefined
       : templatesResource.errorMessage;
   const retryTemplates = () => {
-    const searchField = document.getElementById("templates-search");
-    focusWithoutTooltip(
-      searchField instanceof HTMLElement
-        ? searchField
-        : focusFallbackRef.current,
-      { preventScroll: true },
-    );
+    focusWithoutTooltip(visibleTemplatesFocusTarget(focusFallbackRef.current), {
+      preventScroll: true,
+    });
     if (normalizedSearch) {
       setFilteredRetryVersion((current) => current + 1);
       return;

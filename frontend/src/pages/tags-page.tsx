@@ -161,7 +161,7 @@ export const TagsPage = () => {
 
   return (
     <section
-      className="flex h-[calc(100svh-2.5rem)] min-h-0 flex-col gap-6"
+      className="roomy-shell:h-[calc(100svh-2.5rem)] flex min-h-0 flex-col gap-6"
       aria-labelledby="tags-title"
     >
       <PageHeader

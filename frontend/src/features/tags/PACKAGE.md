@@ -12,7 +12,7 @@
 - FQN is editable only at creation; move or rename uses the shared hierarchy workflow so a whole subtree moves together.
 - The editor initializes from the stored display-label override and sends blank as null so the backend restores the FQN-derived fallback.
 - Use the API `deletable` signal for delete affordances; dependency rules remain backend-owned.
-- List-delete dismissal returns focus to its opener, while successful list deletion moves focus to the search field; the side-panel confirmation restores its delete control.
+- List-delete dismissal returns focus to its opener, while successful list deletion moves focus to the visible search field or compact Controls trigger; the side-panel confirmation restores its delete control.
 
 ## Boundaries
 

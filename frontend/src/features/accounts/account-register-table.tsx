@@ -2,6 +2,7 @@ import { Reload } from "pixelarticons/react";
 import { type KeyboardEvent, useRef } from "react";
 
 import type { JournalRecord } from "@/api";
+import { MobileTableControls } from "@/components/mobile-table-controls";
 import { Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import {
@@ -181,7 +182,10 @@ export const AccountRegisterTable = ({
 
   if (loading && !records) {
     return (
-      <div ref={rootRef} className="flex h-full min-h-0 flex-col gap-3">
+      <div
+        ref={rootRef}
+        className="roomy-shell:h-full flex h-auto min-h-0 flex-col gap-3"
+      >
         <AccountRegisterSkeleton
           showAccount={showAccount}
           showRemainingCredit={showRemainingCredit}
@@ -224,7 +228,10 @@ export const AccountRegisterTable = ({
 
   if (!records || records.length === 0) {
     return (
-      <div ref={rootRef} className="flex h-full min-h-0 flex-col gap-3">
+      <div
+        ref={rootRef}
+        className="roomy-shell:h-full flex h-auto min-h-0 flex-col gap-3"
+      >
         <div className="bg-card flex flex-col items-start gap-3 border-2 border-[var(--border-ink)] p-6 shadow-[var(--shadow-pixel)]">
           <div className="space-y-1">
             <p className="font-heading text-base font-semibold uppercase">
@@ -243,11 +250,11 @@ export const AccountRegisterTable = ({
   return (
     <div
       ref={rootRef}
-      className="flex h-full min-h-0 flex-col gap-3"
+      className="roomy-shell:h-full flex h-auto min-h-0 flex-col gap-3"
       aria-busy={loading ? "true" : undefined}
     >
       <div
-        className="account-register-table-scroll bg-card min-h-0 flex-1 overflow-x-hidden overflow-y-auto border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]"
+        className="account-register-table-scroll bg-card roomy-shell:overflow-x-hidden roomy-shell:overflow-y-auto min-h-0 flex-1 overflow-x-clip overflow-y-visible border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]"
         data-testid="account-register-table-scroll"
       >
         {lookupErrorMessage ? (
@@ -302,7 +309,7 @@ export const AccountRegisterTable = ({
               <col className="account-register-remaining-column" />
             ) : null}
           </colgroup>
-          <thead className="sticky top-0 z-10 bg-[var(--table-header)]">
+          <thead className="roomy-shell:sticky roomy-shell:top-0 roomy-shell:z-10 bg-[var(--table-header)]">
             <tr className="font-heading text-foreground border-b-2 border-[var(--border-ink)] text-left text-xs font-semibold uppercase">
               <th className="account-register-date-column px-3 py-2">Date</th>
               {showAccount ? (
@@ -400,7 +407,7 @@ export const AccountRegisterTable = ({
                   data-transaction-id={record.transaction_id}
                   data-testid="account-register-row"
                   className={cn(
-                    "border-b border-[var(--hairline)] align-middle focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--ring)]",
+                    "compact-shell:scroll-mb-[calc(5.5rem+env(safe-area-inset-bottom))] border-b border-[var(--hairline)] align-middle focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--ring)]",
                     index % 2 === 0 ? "bg-card" : "bg-[var(--band)]",
                     "cursor-pointer hover:bg-[color-mix(in_srgb,var(--band),var(--table-header)_28%)]",
                     inactive && "text-muted-foreground line-through",
@@ -573,65 +580,67 @@ export const AccountRegisterTable = ({
         </table>
       </div>
 
-      <div
-        className="bg-card flex shrink-0 flex-col gap-3 border-2 border-[var(--border-ink)] p-3 shadow-[var(--shadow-pixel)] sm:flex-row sm:items-center sm:justify-between"
-        data-testid="account-register-pagination-footer"
-      >
-        <div className="flex items-center gap-2 text-sm">
-          <label htmlFor="account-register-page-size" className="font-medium">
-            Rows
-          </label>
-          <Select
-            value={String(pageSize)}
-            onValueChange={(value) => {
-              onPageSizeChange(Number(value));
-            }}
-          >
-            <SelectTrigger id="account-register-page-size" size="compact">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {pageSizeOptions.map((option) => (
-                <SelectItem key={option} value={String(option)}>
-                  {option}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex items-center gap-3">
-          {loading ? (
-            <span
-              className="text-muted-foreground font-mono text-xs"
-              data-testid="account-register-page-busy"
-              role="status"
+      <MobileTableControls order="pagination">
+        <div
+          className="bg-card flex shrink-0 flex-col gap-3 border-2 border-[var(--border-ink)] p-3 shadow-[var(--shadow-pixel)] sm:flex-row sm:items-center sm:justify-between"
+          data-testid="account-register-pagination-footer"
+        >
+          <div className="flex items-center gap-2 text-sm">
+            <label htmlFor="account-register-page-size" className="font-medium">
+              Rows
+            </label>
+            <Select
+              value={String(pageSize)}
+              onValueChange={(value) => {
+                onPageSizeChange(Number(value));
+              }}
             >
-              Loading
+              <SelectTrigger id="account-register-page-size" size="compact">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {pageSizeOptions.map((option) => (
+                  <SelectItem key={option} value={String(option)}>
+                    {option}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center gap-3">
+            {loading ? (
+              <span
+                className="text-muted-foreground font-mono text-xs"
+                data-testid="account-register-page-busy"
+                role="status"
+              >
+                Loading
+              </span>
+            ) : null}
+            <span className="text-muted-foreground font-mono text-sm">
+              Page {page} of {pageCount(totalCount, pageSize)}
             </span>
-          ) : null}
-          <span className="text-muted-foreground font-mono text-sm">
-            Page {page} of {pageCount(totalCount, pageSize)}
-          </span>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={onPreviousPage}
-            disabled={page <= 1}
-          >
-            Previous
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={onNextPage}
-            disabled={page >= pageCount(totalCount, pageSize)}
-          >
-            Next
-          </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onPreviousPage}
+              disabled={page <= 1}
+            >
+              Previous
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onNextPage}
+              disabled={page >= pageCount(totalCount, pageSize)}
+            >
+              Next
+            </Button>
+          </div>
         </div>
-      </div>
+      </MobileTableControls>
     </div>
   );
 };

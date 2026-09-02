@@ -28,7 +28,9 @@ interface TransactionFixture {
 
 const openPalette = async (page: Page) => {
   await expect(
-    page.getByRole("button", { name: "Command palette" }),
+    page.locator(
+      'button[aria-label="Command palette"]:visible, button[aria-label="Navigation"]:visible',
+    ),
   ).toBeVisible();
   await page.keyboard.press("Control+K");
   await expect(
@@ -402,7 +404,7 @@ test("command palette transaction search renders results and opens off-page deta
   });
 
   await page.goto("/transactions?page=1&pageSize=25");
-  await expect(page.getByText("Description")).toBeVisible();
+  await expect(page.getByTestId("transactions-table-scroll")).toBeVisible();
   await expect(
     page.getByTestId("transactions-table-scroll").getByText(memo),
   ).toHaveCount(0);

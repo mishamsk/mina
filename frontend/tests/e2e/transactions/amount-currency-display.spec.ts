@@ -335,6 +335,7 @@ test("transaction tables switch native and USD while report previews stay native
       .toBe(true);
     await expect(amountChipsFitCell(complexRow)).resolves.toBe(true);
   }
+  await page.setViewportSize({ width: 700, height: 760 });
   await expectCollapsedRowActionsKeepAmountVisible(complexRow);
 
   await page.setViewportSize({ width: 390, height: 760 });
@@ -372,6 +373,7 @@ test("transaction tables switch native and USD while report previews stay native
 
   await page.setViewportSize({ width: 1024, height: 760 });
 
+  await page.getByRole("button", { name: "Table controls" }).click();
   await page.getByRole("button", { name: "Edit mode" }).click();
   await expect(toggle).toHaveCount(0);
   const cryptoAmountInput = page.getByTestId(
@@ -417,6 +419,8 @@ test("transaction tables switch native and USD while report previews stay native
   await expect(pair.getByTestId("usd-amount-unavailable-chip")).toHaveCount(0);
   await page.getByRole("button", { name: "Close transaction detail" }).click();
 
+  await page.getByRole("button", { name: "Table controls" }).click();
+  await expect(toggle).toBeVisible();
   await toggle.press("Space");
   await expect(toggle).toHaveAttribute("aria-pressed", "false");
   expect(transactionListRequests).toBe(requestsBeforeToggle);
@@ -435,6 +439,7 @@ test("transaction tables switch native and USD while report previews stay native
       .getByTestId("amount-chip"),
   ).toContainText("-30.00 €");
 
+  await page.setViewportSize({ width: 1024, height: 900 });
   const registerDetail = await openAccountTransactionDetail(
     page,
     fixture.complexFunding,

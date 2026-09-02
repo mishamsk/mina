@@ -390,8 +390,9 @@ export const TransactionBrowserToolbar = ({
                 </PopoverTrigger>
               </AppTooltip>
               <PopoverContent
+                compactBack
                 aria-label="Transaction classes"
-                className="w-56 space-y-1 p-2"
+                className="compact-shell:p-3 w-56 space-y-1 p-2"
                 onCloseAutoFocus={(event) => {
                   event.preventDefault();
                   focusWithoutTooltip(classTriggerRef.current);
@@ -467,6 +468,7 @@ export const TransactionBrowserToolbar = ({
                 </PopoverTrigger>
               </AppTooltip>
               <PopoverContent
+                compactBack
                 aria-label="Sort transactions"
                 className="w-60 space-y-3"
                 align="end"

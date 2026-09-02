@@ -355,12 +355,12 @@ export const ReferenceTree = <
       data-testid={referenceTableFrameTestId}
     >
       <div
-        className="reference-table-scroll min-h-0 flex-1 overflow-auto"
+        className="reference-table-scroll roomy-shell:overflow-auto min-h-0 flex-1 overflow-visible"
         data-testid="reference-table-scroll"
         tabIndex={-1}
       >
         <table className="reference-table w-full table-fixed border-collapse text-sm">
-          <thead className="text-foreground sticky top-0 z-10 bg-[var(--table-header)]">
+          <thead className="text-foreground roomy-shell:sticky roomy-shell:top-0 roomy-shell:z-10 bg-[var(--table-header)]">
             <tr className="font-heading text-left text-xs font-semibold uppercase">
               <th
                 scope="col"

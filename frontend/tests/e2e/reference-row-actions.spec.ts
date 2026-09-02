@@ -260,7 +260,12 @@ test("reference row actions fold only when their action cell cannot fit them, in
   for (const [index, target] of targets.entries()) {
     const fqn = `zzE2EFold${index}:${unique}`;
     await page.goto(target.path);
+    const controlsTrigger = page.getByRole("button", {
+      name: "Table controls",
+    });
+    await controlsTrigger.click();
     await page.getByLabel("Search").fill(fqn);
+    await page.getByRole("button", { name: "Close table controls" }).click();
     const row = page
       .getByTestId(target.rowTestId)
       .filter({ hasText: fqn })

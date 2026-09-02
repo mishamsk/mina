@@ -323,7 +323,10 @@ export const DefinitionEditorPanel = ({
       const openModal = document.querySelector<HTMLElement>(
         "[role='alertdialog'], [role='dialog'][aria-modal='true']",
       );
-      if (openModal) {
+      const openCompactToolbarLayer = document.querySelector<HTMLElement>(
+        "[data-mobile-parent-sheet][data-state='open'], [data-mobile-controls-layer][data-state='open']",
+      );
+      if (openModal || openCompactToolbarLayer) {
         return;
       }
       event.preventDefault();
@@ -576,7 +579,7 @@ export const DefinitionEditorPanel = ({
   return (
     <aside
       ref={panelRef}
-      className="bg-card fixed top-0 right-0 z-50 flex h-svh w-[min(44rem,calc(100vw-1rem))] flex-col border-l-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]"
+      className="bg-card compact-shell:bottom-[calc(4.75rem+env(safe-area-inset-bottom))] compact-shell:h-auto fixed top-0 right-0 z-50 flex h-svh w-[min(44rem,calc(100vw-1rem))] flex-col border-l-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]"
       data-recurring-definition-editor
       aria-label={
         definition ? "Edit recurring definition" : "New recurring definition"

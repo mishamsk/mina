@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 interface TransactionSearchInputProps {
   readonly id: string;
@@ -13,14 +13,27 @@ export const TransactionSearchInput = ({
 }: TransactionSearchInputProps) => {
   const [draftState, setDraftState] = useState({ draft: value, value });
   const draft = draftState.value === value ? draftState.draft : value;
+  const pendingSearchRef = useRef<string | null>(null);
+  const routePathnameRef = useRef(window.location.pathname);
+  const flushPendingSearch = useEffectEvent(() => {
+    if (
+      pendingSearchRef.current !== null &&
+      window.location.pathname === routePathnameRef.current
+    ) {
+      onSearchChange(pendingSearchRef.current);
+    }
+  });
 
   useEffect(() => {
     const normalizedSearch = draft.trim();
     if (normalizedSearch === value) {
+      pendingSearchRef.current = null;
       return;
     }
 
+    pendingSearchRef.current = normalizedSearch;
     const timeoutId = window.setTimeout(() => {
+      pendingSearchRef.current = null;
       onSearchChange(normalizedSearch);
     }, 300);
 
@@ -28,6 +41,8 @@ export const TransactionSearchInput = ({
       window.clearTimeout(timeoutId);
     };
   }, [draft, onSearchChange, value]);
+
+  useEffect(() => () => flushPendingSearch(), []);
 
   return (
     <input

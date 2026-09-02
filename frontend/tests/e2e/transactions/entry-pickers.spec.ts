@@ -709,6 +709,7 @@ test("entry category picker completes hierarchy segments and preserves full-path
   await expect(categoryPicker).not.toBeFocused();
   await expect(categoryPicker).toHaveValue("Pantry Pick");
   await expect(categoryPicker).toHaveAttribute("aria-expanded", "false");
+  await spendPanel.getByLabel("Memo").focus();
   await page.mouse.move(0, 0);
   await categoryPicker.hover();
   await expect(page.getByRole("tooltip")).toHaveText(

@@ -58,6 +58,10 @@ interface EntryModalProps {
 
 const listRestoreSelector = "[data-transaction-detail-restore-target]";
 const appShellRestoreSelector = "[data-entry-modal-restore-target]";
+const visibleRestoreTarget = (selector: string): HTMLElement | undefined =>
+  Array.from(document.querySelectorAll<HTMLElement>(selector)).find(
+    (element) => element.getClientRects().length > 0,
+  );
 const hasMatchingDatalistOption = (input: HTMLInputElement): boolean => {
   const query = input.value.trim().toLocaleLowerCase();
   return Array.from(input.list?.options ?? []).some((option) =>
@@ -281,8 +285,8 @@ export const EntryModal = ({
             }
             setDraftCleared(false);
             const fallback =
-              document.querySelector<HTMLElement>(listRestoreSelector) ??
-              document.querySelector<HTMLElement>(appShellRestoreSelector);
+              visibleRestoreTarget(listRestoreSelector) ??
+              visibleRestoreTarget(appShellRestoreSelector);
             const restoreFocusTarget = restoreFocusTargetRef.current;
             pointerLaunchAtRef.current = 0;
             pointerLaunchTargetRef.current = null;
@@ -523,7 +527,7 @@ export const EntryModal = ({
             </>
           )}
           <Toast
-            containerClassName="bottom-16 z-[80]"
+            containerClassName="compact-shell:bottom-[calc(7.75rem+env(safe-area-inset-bottom))] bottom-16 z-[80]"
             className="text-destructive"
             message={globalNotice}
             onDismiss={onGlobalNoticeDismiss}

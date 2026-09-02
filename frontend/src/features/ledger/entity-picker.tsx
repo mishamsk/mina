@@ -516,6 +516,7 @@ const EntityPickerContent = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const listboxRef = useRef<HTMLDivElement>(null);
   const retryButtonRef = useRef<HTMLButtonElement>(null);
+  const restoreInputFocusOnCloseRef = useRef(false);
   const deferredCloseFrameRef = useRef<number | undefined>(undefined);
   const onChangeRef = useRef(onChange);
   const skipInitialAutoFocusOpenRef = useRef(autoFocus);
@@ -1419,6 +1420,7 @@ const EntityPickerContent = ({
         </span>
         {open && !disabled ? (
           <PopoverContent
+            compactBack
             ref={listboxRef}
             id={`${id}-options`}
             role="listbox"
@@ -1432,7 +1434,16 @@ const EntityPickerContent = ({
             sticky="always"
             updatePositionStrategy="always"
             className="w-[var(--radix-popover-trigger-width)] overflow-hidden p-0"
-            onCloseAutoFocus={(event) => event.preventDefault()}
+            onCompactBack={() => {
+              restoreInputFocusOnCloseRef.current = true;
+              skipInitialAutoFocusOpenRef.current = true;
+            }}
+            onCloseAutoFocus={(event) => {
+              event.preventDefault();
+              if (!restoreInputFocusOnCloseRef.current) return;
+              restoreInputFocusOnCloseRef.current = false;
+              inputRef.current?.focus({ preventScroll: true });
+            }}
             onEscapeKeyDown={(event) => {
               event.preventDefault();
               updateOpen(false);

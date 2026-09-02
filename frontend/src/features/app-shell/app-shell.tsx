@@ -26,9 +26,22 @@ import {
 } from "react-router";
 
 import { apiErrorMessage, fetchTransactionById } from "@/api";
+import {
+  MobileTableControlsProvider,
+  MobileTableControlsTrigger,
+} from "@/components/mobile-table-controls";
+import {
+  MobileTableEditPanelProvider,
+  MobileTableEditPanelTrigger,
+} from "@/components/mobile-table-edit-panel";
 import { Toast } from "@/components/toast";
 import { focusWithoutTooltip, Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
 import { CommandPalette } from "@/features/command-palette";
 import { BalanceStrip } from "@/features/featured-balances";
@@ -118,12 +131,19 @@ const isTransactionRowWithinViewport = (row: HTMLElement): boolean => {
 
   const rowBounds = row.getBoundingClientRect();
   const viewportBounds = viewport.getBoundingClientRect();
+  const compactToolbar = document.querySelector<HTMLElement>(
+    "[data-mobile-app-toolbar]",
+  );
+  const compactToolbarTop = compactToolbar?.getClientRects().length
+    ? compactToolbar.getBoundingClientRect().top
+    : window.innerHeight;
   const headerBottom =
     viewport.querySelector("thead")?.getBoundingClientRect().bottom ??
     viewportBounds.top;
   return (
-    rowBounds.bottom > Math.max(viewportBounds.top, headerBottom) &&
-    rowBounds.top < viewportBounds.bottom
+    rowBounds.bottom > Math.max(viewportBounds.top, headerBottom, 0) &&
+    rowBounds.top < viewportBounds.bottom &&
+    rowBounds.bottom <= compactToolbarTop
   );
 };
 
@@ -286,9 +306,11 @@ const navLinkClass = ({ collapsed }: { collapsed: boolean }) =>
 const SidebarNav = ({
   collapsed,
   items,
+  onNavigate,
 }: {
   readonly collapsed: boolean;
   readonly items: readonly NavItem[];
+  readonly onNavigate?: () => void;
 }) => (
   <nav className="flex flex-col gap-1">
     {items.map((item) => {
@@ -300,6 +322,7 @@ const SidebarNav = ({
           }
           key={item.label}
           to={item.to}
+          onClick={onNavigate}
         >
           <item.icon className="size-4 shrink-0" aria-hidden="true" />
           <span className={cn(collapsed && "sr-only")}>{item.label}</span>
@@ -319,8 +342,10 @@ const SidebarNav = ({
 
 const CommandPaletteButton = ({
   collapsed,
+  onOpen = openCommandPalette,
 }: {
   readonly collapsed: boolean;
+  readonly onOpen?: () => void;
 }) => {
   const button = (
     <Button
@@ -328,7 +353,7 @@ const CommandPaletteButton = ({
       variant="outline"
       className={cn("w-full", collapsed && "px-0")}
       aria-label="Command palette"
-      onClick={openCommandPalette}
+      onClick={onOpen}
     >
       <Search aria-hidden="true" />
       <span className={cn(collapsed && "sr-only")}>Command palette</span>
@@ -382,6 +407,77 @@ const LogoutButton = ({
   );
 };
 
+const NavigationSections = ({
+  collapsed,
+  logoutButtonRef,
+  logoutPending,
+  onLogout,
+  onNavigate,
+  onOpenCommandPalette,
+  primaryNavItems,
+  showLogout,
+}: {
+  readonly collapsed: boolean;
+  readonly logoutButtonRef: Ref<HTMLButtonElement>;
+  readonly logoutPending: boolean;
+  readonly onLogout: () => void;
+  readonly onNavigate?: () => void;
+  readonly onOpenCommandPalette?: () => void;
+  readonly primaryNavItems: readonly NavItem[];
+  readonly showLogout: boolean;
+}) => (
+  <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-3">
+    <div className="flex flex-col gap-2">
+      <CommandPaletteButton
+        collapsed={collapsed}
+        onOpen={onOpenCommandPalette}
+      />
+    </div>
+
+    <SidebarNav
+      collapsed={collapsed}
+      items={primaryNavItems}
+      onNavigate={onNavigate}
+    />
+
+    <section className="flex flex-col gap-2">
+      <p
+        className={cn(
+          "text-pixel text-muted-foreground px-2 text-xs",
+          "text-[var(--frame-muted)]",
+          collapsed && "sr-only",
+        )}
+      >
+        Reference
+      </p>
+      <SidebarNav
+        collapsed={collapsed}
+        items={referenceNavItems}
+        onNavigate={onNavigate}
+      />
+    </section>
+
+    <BalanceStrip collapsed={collapsed} onNavigate={onNavigate} />
+
+    <div className="mt-auto flex flex-col gap-3">
+      <Separator />
+      <SidebarNav
+        collapsed={collapsed}
+        items={utilityNavItems}
+        onNavigate={onNavigate}
+      />
+      {showLogout ? (
+        <LogoutButton
+          buttonRef={logoutButtonRef}
+          collapsed={collapsed}
+          pending={logoutPending}
+          onLogout={onLogout}
+        />
+      ) : null}
+    </div>
+  </div>
+);
+
 export const AppShell = ({ children }: AppShellProps) => {
   const {
     preferences: { sidebarCollapsed },
@@ -393,7 +489,14 @@ export const AppShell = ({ children }: AppShellProps) => {
   const templateEditor = useTemplateEditorView();
   const [logoutPending, setLogoutPending] = useState(false);
   const [logoutError, setLogoutError] = useState<string>();
-  const logoutButtonRef = useRef<HTMLButtonElement>(null);
+  const desktopLogoutButtonRef = useRef<HTMLButtonElement>(null);
+  const desktopNavigationRef = useRef<HTMLElement>(null);
+  const mobileLogoutButtonRef = useRef<HTMLButtonElement>(null);
+  const mobileNavigationButtonRef = useRef<HTMLButtonElement>(null);
+  const lastNavigationFocusSurfaceRef = useRef<"compact" | "roomy" | undefined>(
+    undefined,
+  );
+  const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
   const [entrySaveNotice, setEntrySaveNotice] = useState<
     | {
         readonly avoidDetailActions?: boolean;
@@ -422,6 +525,108 @@ export const AppShell = ({ children }: AppShellProps) => {
   const lastTransactionsPageSearch = useLastTransactionsPageSearch();
 
   useEffect(() => {
+    let compactNavigationWasVisible = Boolean(
+      mobileNavigationButtonRef.current?.getClientRects().length,
+    );
+    const trackNavigationFocus = (event: FocusEvent) => {
+      const target =
+        event.target instanceof HTMLElement ? event.target : undefined;
+      if (
+        target === mobileNavigationButtonRef.current ||
+        target?.closest("[data-mobile-navigation-content]")
+      ) {
+        lastNavigationFocusSurfaceRef.current = "compact";
+        return;
+      }
+      if (target && desktopNavigationRef.current?.contains(target)) {
+        lastNavigationFocusSurfaceRef.current = "roomy";
+        return;
+      }
+      if (target !== document.body) {
+        lastNavigationFocusSurfaceRef.current = undefined;
+      }
+    };
+    const visibleRoomyNavigationTarget = () => {
+      const currentPageLink =
+        desktopNavigationRef.current?.querySelector<HTMLElement>(
+          "[aria-current='page']",
+        );
+      if (currentPageLink?.getClientRects().length) return currentPageLink;
+      const commandPaletteButton =
+        desktopNavigationRef.current?.querySelector<HTMLElement>(
+          "button[aria-label='Command palette']",
+        );
+      return commandPaletteButton?.getClientRects().length
+        ? commandPaletteButton
+        : undefined;
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (
+        !mobileNavigationOpen ||
+        event.key !== "Escape" ||
+        event.defaultPrevented
+      ) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      setMobileNavigationOpen(false);
+    };
+    const handOffBreakpointFocus = () => {
+      const compactNavigationIsVisible = Boolean(
+        mobileNavigationButtonRef.current?.getClientRects().length,
+      );
+      if (compactNavigationIsVisible === compactNavigationWasVisible) return;
+      compactNavigationWasVisible = compactNavigationIsVisible;
+      const previousSurface = lastNavigationFocusSurfaceRef.current;
+      const destinationSurface = compactNavigationIsVisible
+        ? "compact"
+        : "roomy";
+      if (!compactNavigationIsVisible && mobileNavigationOpen) {
+        setMobileNavigationOpen(false);
+      }
+      if (!previousSurface || previousSurface === destinationSurface) return;
+      const activeElement =
+        document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null;
+      const activeElementIsVisible = Boolean(
+        activeElement &&
+        activeElement !== document.body &&
+        activeElement.getClientRects().length,
+      );
+      const activeElementWasOnPreviousSurface =
+        previousSurface === "compact"
+          ? activeElement === mobileNavigationButtonRef.current ||
+            Boolean(activeElement?.closest("[data-mobile-navigation-content]"))
+          : Boolean(
+              activeElement &&
+              desktopNavigationRef.current?.contains(activeElement),
+            );
+      if (activeElementIsVisible && !activeElementWasOnPreviousSurface) return;
+      window.requestAnimationFrame(() => {
+        const focusTarget = compactNavigationIsVisible
+          ? mobileNavigationButtonRef.current
+          : visibleRoomyNavigationTarget();
+        focusWithoutTooltip(focusTarget, { preventScroll: true });
+        lastNavigationFocusSurfaceRef.current = destinationSurface;
+      });
+    };
+    document.addEventListener("focusin", trackNavigationFocus, {
+      capture: true,
+    });
+    window.addEventListener("keydown", closeOnEscape, { capture: true });
+    window.addEventListener("resize", handOffBreakpointFocus);
+    return () => {
+      document.removeEventListener("focusin", trackNavigationFocus, {
+        capture: true,
+      });
+      window.removeEventListener("keydown", closeOnEscape, { capture: true });
+      window.removeEventListener("resize", handOffBreakpointFocus);
+    };
+  }, [mobileNavigationOpen]);
+
+  useEffect(() => {
     const markEntryUrlOpening = () => {
       openingEntryUrlRef.current = true;
     };
@@ -436,7 +641,11 @@ export const AppShell = ({ children }: AppShellProps) => {
 
   useEffect(() => {
     if (!logoutPending && logoutError && !commandPaletteOpen) {
-      focusWithoutTooltip(logoutButtonRef.current, { preventScroll: true });
+      const target = [
+        mobileLogoutButtonRef.current,
+        desktopLogoutButtonRef.current,
+      ].find((button) => button && button.getClientRects().length > 0);
+      focusWithoutTooltip(target, { preventScroll: true });
     }
   }, [commandPaletteOpen, logoutError, logoutPending]);
 
@@ -454,6 +663,22 @@ export const AppShell = ({ children }: AppShellProps) => {
     { icon: Calendar, label: "Recurring", to: "/recurring" },
     { icon: Wallet, label: "Accounts", to: "/accounts" },
   ];
+
+  const handleLogout = () => {
+    setLogoutPending(true);
+    setLogoutError(undefined);
+    void logoutAuthentication().then((error) => {
+      setLogoutPending(false);
+      if (error) {
+        setLogoutError(error);
+      }
+    });
+  };
+
+  const openCommandPaletteFromMobileNavigation = () => {
+    setMobileNavigationOpen(false);
+    window.setTimeout(openCommandPalette);
+  };
 
   useEffect(() => {
     if (
@@ -699,8 +924,9 @@ export const AppShell = ({ children }: AppShellProps) => {
   return (
     <div className="bg-background text-foreground min-h-svh">
       <aside
+        ref={desktopNavigationRef}
         className={cn(
-          "fixed inset-y-0 left-0 z-10 flex flex-col border-r-2 border-[var(--border-ink)] bg-[var(--frame)] text-[var(--frame-foreground)] shadow-[var(--shadow-pixel)]",
+          "roomy-shell:flex fixed inset-y-0 left-0 z-10 hidden flex-col border-r-2 border-[var(--border-ink)] bg-[var(--frame)] text-[var(--frame-foreground)] shadow-[var(--shadow-pixel)]",
           sidebarCollapsed ? "w-[76px]" : "w-64",
         )}
         aria-label="Primary"
@@ -725,53 +951,14 @@ export const AppShell = ({ children }: AppShellProps) => {
           </span>
         </div>
 
-        <div className="flex flex-1 flex-col gap-5 overflow-y-auto p-3">
-          <div className="flex flex-col gap-2">
-            <CommandPaletteButton collapsed={sidebarCollapsed} />
-          </div>
-
-          <SidebarNav collapsed={sidebarCollapsed} items={primaryNavItems} />
-
-          <section className="flex flex-col gap-2">
-            <p
-              className={cn(
-                "text-pixel text-muted-foreground px-2 text-xs",
-                "text-[var(--frame-muted)]",
-                sidebarCollapsed && "sr-only",
-              )}
-            >
-              Reference
-            </p>
-            <SidebarNav
-              collapsed={sidebarCollapsed}
-              items={referenceNavItems}
-            />
-          </section>
-
-          <BalanceStrip collapsed={sidebarCollapsed} />
-
-          <div className="mt-auto flex flex-col gap-3">
-            <Separator />
-            <SidebarNav collapsed={sidebarCollapsed} items={utilityNavItems} />
-            {authentication.phase === "authenticated" ? (
-              <LogoutButton
-                buttonRef={logoutButtonRef}
-                collapsed={sidebarCollapsed}
-                pending={logoutPending}
-                onLogout={() => {
-                  setLogoutPending(true);
-                  setLogoutError(undefined);
-                  void logoutAuthentication().then((error) => {
-                    setLogoutPending(false);
-                    if (error) {
-                      setLogoutError(error);
-                    }
-                  });
-                }}
-              />
-            ) : null}
-          </div>
-        </div>
+        <NavigationSections
+          collapsed={sidebarCollapsed}
+          logoutButtonRef={desktopLogoutButtonRef}
+          logoutPending={logoutPending}
+          onLogout={handleLogout}
+          primaryNavItems={primaryNavItems}
+          showLogout={authentication.phase === "authenticated"}
+        />
 
         <div className="border-t-2 border-[var(--border-ink)] p-3">
           <Tooltip
@@ -805,18 +992,100 @@ export const AppShell = ({ children }: AppShellProps) => {
       </aside>
 
       <main
-        inert={
-          location.pathname === "/recurring" &&
-          recurringDefinitionEditor.launch !== undefined
-        }
         className={cn(
-          "min-h-svh bg-[var(--ground)] bg-[linear-gradient(90deg,rgb(237_234_247_/_4%)_1px,transparent_1px),linear-gradient(180deg,rgb(237_234_247_/_4%)_1px,transparent_1px)] bg-[size:16px_16px] px-5 pt-7 pb-3 transition-[margin] duration-150 ease-[steps(2)] sm:px-8",
-          sidebarCollapsed ? "ml-[76px]" : "ml-64",
+          "roomy-shell:px-8 roomy-shell:pb-3 min-h-svh bg-[var(--ground)] bg-[linear-gradient(90deg,rgb(237_234_247_/_4%)_1px,transparent_1px),linear-gradient(180deg,rgb(237_234_247_/_4%)_1px,transparent_1px)] bg-[size:16px_16px] px-5 pt-7 pb-[calc(5.5rem+env(safe-area-inset-bottom))] transition-[margin] duration-150 ease-[steps(2)]",
+          sidebarCollapsed ? "roomy-shell:ml-[76px]" : "roomy-shell:ml-64",
         )}
       >
-        <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
-          {children}
-        </div>
+        <MobileTableControlsProvider>
+          <MobileTableEditPanelProvider>
+            <div
+              inert={
+                location.pathname === "/recurring" &&
+                recurringDefinitionEditor.launch !== undefined
+              }
+              className="mx-auto flex w-full max-w-7xl flex-col gap-6"
+            >
+              {children}
+            </div>
+            <div
+              className={cn(
+                "roomy-shell:hidden fixed inset-x-0 bottom-0 z-40 grid auto-cols-fr grid-flow-col gap-2 border-t-2 border-[var(--border-ink)] bg-[var(--frame)] px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]",
+                (commandPaletteOpen ||
+                  entryModal.open ||
+                  templateEditor.open) &&
+                  "hidden",
+              )}
+              data-mobile-app-toolbar
+            >
+              <Popover
+                open={mobileNavigationOpen}
+                onOpenChange={setMobileNavigationOpen}
+              >
+                <PopoverTrigger asChild>
+                  <Button
+                    ref={mobileNavigationButtonRef}
+                    type="button"
+                    variant="outline"
+                    className="h-11 min-w-0 justify-center bg-[var(--card)] text-[var(--foreground)] shadow-[var(--shadow-pixel)] data-[state=open]:bg-[var(--color-class-adjustment-bright)] data-[state=open]:shadow-[var(--shadow-pixel)]"
+                    aria-label="Navigation"
+                    data-entry-modal-restore-target
+                  >
+                    <Menu aria-hidden="true" />
+                    Navigation
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent
+                  compactBack={false}
+                  side="top"
+                  align="start"
+                  sideOffset={10}
+                  aria-label="Navigation"
+                  data-mobile-navigation-content
+                  className="flex max-h-[var(--radix-popover-content-available-height)] w-[min(20rem,calc(100vw-2rem))] flex-col overflow-hidden bg-[var(--frame)] p-0 text-[var(--frame-foreground)]"
+                >
+                  <div className="flex h-14 shrink-0 items-center gap-3 border-b-2 border-[var(--border-ink)] px-3">
+                    <Archive
+                      className="size-6 shrink-0 text-[var(--color-class-adjustment-bright)]"
+                      aria-hidden="true"
+                    />
+                    <span className="text-pixel text-base leading-none">
+                      Mina
+                    </span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="ml-auto"
+                      aria-label="Close navigation"
+                      onClick={() => {
+                        setMobileNavigationOpen(false);
+                      }}
+                    >
+                      <Close aria-hidden="true" />
+                      Close
+                    </Button>
+                  </div>
+                  <NavigationSections
+                    collapsed={false}
+                    logoutButtonRef={mobileLogoutButtonRef}
+                    logoutPending={logoutPending}
+                    onLogout={handleLogout}
+                    onNavigate={() => {
+                      setMobileNavigationOpen(false);
+                    }}
+                    onOpenCommandPalette={
+                      openCommandPaletteFromMobileNavigation
+                    }
+                    primaryNavItems={primaryNavItems}
+                    showLogout={authentication.phase === "authenticated"}
+                  />
+                </PopoverContent>
+              </Popover>
+              <MobileTableEditPanelTrigger />
+              <MobileTableControlsTrigger />
+            </div>
+          </MobileTableEditPanelProvider>
+        </MobileTableControlsProvider>
       </main>
       <CommandPalette />
       {recurringDefinitionEditor.launch ? (
@@ -1004,7 +1273,7 @@ export const AppShell = ({ children }: AppShellProps) => {
           }
           containerClassName={
             entrySaveNotice?.avoidDetailActions
-              ? "top-20 bottom-auto"
+              ? "compact-shell:bottom-auto top-20 bottom-auto"
               : undefined
           }
           message={entrySaveNotice?.message}
@@ -1015,7 +1284,7 @@ export const AppShell = ({ children }: AppShellProps) => {
       ) : null}
       {!entryModal.open && !templateEditor.open ? (
         <Toast
-          containerClassName="bottom-16 z-[80]"
+          containerClassName="compact-shell:bottom-[calc(7.75rem+env(safe-area-inset-bottom))] bottom-16 z-[80]"
           className="text-destructive"
           message={logoutError}
           onDismiss={() => {

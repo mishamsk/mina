@@ -14,9 +14,10 @@
 - New-definition drafts may be seeded from complete transaction records or partial template defaults; missing template values remain blank and ordinary inline completeness and balance validation blocks save.
 - Per-entity detail reads resolve seeded selected references into caller-retained options even before broader lookups load; ranked-search contexts exclude hidden current values as fresh choices, and returned Account detail immediately reconciles row type and currency without moving eligibility or ordering into the editor.
 - Definition records normalize fiat codes and the `C::` prefix to uppercase while preserving the case-sensitive crypto token suffix.
-- Definition actions and editor closure resolve and restore their live focus target after closing without overriding newer user focus; reordered action rows are revealed below the sticky table header, the feature restore target remains the fallback, and the editor is an outside-close safe overlay for its source detail panel that lets an open confirmation dialog handle Escape first.
-- When a replacement search snapshot removes the focused definition row, focus returns to the recurring search field.
+- Definition actions and editor closure resolve and restore their live focus target after closing without overriding newer user focus; reordered action rows are revealed below the sticky table header, the feature restore target remains the fallback, and the editor is an outside-close safe overlay for its source detail panel that lets an open confirmation dialog or compact toolbar sheet handle Escape first and clears the compact app toolbar.
+- When a replacement search snapshot removes the focused definition row, focus returns to the visible recurring search field or the compact Controls trigger.
 - Definition rows expose `id="definition-<id>"` for route-owned deep links and `data-recurring-definition-id="<id>"` for app-shell focus restoration.
+- The definitions table relinquishes its sticky internal viewport in the compact shell and grows with the document; its route toolbar remains the sole search state and moves through the shared Controls surface.
 
 ## Boundaries
 

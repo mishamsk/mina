@@ -16,6 +16,7 @@ import {
   listBackgroundOperationRunEnvelopes,
   listBackgroundOperations,
 } from "@/api";
+import { MobileTableControls } from "@/components/mobile-table-controls";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -454,7 +455,10 @@ export const StatusOperations = ({
   };
 
   return (
-    <Card className="min-h-0" data-testid="status-operations">
+    <Card
+      className="compact-shell:pb-0 min-h-0"
+      data-testid="status-operations"
+    >
       <CardHeader className="gap-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -473,39 +477,44 @@ export const StatusOperations = ({
             </Button>
           ) : null}
         </div>
-        <div className="flex flex-wrap items-center gap-3 border-t-2 border-[var(--hairline)] pt-4">
-          <label
-            className="font-heading text-xs font-semibold uppercase"
-            htmlFor="status-operation-select"
-          >
-            Operation
-          </label>
-          <Select
-            value={selectedOperationId}
-            onValueChange={(operationID) =>
-              setOperation(operationID as BackgroundOperationId)
-            }
-            disabled={
-              operations.loading || operations.operationIds.length === 0
-            }
-          >
-            <SelectTrigger id="status-operation-select" aria-label="Operation">
-              <SelectValue placeholder="Choose an operation" />
-            </SelectTrigger>
-            <SelectContent>
-              {operations.operationIds.map((operationId) => (
-                <SelectItem key={operationId} value={operationId}>
-                  {operationLabel(operationId)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {operations.loading ? (
-            <span className="text-muted-foreground font-mono text-xs">
-              Loading operations
-            </span>
-          ) : null}
-        </div>
+        <MobileTableControls>
+          <div className="flex flex-wrap items-center gap-3 border-t-2 border-[var(--hairline)] pt-4">
+            <label
+              className="font-heading text-xs font-semibold uppercase"
+              htmlFor="status-operation-select"
+            >
+              Operation
+            </label>
+            <Select
+              value={selectedOperationId}
+              onValueChange={(operationID) =>
+                setOperation(operationID as BackgroundOperationId)
+              }
+              disabled={
+                operations.loading || operations.operationIds.length === 0
+              }
+            >
+              <SelectTrigger
+                id="status-operation-select"
+                aria-label="Operation"
+              >
+                <SelectValue placeholder="Choose an operation" />
+              </SelectTrigger>
+              <SelectContent>
+                {operations.operationIds.map((operationId) => (
+                  <SelectItem key={operationId} value={operationId}>
+                    {operationLabel(operationId)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {operations.loading ? (
+              <span className="text-muted-foreground font-mono text-xs">
+                Loading operations
+              </span>
+            ) : null}
+          </div>
+        </MobileTableControls>
       </CardHeader>
 
       {operations.errorMessage ? (
@@ -651,63 +660,68 @@ export const StatusOperations = ({
             </CardContent>
           ) : null}
 
-          <CardContent className="flex flex-col gap-3 pt-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2 text-sm">
-              <label htmlFor="operation-runs-page-size" className="font-medium">
-                Rows
-              </label>
-              <Select
-                value={String(pageSize)}
-                onValueChange={(value) => setPageSize(Number(value))}
-              >
-                <SelectTrigger
-                  id="operation-runs-page-size"
-                  size="compact"
-                  aria-label="Rows per page"
+          <MobileTableControls order="pagination">
+            <CardContent className="flex flex-col gap-3 pt-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-2 text-sm">
+                <label
+                  htmlFor="operation-runs-page-size"
+                  className="font-medium"
                 >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {operationPageSizes.map((option) => (
-                    <SelectItem key={option} value={String(option)}>
-                      {option}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-center gap-3">
-              {runs.loading ? (
-                <span
-                  className="text-muted-foreground font-mono text-xs"
-                  role="status"
+                  Rows
+                </label>
+                <Select
+                  value={String(pageSize)}
+                  onValueChange={(value) => setPageSize(Number(value))}
                 >
-                  Loading
+                  <SelectTrigger
+                    id="operation-runs-page-size"
+                    size="compact"
+                    aria-label="Rows per page"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {operationPageSizes.map((option) => (
+                      <SelectItem key={option} value={String(option)}>
+                        {option}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-3">
+                {runs.loading ? (
+                  <span
+                    className="text-muted-foreground font-mono text-xs"
+                    role="status"
+                  >
+                    Loading
+                  </span>
+                ) : null}
+                <span className="text-muted-foreground font-mono text-sm">
+                  Page {page} of {currentPageCount}
                 </span>
-              ) : null}
-              <span className="text-muted-foreground font-mono text-sm">
-                Page {page} of {currentPageCount}
-              </span>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={page <= 1}
-                onClick={() => setPage(page - 1)}
-              >
-                Previous
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={page >= currentPageCount}
-                onClick={() => setPage(page + 1)}
-              >
-                Next
-              </Button>
-            </div>
-          </CardContent>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={page <= 1}
+                  onClick={() => setPage(page - 1)}
+                >
+                  Previous
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={page >= currentPageCount}
+                  onClick={() => setPage(page + 1)}
+                >
+                  Next
+                </Button>
+              </div>
+            </CardContent>
+          </MobileTableControls>
 
           {selectedRunDetailState.errorMessage ? (
             <CardContent className="pt-0">

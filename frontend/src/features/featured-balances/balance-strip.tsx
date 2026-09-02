@@ -17,6 +17,7 @@ import {
 
 interface BalanceStripProps {
   readonly collapsed: boolean;
+  readonly onNavigate?: () => void;
 }
 
 const formatBalance = (row: FeaturedBalanceRow): string =>
@@ -190,7 +191,7 @@ const BalanceStripError = ({
   </div>
 );
 
-export const BalanceStrip = ({ collapsed }: BalanceStripProps) => {
+export const BalanceStrip = ({ collapsed, onNavigate }: BalanceStripProps) => {
   const { errorMessage, loading, snapshot } = useFeaturedBalancesResource();
   const rows = snapshot?.rows ?? [];
 
@@ -245,6 +246,15 @@ export const BalanceStrip = ({ collapsed }: BalanceStripProps) => {
       data-testid="featured-balance-strip"
       className="flex flex-col gap-2"
       aria-busy={loading ? "true" : undefined}
+      onClickCapture={(event) => {
+        if (
+          onNavigate &&
+          event.target instanceof Element &&
+          event.target.closest("a[href]")
+        ) {
+          onNavigate();
+        }
+      }}
     >
       <p className="text-pixel px-2 text-xs text-[var(--frame-muted)]">
         Featured

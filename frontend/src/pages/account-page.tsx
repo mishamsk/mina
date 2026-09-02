@@ -236,7 +236,7 @@ const AccountPageContent = ({ accountId }: { readonly accountId: number }) => {
   };
   return (
     <section
-      className="flex h-[calc(100svh-2.5rem)] min-h-0 flex-col gap-6"
+      className="roomy-shell:h-[calc(100svh-2.5rem)] flex min-h-0 flex-col gap-6"
       aria-labelledby="account-title"
     >
       <PageHeader
@@ -353,7 +353,11 @@ const AccountPageContent = ({ accountId }: { readonly accountId: number }) => {
       <Toast
         key={registerDetail.notice?.id ?? "empty"}
         className="text-[var(--color-money-in)]"
-        containerClassName={toggleNotice ? "bottom-16" : undefined}
+        containerClassName={
+          toggleNotice
+            ? "compact-shell:bottom-[calc(7.75rem+env(safe-area-inset-bottom))] bottom-16"
+            : undefined
+        }
         durationMs={toastDurationMs}
         message={registerDetail.notice?.message}
         onDismiss={registerDetail.dismissNotice}
@@ -399,7 +403,7 @@ export const AccountPage = () => {
 
   if (!accountId) {
     return (
-      <section className="flex h-[calc(100svh-2.5rem)] min-h-0 flex-col gap-6">
+      <section className="roomy-shell:h-[calc(100svh-2.5rem)] flex min-h-0 flex-col gap-6">
         <PageHeader title="Account" eyebrow="Register" />
         <AccountPageError message="The account id in the URL is invalid." />
       </section>

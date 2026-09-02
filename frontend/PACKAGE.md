@@ -12,7 +12,7 @@
 - Global initial heading focus waits for bootstrap and yields to a user or feature focus target.
 - Frontend lint rejects handwritten `fetch`, `XMLHttpRequest`, and `sendBeacon` throughout `src`.
 - Outside `src/api`, frontend code imports generated REST runtime operations through configured API entry points; handwritten modules inside `src/api` import them through `generated-access`.
-- Global styles keep transaction action columns bounded and coordinate direct controls with fit-driven and permanent overflow states.
+- Global styles define complementary compact/roomy shell variants, fix compact Popover and Select surfaces above the app toolbar, keep transaction action columns bounded, coordinate direct controls with fit-driven and permanent overflow states, and compose phone transaction rows into two visual tiers without changing table semantics.
 
 ## Boundaries
 
