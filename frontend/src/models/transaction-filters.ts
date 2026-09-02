@@ -237,6 +237,21 @@ const normalizedMembershipValues = (
     : normalized;
 };
 
+const explicitMembershipHumanValues = (
+  chip: Extract<TransactionFilterChip, { readonly kind: "membership" }>,
+): ReadonlySet<string> => {
+  const entityIdValues = new Set(chip.entityIdValues ?? []);
+  const scopedValues = new Set(chip.scopedValues ?? []);
+  const collidingHumanValues = new Set(chip.humanEntityValues ?? []);
+  return new Set(
+    chip.values.filter(
+      (value) =>
+        (!entityIdValues.has(value) && !scopedValues.has(value)) ||
+        collidingHumanValues.has(value),
+    ),
+  );
+};
+
 const expressionFromFilterChip = (
   chip: TransactionFilterChip,
 ): TransactionFilterExpression | undefined => {
@@ -250,13 +265,14 @@ const expressionFromFilterChip = (
   if (values.length === 0) return undefined;
   const terms = values.flatMap((value) => {
     const entityId = chip.entityIdValues?.includes(value) ?? false;
-    const humanEntity =
-      !entityId || (chip.humanEntityValues?.includes(value) ?? false);
+    const explicitHuman = chip.humanEntityValues?.includes(value) ?? false;
+    const scoped = chip.scopedValues?.includes(value) ?? false;
     return [
       ...(entityId ? [term(chip.field, ":", value, false, true)] : []),
-      ...(humanEntity
-        ? [term(chip.field, ":", value, chip.scopedValues?.includes(value))]
+      ...((!entityId && !scoped) || explicitHuman
+        ? [term(chip.field, ":", value)]
         : []),
+      ...(scoped ? [term(chip.field, ":", value, true)] : []),
     ];
   });
   const positive: TransactionFilterExpression =
@@ -754,7 +770,9 @@ const membershipTerms = (
     const provenanceKey = `${candidate.entityId ? "id" : "human"}\0${candidate.value}`;
     if (
       scopeByValue.has(provenanceKey) &&
-      scopeByValue.get(provenanceKey) !== scoped
+      scopeByValue.get(provenanceKey) !== scoped &&
+      (candidate.entityId ||
+        (field !== "account" && field !== "category" && field !== "tag"))
     ) {
       return undefined;
     }
@@ -773,12 +791,19 @@ const membershipTermProvenance = (
     terms.filter((candidate) => candidate.entityId).map(({ value }) => value),
   );
   const humanValues = new Set(
-    terms.filter((candidate) => !candidate.entityId).map(({ value }) => value),
+    terms
+      .filter((candidate) => !candidate.entityId && !candidate.scoped)
+      .map(({ value }) => value),
+  );
+  const scopedHumanValues = new Set(
+    terms
+      .filter((candidate) => !candidate.entityId && candidate.scoped)
+      .map(({ value }) => value),
   );
   return {
     entityIdValues: [...entityIdValues],
-    humanEntityValues: [...entityIdValues].filter((value) =>
-      humanValues.has(value),
+    humanEntityValues: [...humanValues].filter(
+      (value) => entityIdValues.has(value) || scopedHumanValues.has(value),
     ),
   };
 };
@@ -956,22 +981,8 @@ const filterRowFromExpression = (
       >;
       const existingScopes = new Set(existing.scopedValues);
       const chipScopes = new Set(chip.scopedValues);
-      const existingEntityIds = new Set(existing.entityIdValues);
-      const chipEntityIds = new Set(chip.entityIdValues);
-      const existingHumanValues = new Set(
-        existing.values.filter(
-          (value) =>
-            !existingEntityIds.has(value) ||
-            existing.humanEntityValues?.includes(value),
-        ),
-      );
-      const chipHumanValues = new Set(
-        chip.values.filter(
-          (value) =>
-            !chipEntityIds.has(value) ||
-            chip.humanEntityValues?.includes(value),
-        ),
-      );
+      const existingHumanValues = explicitMembershipHumanValues(existing);
+      const chipHumanValues = explicitMembershipHumanValues(chip);
       if (
         chip.values.some(
           (value) =>
@@ -996,8 +1007,9 @@ const filterRowFromExpression = (
         ]),
       ];
       const humanValues = new Set([...existingHumanValues, ...chipHumanValues]);
-      const humanEntityValues = entityIdValues.filter((value) =>
-        humanValues.has(value),
+      const humanEntityValues = [...humanValues].filter(
+        (value) =>
+          entityIdValues.includes(value) || scopedValues.includes(value),
       );
       chips[existingIndex] = {
         ...existing,

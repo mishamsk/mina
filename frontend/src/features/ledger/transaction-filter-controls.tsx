@@ -223,6 +223,21 @@ const entityIDFromLiteral = (value: string): number | undefined => {
   return Number.isSafeInteger(id) ? id : undefined;
 };
 
+const explicitMembershipHumanValues = (
+  chip: Extract<TransactionFilterChip, { readonly kind: "membership" }>,
+): ReadonlySet<string> => {
+  const entityIdValues = new Set(chip.entityIdValues ?? []);
+  const scopedValues = new Set(chip.scopedValues ?? []);
+  const collidingHumanValues = new Set(chip.humanEntityValues ?? []);
+  return new Set(
+    chip.values.filter(
+      (value) =>
+        (!entityIdValues.has(value) && !scopedValues.has(value)) ||
+        collidingHumanValues.has(value),
+    ),
+  );
+};
+
 const mapById = <T,>(
   values: readonly T[] | undefined,
   getId: (value: T) => number,
@@ -949,6 +964,7 @@ export const TransactionFilterControls = ({
     entityProvenance?: {
       readonly entityIdValues: readonly string[];
       readonly humanEntityValues: readonly string[];
+      readonly scopedValues?: readonly string[];
     },
   ): void => {
     const chips = [...(rows[rowIndex]?.chips ?? [])];
@@ -972,9 +988,10 @@ export const TransactionFilterControls = ({
           ? chips[chipIndex].humanEntityValues
           : undefined);
       const scopedValues =
-        chipIndex >= 0 && chips[chipIndex]?.kind === "membership"
+        entityProvenance?.scopedValues ??
+        (chipIndex >= 0 && chips[chipIndex]?.kind === "membership"
           ? chips[chipIndex].scopedValues
-          : undefined;
+          : undefined);
       const chip = {
         field,
         ...(entityIdValues ? { entityIdValues } : {}),
@@ -1023,22 +1040,8 @@ export const TransactionFilterControls = ({
       >;
       const sourceScopes = new Set(source.scopedValues ?? []);
       const targetScopes = new Set(target.scopedValues ?? []);
-      const sourceEntityIds = new Set(source.entityIdValues ?? []);
-      const targetEntityIds = new Set(target.entityIdValues ?? []);
-      const sourceHumanValues = new Set(
-        source.values.filter(
-          (value) =>
-            !sourceEntityIds.has(value) ||
-            source.humanEntityValues?.includes(value),
-        ),
-      );
-      const targetHumanValues = new Set(
-        target.values.filter(
-          (value) =>
-            !targetEntityIds.has(value) ||
-            target.humanEntityValues?.includes(value),
-        ),
-      );
+      const sourceHumanValues = explicitMembershipHumanValues(source);
+      const targetHumanValues = explicitMembershipHumanValues(target);
       const scopeCollision = source.values.some(
         (value) =>
           target.values.includes(value) &&
@@ -1054,18 +1057,20 @@ export const TransactionFilterControls = ({
         ]),
       ];
       const humanValues = new Set([...targetHumanValues, ...sourceHumanValues]);
+      const scopedValues = [
+        ...new Set([
+          ...(target.scopedValues ?? []),
+          ...(source.scopedValues ?? []),
+        ]),
+      ];
       remaining[targetIndex] = {
         ...target,
         entityIdValues,
-        humanEntityValues: entityIdValues.filter((value) =>
-          humanValues.has(value),
+        humanEntityValues: [...humanValues].filter(
+          (value) =>
+            entityIdValues.includes(value) || scopedValues.includes(value),
         ),
-        scopedValues: [
-          ...new Set([
-            ...(target.scopedValues ?? []),
-            ...(source.scopedValues ?? []),
-          ]),
-        ],
+        scopedValues,
         values: [...new Set([...target.values, ...source.values])],
       };
     } else {
@@ -1144,10 +1149,15 @@ export const TransactionFilterControls = ({
     const chip = membershipChip(rowIndex, dimension, mode);
     const entityIdValues = new Set(chip?.entityIdValues ?? []);
     const humanEntityValues = new Set(chip?.humanEntityValues ?? []);
+    const scopedValues = new Set(chip?.scopedValues ?? []);
+    const groupFqns = [...scopedValues].flatMap((value) =>
+      value.endsWith(":*") ? [value.slice(0, -2)] : [],
+    );
     const exactValues =
       chip?.values.filter(
         (value) =>
-          !chip.scopedValues?.includes(value) &&
+          (!chip.scopedValues?.includes(value) ||
+            humanEntityValues.has(value)) &&
           (!entityIdValues.has(value) || humanEntityValues.has(value)),
       ) ?? [];
     const selectedEntityValue = (
@@ -1285,6 +1295,46 @@ export const TransactionFilterControls = ({
           loadOptions={config.loadOptions}
           options={config.options}
           onOpenChange={setEntityPickerOpen}
+          groupValues={dimension === "member" ? [] : groupFqns}
+          onGroupChange={
+            dimension === "member"
+              ? undefined
+              : (fqns) => {
+                  const nextScopedValues = [
+                    ...[...scopedValues].filter((value) => value === "*"),
+                    ...fqns.map((fqn) => `${fqn}:*`),
+                  ];
+                  const retainedValues =
+                    chip?.values.filter(
+                      (value) =>
+                        !scopedValues.has(value) ||
+                        humanEntityValues.has(value),
+                    ) ?? [];
+                  const nextHumanEntityValues = new Set(
+                    [...humanEntityValues].filter(
+                      (value) =>
+                        entityIdValues.has(value) ||
+                        nextScopedValues.includes(value),
+                    ),
+                  );
+                  for (const value of retainedValues) {
+                    if (nextScopedValues.includes(value)) {
+                      nextHumanEntityValues.add(value);
+                    }
+                  }
+                  updateMembership(
+                    rowIndex,
+                    dimension,
+                    mode,
+                    [...new Set([...retainedValues, ...nextScopedValues])],
+                    {
+                      entityIdValues: [...entityIdValues],
+                      humanEntityValues: [...nextHumanEntityValues],
+                      scopedValues: nextScopedValues,
+                    },
+                  );
+                }
+          }
           value={config.selectedIds}
           onChange={(ids, selectedOptions) => {
             setPickerOptionsByValue((current) => {
@@ -1305,12 +1355,17 @@ export const TransactionFilterControls = ({
               if (humanValue) nextHumanValues.add(humanValue);
             }
             const nextValues = [
-              ...new Set([...nextEntityIdValues, ...nextHumanValues]),
+              ...new Set([
+                ...nextEntityIdValues,
+                ...nextHumanValues,
+                ...scopedValues,
+              ]),
             ];
             updateMembership(rowIndex, dimension, mode, nextValues, {
               entityIdValues: [...nextEntityIdValues],
-              humanEntityValues: [...nextEntityIdValues].filter((value) =>
-                nextHumanValues.has(value),
+              humanEntityValues: [...nextHumanValues].filter(
+                (value) =>
+                  nextEntityIdValues.has(value) || scopedValues.has(value),
               ),
             });
           }}
@@ -1367,8 +1422,11 @@ export const TransactionFilterControls = ({
                           nextValues,
                           {
                             entityIdValues: nextEntityIdValues,
-                            humanEntityValues: nextEntityIdValues.filter(
-                              (candidate) => humanEntityValues.has(candidate),
+                            humanEntityValues: [...humanEntityValues].filter(
+                              (candidate) =>
+                                nextValues.includes(candidate) &&
+                                (nextEntityIdValues.includes(candidate) ||
+                                  scopedValues.has(candidate)),
                             ),
                           },
                         );
@@ -1657,7 +1715,7 @@ export const TransactionFilterControls = ({
             ? (account?.display_label ?? pickerOption?.label)
             : undefined,
         hidden: account?.is_hidden ?? pickerOption?.hidden,
-        label: scoped ? `group ${fqn}` : fqn,
+        label: scoped && value !== "*" ? `${value} (entire group)` : fqn,
         tooltip: value,
       };
     }
@@ -1674,7 +1732,7 @@ export const TransactionFilterControls = ({
             ? (candidate?.display_label ?? pickerOption?.label)
             : undefined,
         hidden: candidate?.is_hidden ?? pickerOption?.hidden,
-        label: scoped ? `group ${fqn}` : fqn,
+        label: scoped && value !== "*" ? `${value} (entire group)` : fqn,
         tooltip: value,
       };
     }
@@ -1737,20 +1795,16 @@ export const TransactionFilterControls = ({
     }
     const values = chip.values.flatMap((value) => {
       const entityId = chip.entityIdValues?.includes(value) ?? false;
-      const humanEntity = chip.humanEntityValues?.includes(value) ?? false;
+      const explicitHuman = chip.humanEntityValues?.includes(value) ?? false;
+      const scoped = chip.scopedValues?.includes(value) ?? false;
       return [
         ...(entityId
           ? [valuePresentation(chip.field, value, false, true)]
           : []),
-        ...(!entityId || humanEntity
-          ? [
-              valuePresentation(
-                chip.field,
-                value,
-                chip.scopedValues?.includes(value),
-              ),
-            ]
+        ...((!entityId && !scoped) || explicitHuman
+          ? [valuePresentation(chip.field, value)]
           : []),
+        ...(scoped ? [valuePresentation(chip.field, value, true)] : []),
       ];
     });
     const describedValues = values.map((value) => {

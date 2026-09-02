@@ -84,6 +84,7 @@ interface EntityPickerProps {
   readonly loadCreationAvailability?: EntityCreationAvailabilityLoader;
   readonly loadOptions?: EntityOptionLoader;
   readonly onChange: (id: number | undefined, option?: EntityOption) => void;
+  readonly onGroupSelect?: (fqn: string) => void;
   readonly onLoadedOptions?: (options: readonly EntityOption[]) => void;
   readonly onOpenChange?: (open: boolean) => void;
   readonly openOnFocus?: boolean;
@@ -92,6 +93,7 @@ interface EntityPickerProps {
   readonly preferredSide?: "bottom" | "top";
   readonly value: number | undefined;
   readonly selectedIds?: readonly number[];
+  readonly selectedGroupFqns?: readonly string[];
 }
 
 type HierarchyGroup = EntityPickerGroup;
@@ -103,7 +105,13 @@ interface PickerCreateRow {
   readonly kind: "create";
 }
 
-type PickerRow = PickerLeafRow | PickerGroupRow | PickerCreateRow;
+interface PickerGroupSelectionRow {
+  readonly fqn: string;
+  readonly kind: "group-selection";
+}
+
+type PickerRow =
+  PickerLeafRow | PickerGroupRow | PickerCreateRow | PickerGroupSelectionRow;
 
 interface QueryModel {
   readonly committedPrefix: string;
@@ -315,7 +323,16 @@ const rowId = (id: string, row: PickerRow): string => {
   if (row.kind === "create") {
     return `${id}-option-create`;
   }
+  if (row.kind === "group-selection") {
+    return `${id}-option-group-selection-${encodeURIComponent(row.fqn)}`;
+  }
   return `${id}-option-group-${encodeURIComponent(row.group.fqn)}`;
+};
+
+const typedGroupFqn = (query: string): string | undefined => {
+  if (!query.endsWith(":*")) return undefined;
+  const fqn = query.slice(0, -2);
+  return fqnIsValid(fqn) ? fqn : undefined;
 };
 
 const rowsForQuery = (
@@ -390,6 +407,7 @@ export const EntityPicker = ({
   loadCreationAvailability,
   loadOptions,
   onChange,
+  onGroupSelect,
   onLoadedOptions,
   onOpenChange,
   openOnFocus = true,
@@ -398,6 +416,7 @@ export const EntityPicker = ({
   preferredSide = "bottom",
   value,
   selectedIds = noSelectedIds,
+  selectedGroupFqns = [],
 }: EntityPickerProps) => {
   const [createdOptions, setCreatedOptions] = useState<readonly EntityOption[]>(
     [],
@@ -419,7 +438,10 @@ export const EntityPicker = ({
   }>();
   const [creationAvailable, setCreationAvailable] = useState(false);
   const [availabilityQuery, setAvailabilityQuery] = useState<string>();
-  const [remoteParentFqn, setRemoteParentFqn] = useState<string>();
+  const initialGroupFqn = selectedGroupFqns[0];
+  const [remoteParentFqn, setRemoteParentFqn] = useState<string | undefined>(
+    initialGroupFqn,
+  );
   const loadOptionsRef = useRef(loadOptions);
   const onLoadedOptionsRef = useRef(onLoadedOptions);
   const loadVersionRef = useRef(0);
@@ -455,7 +477,9 @@ export const EntityPicker = ({
   const typedThisSessionRef = useRef(false);
   const [typedThisSession, setTypedThisSession] = useState(false);
   const selected = effectiveOptions.find((option) => option.id === value);
-  const [query, setQuery] = useState(selected?.searchLabel ?? "");
+  const [query, setQuery] = useState(
+    selected?.searchLabel ?? (initialGroupFqn ? `${initialGroupFqn}:` : ""),
+  );
   const loadRequestKey = JSON.stringify([
     loadKey,
     query,
@@ -742,6 +766,22 @@ export const EntityPicker = ({
       updateOpen,
     ],
   );
+  const selectGroup = useCallback(
+    (fqn: string) => {
+      interactionVersionRef.current += 1;
+      retainedPrefixRef.current = fqn;
+      if (loadOptions) {
+        setRemoteParentFqn(fqn);
+      }
+      setQuery(`${fqn}:`);
+      setActiveIndex(0);
+      setCreateError(undefined);
+      onGroupSelect?.(fqn);
+      setAnnouncement(`Selected entire group ${fqn}`);
+      updateOpen(false);
+    },
+    [loadOptions, onGroupSelect, updateOpen],
+  );
   useEffect(() => {
     if (
       !loadOptions ||
@@ -752,17 +792,37 @@ export const EntityPicker = ({
     ) {
       return;
     }
+    if (loadedQuery !== query) {
+      return;
+    }
     const exact = optionRows.find(
       (row) => row.kind === "leaf" && row.option.searchLabel === query,
     );
-    if (!exact || exact.kind !== "leaf") {
+    const groupFqn = onGroupSelect ? typedGroupFqn(query) : undefined;
+    if ((!exact || exact.kind !== "leaf") && !groupFqn) {
       return;
     }
     const frame = window.requestAnimationFrame(() => {
-      selectOption(exact.option);
+      if (exact?.kind === "leaf") {
+        selectOption(exact.option);
+        return;
+      }
+      if (groupFqn) {
+        selectGroup(groupFqn);
+      }
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [loadOptions, open, optionRows, query, requestPending, selectOption]);
+  }, [
+    loadOptions,
+    loadedQuery,
+    onGroupSelect,
+    open,
+    optionRows,
+    query,
+    requestPending,
+    selectGroup,
+    selectOption,
+  ]);
   const createAllowed = Boolean(
     loadOptions &&
     createOption &&
@@ -776,13 +836,30 @@ export const EntityPicker = ({
       ? availabilityFailure.message
       : undefined);
   const rows = useMemo<readonly PickerRow[]>(() => {
-    if (!createAllowed || loadedQuery === undefined) {
-      return optionRows;
-    }
-    return [...optionRows, { fqn: loadedQuery, kind: "create" }];
-  }, [createAllowed, loadedQuery, optionRows]);
+    const selectableRows: readonly PickerRow[] =
+      createAllowed && loadedQuery !== undefined
+        ? [...optionRows, { fqn: loadedQuery, kind: "create" }]
+        : optionRows;
+    return onGroupSelect && model.committedPrefix
+      ? [
+          { fqn: model.committedPrefix, kind: "group-selection" },
+          ...selectableRows,
+        ]
+      : selectableRows;
+  }, [
+    createAllowed,
+    loadedQuery,
+    model.committedPrefix,
+    onGroupSelect,
+    optionRows,
+  ]);
   const clampedActiveIndex =
-    rows.length === 0 ? 0 : Math.min(activeIndex, rows.length - 1);
+    rows.length === 0 ||
+    (rows[0]?.kind === "group-selection" &&
+      model.filter.length > 0 &&
+      activeIndex >= rows.length)
+      ? activeIndex
+      : Math.min(activeIndex, rows.length - 1);
   const activeRow = rows[clampedActiveIndex];
   const activeOptionId =
     open && !disabled && !requestPending && activeRow
@@ -815,12 +892,25 @@ export const EntityPicker = ({
         selectOption(exact.option);
         return;
       }
+      const groupFqn = onGroupSelect ? typedGroupFqn(query) : undefined;
+      if (groupFqn) {
+        selectGroup(groupFqn);
+        return;
+      }
       inputRef.current?.dispatchEvent(
         new KeyboardEvent("keydown", { bubbles: true, key: "Enter" }),
       );
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [open, optionRows, query, requestPending, selectOption]);
+  }, [
+    onGroupSelect,
+    open,
+    optionRows,
+    query,
+    requestPending,
+    selectGroup,
+    selectOption,
+  ]);
 
   const updatePopoverOpen = (nextOpen: boolean) => {
     window.cancelAnimationFrame(deferredCloseFrameRef.current ?? 0);
@@ -882,6 +972,10 @@ export const EntityPicker = ({
     }
     if (row.kind === "group") {
       drillInto(row.group);
+      return;
+    }
+    if (row.kind === "group-selection") {
+      selectGroup(row.fqn);
       return;
     }
     if (!createOption || creating) {
@@ -998,6 +1092,24 @@ export const EntityPicker = ({
                         editedValue,
                       )
                     : editedValue;
+                const exactOption = loadOptions
+                  ? undefined
+                  : effectiveOptions.find(
+                      (option) => option.searchLabel === nextQuery,
+                    );
+                if (exactOption) {
+                  selectOption(exactOption);
+                  return;
+                }
+                const selectedGroupFqn = onGroupSelect
+                  ? typedGroupFqn(nextQuery)
+                  : undefined;
+                if (selectedGroupFqn && !loadOptions) {
+                  typedThisSessionRef.current = true;
+                  setTypedThisSession(true);
+                  selectGroup(selectedGroupFqn);
+                  return;
+                }
                 const remoteRemainder =
                   remoteParentFqn && nextQuery.startsWith(`${remoteParentFqn}:`)
                     ? nextQuery.slice(remoteParentFqn.length + 1)
@@ -1037,15 +1149,6 @@ export const EntityPicker = ({
                     : "");
                 typedThisSessionRef.current = true;
                 setTypedThisSession(true);
-                const exactOption = loadOptions
-                  ? undefined
-                  : effectiveOptions.find(
-                      (option) => option.searchLabel === nextQuery,
-                    );
-                if (exactOption) {
-                  selectOption(exactOption);
-                  return;
-                }
                 if (nextModel.levelMode !== model.levelMode) {
                   setAnnouncement(
                     nextModel.levelMode
@@ -1056,7 +1159,11 @@ export const EntityPicker = ({
                 setQuery(nextQuery);
                 setCreateError(undefined);
                 updateOpen(true, true);
-                setActiveIndex(0);
+                setActiveIndex(
+                  onGroupSelect && nextModel.committedPrefix && nextModel.filter
+                    ? 1
+                    : 0,
+                );
                 if (!selected || selected.searchLabel !== nextQuery) {
                   onChange(undefined);
                 }
@@ -1179,7 +1286,9 @@ export const EntityPicker = ({
                       ? `${activeRow.group.fqn}:`
                       : activeRow.kind === "leaf"
                         ? activeRow.option.searchLabel
-                        : activeRow.fqn;
+                        : activeRow.kind === "create"
+                          ? activeRow.fqn
+                          : `${activeRow.fqn}:*`;
                   if (adoptedValue !== query) {
                     event.preventDefault();
                     adoptActiveRow();
@@ -1419,12 +1528,18 @@ export const EntityPicker = ({
                     aria-label={
                       row.kind === "group"
                         ? `${row.group.fqn}, group, ${row.group.childCount} children`
-                        : row.kind === "create"
-                          ? `Create ${row.fqn}`
-                          : undefined
+                        : row.kind === "group-selection"
+                          ? `Select entire group ${row.fqn}`
+                          : row.kind === "create"
+                            ? `Create ${row.fqn}`
+                            : undefined
                     }
                     aria-selected={
-                      row.kind === "leaf" ? row.option.id === value : false
+                      row.kind === "leaf"
+                        ? row.option.id === value
+                        : row.kind === "group-selection"
+                          ? selectedGroupFqns.includes(row.fqn)
+                          : false
                     }
                     className={cn(
                       "hover:bg-muted flex w-full items-center px-2 py-2 text-left text-sm",
@@ -1433,6 +1548,9 @@ export const EntityPicker = ({
                         "bg-[var(--color-interactive-bright)]",
                       row.kind === "leaf" &&
                         row.option.id === value &&
+                        "bg-[var(--color-interactive-bright)]",
+                      row.kind === "group-selection" &&
+                        selectedGroupFqns.includes(row.fqn) &&
                         "bg-[var(--color-interactive-bright)]",
                       row.kind === "create" &&
                         creating &&
@@ -1532,6 +1650,15 @@ export const EntityPicker = ({
                           className="text-muted-foreground ml-1 size-4 shrink-0"
                         />
                       </>
+                    ) : row.kind === "group-selection" ? (
+                      <span className="flex min-w-0 flex-col">
+                        <span className="font-mono font-medium">
+                          Select entire group
+                        </span>
+                        <span className="text-muted-foreground truncate font-mono text-xs">
+                          {row.fqn}:*
+                        </span>
+                      </span>
                     ) : (
                       <>
                         <Plus
@@ -1617,6 +1744,8 @@ interface EntityMultiPickerProps {
     ids: readonly number[],
     selectedOptions: readonly EntityOption[],
   ) => void;
+  readonly groupValues?: readonly string[];
+  readonly onGroupChange?: (fqns: readonly string[]) => void;
   readonly onOpenChange?: (open: boolean) => void;
   readonly options?: readonly EntityOption[];
   readonly placeholder?: string;
@@ -1635,6 +1764,8 @@ export const EntityMultiPicker = ({
   loadCreationAvailability,
   loadOptions,
   onChange,
+  groupValues = [],
+  onGroupChange,
   onOpenChange,
   options = [],
   placeholder = "Search",
@@ -1654,11 +1785,35 @@ export const EntityMultiPicker = ({
     value.includes(option.id),
   );
   const valueRef = useRef(value);
+  const groupValuesRef = useRef(groupValues);
+  const pickerRef = useRef<HTMLDivElement>(null);
+  const restoreGroupFocusRef = useRef<number | undefined>(undefined);
+  const groupValuesKey = JSON.stringify(groupValues);
+  const renderedGroupValuesKeyRef = useRef(groupValuesKey);
   useLayoutEffect(() => {
     valueRef.current = value;
   }, [value]);
+  useLayoutEffect(() => {
+    if (renderedGroupValuesKeyRef.current === groupValuesKey) return;
+    renderedGroupValuesKeyRef.current = groupValuesKey;
+    groupValuesRef.current = groupValues;
+  }, [groupValues, groupValuesKey]);
+  useLayoutEffect(() => {
+    const removedIndex = restoreGroupFocusRef.current;
+    if (removedIndex === undefined) return;
+    restoreGroupFocusRef.current = undefined;
+    const remainingButtons = Array.from(
+      pickerRef.current?.querySelectorAll<HTMLButtonElement>(
+        "[data-entity-group-remove]",
+      ) ?? [],
+    );
+    const fallback =
+      remainingButtons[Math.min(removedIndex, remainingButtons.length - 1)] ??
+      pickerRef.current?.querySelector<HTMLInputElement>("[role=combobox]");
+    fallback?.focus();
+  }, [groupValuesKey]);
   return (
-    <div className="flex min-w-0 flex-col gap-2">
+    <div ref={pickerRef} className="flex min-w-0 flex-col gap-2">
       <EntityPicker
         autoFocus={autoFocus}
         clearOnSelect
@@ -1684,10 +1839,22 @@ export const EntityMultiPicker = ({
           setLoadedOptions(returned);
         }}
         onOpenChange={onOpenChange}
+        onGroupSelect={
+          onGroupChange
+            ? (fqn) => {
+                if (!groupValuesRef.current.includes(fqn)) {
+                  const nextGroupValues = [...groupValuesRef.current, fqn];
+                  groupValuesRef.current = nextGroupValues;
+                  onGroupChange(nextGroupValues);
+                }
+              }
+            : undefined
+        }
         placeholder={placeholder}
         preferredSide="top"
         options={options}
         selectedIds={value}
+        selectedGroupFqns={groupValues}
         value={undefined}
         onChange={(nextId, selectedOption) => {
           if (nextId) {
@@ -1708,7 +1875,7 @@ export const EntityMultiPicker = ({
           }
         }}
       />
-      {selectedOptions.length > 0 ? (
+      {selectedOptions.length > 0 || groupValues.length > 0 ? (
         <div
           className="relative z-40 flex w-full min-w-0 flex-wrap gap-1 overflow-x-hidden p-0.5"
           data-testid="entity-multi-picker-selected"
@@ -1756,6 +1923,41 @@ export const EntityMultiPicker = ({
               </span>
             );
           })}
+          {groupValues.map((fqn, groupIndex) => (
+            <span
+              key={`group:${fqn}`}
+              className="bg-muted inline-flex h-7 max-w-full min-w-0 items-center gap-1 border border-[var(--border-ink)] px-2 font-mono text-xs shadow-[var(--shadow-chip)]"
+            >
+              <Tooltip
+                className="min-w-0 flex-1"
+                focusable={false}
+                label={`${fqn}:* (entire group)`}
+              >
+                <span className="block truncate">{fqn}:* (entire group)</span>
+              </Tooltip>
+              <Tooltip asChild label={`Remove group ${fqn}`}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="shrink-0"
+                  aria-label={`Remove group ${fqn}`}
+                  data-entity-group-remove
+                  disabled={disabled}
+                  onClick={() => {
+                    restoreGroupFocusRef.current = groupIndex;
+                    const nextGroupValues = groupValuesRef.current.filter(
+                      (candidate) => candidate !== fqn,
+                    );
+                    groupValuesRef.current = nextGroupValues;
+                    onGroupChange?.(nextGroupValues);
+                  }}
+                >
+                  <Close aria-hidden="true" />
+                </Button>
+              </Tooltip>
+            </span>
+          ))}
         </div>
       ) : null}
     </div>
