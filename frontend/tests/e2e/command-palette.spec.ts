@@ -6,23 +6,7 @@ interface AccountFixture {
   readonly fqn: string;
 }
 
-interface CategoryFixture {
-  readonly category_id: number;
-  readonly fqn: string;
-}
-
-interface TagFixture {
-  readonly tag_id: number;
-}
-
-interface MemberFixture {
-  readonly member_id: number;
-  readonly name: string;
-}
-
 interface TransactionFixture {
-  readonly display_title: string;
-  readonly initiated_date: string;
   readonly transaction_id: number;
 }
 
@@ -63,132 +47,106 @@ const findByFqn = <T extends { readonly fqn: string }>(
   return fixture as T;
 };
 
-const createTag = async (page: Page, fqn: string): Promise<TagFixture> => {
-  const response = await page.request.post("/api/tags", { data: { fqn } });
-  expect(response.ok()).toBe(true);
-  return (await response.json()) as TagFixture;
-};
-
-const createCategory = async (
-  page: Page,
-  fqn: string,
-): Promise<CategoryFixture> => {
-  const response = await page.request.post("/api/categories", {
-    data: {
-      economic_intent: "expense",
-      fqn,
-    },
-  });
-  expect(response.ok()).toBe(true);
-  return (await response.json()) as CategoryFixture;
-};
-
-const createMember = async (
-  page: Page,
-  name: string,
-): Promise<MemberFixture> => {
-  const response = await page.request.post("/api/members", { data: { name } });
-  expect(response.ok()).toBe(true);
-  return (await response.json()) as MemberFixture;
-};
-
 const createSearchFixtureTransaction = async (
   page: Page,
-  options: {
-    readonly amount: string;
-    readonly category: CategoryFixture;
-    readonly initiatedDate: string;
-    readonly member?: MemberFixture;
-    readonly memo: string;
-    readonly tag?: TagFixture;
-  },
+  memo: string,
 ): Promise<TransactionFixture> => {
   const accounts = await listAccountFixtures(page);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
   const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
+  const categoryResponse = await page.request.post("/api/categories", {
+    data: {
+      economic_intent: "expense",
+      fqn: `zzE2EPalette:${memo}:Category`,
+    },
+  });
+  expect(categoryResponse.ok()).toBe(true);
+  const category = (await categoryResponse.json()) as {
+    readonly category_id: number;
+  };
   const response = await page.request.post("/api/transactions/spend", {
     data: {
-      amount: options.amount,
-      category_id: options.category.category_id,
+      amount: "12.34",
+      category_id: category.category_id,
       counterparty_account_id: merchantAccount.account_id,
       currency: "USD",
       funding_account_id: fundingAccount.account_id,
-      initiated_date: options.initiatedDate,
-      member_id: options.member?.member_id,
-      memo: options.memo,
-      tag_ids: options.tag ? [options.tag.tag_id] : undefined,
+      initiated_date: "2026-05-08",
+      memo,
     },
   });
   expect(response.ok()).toBe(true);
   return (await response.json()) as TransactionFixture;
 };
 
-const deleteTransaction = async (
-  page: Page,
-  transaction: TransactionFixture,
-): Promise<void> => {
-  const response = await page.request.delete(
-    `/api/transactions/${transaction.transaction_id}`,
-  );
-  expect(response.ok()).toBe(true);
-};
+test("command palette navigates to Status", async ({ page }) => {
+  await page.goto("/overview");
+  await openPalette(page);
 
-test("command palette opens globally, filters, navigates, and restores focus", async ({
+  const dialog = page.getByRole("dialog", { name: "Command Palette" });
+  await page.keyboard.insertText("status");
+  await expect(dialog.getByRole("option", { name: "Status" })).toBeVisible();
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Enter");
+
+  await expect(page).toHaveURL(/\/status$/);
+  await expect(page.getByRole("heading", { name: "Status" })).toBeVisible();
+});
+
+test("command palette discovers and navigates to an account", async ({
   page,
 }) => {
   await page.goto("/overview");
-
-  const overviewLink = page
-    .getByLabel("Primary")
-    .getByRole("link", { exact: true, name: "Overview" });
-  await overviewLink.focus();
-  await expect(overviewLink).toBeFocused();
-
   await openPalette(page);
+
   const dialog = page.getByRole("dialog", { name: "Command Palette" });
-  const search = page.getByRole("combobox", { name: "Command search" });
-  await expect(search).toHaveAttribute(
-    "aria-controls",
-    "command-palette-results",
-  );
-  await expect(search).toHaveAttribute("aria-expanded", "true");
+  await dialog
+    .getByRole("combobox", { name: "Command search" })
+    .fill("joint_checking");
+  await dialog
+    .getByRole("option", { name: /Account bank:Chase:joint_checking/ })
+    .click();
+
+  await expect(page).toHaveURL(/\/accounts\/\d+$/);
   await expect(
-    dialog.getByRole("listbox", { name: "Command results" }),
+    page.getByRole("heading", { name: /joint_checking/ }),
   ).toBeVisible();
-  await expect(dialog.getByRole("group", { name: "Navigation" })).toBeVisible();
-
-  await search.fill("status");
-  await expect(dialog.getByRole("option", { name: /Status/ })).toBeVisible();
-  await expect(dialog.getByRole("option", { name: /Overview/ })).toHaveCount(0);
-
-  await page.keyboard.press("Escape");
-  await expect(dialog).toHaveCount(0);
-  await expect(overviewLink).toBeFocused();
-
-  await openPalette(page);
-  await page.keyboard.press("Control+K");
-  await expect(
-    page.getByRole("dialog", { name: "Command Palette" }),
-  ).toHaveCount(0);
-
-  await openPalette(page);
-  await page.keyboard.press("ArrowDown");
-  await page.keyboard.press("ArrowDown");
-  await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(/\/accounts$/);
-  await expect(page.getByRole("heading", { name: "Accounts" })).toBeVisible();
 });
 
-test("command palette opens from the transactions page", async ({ page }) => {
-  await page.goto("/transactions");
-  await expect(
-    page.getByRole("heading", { name: "Transactions" }),
-  ).toBeFocused();
-  await page.getByRole("searchbox", { name: "Search" }).focus();
+test("command palette searches transactions and opens the selected detail", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const memo = `Palette multiword search ${unique}`;
+  const transaction = await createSearchFixtureTransaction(page, memo);
+  await page.goto("/overview");
   await openPalette(page);
-  const dialog = page.getByRole("dialog", { name: "Command Palette" });
-  await expect(dialog).toHaveCount(1);
 
+  const dialog = page.getByRole("dialog", { name: "Command Palette" });
+  await dialog
+    .getByRole("combobox", { name: "Command search" })
+    .fill(`'${memo}`);
+  const result = dialog.getByRole("option").filter({ hasText: memo });
+  await expect(result).toBeVisible();
+  await result.click();
+
+  await expect(page).toHaveURL(
+    new RegExp(`[?&]transaction=${transaction.transaction_id}(?:&|$)`),
+  );
+  await expect(
+    page
+      .getByTestId("transaction-detail-panel")
+      .getByTestId("transaction-detail-summary-memo"),
+  ).toHaveText(memo);
+});
+
+test("command palette suppresses global entry and opens a new spend", async ({
+  page,
+}) => {
+  await page.goto("/overview");
+  await openPalette(page);
+
+  const dialog = page.getByRole("dialog", { name: "Command Palette" });
   const overviewOption = dialog.getByRole("option", { name: /Overview/ });
   await page.keyboard.press("Tab");
   await expect(overviewOption).toHaveAttribute("aria-selected", "true");
@@ -197,762 +155,25 @@ test("command palette opens from the transactions page", async ({ page }) => {
   }
   await expect(overviewOption).toBeFocused();
   await page.keyboard.press("KeyN");
-  await expect(page.getByRole("heading", { name: "New spend" })).toHaveCount(0);
-});
-
-test("long template paths stay within the narrow command palette", async ({
-  page,
-}, testInfo) => {
-  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
-  const fqn = `E2E:${unique}:${"UnbrokenTemplateSegment".repeat(12)}`;
-  const createResponse = await page.request.post("/api/transaction-templates", {
-    data: { fqn, records: [{}] },
-  });
-  expect(createResponse.ok(), await createResponse.text()).toBe(true);
-  const template = (await createResponse.json()) as {
-    readonly transaction_template_id: number;
-  };
-
-  await page.setViewportSize({ height: 800, width: 480 });
-  await page.goto("/overview");
-  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
-  await openPalette(page);
-  const dialog = page.getByRole("dialog", { name: "Command Palette" });
-  await dialog.getByRole("combobox", { name: "Command search" }).fill(unique);
-  const option = dialog.getByRole("option", { name: `Use ${fqn}` });
-  await expect(option).toBeVisible();
-  const viewport = dialog.getByRole("listbox", { name: "Command results" });
-  expect(
-    await viewport.evaluate(
-      (element) => element.scrollWidth <= element.clientWidth + 1,
-    ),
-  ).toBe(true);
-
-  await option.locator("[data-slot='tooltip-trigger']").hover();
-  await expect(page.getByRole("tooltip")).toHaveText(fqn);
-
-  const deleteResponse = await page.request.delete(
-    `/api/transaction-templates/${template.transaction_template_id}`,
-  );
-  expect(deleteResponse.ok(), await deleteResponse.text()).toBe(true);
-});
-
-test("command palette toggles transaction edit-mode mode", async ({ page }) => {
-  await page.goto("/transactions");
-  await expect(page.getByText("Description")).toBeVisible();
-  await page.getByRole("searchbox", { name: "Search" }).focus();
-
-  await openPalette(page);
-  const search = page.getByRole("combobox", { name: "Command search" });
-  await search.fill("edit mode");
-  await page
-    .getByRole("dialog", { name: "Command Palette" })
-    .getByRole("option", { name: /Toggle transaction edit mode/ })
-    .click();
   await expect(
-    page.getByTestId("transaction-browser-edit-mode-header"),
-  ).toBeVisible();
-  await expect(
-    page.getByTestId("transaction-browser-edit-mode-header"),
-  ).toContainText("0 selected");
-
-  await openPalette(page);
-  const doneButton = page
-    .getByTestId("transaction-browser-edit-mode-header")
-    .getByRole("button", { name: "Done" });
-  const doneBounds = await doneButton.boundingBox();
-  expect(doneBounds).not.toBeNull();
-  await page.mouse.click(
-    doneBounds!.x + doneBounds!.width / 2,
-    doneBounds!.y + doneBounds!.height / 2,
-  );
-  await expect(
-    page.getByTestId("transaction-browser-edit-mode-header"),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("dialog", { name: "Command Palette" }),
+    page.getByRole("dialog", { name: "Transaction editor" }),
   ).toHaveCount(0);
 
-  await openPalette(page);
-  await page
+  await dialog
     .getByRole("combobox", { name: "Command search" })
-    .fill("edit mode");
-  await page
-    .getByRole("dialog", { name: "Command Palette" })
-    .getByRole("option", { name: /Toggle transaction edit mode/ })
-    .click();
-  await expect(
-    page.getByTestId("transaction-browser-edit-mode-header"),
-  ).toHaveCount(0);
-  await expect(page.getByTestId("transaction-edit-dock")).toHaveCount(0);
-});
+    .fill("new spend");
+  await dialog.getByRole("option", { name: "New spend" }).click();
 
-test("current Settings command restores focus to the sidebar link", async ({
-  page,
-}) => {
-  await page.goto("/settings/");
-  const settingsLink = page
-    .getByLabel("Primary")
-    .getByRole("link", { exact: true, name: "Settings" });
-  await settingsLink.focus();
-
-  await openPalette(page);
-  const dialog = page.getByRole("dialog", { name: "Command Palette" });
-  await page.getByRole("combobox", { name: "Command search" }).fill("settings");
-  await expect(dialog.getByRole("option", { name: /Settings/ })).toContainText(
-    "Current",
-  );
-  await page.keyboard.press("Enter");
-
-  await expect(dialog).toHaveCount(0);
-  await expect(page).toHaveURL(/\/settings\/$/);
-  await expect(settingsLink).toBeFocused();
-});
-
-test("Settings navigation keeps palette focus trapped during history", async ({
-  page,
-}) => {
-  await page.goto("/overview");
-  await page
-    .getByLabel("Primary")
-    .getByRole("link", { exact: true, name: "Overview" })
-    .focus();
-  await openPalette(page);
-
-  const dialog = page.getByRole("dialog", { name: "Command Palette" });
-  await page.getByRole("combobox", { name: "Command search" }).fill("settings");
-  await page.keyboard.press("Enter");
-
-  await expect(dialog).toHaveCount(0);
-  await expect(page).toHaveURL(/\/settings$/);
-  await expect(
-    page.getByRole("heading", { level: 1, name: "Settings" }),
-  ).toBeFocused();
-
-  await page
-    .getByLabel("Primary")
-    .getByRole("link", { exact: true, name: "Overview" })
-    .click();
-  await page.locator("header").getByRole("link", { name: "View all" }).focus();
-  await openPalette(page);
-  await page.goBack();
-
-  await expect(page).toHaveURL(/\/settings$/);
-  await expect(dialog).toBeVisible();
-  await expect(
-    page.getByRole("combobox", { name: "Command search" }),
-  ).toBeFocused();
-  const lastOption = dialog.getByRole("option").last();
-  await page.keyboard.press("Shift+Tab");
-  await expect(lastOption).toBeFocused();
-  await page.keyboard.press("Tab");
-  await expect(
-    page.getByRole("combobox", { name: "Command search" }),
-  ).toBeFocused();
-  await page.keyboard.press("Escape");
-  await expect(dialog).toHaveCount(0);
-  await expect(
-    page.getByRole("heading", { level: 1, name: "Settings" }),
-  ).toBeFocused();
-});
-
-test("palette restores focus when history detaches the Settings opener", async ({
-  page,
-}) => {
-  await page.goto("/status");
-  await page
-    .getByLabel("Primary")
-    .getByRole("link", { exact: true, name: "Settings" })
-    .click();
-  await expect(
-    page.getByRole("heading", { level: 1, name: "Settings" }),
-  ).toBeFocused();
-
-  await openPalette(page);
-  await page.goBack();
-
-  await expect(page).toHaveURL(/\/status$/);
-  await expect(
-    page.getByRole("combobox", { name: "Command search" }),
-  ).toBeFocused();
-  await page.keyboard.press("Escape");
-  await expect(
-    page.getByRole("heading", { level: 1, name: "Status" }),
-  ).toBeFocused();
-});
-
-test("command palette transaction search renders results and opens off-page detail", async ({
-  page,
-}, testInfo) => {
-  await page.setViewportSize({ width: 600, height: 720 });
-  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
-  const unique = `${slug}${Date.now()}`;
-  const member = await createMember(page, `zzPaletteTxn ${unique}`);
-  const tag = await createTag(page, `zzE2EPaletteTxn:${unique}:Reference`);
-  const category = await createCategory(
-    page,
-    `zzE2EPaletteTxn:${unique}:Category`,
-  );
-  const memo = `E2E palette transaction search ${unique}`;
-  const transaction = await createSearchFixtureTransaction(page, {
-    amount: "9999999999.87",
-    category,
-    initiatedDate: "2026-01-09",
-    member,
-    memo,
-    tag,
-  });
-
-  await page.goto("/transactions?page=1&pageSize=25");
-  await expect(page.getByTestId("transactions-table-scroll")).toBeVisible();
-  await expect(
-    page.getByTestId("transactions-table-scroll").getByText(memo),
-  ).toHaveCount(0);
-
-  await openPalette(page);
-  const dialog = page.getByRole("dialog", { name: "Command Palette" });
-  const search = page.getByRole("combobox", { name: "Command search" });
-  const searchRequest = page.waitForRequest((request) => {
-    const url = new URL(request.url());
-    return (
-      url.pathname === "/api/transactions" &&
-      url.searchParams.get("search") === member.name &&
-      url.searchParams.get("filter") ===
-        "(lifecycle:active or lifecycle:expected or lifecycle:cancelled)" &&
-      url.searchParams.get("limit") === "20" &&
-      url.searchParams.get("offset") === "0"
-    );
-  });
-  await search.fill(`'${member.name}`);
-  await searchRequest;
-
-  const option = dialog.getByRole("option").filter({ hasText: memo });
-  await expect(option).toBeVisible();
-  await expect(option).toContainText("Jan 9");
-  await expect(option).toContainText(transaction.display_title);
-  await expect(option).toContainText(memo);
-  const optionLabel = await option.getAttribute("aria-label");
-  expect(optionLabel).toContain("cash:Wallet");
-  expect(optionLabel).toContain("merchant:PowellsBooks");
-  await option
-    .getByTestId("transaction-result-description")
-    .getByText(transaction.display_title, { exact: true })
-    .hover();
-  const summaryTooltip = page.getByRole("tooltip");
-  await expect(summaryTooltip).toContainText("cash:Wallet");
-  await expect(summaryTooltip).toContainText("merchant:PowellsBooks");
-  await page.mouse.move(0, 0);
-  await expect(summaryTooltip).toBeHidden();
-  await expect(option.getByRole("img", { name: "Spend" })).toBeVisible();
-  const amountChip = option.getByTestId("amount-chip");
-  await expect(amountChip).toContainText("-9,999,999,999.87 $");
-  await expect(amountChip).toHaveCSS("height", "28px");
-
-  await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(
-    new RegExp(`[?&]transaction=${transaction.transaction_id}(?:&|$)`),
-  );
-  const detailPanel = page.getByRole("dialog", {
-    name: transaction.display_title,
-  });
-  await expect(detailPanel).toBeVisible();
-  await expect(
-    detailPanel.getByTestId("transaction-detail-summary-memo"),
-  ).toHaveText(memo);
-  await deleteTransaction(page, transaction);
-});
-
-test("command palette transaction search falls back while account context loads", async ({
-  page,
-}, testInfo) => {
-  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
-  const unique = `${slug}${Date.now()}`;
-  const member = await createMember(page, `zzPaletteLookup ${unique}`);
-  const tag = await createTag(page, `zzE2EPaletteLookup:${unique}:Reference`);
-  const category = await createCategory(
-    page,
-    `zzE2EPaletteLookup:${unique}:Category`,
-  );
-  const memo = `E2E palette lookup context ${unique}`;
-  const transaction = await createSearchFixtureTransaction(page, {
-    amount: "123.45",
-    category,
-    initiatedDate: "2026-01-09",
-    member,
-    memo,
-    tag,
-  });
-  let releaseAccountLookup: (() => void) | undefined;
-  const accountLookupReleased = new Promise<void>((resolve) => {
-    releaseAccountLookup = resolve;
-  });
-
-  await page.route("**/api/accounts?**", async (route) => {
-    const url = new URL(route.request().url());
-    if (
-      route.request().method() !== "GET" ||
-      url.searchParams.get("include_tombstoned") !== "true"
-    ) {
-      await route.fallback();
-      return;
-    }
-
-    await accountLookupReleased;
-    await route.fulfill({
-      body: JSON.stringify({
-        error: { code: "unavailable", message: "Lookups unavailable." },
-      }),
-      contentType: "application/json",
-      status: 503,
-    });
-  });
-
-  await page.goto("/overview");
-  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
-  await openPalette(page);
-  const dialog = page.getByRole("dialog", { name: "Command Palette" });
-  await page.getByRole("combobox", { name: "Command search" }).fill(`'${memo}`);
-  await expect(dialog.getByText(transaction.display_title)).toBeVisible();
-
-  releaseAccountLookup?.();
-  await expect(dialog.getByRole("alert")).toHaveCount(0);
-  await expect(dialog.getByText(transaction.display_title)).toBeVisible();
-  await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(
-    new RegExp(`[?&]transaction=${transaction.transaction_id}(?:&|$)`),
-  );
-  await deleteTransaction(page, transaction);
-});
-
-test("command palette keeps narrow multi-part results single-height", async ({
-  page,
-}, testInfo) => {
-  await page.setViewportSize({ width: 390, height: 720 });
-  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
-  const unique = `${slug}${Date.now()}`;
-  const category = await createCategory(
-    page,
-    `zzE2EPaletteHeight:${unique}:Category`,
-  );
-  const accounts = await listAccountFixtures(page);
-  const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
-  const partyAccount = findByFqn(accounts, "person:Friend:Jordan");
-  const simpleMemo = `E2E palette height ${unique} simple`;
-  const multiPartMemo = `E2E palette height ${unique} multi`;
-  const decoyMemo = `E2E palette height ${unique} decoy`;
-
-  const decoyTransaction = await createSearchFixtureTransaction(page, {
-    amount: "11.00",
-    category,
-    initiatedDate: "2026-05-31",
-    memo: decoyMemo,
-  });
-  const simpleTransaction = await createSearchFixtureTransaction(page, {
-    amount: "999999.99",
-    category,
-    initiatedDate: "2026-05-30",
-    memo: simpleMemo,
-  });
-  const multiPartResponse = await page.request.post("/api/transactions", {
-    data: {
-      initiated_date: "2026-05-29",
-      records: [
-        {
-          account_id: fundingAccount.account_id,
-          amount: "-1000000.00",
-          category_id: null,
-          currency: "USD",
-          memo: multiPartMemo,
-          settlement: { status: "posted" },
-          reconciliation_status: "unreconciled",
-          source: "manual",
-        },
-        {
-          account_id: merchantAccount.account_id,
-          amount: "999999.99",
-          category_id: category.category_id,
-          currency: "USD",
-          memo: multiPartMemo,
-          settlement: null,
-          reconciliation_status: "unreconciled",
-          source: "manual",
-        },
-        {
-          account_id: partyAccount.account_id,
-          amount: "0.01",
-          category_id: null,
-          currency: "USD",
-          memo: multiPartMemo,
-          settlement: { status: "posted" },
-          reconciliation_status: "unreconciled",
-          source: "manual",
-        },
-      ],
-    },
-  });
-  expect(multiPartResponse.ok()).toBe(true);
-  const multiPartTransaction =
-    (await multiPartResponse.json()) as TransactionFixture;
-
-  await page.goto("/overview");
-  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
-  await openPalette(page);
-  const searchRequest = page.waitForRequest((request) => {
-    const url = new URL(request.url());
-    return (
-      url.pathname === "/api/transactions" &&
-      url.searchParams.get("search") === `palette height ${unique}`
-    );
-  });
-  await page
-    .getByRole("combobox", { name: "Command search" })
-    .fill(`'palette height ${unique}`);
-  await searchRequest;
-
-  const dialog = page.getByRole("dialog", { name: "Command Palette" });
-  const simpleOption = dialog
-    .getByRole("option")
-    .filter({ hasText: simpleMemo });
-  const multiPartOption = dialog
-    .getByRole("option")
-    .filter({ hasText: multiPartMemo });
-  await expect(simpleOption).toHaveAttribute("aria-selected", "false");
-  await expect(multiPartOption).toHaveAttribute("aria-selected", "false");
-  await expect(multiPartOption.getByTestId("amount-chip")).toHaveText(
-    "-999,999.99 $",
-  );
-  await expect(
-    multiPartOption.getByTestId("more-parts-indicator"),
-  ).toBeVisible();
-  await expect(multiPartOption.getByTestId("more-parts-indicator")).toHaveText(
-    "+",
-  );
-  expect(
-    await multiPartOption
-      .getByTestId("more-parts-indicator")
-      .evaluate((indicator) => indicator.tabIndex),
-  ).toBe(-1);
-  await expect(multiPartOption).toHaveAttribute(
-    "aria-label",
-    /more transaction parts, all parts -999,999\.99 \$, -0\.01 \$/,
-  );
-  await expect(
-    multiPartOption.evaluate(
-      (option) => option.scrollWidth <= option.clientWidth,
-    ),
-  ).resolves.toBe(true);
-  const [descriptionBounds, amountBounds] = await Promise.all([
-    multiPartOption.getByTestId("transaction-result-description").boundingBox(),
-    multiPartOption.getByTestId("transaction-result-amounts").boundingBox(),
-  ]);
-  expect(descriptionBounds).not.toBeNull();
-  expect(amountBounds).not.toBeNull();
-  expect(descriptionBounds?.width ?? 0).toBeGreaterThan(0);
-  expect(descriptionBounds?.x ?? 0).toBeLessThan((amountBounds?.x ?? 0) + 0.5);
-  expect(
-    (descriptionBounds?.x ?? 0) + (descriptionBounds?.width ?? 0),
-  ).toBeLessThanOrEqual((amountBounds?.x ?? 0) + 0.5);
-
-  const [simpleHeight, multiPartHeight] = await Promise.all([
-    simpleOption.evaluate((option) => option.getBoundingClientRect().height),
-    multiPartOption.evaluate((option) => option.getBoundingClientRect().height),
-  ]);
-  expect(Math.abs(simpleHeight - multiPartHeight)).toBeLessThanOrEqual(1);
-  await deleteTransaction(page, multiPartTransaction);
-  await deleteTransaction(page, simpleTransaction);
-  await deleteTransaction(page, decoyTransaction);
-});
-
-test("command palette transaction search preserves spaces and supports keyboard selection", async ({
-  page,
-}, testInfo) => {
-  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
-  const unique = `${slug}${Date.now()}`;
-  const category = await createCategory(
-    page,
-    `zzE2EPaletteKeyboard:${unique}:Category`,
-  );
-  const firstMemo = `E2E palette keyboard ${unique} first result`;
-  const secondMemo = `E2E palette keyboard ${unique} second result`;
-  await createSearchFixtureTransaction(page, {
-    amount: "11.00",
-    category,
-    initiatedDate: "2026-05-09",
-    memo: firstMemo,
-  });
-  const secondTransaction = await createSearchFixtureTransaction(page, {
-    amount: "12.00",
-    category,
-    initiatedDate: "2026-05-08",
-    memo: secondMemo,
-  });
-
-  await page.goto("/overview");
-  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
-  await openPalette(page);
-  const search = page.getByRole("combobox", { name: "Command search" });
-  await page.keyboard.press("Space");
-  await expect(search).toHaveValue("'");
-
-  const searchRequest = page.waitForRequest((request) => {
-    const url = new URL(request.url());
-    return (
-      url.pathname === "/api/transactions" &&
-      url.searchParams.get("search") === `palette keyboard ${unique}`
-    );
-  });
-  await page.keyboard.type(`palette keyboard ${unique}`);
-  await searchRequest;
-  await expect(search).toHaveValue(`'palette keyboard ${unique}`);
-  await expect(page.getByRole("option", { name: /Transaction/ })).toHaveCount(
-    2,
-  );
-
-  await page.keyboard.press("ArrowDown");
-  await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(
-    new RegExp(`[?&]transaction=${secondTransaction.transaction_id}(?:&|$)`),
-  );
-  await expect(
-    page.getByRole("dialog", { name: secondTransaction.display_title }),
-  ).toBeVisible();
-});
-
-test("command palette transaction search shows empty and error states and exits mode", async ({
-  page,
-}, testInfo) => {
-  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
-  const unique = `${slug}${Date.now()}`;
-  const emptyQuery = `no transaction palette match ${unique}`;
-  const errorQuery = `palette error ${unique}`;
-
-  await page.route("**/api/transactions?**", async (route) => {
-    const url = new URL(route.request().url());
-    if (url.searchParams.get("search") !== errorQuery) {
-      await route.fallback();
-      return;
-    }
-
-    await route.fulfill({
-      body: JSON.stringify({
-        error: {
-          code: "invalid_request",
-          message: "Palette transaction search failed.",
-        },
-      }),
-      contentType: "application/json",
-      status: 400,
-    });
-  });
-
-  await page.goto("/overview");
-  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
-  await openPalette(page);
-  const dialog = page.getByRole("dialog", { name: "Command Palette" });
-  const search = page.getByRole("combobox", { name: "Command search" });
-
-  await search.fill(`'${emptyQuery}`);
-  await expect(dialog.getByText("No matching transactions.")).toBeVisible();
-
-  await search.fill(`'${errorQuery}`);
-  await expect(
-    dialog.getByText("Palette transaction search failed."),
-  ).toBeVisible();
-
-  await search.fill("'");
-  await page.keyboard.press("Backspace");
-  await expect(search).toHaveValue("");
-  await expect(dialog.getByRole("group", { name: "Navigation" })).toBeVisible();
-  await search.fill("status");
-  await expect(dialog.getByRole("option", { name: /Status/ })).toBeVisible();
-});
-
-const createHiddenAccount = async (
-  page: Page,
-  fqn: string,
-): Promise<AccountFixture> => {
-  const response = await page.request.post("/api/accounts", {
-    data: {
-      account_type: "owned",
-      currency: "USD",
-      fqn,
-      is_hidden: true,
-    },
-  });
-  expect(response.ok()).toBe(true);
-  return (await response.json()) as AccountFixture;
-};
-
-test("command palette entity search discards stale results and reports empty and error states", async ({
-  page,
-}) => {
-  let releaseSlow: (() => void) | undefined;
-  const slowSearch = new Promise<void>((resolve) => {
-    releaseSlow = resolve;
-  });
-  await page.route(
-    /\/api\/(accounts|categories|tags|members)\/search/,
-    async (route) => {
-      const url = new URL(route.request().url());
-      const surface = url.pathname.split("/").at(-2);
-      const query = url.searchParams.get("q");
-      if (query === "PaletteSlow") {
-        await slowSearch;
-      }
-      if (query === "PaletteError") {
-        await route.fulfill({
-          body: JSON.stringify({
-            code: "unavailable",
-            message: "Entity search unavailable.",
-          }),
-          contentType: "application/json",
-          status: 500,
-        });
-        return;
-      }
-      const items =
-        surface === "accounts" && query !== "PaletteEmpty"
-          ? [
-              {
-                account_id: query === "PaletteSlow" ? 9501 : 9502,
-                account_type: "owned",
-                currency: "USD",
-                fqn:
-                  query === "PaletteSlow"
-                    ? "PaletteSlow:Stale"
-                    : "PaletteFresh:Winner",
-                is_hidden: false,
-                kind: "leaf",
-                title: query === "PaletteSlow" ? "Stale" : "Winner",
-              },
-            ]
-          : [];
-      await route.fulfill({
-        body: JSON.stringify({ has_more: false, items }),
-        contentType: "application/json",
-        status: 200,
-      });
-    },
-  );
-
-  await page.goto("/overview");
-  await openPalette(page);
-  const dialog = page.getByRole("dialog", { name: "Command Palette" });
-  const search = dialog.getByRole("combobox", { name: "Command search" });
-
-  await search.fill("PaletteSlow");
-  await expect(
-    dialog.getByRole("status", { name: "Loading command results" }),
-  ).toBeVisible();
-  await search.fill("PaletteFresh");
-  await expect(
-    dialog.getByRole("option", { name: "Account PaletteFresh:Winner" }),
-  ).toBeVisible();
-  releaseSlow?.();
-  await expect(
-    dialog.getByRole("option", { name: "Account PaletteSlow:Stale" }),
-  ).toHaveCount(0);
-
-  await search.fill("PaletteEmpty");
-  await expect(dialog.getByText("No commands found.")).toBeVisible();
-  await search.fill("PaletteError");
-  await expect(dialog.getByRole("alert")).toContainText(
-    "Some entity results are unavailable",
-  );
-  await expect(search).toBeFocused();
-});
-
-test("command palette navigates to account and account group matches", async ({
-  browserName,
-  page,
-}) => {
-  const unique = Date.now().toString(36);
-  const hiddenAccount = await createHiddenAccount(
-    page,
-    `e2e:hidden:${browserName}:${unique}:Vault`,
-  );
-
-  await page.goto("/overview");
-  const overviewLink = page
-    .getByLabel("Primary")
-    .getByRole("link", { exact: true, name: "Overview" });
-  await overviewLink.focus();
-
-  await openPalette(page);
-  const search = page.getByRole("combobox", { name: "Command search" });
-  await search.fill("joint_checking");
-  await expect(
-    page.getByRole("option", { name: /Account bank:Chase:joint_checking/ }),
-  ).toBeVisible();
-  await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(/\/accounts\/\d+$/);
-  await expect(
-    page.getByRole("heading", { name: /joint_checking/ }),
-  ).toBeVisible();
-
-  await openPalette(page);
-  await search.fill("bank");
-  const bankGroup = page.getByRole("option", {
-    exact: true,
-    name: "Account group bank",
-  });
-  await expect(bankGroup).toBeVisible();
-  await bankGroup.click();
-  await expect(page).toHaveURL(/\/accounts\/group\?prefix=bank$/);
-  await expect(page.getByRole("heading", { name: /bank/ })).toBeVisible();
-
-  await openPalette(page);
-  await search.fill(hiddenAccount.fqn);
-  await expect(
-    page.getByRole("option", { name: new RegExp(hiddenAccount.fqn) }),
-  ).toBeVisible();
-  await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(
-    new RegExp(`/accounts/${hiddenAccount.account_id}$`),
-  );
-});
-
-test("command palette opens entry tabs from any page without clobbering plain open", async ({
-  page,
-}) => {
-  await page.goto("/overview");
-  const overviewLink = page
-    .getByLabel("Primary")
-    .getByRole("link", { exact: true, name: "Overview" });
-  await overviewLink.focus();
-
-  await openPalette(page);
-  await page.getByRole("combobox", { name: "Command search" }).fill("exchange");
-  await page.getByRole("option", { name: "New exchange" }).click();
-  await expect(page).toHaveURL(/\/overview\?entry=new%3Aexchange$/);
+  await expect(page).toHaveURL(/\/overview\?entry=new%3Aspend$/);
   const editor = page.getByRole("dialog", { name: "Transaction editor" });
-  const templatePicker = editor.getByRole("combobox", {
-    name: "Start from a template",
-  });
-  await expect(editor.getByRole("tab", { name: "Exchange" })).toHaveAttribute(
-    "aria-selected",
-    "true",
-  );
-  await expect(templatePicker).toBeEnabled();
-  await expect(templatePicker).toHaveAttribute("aria-expanded", "true");
-
-  await page.keyboard.press("Escape");
   await expect(editor).toBeVisible();
-  await expect(templatePicker).toHaveAttribute("aria-expanded", "false");
-  await page.keyboard.press("Escape");
-  await expect(page).toHaveURL(/\/overview$/);
-  await expect(editor).toHaveCount(0);
-  await expect(
-    page.locator("main").getByRole("button", { name: "New transaction" }),
-  ).toHaveCount(0);
-  await overviewLink.focus();
-  await page.keyboard.press("n");
   await expect(editor.getByRole("tab", { name: "Spend" })).toHaveAttribute(
     "aria-selected",
     "true",
   );
-  await expect(templatePicker).toBeEnabled();
+  const templatePicker = editor.getByRole("combobox", {
+    name: "Start from a template",
+  });
   await expect(templatePicker).toHaveAttribute("aria-expanded", "true");
 
   await page.keyboard.press("Escape");
@@ -961,61 +182,86 @@ test("command palette opens entry tabs from any page without clobbering plain op
   await page.keyboard.press("Escape");
   await expect(page).toHaveURL(/\/overview$/);
   await expect(editor).toHaveCount(0);
-  await expect(overviewLink).toBeFocused();
-
-  await openPalette(page);
-  await page.getByRole("combobox", { name: "Command search" }).fill("income");
-  await page.getByRole("option", { name: "New income" }).click();
-  await expect(page).toHaveURL(/\/overview\?entry=new%3Aincome$/);
-  await expect(page.getByRole("tab", { name: "Income" })).toHaveAttribute(
-    "aria-selected",
-    "true",
-  );
 });
 
-test("command palette runs exchange-rate action", async ({ page }) => {
-  await page.goto("/overview");
-  const overviewLink = page
-    .getByLabel("Primary")
-    .getByRole("link", { exact: true, name: "Overview" });
-  await overviewLink.focus();
-
-  await openPalette(page);
-  await page.getByRole("combobox", { name: "Command search" }).fill("reload");
-  const reloadRequest = page.waitForRequest((request) => {
-    const url = new URL(request.url());
-    return (
-      request.method() === "POST" &&
-      url.pathname === "/api/background-operations/exchange-rate-loading/runs"
-    );
-  });
-  await page.getByRole("option", { name: "Reload exchange rates" }).click();
-  await reloadRequest;
-  await expect(page.getByRole("status")).toContainText(
-    "Exchange-rate reload started: run",
-  );
-});
-
-test("command palette surfaces database backup action result", async ({
+test("command palette applies a discovered transaction template", async ({
   page,
-}) => {
-  await page.goto("/overview");
-  const overviewLink = page
-    .getByLabel("Primary")
-    .getByRole("link", { exact: true, name: "Overview" });
-  await overviewLink.focus();
-
-  await openPalette(page);
-  await page.getByRole("combobox", { name: "Command search" }).fill("backup");
-  const backupRequest = page.waitForRequest((request) => {
-    const url = new URL(request.url());
-    return (
-      request.method() === "POST" &&
-      url.pathname === "/api/background-operations/database-backup/runs"
-    );
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const fqn = `E2E:Palette:${unique}:Coffee`;
+  const memo = `Template prefill ${unique}`;
+  const response = await page.request.post("/api/transaction-templates", {
+    data: { fqn, records: [{ memo }] },
   });
-  await page.getByRole("option", { name: "Run database backup" }).click();
-  await backupRequest;
+  expect(response.ok()).toBe(true);
+  await page.goto("/overview");
+  await openPalette(page);
+
+  const dialog = page.getByRole("dialog", { name: "Command Palette" });
+  await dialog.getByRole("combobox", { name: "Command search" }).fill(unique);
+  await dialog.getByRole("option", { name: `Use ${fqn}` }).click();
+
+  const editor = page.getByRole("dialog", { name: "Transaction editor" });
+  await expect(editor).toBeVisible();
+  await expect(editor.getByLabel("Memo")).toHaveValue(memo);
+});
+
+test("long template paths stay usable in the narrow command palette", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const fqn = `E2E:${unique}:${"UnbrokenTemplateSegment".repeat(12)}`;
+  const response = await page.request.post("/api/transaction-templates", {
+    data: { fqn, records: [{}] },
+  });
+  expect(response.ok()).toBe(true);
+
+  await page.setViewportSize({ height: 800, width: 390 });
+  await page.goto("/overview");
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
+  const pageOverflowBefore = await page
+    .locator("html")
+    .evaluate((element) => element.scrollWidth - element.clientWidth);
+  await openPalette(page);
+
+  const dialog = page.getByRole("dialog", { name: "Command Palette" });
+  await dialog.getByRole("combobox", { name: "Command search" }).fill(unique);
+  const result = dialog.getByRole("option", { name: `Use ${fqn}` });
+  await expect(result).toBeVisible();
+
+  const results = dialog.getByRole("listbox", { name: "Command results" });
+  const pageOverflowAfter = await page
+    .locator("html")
+    .evaluate((element) => element.scrollWidth - element.clientWidth);
+  expect(
+    pageOverflowAfter,
+    "the palette does not add page-level horizontal overflow",
+  ).toBeLessThanOrEqual(pageOverflowBefore + 1);
+  for (const [name, surface] of [
+    ["dialog", dialog],
+    ["results", results],
+    ["result", result],
+  ] as const) {
+    expect(
+      await surface.evaluate(
+        (element) => element.scrollWidth <= element.clientWidth + 1,
+      ),
+      `${name} has no horizontal overflow`,
+    ).toBe(true);
+  }
+
+  await result.locator("[data-slot='tooltip-trigger']").hover();
+  await expect(page.getByRole("tooltip")).toHaveText(fqn);
+});
+
+test("command palette starts a database backup", async ({ page }) => {
+  await page.goto("/overview");
+  await openPalette(page);
+
+  const dialog = page.getByRole("dialog", { name: "Command Palette" });
+  await dialog.getByRole("combobox", { name: "Command search" }).fill("backup");
+  await dialog.getByRole("option", { name: "Run database backup" }).click();
+
   await expect(page.getByRole("status")).toContainText(
     "Database backup started: run",
   );

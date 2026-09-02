@@ -24,7 +24,6 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 
 const invocationRootEnvironment = "MINA_FRONTEND_E2E_INVOCATION_TEMP_DIRECTORY";
-const lifecyclePathLogEnvironment = "MINA_FRONTEND_E2E_PATH_LOG";
 const templateDatabaseEnvironment = "MINA_FRONTEND_E2E_TEMPLATE_DATABASE";
 
 const demoAnchorDate = "2026-05-31";
@@ -46,7 +45,6 @@ type ProcessExit = {
 };
 
 type ProcessRecord = {
-  readonly backupDirectory: string;
   readonly binary: string;
   readonly database: string;
   readonly pid: number;
@@ -118,18 +116,6 @@ const delay = async (milliseconds: number): Promise<void> => {
   await new Promise<void>((resolveDelay) => {
     const timer = setTimeout(resolveDelay, milliseconds);
     timer.unref();
-  });
-};
-
-const appendLifecyclePath = (kind: string, path: string): void => {
-  const pathLog = process.env[lifecyclePathLogEnvironment];
-  if (pathLog === undefined) {
-    return;
-  }
-
-  appendFileSync(pathLog, `${JSON.stringify({ kind, path })}\n`, {
-    encoding: "utf8",
-    flag: "a",
   });
 };
 
@@ -269,7 +255,6 @@ const startMina = async ({
   await writeFile(
     startingPath,
     `${JSON.stringify({
-      backupDirectory,
       binary: minaBinary,
       database,
       pid: null,
@@ -343,7 +328,6 @@ const startMina = async ({
     }
 
     const record: ProcessRecord = {
-      backupDirectory,
       binary: minaBinary,
       database,
       pid: child.pid,
@@ -664,7 +648,6 @@ const createE2EInvocation = async (): Promise<() => Promise<void>> => {
   };
 
   try {
-    appendLifecyclePath("invocation", root);
     await writeFile(join(root, invocationActiveFilename), "", {
       encoding: "utf8",
       mode: 0o600,
@@ -676,9 +659,6 @@ const createE2EInvocation = async (): Promise<() => Promise<void>> => {
     const backupDirectory = join(templateDirectory, "backups");
     await mkdir(join(root, "tests"));
     await mkdir(backupDirectory, { recursive: true });
-    appendLifecyclePath("template-database", templateDatabase);
-    appendLifecyclePath("template-backups", backupDirectory);
-
     const seedProcess = await startMina({
       args: [
         "serve",
@@ -763,10 +743,6 @@ const createTestBackend = async (
   const testDirectory = await mkdtemp(join(testsDirectory, "test-"));
   const database = join(testDirectory, "mina.db");
   const backupDirectory = join(testDirectory, "backups");
-  appendLifecyclePath("test-directory", testDirectory);
-  appendLifecyclePath("test-database", database);
-  appendLifecyclePath("test-backups", backupDirectory);
-
   let mina: StartedMinaProcess | undefined;
   let cleanupPromise: Promise<void> | undefined;
   const cleanup = async (): Promise<void> => {

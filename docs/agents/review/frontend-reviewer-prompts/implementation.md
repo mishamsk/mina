@@ -8,7 +8,7 @@ Review whether the frontend implementation achieves the stated goal/requirement.
 
 3. Wiring and integration - is everything connected properly? Routes registered, components mounted and exported, providers wired at the right level, generated client operations used instead of handwritten endpoint paths or DTO shapes.
 
-4. Completeness - are there missing pieces that would prevent the primary supported workflow from working? Missing loading and empty states for new data fetches or unwired keyboard access for new mouse affordances. Do not request frontend e2e coverage for ordinary changes, error paths, edge cases, or regressions; `docs/TESTING.md` limits it to a few uncovered core happy-path journeys.
+4. Completeness - are there missing pieces that would prevent the primary supported workflow from working? Missing loading and empty states for new data fetches or unwired keyboard access for new mouse affordances. Do not request frontend e2e coverage for ordinary changes, error paths, edge cases, or regressions; `docs/FRONTEND-TESTING.md` limits it to a few uncovered essential browser journeys or material frontend-owned safeguards.
 
 5. Data flow - does data flow correctly from API response to render? Shareable table query state (filters, search, sort, page) belongs in the URL; unbounded accounting data uses backend pagination and filtering; after create, update, delete, or bulk operations the affected resource snapshots are refetched or invalidated. Accounting data copied from REST responses must never be persisted in IndexedDB - snapshots are disposable views, not a source of truth.
 

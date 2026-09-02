@@ -3,37 +3,45 @@ import { createTestBackend } from "@tests/e2e/backend-lifecycle";
 
 const backendFixtureTimeoutMilliseconds = 45_000;
 
+type Backend = Awaited<ReturnType<typeof createTestBackend>>;
+type AuthenticationCredentials = NonNullable<Backend["authentication"]>;
+
 type Fixtures = {
-  readonly authenticatedBackend: {
-    readonly baseURL: string;
-    readonly email: string;
-    readonly password: string;
-  };
+  readonly _backend: Backend;
+  readonly authenticationCredentials: AuthenticationCredentials;
 };
 
-const test = base.extend<Fixtures>({
-  authenticatedBackend: [
-    async ({}, provide) => {
-      const backend = await createTestBackend({ authentication: true });
-      if (backend.authentication === undefined) {
-        throw new Error("authenticated backend returned no credentials");
-      }
-      await provide({
-        baseURL: backend.baseURL,
-        ...backend.authentication,
+type Options = {
+  readonly backendAuthentication: boolean;
+};
+
+const requireAuthenticationCredentials = (
+  backend: Backend,
+): AuthenticationCredentials => {
+  if (backend.authentication === undefined) {
+    throw new Error("authenticated backend returned no credentials");
+  }
+  return backend.authentication;
+};
+
+const test = base.extend<Fixtures & Options>({
+  backendAuthentication: [false, { option: true }],
+  _backend: [
+    async ({ backendAuthentication }, provide) => {
+      const backend = await createTestBackend({
+        authentication: backendAuthentication,
       });
+      await provide(backend);
       await backend.cleanup();
     },
     { scope: "test", timeout: backendFixtureTimeoutMilliseconds },
   ],
-  baseURL: [
-    async ({}, provide) => {
-      const backend = await createTestBackend();
-      await provide(backend.baseURL);
-      await backend.cleanup();
-    },
-    { scope: "test", timeout: backendFixtureTimeoutMilliseconds },
-  ],
+  authenticationCredentials: async ({ _backend }, provide) => {
+    await provide(requireAuthenticationCredentials(_backend));
+  },
+  baseURL: async ({ _backend }, provide) => {
+    await provide(_backend.baseURL);
+  },
 });
 
 export { test };

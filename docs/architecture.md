@@ -14,7 +14,7 @@ Mina is a local-first personal finance system for one household.
 
 - Keep abstractions narrow. Add interfaces only at real boundaries.
 - No hidden global state.
-- No unit tests. When planning, writing or modifying tests you must first read and follow `docs/TESTING.md`. This is non-negotiable.
+- No unit tests. When planning, writing or modifying tests you must first read and follow `docs/TESTING.md` and every scope-specific guide it requires. This is non-negotiable.
 - No breaching of package boundaries. You must preserve boundaries `## Package Boundaries` below
 
 ## Layers
@@ -150,7 +150,7 @@ Rules:
 
 ## Testing
 
-- `docs/TESTING.md` owns test classes, test design rules, and integration-test scope.
+- `docs/TESTING.md` owns test-class navigation; its linked scope-specific guides own test design rules and integration-test scope.
 
 ## If Editing This File
 
