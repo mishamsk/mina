@@ -120,7 +120,7 @@ ORDER BY occurred_at DESC, api_audit_entry_id DESC`
 	return services.PaginatedList[apiaudit.Entry]{Items: entries, TotalCount: totalCount}, nil
 }
 
-// DeleteOlderThan deletes API audit entries whose occurrence precedes cutoff.
+// DeleteOlderThan deletes API audit entries whose timestamp precedes cutoff.
 func (s *APIAuditStore) DeleteOlderThan(ctx context.Context, cutoff time.Time) error {
 	if _, err := s.db.query().ExecContext(
 		ctx,

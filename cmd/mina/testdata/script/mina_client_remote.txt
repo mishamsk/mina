@@ -16,6 +16,12 @@ exec mina client --server http://127.0.0.1:$PORT demo seed --anchor_date 2026-07
 stdout '"transactions":[1-9][0-9]*'
 ! stderr .
 
+# Required replacement headers cross the launched CLI boundary into REST.
+exec mina client --server http://127.0.0.1:$PORT transactions create --json @replacement.json
+stdout '"transaction_id":1061'
+! exec mina client --server http://127.0.0.1:$PORT transactions replace 1061 --if-match '"2020-01-01T00:00:00Z"' --json @replacement.json
+stderr '"code":"precondition_failed"'
+
 # Query/list output is raw JSON on stdout.
 exec mina client --server http://127.0.0.1:$PORT transactions list --limit 5
 stdout '"transactions":\['
@@ -26,7 +32,7 @@ stdout '"transaction_id":846'
 # The generated filter flag preserves DSL quoting, spaces, colons, and glob characters.
 exec mina client --server http://127.0.0.1:$PORT transactions list --filter 'category:"Entertainment:*" and not lifecycle:expected' --limit 5
 stdout '"transactions":\['
-stdout '"total_count":26'
+stdout '"total_count":27'
 ! stderr .
 
 # A path argument selects the transaction observed in the prior list.
@@ -34,12 +40,6 @@ exec mina client --server http://127.0.0.1:$PORT transactions get 846
 stdout '"transaction_id":846'
 stdout '"records":\['
 ! stderr .
-
-# Required replacement headers cross the launched CLI boundary into REST.
-exec mina client --server http://127.0.0.1:$PORT transactions create --json @replacement.json
-stdout '"transaction_id":1073'
-! exec mina client --server http://127.0.0.1:$PORT transactions replace 1073 --if-match '"2020-01-01T00:00:00Z"' --json @replacement.json
-stderr '"code":"precondition_failed"'
 
 # JSON bodies pass through for successful and failing writes.
 exec mina client --server http://127.0.0.1:$PORT tags create --json '{"fqn":"RemoteCLI"}'

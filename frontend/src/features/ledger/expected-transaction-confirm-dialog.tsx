@@ -5,7 +5,7 @@ import type { Transaction } from "@/api";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { formatLocalCivilDate } from "@/utils/date";
 
-interface RecurringOccurrenceConfirmDialogProps {
+interface ExpectedTransactionConfirmDialogProps {
   readonly errorMessage: string | undefined;
   readonly onConfirm: (actualDate: string) => void;
   readonly onOpenChange: (open: boolean) => void;
@@ -14,14 +14,14 @@ interface RecurringOccurrenceConfirmDialogProps {
   readonly transaction: Transaction | undefined;
 }
 
-const RecurringOccurrenceConfirmDialogContent = ({
+const ExpectedTransactionConfirmDialogContent = ({
   errorMessage,
   onConfirm,
   onOpenChange,
   open,
   pending,
   transaction,
-}: RecurringOccurrenceConfirmDialogProps) => {
+}: ExpectedTransactionConfirmDialogProps) => {
   const [actualDate, setActualDate] = useState(
     transaction?.initiated_date ?? "",
   );
@@ -34,7 +34,7 @@ const RecurringOccurrenceConfirmDialogContent = ({
       confirmDisabled={validationMessage !== undefined}
       confirmDisabledTooltip={validationMessage}
       confirmIcon={<Check aria-hidden="true" />}
-      confirmLabel="Confirm occurrence"
+      confirmLabel="Confirm expected transaction"
       confirmVariant="default"
       errorMessage={errorMessage}
       initialFocusRef={inputRef}
@@ -43,11 +43,11 @@ const RecurringOccurrenceConfirmDialogContent = ({
       open={open && transaction !== undefined}
       pending={pending}
       pendingLabel="Confirming"
-      title="Confirm occurrence"
+      title="Confirm expected transaction"
     >
       <p>
         {transaction
-          ? `${transaction.display_title} scheduled ${formatLocalCivilDate(
+          ? `${transaction.display_title} expected ${formatLocalCivilDate(
               transaction.initiated_date,
             )}`
           : ""}
@@ -74,15 +74,15 @@ const RecurringOccurrenceConfirmDialogContent = ({
           </span>
         ) : null}
       </label>
-      <p>The recurring schedule remains fixed to its scheduled dates.</p>
+      <p>Reviewing this transaction does not move the next occurrence.</p>
     </ConfirmationDialog>
   );
 };
 
-export const RecurringOccurrenceConfirmDialog = (
-  props: RecurringOccurrenceConfirmDialogProps,
+export const ExpectedTransactionConfirmDialog = (
+  props: ExpectedTransactionConfirmDialogProps,
 ) => (
-  <RecurringOccurrenceConfirmDialogContent
+  <ExpectedTransactionConfirmDialogContent
     key={`${String(props.open)}:${String(props.transaction?.transaction_id)}`}
     {...props}
   />

@@ -11,9 +11,13 @@ import {
   getDatabaseBackupStatus,
   getExchangeRateLoadingRun,
   getExchangeRateLoadingStatus,
+  getRecurringCatchUpRun,
+  getRecurringCatchUpStatus,
+  type RecurringCatchUpRun,
   startAuditLogCompactionRun,
   startDatabaseBackupRun,
   startExchangeRateLoadingRun,
+  startRecurringCatchUpRun,
 } from "@/api";
 
 export interface OperationStatusSummary {
@@ -24,7 +28,10 @@ export interface OperationStatusSummary {
 }
 
 export type ConcreteOperationRun =
-  ExchangeRateLoadingRun | DatabaseBackupRun | AuditLogCompactionRun;
+  | ExchangeRateLoadingRun
+  | DatabaseBackupRun
+  | AuditLogCompactionRun
+  | RecurringCatchUpRun;
 
 export interface OperationModule {
   readonly label: string;
@@ -103,6 +110,25 @@ const AuditLogCompactionRunDetail = ({
     <DefinitionField label="Operation" value="API audit-log compaction" />
     <DefinitionField label="Run ID" value={run.operation_run_id} />
     <DefinitionField label="Work" value="Expired audit-history deletion" />
+    <DefinitionField
+      label="Result"
+      value={run.error ?? "No operation-specific message was recorded."}
+    />
+  </DefinitionList>
+);
+
+const RecurringCatchUpRunDetail = ({
+  run,
+}: {
+  readonly run: RecurringCatchUpRun;
+}) => (
+  <DefinitionList>
+    <DefinitionField label="Operation" value="Recurring catch-up" />
+    <DefinitionField label="Run ID" value={run.operation_run_id} />
+    <DefinitionField
+      label="Work"
+      value="Due recurring occurrence materialization"
+    />
     <DefinitionField
       label="Result"
       value={run.error ?? "No operation-specific message was recorded."}
@@ -203,6 +229,40 @@ export const operationModules: Record<BackgroundOperationId, OperationModule> =
       ),
       start: async () => {
         const result = await startAuditLogCompactionRun();
+        return result.data
+          ? { runId: result.data.operation_run_id }
+          : { error: result.error };
+      },
+    },
+    "recurring-catch-up": {
+      label: "Recurring catch-up",
+      loadRun: async (runID) => {
+        const result = await getRecurringCatchUpRun({
+          path: { operation_run_id: runID },
+        });
+        return result.data ? { run: result.data } : { error: result.error };
+      },
+      loadStatus: async () => {
+        const result = await getRecurringCatchUpStatus();
+        if (!result.data) {
+          return { error: result.error };
+        }
+        return {
+          status: {
+            enabled: result.data.enabled,
+            runCount: result.data.run_count,
+            schedule: result.data.schedule_local
+              ? `${result.data.schedule_local} (server local time)`
+              : result.data.schedule_local,
+            state: result.data.state,
+          },
+        };
+      },
+      renderRunDetail: (run) => (
+        <RecurringCatchUpRunDetail run={run as RecurringCatchUpRun} />
+      ),
+      start: async () => {
+        const result = await startRecurringCatchUpRun();
         return result.data
           ? { runId: result.data.operation_run_id }
           : { error: result.error };

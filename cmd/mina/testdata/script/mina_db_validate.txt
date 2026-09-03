@@ -196,10 +196,10 @@ duckdbexec $WORK/inv_multi_currency_credit_limit.db inv_multi_currency_credit_li
 ! exec mina db validate --db $WORK/inv_multi_currency_credit_limit.db --schema demo
 stderr 'error: invariant: active credit limit history is associated with a multi-currency account'
 
-duckdbclone $WORK/demo.db $WORK/inv_expected_without_occurrence.db
-duckdbexec $WORK/inv_expected_without_occurrence.db inv_expected_without_occurrence.sql
-! exec mina db validate --db $WORK/inv_expected_without_occurrence.db --schema demo
-stderr 'error: invariant: transaction .* expected lifecycle has no recurring occurrence'
+duckdbclone $WORK/demo.db $WORK/inv_expected_without_definition.db
+duckdbexec $WORK/inv_expected_without_definition.db inv_expected_without_definition.sql
+! exec mina db validate --db $WORK/inv_expected_without_definition.db --schema demo
+stderr 'error: invariant: expected transaction .* has no recurring definition'
 
 duckdbclone $WORK/demo.db $WORK/inv_recurring_definition_shape.db
 duckdbexec $WORK/inv_recurring_definition_shape.db inv_recurring_definition_shape.sql

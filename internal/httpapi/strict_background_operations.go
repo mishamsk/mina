@@ -122,6 +122,29 @@ func (s *strictServer) GetAuditLogCompactionStatus(
 	}, nil
 }
 
+func (s *strictServer) GetRecurringCatchUpStatus(
+	ctx context.Context,
+	_ openapi.GetRecurringCatchUpStatusRequestObject,
+) (openapi.GetRecurringCatchUpStatusResponseObject, error) {
+	status, err := s.deps.Operations.RecurringCatchUpStatus(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return openapi.GetRecurringCatchUpStatus200JSONResponse{
+		OperationId:          openapi.RecurringCatchUpStatusResponseOperationId(status.ID),
+		Enabled:              status.Enabled,
+		ScheduleLocal:        status.ScheduleLocal,
+		State:                openapi.RecurringCatchUpStatusResponseState(status.State),
+		LastStartedAt:        status.LastStartedAt,
+		LastCompletedAt:      status.LastCompletedAt,
+		LastSuccess:          status.LastSuccess,
+		LastError:            status.LastError,
+		RunCount:             status.RunCount,
+		CompletedRunRevision: status.CompletedRunRevision,
+	}, nil
+}
+
 func (s *strictServer) StartExchangeRateLoadingRun(
 	ctx context.Context,
 	_ openapi.StartExchangeRateLoadingRunRequestObject,
@@ -170,6 +193,22 @@ func (s *strictServer) StartAuditLogCompactionRun(
 	}, nil
 }
 
+func (s *strictServer) StartRecurringCatchUpRun(
+	ctx context.Context,
+	_ openapi.StartRecurringCatchUpRunRequestObject,
+) (openapi.StartRecurringCatchUpRunResponseObject, error) {
+	run, err := s.deps.Operations.TriggerRecurringCatchUpOperation(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return openapi.StartRecurringCatchUpRun202JSONResponse{
+		OperationRunId: run.ID,
+		OperationId:    openapi.OperationRunReferenceResponseOperationId(run.OperationID),
+		StatusUrl:      recurringCatchUpRunURL(run.ID),
+	}, nil
+}
+
 func (s *strictServer) GetExchangeRateLoadingRun(
 	ctx context.Context,
 	request openapi.GetExchangeRateLoadingRunRequestObject,
@@ -204,6 +243,18 @@ func (s *strictServer) GetAuditLogCompactionRun(
 	}
 
 	return openapi.GetAuditLogCompactionRun200JSONResponse(auditLogCompactionRunAPIResponse(run)), nil
+}
+
+func (s *strictServer) GetRecurringCatchUpRun(
+	ctx context.Context,
+	request openapi.GetRecurringCatchUpRunRequestObject,
+) (openapi.GetRecurringCatchUpRunResponseObject, error) {
+	run, err := s.deps.Operations.GetRecurringCatchUpRun(ctx, request.OperationRunId)
+	if err != nil {
+		return nil, err
+	}
+
+	return openapi.GetRecurringCatchUpRun200JSONResponse(recurringCatchUpRunAPIResponse(run)), nil
 }
 
 func backgroundOperationRunAPIResponse(run operationruns.RunEnvelope) openapi.BackgroundOperationRun {
@@ -263,6 +314,18 @@ func auditLogCompactionRunAPIResponse(run operationruns.AuditLogCompactionRun) o
 	}
 }
 
+func recurringCatchUpRunAPIResponse(run operationruns.RecurringCatchUpRun) openapi.RecurringCatchUpRun {
+	return openapi.RecurringCatchUpRun{
+		OperationRunId: run.ID,
+		OperationId:    openapi.RecurringCatchUpRunOperationId(run.OperationID),
+		Outcome:        openapi.BackgroundOperationRunOutcome(run.Status),
+		Trigger:        openapi.BackgroundOperationRunTrigger(run.Trigger),
+		StartedAt:      run.StartedAt,
+		CompletedAt:    run.CompletedAt,
+		Error:          run.Error,
+	}
+}
+
 func exchangeRateLoadingRunURL(runID int64) string {
 	return fmt.Sprintf("/api/background-operations/exchange-rate-loading/runs/%d", runID)
 }
@@ -273,6 +336,10 @@ func databaseBackupRunURL(runID int64) string {
 
 func auditLogCompactionRunURL(runID int64) string {
 	return fmt.Sprintf("/api/background-operations/audit-log-compaction/runs/%d", runID)
+}
+
+func recurringCatchUpRunURL(runID int64) string {
+	return fmt.Sprintf("/api/background-operations/recurring-catch-up/runs/%d", runID)
 }
 
 func operationLinks(operationID operationruns.OperationID) openapi.BackgroundOperationLinks {
@@ -297,6 +364,13 @@ func operationLinks(operationID operationruns.OperationID) openapi.BackgroundOpe
 			StartRun: "/api/background-operations/audit-log-compaction/runs",
 			Run:      "/api/background-operations/audit-log-compaction/runs/{operation_run_id}",
 			Runs:     "/api/background-operations/runs?operation_id=audit-log-compaction",
+		}
+	case operationruns.RecurringCatchUpOperationID:
+		return openapi.BackgroundOperationLinks{
+			Status:   "/api/background-operations/recurring-catch-up/status",
+			StartRun: "/api/background-operations/recurring-catch-up/runs",
+			Run:      "/api/background-operations/recurring-catch-up/runs/{operation_run_id}",
+			Runs:     "/api/background-operations/runs?operation_id=recurring-catch-up",
 		}
 	default:
 		return openapi.BackgroundOperationLinks{}

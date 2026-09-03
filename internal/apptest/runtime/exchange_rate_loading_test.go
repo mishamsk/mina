@@ -165,9 +165,11 @@ func TestExchangeRateLoadingExpectedBehavior(t *testing.T) {
 		records[1].Currency = recurringStringPtr("CHF")
 		request.Records = &records
 		definition := createRecurringDefinition(t, client, request)
-		listRecurringOccurrences(t, client, &httpclient.ListRecurringOccurrencesParams{
-			RecurringDefinitionId: &definition.JSON201.RecurringDefinitionId,
-		})
+		runRecurringCatchUp(t, client)
+		materialized := listExpectedTransactions(t, client, nil)
+		if len(materialized) != 1 || materialized[0].RecurringDefinitionId == nil || *materialized[0].RecurringDefinitionId != definition.JSON201.RecurringDefinitionId {
+			t.Fatalf("recurring currency materialization = %+v, want one direct transaction", materialized)
+		}
 
 		triggerAndWaitForExchangeRateLoad(t, client)
 		assertExchangeRateRateOnDate(t, client, "USD", "CHF", "2026-04-10", "0.94000000")
@@ -298,7 +300,7 @@ func TestExchangeRateLoadingExpectedBehavior(t *testing.T) {
 		readTransaction := func(id int64) httpclient.Transaction {
 			t.Helper()
 
-			response, err := client.REST().GetTransactionWithResponse(context.Background(), id)
+			response, err := client.REST().GetTransactionWithResponse(context.Background(), id, nil)
 			requireClientResponse(t, "get backfill transaction", err, response.StatusCode(), http.StatusOK, response.Body)
 
 			return *response.JSON200
@@ -372,7 +374,7 @@ func TestExchangeRateLoadingExpectedBehavior(t *testing.T) {
 
 		triggerAndWaitForExchangeRateLoad(t, client)
 
-		read, err := client.REST().GetTransactionWithResponse(context.Background(), response.JSON201.TransactionId)
+		read, err := client.REST().GetTransactionWithResponse(context.Background(), response.JSON201.TransactionId, nil)
 		requireClientResponse(t, "get overflow backfill transaction", err, read.StatusCode(), http.StatusOK, read.Body)
 		assertRecordAmountUSDNil(t, *read.JSON200, cash.AccountId)
 		assertRecordAmountUSDNil(t, *read.JSON200, counterparty.AccountId)
@@ -396,12 +398,12 @@ func TestExchangeRateLoadingExpectedBehavior(t *testing.T) {
 
 		triggerAndWaitForExchangeRateLoad(t, client)
 
-		halfEvenRead, err := client.REST().GetTransactionWithResponse(context.Background(), halfEven.TransactionId)
+		halfEvenRead, err := client.REST().GetTransactionWithResponse(context.Background(), halfEven.TransactionId, nil)
 		requireClientResponse(t, "get half-even backfill transaction", err, halfEvenRead.StatusCode(), http.StatusOK, halfEvenRead.Body)
 		assertRecordAmountUSD(t, *halfEvenRead.JSON200, halfEven.Records[0].AccountId, "-0.00000002")
 		assertRecordAmountUSD(t, *halfEvenRead.JSON200, halfEven.Records[1].AccountId, "0.00000002")
 
-		roundedZeroRead, err := client.REST().GetTransactionWithResponse(context.Background(), roundedZero.TransactionId)
+		roundedZeroRead, err := client.REST().GetTransactionWithResponse(context.Background(), roundedZero.TransactionId, nil)
 		requireClientResponse(t, "get rounded-zero backfill transaction", err, roundedZeroRead.StatusCode(), http.StatusOK, roundedZeroRead.Body)
 		assertRecordAmountUSDNil(t, *roundedZeroRead.JSON200, roundedZero.Records[0].AccountId)
 		assertRecordAmountUSDNil(t, *roundedZeroRead.JSON200, roundedZero.Records[1].AccountId)
@@ -443,7 +445,7 @@ func TestExchangeRateLoadingExpectedBehavior(t *testing.T) {
 
 		triggerAndWaitForExchangeRateLoad(t, client)
 
-		read, err := client.REST().GetTransactionWithResponse(context.Background(), response.JSON201.TransactionId)
+		read, err := client.REST().GetTransactionWithResponse(context.Background(), response.JSON201.TransactionId, nil)
 		requireClientResponse(t, "get weekend backfill transaction", err, read.StatusCode(), http.StatusOK, read.Body)
 		assertExchangeRateDateExists(t, client, "USD", "EUR", "2026-04-03")
 		assertExchangeRateDateExists(t, client, "USD", "EUR", "2026-04-06")
@@ -468,7 +470,7 @@ func TestExchangeRateLoadingExpectedBehavior(t *testing.T) {
 
 		triggerAndWaitForExchangeRateLoad(t, client)
 
-		read, err := client.REST().GetTransactionWithResponse(context.Background(), created.TransactionId)
+		read, err := client.REST().GetTransactionWithResponse(context.Background(), created.TransactionId, nil)
 		requireClientResponse(t, "get backdated unresolved transaction", err, read.StatusCode(), http.StatusOK, read.Body)
 		assertExchangeRateDateExists(t, client, "USD", "NOK", "2026-03-14")
 		assertExchangeRateDateExists(t, client, "USD", "NOK", "2026-03-16")
@@ -490,7 +492,7 @@ func TestExchangeRateLoadingExpectedBehavior(t *testing.T) {
 
 		assertExchangeRateDateExists(t, client, "USD", "EUR", "2026-04-02")
 		assertExchangeRateDateMissing(t, client, "USD", "EUR", "2026-03-31")
-		read, err := client.REST().GetTransactionWithResponse(context.Background(), created.TransactionId)
+		read, err := client.REST().GetTransactionWithResponse(context.Background(), created.TransactionId, nil)
 		requireClientResponse(t, "get posted-date backfill transaction", err, read.StatusCode(), http.StatusOK, read.Body)
 		assertRecordAmountUSD(t, *read.JSON200, created.Records[0].AccountId, "-10.00000000")
 		assertRecordAmountUSDNil(t, *read.JSON200, created.Records[1].AccountId)
@@ -521,24 +523,53 @@ func TestExchangeRateLoadingExpectedBehavior(t *testing.T) {
 			(*request.Records)[index].Currency = recurringStringPtr("EUR")
 		}
 		definition := createRecurringDefinition(t, client, request)
-		occurrences := listRecurringOccurrences(t, client, &httpclient.ListRecurringOccurrencesParams{RecurringDefinitionId: &definition.JSON201.RecurringDefinitionId})
-		occurrence := occurrences.JSON200.RecurringOccurrences[0]
-		transactionID := *occurrence.GeneratedTransactionId
+		runRecurringCatchUp(t, client)
+		materialized := listExpectedTransactions(t, client, nil)
+		if len(materialized) != 1 || materialized[0].RecurringDefinitionId == nil || *materialized[0].RecurringDefinitionId != definition.JSON201.RecurringDefinitionId {
+			t.Fatalf("recurring actual-date materialization = %+v, want one direct transaction", materialized)
+		}
+		transactionID := materialized[0].TransactionId
 		assertRecordAmountUSDNil(t, *getTransaction(t, client, transactionID).JSON200, refs.CheckingAccountID)
 
 		actualDate := apptest.Date("2026-08-10")
-		confirmed, err := client.REST().ConfirmRecurringOccurrenceWithResponse(
+		confirmed, err := client.REST().ConfirmExpectedTransactionWithResponse(
 			context.Background(),
-			occurrence.RecurringOccurrenceId,
-			recurringOccurrenceConfirmRequest(*apptest.PostedSettlement(), &actualDate),
+			transactionID,
+			expectedConfirmRequest(*apptest.PostedSettlement(), &actualDate),
 		)
-		requireClientResponse(t, "confirm unresolved recurring occurrence", err, confirmed.StatusCode(), http.StatusOK, confirmed.Body)
+		requireClientResponse(t, "confirm unresolved expected transaction", err, confirmed.StatusCode(), http.StatusOK, confirmed.Body)
 		assertRecordAmountUSDNil(t, *getTransaction(t, client, transactionID).JSON200, refs.CheckingAccountID)
 
 		triggerAndWaitForExchangeRateLoad(t, client)
 
 		read := getTransaction(t, client, transactionID)
 		assertRecordAmountUSD(t, *read.JSON200, refs.CheckingAccountID, "-5.00000000")
+	})
+
+	t.Run("recurring actual date immediately revalues expected records", func(t *testing.T) {
+		client := newSharedClient(t, apptest.WithClock(apptest.NewFakeClock(apptest.Timestamp("2026-08-14T12:00:00Z"))), apptest.WithExchangeRateLoading(false))
+		refs := createRecurringDefinitionRefs(t, client, "RecurringActualDateRevaluation")
+		eur := "EUR"
+		client.SetAccountCurrency(refs.CheckingAccountID, &eur)
+		request := recurringDefinitionRequest("RecurringActualDateRevaluation:Monthly", refs, "-10.00000000", "10.00000000", intervalRule(1, "MONTH"), "2026-08-09")
+		for index := range *request.Records {
+			(*request.Records)[index].Currency = recurringStringPtr("EUR")
+		}
+		createRecurringDefinition(t, client, request)
+		runRecurringCatchUp(t, client)
+		materialized := listExpectedTransactions(t, client, nil)
+		if len(materialized) != 1 {
+			t.Fatalf("recurring actual-date materialization = %+v, want one transaction", materialized)
+		}
+		assertRecordAmountUSDNil(t, materialized[0], refs.CheckingAccountID)
+
+		rate, err := client.REST().CreateExchangeRateWithResponse(context.Background(), httpclient.CreateExchangeRateRequest{FromCurrency: "USD", ToCurrency: "EUR", Rate: "2.00000000", EffectiveDate: apptest.Timestamp("2026-08-10T00:00:00Z")})
+		requireClientResponse(t, "create actual-date exchange rate", err, rate.StatusCode(), http.StatusCreated, rate.Body)
+		actualDate := apptest.Date("2026-08-10")
+		confirmed, err := client.REST().ConfirmExpectedTransactionWithResponse(context.Background(), materialized[0].TransactionId, expectedConfirmRequest(*apptest.PostedSettlement(), &actualDate))
+		requireClientResponse(t, "confirm expected transaction on valued actual date", err, confirmed.StatusCode(), http.StatusOK, confirmed.Body)
+		assertRecordAmountUSD(t, *confirmed.JSON200, refs.CheckingAccountID, "-5.00000000")
+		assertRecordAmountUSD(t, *getTransaction(t, client, materialized[0].TransactionId).JSON200, refs.CheckingAccountID, "-5.00000000")
 	})
 
 	t.Run("null posted date uses initiated date", func(t *testing.T) {
@@ -553,7 +584,7 @@ func TestExchangeRateLoadingExpectedBehavior(t *testing.T) {
 		triggerAndWaitForExchangeRateLoad(t, client)
 
 		assertExchangeRateDateExists(t, client, "USD", "EUR", "2026-03-31")
-		read, err := client.REST().GetTransactionWithResponse(context.Background(), created.TransactionId)
+		read, err := client.REST().GetTransactionWithResponse(context.Background(), created.TransactionId, nil)
 		requireClientResponse(t, "get initiated-date backfill transaction", err, read.StatusCode(), http.StatusOK, read.Body)
 		assertRecordAmountUSD(t, *read.JSON200, created.Records[0].AccountId, "-10.00000000")
 		assertRecordAmountUSD(t, *read.JSON200, created.Records[1].AccountId, "10.00000000")

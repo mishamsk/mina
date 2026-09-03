@@ -204,7 +204,7 @@ func TestMemberHiddenStateBoundary(t *testing.T) {
 		t.Fatal("get hidden member is_hidden = false, want true")
 	}
 
-	historicalRead, err := client.REST().GetTransactionWithResponse(context.Background(), historicalTransaction.TransactionId)
+	historicalRead, err := client.REST().GetTransactionWithResponse(context.Background(), historicalTransaction.TransactionId, nil)
 	if err != nil {
 		t.Fatalf("get historical transaction request: %v", err)
 	}

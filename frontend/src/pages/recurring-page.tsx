@@ -281,7 +281,7 @@ export const RecurringPage = () => {
         }
         help={
           <PageHelp label="Recurring help">
-            Manage recurring transaction definitions. Expected occurrences
+            Manage recurring transaction definitions. Expected transactions
             appear inline in Transactions.
           </PageHelp>
         }

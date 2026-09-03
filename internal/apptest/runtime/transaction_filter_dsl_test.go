@@ -538,10 +538,12 @@ func TestTransactionFilterDSLLifecycleExpectedBoundary(t *testing.T) {
 		intervalRule(1, "WEEK"),
 		"2024-04-10",
 	))
-	occurrences := listRecurringOccurrences(t, client, &httpclient.ListRecurringOccurrencesParams{
-		RecurringDefinitionId: &definition.JSON201.RecurringDefinitionId,
-	})
-	expectedID := occurrences.JSON200.RecurringOccurrences[0].GeneratedTransactionId
+	runRecurringCatchUp(t, client)
+	expectedTransactions := listExpectedTransactions(t, client, nil)
+	if len(expectedTransactions) != 1 || expectedTransactions[0].RecurringDefinitionId == nil || *expectedTransactions[0].RecurringDefinitionId != definition.JSON201.RecurringDefinitionId {
+		t.Fatalf("materialized expected transactions = %+v, want one transaction for definition %d", expectedTransactions, definition.JSON201.RecurringDefinitionId)
+	}
+	expectedID := expectedTransactions[0].TransactionId
 
 	t.Run("default list excludes expected transactions", func(t *testing.T) {
 		response, err := client.REST().ListTransactionsWithResponse(context.Background(), nil)
@@ -549,20 +551,20 @@ func TestTransactionFilterDSLLifecycleExpectedBoundary(t *testing.T) {
 		assertTransactionIDs(t, response.JSON200.Transactions, []int64{manual.JSON201.TransactionId})
 	})
 	t.Run("any filter disables the expected exclusion", func(t *testing.T) {
-		assertDSLFilterResult(t, client, `currency:USD`, []int64{*expectedID, manual.JSON201.TransactionId}, 2)
+		assertDSLFilterResult(t, client, `currency:USD`, []int64{expectedID, manual.JSON201.TransactionId}, 2)
 	})
 	t.Run("non-negated expected term includes expected transactions", func(t *testing.T) {
-		assertDSLFilterResult(t, client, `lifecycle:expected`, []int64{*expectedID}, 1)
-		assertDSLFilterResult(t, client, `lifecycle:active or lifecycle:expected`, []int64{*expectedID, manual.JSON201.TransactionId}, 2)
+		assertDSLFilterResult(t, client, `lifecycle:expected`, []int64{expectedID}, 1)
+		assertDSLFilterResult(t, client, `lifecycle:active or lifecycle:expected`, []int64{expectedID, manual.JSON201.TransactionId}, 2)
 	})
 	t.Run("negation controls lifecycle without an implicit exclusion", func(t *testing.T) {
-		assertDSLFilterResult(t, client, `not lifecycle:cancelled`, []int64{*expectedID, manual.JSON201.TransactionId}, 2)
+		assertDSLFilterResult(t, client, `not lifecycle:cancelled`, []int64{expectedID, manual.JSON201.TransactionId}, 2)
 	})
 	t.Run("explicit expected exclusion stays empty of expected rows", func(t *testing.T) {
 		response := listTransactionsWithDSLFilter(t, client, `not lifecycle:expected`)
 		for _, transaction := range response.JSON200.Transactions {
-			if transaction.TransactionId == *expectedID {
-				t.Fatalf("negated expected filter returned expected transaction %d", *expectedID)
+			if transaction.TransactionId == expectedID {
+				t.Fatalf("negated expected filter returned expected transaction %d", expectedID)
 			}
 		}
 	})

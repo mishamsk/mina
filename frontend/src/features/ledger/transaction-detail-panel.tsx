@@ -47,6 +47,7 @@ import { formatInstantTimestamp, localCivilDate } from "@/utils/date";
 import { AccountDisplayLabel } from "./account-display-label";
 import { AmountText, UnavailableUsdAmountChip } from "./amount-text";
 import { ClassBadge } from "./class-badge";
+import { ExpectedTransactionConfirmDialog } from "./expected-transaction-confirm-dialog";
 import {
   buildLookupMaps,
   detailDisplayAmounts,
@@ -63,7 +64,6 @@ import {
 import { FqnPath } from "./fqn-path";
 import { RecordRoleIcon, StatusIcon } from "./line-icons";
 import { MemberChip } from "./member-chip";
-import { RecurringOccurrenceConfirmDialog } from "./recurring-occurrence-confirm-dialog";
 import {
   defaultPostSettlementDateTimeValue,
   settlementDateTimeToISO,
@@ -89,19 +89,19 @@ interface TransactionDetailPanelProps {
     transaction: Transaction,
     action: "cancel" | "restore",
   ) => Promise<void>;
-  readonly onConfirmOccurrence?: (
+  readonly onConfirmExpected?: (
     transaction: Transaction,
     actualDate: string,
   ) => Promise<void>;
   readonly onConfirmNextProjection?: (
     transaction: Transaction,
-  ) => Promise<number | undefined>;
+  ) => Promise<number>;
   readonly onDeferProjection?: (
     transaction: Transaction,
     request: RecurringDefinitionDeferRequest,
   ) => Promise<number | undefined>;
   readonly onDelete: (transaction: Transaction) => Promise<void>;
-  readonly onDismissOccurrence?: (transaction: Transaction) => Promise<void>;
+  readonly onDismissExpected?: (transaction: Transaction) => Promise<void>;
   readonly onDuplicate?: (
     transaction: Transaction,
     opener?: HTMLElement,
@@ -777,15 +777,7 @@ export const TransactionDetailContent = ({
                 className="min-w-0"
                 data-testid="transaction-recurring-definition"
               >
-                {recurringDefinitionProvenance.loading ? (
-                  <>
-                    <Skeleton className="h-5 w-48 max-w-full" />
-                    <span className="sr-only" role="status">
-                      Loading recurring definition.
-                    </span>
-                  </>
-                ) : recurringDefinitionProvenance.provenance
-                    ?.definitionActive ? (
+                {recurringDefinitionProvenance.provenance?.definitionActive ? (
                   <FqnPath
                     collapseAncestors={false}
                     to={`/recurring#definition-${recurringDefinitionProvenance.provenance.definitionId}`}
@@ -793,27 +785,14 @@ export const TransactionDetailContent = ({
                       recurringDefinitionProvenance.provenance.definitionFqn
                     }
                   />
-                ) : recurringDefinitionProvenance.provenance ? (
+                ) : (
                   <FqnPath
                     collapseAncestors={false}
                     value={
-                      recurringDefinitionProvenance.provenance.definitionFqn
+                      recurringDefinitionProvenance.provenance?.definitionFqn ??
+                      ""
                     }
                   />
-                ) : (
-                  <div className="min-w-0">
-                    <p className="text-destructive font-body">
-                      {recurringDefinitionProvenance.errorMessage}
-                    </p>
-                    <details className="text-muted-foreground mt-2 text-sm">
-                      <summary className="text-foreground cursor-pointer">
-                        API error
-                      </summary>
-                      <pre className="mt-2 overflow-auto font-mono text-xs whitespace-pre-wrap">
-                        {recurringDefinitionProvenance.errorDetails}
-                      </pre>
-                    </details>
-                  </div>
                 )}
               </dd>
             </>
@@ -846,10 +825,10 @@ export const TransactionDetailPanel = ({
   onClose,
   onChangeLifecycle,
   onConfirmNextProjection,
-  onConfirmOccurrence,
+  onConfirmExpected,
   onDeferProjection,
   onDelete,
-  onDismissOccurrence,
+  onDismissExpected,
   onDuplicate,
   onEdit,
   onPost,
@@ -863,7 +842,7 @@ export const TransactionDetailPanel = ({
 }: TransactionDetailPanelProps) => {
   const panelRef = useRef<HTMLElement | null>(null);
   const confirmNextProjectionButtonRef = useRef<HTMLButtonElement | null>(null);
-  const confirmOccurrenceButtonRef = useRef<HTMLButtonElement | null>(null);
+  const confirmExpectedButtonRef = useRef<HTMLButtonElement | null>(null);
   const deferButtonRef = useRef<HTMLButtonElement | null>(null);
   const deleteButtonRef = useRef<HTMLButtonElement | null>(null);
   const dismissButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -881,7 +860,7 @@ export const TransactionDetailPanel = ({
   const recurringDefinitionProvenance =
     useRecurringDefinitionProvenance(transaction);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
-  const [confirmOccurrenceOpen, setConfirmOccurrenceOpen] = useState(false);
+  const [confirmExpectedOpen, setConfirmExpectedOpen] = useState(false);
   const [confirmDismissOpen, setConfirmDismissOpen] = useState(false);
   const [confirmPostOpen, setConfirmPostOpen] = useState(false);
   const [postDialogTransaction, setPostDialogTransaction] = useState<
@@ -924,7 +903,7 @@ export const TransactionDetailPanel = ({
       }
     | undefined
   >();
-  const [occurrenceActionError, setOccurrenceActionError] = useState<
+  const [expectedActionError, setExpectedActionError] = useState<
     | {
         readonly message: string;
         readonly transactionId: Transaction["transaction_id"];
@@ -935,7 +914,7 @@ export const TransactionDetailPanel = ({
     useState(transactionId);
   if (renderedPostTransactionId !== transactionId) {
     setRenderedPostTransactionId(transactionId);
-    setConfirmOccurrenceOpen(false);
+    setConfirmExpectedOpen(false);
     setDeferActionErrorMessage(undefined);
     setDeferOpen(false);
     setProjectionConfirmError(undefined);
@@ -946,7 +925,7 @@ export const TransactionDetailPanel = ({
   }
 
   const closePanel = useCallback(() => {
-    setOccurrenceActionError(undefined);
+    setExpectedActionError(undefined);
     onClose();
   }, [onClose]);
 
@@ -954,7 +933,7 @@ export const TransactionDetailPanel = ({
     enabled:
       !confirmDeleteOpen &&
       !confirmDismissOpen &&
-      !confirmOccurrenceOpen &&
+      !confirmExpectedOpen &&
       !confirmPostOpen &&
       !deferOpen,
     floatingOverlaySelectors,
@@ -987,14 +966,14 @@ export const TransactionDetailPanel = ({
     });
   }, [dismissing]);
 
-  const closeOccurrenceConfirmation = useCallback(() => {
+  const closeExpectedConfirmation = useCallback(() => {
     if (confirming) {
       return;
     }
-    setOccurrenceActionError(undefined);
-    setConfirmOccurrenceOpen(false);
+    setExpectedActionError(undefined);
+    setConfirmExpectedOpen(false);
     window.requestAnimationFrame(() => {
-      confirmOccurrenceButtonRef.current?.focus({ preventScroll: true });
+      confirmExpectedButtonRef.current?.focus({ preventScroll: true });
     });
   }, [confirming]);
 
@@ -1141,18 +1120,18 @@ export const TransactionDetailPanel = ({
     }
   };
 
-  const confirmOccurrence = async (actualDate: string) => {
-    if (!transaction || !onConfirmOccurrence) {
+  const confirmExpected = async (actualDate: string) => {
+    if (!transaction || !onConfirmExpected) {
       return;
     }
 
     setConfirming(true);
-    setOccurrenceActionError(undefined);
+    setExpectedActionError(undefined);
     try {
-      await onConfirmOccurrence(transaction, actualDate);
-      setConfirmOccurrenceOpen(false);
+      await onConfirmExpected(transaction, actualDate);
+      setConfirmExpectedOpen(false);
     } catch (error) {
-      setOccurrenceActionError({
+      setExpectedActionError({
         message:
           error instanceof Error ? error.message : "The API request failed.",
         transactionId: transaction.transaction_id,
@@ -1264,14 +1243,14 @@ export const TransactionDetailPanel = ({
   };
 
   const confirmDismiss = async () => {
-    if (!transaction || !onDismissOccurrence) {
+    if (!transaction || !onDismissExpected) {
       return;
     }
 
     setDismissing(true);
     setDismissErrorMessage(undefined);
     try {
-      await onDismissOccurrence(transaction);
+      await onDismissExpected(transaction);
     } catch (error) {
       setDismissErrorMessage(
         error instanceof Error ? error.message : "The API request failed.",
@@ -1371,11 +1350,11 @@ export const TransactionDetailPanel = ({
   const actionApplicability = transaction
     ? transactionActionApplicability(transaction)
     : undefined;
-  const expectedOccurrence = Boolean(actionApplicability?.confirmOccurrence);
-  const expectedOccurrenceActionsAvailable =
-    expectedOccurrence &&
-    onConfirmOccurrence !== undefined &&
-    onDismissOccurrence !== undefined;
+  const materializedExpected = Boolean(actionApplicability?.confirmExpected);
+  const expectedTransactionActionsAvailable =
+    materializedExpected &&
+    onConfirmExpected !== undefined &&
+    onDismissExpected !== undefined;
   const projectionDeferAvailable =
     actionApplicability?.deferProjection === true &&
     onDeferProjection !== undefined;
@@ -1393,14 +1372,14 @@ export const TransactionDetailPanel = ({
   const detailActionsApplicable =
     actionApplicability !== undefined &&
     Object.values(actionApplicability).some(Boolean);
-  const occurrenceActionsDisabled = confirming || dismissing;
-  const occurrenceActionsDisabledReason = occurrenceActionsDisabled
-    ? "Occurrence action in progress."
+  const expectedActionsDisabled = confirming || dismissing;
+  const expectedActionsDisabledReason = expectedActionsDisabled
+    ? "Expected transaction action in progress."
     : undefined;
-  const occurrenceActionErrorMessage =
-    occurrenceActionError !== undefined &&
-    occurrenceActionError.transactionId === transaction?.transaction_id
-      ? occurrenceActionError.message
+  const expectedActionErrorMessage =
+    expectedActionError !== undefined &&
+    expectedActionError.transactionId === transaction?.transaction_id
+      ? expectedActionError.message
       : undefined;
   const posting =
     transaction !== undefined &&
@@ -1536,35 +1515,35 @@ export const TransactionDetailPanel = ({
       !loading &&
       !errorMessage ? (
         <div className="bg-card flex flex-wrap justify-end gap-2 border-t-2 border-[var(--border-ink)] p-4">
-          {expectedOccurrence ? (
-            expectedOccurrenceActionsAvailable ? (
+          {materializedExpected ? (
+            expectedTransactionActionsAvailable ? (
               <>
-                {occurrenceActionsDisabledReason ? (
-                  <Tooltip label={occurrenceActionsDisabledReason}>
+                {expectedActionsDisabledReason ? (
+                  <Tooltip label={expectedActionsDisabledReason}>
                     <Button
-                      ref={confirmOccurrenceButtonRef}
+                      ref={confirmExpectedButtonRef}
                       type="button"
                       disabled
                     >
                       <Check aria-hidden="true" />
-                      {confirming ? "Confirming" : "Confirm occurrence"}
+                      {confirming ? "Confirming" : "Confirm expected"}
                     </Button>
                   </Tooltip>
                 ) : (
                   <Button
-                    ref={confirmOccurrenceButtonRef}
+                    ref={confirmExpectedButtonRef}
                     type="button"
                     onClick={() => {
-                      setOccurrenceActionError(undefined);
-                      setConfirmOccurrenceOpen(true);
+                      setExpectedActionError(undefined);
+                      setConfirmExpectedOpen(true);
                     }}
                   >
                     <Check aria-hidden="true" />
-                    Confirm occurrence
+                    Confirm expected
                   </Button>
                 )}
-                {occurrenceActionsDisabledReason ? (
-                  <Tooltip label={occurrenceActionsDisabledReason}>
+                {expectedActionsDisabledReason ? (
+                  <Tooltip label={expectedActionsDisabledReason}>
                     <Button
                       ref={dismissButtonRef}
                       type="button"
@@ -1572,7 +1551,7 @@ export const TransactionDetailPanel = ({
                       disabled
                     >
                       <Close aria-hidden="true" />
-                      Dismiss occurrence
+                      Dismiss expected
                     </Button>
                   </Tooltip>
                 ) : (
@@ -1586,7 +1565,7 @@ export const TransactionDetailPanel = ({
                     }}
                   >
                     <Close aria-hidden="true" />
-                    Dismiss occurrence
+                    Dismiss expected
                   </Button>
                 )}
               </>
@@ -1607,7 +1586,7 @@ export const TransactionDetailPanel = ({
                   >
                     <Check aria-hidden="true" />
                     {confirmingProjectionDefinitionId ===
-                    transaction.recurring_projection_definition_id
+                    transaction.recurring_definition_id
                       ? "Confirming"
                       : "Confirm next"}
                   </Button>
@@ -1772,9 +1751,9 @@ export const TransactionDetailPanel = ({
           ) : null}
         </div>
       ) : null}
-      {occurrenceActionErrorMessage && !confirmOccurrenceOpen ? (
+      {expectedActionErrorMessage && !confirmExpectedOpen ? (
         <p className="text-destructive px-4 pb-4 text-sm" role="alert">
-          {occurrenceActionErrorMessage}
+          {expectedActionErrorMessage}
         </p>
       ) : null}
       {confirmPostOpen && postDialogTransaction ? (
@@ -1818,17 +1797,17 @@ export const TransactionDetailPanel = ({
           <TransactionDeleteDescription transaction={transaction} />
         ) : null}
       </ConfirmationDialog>
-      <RecurringOccurrenceConfirmDialog
-        errorMessage={occurrenceActionErrorMessage}
+      <ExpectedTransactionConfirmDialog
+        errorMessage={expectedActionErrorMessage}
         onConfirm={(actualDate) => {
-          void confirmOccurrence(actualDate);
+          void confirmExpected(actualDate);
         }}
         onOpenChange={(open) => {
           if (!open) {
-            closeOccurrenceConfirmation();
+            closeExpectedConfirmation();
           }
         }}
-        open={confirmOccurrenceOpen}
+        open={confirmExpectedOpen}
         pending={confirming}
         transaction={transaction}
       />
@@ -1849,12 +1828,12 @@ export const TransactionDetailPanel = ({
       />
       <ConfirmationDialog
         confirmIcon={<Close aria-hidden="true" />}
-        confirmLabel="Dismiss occurrence"
+        confirmLabel="Dismiss expected transaction"
         errorMessage={dismissErrorMessage}
         open={confirmDismissOpen && transaction !== undefined}
         pending={dismissing}
         pendingLabel="Dismissing"
-        title="Dismiss occurrence"
+        title="Dismiss expected transaction"
         onConfirm={() => {
           void confirmDismiss();
         }}
@@ -1865,7 +1844,8 @@ export const TransactionDetailPanel = ({
         }}
       >
         <p>
-          This occurrence will be skipped. The recurring schedule will continue.
+          This expected transaction will be skipped. The recurring schedule will
+          continue.
         </p>
       </ConfirmationDialog>
     </aside>

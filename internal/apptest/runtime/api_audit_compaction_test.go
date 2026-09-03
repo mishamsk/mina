@@ -79,16 +79,16 @@ func TestAuditCompactionScheduleUsesCancelableClockDeadline(t *testing.T) {
 		apptest.WithOperationsEnabled(true),
 		apptest.WithAuditLogCompactionScheduleUTC("5 2 15 * *"),
 	)
-	clock.WaitForPendingDeadlineWaits(t, 1)
-	if calls := clock.DeadlineWaitCalls(); calls != 1 {
-		t.Fatalf("deadline wait calls = %d, want one idle wait", calls)
+	clock.WaitForPendingDeadlineWaits(t, 2)
+	if calls := clock.DeadlineWaitCalls(); calls != 2 {
+		t.Fatalf("deadline wait calls = %d, want audit-compaction and recurring-catch-up waits", calls)
 	}
 	for range 5 {
 		if status := client.AuditLogCompactionStatus(); status.RunCount != 0 {
 			t.Fatalf("audit compaction status before deadline = %+v, want no runs", status)
 		}
 	}
-	if calls := clock.DeadlineWaitCalls(); calls != 1 {
+	if calls := clock.DeadlineWaitCalls(); calls != 2 {
 		t.Fatalf("deadline wait calls after idle requests = %d, want no periodic wakeups", calls)
 	}
 
@@ -98,8 +98,8 @@ func TestAuditCompactionScheduleUsesCancelableClockDeadline(t *testing.T) {
 		t.Fatalf("scheduled audit compaction status = %+v, want success", status)
 	}
 	requireLatestRunEnvelopeTrigger(t, client, httpclient.BackgroundOperationIdAuditLogCompaction, httpclient.BackgroundOperationRunTriggerScheduled)
-	clock.WaitForPendingDeadlineWaits(t, 1)
-	if calls := clock.DeadlineWaitCalls(); calls != 2 {
+	clock.WaitForPendingDeadlineWaits(t, 2)
+	if calls := clock.DeadlineWaitCalls(); calls != 3 {
 		t.Fatalf("deadline wait calls after scheduled run = %d, want next monthly deadline only", calls)
 	}
 
@@ -137,7 +137,7 @@ func startAuditLogCompaction(t *testing.T, client *apptest.Client) *httpclient.A
 	started, err := client.REST().StartAuditLogCompactionRunWithResponse(context.Background())
 	requireClientResponse(t, "start API audit-log compaction", err, started.StatusCode(), http.StatusAccepted, started.Body)
 	wantURL := fmt.Sprintf("/api/background-operations/audit-log-compaction/runs/%d", started.JSON202.OperationRunId)
-	if started.JSON202.OperationId != httpclient.AuditLogCompaction || started.JSON202.StatusUrl != wantURL {
+	if started.JSON202.OperationId != httpclient.OperationRunReferenceResponseOperationIdAuditLogCompaction || started.JSON202.StatusUrl != wantURL {
 		t.Fatalf("audit compaction start response = %+v, want operation identity and typed run URL %q", started.JSON202, wantURL)
 	}
 

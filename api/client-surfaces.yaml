@@ -173,6 +173,36 @@ operations:
       name: get_audit_log_compaction_run
       description: Use with an exact API audit-log compaction run ID, normally returned by the start tool. This returns one typed run; use operations_list_runs to discover historical IDs.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
+  getRecurringCatchUpStatus:
+    cli: {state: exposed, name: recurring-catch-up-status}
+    mcp:
+      state: exposed
+      name: recurring_catch_up_status
+      description: Use for recurring catch-up operation state; this does not materialize due occurrences or return one specific run. Use operations_get_recurring_catch_up_run with a known run ID.
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
+  startRecurringCatchUpRun:
+    cli:
+      state: exposed
+      name: start-recurring-catch-up
+      run_wait:
+        status_operation_id: getRecurringCatchUpRun
+        run_id_response_field: operation_run_id
+        status_path_parameter: operation_run_id
+        terminal_field: outcome
+        terminal_values: [succeeded, failed, skipped, canceled]
+        failure_values: [failed, canceled]
+    mcp:
+      state: exposed
+      name: start_recurring_catch_up
+      description: Materializes all due recurring occurrences through today's server civil date and returns the observable run ID. Use the typed get-run tool to poll that run.
+      annotations: {read_only: false, destructive: false, idempotent: true, open_world: false}
+  getRecurringCatchUpRun:
+    cli: {state: exposed, name: get-recurring-catch-up-run}
+    mcp:
+      state: exposed
+      name: get_recurring_catch_up_run
+      description: Use with an exact recurring catch-up run ID, normally returned by the start tool. This returns one typed run; use operations_list_runs to discover historical IDs.
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
 
   searchCategories:
     cli: {state: exposed, name: search}
@@ -612,35 +642,35 @@ operations:
     mcp:
       state: exposed
       name: replace_definition
-      description: Replace the schedule and complete balanced record set for one definition while preserving its ID. A changed anchor must be current or future and becomes the schedule floor; already materialized occurrences are unchanged.
+      description: Replace the schedule and complete balanced record set for one definition while preserving its ID. Supply the definition ETag through If-Match, and omit or null anchor_date unless intentionally changing the next occurrence date. Existing generated transactions are unchanged.
       annotations: {read_only: false, destructive: false, idempotent: true, open_world: false}
   deleteRecurringDefinition:
     cli: {state: exposed, name: delete-definition}
     mcp:
       state: exposed
       name: delete_definition
-      description: Cancel and tombstone one recurring definition while retaining generated transaction history and queued occurrences. This is destructive and requires explicit user intent.
+      description: Cancel and tombstone one recurring definition while retaining generated transaction history and expected transactions awaiting review. This is destructive and requires explicit user intent.
       annotations: {read_only: false, destructive: true, idempotent: true, open_world: false}
   confirmNextRecurringDefinition:
     cli: {state: exposed, name: confirm-next}
     mcp:
       state: exposed
       name: confirm_next
-      description: Confirm the next occurrence early for one definition, materializing it as a normal transaction dated today. This mutates household transaction state and requires explicit user intent.
+      description: Confirm the next occurrence early for one definition, creating an active transaction dated today and advancing the schedule. This mutates household transaction state and requires explicit user intent.
       annotations: {read_only: false, destructive: false, idempotent: false, open_world: false}
   deferRecurringDefinition:
     cli: {state: exposed, name: defer}
     mcp:
       state: exposed
       name: defer
-      description: Defer the next non-materialized occurrence and re-anchor every later slot. Interval definitions use cadence units; date-rule definitions use natural schedule periods. Existing materialized occurrences remain in the review queue.
+      description: Defer the next occurrence without creating a transaction. Interval definitions use cadence units; date-rule definitions use natural schedule periods. Existing expected transactions remain available for review.
       annotations: {read_only: false, destructive: false, idempotent: false, open_world: false}
   pauseRecurringDefinition:
     cli: {state: exposed, name: pause}
     mcp:
       state: exposed
       name: pause
-      description: Pause one definition so no occurrences accrue and no backlog forms. Existing review-queue occurrences remain; this mutation requires explicit user intent.
+      description: Pause one definition so no occurrences accrue and no backlog forms. Existing expected transactions remain available for review; this mutation requires explicit user intent.
       annotations: {read_only: false, destructive: false, idempotent: true, open_world: false}
   resumeRecurringDefinition:
     cli: {state: exposed, name: resume}
@@ -649,41 +679,12 @@ operations:
       name: resume
       description: Resume one paused definition, re-anchoring interval schedules at resume or using the next natural date-rule date. This mutation requires explicit user intent.
       annotations: {read_only: false, destructive: false, idempotent: true, open_world: false}
-  listRecurringOccurrences:
-    cli: {state: exposed, name: list-occurrences}
-    mcp:
-      state: exposed
-      name: list_occurrences
-      description: Use as the recurring review queue; it materializes due occurrences through the current civil date. Supply limit (1-500), offset, definition/status filters; defaults sort scheduled date ascending.
-      annotations: {read_only: false, destructive: false, idempotent: true, open_world: false}
-  getRecurringOccurrence:
-    cli: {state: exposed, name: get-occurrence}
-    mcp:
-      state: exposed
-      name: get_occurrence
-      description: Use when you already have an exact recurring-occurrence ID and need its definition provenance, scheduled date, review status, or generated transaction ID. This reads only that stored occurrence and does not run catch-up or create due occurrences; use recurring_list_occurrences to discover IDs and materialize catch-up through today.
-      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
-  confirmRecurringOccurrence:
-    cli: {state: exposed, name: confirm-occurrence}
-    mcp:
-      state: exposed
-      name: confirm_occurrence
-      description: Confirm one expected review-queue occurrence as a normal transaction, optionally recording the actual date while leaving the schedule fixed. If other values differ, confirm then edit the transaction; this mutation requires explicit user intent.
-      annotations: {read_only: false, destructive: false, idempotent: false, open_world: false}
-  dismissRecurringOccurrence:
-    cli: {state: exposed, name: dismiss-occurrence}
-    mcp:
-      state: exposed
-      name: dismiss_occurrence
-      description: Durably dismiss one review-queue occurrence without moving the schedule anchor; it will not reappear. This is destructive and requires explicit user intent.
-      annotations: {read_only: false, destructive: true, idempotent: true, open_world: false}
-
   listTransactions:
     cli: {state: exposed, name: list}
     mcp:
       state: exposed
       name: list
-      description: Use for transaction-level results with nested balanced journal records, including free-text, currency, class, entity, status, and date filters. Future expected projections identify the next non-materialized slot for each definition. Supply limit (1-500); defaults sort by initiated date descending. Use records_search for individual record matches or register queries.
+      description: Use for transaction-level results with nested balanced journal records, including free-text, currency, class, entity, status, and date filters. Listing never mutates recurring state. Future expected projections remain read-only and identify the next non-materialized occurrence for each definition. Supply limit (1-500); defaults sort by initiated date descending. Use records_search for individual record matches or register queries.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   createTransaction:
     cli: {state: exposed, name: create}
@@ -746,8 +747,22 @@ operations:
     mcp:
       state: exposed
       name: get
-      description: Use when you already have an exact transaction ID and need the transaction plus all active journal records. Use transactions_list to discover IDs or filter at transaction level.
+      description: Use when you already have an exact transaction ID and need the transaction plus its journal records. Set include_tombstoned to inspect deleted transaction history; otherwise only active transactions and records are returned. Use transactions_list to discover IDs or filter at transaction level.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
+  confirmExpectedTransaction:
+    cli: {state: exposed, name: confirm-expected}
+    mcp:
+      state: exposed
+      name: confirm_expected
+      description: Confirm one materialized expected recurring transaction, optionally recording its actual date. This activates the transaction without moving the definition anchor and requires explicit user intent.
+      annotations: {read_only: false, destructive: false, idempotent: false, open_world: false}
+  dismissExpectedTransaction:
+    cli: {state: exposed, name: dismiss-expected}
+    mcp:
+      state: exposed
+      name: dismiss_expected
+      description: Tombstone one materialized expected recurring transaction. The definition schedule has already advanced, so the occurrence will not reappear; this is destructive and requires explicit user intent.
+      annotations: {read_only: false, destructive: true, idempotent: true, open_world: false}
   replaceTransaction:
     cli: {state: exposed, name: replace}
     mcp:

@@ -5,9 +5,11 @@ import {
   apiErrorMessage,
   createRecurringDefinition,
   fetchAccountingHistoryRange,
+  getRecurringDefinition,
   pauseRecurringDefinition,
   type RecurringDefinition,
   type RecurringDefinitionRecordRequest,
+  type RecurringDefinitionReplaceRequest,
   type RecurringDefinitionWriteRequest,
   replaceRecurringDefinition,
   resumeRecurringDefinition,
@@ -59,6 +61,11 @@ interface DefinitionDraft {
   readonly records: readonly DefinitionRecordDraft[];
   readonly scheduleKind: ScheduleKind;
   readonly unit: IntervalUnit;
+}
+
+interface ReplacementBaseline {
+  readonly anchorDate: string;
+  readonly etag: string;
 }
 
 interface DefinitionEditorPanelProps {
@@ -191,6 +198,13 @@ export const DefinitionEditorPanel = ({
   const panelRef = useRef<HTMLElement | null>(null);
   const [draft, setDraft] = useState<DefinitionDraft>(() =>
     definitionDraft(definition, initialRecords),
+  );
+  const [replacementBaseline, setReplacementBaseline] = useState<
+    ReplacementBaseline | undefined
+  >(() =>
+    definition
+      ? { anchorDate: definition.anchor_date, etag: definition.etag }
+      : undefined,
   );
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [generalError, setGeneralError] = useState<string>();
@@ -425,8 +439,9 @@ export const DefinitionEditorPanel = ({
     if (!candidate.anchorDate) next.anchorDate = "Anchor date is required.";
     if (
       definition &&
+      replacementBaseline &&
       serverToday &&
-      candidate.anchorDate !== definition.anchor_date &&
+      candidate.anchorDate !== replacementBaseline.anchorDate &&
       candidate.anchorDate < serverToday
     )
       next.anchorDate = "A changed anchor date cannot be in the past.";
@@ -488,6 +503,8 @@ export const DefinitionEditorPanel = ({
     const nextErrors = validate(draft);
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0 || saving) return;
+    setSaving(true);
+    setGeneralError(undefined);
     const schedule_rule =
       draft.scheduleKind === "interval"
         ? { every: draft.every, kind: "interval", unit: draft.unit, version: 1 }
@@ -505,21 +522,68 @@ export const DefinitionEditorPanel = ({
         tag_ids: [...row.tagIds],
       }),
     );
-    const body: RecurringDefinitionWriteRequest = {
-      anchor_date: draft.anchorDate,
+    const body = {
       fqn: draft.fqn.trim(),
       records,
       schedule_rule,
     };
-    setSaving(true);
-    setGeneralError(undefined);
-    const result = definition
-      ? await replaceRecurringDefinition({
-          body,
-          path: { recurring_definition_id: definition.recurring_definition_id },
-        })
-      : await createRecurringDefinition({ body });
+    const result =
+      definition && replacementBaseline
+        ? await replaceRecurringDefinition({
+            body: {
+              ...body,
+              anchor_date:
+                draft.anchorDate === replacementBaseline.anchorDate
+                  ? null
+                  : draft.anchorDate,
+            } satisfies RecurringDefinitionReplaceRequest,
+            headers: { "If-Match": replacementBaseline.etag },
+            path: {
+              recurring_definition_id: definition.recurring_definition_id,
+            },
+          })
+        : await createRecurringDefinition({
+            body: {
+              ...body,
+              anchor_date: draft.anchorDate,
+            } satisfies RecurringDefinitionWriteRequest,
+          });
     if (!result.data) {
+      if (
+        definition &&
+        replacementBaseline &&
+        result.response?.status === 412
+      ) {
+        const anchorWasChanged =
+          draft.anchorDate !== replacementBaseline.anchorDate;
+        const latest = await getRecurringDefinition({
+          path: {
+            recurring_definition_id: definition.recurring_definition_id,
+          },
+        });
+        if (latest.data) {
+          setReplacementBaseline({
+            anchorDate: latest.data.anchor_date,
+            etag: latest.data.etag,
+          });
+          if (!anchorWasChanged) {
+            setDraft((current) => ({
+              ...current,
+              anchorDate: latest.data.anchor_date,
+            }));
+          }
+          setErrors({});
+          setGeneralError(
+            "This recurring definition changed elsewhere. Your draft is preserved against the latest version; review it and save again.",
+          );
+        } else {
+          setGeneralError(
+            `This recurring definition changed elsewhere, but the latest version could not be loaded. Your draft is preserved; try again. ${apiErrorMessage(latest.error)}`,
+          );
+        }
+        setSaving(false);
+        return;
+      }
       const message = apiErrorMessage(
         result.error,
         "Definition could not be saved.",
@@ -543,6 +607,12 @@ export const DefinitionEditorPanel = ({
       setGeneralError(message);
       setSaving(false);
       return;
+    }
+    if (definition) {
+      setReplacementBaseline({
+        anchorDate: result.data.anchor_date,
+        etag: result.data.etag,
+      });
     }
     const shouldPause = draft.paused;
     const isPaused = Boolean(result.data.paused_at);

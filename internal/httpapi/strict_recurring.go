@@ -69,9 +69,13 @@ func recurringDefinitionSearchAPIItems(source []recurring.SearchItem) []openapi.
 }
 
 func (s *strictServer) CreateRecurringDefinition(ctx context.Context, request openapi.CreateRecurringDefinitionRequestObject) (openapi.CreateRecurringDefinitionResponseObject, error) {
-	input, err := recurringDefinitionWriteAPIInput(*request.Body)
+	write, err := recurringDefinitionWriteAPIInput(request.Body.Fqn, request.Body.ScheduleRule, request.Body.TemplateId, request.Body.Records)
 	if err != nil {
 		return nil, err
+	}
+	input := recurring.CreateInput{
+		WriteInput: write,
+		AnchorDate: civilDateFromOpenAPI(request.Body.AnchorDate),
 	}
 
 	definition, err := s.deps.Recurring.Create(ctx, input)
@@ -91,7 +95,7 @@ func (s *strictServer) DeleteRecurringDefinition(ctx context.Context, request op
 }
 
 func (s *strictServer) ConfirmNextRecurringDefinition(ctx context.Context, request openapi.ConfirmNextRecurringDefinitionRequestObject) (openapi.ConfirmNextRecurringDefinitionResponseObject, error) {
-	occurrence, err := s.deps.Recurring.ConfirmNext(
+	transaction, err := s.deps.Recurring.ConfirmNext(
 		ctx,
 		request.RecurringDefinitionId,
 		values.LocalCivilDateFromTime(s.deps.clock().Now()),
@@ -101,11 +105,11 @@ func (s *strictServer) ConfirmNextRecurringDefinition(ctx context.Context, reque
 		return nil, err
 	}
 
-	return openapi.ConfirmNextRecurringDefinition200JSONResponse(recurringOccurrenceAPIResponse(occurrence)), nil
+	return openapi.ConfirmNextRecurringDefinition200JSONResponse(transactionAPIResponse(transaction)), nil
 }
 
 func (s *strictServer) DeferRecurringDefinition(ctx context.Context, request openapi.DeferRecurringDefinitionRequestObject) (openapi.DeferRecurringDefinitionResponseObject, error) {
-	occurrence, err := s.deps.Recurring.Defer(
+	definition, err := s.deps.Recurring.Defer(
 		ctx,
 		request.RecurringDefinitionId,
 		values.LocalCivilDateFromTime(s.deps.clock().Now()),
@@ -115,7 +119,7 @@ func (s *strictServer) DeferRecurringDefinition(ctx context.Context, request ope
 		return nil, err
 	}
 
-	return openapi.DeferRecurringDefinition200JSONResponse(recurringOccurrenceAPIResponse(occurrence)), nil
+	return openapi.DeferRecurringDefinition200JSONResponse(recurringDefinitionAPIResponse(definition)), nil
 }
 
 func (s *strictServer) GetRecurringDefinition(ctx context.Context, request openapi.GetRecurringDefinitionRequestObject) (openapi.GetRecurringDefinitionResponseObject, error) {
@@ -128,9 +132,17 @@ func (s *strictServer) GetRecurringDefinition(ctx context.Context, request opena
 }
 
 func (s *strictServer) ReplaceRecurringDefinition(ctx context.Context, request openapi.ReplaceRecurringDefinitionRequestObject) (openapi.ReplaceRecurringDefinitionResponseObject, error) {
-	input, err := recurringDefinitionWriteAPIInput(*request.Body)
+	write, err := recurringDefinitionWriteAPIInput(request.Body.Fqn, request.Body.ScheduleRule, request.Body.TemplateId, request.Body.Records)
 	if err != nil {
 		return nil, err
+	}
+	input := recurring.ReplaceInput{
+		WriteInput:   write,
+		ExpectedETag: request.Params.IfMatch,
+	}
+	if request.Body.AnchorDate != nil {
+		anchorDate := civilDateFromOpenAPI(*request.Body.AnchorDate)
+		input.AnchorDate = &anchorDate
 	}
 
 	definition, err := s.deps.Recurring.Replace(ctx, request.RecurringDefinitionId, input)
@@ -141,74 +153,12 @@ func (s *strictServer) ReplaceRecurringDefinition(ctx context.Context, request o
 	return openapi.ReplaceRecurringDefinition200JSONResponse(recurringDefinitionAPIResponse(definition)), nil
 }
 
-func (s *strictServer) ConfirmRecurringOccurrence(ctx context.Context, request openapi.ConfirmRecurringOccurrenceRequestObject) (openapi.ConfirmRecurringOccurrenceResponseObject, error) {
-	occurrence, err := s.deps.Recurring.ConfirmOccurrence(ctx, request.RecurringOccurrenceId, recurringOccurrenceConfirmationAPIInput(*request.Body))
-	if err != nil {
-		return nil, err
-	}
-
-	return openapi.ConfirmRecurringOccurrence200JSONResponse(recurringOccurrenceAPIResponse(occurrence)), nil
-}
-
-func recurringOccurrenceConfirmationAPIInput(input openapi.RecurringOccurrenceConfirmRequest) recurring.ConfirmOccurrenceInput {
-	return recurring.ConfirmOccurrenceInput{
-		ActualDate: nullableCivilDateFromOpenAPI(input.ActualDate),
-		Settlement: transactions.SettlementIntent{
-			Status:      transactions.SettlementStatus(input.Status),
-			PendingDate: nullableTimestampFromOpenAPI(input.PendingDate),
-			PostedDate:  nullableTimestampFromOpenAPI(input.PostedDate),
-		},
-	}
-}
-
 func recurringConfirmationAPIInput(input openapi.SettlementIntent) transactions.SettlementIntent {
 	return transactions.SettlementIntent{
 		Status:      transactions.SettlementStatus(input.Status),
 		PendingDate: nullableTimestampFromOpenAPI(input.PendingDate),
 		PostedDate:  nullableTimestampFromOpenAPI(input.PostedDate),
 	}
-}
-
-func (s *strictServer) DismissRecurringOccurrence(ctx context.Context, request openapi.DismissRecurringOccurrenceRequestObject) (openapi.DismissRecurringOccurrenceResponseObject, error) {
-	occurrence, err := s.deps.Recurring.DismissOccurrence(ctx, request.RecurringOccurrenceId)
-	if err != nil {
-		return nil, err
-	}
-
-	return openapi.DismissRecurringOccurrence200JSONResponse(recurringOccurrenceAPIResponse(occurrence)), nil
-}
-
-func (s *strictServer) GetRecurringOccurrence(ctx context.Context, request openapi.GetRecurringOccurrenceRequestObject) (openapi.GetRecurringOccurrenceResponseObject, error) {
-	occurrence, err := s.deps.Recurring.GetOccurrence(ctx, request.RecurringOccurrenceId)
-	if err != nil {
-		return nil, err
-	}
-
-	return openapi.GetRecurringOccurrence200JSONResponse(recurringOccurrenceAPIResponse(occurrence)), nil
-}
-
-func (s *strictServer) ListRecurringOccurrences(ctx context.Context, request openapi.ListRecurringOccurrencesRequestObject) (openapi.ListRecurringOccurrencesResponseObject, error) {
-	params := request.Params
-	occurrences, err := s.deps.Recurring.ListOccurrences(ctx, recurring.OccurrenceListOptions{
-		ListOptions: listOptionsFromParams(
-			params.Sort,
-			params.SortDir,
-			params.Limit,
-			params.Offset,
-			services.SortKeyScheduledDate,
-		),
-		Today:                 values.LocalCivilDateFromTime(s.deps.clock().Now()),
-		RecurringDefinitionID: params.RecurringDefinitionId,
-		Statuses:              recurringOccurrenceAPIStatuses(params.Status),
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return openapi.ListRecurringOccurrences200JSONResponse{
-		RecurringOccurrences: recurringOccurrenceAPIResponses(occurrences.Items),
-		TotalCount:           occurrences.TotalCount,
-	}, nil
 }
 
 func (s *strictServer) PauseRecurringDefinition(ctx context.Context, request openapi.PauseRecurringDefinitionRequestObject) (openapi.PauseRecurringDefinitionResponseObject, error) {
@@ -233,21 +183,20 @@ func (s *strictServer) ResumeRecurringDefinition(ctx context.Context, request op
 	return openapi.ResumeRecurringDefinition200JSONResponse(recurringDefinitionAPIResponse(definition)), nil
 }
 
-func recurringDefinitionWriteAPIInput(request openapi.RecurringDefinitionWriteRequest) (recurring.WriteInput, error) {
-	scheduleRule, err := json.Marshal(request.ScheduleRule)
+func recurringDefinitionWriteAPIInput(fqn string, scheduleRuleValue openapi.RecurringScheduleRule, templateID *int64, requestRecords *[]openapi.RecurringDefinitionRecordRequest) (recurring.WriteInput, error) {
+	scheduleRule, err := json.Marshal(scheduleRuleValue)
 	if err != nil {
 		return recurring.WriteInput{}, services.InvalidRequest("schedule_rule must be a JSON object")
 	}
-	records, err := recurringDefinitionRecordAPIInputs(request.Records)
+	records, err := recurringDefinitionRecordAPIInputs(requestRecords)
 	if err != nil {
 		return recurring.WriteInput{}, err
 	}
 
 	return recurring.WriteInput{
-		FQN:          request.Fqn,
+		FQN:          fqn,
 		ScheduleRule: scheduleRule,
-		AnchorDate:   civilDateFromOpenAPI(request.AnchorDate),
-		TemplateID:   request.TemplateId,
+		TemplateID:   templateID,
 		Records:      records,
 	}, nil
 }
@@ -321,6 +270,7 @@ func optionalRecurringNullableString(value nullable.Nullable[string]) recurring.
 func recurringDefinitionAPIResponse(definition recurring.Definition) openapi.RecurringDefinition {
 	return openapi.RecurringDefinition{
 		RecurringDefinitionId: definition.ID,
+		Etag:                  services.ETag(definition.UpdatedAt),
 		Fqn:                   definition.FQN,
 		ScheduleRule:          recurringScheduleRuleAPIResponse(definition.ScheduleRule),
 		ScheduleClass:         openapi.RecurringScheduleClass(definition.ScheduleClass),
@@ -353,44 +303,6 @@ func recurringDefinitionAPIResponses(definitions []recurring.Definition) []opena
 	responses := make([]openapi.RecurringDefinition, 0, len(definitions))
 	for _, definition := range definitions {
 		responses = append(responses, recurringDefinitionAPIResponse(definition))
-	}
-
-	return responses
-}
-
-func recurringOccurrenceAPIStatuses(statuses *[]openapi.RecurringOccurrenceStatus) []recurring.OccurrenceStatus {
-	if statuses == nil {
-		return nil
-	}
-	values := make([]recurring.OccurrenceStatus, 0, len(*statuses))
-	for _, status := range *statuses {
-		values = append(values, recurring.OccurrenceStatus(status))
-	}
-
-	return values
-}
-
-func recurringOccurrenceAPIResponse(occurrence recurring.Occurrence) openapi.RecurringOccurrence {
-	return openapi.RecurringOccurrence{
-		RecurringOccurrenceId:         occurrence.ID,
-		RecurringDefinitionId:         occurrence.RecurringDefinitionID,
-		RecurringDefinitionFqn:        occurrence.RecurringDefinitionFQN,
-		RecurringDefinitionActive:     occurrence.RecurringDefinitionActive,
-		ScheduledDate:                 openAPIDate(occurrence.ScheduledDate),
-		Status:                        openapi.RecurringOccurrenceStatus(occurrence.Status),
-		MaterializedDefinitionVersion: occurrence.MaterializedDefinitionVersion,
-		MaterializedAt:                occurrence.MaterializedAt.UTC(),
-		ReviewedAt:                    nullableTimestampTime(occurrence.ReviewedAt),
-		GeneratedTransactionId:        occurrence.GeneratedTransactionID,
-		CreatedAt:                     occurrence.CreatedAt.UTC(),
-		UpdatedAt:                     occurrence.UpdatedAt.UTC(),
-	}
-}
-
-func recurringOccurrenceAPIResponses(occurrences []recurring.Occurrence) []openapi.RecurringOccurrence {
-	responses := make([]openapi.RecurringOccurrence, 0, len(occurrences))
-	for _, occurrence := range occurrences {
-		responses = append(responses, recurringOccurrenceAPIResponse(occurrence))
 	}
 
 	return responses

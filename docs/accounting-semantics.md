@@ -104,7 +104,7 @@ Record sign follows the journal convention: positive amounts debit an account an
 Lifecycle belongs to the transaction:
 
 - `ACTIVE` is ordinary accounting activity and is the only lifecycle accepted by generic create and replace workflows.
-- `EXPECTED` is an unconfirmed recurring occurrence. Recurring materialization is its only creator.
+- `EXPECTED` is a generated recurring transaction awaiting review. Recurring catch-up is its only creator.
 - `CANCELLED` is preserved history that no longer affects accounting. It is reached only by cancelling an active transaction.
 
 Lifecycle is separate from tombstoning. Tombstoning deletes a transaction from active persistence views; cancellation keeps it reviewable and reversible. Expected and cancelled transactions remain structurally balanced, but balances, running balances, month totals, and reports include only active transactions. Transaction listings omit expected transactions only when no filter expression is supplied; any supplied expression governs lifecycle inclusion by itself. Record listings omit expected transactions by default and may include them through an explicit lifecycle filter.

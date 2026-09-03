@@ -92,6 +92,7 @@ type Operation struct {
 	StartupInvocation *Invocation
 	Startup           bool
 	Schedule          string
+	ScheduleLocal     bool
 	MaxRetries        uint
 }
 
@@ -178,7 +179,7 @@ func (r *Runner) Register(op Operation) error {
 	return nil
 }
 
-// ValidateSchedule checks a five-field UTC cron schedule.
+// ValidateSchedule checks a five-field cron schedule.
 func ValidateSchedule(schedule string) error {
 	_, err := parseSchedule(schedule)
 	return err
@@ -203,7 +204,7 @@ func (r *Runner) Start() {
 			})
 		}
 		if op.schedule != nil {
-			next := op.schedule.Next(r.clock.Now().UTC())
+			next := op.schedule.Next(op.scheduleTime(r.clock.Now()))
 			if next.IsZero() {
 				r.log("%s schedule has no next matching time\n", op.ID)
 				continue
@@ -299,7 +300,7 @@ func (r *Runner) runRecurring(ctx context.Context, op registeredOperation, next 
 		if err := ctx.Err(); err != nil {
 			return
 		}
-		now := r.clock.Now().UTC()
+		now := op.scheduleTime(r.clock.Now())
 		if !now.Before(next) {
 			if _, err := r.run(ctx, op, operationruns.RunTriggerScheduled); err != nil {
 				if ctx.Err() == nil {
@@ -317,6 +318,14 @@ func (r *Runner) runRecurring(ctx context.Context, op registeredOperation, next 
 			return
 		}
 	}
+}
+
+func (op registeredOperation) scheduleTime(now time.Time) time.Time {
+	if op.ScheduleLocal {
+		return now
+	}
+
+	return now.UTC()
 }
 
 func (r *Runner) run(ctx context.Context, op registeredOperation, trigger operationruns.RunTrigger) (operationruns.RunEnvelope, error) {

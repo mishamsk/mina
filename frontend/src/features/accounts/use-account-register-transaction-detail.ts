@@ -4,14 +4,15 @@ import type { SetURLSearchParams } from "react-router";
 import {
   apiErrorMessage,
   cancelTransactionById,
-  confirmRecurringOccurrenceById,
+  confirmExpectedTransactionById,
   deleteTransactionById,
-  dismissRecurringOccurrenceById,
+  dismissExpectedTransactionById,
   restoreTransactionById,
   type Transaction,
   updateJournalRecordsSettlement,
 } from "@/api";
 import {
+  isMaterializedExpectedRecurringTransaction,
   refreshViewsAfterEntrySave,
   useTransactionDetail,
 } from "@/features/ledger";
@@ -119,53 +120,63 @@ export const useAccountRegisterTransactionDetail = ({
     await refreshViewsAfterEntrySave(transaction, [transaction]);
   };
 
-  const confirmRecurringOccurrence = async (
+  const confirmExpectedTransaction = async (
     transaction: Transaction,
     actualDate: string,
   ) => {
-    if (transaction.recurring_occurrence_id === null) {
-      throw new Error("This transaction is not a recurring occurrence.");
+    if (!isMaterializedExpectedRecurringTransaction(transaction)) {
+      throw new Error(
+        "This transaction is not a materialized expected transaction.",
+      );
     }
-    const result = await confirmRecurringOccurrenceById({
+    const result = await confirmExpectedTransactionById({
       actual_date: actualDate,
-      recurring_occurrence_id: transaction.recurring_occurrence_id,
+      transaction_id: transaction.transaction_id,
     });
     if (result.error) {
       throw new Error(
-        apiErrorMessage(result.error, "Occurrence could not be confirmed."),
+        apiErrorMessage(
+          result.error,
+          "Expected transaction could not be confirmed.",
+        ),
       );
     }
     await refreshViewsAfterEntrySave(transaction, [transaction]);
     await detail.refreshSelectedTransactionDetail(transaction.transaction_id);
-    showNotice("Occurrence confirmed.");
+    showNotice("Expected transaction confirmed.");
   };
 
-  const dismissRecurringOccurrence = async (transaction: Transaction) => {
-    if (transaction.recurring_occurrence_id === null) {
-      throw new Error("This transaction is not a recurring occurrence.");
+  const dismissExpectedTransaction = async (transaction: Transaction) => {
+    if (!isMaterializedExpectedRecurringTransaction(transaction)) {
+      throw new Error(
+        "This transaction is not a materialized expected transaction.",
+      );
     }
-    const result = await dismissRecurringOccurrenceById({
-      recurring_occurrence_id: transaction.recurring_occurrence_id,
+    const result = await dismissExpectedTransactionById({
+      transaction_id: transaction.transaction_id,
     });
     if (result.error) {
       throw new Error(
-        apiErrorMessage(result.error, "Occurrence could not be dismissed."),
+        apiErrorMessage(
+          result.error,
+          "Expected transaction could not be dismissed.",
+        ),
       );
     }
     detail.closeTransactionDetail();
     await refreshViewsAfterEntrySave(transaction, [transaction]);
-    showNotice("Occurrence dismissed.");
+    showNotice("Expected transaction dismissed.");
   };
 
   return {
     changeTransactionLifecycle,
-    confirmRecurringOccurrence,
+    confirmExpectedTransaction,
     deleteTransaction,
     detail,
     dismissNotice: () => {
       setNotice(undefined);
     },
-    dismissRecurringOccurrence,
+    dismissExpectedTransaction,
     notice,
     postTransaction,
   };

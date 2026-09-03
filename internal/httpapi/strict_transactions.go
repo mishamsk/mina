@@ -8,6 +8,7 @@ import (
 	"github.com/mishamsk/mina/internal/httpapi/openapi"
 	"github.com/mishamsk/mina/internal/services"
 	"github.com/mishamsk/mina/internal/services/creditlimits"
+	"github.com/mishamsk/mina/internal/services/recurring"
 	"github.com/mishamsk/mina/internal/services/transactions"
 	"github.com/mishamsk/mina/internal/services/values"
 	openapi_types "github.com/oapi-codegen/runtime/types"
@@ -259,12 +260,34 @@ func (s *strictServer) DeleteTransaction(ctx context.Context, request openapi.De
 }
 
 func (s *strictServer) GetTransaction(ctx context.Context, request openapi.GetTransactionRequestObject) (openapi.GetTransactionResponseObject, error) {
-	transaction, err := s.deps.Transactions.Get(ctx, request.TransactionId)
+	transaction, err := s.deps.Transactions.Get(ctx, request.TransactionId, boolParam(request.Params.IncludeTombstoned))
 	if err != nil {
 		return nil, err
 	}
 
 	return openapi.GetTransaction200JSONResponse(transactionAPIResponse(transaction)), nil
+}
+
+func (s *strictServer) ConfirmExpectedTransaction(ctx context.Context, request openapi.ConfirmExpectedTransactionRequestObject) (openapi.ConfirmExpectedTransactionResponseObject, error) {
+	transaction, err := s.deps.Recurring.ConfirmExpected(ctx, request.TransactionId, recurring.ConfirmExpectedInput{
+		ActualDate: nullableCivilDateFromOpenAPI(request.Body.ActualDate),
+		Settlement: transactions.SettlementIntent{
+			Status:      transactions.SettlementStatus(request.Body.Status),
+			PendingDate: nullableTimestampFromOpenAPI(request.Body.PendingDate),
+			PostedDate:  nullableTimestampFromOpenAPI(request.Body.PostedDate),
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return openapi.ConfirmExpectedTransaction200JSONResponse(transactionAPIResponse(transaction)), nil
+}
+
+func (s *strictServer) DismissExpectedTransaction(ctx context.Context, request openapi.DismissExpectedTransactionRequestObject) (openapi.DismissExpectedTransactionResponseObject, error) {
+	if err := s.deps.Recurring.DismissExpected(ctx, request.TransactionId); err != nil {
+		return nil, err
+	}
+	return openapi.DismissExpectedTransaction204Response{}, nil
 }
 
 func (s *strictServer) CancelTransaction(ctx context.Context, request openapi.CancelTransactionRequestObject) (openapi.CancelTransactionResponseObject, error) {
@@ -649,22 +672,23 @@ func updateJournalRecordAPIInputs(records []openapi.UpdateTransactionRequest_Rec
 
 func transactionAPIResponse(transaction transactions.Transaction) openapi.Transaction {
 	return openapi.Transaction{
-		TransactionId:                   transaction.ID,
-		Etag:                            transactions.ETag(transaction.UpdatedAt),
-		InitiatedDate:                   openAPIDate(transaction.InitiatedDate),
-		TransactionClass:                openapi.TransactionClass(transaction.Class),
-		DisplayTitle:                    transaction.DisplayTitle,
-		PrimaryAmounts:                  displayAmountAPIResponses(transaction.PrimaryAmounts),
-		Shapes:                          transactionShapeAPIResponses(transaction.Shapes),
-		RecurringOccurrenceId:           transaction.RecurringOccurrenceID,
-		RecurringProjectionDefinitionId: transaction.RecurringProjectionDefinitionID,
-		RecurringProjectionIsNext:       transaction.RecurringProjectionIsNext,
-		LifecycleStatus:                 openapi.TransactionLifecycleStatus(transaction.LifecycleStatus),
-		Settlement:                      openapi.TransactionSettlement(transaction.Settlement),
-		CreatedAt:                       transaction.CreatedAt.UTC(),
-		UpdatedAt:                       transaction.UpdatedAt.UTC(),
-		TombstonedAt:                    nullableTimestampTime(transaction.TombstonedAt),
-		Records:                         journalRecordAPIResponses(transaction.Records),
+		TransactionId:             transaction.ID,
+		Etag:                      services.ETag(transaction.UpdatedAt),
+		InitiatedDate:             openAPIDate(transaction.InitiatedDate),
+		TransactionClass:          openapi.TransactionClass(transaction.Class),
+		DisplayTitle:              transaction.DisplayTitle,
+		PrimaryAmounts:            displayAmountAPIResponses(transaction.PrimaryAmounts),
+		Shapes:                    transactionShapeAPIResponses(transaction.Shapes),
+		RecurringDefinitionId:     transaction.RecurringDefinitionID,
+		RecurringDefinitionFqn:    transaction.RecurringDefinitionFQN,
+		RecurringDefinitionActive: transaction.RecurringDefinitionActive,
+		RecurringProjectionIsNext: transaction.RecurringProjectionIsNext,
+		LifecycleStatus:           openapi.TransactionLifecycleStatus(transaction.LifecycleStatus),
+		Settlement:                openapi.TransactionSettlement(transaction.Settlement),
+		CreatedAt:                 transaction.CreatedAt.UTC(),
+		UpdatedAt:                 transaction.UpdatedAt.UTC(),
+		TombstonedAt:              nullableTimestampTime(transaction.TombstonedAt),
+		Records:                   journalRecordAPIResponses(transaction.Records),
 	}
 }
 

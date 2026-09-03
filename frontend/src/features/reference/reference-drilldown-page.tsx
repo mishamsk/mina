@@ -390,8 +390,8 @@ export const ReferenceDrilldownPage = ({
           }
           loading={browser.loading}
           lookups={browser.lookups.snapshot}
-          onConfirmRecurringOccurrence={
-            browser.confirmRecurringOccurrenceFromRow
+          onConfirmExpectedTransaction={
+            browser.confirmExpectedTransactionFromRow
           }
           onDeferRecurringProjection={browser.deferRecurringProjection}
           onChangeTransactionLifecycle={browser.changeTransactionLifecycle}
@@ -421,8 +421,8 @@ export const ReferenceDrilldownPage = ({
           onDiscardTransactionAmountConflict={
             browser.discardTransactionAmountConflict
           }
-          onDismissRecurringOccurrence={
-            browser.dismissRecurringOccurrenceFromRow
+          onDismissExpectedTransaction={
+            browser.dismissExpectedTransactionFromRow
           }
           onLoadRecurringDefinitionForProjection={
             browser.loadRecurringDefinitionForProjection
@@ -494,10 +494,10 @@ export const ReferenceDrilldownPage = ({
           lookups={browser.lookups.snapshot}
           onChangeLifecycle={browser.changeTransactionLifecycle}
           onClose={browser.detail.closeTransactionDetail}
-          onConfirmOccurrence={browser.confirmRecurringOccurrenceFromRow}
+          onConfirmExpected={browser.confirmExpectedTransactionFromRow}
           onDeferProjection={browser.deferRecurringProjection}
           onDelete={browser.deleteSelectedTransaction}
-          onDismissOccurrence={browser.dismissRecurringOccurrenceFromRow}
+          onDismissExpected={browser.dismissExpectedTransactionFromRow}
           onDuplicate={(transaction) => {
             openTransactionEntryLaunch(
               { transaction, type: "duplicate" },

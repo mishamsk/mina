@@ -26,8 +26,8 @@ func TestTransactionCreateReadListBoundary(t *testing.T) {
 	if created.JSON201.InitiatedDate.String() != "2024-03-10" {
 		t.Fatalf("initiated_date = %q, want 2024-03-10", created.JSON201.InitiatedDate)
 	}
-	if created.JSON201.RecurringOccurrenceId != nil {
-		t.Fatalf("created recurring_occurrence_id = %v, want nil", created.JSON201.RecurringOccurrenceId)
+	if created.JSON201.RecurringDefinitionId != nil || created.JSON201.RecurringDefinitionFqn != nil || created.JSON201.RecurringDefinitionActive != nil {
+		t.Fatalf("created recurring provenance = %v/%v/%v, want nil", created.JSON201.RecurringDefinitionId, created.JSON201.RecurringDefinitionFqn, created.JSON201.RecurringDefinitionActive)
 	}
 	if len(created.JSON201.Records) != 2 {
 		t.Fatalf("created record count = %d, want 2; body %+v", len(created.JSON201.Records), created.JSON201)
@@ -41,7 +41,7 @@ func TestTransactionCreateReadListBoundary(t *testing.T) {
 	}
 	assertInt64s(t, created.JSON201.Records[0].TagIds, []int64{refs.TagId})
 
-	read, err := client.REST().GetTransactionWithResponse(context.Background(), created.JSON201.TransactionId)
+	read, err := client.REST().GetTransactionWithResponse(context.Background(), created.JSON201.TransactionId, nil)
 	if err != nil {
 		t.Fatalf("read request: %v", err)
 	}
@@ -51,8 +51,8 @@ func TestTransactionCreateReadListBoundary(t *testing.T) {
 	if read.JSON200.TransactionId != created.JSON201.TransactionId {
 		t.Fatalf("read transaction id = %d, want %d", read.JSON200.TransactionId, created.JSON201.TransactionId)
 	}
-	if read.JSON200.RecurringOccurrenceId != nil {
-		t.Fatalf("read recurring_occurrence_id = %v, want nil", read.JSON200.RecurringOccurrenceId)
+	if read.JSON200.RecurringDefinitionId != nil || read.JSON200.RecurringDefinitionFqn != nil || read.JSON200.RecurringDefinitionActive != nil {
+		t.Fatalf("read recurring provenance = %v/%v/%v, want nil", read.JSON200.RecurringDefinitionId, read.JSON200.RecurringDefinitionFqn, read.JSON200.RecurringDefinitionActive)
 	}
 	if len(read.JSON200.Records) != 2 {
 		t.Fatalf("read record count = %d, want 2; body %+v", len(read.JSON200.Records), read.JSON200)
@@ -76,8 +76,8 @@ func TestTransactionCreateReadListBoundary(t *testing.T) {
 		t.Fatalf("listed transaction = %+v, want id %d with 2 records", list.JSON200.Transactions[0], created.JSON201.TransactionId)
 	}
 	assertRecordInitiatedDates(t, "listed", list.JSON200.Transactions[0].Records, "2024-03-10")
-	if list.JSON200.Transactions[0].RecurringOccurrenceId != nil {
-		t.Fatalf("listed recurring_occurrence_id = %v, want nil", list.JSON200.Transactions[0].RecurringOccurrenceId)
+	if list.JSON200.Transactions[0].RecurringDefinitionId != nil || list.JSON200.Transactions[0].RecurringDefinitionFqn != nil || list.JSON200.Transactions[0].RecurringDefinitionActive != nil {
+		t.Fatalf("listed recurring provenance = %v/%v/%v, want nil", list.JSON200.Transactions[0].RecurringDefinitionId, list.JSON200.Transactions[0].RecurringDefinitionFqn, list.JSON200.Transactions[0].RecurringDefinitionActive)
 	}
 }
 
@@ -412,7 +412,7 @@ func TestTransactionRecordFieldsBoundary(t *testing.T) {
 		t.Fatalf("transaction timestamps = %q/%q, want populated created_at/updated_at", created.JSON201.CreatedAt, created.JSON201.UpdatedAt)
 	}
 	record := created.JSON201.Records[0]
-	if record.Settlement == nil || *record.Settlement != httpclient.SettlementStatusPosted || record.LifecycleStatus != httpclient.TransactionLifecycleStatusActive {
+	if record.Settlement == nil || *record.Settlement != httpclient.SettlementStatusPosted || record.LifecycleStatus != httpclient.Active {
 		t.Fatalf("settlement/lifecycle_status = %v/%q, want posted/active", record.Settlement, record.LifecycleStatus)
 	}
 	if record.ReconciliationStatus != httpclient.Reconciled {
@@ -435,7 +435,7 @@ func TestTransactionRecordFieldsBoundary(t *testing.T) {
 		t.Fatalf("timestamps = %q/%q, want populated created_at/updated_at", record.CreatedAt, record.UpdatedAt)
 	}
 
-	read, err := client.REST().GetTransactionWithResponse(context.Background(), created.JSON201.TransactionId)
+	read, err := client.REST().GetTransactionWithResponse(context.Background(), created.JSON201.TransactionId, nil)
 	if err != nil {
 		t.Fatalf("read request: %v", err)
 	}
@@ -449,7 +449,7 @@ func TestTransactionRecordFieldsBoundary(t *testing.T) {
 	if readRecord.RecordId != record.RecordId {
 		t.Fatalf("read record id = %d, want %d", readRecord.RecordId, record.RecordId)
 	}
-	if readRecord.Settlement == nil || *readRecord.Settlement != httpclient.SettlementStatusPosted || readRecord.LifecycleStatus != httpclient.TransactionLifecycleStatusActive {
+	if readRecord.Settlement == nil || *readRecord.Settlement != httpclient.SettlementStatusPosted || readRecord.LifecycleStatus != httpclient.Active {
 		t.Fatalf("read settlement/lifecycle_status = %v/%q, want posted/active", readRecord.Settlement, readRecord.LifecycleStatus)
 	}
 	if readRecord.ReconciliationStatus != httpclient.Reconciled {
@@ -852,7 +852,7 @@ func TestTransactionTimestampsNormalizeOffsetInputBoundary(t *testing.T) {
 	assertBodyContains(t, "created", created.Body, wantPendingJSON)
 	assertBodyContains(t, "created", created.Body, wantPostedJSON)
 
-	read, err := client.REST().GetTransactionWithResponse(context.Background(), created.JSON201.TransactionId)
+	read, err := client.REST().GetTransactionWithResponse(context.Background(), created.JSON201.TransactionId, nil)
 	if err != nil {
 		t.Fatalf("read request: %v", err)
 	}
@@ -1134,7 +1134,7 @@ func TestTransactionCancellationRequiresWhollyPendingBalanceSettlement(t *testin
 	if rejected.StatusCode() != http.StatusBadRequest {
 		t.Fatalf("cancel posted status = %d, want %d; body %s", rejected.StatusCode(), http.StatusBadRequest, rejected.Body)
 	}
-	apptest.AssertTransactionLifecycle(t, getTransaction(t, client, posted.JSON201.TransactionId).JSON200, httpclient.TransactionLifecycleStatusActive)
+	apptest.AssertTransactionLifecycle(t, getTransaction(t, client, posted.JSON201.TransactionId).JSON200, httpclient.Active)
 
 	pending := createTransaction(t, client, settlementTransactionRequest(refs, "2024-03-11", httpclient.SettlementStatusPending))
 	cancelled, err := client.REST().CancelTransactionWithResponse(context.Background(), pending.JSON201.TransactionId)
@@ -1142,14 +1142,14 @@ func TestTransactionCancellationRequiresWhollyPendingBalanceSettlement(t *testin
 	if cancelled.StatusCode() != http.StatusOK {
 		t.Fatalf("cancel pending status = %d, want %d; body %s", cancelled.StatusCode(), http.StatusOK, cancelled.Body)
 	}
-	apptest.AssertTransactionLifecycle(t, cancelled.JSON200, httpclient.TransactionLifecycleStatusCancelled)
+	apptest.AssertTransactionLifecycle(t, cancelled.JSON200, httpclient.Cancelled)
 
 	repeated, err := client.REST().CancelTransactionWithResponse(context.Background(), pending.JSON201.TransactionId)
 	requireNoTransportError(t, "repeat cancel transaction", err)
 	if repeated.StatusCode() != http.StatusOK {
 		t.Fatalf("repeat cancel status = %d, want %d; body %s", repeated.StatusCode(), http.StatusOK, repeated.Body)
 	}
-	apptest.AssertTransactionLifecycle(t, repeated.JSON200, httpclient.TransactionLifecycleStatusCancelled)
+	apptest.AssertTransactionLifecycle(t, repeated.JSON200, httpclient.Cancelled)
 }
 
 func TestTransactionValidationErrors(t *testing.T) {

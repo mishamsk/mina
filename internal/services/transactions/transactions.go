@@ -85,21 +85,22 @@ var (
 
 // Transaction is a double-entry transaction with nested journal records.
 type Transaction struct {
-	ID                              int64
-	InitiatedDate                   values.CivilDate
-	RecurringOccurrenceID           *int64
-	RecurringProjectionDefinitionID *int64
-	RecurringProjectionIsNext       *bool
-	LifecycleStatus                 LifecycleStatus
-	Settlement                      SettlementSummary
-	Class                           TransactionClass
-	DisplayTitle                    string
-	PrimaryAmounts                  []DisplayAmount
-	Shapes                          []TransactionShape
-	CreatedAt                       time.Time
-	UpdatedAt                       time.Time
-	TombstonedAt                    *time.Time
-	Records                         []JournalRecord
+	ID                        int64
+	InitiatedDate             values.CivilDate
+	RecurringDefinitionID     *int64
+	RecurringDefinitionFQN    *string
+	RecurringDefinitionActive *bool
+	RecurringProjectionIsNext *bool
+	LifecycleStatus           LifecycleStatus
+	Settlement                SettlementSummary
+	Class                     TransactionClass
+	DisplayTitle              string
+	PrimaryAmounts            []DisplayAmount
+	Shapes                    []TransactionShape
+	CreatedAt                 time.Time
+	UpdatedAt                 time.Time
+	TombstonedAt              *time.Time
+	Records                   []JournalRecord
 }
 
 // JournalRecord is one debit or credit entry inside a transaction.
@@ -183,7 +184,7 @@ type SettlementIntent struct {
 // PersistInput is a fully normalized transaction write passed to persistence.
 type PersistInput struct {
 	InitiatedDate         values.CivilDate
-	RecurringOccurrenceID *int64
+	RecurringDefinitionID *int64
 	LifecycleStatus       LifecycleStatus
 	ExpectedUpdatedAt     *time.Time
 	Records               []PersistJournalRecordInput
@@ -392,7 +393,7 @@ type SemanticRecord struct {
 type Repository interface {
 	Create(context.Context, PersistInput) (Transaction, error)
 	Replace(context.Context, int64, PersistInput) (Transaction, error)
-	Get(context.Context, int64) (Transaction, error)
+	Get(context.Context, int64, bool) (Transaction, error)
 	TransactionsByIDs(context.Context, []int64) ([]Transaction, error)
 	Cancel(context.Context, int64) (Transaction, error)
 	Restore(context.Context, int64) (Transaction, error)
@@ -451,9 +452,9 @@ type ReferenceCoordinator interface {
 	WithSharedLease(context.Context, func(context.Context) error) error
 }
 
-// FutureProjectionProvider supplies non-persisted recurring rows within a coherent occurrence snapshot.
-type FutureProjectionProvider interface {
-	WithProjectedTransactions(context.Context, values.CivilDate, ListOptions, func(context.Context, []Transaction) error) error
+// RecurringProjector supplies non-persisted future rows under one read-only snapshot.
+type RecurringProjector interface {
+	WithProjectedTransactions(context.Context, *values.CivilDate, ListOptions, func(context.Context, []Transaction) error) error
 }
 
 // Service owns transaction, journal record, and bulk record use cases.
@@ -467,12 +468,12 @@ type Service struct {
 	refs                 ReferenceCoordinator
 	clock                Clock
 	currencyUsageChanged func()
-	futureProjections    FutureProjectionProvider
+	recurring            RecurringProjector
 }
 
-// SetFutureProjectionProvider connects future-positioned transaction reads to recurring projections.
-func (s *Service) SetFutureProjectionProvider(provider FutureProjectionProvider) {
-	s.futureProjections = provider
+// SetRecurringProjector connects transaction listing to recurring projection.
+func (s *Service) SetRecurringProjector(projector RecurringProjector) {
+	s.recurring = projector
 }
 
 // Clock supplies operation timestamps at the service boundary.
@@ -640,7 +641,7 @@ func (s *Service) Replace(ctx context.Context, id int64, input UpdateInput) (Tra
 	if id <= 0 {
 		return Transaction{}, services.InvalidRequest("transaction_id must be positive")
 	}
-	expectedUpdatedAt, err := updatedAtFromETag(input.ExpectedETag)
+	expectedUpdatedAt, err := services.UpdatedAtFromETag(input.ExpectedETag, "transaction")
 	if err != nil {
 		return Transaction{}, err
 	}
@@ -650,11 +651,11 @@ func (s *Service) Replace(ctx context.Context, id int64, input UpdateInput) (Tra
 
 	var transaction Transaction
 	if err := s.refs.WithSharedLease(ctx, func(ctx context.Context) error {
-		current, err := s.Get(ctx, id)
+		current, err := s.Get(ctx, id, false)
 		if err != nil {
 			return err
 		}
-		if ETag(current.UpdatedAt) != input.ExpectedETag {
+		if services.ETag(current.UpdatedAt) != input.ExpectedETag {
 			return services.PreconditionFailed("transaction changed since it was read")
 		}
 		if current.LifecycleStatus != LifecycleStatusActive {
@@ -713,35 +714,6 @@ func (s *Service) Replace(ctx context.Context, id int64, input UpdateInput) (Tra
 	}
 
 	return transaction, nil
-}
-
-// ETag returns the canonical strong validator for a transaction update timestamp.
-func ETag(updatedAt time.Time) string {
-	return `"` + updatedAt.UTC().Format(time.RFC3339Nano) + `"`
-}
-
-func updatedAtFromETag(etag string) (time.Time, error) {
-	if !validStrongETag(etag) {
-		return time.Time{}, services.InvalidRequest("If-Match must be a strong transaction ETag")
-	}
-	updatedAt, err := time.Parse(time.RFC3339Nano, etag[1:len(etag)-1])
-	if err != nil || ETag(updatedAt) != etag {
-		return time.Time{}, services.PreconditionFailed("transaction changed since it was read")
-	}
-	return updatedAt.UTC(), nil
-}
-
-func validStrongETag(etag string) bool {
-	if len(etag) < 2 || etag[0] != '"' || etag[len(etag)-1] != '"' {
-		return false
-	}
-	for index := 1; index < len(etag)-1; index++ {
-		character := etag[index]
-		if character != 0x21 && (character < 0x23 || character > 0x7e) && character < 0x80 {
-			return false
-		}
-	}
-	return true
 }
 
 func validateUpdateRecordShapes(records []UpdateJournalRecordInput) error {
@@ -867,12 +839,12 @@ func (s *Service) BackfillMissingAmountUSD(ctx context.Context) error {
 }
 
 // Get returns a transaction with nested journal records by ID.
-func (s *Service) Get(ctx context.Context, id int64) (Transaction, error) {
+func (s *Service) Get(ctx context.Context, id int64, includeTombstoned bool) (Transaction, error) {
 	if id <= 0 {
 		return Transaction{}, services.InvalidRequest("transaction_id must be positive")
 	}
 
-	transaction, err := s.repo.Get(ctx, id)
+	transaction, err := s.repo.Get(ctx, id, includeTombstoned)
 	if errors.Is(err, services.ErrNotFound) {
 		return Transaction{}, services.NotFound("transaction not found")
 	}
@@ -889,7 +861,7 @@ func (s *Service) Cancel(ctx context.Context, id int64) (Transaction, error) {
 		return Transaction{}, services.InvalidRequest("transaction_id must be positive")
 	}
 
-	current, err := s.Get(ctx, id)
+	current, err := s.Get(ctx, id, false)
 	if err != nil {
 		return Transaction{}, err
 	}
@@ -928,7 +900,7 @@ func (s *Service) Restore(ctx context.Context, id int64) (Transaction, error) {
 		return Transaction{}, services.InvalidRequest("transaction_id must be positive")
 	}
 
-	current, err := s.Get(ctx, id)
+	current, err := s.Get(ctx, id, false)
 	if err != nil {
 		return Transaction{}, err
 	}
@@ -979,12 +951,16 @@ func (s *Service) List(ctx context.Context, opts ListOptions) (ListResult, error
 }
 
 func (s *Service) listValidatedTransactions(ctx context.Context, validatedOpts ListOptions) (ListResult, error) {
-	if s.futureProjections == nil || validatedOpts.AnchorDate == nil || !validatedOpts.AnchorDate.Time().After(values.LocalCivilDateFromTime(s.clock.Now()).Time()) {
+	if s.recurring == nil {
+		return s.listPersistedTransactions(ctx, validatedOpts)
+	}
+
+	if validatedOpts.AnchorDate == nil || !validatedOpts.AnchorDate.Time().After(values.LocalCivilDateFromTime(s.clock.Now()).Time()) {
 		return s.listPersistedTransactions(ctx, validatedOpts)
 	}
 
 	var result ListResult
-	err := s.futureProjections.WithProjectedTransactions(ctx, *validatedOpts.AnchorDate, validatedOpts, func(ctx context.Context, projected []Transaction) error {
+	err := s.recurring.WithProjectedTransactions(ctx, validatedOpts.AnchorDate, validatedOpts, func(ctx context.Context, projected []Transaction) error {
 		position, err := s.repo.ListPosition(ctx, validatedOpts)
 		if err != nil {
 			return err
@@ -1513,7 +1489,7 @@ func (s *Service) BulkReplaceAccount(ctx context.Context, transactionIDs []int64
 		seenCurrencies := map[string]struct{}{}
 		targets := make([]BulkAccountReplaceTarget, 0, len(transactionIDs))
 		for _, transactionID := range transactionIDs {
-			transaction, err := s.repo.Get(ctx, transactionID)
+			transaction, err := s.repo.Get(ctx, transactionID, false)
 			if errors.Is(err, services.ErrNotFound) {
 				return services.InvalidRequest("transactions missing or inactive resource")
 			}
@@ -1944,7 +1920,7 @@ func (s *Service) validateBulkReassignAccountClassification(ctx context.Context,
 }
 
 func expectedRecurringMutationError() error {
-	return services.InvalidRequest("expected recurring transactions must be changed through recurring occurrence endpoints")
+	return services.InvalidRequest("expected recurring transactions must be changed through expected-transaction endpoints")
 }
 
 func accountReplaceSourceNotCommonError() error {

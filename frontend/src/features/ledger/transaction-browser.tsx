@@ -71,11 +71,13 @@ import {
   type EditModeSkipSummary,
   summarizeEditModeSkips,
 } from "./edit-mode-prediction";
+import { ExpectedTransactionConfirmDialog } from "./expected-transaction-confirm-dialog";
 import {
   buildLookupMaps,
   displayAmountKey,
   formatInitiatedDate,
   formatInitiatedDateParts,
+  isMaterializedExpectedRecurringTransaction,
   isProjectedRecurringTransaction,
   lineCategory,
   lineDisplayAmounts,
@@ -91,7 +93,6 @@ import { FqnPath } from "./fqn-path";
 import { ClassIcon, StatusIcon } from "./line-icons";
 import { MemberChip } from "./member-chip";
 import { MixedSentinel, MorePartsIndicator } from "./mixed-sentinel";
-import { RecurringOccurrenceConfirmDialog } from "./recurring-occurrence-confirm-dialog";
 import {
   defaultPostSettlementDateTimeValue,
   settlementDateTimeToISO,
@@ -127,14 +128,14 @@ interface TransactionBrowserProps {
   readonly hasNextPage: boolean;
   readonly loading: boolean;
   readonly lookups: LedgerLookupsSnapshot | undefined;
-  readonly onConfirmRecurringOccurrence: (
+  readonly onConfirmExpectedTransaction: (
     transaction: Transaction,
     actualDate: string,
   ) => Promise<void>;
   readonly onConfirmNextRecurringProjection?: (
     transaction: Transaction,
     origin?: "detail" | "row",
-  ) => Promise<number | undefined>;
+  ) => Promise<number>;
   readonly onDeferRecurringProjection?: (
     transaction: Transaction,
     request: RecurringDefinitionDeferRequest,
@@ -149,7 +150,7 @@ interface TransactionBrowserProps {
   readonly onClearSelection: () => void;
   readonly onNewTransaction?: () => void;
   readonly onDeleteTransaction: (transaction: Transaction) => Promise<void>;
-  readonly onDismissRecurringOccurrence: (
+  readonly onDismissExpectedTransaction: (
     transaction: Transaction,
   ) => Promise<void>;
   readonly onLoadRecurringDefinitionForProjection?: (
@@ -537,7 +538,7 @@ export const TransactionBrowser = ({
   loading,
   lookups,
   onConfirmNextRecurringProjection,
-  onConfirmRecurringOccurrence,
+  onConfirmExpectedTransaction,
   onDeferRecurringProjection,
   onChangeTransactionLifecycle,
   onClearSelection,
@@ -547,7 +548,7 @@ export const TransactionBrowser = ({
   onNewTransaction,
   onDeleteTransaction,
   onDiscardTransactionAmountConflict,
-  onDismissRecurringOccurrence,
+  onDismissExpectedTransaction,
   onDuplicateTransaction,
   onEditTransaction,
   onNextPage,
@@ -625,11 +626,11 @@ export const TransactionBrowser = ({
   >();
   const [deleting, setDeleting] = useState(false);
   const [dismissing, setDismissing] = useState(false);
-  const [confirmingOccurrenceId, setConfirmingOccurrenceId] = useState<
-    number | undefined
+  const [confirmingExpectedTransactionId, setConfirmingExpectedTransactionId] =
+    useState<number | undefined>();
+  const [expectedActionErrorMessage, setExpectedActionErrorMessage] = useState<
+    string | undefined
   >();
-  const [occurrenceActionErrorMessage, setOccurrenceActionErrorMessage] =
-    useState<string | undefined>();
   const [lifecycleActionsBusy, setLifecycleActionsBusy] = useState<
     ReadonlyMap<number, "cancel" | "post" | "restore">
   >(() => new Map());
@@ -982,46 +983,46 @@ export const TransactionBrowser = ({
     });
   };
 
-  const closeConfirmOccurrence = () => {
-    if (confirmingOccurrenceId !== undefined) {
+  const closeConfirmExpected = () => {
+    if (confirmingExpectedTransactionId !== undefined) {
       return;
     }
     const opener = confirmDialog?.opener;
-    setOccurrenceActionErrorMessage(undefined);
+    setExpectedActionErrorMessage(undefined);
     setConfirmDialog(undefined);
     window.requestAnimationFrame(() => {
       focusWithoutTooltip(opener, { preventScroll: true });
     });
   };
 
-  const confirmOccurrence = useCallback(
+  const confirmExpected = useCallback(
     async (actualDate: string) => {
       if (!confirmDialog) {
         return;
       }
       const { rowIndex, transaction } = confirmDialog;
-      if (transaction.recurring_occurrence_id === null) {
+      if (!isMaterializedExpectedRecurringTransaction(transaction)) {
         return;
       }
 
-      setConfirmingOccurrenceId(transaction.recurring_occurrence_id);
-      setOccurrenceActionErrorMessage(undefined);
+      setConfirmingExpectedTransactionId(transaction.transaction_id);
+      setExpectedActionErrorMessage(undefined);
       deletedRowFocusIndexRef.current = rowIndex;
       retainedRowFocusTransactionIdRef.current = transaction.transaction_id;
       try {
-        await onConfirmRecurringOccurrence(transaction, actualDate);
+        await onConfirmExpectedTransaction(transaction, actualDate);
         setConfirmDialog(undefined);
       } catch (error) {
         deletedRowFocusIndexRef.current = undefined;
         retainedRowFocusTransactionIdRef.current = undefined;
-        setOccurrenceActionErrorMessage(
+        setExpectedActionErrorMessage(
           error instanceof Error ? error.message : "The API request failed.",
         );
       } finally {
-        setConfirmingOccurrenceId(undefined);
+        setConfirmingExpectedTransactionId(undefined);
       }
     },
-    [confirmDialog, onConfirmRecurringOccurrence],
+    [confirmDialog, onConfirmExpectedTransaction],
   );
 
   const closeDeferProjection = () => {
@@ -1077,7 +1078,7 @@ export const TransactionBrowser = ({
     transaction: Transaction,
     rowIndex: number,
   ) => {
-    const definitionId = transaction.recurring_projection_definition_id;
+    const definitionId = transaction.recurring_definition_id;
     if (definitionId == null || !onConfirmNextRecurringProjection) {
       return;
     }
@@ -1255,7 +1256,7 @@ export const TransactionBrowser = ({
     setDismissErrorMessage(undefined);
     deletedRowFocusIndexRef.current = dismissDialog.rowIndex;
     try {
-      await onDismissRecurringOccurrence(dismissDialog.transaction);
+      await onDismissExpectedTransaction(dismissDialog.transaction);
       setDismissDialog(undefined);
     } catch (error) {
       deletedRowFocusIndexRef.current = undefined;
@@ -1265,7 +1266,7 @@ export const TransactionBrowser = ({
     } finally {
       setDismissing(false);
     }
-  }, [dismissDialog, onDismissRecurringOccurrence]);
+  }, [dismissDialog, onDismissExpectedTransaction]);
 
   useLayoutEffect(() => {
     if (
@@ -1595,10 +1596,10 @@ export const TransactionBrowser = ({
                     transaction.initiated_date < today;
                   const actionApplicability =
                     transactionActionApplicability(transaction);
-                  const expectedOccurrence =
-                    actionApplicability.confirmOccurrence;
+                  const materializedExpected =
+                    actionApplicability.confirmExpected;
                   const whollyPending = actionApplicability.post;
-                  const projectedOccurrence =
+                  const projectedRecurring =
                     isProjectedRecurringTransaction(transaction);
                   const projectionDeferAvailable =
                     actionApplicability.deferProjection &&
@@ -1611,7 +1612,7 @@ export const TransactionBrowser = ({
                     confirmingProjectionDefinitionId !== undefined;
                   const projectionActionDisabledReason = projectionActionBusy
                     ? confirmingProjectionDefinitionId ===
-                      transaction.recurring_projection_definition_id
+                      transaction.recurring_definition_id
                       ? "Next occurrence confirmation in progress."
                       : "Another next occurrence confirmation is in progress."
                     : undefined;
@@ -1627,8 +1628,8 @@ export const TransactionBrowser = ({
                     (retainedAmountEditorRecords !== undefined ||
                       (transaction.lifecycle_status === "active" &&
                         amounts.length === 1));
-                  const occurrenceActionBusy =
-                    confirmingOccurrenceId !== undefined || dismissing;
+                  const expectedActionBusy =
+                    confirmingExpectedTransactionId !== undefined || dismissing;
                   const walkRowFocus = (
                     event: KeyboardEvent<HTMLTableRowElement>,
                     direction: -1 | 1,
@@ -1719,7 +1720,7 @@ export const TransactionBrowser = ({
                       }
                       data-transaction-id={transaction.transaction_id}
                       data-recurring-projection={
-                        projectedOccurrence ? "true" : undefined
+                        projectedRecurring ? "true" : undefined
                       }
                       data-transaction-row="true"
                       tabIndex={0}
@@ -1897,7 +1898,7 @@ export const TransactionBrowser = ({
                               {displayStatus === "expected" &&
                               overdueExpected ? (
                                 <Tooltip
-                                  label="Overdue occurrence"
+                                  label="Overdue expected transaction"
                                   className="inline-flex size-6 shrink-0"
                                 >
                                   <span
@@ -2119,25 +2120,25 @@ export const TransactionBrowser = ({
                       </td>
                       <td className="transactions-actions-column px-3 py-2 text-right align-middle">
                         {editMode ||
-                        (projectedOccurrence &&
+                        (projectedRecurring &&
                           !projectionConfirmAvailable &&
                           !projectionDeferAvailable) ? null : (
                           <RowActions
                             foldable
                             actions={
-                              expectedOccurrence
+                              materializedExpected
                                 ? [
                                     {
-                                      disabled: occurrenceActionBusy,
-                                      disabledReason: occurrenceActionBusy
-                                        ? "Occurrence action in progress."
+                                      disabled: expectedActionBusy,
+                                      disabledReason: expectedActionBusy
+                                        ? "Expected transaction action in progress."
                                         : undefined,
                                       icon: <Check aria-hidden="true" />,
-                                      label: occurrenceActionBusy
+                                      label: expectedActionBusy
                                         ? "Confirming"
-                                        : "Confirm occurrence",
+                                        : "Confirm expected",
                                       onSelect: (opener) => {
-                                        setOccurrenceActionErrorMessage(
+                                        setExpectedActionErrorMessage(
                                           undefined,
                                         );
                                         setConfirmDialog({
@@ -2148,14 +2149,14 @@ export const TransactionBrowser = ({
                                       },
                                     },
                                     {
-                                      disabled: occurrenceActionBusy,
-                                      disabledReason: occurrenceActionBusy
-                                        ? "Occurrence action in progress."
+                                      disabled: expectedActionBusy,
+                                      disabledReason: expectedActionBusy
+                                        ? "Expected transaction action in progress."
                                         : undefined,
                                       icon: <Close aria-hidden="true" />,
-                                      label: "Dismiss occurrence",
+                                      label: "Dismiss expected",
                                       onSelect: (opener) => {
-                                        setOccurrenceActionErrorMessage(
+                                        setExpectedActionErrorMessage(
                                           undefined,
                                         );
                                         setDismissErrorMessage(undefined);
@@ -2182,7 +2183,7 @@ export const TransactionBrowser = ({
                                               ),
                                               label:
                                                 confirmingProjectionDefinitionId ===
-                                                transaction.recurring_projection_definition_id
+                                                transaction.recurring_definition_id
                                                   ? "Confirming"
                                                   : "Confirm next",
                                               onSelect: () => {
@@ -2474,16 +2475,16 @@ export const TransactionBrowser = ({
               </tbody>
             </table>
           </div>
-          {occurrenceActionErrorMessage && !confirmDialog ? (
+          {expectedActionErrorMessage && !confirmDialog ? (
             <div
               className="border-destructive bg-card border-2 p-3 text-sm shadow-[var(--shadow-pixel)]"
               role="alert"
             >
               <p className="text-destructive font-semibold">
-                Occurrence could not be confirmed.
+                Expected transaction could not be confirmed.
               </p>
               <p className="text-muted-foreground mt-1">
-                {occurrenceActionErrorMessage}
+                {expectedActionErrorMessage}
               </p>
             </div>
           ) : null}
@@ -2652,16 +2653,16 @@ export const TransactionBrowser = ({
           />
         ) : null}
       </ConfirmationDialog>
-      <RecurringOccurrenceConfirmDialog
-        errorMessage={occurrenceActionErrorMessage}
+      <ExpectedTransactionConfirmDialog
+        errorMessage={expectedActionErrorMessage}
         onConfirm={(actualDate) => {
-          void confirmOccurrence(actualDate);
+          void confirmExpected(actualDate);
         }}
         onOpenChange={(open) => {
-          if (!open) closeConfirmOccurrence();
+          if (!open) closeConfirmExpected();
         }}
         open={Boolean(confirmDialog)}
-        pending={confirmingOccurrenceId !== undefined}
+        pending={confirmingExpectedTransactionId !== undefined}
         transaction={confirmDialog?.transaction}
       />
       <RecurringDefinitionDeferDialog
@@ -2679,7 +2680,7 @@ export const TransactionBrowser = ({
       />
       <ConfirmationDialog
         confirmIcon={<Close aria-hidden="true" />}
-        confirmLabel="Dismiss occurrence"
+        confirmLabel="Dismiss expected transaction"
         errorMessage={dismissErrorMessage}
         onConfirm={() => {
           void confirmDismiss();
@@ -2692,7 +2693,7 @@ export const TransactionBrowser = ({
         open={Boolean(dismissDialog)}
         pending={dismissing}
         pendingLabel="Dismissing"
-        title="Dismiss occurrence"
+        title="Dismiss expected transaction"
       >
         <p>
           {dismissDialog
@@ -2701,7 +2702,7 @@ export const TransactionBrowser = ({
               )}`
             : ""}
         </p>
-        <p>This skips only this scheduled occurrence.</p>
+        <p>This skips only this expected transaction.</p>
       </ConfirmationDialog>
     </div>
   );

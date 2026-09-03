@@ -117,6 +117,42 @@ func (c *Client) AwaitAuditLogCompactionRun(runID int64) *httpclient.AuditLogCom
 	})
 }
 
+// RecurringCatchUpStatus returns the public recurring catch-up status.
+func (c *Client) RecurringCatchUpStatus() *httpclient.RecurringCatchUpStatusResponse {
+	c.t.Helper()
+	return c.recurringCatchUpStatus(context.Background())
+}
+
+func (c *Client) recurringCatchUpStatus(ctx context.Context) *httpclient.RecurringCatchUpStatusResponse {
+	response, err := c.REST().GetRecurringCatchUpStatusWithResponse(ctx)
+	requireNoClientError(c, "get recurring catch-up status", err)
+	requireStatus(c, "get recurring catch-up status", response.StatusCode(), http.StatusOK, response.Body)
+
+	return response.JSON200
+}
+
+// AwaitRecurringCatchUpStatusRevision waits for a terminal catch-up revision through REST.
+func (c *Client) AwaitRecurringCatchUpStatusRevision(revision int64) *httpclient.RecurringCatchUpStatusResponse {
+	c.t.Helper()
+
+	return awaitCondition(c.t, fmt.Sprintf("recurring catch-up revision %d", revision), func(ctx context.Context) (*httpclient.RecurringCatchUpStatusResponse, bool) {
+		status := c.recurringCatchUpStatus(ctx)
+		return status, status.CompletedRunRevision >= revision
+	})
+}
+
+// AwaitRecurringCatchUpRun waits for a concrete catch-up run through REST.
+func (c *Client) AwaitRecurringCatchUpRun(runID int64) *httpclient.RecurringCatchUpRun {
+	c.t.Helper()
+
+	return awaitCondition(c.t, fmt.Sprintf("recurring catch-up run %d", runID), func(ctx context.Context) (*httpclient.RecurringCatchUpRun, bool) {
+		response, err := c.REST().GetRecurringCatchUpRunWithResponse(ctx, runID)
+		requireNoClientError(c, "get recurring catch-up run", err)
+		requireStatus(c, "get recurring catch-up run", response.StatusCode(), http.StatusOK, response.Body)
+		return response.JSON200, response.JSON200.Outcome != httpclient.BackgroundOperationRunOutcomeRunning
+	})
+}
+
 // AwaitBackgroundOperationRun waits for an exact terminal run envelope through REST.
 func (c *Client) AwaitBackgroundOperationRun(
 	operationID httpclient.BackgroundOperationId,

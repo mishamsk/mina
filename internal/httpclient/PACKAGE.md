@@ -7,7 +7,7 @@
 ## Implicit Contracts
 
 - Generated request types carry the shared household-flow anchor/window configuration and separate accounting-history range read without client-side date alignment or report arithmetic.
-- Generated transaction replacement requests preserve the required `If-Match` header and the mutually exclusive retained-record and new-record shapes from OpenAPI.
+- Generated transaction and recurring-definition replacement requests preserve their required `If-Match` headers; transaction requests also preserve the mutually exclusive retained-record and new-record shapes from OpenAPI.
 - Generated entity search requests preserve separate typed Account, Category, Tag, Member, Transaction Template, and Recurring Definition contexts, caller bounds, exclusions, entity-shaped rows, and `has_more`; Account, Category, and Tag availability reads remain separate, and no generic entity-kind union is exposed.
 - Generated entity-list requests expose shared fuzzy membership independently from canonical sorting and preserve repeated Account type filtering.
 - Generated journal-record search responses expose the optional server-derived transaction display title used by record browsers.

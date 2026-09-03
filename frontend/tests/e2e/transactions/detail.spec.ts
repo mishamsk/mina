@@ -1,7 +1,7 @@
 import { test } from "@tests/e2e/test";
 import {
   type AccountFixture,
-  createExpectedRecurringFixture,
+  createRecurringTransactionFixture,
   createSearchSpend,
   expect,
   findByFqn,
@@ -17,32 +17,32 @@ test("recurring transaction detail links back to its definition", async ({
   page,
 }, testInfo) => {
   const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
-  const expected = await createExpectedRecurringFixture(page, unique);
+  const recurring = await createRecurringTransactionFixture(page, unique);
 
   await page.goto(
-    `/transactions?page=1&pageSize=50&transaction=${expected.transactionId}`,
+    `/transactions?page=1&pageSize=50&transaction=${recurring.transactionId}`,
   );
   const panel = page.getByTestId("transaction-detail-panel");
   const definitionLink = panel.getByRole("link", {
-    name: expected.recurringDefinitionFqn,
+    name: recurring.recurringDefinitionFqn,
   });
   await expect(panel).toBeVisible();
   await expect(definitionLink).toBeVisible();
   await expect(
     panel.getByTestId("transaction-recurring-definition"),
-  ).toContainText(expected.recurringDefinitionFqn);
+  ).toContainText(recurring.recurringDefinitionFqn);
 
   await definitionLink.click();
 
   await expect(page).toHaveURL(
-    new RegExp(`/recurring#definition-${expected.recurringDefinitionId}$`),
+    new RegExp(`/recurring#definition-${recurring.recurringDefinitionId}$`),
   );
   const editor = page.getByRole("complementary", {
     name: "Edit recurring definition",
   });
   await expect(editor).toBeVisible();
   await expect(editor.getByLabel("Definition FQN")).toHaveValue(
-    expected.recurringDefinitionFqn,
+    recurring.recurringDefinitionFqn,
   );
   const records = editor.getByLabel("Definition records").locator("section");
   await expect(records).toHaveCount(2);

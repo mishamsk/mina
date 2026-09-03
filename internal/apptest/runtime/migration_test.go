@@ -32,7 +32,7 @@ func TestMigrationV13BackfillsTransactionUpdatedAt(t *testing.T) {
 	assertMigratedTransaction(t, response.JSON200.Transactions[0], migratedTransactionExpectation{
 		createdAt:       time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC),
 		initiatedDate:   "2026-01-01",
-		lifecycleStatus: httpclient.TransactionLifecycleStatusCancelled,
+		lifecycleStatus: httpclient.Cancelled,
 		records: []migratedRecordExpectation{
 			{id: 200, accountID: 5, amount: "10.00000000"},
 			{id: 204, accountID: 6, amount: "-10.00000000"},
@@ -41,10 +41,9 @@ func TestMigrationV13BackfillsTransactionUpdatedAt(t *testing.T) {
 		updatedAt: time.Date(2026, 3, 4, 5, 6, 7, 0, time.UTC),
 	})
 	assertMigratedTransaction(t, response.JSON200.Transactions[1], migratedTransactionExpectation{
-		createdAt:             time.Date(2026, 4, 5, 6, 7, 8, 0, time.UTC),
-		initiatedDate:         "2026-02-01",
-		lifecycleStatus:       httpclient.TransactionLifecycleStatusActive,
-		recurringOccurrenceID: 303,
+		createdAt:       time.Date(2026, 4, 5, 6, 7, 8, 0, time.UTC),
+		initiatedDate:   "2026-02-01",
+		lifecycleStatus: httpclient.Active,
 		records: []migratedRecordExpectation{
 			{id: 202, accountID: 1, amount: "20.00000000"},
 			{id: 203, accountID: 2, amount: "-20.00000000"},
@@ -79,7 +78,7 @@ func TestMigrationV17PreservesUTCInstantsAndCivilDates(t *testing.T) {
 		t.Fatalf("migrated exchange rate created_at = %s, want %s", got, want)
 	}
 
-	transaction, err := client.REST().GetTransactionWithResponse(ctx, 8)
+	transaction, err := client.REST().GetTransactionWithResponse(ctx, 8, nil)
 	requireClientResponse(t, "get migrated transaction", err, transaction.StatusCode(), http.StatusOK, transaction.Body)
 	if got := transaction.JSON200.InitiatedDate.String(); got != "2026-08-20" {
 		t.Fatalf("migrated transaction initiated_date = %s, want 2026-08-20", got)
@@ -131,6 +130,128 @@ func TestMigrationV18PreservesCategoryAndTagRowsWithAutomaticLabels(t *testing.T
 	}
 }
 
+func TestMigrationV19ReplacesRecurringStateWithNextSlotAnchors(t *testing.T) {
+	client := apptest.NewFromMigrationFixture(t, 18)
+	ctx := context.Background()
+	definitions, err := client.REST().ListRecurringDefinitionsWithResponse(ctx, nil)
+	requireClientResponse(t, "list v19 migrated recurring definitions", err, definitions.StatusCode(), http.StatusOK, definitions.Body)
+	wantAnchors := map[int64]string{
+		8:   "2026-09-16",
+		15:  "2026-09-09",
+		30:  "2026-10-02",
+		37:  "2026-09-15",
+		44:  "2026-09-17",
+		48:  "2026-09-09",
+		55:  "2026-09-30",
+		90:  "2026-10-02",
+		127: "2026-09-30",
+		142: "2026-09-30",
+		153: "9999-12-31",
+	}
+	if len(definitions.JSON200.RecurringDefinitions) != len(wantAnchors) {
+		t.Fatalf("v19 migrated recurring definition count = %d, want %d", len(definitions.JSON200.RecurringDefinitions), len(wantAnchors))
+	}
+	for _, definition := range definitions.JSON200.RecurringDefinitions {
+		want, ok := wantAnchors[definition.RecurringDefinitionId]
+		if !ok {
+			t.Fatalf("v19 migrated unexpected recurring definition: %+v", definition)
+		}
+		if got := definition.AnchorDate.Format("2006-01-02"); got != want {
+			t.Fatalf("v19 migrated definition %d anchor = %s, want %s", definition.RecurringDefinitionId, got, want)
+		}
+		if len(definition.Records) != 2 {
+			t.Fatalf("v19 migrated definition %d records = %d, want 2", definition.RecurringDefinitionId, len(definition.Records))
+		}
+		if definition.RecurringDefinitionId == 48 && definition.PausedAt == nil {
+			t.Fatalf("v19 migrated definition 48 paused_at = nil, want preserved pause state")
+		}
+	}
+
+	preserved := map[int64]int64{
+		12:  8,
+		21:  15,
+		22:  15,
+		23:  15,
+		34:  30,
+		52:  48,
+		66:  55,
+		67:  55,
+		68:  55,
+		69:  55,
+		70:  55,
+		71:  55,
+		72:  55,
+		73:  55,
+		101: 90,
+		102: 90,
+		103: 90,
+		104: 90,
+		105: 90,
+		106: 90,
+		107: 90,
+		108: 90,
+		133: 90,
+		134: 127,
+		135: 127,
+		147: 142,
+		148: 142,
+		157: 153,
+	}
+	for transactionID, definitionID := range preserved {
+		transaction := getTransaction(t, client, transactionID).JSON200
+		if transaction.RecurringDefinitionId == nil || *transaction.RecurringDefinitionId != definitionID || transaction.RecurringDefinitionFqn == nil || transaction.RecurringDefinitionActive == nil || !*transaction.RecurringDefinitionActive {
+			t.Fatalf("v19 migrated transaction %d provenance = id:%v fqn:%v active:%v, want active definition %d", transactionID, transaction.RecurringDefinitionId, transaction.RecurringDefinitionFqn, transaction.RecurringDefinitionActive, definitionID)
+		}
+		if len(transaction.Records) != 2 {
+			t.Fatalf("v19 migrated transaction %d records = %d, want 2", transactionID, len(transaction.Records))
+		}
+		for _, record := range transaction.Records {
+			if record.Amount != "-10.00000000" && record.Amount != "10.00000000" || record.ReconciliationStatus != httpclient.Reconciled || record.Source != httpclient.RecurringTemplate {
+				t.Fatalf("v19 migrated transaction %d record = %+v, want preserved reconciled accounting data", transactionID, record)
+			}
+		}
+	}
+	includeTombstoned := true
+	dismissed, err := client.REST().GetTransactionWithResponse(ctx, 41, &httpclient.GetTransactionParams{IncludeTombstoned: &includeTombstoned})
+	requireClientResponse(t, "get v19 migrated dismissed transaction", err, dismissed.StatusCode(), http.StatusOK, dismissed.Body)
+	if dismissed.JSON200.TombstonedAt == nil || dismissed.JSON200.LifecycleStatus != httpclient.Expected {
+		t.Fatalf("v19 migrated dismissed transaction state = tombstoned:%v lifecycle:%q, want tombstoned expected", dismissed.JSON200.TombstonedAt, dismissed.JSON200.LifecycleStatus)
+	}
+	if dismissed.JSON200.RecurringDefinitionId == nil || *dismissed.JSON200.RecurringDefinitionId != 37 || dismissed.JSON200.RecurringDefinitionFqn == nil || dismissed.JSON200.RecurringDefinitionActive == nil || !*dismissed.JSON200.RecurringDefinitionActive {
+		t.Fatalf("v19 migrated dismissed transaction provenance = id:%v fqn:%v active:%v, want active definition 37", dismissed.JSON200.RecurringDefinitionId, dismissed.JSON200.RecurringDefinitionFqn, dismissed.JSON200.RecurringDefinitionActive)
+	}
+	if len(dismissed.JSON200.Records) != 2 {
+		t.Fatalf("v19 migrated dismissed transaction records = %d, want 2", len(dismissed.JSON200.Records))
+	}
+	for index, record := range dismissed.JSON200.Records {
+		if record.RecordId != int64(42+index) || record.TombstonedAt == nil || record.ReconciliationStatus != httpclient.Reconciled || record.Source != httpclient.RecurringTemplate || record.Amount != "-10.00000000" && record.Amount != "10.00000000" {
+			t.Fatalf("v19 migrated dismissed transaction record %d = %+v, want tombstoned preserved recurring accounting data", index, record)
+		}
+	}
+	if got := getTransaction(t, client, 12).JSON200; got.LifecycleStatus != httpclient.Active || got.InitiatedDate.Format("2006-01-02") != "2026-09-02" {
+		t.Fatalf("v19 occupied-anchor transaction identity changed: %+v", got)
+	}
+	if got := getTransaction(t, client, 34).JSON200; got.LifecycleStatus != httpclient.Active {
+		t.Fatalf("v19 confirmed transaction lifecycle = %q, want active", got.LifecycleStatus)
+	}
+	if got := getTransaction(t, client, 21).JSON200; got.LifecycleStatus != httpclient.Cancelled {
+		t.Fatalf("v19 cancelled transaction lifecycle = %q, want cancelled", got.LifecycleStatus)
+	}
+	if got := getTransaction(t, client, 22).JSON200; got.LifecycleStatus != httpclient.Expected {
+		t.Fatalf("v19 expected transaction lifecycle = %q, want expected", got.LifecycleStatus)
+	}
+
+	manual := getTransaction(t, client, 160).JSON200
+	if len(manual.Records) != 2 {
+		t.Fatalf("v19 migrated manual transaction records = %d, want 2", len(manual.Records))
+	}
+	for _, record := range manual.Records {
+		if record.Source != httpclient.Manual || record.ReconciliationStatus != httpclient.Unreconciled {
+			t.Fatalf("v19 migrated manual record = %+v, want manual unreconciled", record)
+		}
+	}
+}
+
 func TestV15FixtureRESTDataPreserved(t *testing.T) {
 	const fixtureVersion = 15
 	client := apptest.NewFromMigrationFixture(t, fixtureVersion)
@@ -155,26 +276,18 @@ func TestV15FixtureRESTDataPreserved(t *testing.T) {
 		},
 	)
 
-	occurrences := listRecurringOccurrences(t, client, nil)
-	assertMigrationTableData(
-		t,
-		fixtureVersion,
-		"recurring_occurrence",
-		occurrences.JSON200.TotalCount,
-		occurrences.JSON200.RecurringOccurrences,
-		func(occurrence httpclient.RecurringOccurrence) int64 { return occurrence.RecurringOccurrenceId },
-		map[int64]httpclient.RecurringOccurrence{
-			293: {CreatedAt: timestamp, GeneratedTransactionId: apptest.Int64Ptr(294), MaterializedAt: timestamp, MaterializedDefinitionVersion: 1, RecurringDefinitionActive: true, RecurringDefinitionFqn: "Household:Mortgage", RecurringDefinitionId: 278, RecurringOccurrenceId: 293, ScheduledDate: apptest.Date("2026-07-23"), Status: httpclient.RecurringOccurrenceStatusExpected, UpdatedAt: timestamp},
-			300: {CreatedAt: timestamp, GeneratedTransactionId: apptest.Int64Ptr(301), MaterializedAt: timestamp, MaterializedDefinitionVersion: 1, RecurringDefinitionActive: true, RecurringDefinitionFqn: "Subscriptions:Netflix", RecurringDefinitionId: 284, RecurringOccurrenceId: 300, ScheduledDate: apptest.Date("2026-07-28"), Status: httpclient.RecurringOccurrenceStatusExpected, UpdatedAt: timestamp},
-			304: {CreatedAt: timestamp, GeneratedTransactionId: apptest.Int64Ptr(305), MaterializedAt: timestamp, MaterializedDefinitionVersion: 1, RecurringDefinitionActive: true, RecurringDefinitionFqn: "Savings:WeeklyTransfer", RecurringDefinitionId: 287, RecurringOccurrenceId: 304, ScheduledDate: apptest.Date("2026-07-20"), Status: httpclient.RecurringOccurrenceStatusExpected, UpdatedAt: timestamp},
-			308: {CreatedAt: timestamp, GeneratedTransactionId: apptest.Int64Ptr(309), MaterializedAt: timestamp, MaterializedDefinitionVersion: 1, RecurringDefinitionActive: true, RecurringDefinitionFqn: "Savings:WeeklyTransfer", RecurringDefinitionId: 287, RecurringOccurrenceId: 308, ScheduledDate: apptest.Date("2026-07-27"), Status: httpclient.RecurringOccurrenceStatusExpected, UpdatedAt: timestamp},
-			312: {CreatedAt: timestamp, GeneratedTransactionId: apptest.Int64Ptr(313), MaterializedAt: timestamp, MaterializedDefinitionVersion: 1, RecurringDefinitionActive: true, RecurringDefinitionFqn: "Savings:WeeklyTransfer", RecurringDefinitionId: 287, RecurringOccurrenceId: 312, ScheduledDate: apptest.Date("2026-08-03"), Status: httpclient.RecurringOccurrenceStatusExpected, UpdatedAt: timestamp},
-			316: {CreatedAt: timestamp, GeneratedTransactionId: apptest.Int64Ptr(317), MaterializedAt: timestamp, MaterializedDefinitionVersion: 1, RecurringDefinitionActive: true, RecurringDefinitionFqn: "Savings:WeeklyTransfer", RecurringDefinitionId: 287, RecurringOccurrenceId: 316, ScheduledDate: apptest.Date("2026-08-10"), Status: httpclient.RecurringOccurrenceStatusExpected, UpdatedAt: timestamp},
-			320: {CreatedAt: timestamp, GeneratedTransactionId: apptest.Int64Ptr(321), MaterializedAt: timestamp, MaterializedDefinitionVersion: 1, RecurringDefinitionActive: true, RecurringDefinitionFqn: "Savings:WeeklyTransfer", RecurringDefinitionId: 287, RecurringOccurrenceId: 320, ScheduledDate: apptest.Date("2026-08-17"), Status: httpclient.RecurringOccurrenceStatusExpected, UpdatedAt: timestamp},
-			324: {CreatedAt: timestamp, GeneratedTransactionId: apptest.Int64Ptr(325), MaterializedAt: timestamp, MaterializedDefinitionVersion: 1, RecurringDefinitionActive: true, RecurringDefinitionFqn: "Debt:CreditCardPayment", RecurringDefinitionId: 290, RecurringOccurrenceId: 324, ScheduledDate: apptest.Date("2026-07-30"), Status: httpclient.RecurringOccurrenceStatusExpected, UpdatedAt: timestamp},
-		},
-	)
-	assertMigratedRecurringRelationships(t, fixtureVersion, client, occurrences.JSON200.RecurringOccurrences)
+	generated := map[int64]int64{294: 278, 301: 284, 305: 287, 309: 287, 313: 287, 317: 287, 321: 287, 325: 290}
+	for transactionID, definitionID := range generated {
+		transaction := getTransaction(t, client, transactionID).JSON200
+		if transaction.RecurringDefinitionId == nil || *transaction.RecurringDefinitionId != definitionID || transaction.RecurringDefinitionFqn == nil || transaction.RecurringDefinitionActive == nil || !*transaction.RecurringDefinitionActive {
+			t.Fatalf("v%d generated transaction %d provenance = id:%v fqn:%v active:%v, want active definition %d", fixtureVersion, transactionID, transaction.RecurringDefinitionId, transaction.RecurringDefinitionFqn, transaction.RecurringDefinitionActive, definitionID)
+		}
+		for _, record := range transaction.Records {
+			if record.ReconciliationStatus != httpclient.Reconciled {
+				t.Fatalf("v%d generated transaction %d record %d reconciliation = %q, want reconciled", fixtureVersion, transactionID, record.RecordId, record.ReconciliationStatus)
+			}
+		}
+	}
 }
 
 func assertMigrationTableData[T any](t *testing.T, fixtureVersion int, table string, totalCount int64, rows []T, identity func(T) int64, want map[int64]T) {
@@ -200,30 +313,12 @@ func assertMigrationTableData[T any](t *testing.T, fixtureVersion int, table str
 	}
 }
 
-func assertMigratedRecurringRelationships(t *testing.T, fixtureVersion int, client *apptest.Client, occurrences []httpclient.RecurringOccurrence) {
-	t.Helper()
-	for _, occurrence := range occurrences {
-		definition := getRecurringDefinition(t, client, occurrence.RecurringDefinitionId).JSON200
-		if definition.Fqn != occurrence.RecurringDefinitionFqn || definition.DefinitionVersion != occurrence.MaterializedDefinitionVersion || len(definition.Records) == 0 {
-			t.Fatalf("v%d migrated recurring definition %d = %+v, want fqn %q, version %d, and preserved records", fixtureVersion, occurrence.RecurringDefinitionId, definition, occurrence.RecurringDefinitionFqn, occurrence.MaterializedDefinitionVersion)
-		}
-		if occurrence.GeneratedTransactionId == nil {
-			t.Fatalf("v%d migrated recurring occurrence %d has no generated transaction", fixtureVersion, occurrence.RecurringOccurrenceId)
-		}
-		generated := getTransaction(t, client, *occurrence.GeneratedTransactionId).JSON200
-		if generated.RecurringOccurrenceId == nil || *generated.RecurringOccurrenceId != occurrence.RecurringOccurrenceId {
-			t.Fatalf("v%d generated transaction %d recurring_occurrence_id = %v, want %d", fixtureVersion, *occurrence.GeneratedTransactionId, generated.RecurringOccurrenceId, occurrence.RecurringOccurrenceId)
-		}
-	}
-}
-
 type migratedTransactionExpectation struct {
-	createdAt             time.Time
-	initiatedDate         string
-	lifecycleStatus       httpclient.TransactionLifecycleStatus
-	recurringOccurrenceID int64
-	records               []migratedRecordExpectation
-	updatedAt             time.Time
+	createdAt       time.Time
+	initiatedDate   string
+	lifecycleStatus httpclient.TransactionLifecycleStatus
+	records         []migratedRecordExpectation
+	updatedAt       time.Time
 }
 
 type migratedRecordExpectation struct {
@@ -242,10 +337,6 @@ func assertMigratedTransaction(t *testing.T, transaction httpclient.Transaction,
 	}
 	if transaction.LifecycleStatus != want.lifecycleStatus {
 		t.Fatalf("transaction %d lifecycle_status = %s, want %s", transaction.TransactionId, transaction.LifecycleStatus, want.lifecycleStatus)
-	}
-	if (transaction.RecurringOccurrenceId == nil && want.recurringOccurrenceID != 0) ||
-		(transaction.RecurringOccurrenceId != nil && *transaction.RecurringOccurrenceId != want.recurringOccurrenceID) {
-		t.Fatalf("transaction %d recurring_occurrence_id = %v, want %d", transaction.TransactionId, transaction.RecurringOccurrenceId, want.recurringOccurrenceID)
 	}
 	if !transaction.UpdatedAt.Equal(want.updatedAt) {
 		t.Fatalf("transaction %d updated_at = %s, want %s", transaction.TransactionId, transaction.UpdatedAt, want.updatedAt)

@@ -572,7 +572,7 @@ func TestPersistedDisplayAmountUSDOverflowIsUnavailable(t *testing.T) {
 	}
 	assertDerivedTransaction(t, *created.JSON201, want)
 
-	read, err := client.REST().GetTransactionWithResponse(context.Background(), created.JSON201.TransactionId)
+	read, err := client.REST().GetTransactionWithResponse(context.Background(), created.JSON201.TransactionId, nil)
 	requireClientResponse(t, "read transaction with overflowing USD display aggregation", err, read.StatusCode(), http.StatusOK, read.Body)
 	assertDerivedTransaction(t, *read.JSON200, want)
 

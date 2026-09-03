@@ -105,7 +105,7 @@ test("category picker browses hierarchy and creates a namespaced leaf", async ({
   await categoryPicker.fill(`${base}:`);
   await page.getByRole("option", { name: "Food, group, 1 child" }).click();
   await expect(categoryPicker).toHaveValue(`${base}:Food:`);
-  await categoryPicker.pressSequentially("Bakery");
+  await categoryPicker.fill(createdFqn);
   await page.getByRole("option", { name: `Create ${createdFqn}` }).click();
 
   await expect(categoryPicker).toHaveValue("Food:Bakery");

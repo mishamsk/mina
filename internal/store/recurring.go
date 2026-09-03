@@ -17,7 +17,7 @@ import (
 	"github.com/mishamsk/mina/internal/services/values"
 )
 
-// RecurringStore persists recurring definitions and occurrences.
+// RecurringStore persists recurring definitions and generated transactions.
 type RecurringStore struct {
 	db *AppDB
 }
@@ -37,7 +37,7 @@ func (s *RecurringStore) Create(ctx context.Context, input recurring.SaveInput) 
 			ctx,
 			`INSERT INTO `+s.db.accountingName("recurring_definition")+` (fqn, schedule_rule, anchor_date)
 VALUES (?, CAST(? AS JSON), ?)
-RETURNING recurring_definition_id, fqn, CAST(schedule_rule AS VARCHAR), anchor_date, definition_version, paused_at, CAST(NULL AS DATE), parent_fqn, name, level, created_at, updated_at, tombstoned_at`,
+RETURNING recurring_definition_id, fqn, CAST(schedule_rule AS VARCHAR), anchor_date, definition_version, paused_at, parent_fqn, name, level, created_at, updated_at, tombstoned_at`,
 			input.FQN,
 			string(input.ScheduleRule),
 			civilDateArg(input.AnchorDate),
@@ -74,7 +74,6 @@ func (s *RecurringStore) Get(ctx context.Context, id int64) (recurring.Definitio
 	definition, err := scanRecurringDefinition(s.db.query().QueryRowContext(
 		ctx,
 		`SELECT recurring_definition_id, fqn, CAST(schedule_rule AS VARCHAR), anchor_date, definition_version, paused_at,
-	(SELECT MAX(o.scheduled_date) FROM `+s.db.accountingName("recurring_occurrence")+` AS o WHERE o.recurring_definition_id = d.recurring_definition_id),
 	parent_fqn, name, level, created_at, updated_at, tombstoned_at
 FROM `+s.db.accountingName("recurring_definition")+` AS d
 WHERE d.recurring_definition_id = ? AND d.tombstoned_at IS NULL`,
@@ -107,7 +106,6 @@ WHERE tombstoned_at IS NULL`
 	}
 
 	query := `SELECT recurring_definition_id, fqn, CAST(schedule_rule AS VARCHAR), anchor_date, definition_version, paused_at,
-	(SELECT MAX(o.scheduled_date) FROM ` + s.db.accountingName("recurring_occurrence") + ` AS o WHERE o.recurring_definition_id = recurring_definition.recurring_definition_id),
 	parent_fqn, name, level, created_at, updated_at, tombstoned_at
 ` + filterQuery
 	query, args = appendServiceListOrderAndPage(query, args, opts, recurringDefinitionSortColumns, services.SortKeyFQN, "recurring_definition_id")
@@ -187,6 +185,9 @@ ORDER BY fqn ASC, recurring_definition_id ASC`,
 
 // Replace atomically updates a recurring definition and replaces active record shapes.
 func (s *RecurringStore) Replace(ctx context.Context, id int64, input recurring.SaveInput) (recurring.Definition, error) {
+	if input.ExpectedUpdatedAt == nil {
+		return recurring.Definition{}, errors.New("replace recurring definition: expected updated timestamp is required")
+	}
 	var definition recurring.Definition
 	err := s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
 		row := tx.QueryRowContext(
@@ -197,38 +198,31 @@ SET fqn = ?,
     anchor_date = ?,
     definition_version = definition_version + 1,
     updated_at = CURRENT_TIMESTAMP
-WHERE recurring_definition_id = ? AND tombstoned_at IS NULL
-RETURNING recurring_definition_id, fqn, CAST(schedule_rule AS VARCHAR), anchor_date, definition_version, paused_at,
-	CAST(NULL AS DATE),
-	parent_fqn, name, level, created_at, updated_at, tombstoned_at`,
+WHERE recurring_definition_id = ? AND tombstoned_at IS NULL AND updated_at = ?
+			RETURNING recurring_definition_id, fqn, CAST(schedule_rule AS VARCHAR), anchor_date, definition_version, paused_at,
+		parent_fqn, name, level, created_at, updated_at, tombstoned_at`,
 			input.FQN,
 			string(input.ScheduleRule),
 			civilDateArg(input.AnchorDate),
 			id,
+			timestampArg(*input.ExpectedUpdatedAt),
 		)
 		replaced, scanErr := scanRecurringDefinition(row)
 		if errors.Is(scanErr, sql.ErrNoRows) {
-			return services.ErrNotFound
+			var exists bool
+			if err := tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM `+s.db.accountingName("recurring_definition")+` WHERE recurring_definition_id = ? AND tombstoned_at IS NULL)`, id).Scan(&exists); err != nil {
+				return fmt.Errorf("inspect rejected recurring definition replacement: %w", err)
+			}
+			if !exists {
+				return services.ErrNotFound
+			}
+			return services.ErrPreconditionFailed
 		}
 		if scanErr != nil {
 			if isUniqueConstraintError(scanErr) {
 				return fmt.Errorf("%w: active recurring definition fqn already exists", services.ErrConflict)
 			}
 			return fmt.Errorf("update recurring definition: %w", scanErr)
-		}
-		var lastOccurrenceDate sql.NullTime
-		if err := tx.QueryRowContext(
-			ctx,
-			`SELECT MAX(scheduled_date)
-FROM `+s.db.accountingName("recurring_occurrence")+`
-WHERE recurring_definition_id = ?`,
-			id,
-		).Scan(&lastOccurrenceDate); err != nil {
-			return fmt.Errorf("read recurring definition last occurrence date: %w", err)
-		}
-		if lastOccurrenceDate.Valid {
-			date := values.CivilDateFromTime(lastOccurrenceDate.Time)
-			replaced.LastOccurrenceDate = &date
 		}
 		definition = replaced
 
@@ -255,6 +249,9 @@ WHERE recurring_definition_id = ? AND tombstoned_at IS NULL`,
 		return nil
 	})
 	if err != nil {
+		if isDuckDBTransactionConflictError(err) {
+			return recurring.Definition{}, services.ErrPreconditionFailed
+		}
 		return recurring.Definition{}, err
 	}
 
@@ -285,730 +282,299 @@ WHERE recurring_definition_id = ? AND tombstoned_at IS NULL`,
 	return nil
 }
 
-// ListMaterializationDefinitions returns active non-paused definitions with their existing occurrence slots through the supplied date.
-func (s *RecurringStore) ListMaterializationDefinitions(ctx context.Context, through values.CivilDate) ([]recurring.MaterializationDefinition, error) {
-	rows, err := s.db.query().QueryContext(
-		ctx,
-		`SELECT recurring_definition_id, fqn, CAST(schedule_rule AS VARCHAR), anchor_date, definition_version, paused_at,
-	(SELECT MAX(o.scheduled_date) FROM `+s.db.accountingName("recurring_occurrence")+` AS o WHERE o.recurring_definition_id = d.recurring_definition_id),
+// ListMaterializationDefinitions returns active, unpaused definitions at their authoritative next anchors.
+func (s *RecurringStore) ListMaterializationDefinitions(ctx context.Context) ([]recurring.Definition, error) {
+	rows, err := s.db.query().QueryContext(ctx, `SELECT recurring_definition_id, fqn, CAST(schedule_rule AS VARCHAR), anchor_date, definition_version, paused_at,
 	parent_fqn, name, level, created_at, updated_at, tombstoned_at
-FROM `+s.db.accountingName("recurring_definition")+` AS d
+FROM `+s.db.accountingName("recurring_definition")+`
 WHERE tombstoned_at IS NULL AND paused_at IS NULL
-ORDER BY recurring_definition_id ASC`,
-	)
+ORDER BY recurring_definition_id ASC`)
 	if err != nil {
 		return nil, fmt.Errorf("list materializable recurring definitions: %w", err)
 	}
-
-	definitions := []recurring.MaterializationDefinition{}
-	definitionIDs := []int64{}
+	definitions := []recurring.Definition{}
+	ids := []int64{}
 	for rows.Next() {
 		definition, err := scanRecurringDefinition(rows)
 		if err != nil {
 			return nil, fmt.Errorf("scan materializable recurring definition: %w", err)
 		}
-		definitions = append(definitions, recurring.MaterializationDefinition{Definition: definition})
-		definitionIDs = append(definitionIDs, definition.ID)
+		definitions = append(definitions, definition)
+		ids = append(ids, definition.ID)
 	}
 	if err := rows.Err(); err != nil {
-		if closeErr := rows.Close(); closeErr != nil {
-			return nil, fmt.Errorf("iterate materializable recurring definitions: %w; close recurring definition rows: %w", err, closeErr)
-		}
+		_ = rows.Close()
 		return nil, fmt.Errorf("iterate materializable recurring definitions: %w", err)
 	}
 	if err := rows.Close(); err != nil {
-		return nil, fmt.Errorf("close materializable recurring definition rows: %w", err)
+		return nil, fmt.Errorf("close materializable recurring definitions: %w", err)
 	}
-
-	records, err := s.recordsByDefinitionIDs(ctx, definitionIDs)
-	if err != nil {
-		return nil, err
-	}
-	occurrences, err := recurringOccurrenceDatesByDefinitionIDs(ctx, s.db.query(), s.db, definitionIDs, through)
+	records, err := s.recordsByDefinitionIDs(ctx, ids)
 	if err != nil {
 		return nil, err
 	}
 	for index := range definitions {
 		definitions[index].Records = records[definitions[index].ID]
-		definitions[index].OccurrenceDates = occurrences[definitions[index].ID]
 	}
-
 	return definitions, nil
 }
 
-// CreateExpectedOccurrences atomically inserts a catch-up batch of EXPECTED occurrences and generated transactions.
-func (s *RecurringStore) CreateExpectedOccurrences(ctx context.Context, inputs []recurring.ExpectedOccurrenceInput) error {
+// MaterializeExpectedTransactions atomically creates all due transactions and advances every affected anchor.
+func (s *RecurringStore) MaterializeExpectedTransactions(ctx context.Context, inputs []recurring.CatchUpInput) error {
 	return s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
-		seenSlots := make(map[string]struct{}, len(inputs))
 		for _, input := range inputs {
-			key := fmt.Sprintf("%d/%s", input.Definition.ID, input.ScheduledDate.String())
-			if _, exists := seenSlots[key]; exists {
+			for _, expected := range input.Transactions {
+				if _, err := insertGeneratedRecurringTransaction(ctx, tx, s.db, input.Definition.ID, expected.ScheduledDate, transactions.LifecycleStatusExpected, expected.Records); err != nil {
+					return err
+				}
+			}
+			result, err := tx.ExecContext(ctx, `UPDATE `+s.db.accountingName("recurring_definition")+`
+SET anchor_date = ?, updated_at = CURRENT_TIMESTAMP
+WHERE recurring_definition_id = ? AND anchor_date = ? AND paused_at IS NULL AND tombstoned_at IS NULL`,
+				civilDateArg(input.NextAnchor), input.Definition.ID, civilDateArg(input.Definition.AnchorDate))
+			if err != nil {
+				return fmt.Errorf("advance recurring definition anchor after catch-up: %w", err)
+			}
+			affected, err := result.RowsAffected()
+			if err != nil {
+				return fmt.Errorf("read recurring catch-up anchor update: %w", err)
+			}
+			if affected != 1 {
 				return services.ErrConflict
 			}
-			seenSlots[key] = struct{}{}
 		}
-
-		return createExpectedOccurrences(ctx, tx, s.db, inputs)
+		return nil
 	})
 }
 
-func createExpectedOccurrences(ctx context.Context, tx *sql.Tx, db *AppDB, inputs []recurring.ExpectedOccurrenceInput) error {
-	if len(inputs) == 0 {
-		return nil
-	}
-
-	occurrenceRows := make([]string, 0, len(inputs))
-	occurrenceArgs := make([]any, 0, len(inputs)*4)
-	recordCount := 0
-	for index, input := range inputs {
-		occurrenceRows = append(occurrenceRows, "(CAST(? AS INTEGER), CAST(? AS INTEGER), CAST(? AS DATE), CAST(? AS INTEGER))")
-		occurrenceArgs = append(occurrenceArgs, index, input.Definition.ID, civilDateArg(input.ScheduledDate), input.Definition.DefinitionVersion)
-		recordCount += len(input.Records)
-	}
-	occurrenceValuesSQL := "VALUES " + strings.Join(occurrenceRows, ", ")
-
-	var inputIssue string
-	err := tx.QueryRowContext(ctx, `SELECT issue
-FROM (
-	SELECT input.input_index,
-		CASE
-			WHEN occurrence.recurring_occurrence_id IS NOT NULL THEN 'conflict'
-			WHEN definition.recurring_definition_id IS NULL THEN 'not_found'
-		END AS issue
-	FROM (`+occurrenceValuesSQL+`) AS input(input_index, recurring_definition_id, scheduled_date, definition_version)
-	LEFT JOIN `+db.accountingName("recurring_occurrence")+` AS occurrence
-	  ON occurrence.recurring_definition_id = input.recurring_definition_id
-	 AND occurrence.scheduled_date = input.scheduled_date
-	LEFT JOIN `+db.accountingName("recurring_definition")+` AS definition
-	  ON definition.recurring_definition_id = input.recurring_definition_id
-	 AND definition.tombstoned_at IS NULL
-	 AND definition.paused_at IS NULL
-) AS checked
-WHERE issue IS NOT NULL
-ORDER BY input_index
-LIMIT 1`, occurrenceArgs...).Scan(&inputIssue)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return fmt.Errorf("validate expected recurring occurrences: %w", err)
-	}
-	if inputIssue == "conflict" {
-		return services.ErrConflict
-	}
-	if inputIssue == "not_found" {
-		return services.ErrNotFound
-	}
-
-	if _, err := tx.ExecContext(ctx, `INSERT INTO `+db.accountingName("recurring_occurrence")+` (
-	recurring_definition_id, scheduled_date, status, materialized_definition_version
-)
-SELECT recurring_definition_id, scheduled_date, CAST('EXPECTED' AS `+db.accountingName("recurring_occurrence_status")+`), definition_version
-FROM (`+occurrenceValuesSQL+`) AS input(input_index, recurring_definition_id, scheduled_date, definition_version)`, occurrenceArgs...); err != nil {
-		return fmt.Errorf("insert expected recurring occurrences: %w", err)
-	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO `+db.accountingName("transaction")+` (
-	initiated_date, recurring_occurrence_id, lifecycle_status
-)
-SELECT input.scheduled_date, occurrence.recurring_occurrence_id, CAST('EXPECTED' AS `+db.accountingName("transaction_lifecycle_status")+`)
-FROM (`+occurrenceValuesSQL+`) AS input(input_index, recurring_definition_id, scheduled_date, definition_version)
-JOIN `+db.accountingName("recurring_occurrence")+` AS occurrence
-	ON occurrence.recurring_definition_id = input.recurring_definition_id
-	AND occurrence.scheduled_date = input.scheduled_date`, occurrenceArgs...); err != nil {
-		return fmt.Errorf("insert expected recurring transactions: %w", err)
-	}
-
-	if recordCount == 0 {
-		return nil
-	}
-	recordRows := make([]string, 0, recordCount)
-	recordArgs := []any{}
-	for inputIndex, input := range inputs {
-		for recordIndex, record := range input.Records {
-			tagListExpr, tagListArgs := tagListExpression(record.TagIDs)
-			recordRows = append(recordRows, "(CAST(? AS INTEGER), CAST(? AS INTEGER), CAST(? AS INTEGER), CAST(? AS DATE), CAST(? AS INTEGER), CAST(? AS INTEGER), CAST(? AS VARCHAR), CAST(? AS DECIMAL(18,8)), CAST(? AS DECIMAL(18,8)), CAST(? AS INTEGER), "+tagListExpr+", CAST(? AS VARCHAR), CAST(? AS TIMESTAMP WITH TIME ZONE), CAST(? AS TIMESTAMP WITH TIME ZONE), CAST(? AS VARCHAR), CAST(? AS VARCHAR), CAST(? AS VARCHAR), CAST(? AS VARCHAR))")
-			recordArgs = append(recordArgs,
-				inputIndex,
-				recordIndex,
-				input.Definition.ID,
-				civilDateArg(input.ScheduledDate),
-				record.AccountID,
-				record.MemberID,
-				record.Currency,
-				record.Amount.LibraryDecimal(),
-				nullableDecimalArg(record.AmountUSD),
-				record.CategoryID,
-			)
-			recordArgs = append(recordArgs, tagListArgs...)
-			recordArgs = append(recordArgs,
-				record.Memo,
-				nullableTimestampArg(record.PendingDate),
-				nullableTimestampArg(record.PostedDate),
-				enumValue(record.ReconciliationStatus),
-				enumValue(record.Source),
-				record.ExternalID,
-				record.ExternalSystem,
-			)
-		}
-	}
-	recordValuesSQL := "VALUES " + strings.Join(recordRows, ", ")
-
-	if _, err := tx.ExecContext(ctx, `INSERT INTO `+db.accountingName("journal_record")+` (
-	transaction_id, account_id, member_id, currency, amount, amount_usd, category_id, tag_ids, memo,
-	pending_date, posted_date, reconciliation_status, source, external_id, external_system
-)
-SELECT generated.transaction_id, record.account_id, record.member_id, record.currency, record.amount, record.amount_usd,
-	record.category_id, record.tag_ids, record.memo, record.pending_date, record.posted_date,
-	CAST(record.reconciliation_status AS `+db.accountingName("reconciliation_status")+`),
-	CAST(record.source AS `+db.accountingName("source")+`), record.external_id, record.external_system
-FROM (`+recordValuesSQL+`) AS record(
-	input_index, record_index, recurring_definition_id, scheduled_date, account_id, member_id, currency, amount, amount_usd, category_id,
-	tag_ids, memo, pending_date, posted_date, reconciliation_status, source, external_id, external_system
-)
-JOIN `+db.accountingName("recurring_occurrence")+` AS occurrence
-	ON occurrence.recurring_definition_id = record.recurring_definition_id
-	AND occurrence.scheduled_date = record.scheduled_date
-JOIN `+db.accountingName("transaction")+` AS generated ON generated.recurring_occurrence_id = occurrence.recurring_occurrence_id
-ORDER BY record.input_index, record.record_index`, recordArgs...); err != nil {
-		return fmt.Errorf("insert expected recurring journal records: %w", err)
-	}
-
-	return nil
-}
-
-// CreateConfirmedOccurrence atomically inserts a CONFIRMED occurrence and generated posted transaction.
-func (s *RecurringStore) CreateConfirmedOccurrence(
-	ctx context.Context,
-	definition recurring.Definition,
-	scheduledDate values.CivilDate,
-	initiatedDate values.CivilDate,
-	records []transactions.PersistJournalRecordInput,
-	reviewedAt time.Time,
-) (recurring.Occurrence, error) {
-	return s.createOccurrenceWithTransaction(ctx, definition, scheduledDate, initiatedDate, recurring.OccurrenceStatusConfirmed, records, &reviewedAt)
-}
-
-func (s *RecurringStore) createOccurrenceWithTransaction(
-	ctx context.Context,
-	definition recurring.Definition,
-	scheduledDate values.CivilDate,
-	initiatedDate values.CivilDate,
-	status recurring.OccurrenceStatus,
-	records []transactions.PersistJournalRecordInput,
-	reviewedAt *time.Time,
-) (recurring.Occurrence, error) {
-	var occurrence recurring.Occurrence
+// CreateConfirmedTransaction atomically creates an active recurring transaction and consumes the current anchor.
+func (s *RecurringStore) CreateConfirmedTransaction(ctx context.Context, definition recurring.Definition, initiatedDate values.CivilDate, nextAnchor values.CivilDate, records []transactions.PersistJournalRecordInput) (transactions.Transaction, error) {
+	var transaction transactions.Transaction
 	err := s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
-		created, err := createOccurrenceWithTransactionTx(ctx, tx, s.db, definition, scheduledDate, initiatedDate, status, records, reviewedAt)
+		result, err := tx.ExecContext(ctx, `UPDATE `+s.db.accountingName("recurring_definition")+`
+SET anchor_date = ?, updated_at = CURRENT_TIMESTAMP
+WHERE recurring_definition_id = ? AND anchor_date = ? AND paused_at IS NULL AND tombstoned_at IS NULL`,
+			civilDateArg(nextAnchor), definition.ID, civilDateArg(definition.AnchorDate))
+		if err != nil {
+			return fmt.Errorf("advance recurring definition anchor after confirmation: %w", err)
+		}
+		affected, err := result.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("read recurring confirmation anchor update: %w", err)
+		}
+		if affected != 1 {
+			return services.ErrConflict
+		}
+		transaction, err = insertGeneratedRecurringTransaction(ctx, tx, s.db, definition.ID, initiatedDate, transactions.LifecycleStatusActive, records)
 		if err != nil {
 			return err
 		}
-		occurrence = created
-
-		return nil
+		transaction, err = transactionByID(ctx, tx, s.db, transaction.ID, false)
+		return err
 	})
-	if err != nil {
-		return recurring.Occurrence{}, err
-	}
-
-	return occurrence, nil
+	return transaction, err
 }
 
-func createOccurrenceWithTransactionTx(
-	ctx context.Context,
-	tx *sql.Tx,
-	db *AppDB,
-	definition recurring.Definition,
-	scheduledDate values.CivilDate,
-	initiatedDate values.CivilDate,
-	status recurring.OccurrenceStatus,
-	records []transactions.PersistJournalRecordInput,
-	reviewedAt *time.Time,
-) (recurring.Occurrence, error) {
-	if err := ensureRecurringOccurrenceSlotAvailable(ctx, tx, db, definition.ID, scheduledDate); err != nil {
-		return recurring.Occurrence{}, err
-	}
-	occurrence, err := scanMaterializedRecurringOccurrence(tx.QueryRowContext(
-		ctx,
-		`INSERT INTO `+db.accountingName("recurring_occurrence")+` (
-	recurring_definition_id, scheduled_date, status, materialized_definition_version, reviewed_at
-)
-SELECT ?, ?, CAST(? AS `+db.accountingName("recurring_occurrence_status")+`), ?, ?
-WHERE EXISTS (
-	SELECT 1
-	FROM `+db.accountingName("recurring_definition")+`
-	WHERE recurring_definition_id = ?
-	  AND tombstoned_at IS NULL
-	  AND paused_at IS NULL
-)
-RETURNING recurring_occurrence_id, recurring_definition_id, scheduled_date, CAST(status AS VARCHAR), materialized_definition_version,
-	materialized_at, reviewed_at, CAST(NULL AS BIGINT), created_at, updated_at`,
-		definition.ID,
-		civilDateArg(scheduledDate),
-		enumValue(status),
-		definition.DefinitionVersion,
-		nullableTimestampArg(reviewedAt),
-		definition.ID,
-	), definition.FQN)
+// GetExpectedConfirmation returns one transaction's scheduled date and active generated record amounts.
+func (s *RecurringStore) GetExpectedConfirmation(ctx context.Context, id int64) (recurring.ExpectedConfirmation, error) {
+	var confirmation recurring.ExpectedConfirmation
+	var date time.Time
+	var definitionID sql.NullInt64
+	var lifecycle string
+	var tombstonedAt sql.NullTime
+	err := s.db.query().QueryRowContext(ctx, `SELECT initiated_date, recurring_definition_id, CAST(lifecycle_status AS VARCHAR), tombstoned_at
+FROM `+s.db.accountingName("transaction")+`
+WHERE transaction_id = ?`, id).Scan(&date, &definitionID, &lifecycle, &tombstonedAt)
 	if errors.Is(err, sql.ErrNoRows) {
-		return recurring.Occurrence{}, services.ErrNotFound
+		return recurring.ExpectedConfirmation{}, services.ErrNotFound
 	}
 	if err != nil {
-		return recurring.Occurrence{}, fmt.Errorf("insert recurring occurrence: %w", err)
+		return recurring.ExpectedConfirmation{}, fmt.Errorf("get expected recurring transaction: %w", err)
 	}
-
-	lifecycle := transactions.LifecycleStatusExpected
-	if status == recurring.OccurrenceStatusConfirmed {
-		lifecycle = transactions.LifecycleStatusActive
+	if !definitionID.Valid || lifecycle != "EXPECTED" || tombstonedAt.Valid {
+		return recurring.ExpectedConfirmation{}, services.ErrConflict
 	}
-	transaction, err := insertGeneratedRecurringTransaction(ctx, tx, db, occurrence.ID, initiatedDate, lifecycle, records)
-	if err != nil {
-		return recurring.Occurrence{}, err
-	}
-	occurrence.GeneratedTransactionID = &transaction.ID
-
-	return occurrence, nil
-}
-
-// ListOccurrences returns recurring occurrence rows with generated transaction IDs.
-func (s *RecurringStore) ListOccurrences(ctx context.Context, opts recurring.OccurrenceListOptions) (services.PaginatedList[recurring.Occurrence], error) {
-	filterQuery := `FROM ` + s.db.accountingName("recurring_occurrence") + ` AS o
-JOIN ` + s.db.accountingName("recurring_definition") + ` AS d
-  ON d.recurring_definition_id = o.recurring_definition_id
-LEFT JOIN ` + s.db.accountingName("transaction") + ` AS t
-  ON t.recurring_occurrence_id = o.recurring_occurrence_id
-WHERE 1 = 1`
-	args := []any{}
-	if opts.RecurringDefinitionID != nil {
-		filterQuery += " AND o.recurring_definition_id = ?"
-		args = append(args, *opts.RecurringDefinitionID)
-	}
-	if len(opts.Statuses) > 0 {
-		filterQuery += " AND o.status IN ("
-		for index, status := range opts.Statuses {
-			if index > 0 {
-				filterQuery += ", "
-			}
-			filterQuery += "CAST(? AS " + s.db.accountingName("recurring_occurrence_status") + ")"
-			args = append(args, enumValue(status))
-		}
-		filterQuery += ")"
-	}
-
-	totalCount, err := countMatchingRows(ctx, s.db.query(), "SELECT COUNT(*) "+filterQuery, args, "recurring occurrences", opts.IncludeTotalCount)
-	if err != nil {
-		return services.PaginatedList[recurring.Occurrence]{}, err
-	}
-
-	query := `SELECT o.recurring_occurrence_id, o.recurring_definition_id, d.fqn, d.tombstoned_at, o.scheduled_date, CAST(o.status AS VARCHAR), o.materialized_definition_version,
-	o.materialized_at, o.reviewed_at, t.transaction_id, o.created_at, o.updated_at
-` + filterQuery
-	query, args = appendServiceListOrderAndPage(query, args, opts.ListOptions, recurringOccurrenceSortColumns, services.SortKeyScheduledDate, "o.recurring_occurrence_id")
-
-	rows, err := s.db.query().QueryContext(ctx, query, args...)
-	if err != nil {
-		return services.PaginatedList[recurring.Occurrence]{}, fmt.Errorf("list recurring occurrences: %w", err)
-	}
-	occurrences := []recurring.Occurrence{}
-	for rows.Next() {
-		occurrence, err := scanRecurringOccurrence(rows)
-		if err != nil {
-			return services.PaginatedList[recurring.Occurrence]{}, fmt.Errorf("scan recurring occurrence: %w", err)
-		}
-		occurrences = append(occurrences, occurrence)
-	}
-	if err := rows.Err(); err != nil {
-		if closeErr := rows.Close(); closeErr != nil {
-			return services.PaginatedList[recurring.Occurrence]{}, fmt.Errorf("iterate recurring occurrences: %w; close recurring occurrence rows: %w", err, closeErr)
-		}
-		return services.PaginatedList[recurring.Occurrence]{}, fmt.Errorf("iterate recurring occurrences: %w", err)
-	}
-	if err := rows.Close(); err != nil {
-		return services.PaginatedList[recurring.Occurrence]{}, fmt.Errorf("close recurring occurrence rows: %w", err)
-	}
-
-	return services.PaginatedList[recurring.Occurrence]{
-		Items:      occurrences,
-		TotalCount: totalCount,
-	}, nil
-}
-
-// GetOccurrence returns one permanent recurring occurrence by ID.
-func (s *RecurringStore) GetOccurrence(ctx context.Context, id int64) (recurring.Occurrence, error) {
-	return selectRecurringOccurrenceByID(ctx, s.db.query(), s.db, id)
-}
-
-// GetOccurrenceConfirmation returns an occurrence with the generated records needed for actual-date valuation.
-func (s *RecurringStore) GetOccurrenceConfirmation(ctx context.Context, id int64) (recurring.OccurrenceConfirmation, error) {
-	occurrence, err := selectRecurringOccurrenceByID(ctx, s.db.query(), s.db, id)
-	if err != nil {
-		return recurring.OccurrenceConfirmation{}, err
-	}
-	confirmation := recurring.OccurrenceConfirmation{Occurrence: occurrence, Records: []recurring.OccurrenceConfirmationRecord{}}
-	if occurrence.GeneratedTransactionID == nil {
-		return confirmation, nil
-	}
-	rows, err := s.db.query().QueryContext(
-		ctx,
-		`SELECT record_id, currency, amount
+	confirmation.ScheduledDate = values.CivilDateFromTime(date)
+	rows, err := s.db.query().QueryContext(ctx, `SELECT record_id, currency, amount
 FROM `+s.db.accountingName("journal_record")+`
-WHERE transaction_id = ? AND tombstoned_at IS NULL
-ORDER BY record_id ASC`,
-		*occurrence.GeneratedTransactionID,
-	)
+WHERE transaction_id = ? AND tombstoned_at IS NULL AND source = CAST('RECURRING_TEMPLATE' AS `+s.db.accountingName("source")+`)
+ORDER BY record_id`, id)
 	if err != nil {
-		return recurring.OccurrenceConfirmation{}, fmt.Errorf("list recurring occurrence confirmation records: %w", err)
+		return recurring.ExpectedConfirmation{}, fmt.Errorf("list expected recurring transaction records: %w", err)
 	}
 	for rows.Next() {
-		var record recurring.OccurrenceConfirmationRecord
+		var record recurring.ExpectedConfirmationRecord
 		var amount duckdb.Decimal
 		if err := rows.Scan(&record.ID, &record.Currency, &amount); err != nil {
-			_ = rows.Close()
-			return recurring.OccurrenceConfirmation{}, fmt.Errorf("scan recurring occurrence confirmation record: %w", err)
+			return recurring.ExpectedConfirmation{}, fmt.Errorf("scan expected recurring transaction record: %w", err)
 		}
-		record.Amount, err = decimalFromDuckDB(amount)
+		parsed, err := decimalFromDuckDB(amount)
 		if err != nil {
-			_ = rows.Close()
-			return recurring.OccurrenceConfirmation{}, fmt.Errorf("decode recurring occurrence confirmation amount: %w", err)
+			return recurring.ExpectedConfirmation{}, err
 		}
+		record.Amount = parsed
 		confirmation.Records = append(confirmation.Records, record)
 	}
 	if err := rows.Err(); err != nil {
 		_ = rows.Close()
-		return recurring.OccurrenceConfirmation{}, fmt.Errorf("iterate recurring occurrence confirmation records: %w", err)
+		return recurring.ExpectedConfirmation{}, fmt.Errorf("iterate expected recurring transaction records: %w", err)
 	}
 	if err := rows.Close(); err != nil {
-		return recurring.OccurrenceConfirmation{}, fmt.Errorf("close recurring occurrence confirmation records: %w", err)
+		return recurring.ExpectedConfirmation{}, fmt.Errorf("close expected recurring transaction records: %w", err)
 	}
-
 	return confirmation, nil
 }
 
-// ConfirmOccurrence activates an expected transaction on its actual date and stamps balance records atomically.
-func (s *RecurringStore) ConfirmOccurrence(ctx context.Context, id int64, actualDate values.CivilDate, valuations []recurring.OccurrenceRecordValuation, pendingDate *time.Time, postedDate *time.Time, reviewedAt time.Time) (recurring.Occurrence, error) {
-	var occurrence recurring.Occurrence
+// ConfirmExpectedTransaction atomically activates an expected transaction and settles its generated records.
+func (s *RecurringStore) ConfirmExpectedTransaction(ctx context.Context, id int64, actualDate values.CivilDate, valuations []recurring.ExpectedRecordValuation, pendingDate *time.Time, postedDate *time.Time, updatedAt time.Time) (transactions.Transaction, error) {
+	var transaction transactions.Transaction
 	err := s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
-		current, err := selectRecurringOccurrenceByID(ctx, tx, s.db, id)
+		result, err := tx.ExecContext(ctx, `UPDATE `+s.db.accountingName("transaction")+`
+SET initiated_date = ?, lifecycle_status = CAST('ACTIVE' AS `+s.db.accountingName("transaction_lifecycle_status")+`), updated_at = ?
+WHERE transaction_id = ? AND recurring_definition_id IS NOT NULL AND lifecycle_status = CAST('EXPECTED' AS `+s.db.accountingName("transaction_lifecycle_status")+`) AND tombstoned_at IS NULL`,
+			civilDateArg(actualDate), timestampArg(updatedAt), id)
 		if err != nil {
-			return err
-		}
-		if current.Status != recurring.OccurrenceStatusExpected {
-			return services.ErrConflict
-		}
-		if current.GeneratedTransactionID == nil {
-			return services.ErrConflict
-		}
-		result, err := tx.ExecContext(
-			ctx,
-			`UPDATE `+s.db.accountingName("transaction")+`
-SET initiated_date = ?,
-    lifecycle_status = CAST('ACTIVE' AS `+s.db.accountingName("transaction_lifecycle_status")+`),
-    updated_at = CURRENT_TIMESTAMP
-WHERE transaction_id = ?
-  AND tombstoned_at IS NULL
-  AND lifecycle_status = CAST('EXPECTED' AS `+s.db.accountingName("transaction_lifecycle_status")+`)`,
-			civilDateArg(actualDate), *current.GeneratedTransactionID,
-		)
-		if err != nil {
-			return fmt.Errorf("activate recurring occurrence transaction: %w", err)
-		}
-		updated, err := result.RowsAffected()
-		if err != nil {
-			return fmt.Errorf("activate recurring occurrence transaction affected rows: %w", err)
-		}
-		if updated == 0 {
-			return services.ErrConflict
-		}
-		for _, valuation := range valuations {
-			result, err := tx.ExecContext(
-				ctx,
-				`UPDATE `+s.db.accountingName("journal_record")+`
-SET amount_usd = ?,
-    updated_at = CURRENT_TIMESTAMP
-WHERE record_id = ?
-  AND transaction_id = ?
-  AND tombstoned_at IS NULL`,
-				nullableDecimalArg(valuation.AmountUSD), valuation.ID, *current.GeneratedTransactionID,
-			)
-			if err != nil {
-				return fmt.Errorf("revalue recurring occurrence record: %w", err)
-			}
-			updated, err := result.RowsAffected()
-			if err != nil {
-				return fmt.Errorf("revalue recurring occurrence record affected rows: %w", err)
-			}
-			if updated == 0 {
-				return services.ErrConflict
-			}
-		}
-		if _, err := tx.ExecContext(ctx, `UPDATE `+s.db.accountingName("journal_record")+` AS jr
-SET pending_date = ?,
-    posted_date = ?,
-    updated_at = CURRENT_TIMESTAMP
-FROM `+s.db.accountingName("account")+` AS a
-WHERE jr.account_id = a.account_id
-  AND jr.transaction_id = ?
-  AND jr.tombstoned_at IS NULL
-  AND a.account_type IN (CAST('OWNED' AS `+s.db.accountingName("account_type")+`), CAST('PARTY' AS `+s.db.accountingName("account_type")+`))`,
-			nullableTimestampArg(pendingDate), nullableTimestampArg(postedDate), *current.GeneratedTransactionID); err != nil {
-			return fmt.Errorf("stamp recurring occurrence balance records: %w", err)
-		}
-		result, err = tx.ExecContext(
-			ctx,
-			`UPDATE `+s.db.accountingName("recurring_occurrence")+`
-SET status = CAST('CONFIRMED' AS `+s.db.accountingName("recurring_occurrence_status")+`),
-    reviewed_at = ?,
-    updated_at = CURRENT_TIMESTAMP
-WHERE recurring_occurrence_id = ?
-  AND status = CAST('EXPECTED' AS `+s.db.accountingName("recurring_occurrence_status")+`)`,
-			timestampArg(reviewedAt),
-			id,
-		)
-		if err != nil {
-			return fmt.Errorf("confirm recurring occurrence: %w", err)
-		}
-		updated, err = result.RowsAffected()
-		if err != nil {
-			return fmt.Errorf("confirm recurring occurrence affected rows: %w", err)
-		}
-		if updated == 0 {
-			return services.ErrConflict
-		}
-		confirmed, err := selectRecurringOccurrenceByID(ctx, tx, s.db, id)
-		if err != nil {
-			return err
-		}
-		occurrence = confirmed
-
-		return nil
-	})
-	if err != nil {
-		return recurring.Occurrence{}, err
-	}
-
-	return occurrence, nil
-}
-
-// DismissOccurrence tombstones an EXPECTED occurrence's generated transaction and marks the slot dismissed.
-func (s *RecurringStore) DismissOccurrence(ctx context.Context, id int64, dismissedAt time.Time) (recurring.Occurrence, error) {
-	var occurrence recurring.Occurrence
-	err := s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
-		current, err := selectRecurringOccurrenceByID(ctx, tx, s.db, id)
-		if err != nil {
-			return err
-		}
-		if current.Status != recurring.OccurrenceStatusExpected {
-			return services.ErrConflict
-		}
-		if current.GeneratedTransactionID == nil {
-			return services.ErrConflict
-		}
-		result, err := tx.ExecContext(
-			ctx,
-			`UPDATE `+s.db.accountingName("journal_record")+`
-SET tombstoned_at = ?,
-    updated_at = ?
-WHERE transaction_id = ?
-  AND tombstoned_at IS NULL
-  AND source = CAST('RECURRING_TEMPLATE' AS `+s.db.accountingName("source")+`)`,
-			timestampArg(dismissedAt),
-			timestampArg(dismissedAt),
-			*current.GeneratedTransactionID,
-		)
-		if err != nil {
-			return fmt.Errorf("dismiss recurring occurrence journal records: %w", err)
-		}
-		updated, err := result.RowsAffected()
-		if err != nil {
-			return fmt.Errorf("dismiss recurring occurrence journal records affected rows: %w", err)
-		}
-		if updated == 0 {
-			return services.ErrConflict
-		}
-		result, err = tx.ExecContext(
-			ctx,
-			`UPDATE `+s.db.accountingName("transaction")+`
-SET tombstoned_at = ?,
-    updated_at = ?
-WHERE transaction_id = ? AND tombstoned_at IS NULL`,
-			timestampArg(dismissedAt),
-			timestampArg(dismissedAt),
-			*current.GeneratedTransactionID,
-		)
-		if err != nil {
-			return fmt.Errorf("dismiss recurring occurrence transaction: %w", err)
-		}
-		updated, err = result.RowsAffected()
-		if err != nil {
-			return fmt.Errorf("dismiss recurring occurrence transaction affected rows: %w", err)
-		}
-		if updated == 0 {
-			return services.ErrConflict
-		}
-		result, err = tx.ExecContext(
-			ctx,
-			`UPDATE `+s.db.accountingName("recurring_occurrence")+`
-SET status = CAST('DISMISSED' AS `+s.db.accountingName("recurring_occurrence_status")+`),
-    reviewed_at = ?,
-    updated_at = ?
-WHERE recurring_occurrence_id = ?
-  AND status = CAST('EXPECTED' AS `+s.db.accountingName("recurring_occurrence_status")+`)`,
-			timestampArg(dismissedAt),
-			timestampArg(dismissedAt),
-			id,
-		)
-		if err != nil {
-			return fmt.Errorf("dismiss recurring occurrence: %w", err)
-		}
-		updated, err = result.RowsAffected()
-		if err != nil {
-			return fmt.Errorf("dismiss recurring occurrence affected rows: %w", err)
-		}
-		if updated == 0 {
-			return services.ErrConflict
-		}
-		dismissed, err := selectRecurringOccurrenceByID(ctx, tx, s.db, id)
-		if err != nil {
-			return err
-		}
-		occurrence = dismissed
-
-		return nil
-	})
-	if err != nil {
-		return recurring.Occurrence{}, err
-	}
-
-	return occurrence, nil
-}
-
-// ListOccurrenceDates returns occurrence slots for one definition through the supplied date.
-func (s *RecurringStore) ListOccurrenceDates(ctx context.Context, definitionID int64, through values.CivilDate) ([]values.CivilDate, error) {
-	dates, err := s.ListOccurrenceDatesByDefinitionIDs(ctx, []int64{definitionID}, through)
-	if err != nil {
-		return nil, err
-	}
-
-	return dates[definitionID], nil
-}
-
-// ListOccurrenceDatesByDefinitionIDs returns occurrence slots for multiple definitions through the supplied date.
-func (s *RecurringStore) ListOccurrenceDatesByDefinitionIDs(ctx context.Context, definitionIDs []int64, through values.CivilDate) (map[int64][]values.CivilDate, error) {
-	return recurringOccurrenceDatesByDefinitionIDs(ctx, s.db.query(), s.db, definitionIDs, through)
-}
-
-// DeferOccurrenceAndShiftAnchor inserts a DEFERRED audit row and shifts the definition anchor.
-func (s *RecurringStore) DeferOccurrenceAndShiftAnchor(
-	ctx context.Context,
-	definition recurring.Definition,
-	scheduledDate values.CivilDate,
-	newAnchor values.CivilDate,
-) (recurring.Occurrence, error) {
-	var occurrence recurring.Occurrence
-	err := s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
-		created, err := insertDeferredOccurrence(ctx, tx, s.db, definition.ID, definition.FQN, scheduledDate, definition.DefinitionVersion)
-		if err != nil {
-			return err
-		}
-		result, err := tx.ExecContext(
-			ctx,
-			`UPDATE `+s.db.accountingName("recurring_definition")+`
-SET anchor_date = ?,
-    updated_at = CURRENT_TIMESTAMP
-WHERE recurring_definition_id = ?
-  AND tombstoned_at IS NULL
-  AND paused_at IS NULL`,
-			civilDateArg(newAnchor),
-			definition.ID,
-		)
-		if err != nil {
-			return fmt.Errorf("shift deferred recurring definition anchor: %w", err)
+			return fmt.Errorf("activate expected recurring transaction: %w", err)
 		}
 		affected, err := result.RowsAffected()
 		if err != nil {
-			return fmt.Errorf("read deferred recurring definition affected rows: %w", err)
+			return fmt.Errorf("read activated expected transaction count: %w", err)
 		}
-		if affected == 0 {
-			return services.ErrNotFound
+		if affected != 1 {
+			var exists bool
+			if err := tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM `+s.db.accountingName("transaction")+` WHERE transaction_id = ?)`, id).Scan(&exists); err != nil {
+				return fmt.Errorf("check recurring transaction existence: %w", err)
+			}
+			if !exists {
+				return services.ErrNotFound
+			}
+			return services.ErrConflict
 		}
-		occurrence = created
-
-		return nil
+		for _, valuation := range valuations {
+			result, err := tx.ExecContext(ctx, `UPDATE `+s.db.accountingName("journal_record")+` SET amount_usd = ?
+WHERE record_id = ? AND transaction_id = ? AND tombstoned_at IS NULL`, nullableDecimalArg(valuation.AmountUSD), valuation.ID, id)
+			if err != nil {
+				return fmt.Errorf("revalue expected recurring transaction record: %w", err)
+			}
+			affected, err := result.RowsAffected()
+			if err != nil || affected != 1 {
+				return services.ErrConflict
+			}
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE `+s.db.accountingName("journal_record")+` AS r
+SET pending_date = CASE WHEN a.account_type IN (CAST('OWNED' AS `+s.db.accountingName("account_type")+`), CAST('PARTY' AS `+s.db.accountingName("account_type")+`)) THEN ? ELSE NULL END,
+	posted_date = CASE WHEN a.account_type IN (CAST('OWNED' AS `+s.db.accountingName("account_type")+`), CAST('PARTY' AS `+s.db.accountingName("account_type")+`)) THEN ? ELSE NULL END,
+	reconciliation_status = CAST('RECONCILED' AS `+s.db.accountingName("reconciliation_status")+`), updated_at = ?
+FROM `+s.db.accountingName("account")+` AS a
+WHERE r.transaction_id = ? AND r.account_id = a.account_id AND r.tombstoned_at IS NULL AND r.source = CAST('RECURRING_TEMPLATE' AS `+s.db.accountingName("source")+`)`,
+			nullableTimestampArg(pendingDate), nullableTimestampArg(postedDate), timestampArg(updatedAt), id); err != nil {
+			return fmt.Errorf("settle expected recurring transaction records: %w", err)
+		}
+		transaction, err = transactionByID(ctx, tx, s.db, id, false)
+		return err
 	})
-	if err != nil {
-		return recurring.Occurrence{}, err
-	}
-
-	return occurrence, nil
+	return transaction, err
 }
 
-// PauseDefinition marks an active definition paused.
+// DismissExpectedTransaction atomically tombstones an expected recurring transaction and its records.
+func (s *RecurringStore) DismissExpectedTransaction(ctx context.Context, id int64, tombstonedAt time.Time) error {
+	return s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
+		result, err := tx.ExecContext(ctx, `UPDATE `+s.db.accountingName("transaction")+`
+SET tombstoned_at = ?, updated_at = ?
+WHERE transaction_id = ? AND recurring_definition_id IS NOT NULL AND lifecycle_status = CAST('EXPECTED' AS `+s.db.accountingName("transaction_lifecycle_status")+`) AND tombstoned_at IS NULL`,
+			timestampArg(tombstonedAt), timestampArg(tombstonedAt), id)
+		if err != nil {
+			return fmt.Errorf("dismiss expected recurring transaction: %w", err)
+		}
+		affected, err := result.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("read dismissed expected transaction count: %w", err)
+		}
+		if affected != 1 {
+			var exists bool
+			if err := tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM `+s.db.accountingName("transaction")+` WHERE transaction_id = ?)`, id).Scan(&exists); err != nil {
+				return err
+			}
+			if !exists {
+				return services.ErrNotFound
+			}
+			return services.ErrConflict
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE `+s.db.accountingName("journal_record")+`
+SET tombstoned_at = ?, updated_at = ? WHERE transaction_id = ? AND tombstoned_at IS NULL`,
+			timestampArg(tombstonedAt), timestampArg(tombstonedAt), id); err != nil {
+			return fmt.Errorf("dismiss expected recurring transaction records: %w", err)
+		}
+		return nil
+	})
+}
+
+// ShiftAnchor consumes a virtual slot by replacing the definition's current anchor.
+func (s *RecurringStore) ShiftAnchor(ctx context.Context, definition recurring.Definition, nextAnchor values.CivilDate) (recurring.Definition, error) {
+	var shifted recurring.Definition
+	err := s.db.WithTx(ctx, nil, func(txDB *AppDB) error {
+		result, err := txDB.query().ExecContext(ctx, `UPDATE `+txDB.accountingName("recurring_definition")+`
+SET anchor_date = ?, updated_at = CURRENT_TIMESTAMP
+WHERE recurring_definition_id = ? AND anchor_date = ? AND paused_at IS NULL AND tombstoned_at IS NULL`,
+			civilDateArg(nextAnchor), definition.ID, civilDateArg(definition.AnchorDate))
+		if err != nil {
+			return fmt.Errorf("shift recurring definition anchor: %w", err)
+		}
+		affected, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if affected != 1 {
+			return services.ErrConflict
+		}
+		shifted, err = NewRecurringStore(txDB).Get(ctx, definition.ID)
+		return err
+	})
+	return shifted, err
+}
+
+// PauseDefinition records pause state without changing the next anchor.
 func (s *RecurringStore) PauseDefinition(ctx context.Context, id int64) (recurring.Definition, error) {
-	result, err := s.db.query().ExecContext(
-		ctx,
-		`UPDATE `+s.db.accountingName("recurring_definition")+`
-SET paused_at = COALESCE(paused_at, CURRENT_TIMESTAMP),
-    updated_at = CURRENT_TIMESTAMP
-WHERE recurring_definition_id = ? AND tombstoned_at IS NULL`,
-		id,
-	)
+	result, err := s.db.query().ExecContext(ctx, `UPDATE `+s.db.accountingName("recurring_definition")+`
+SET paused_at = COALESCE(paused_at, CURRENT_TIMESTAMP), updated_at = CASE WHEN paused_at IS NULL THEN CURRENT_TIMESTAMP ELSE updated_at END
+WHERE recurring_definition_id = ? AND tombstoned_at IS NULL`, id)
 	if err != nil {
 		return recurring.Definition{}, fmt.Errorf("pause recurring definition: %w", err)
 	}
 	affected, err := result.RowsAffected()
-	if err != nil {
-		return recurring.Definition{}, fmt.Errorf("read pause recurring definition affected rows: %w", err)
-	}
-	if affected == 0 {
+	if err != nil || affected != 1 {
 		return recurring.Definition{}, services.ErrNotFound
 	}
-
 	return s.Get(ctx, id)
 }
 
-// ResumeDefinition clears paused state, optionally recording skipped date-rule slots.
-func (s *RecurringStore) ResumeDefinition(
-	ctx context.Context,
-	definition recurring.Definition,
-	newAnchor values.CivilDate,
-	skippedSlots []values.CivilDate,
-) (recurring.Definition, error) {
-	err := s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
-		seenSlots := make(map[string]struct{}, len(skippedSlots))
-		for _, slot := range skippedSlots {
-			if _, exists := seenSlots[slot.String()]; exists {
-				return services.ErrConflict
-			}
-			seenSlots[slot.String()] = struct{}{}
-		}
-		result, err := tx.ExecContext(
-			ctx,
-			`UPDATE `+s.db.accountingName("recurring_definition")+`
-SET paused_at = NULL,
-    anchor_date = ?,
-    updated_at = CURRENT_TIMESTAMP
-WHERE recurring_definition_id = ? AND tombstoned_at IS NULL`,
-			civilDateArg(newAnchor),
-			definition.ID,
-		)
-		if err != nil {
-			return fmt.Errorf("resume recurring definition: %w", err)
-		}
-		affected, err := result.RowsAffected()
-		if err != nil {
-			return fmt.Errorf("read resume recurring definition affected rows: %w", err)
-		}
-		if affected == 0 {
-			return services.ErrNotFound
-		}
-		if err := insertDeferredOccurrences(ctx, tx, s.db, definition.ID, skippedSlots, definition.DefinitionVersion); err != nil {
-			return err
-		}
-
-		return nil
-	})
+// ResumeDefinition clears pause state and establishes the supplied next anchor.
+func (s *RecurringStore) ResumeDefinition(ctx context.Context, definition recurring.Definition, nextAnchor values.CivilDate) (recurring.Definition, error) {
+	result, err := s.db.query().ExecContext(ctx, `UPDATE `+s.db.accountingName("recurring_definition")+`
+SET paused_at = NULL, anchor_date = ?, updated_at = CURRENT_TIMESTAMP
+WHERE recurring_definition_id = ? AND paused_at IS NOT NULL AND tombstoned_at IS NULL`, civilDateArg(nextAnchor), definition.ID)
 	if err != nil {
-		return recurring.Definition{}, err
+		return recurring.Definition{}, fmt.Errorf("resume recurring definition: %w", err)
 	}
-
+	affected, err := result.RowsAffected()
+	if err != nil || affected != 1 {
+		return recurring.Definition{}, services.ErrNotFound
+	}
 	return s.Get(ctx, definition.ID)
+}
+
+func insertGeneratedRecurringTransaction(ctx context.Context, tx *sql.Tx, db *AppDB, definitionID int64, initiatedDate values.CivilDate, lifecycle transactions.LifecycleStatus, records []transactions.PersistJournalRecordInput) (transactions.Transaction, error) {
+	transaction, err := scanTransaction(tx.QueryRowContext(ctx, `INSERT INTO `+db.accountingName("transaction")+` (initiated_date, recurring_definition_id, lifecycle_status)
+VALUES (?, ?, CAST(? AS `+db.accountingName("transaction_lifecycle_status")+`))
+RETURNING transaction_id, initiated_date, recurring_definition_id, CAST(lifecycle_status AS VARCHAR), created_at, updated_at, tombstoned_at`,
+		civilDateArg(initiatedDate), definitionID, enumValue(lifecycle)))
+	if err != nil {
+		return transactions.Transaction{}, fmt.Errorf("insert recurring generated transaction: %w", err)
+	}
+	if err := insertJournalRecords(ctx, tx, db, transaction.ID, records); err != nil {
+		return transactions.Transaction{}, err
+	}
+	return transaction, nil
 }
 
 type recurringDefinitionScanner interface {
@@ -1020,7 +586,6 @@ func scanRecurringDefinition(scanner recurringDefinitionScanner) (recurring.Defi
 	var scheduleRule string
 	var anchorDate time.Time
 	var pausedAt sql.NullTime
-	var lastOccurrenceDate sql.NullTime
 	var parentFQN sql.NullString
 	var createdAt time.Time
 	var updatedAt time.Time
@@ -1032,7 +597,6 @@ func scanRecurringDefinition(scanner recurringDefinitionScanner) (recurring.Defi
 		&anchorDate,
 		&definition.DefinitionVersion,
 		&pausedAt,
-		&lastOccurrenceDate,
 		&parentFQN,
 		&definition.Name,
 		&definition.Level,
@@ -1050,10 +614,6 @@ func scanRecurringDefinition(scanner recurringDefinitionScanner) (recurring.Defi
 	definition.ScheduleClass = scheduleClass
 	definition.AnchorDate = values.CivilDateFromTime(anchorDate)
 	definition.PausedAt = nullableTimeFromSQL(pausedAt)
-	if lastOccurrenceDate.Valid {
-		date := values.CivilDateFromTime(lastOccurrenceDate.Time)
-		definition.LastOccurrenceDate = &date
-	}
 	if parentFQN.Valid {
 		definition.ParentFQN = &parentFQN.String
 	}
@@ -1076,221 +636,6 @@ func recurringScheduleClassFromRule(rule json.RawMessage) (recurring.ScheduleCla
 		return recurring.ScheduleClassInterval, nil
 	}
 	return recurring.ScheduleClassDateRule, nil
-}
-
-func insertGeneratedRecurringTransaction(
-	ctx context.Context,
-	tx *sql.Tx,
-	db *AppDB,
-	occurrenceID int64,
-	initiatedDate values.CivilDate,
-	lifecycle transactions.LifecycleStatus,
-	records []transactions.PersistJournalRecordInput,
-) (transactions.Transaction, error) {
-	transaction, err := scanTransaction(tx.QueryRowContext(
-		ctx,
-		`INSERT INTO `+db.accountingName("transaction")+` (initiated_date, recurring_occurrence_id, lifecycle_status)
-VALUES (?, ?, CAST(? AS `+db.accountingName("transaction_lifecycle_status")+`))
-RETURNING transaction_id, initiated_date, recurring_occurrence_id, CAST(lifecycle_status AS VARCHAR), created_at, updated_at, tombstoned_at`,
-		civilDateArg(initiatedDate),
-		occurrenceID,
-		enumValue(lifecycle),
-	))
-	if err != nil {
-		return transactions.Transaction{}, fmt.Errorf("insert recurring generated transaction: %w", err)
-	}
-	if err := insertJournalRecords(ctx, tx, db, transaction.ID, records); err != nil {
-		return transactions.Transaction{}, err
-	}
-
-	return transaction, nil
-}
-
-func insertDeferredOccurrence(
-	ctx context.Context,
-	tx *sql.Tx,
-	db *AppDB,
-	definitionID int64,
-	definitionFQN string,
-	scheduledDate values.CivilDate,
-	definitionVersion int64,
-) (recurring.Occurrence, error) {
-	if err := ensureRecurringOccurrenceSlotAvailable(ctx, tx, db, definitionID, scheduledDate); err != nil {
-		return recurring.Occurrence{}, err
-	}
-	occurrence, err := scanMaterializedRecurringOccurrence(tx.QueryRowContext(
-		ctx,
-		`INSERT INTO `+db.accountingName("recurring_occurrence")+` (
-	recurring_definition_id, scheduled_date, status, materialized_definition_version, reviewed_at
-)
-VALUES (?, ?, CAST('DEFERRED' AS `+db.accountingName("recurring_occurrence_status")+`), ?, CURRENT_TIMESTAMP)
-RETURNING recurring_occurrence_id, recurring_definition_id, scheduled_date, CAST(status AS VARCHAR), materialized_definition_version,
-	materialized_at, reviewed_at, CAST(NULL AS BIGINT), created_at, updated_at`,
-		definitionID,
-		civilDateArg(scheduledDate),
-		definitionVersion,
-	), definitionFQN)
-	if err != nil {
-		return recurring.Occurrence{}, fmt.Errorf("insert deferred recurring occurrence: %w", err)
-	}
-
-	return occurrence, nil
-}
-
-func insertDeferredOccurrences(
-	ctx context.Context,
-	tx *sql.Tx,
-	db *AppDB,
-	definitionID int64,
-	scheduledDates []values.CivilDate,
-	definitionVersion int64,
-) error {
-	if len(scheduledDates) == 0 {
-		return nil
-	}
-
-	valuesSQL, args := civilDateInputValues(scheduledDates)
-	var occupied bool
-	if err := tx.QueryRowContext(ctx, `SELECT EXISTS (
-	SELECT 1
-	FROM (`+valuesSQL+`) AS input(scheduled_date)
-	JOIN `+db.accountingName("recurring_occurrence")+` AS occurrence
-	  ON occurrence.recurring_definition_id = ?
-	 AND occurrence.scheduled_date = input.scheduled_date
-)`, append(args, definitionID)...).Scan(&occupied); err != nil {
-		return fmt.Errorf("check recurring occurrence slots: %w", err)
-	}
-	if occupied {
-		return services.ErrConflict
-	}
-
-	insertArgs := []any{definitionID, definitionVersion}
-	insertArgs = append(insertArgs, args...)
-	if _, err := tx.ExecContext(ctx, `INSERT INTO `+db.accountingName("recurring_occurrence")+` (
-	recurring_definition_id, scheduled_date, status, materialized_definition_version, reviewed_at
-)
-SELECT ?, input.scheduled_date, CAST('DEFERRED' AS `+db.accountingName("recurring_occurrence_status")+`), ?, CURRENT_TIMESTAMP
-FROM (`+valuesSQL+`) AS input(scheduled_date)`, insertArgs...); err != nil {
-		return fmt.Errorf("insert deferred recurring occurrences: %w", err)
-	}
-
-	return nil
-}
-
-func civilDateInputValues(dates []values.CivilDate) (string, []any) {
-	rows := make([]string, 0, len(dates))
-	args := make([]any, 0, len(dates))
-	for _, date := range dates {
-		rows = append(rows, "(CAST(? AS DATE))")
-		args = append(args, civilDateArg(date))
-	}
-	return "VALUES " + strings.Join(rows, ", "), args
-}
-
-func ensureRecurringOccurrenceSlotAvailable(
-	ctx context.Context,
-	queryer rowQuerier,
-	db *AppDB,
-	definitionID int64,
-	scheduledDate values.CivilDate,
-) error {
-	var exists bool
-	if err := queryer.QueryRowContext(ctx, `SELECT EXISTS (
-	SELECT 1
-	FROM `+db.accountingName("recurring_occurrence")+`
-	WHERE recurring_definition_id = ? AND scheduled_date = ?
-)`, definitionID, civilDateArg(scheduledDate)).Scan(&exists); err != nil {
-		return fmt.Errorf("check recurring occurrence slot: %w", err)
-	}
-	if exists {
-		return services.ErrConflict
-	}
-	return nil
-}
-
-type recurringOccurrenceScanner interface {
-	Scan(dest ...any) error
-}
-
-func scanMaterializedRecurringOccurrence(scanner recurringOccurrenceScanner, definitionFQN string) (recurring.Occurrence, error) {
-	occurrence, err := scanRecurringOccurrenceFields(scanner, false)
-	if err != nil {
-		return recurring.Occurrence{}, err
-	}
-	occurrence.RecurringDefinitionFQN = definitionFQN
-
-	return occurrence, nil
-}
-
-func scanRecurringOccurrence(scanner recurringOccurrenceScanner) (recurring.Occurrence, error) {
-	return scanRecurringOccurrenceFields(scanner, true)
-}
-
-func scanRecurringOccurrenceFields(scanner recurringOccurrenceScanner, includesDefinitionFQN bool) (recurring.Occurrence, error) {
-	var occurrence recurring.Occurrence
-	var definitionTombstonedAt sql.NullTime
-	var scheduledDate time.Time
-	var status string
-	var reviewedAt sql.NullTime
-	var transactionID sql.NullInt64
-	var materializedAt time.Time
-	var createdAt time.Time
-	var updatedAt time.Time
-	dest := []any{
-		&occurrence.ID,
-		&occurrence.RecurringDefinitionID,
-	}
-	if includesDefinitionFQN {
-		dest = append(dest, &occurrence.RecurringDefinitionFQN, &definitionTombstonedAt)
-	}
-	dest = append(dest,
-		&scheduledDate,
-		&status,
-		&occurrence.MaterializedDefinitionVersion,
-		&materializedAt,
-		&reviewedAt,
-		&transactionID,
-		&createdAt,
-		&updatedAt,
-	)
-	if err := scanner.Scan(dest...); err != nil {
-		return recurring.Occurrence{}, err
-	}
-	occurrence.ScheduledDate = values.CivilDateFromTime(scheduledDate)
-	occurrence.RecurringDefinitionActive = !definitionTombstonedAt.Valid
-	occurrence.Status = recurring.OccurrenceStatus(strings.ToLower(status))
-	occurrence.MaterializedAt = materializedAt.UTC()
-	occurrence.ReviewedAt = nullableTimeFromSQL(reviewedAt)
-	if transactionID.Valid {
-		occurrence.GeneratedTransactionID = &transactionID.Int64
-	}
-	occurrence.CreatedAt = createdAt.UTC()
-	occurrence.UpdatedAt = updatedAt.UTC()
-
-	return occurrence, nil
-}
-
-func selectRecurringOccurrenceByID(ctx context.Context, queryer rowQuerier, db *AppDB, id int64) (recurring.Occurrence, error) {
-	occurrence, err := scanRecurringOccurrence(queryer.QueryRowContext(
-		ctx,
-		`SELECT o.recurring_occurrence_id, o.recurring_definition_id, d.fqn, d.tombstoned_at, o.scheduled_date, CAST(o.status AS VARCHAR), o.materialized_definition_version,
-	o.materialized_at, o.reviewed_at, t.transaction_id, o.created_at, o.updated_at
-FROM `+db.accountingName("recurring_occurrence")+` AS o
-JOIN `+db.accountingName("recurring_definition")+` AS d
-  ON d.recurring_definition_id = o.recurring_definition_id
-LEFT JOIN `+db.accountingName("transaction")+` AS t
-  ON t.recurring_occurrence_id = o.recurring_occurrence_id
-WHERE o.recurring_occurrence_id = ?`,
-		id,
-	))
-	if errors.Is(err, sql.ErrNoRows) {
-		return recurring.Occurrence{}, services.ErrNotFound
-	}
-	if err != nil {
-		return recurring.Occurrence{}, fmt.Errorf("get recurring occurrence: %w", err)
-	}
-
-	return occurrence, nil
 }
 
 func insertRecurringDefinitionRecords(
@@ -1437,55 +782,6 @@ ORDER BY recurring_definition_id ASC, recurring_definition_record_id ASC`,
 	return recordsByDefinitionID, nil
 }
 
-func recurringOccurrenceDatesByDefinitionIDs(
-	ctx context.Context,
-	queryer rowsQuerier,
-	db *AppDB,
-	definitionIDs []int64,
-	through values.CivilDate,
-) (map[int64][]values.CivilDate, error) {
-	datesByDefinitionID := map[int64][]values.CivilDate{}
-	for _, id := range definitionIDs {
-		datesByDefinitionID[id] = []values.CivilDate{}
-	}
-	if len(definitionIDs) == 0 {
-		return datesByDefinitionID, nil
-	}
-
-	args := int64Args(definitionIDs)
-	args = append(args, civilDateArg(through))
-	rows, err := queryer.QueryContext(
-		ctx,
-		`SELECT recurring_definition_id, scheduled_date
-FROM `+db.accountingName("recurring_occurrence")+`
-WHERE recurring_definition_id IN (`+placeholders(len(definitionIDs))+`) AND scheduled_date <= ?
-ORDER BY recurring_definition_id ASC, scheduled_date ASC`,
-		args...,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("list recurring occurrence dates: %w", err)
-	}
-	for rows.Next() {
-		var definitionID int64
-		var scheduledDate time.Time
-		if err := rows.Scan(&definitionID, &scheduledDate); err != nil {
-			return nil, fmt.Errorf("scan recurring occurrence date: %w", err)
-		}
-		datesByDefinitionID[definitionID] = append(datesByDefinitionID[definitionID], values.CivilDateFromTime(scheduledDate))
-	}
-	if err := rows.Err(); err != nil {
-		if closeErr := rows.Close(); closeErr != nil {
-			return nil, fmt.Errorf("iterate recurring occurrence dates: %w; close recurring occurrence date rows: %w", err, closeErr)
-		}
-		return nil, fmt.Errorf("iterate recurring occurrence dates: %w", err)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, fmt.Errorf("close recurring occurrence date rows: %w", err)
-	}
-
-	return datesByDefinitionID, nil
-}
-
 func (s *RecurringStore) recordsByDefinitionIDs(ctx context.Context, definitionIDs []int64) (map[int64][]recurring.DefinitionRecord, error) {
 	return recurringDefinitionRecordsByDefinitionIDs(ctx, s.db.query(), s.db, definitionIDs)
 }
@@ -1494,10 +790,4 @@ var recurringDefinitionSortColumns = map[services.SortKey][]string{
 	services.SortKeyCreatedAt: {"created_at"},
 	services.SortKeyFQN:       {"fqn"},
 	services.SortKeyUpdatedAt: {"updated_at"},
-}
-
-var recurringOccurrenceSortColumns = map[services.SortKey][]string{
-	services.SortKeyCreatedAt:     {"o.created_at"},
-	services.SortKeyScheduledDate: {"o.scheduled_date"},
-	services.SortKeyUpdatedAt:     {"o.updated_at"},
 }

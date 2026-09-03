@@ -18,6 +18,8 @@ const (
 	DatabaseBackupOperationID OperationID = "database-backup"
 	// AuditLogCompactionOperationID identifies automatic and manual API audit-log compaction.
 	AuditLogCompactionOperationID OperationID = "audit-log-compaction"
+	// RecurringCatchUpOperationID identifies automatic and manual recurring catch-up.
+	RecurringCatchUpOperationID OperationID = "recurring-catch-up"
 )
 
 // RunStatus is the observable lifecycle state of one operation invocation.
@@ -83,6 +85,20 @@ type AuditLogCompactionStatus struct {
 	CompletedRunRevision int64
 }
 
+// RecurringCatchUpStatus is the public status for recurring catch-up.
+type RecurringCatchUpStatus struct {
+	ID                   OperationID
+	Enabled              bool
+	ScheduleLocal        string
+	State                string
+	LastStartedAt        *time.Time
+	LastCompletedAt      *time.Time
+	LastSuccess          *bool
+	LastError            *string
+	RunCount             int64
+	CompletedRunRevision int64
+}
+
 // RunTrigger identifies how one operation invocation was initiated.
 type RunTrigger string
 
@@ -121,10 +137,21 @@ type AuditLogCompactionRun struct {
 	RunEnvelope
 }
 
+// RecurringCatchUpRun is the concrete recurring catch-up run detail.
+type RecurringCatchUpRun struct {
+	RunEnvelope
+}
+
 // OperationConfig contains observable configuration for one registered operation.
 type OperationConfig struct {
 	Enabled     bool
 	ScheduleUTC string
+}
+
+// RecurringCatchUpConfig contains observable configuration for recurring catch-up.
+type RecurringCatchUpConfig struct {
+	Enabled       bool
+	ScheduleLocal string
 }
 
 // Config contains observable configuration for registered operations.
@@ -132,6 +159,7 @@ type Config struct {
 	ExchangeRateLoading OperationConfig
 	DatabaseBackup      OperationConfig
 	AuditLogCompaction  OperationConfig
+	RecurringCatchUp    RecurringCatchUpConfig
 }
 
 // Repository stores background operation invocations.
@@ -278,6 +306,28 @@ func (s *Service) AuditLogCompactionStatus(ctx context.Context) (AuditLogCompact
 	}, nil
 }
 
+// RecurringCatchUpStatus returns recurring catch-up operation status.
+func (s *Service) RecurringCatchUpStatus(ctx context.Context) (RecurringCatchUpStatus, error) {
+	count, latest, running, err := s.repo.RunStats(ctx, RecurringCatchUpOperationID)
+	if err != nil {
+		return RecurringCatchUpStatus{}, err
+	}
+
+	lastStartedAt, lastCompletedAt, lastSuccess, lastError := latestRunFields(latest)
+	return RecurringCatchUpStatus{
+		ID:                   RecurringCatchUpOperationID,
+		Enabled:              s.config.RecurringCatchUp.Enabled,
+		ScheduleLocal:        s.config.RecurringCatchUp.ScheduleLocal,
+		State:                state(running),
+		LastStartedAt:        lastStartedAt,
+		LastCompletedAt:      lastCompletedAt,
+		LastSuccess:          lastSuccess,
+		LastError:            lastError,
+		RunCount:             count,
+		CompletedRunRevision: count,
+	}, nil
+}
+
 // TriggerExchangeRateLoadingOperation triggers one asynchronous exchange-rate loading operation.
 func (s *Service) TriggerExchangeRateLoadingOperation(ctx context.Context) (RunEnvelope, error) {
 	if s.trigger == nil {
@@ -306,6 +356,15 @@ func (s *Service) TriggerAuditLogCompactionOperation(ctx context.Context) (RunEn
 	}
 
 	return s.trigger.Trigger(ctx, AuditLogCompactionOperationID)
+}
+
+// TriggerRecurringCatchUpOperation triggers one asynchronous recurring catch-up operation.
+func (s *Service) TriggerRecurringCatchUpOperation(ctx context.Context) (RunEnvelope, error) {
+	if s.trigger == nil {
+		return RunEnvelope{}, services.InvalidRequest("background operation trigger is not configured")
+	}
+
+	return s.trigger.Trigger(ctx, RecurringCatchUpOperationID)
 }
 
 // GetExchangeRateLoadingRun returns one exchange-rate loading operation run.
@@ -338,6 +397,16 @@ func (s *Service) GetAuditLogCompactionRun(ctx context.Context, runID int64) (Au
 	return AuditLogCompactionRun{RunEnvelope: run}, nil
 }
 
+// GetRecurringCatchUpRun returns one recurring catch-up operation run.
+func (s *Service) GetRecurringCatchUpRun(ctx context.Context, runID int64) (RecurringCatchUpRun, error) {
+	run, err := s.getRun(ctx, RecurringCatchUpOperationID, runID)
+	if err != nil {
+		return RecurringCatchUpRun{}, err
+	}
+
+	return RecurringCatchUpRun{RunEnvelope: run}, nil
+}
+
 func (s *Service) getRun(ctx context.Context, operationID OperationID, runID int64) (RunEnvelope, error) {
 	run, err := s.repo.GetRun(ctx, runID)
 	if err != nil {
@@ -368,6 +437,7 @@ func (s *Service) registeredOperations() []OperationID {
 		ExchangeRateLoadingOperationID,
 		DatabaseBackupOperationID,
 		AuditLogCompactionOperationID,
+		RecurringCatchUpOperationID,
 	}
 }
 

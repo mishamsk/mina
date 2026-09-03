@@ -113,7 +113,7 @@ func testTransactionTemplateSearch(t *testing.T) {
 	listQuery := "SearchTemplate:Brancx"
 	limit := 1
 	offset := 1
-	sortDirection := httpclient.Desc
+	sortDirection := httpclient.ListTransactionTemplatesParamsSortDirDesc
 	listed, err := client.REST().ListTransactionTemplatesWithResponse(ctx, &httpclient.ListTransactionTemplatesParams{Q: &listQuery, SortDir: &sortDirection, Limit: &limit, Offset: &offset})
 	requireClientResponse(t, "filter template list by fuzzy-matched group", err, listed.StatusCode(), http.StatusOK, listed.Body)
 	if listed.JSON200.TotalCount != 2 || len(listed.JSON200.TransactionTemplates) != 1 || listed.JSON200.TransactionTemplates[0].TransactionTemplateId != other.JSON201.TransactionTemplateId {

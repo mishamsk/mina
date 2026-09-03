@@ -146,8 +146,8 @@ const RecurringDefinitionDeferDialogContent = ({
         </div>
       )}
       <p>
-        This re-anchors future non-materialized occurrences. Existing
-        occurrences stay unchanged.
+        This reschedules future occurrences. Existing transactions stay
+        unchanged.
       </p>
     </ConfirmationDialog>
   );

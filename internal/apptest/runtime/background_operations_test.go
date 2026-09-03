@@ -706,7 +706,7 @@ func TestBackgroundOperationExpectedBehavior(t *testing.T) {
 		if daily.JSON200.ExchangeRates[0].ToCurrency != "EUR" || daily.JSON200.ExchangeRates[0].Rate != "2.00000000" {
 			t.Fatalf("daily rates after provider failure = %+v, want EUR rate 2.00000000", daily.JSON200)
 		}
-		read, err := client.REST().GetTransactionWithResponse(context.Background(), transaction.TransactionId)
+		read, err := client.REST().GetTransactionWithResponse(context.Background(), transaction.TransactionId, nil)
 		requireClientResponse(t, "read transaction after provider failure", err, read.StatusCode(), http.StatusOK, read.Body)
 		assertRecordAmountUSD(t, *read.JSON200, transaction.Records[0].AccountId, "-5.00000000")
 		assertRecordAmountUSD(t, *read.JSON200, transaction.Records[1].AccountId, "5.00000000")

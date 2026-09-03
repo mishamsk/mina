@@ -66,7 +66,6 @@ export type DemoSeedResponse = {
     transaction_templates: number;
     transactions: number;
     recurring_definitions: number;
-    recurring_occurrences: number;
 };
 
 export type Account = {
@@ -1188,7 +1187,7 @@ export type RecurringDefinitionWriteRequest = {
     fqn: string;
     schedule_rule: RecurringScheduleRule;
     /**
-     * Schedule floor in YYYY-MM-DD format. The next occurrence is the first unoccupied schedule slot on or after this date. Creation accepts historical anchors for backfill; replacement accepts a changed anchor only on or after the server's current civil date, while an unchanged historical anchor remains valid.
+     * Requested first occurrence date in YYYY-MM-DD format. Interval schedules persist it directly. Date-rule schedules treat it as a floor and persist the first rule-produced occurrence on or after it, so the returned anchor_date may be later. Creation accepts historical inputs for backfill.
      */
     anchor_date: string;
     /**
@@ -1196,7 +1195,27 @@ export type RecurringDefinitionWriteRequest = {
      */
     template_id?: number | null;
     /**
-     * Complete balanced record shape copied to each generated occurrence transaction.
+     * Complete balanced record shape copied to each generated transaction.
+     */
+    records?: Array<RecurringDefinitionRecordRequest>;
+};
+
+export type RecurringDefinitionReplaceRequest = {
+    /**
+     * Colon-separated hierarchical FQN for the recurring definition leaf.
+     */
+    fqn: string;
+    schedule_rule: RecurringScheduleRule;
+    /**
+     * Intentional replacement anchor in YYYY-MM-DD format. Omit or null to preserve the current server anchor. Interval schedules persist a supplied date directly; date-rule schedules treat it as a floor and may persist a later rule-produced occurrence.
+     */
+    anchor_date?: string | null;
+    /**
+     * Optional template identifier whose record shape is copied once when replacing the definition.
+     */
+    template_id?: number | null;
+    /**
+     * Complete balanced record shape copied to each generated transaction.
      */
     records?: Array<RecurringDefinitionRecordRequest>;
 };
@@ -1289,7 +1308,7 @@ export type BackgroundOperationSummary = {
     links: BackgroundOperationLinks;
 };
 
-export type BackgroundOperationId = 'exchange-rate-loading' | 'database-backup' | 'audit-log-compaction';
+export type BackgroundOperationId = 'exchange-rate-loading' | 'database-backup' | 'audit-log-compaction' | 'recurring-catch-up';
 
 export type BackgroundOperationRunOutcome = 'running' | 'succeeded' | 'failed' | 'skipped' | 'canceled';
 
@@ -1350,9 +1369,25 @@ export type AuditLogCompactionStatusResponse = {
     completed_run_revision: number;
 };
 
+export type RecurringCatchUpStatusResponse = {
+    operation_id: 'recurring-catch-up';
+    enabled: boolean;
+    /**
+     * Fixed five-field cron-style schedule interpreted in the server's local time.
+     */
+    schedule_local: string;
+    state: 'idle' | 'running';
+    last_started_at?: string | null;
+    last_completed_at?: string | null;
+    last_success?: boolean | null;
+    last_error?: string | null;
+    run_count: number;
+    completed_run_revision: number;
+};
+
 export type OperationRunReferenceResponse = {
     operation_run_id: number;
-    operation_id: 'exchange-rate-loading' | 'database-backup' | 'audit-log-compaction';
+    operation_id: 'exchange-rate-loading' | 'database-backup' | 'audit-log-compaction' | 'recurring-catch-up';
     status_url: string;
 };
 
@@ -1376,6 +1411,10 @@ export type DatabaseBackupRun = BackgroundOperationRun & {
 
 export type AuditLogCompactionRun = BackgroundOperationRun & {
     operation_id: 'audit-log-compaction';
+};
+
+export type RecurringCatchUpRun = BackgroundOperationRun & {
+    operation_id: 'recurring-catch-up';
 };
 
 export type BackgroundOperationRunListResponse = {
@@ -1588,9 +1627,9 @@ export type SettlementIntent = {
     posted_date?: string | null;
 };
 
-export type RecurringOccurrenceConfirmRequest = {
+export type ExpectedTransactionConfirmRequest = {
     /**
-     * Actual transaction date; defaults to the occurrence's scheduled date and must not be after the server's current civil date.
+     * Actual transaction date; defaults to the expected transaction's initiated date and must not be after the server's current civil date.
      */
     actual_date?: string;
     status: SettlementStatus;
@@ -1760,6 +1799,10 @@ export type RecurringScheduleClass = 'interval' | 'date_rule';
 
 export type RecurringDefinition = {
     recurring_definition_id: number;
+    /**
+     * Strong ETag derived directly from updated_at; send this exact value in If-Match for complete replacement.
+     */
+    etag: string;
     fqn: string;
     schedule_rule: RecurringScheduleRule;
     schedule_class: RecurringScheduleClass;
@@ -1835,37 +1878,9 @@ export type RecurringDefinitionSearchItem = {
     child_count?: number;
 };
 
-export type RecurringOccurrenceStatus = 'expected' | 'confirmed' | 'dismissed' | 'deferred';
-
-export type RecurringOccurrence = {
-    recurring_occurrence_id: number;
-    recurring_definition_id: number;
-    recurring_definition_fqn: string;
-    /**
-     * Whether the definition has not been cancelled (tombstoned); paused definitions remain true.
-     */
-    recurring_definition_active: boolean;
-    scheduled_date: string;
-    status: RecurringOccurrenceStatus;
-    materialized_definition_version: number;
-    materialized_at: string;
-    reviewed_at: string | null;
-    generated_transaction_id: number | null;
-    created_at: string;
-    updated_at: string;
-};
-
-export type RecurringOccurrenceListResponse = {
-    recurring_occurrences: Array<RecurringOccurrence>;
-    /**
-     * Count of matching recurring occurrences before limit and offset are applied.
-     */
-    total_count: number;
-};
-
 export type Transaction = {
     /**
-     * Durable positive identifier, or a response-local negative row identity when recurring_projection_definition_id is non-null.
+     * Durable positive identifier, or a response-local negative row identity for a future recurring projection.
      */
     transaction_id: number;
     /**
@@ -1874,15 +1889,19 @@ export type Transaction = {
     etag: string;
     initiated_date: string;
     /**
-     * Occurrence this transaction was generated from; null for non-recurring transactions; the definition is reached via the occurrence.
+     * Recurring definition that generated this persisted transaction or future projection; null for non-recurring transactions.
      */
-    recurring_occurrence_id: number | null;
+    recurring_definition_id: number | null;
     /**
-     * Recurring definition for a read-only future row computed by transaction-list date navigation; null or omitted when the transaction is persisted.
+     * Definition FQN retained as usable provenance after definition cancellation.
      */
-    recurring_projection_definition_id?: number | null;
+    recurring_definition_fqn: string | null;
     /**
-     * True only for the definition's next non-materialized projected occurrence; false for its later projections and null or omitted when the transaction is persisted.
+     * Whether the referenced definition remains active; null for non-recurring transactions.
+     */
+    recurring_definition_active: boolean | null;
+    /**
+     * True only for the definition's next projected occurrence; false for later projections and null or omitted when the transaction is persisted.
      */
     recurring_projection_is_next?: boolean | null;
     lifecycle_status: TransactionLifecycleStatus;
@@ -2793,6 +2812,110 @@ export type GetAuditLogCompactionRunResponses = {
 };
 
 export type GetAuditLogCompactionRunResponse = GetAuditLogCompactionRunResponses[keyof GetAuditLogCompactionRunResponses];
+
+export type GetRecurringCatchUpStatusData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/background-operations/recurring-catch-up/status';
+};
+
+export type GetRecurringCatchUpStatusErrors = {
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The route does not support the requested method.
+     */
+    405: ErrorResponse;
+};
+
+export type GetRecurringCatchUpStatusError = GetRecurringCatchUpStatusErrors[keyof GetRecurringCatchUpStatusErrors];
+
+export type GetRecurringCatchUpStatusResponses = {
+    /**
+     * Recurring catch-up status.
+     */
+    200: RecurringCatchUpStatusResponse;
+};
+
+export type GetRecurringCatchUpStatusResponse = GetRecurringCatchUpStatusResponses[keyof GetRecurringCatchUpStatusResponses];
+
+export type StartRecurringCatchUpRunData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/background-operations/recurring-catch-up/runs';
+};
+
+export type StartRecurringCatchUpRunErrors = {
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
+    /**
+     * The route does not support the requested method.
+     */
+    405: ErrorResponse;
+};
+
+export type StartRecurringCatchUpRunError = StartRecurringCatchUpRunErrors[keyof StartRecurringCatchUpRunErrors];
+
+export type StartRecurringCatchUpRunResponses = {
+    /**
+     * Recurring catch-up was invoked.
+     */
+    202: OperationRunReferenceResponse;
+};
+
+export type StartRecurringCatchUpRunResponse = StartRecurringCatchUpRunResponses[keyof StartRecurringCatchUpRunResponses];
+
+export type GetRecurringCatchUpRunData = {
+    body?: never;
+    path: {
+        /**
+         * Numeric identifier of the background-operation run.
+         */
+        operation_run_id: number;
+    };
+    query?: never;
+    url: '/api/background-operations/recurring-catch-up/runs/{operation_run_id}';
+};
+
+export type GetRecurringCatchUpRunErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The requested resource was not found.
+     */
+    404: ErrorResponse;
+    /**
+     * The route does not support the requested method.
+     */
+    405: ErrorResponse;
+};
+
+export type GetRecurringCatchUpRunError = GetRecurringCatchUpRunErrors[keyof GetRecurringCatchUpRunErrors];
+
+export type GetRecurringCatchUpRunResponses = {
+    /**
+     * Recurring catch-up run status.
+     */
+    200: RecurringCatchUpRun;
+};
+
+export type GetRecurringCatchUpRunResponse = GetRecurringCatchUpRunResponses[keyof GetRecurringCatchUpRunResponses];
 
 export type ListCategoriesData = {
     body?: never;
@@ -5647,7 +5770,13 @@ export type GetRecurringDefinitionResponses = {
 export type GetRecurringDefinitionResponse = GetRecurringDefinitionResponses[keyof GetRecurringDefinitionResponses];
 
 export type ReplaceRecurringDefinitionData = {
-    body: RecurringDefinitionWriteRequest;
+    body: RecurringDefinitionReplaceRequest;
+    headers: {
+        /**
+         * Strong ETag from the recurring definition response being replaced.
+         */
+        'If-Match': string;
+    };
     path: {
         /**
          * Numeric identifier of the recurring definition to target or filter by.
@@ -5679,6 +5808,14 @@ export type ReplaceRecurringDefinitionErrors = {
      * The request conflicts with existing state.
      */
     409: ErrorResponse;
+    /**
+     * The supplied write precondition no longer matches current state.
+     */
+    412: ErrorResponse;
+    /**
+     * The required write precondition was not supplied.
+     */
+    428: ErrorResponse;
 };
 
 export type ReplaceRecurringDefinitionError = ReplaceRecurringDefinitionErrors[keyof ReplaceRecurringDefinitionErrors];
@@ -5731,9 +5868,9 @@ export type ConfirmNextRecurringDefinitionError = ConfirmNextRecurringDefinition
 
 export type ConfirmNextRecurringDefinitionResponses = {
     /**
-     * Next occurrence materialized and confirmed.
+     * Next occurrence materialized as an active transaction and confirmed.
      */
-    200: RecurringOccurrence;
+    200: Transaction;
 };
 
 export type ConfirmNextRecurringDefinitionResponse = ConfirmNextRecurringDefinitionResponses[keyof ConfirmNextRecurringDefinitionResponses];
@@ -5777,9 +5914,9 @@ export type DeferRecurringDefinitionError = DeferRecurringDefinitionErrors[keyof
 
 export type DeferRecurringDefinitionResponses = {
     /**
-     * Next recurring occurrence deferred.
+     * Next occurrence deferred and definition schedule advanced.
      */
-    200: RecurringOccurrence;
+    200: RecurringDefinition;
 };
 
 export type DeferRecurringDefinitionResponse = DeferRecurringDefinitionResponses[keyof DeferRecurringDefinitionResponses];
@@ -5867,182 +6004,6 @@ export type ResumeRecurringDefinitionResponses = {
 };
 
 export type ResumeRecurringDefinitionResponse = ResumeRecurringDefinitionResponses[keyof ResumeRecurringDefinitionResponses];
-
-export type ListRecurringOccurrencesData = {
-    body?: never;
-    path?: never;
-    query?: {
-        /**
-         * Numeric identifier of the recurring definition to target or filter by.
-         */
-        recurring_definition_id?: number;
-        /**
-         * Filter by one or more recurring-occurrence lifecycle statuses.
-         */
-        status?: Array<RecurringOccurrenceStatus>;
-        /**
-         * Field used to sort matching results; defaults to `scheduled_date`.
-         */
-        sort?: 'scheduled_date' | 'created_at' | 'updated_at';
-        /**
-         * Sort direction for matching results; defaults to `asc`.
-         */
-        sort_dir?: 'asc' | 'desc';
-        /**
-         * Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.
-         */
-        limit?: number;
-        /**
-         * Zero-based number of matching results to skip.
-         */
-        offset?: number;
-    };
-    url: '/api/recurring-occurrences';
-};
-
-export type ListRecurringOccurrencesErrors = {
-    /**
-     * The request is invalid.
-     */
-    400: ErrorResponse;
-    /**
-     * Authentication is required or the supplied credential is invalid.
-     */
-    401: ErrorResponse;
-};
-
-export type ListRecurringOccurrencesError = ListRecurringOccurrencesErrors[keyof ListRecurringOccurrencesErrors];
-
-export type ListRecurringOccurrencesResponses = {
-    /**
-     * Recurring occurrences in caller-selected deterministic order.
-     */
-    200: RecurringOccurrenceListResponse;
-};
-
-export type ListRecurringOccurrencesResponse = ListRecurringOccurrencesResponses[keyof ListRecurringOccurrencesResponses];
-
-export type GetRecurringOccurrenceData = {
-    body?: never;
-    path: {
-        /**
-         * Numeric identifier of the recurring occurrence.
-         */
-        recurring_occurrence_id: number;
-    };
-    query?: never;
-    url: '/api/recurring-occurrences/{recurring_occurrence_id}';
-};
-
-export type GetRecurringOccurrenceErrors = {
-    /**
-     * The request is invalid.
-     */
-    400: ErrorResponse;
-    /**
-     * Authentication is required or the supplied credential is invalid.
-     */
-    401: ErrorResponse;
-    /**
-     * The requested resource was not found.
-     */
-    404: ErrorResponse;
-};
-
-export type GetRecurringOccurrenceError = GetRecurringOccurrenceErrors[keyof GetRecurringOccurrenceErrors];
-
-export type GetRecurringOccurrenceResponses = {
-    /**
-     * Recurring occurrence found.
-     */
-    200: RecurringOccurrence;
-};
-
-export type GetRecurringOccurrenceResponse = GetRecurringOccurrenceResponses[keyof GetRecurringOccurrenceResponses];
-
-export type ConfirmRecurringOccurrenceData = {
-    body: RecurringOccurrenceConfirmRequest;
-    path: {
-        /**
-         * Numeric identifier of the recurring occurrence.
-         */
-        recurring_occurrence_id: number;
-    };
-    query?: never;
-    url: '/api/recurring-occurrences/{recurring_occurrence_id}/confirm';
-};
-
-export type ConfirmRecurringOccurrenceErrors = {
-    /**
-     * The request is invalid.
-     */
-    400: ErrorResponse;
-    /**
-     * Authentication is required or the supplied credential is invalid.
-     */
-    401: ErrorResponse;
-    /**
-     * The request failed same-origin enforcement.
-     */
-    403: ErrorResponse;
-    /**
-     * The requested resource was not found.
-     */
-    404: ErrorResponse;
-};
-
-export type ConfirmRecurringOccurrenceError = ConfirmRecurringOccurrenceErrors[keyof ConfirmRecurringOccurrenceErrors];
-
-export type ConfirmRecurringOccurrenceResponses = {
-    /**
-     * Occurrence confirmed and generated balance records settled.
-     */
-    200: RecurringOccurrence;
-};
-
-export type ConfirmRecurringOccurrenceResponse = ConfirmRecurringOccurrenceResponses[keyof ConfirmRecurringOccurrenceResponses];
-
-export type DismissRecurringOccurrenceData = {
-    body?: never;
-    path: {
-        /**
-         * Numeric identifier of the recurring occurrence.
-         */
-        recurring_occurrence_id: number;
-    };
-    query?: never;
-    url: '/api/recurring-occurrences/{recurring_occurrence_id}/dismiss';
-};
-
-export type DismissRecurringOccurrenceErrors = {
-    /**
-     * The request is invalid.
-     */
-    400: ErrorResponse;
-    /**
-     * Authentication is required or the supplied credential is invalid.
-     */
-    401: ErrorResponse;
-    /**
-     * The request failed same-origin enforcement.
-     */
-    403: ErrorResponse;
-    /**
-     * The requested resource was not found.
-     */
-    404: ErrorResponse;
-};
-
-export type DismissRecurringOccurrenceError = DismissRecurringOccurrenceErrors[keyof DismissRecurringOccurrenceErrors];
-
-export type DismissRecurringOccurrenceResponses = {
-    /**
-     * Occurrence dismissed and generated transaction tombstoned.
-     */
-    200: RecurringOccurrence;
-};
-
-export type DismissRecurringOccurrenceResponse = DismissRecurringOccurrenceResponses[keyof DismissRecurringOccurrenceResponses];
 
 export type ListTransactionsData = {
     body?: never;
@@ -6909,7 +6870,12 @@ export type GetTransactionData = {
          */
         transaction_id: number;
     };
-    query?: never;
+    query?: {
+        /**
+         * Include a tombstoned transaction and its tombstoned journal records; defaults to false.
+         */
+        include_tombstoned?: boolean;
+    };
     url: '/api/transactions/{transaction_id}';
 };
 
@@ -7040,6 +7006,90 @@ export type CancelTransactionResponses = {
 };
 
 export type CancelTransactionResponse = CancelTransactionResponses[keyof CancelTransactionResponses];
+
+export type ConfirmExpectedTransactionData = {
+    body: ExpectedTransactionConfirmRequest;
+    path: {
+        /**
+         * Numeric identifier of the expected transaction.
+         */
+        transaction_id: number;
+    };
+    query?: never;
+    url: '/api/transactions/{transaction_id}/confirm-expected';
+};
+
+export type ConfirmExpectedTransactionErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
+    /**
+     * The requested resource was not found.
+     */
+    404: ErrorResponse;
+};
+
+export type ConfirmExpectedTransactionError = ConfirmExpectedTransactionErrors[keyof ConfirmExpectedTransactionErrors];
+
+export type ConfirmExpectedTransactionResponses = {
+    /**
+     * Expected transaction activated and its balance records settled.
+     */
+    200: Transaction;
+};
+
+export type ConfirmExpectedTransactionResponse = ConfirmExpectedTransactionResponses[keyof ConfirmExpectedTransactionResponses];
+
+export type DismissExpectedTransactionData = {
+    body?: never;
+    path: {
+        /**
+         * Numeric identifier of the expected transaction.
+         */
+        transaction_id: number;
+    };
+    query?: never;
+    url: '/api/transactions/{transaction_id}/dismiss-expected';
+};
+
+export type DismissExpectedTransactionErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication is required or the supplied credential is invalid.
+     */
+    401: ErrorResponse;
+    /**
+     * The request failed same-origin enforcement.
+     */
+    403: ErrorResponse;
+    /**
+     * The requested resource was not found.
+     */
+    404: ErrorResponse;
+};
+
+export type DismissExpectedTransactionError = DismissExpectedTransactionErrors[keyof DismissExpectedTransactionErrors];
+
+export type DismissExpectedTransactionResponses = {
+    /**
+     * Expected transaction and its journal records tombstoned.
+     */
+    204: void;
+};
+
+export type DismissExpectedTransactionResponse = DismissExpectedTransactionResponses[keyof DismissExpectedTransactionResponses];
 
 export type RestoreTransactionData = {
     body?: never;

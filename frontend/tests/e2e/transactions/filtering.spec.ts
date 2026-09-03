@@ -4,16 +4,37 @@ import {
   type CategoryFixture,
   clickRowAction,
   createCategory,
-  createExpectedRecurringFixture,
   createSearchSpend,
   createTag,
   expect,
   findByFqn,
   listFixtures,
+  type Page,
 } from "@tests/e2e/transactions/support";
 
 const uniqueSuffix = (projectName: string) =>
   `${projectName.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+
+const seededExpectedTransactionRow = async (page: Page) => {
+  await page.goto(
+    "/transactions?page=1&pageSize=50&q=Streaming%20subscription&filter=lifecycle%3Aexpected",
+  );
+  const firstExpectedRow = page
+    .locator('[data-transaction-row="true"]')
+    .filter({ has: page.getByRole("img", { name: "Expected" }) })
+    .first();
+  await expect(firstExpectedRow).toBeVisible();
+  const transactionId = await firstExpectedRow.getAttribute(
+    "data-transaction-id",
+  );
+  if (transactionId === null) {
+    throw new Error("Expected transaction row has no transaction identity");
+  }
+
+  return page.locator(
+    `[data-transaction-row="true"][data-transaction-id="${transactionId}"]`,
+  );
+};
 
 test("transactions page changes page size and pages through results", async ({
   page,
@@ -171,57 +192,50 @@ test("transaction toolbar icon controls expose their tooltips", async ({
 
 test("transactions occurrence review confirms an expected transaction", async ({
   page,
-}, testInfo) => {
-  const fixture = await createExpectedRecurringFixture(
-    page,
-    `${uniqueSuffix(testInfo.project.name)}Confirm`,
-  );
-  await page.goto(
-    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(fixture.memo)}`,
-  );
-  const row = page.locator(
-    `[data-transaction-row="true"][data-transaction-id="${fixture.transactionId}"]`,
-  );
+}) => {
+  const row = await seededExpectedTransactionRow(page);
   await expect(row.getByRole("img", { name: "Expected" })).toBeVisible();
 
-  await clickRowAction(page, row, "Confirm occurrence");
+  await clickRowAction(page, row, "Confirm expected");
   const dialog = page.getByRole("alertdialog", {
-    name: "Confirm occurrence",
+    name: "Confirm expected transaction",
   });
   await expect(dialog).toBeVisible();
-  await dialog.getByRole("button", { name: "Confirm occurrence" }).click();
+  await dialog
+    .getByRole("button", { name: "Confirm expected transaction" })
+    .click();
 
   await expect(
-    page.getByRole("status").filter({ hasText: "Occurrence confirmed." }),
+    page
+      .getByRole("status")
+      .filter({ hasText: "Expected transaction confirmed." }),
   ).toBeVisible();
+  await page.goto(
+    "/transactions?page=1&pageSize=50&q=Streaming%20subscription",
+  );
   await expect(row).toBeVisible();
   await expect(row.getByRole("img", { name: "Expected" })).toHaveCount(0);
 });
 
 test("transactions occurrence review dismisses an expected transaction", async ({
   page,
-}, testInfo) => {
-  const fixture = await createExpectedRecurringFixture(
-    page,
-    `${uniqueSuffix(testInfo.project.name)}Dismiss`,
-  );
-  await page.goto(
-    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(fixture.memo)}`,
-  );
-  const row = page.locator(
-    `[data-transaction-row="true"][data-transaction-id="${fixture.transactionId}"]`,
-  );
+}) => {
+  const row = await seededExpectedTransactionRow(page);
   await expect(row.getByRole("img", { name: "Expected" })).toBeVisible();
 
-  await clickRowAction(page, row, "Dismiss occurrence");
+  await clickRowAction(page, row, "Dismiss expected");
   const dialog = page.getByRole("alertdialog", {
-    name: "Dismiss occurrence",
+    name: "Dismiss expected transaction",
   });
   await expect(dialog).toBeVisible();
-  await dialog.getByRole("button", { name: "Dismiss occurrence" }).click();
+  await dialog
+    .getByRole("button", { name: "Dismiss expected transaction" })
+    .click();
 
   await expect(
-    page.getByRole("status").filter({ hasText: "Occurrence dismissed." }),
+    page
+      .getByRole("status")
+      .filter({ hasText: "Expected transaction dismissed." }),
   ).toBeVisible();
   await expect(row).toHaveCount(0);
 });

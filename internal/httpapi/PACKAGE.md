@@ -9,7 +9,7 @@
 
 - Generated route registration owns REST path and method declarations. `/api/openapi.json` is the only hand-registered route and serves the embedded generated specification.
 - Generated binding and OpenAPI validation own declared transport shape. A matched-route guard additionally rejects unknown query names because the validator intentionally ignores them.
-- Transaction responses expose the service-owned canonical `updated_at` ETag. Any operation with a required `If-Match` maps its absence to 428; the adapter otherwise forwards validators and maps service outcomes without parsing version semantics.
+- Transaction and recurring-definition responses expose the shared canonical `updated_at` ETag. Any operation with a required `If-Match` maps its absence to 428; the adapter otherwise forwards validators and maps service outcomes without parsing version semantics.
 - Raw query parsing is limited to validation-error formatting, preserving submitted empty or duplicate values when OpenAPI defaults would otherwise obscure them.
 - Transaction-list transport passes the raw DSL expression and separate standing class/search inputs to the transactions service; it owns no filter parsing or reference resolution.
 - Generated binding, validation, and strict-handler errors all use the REST contract's stable JSON error envelope.
@@ -21,7 +21,7 @@
 - Household, Category, and Tag flow operations map the shared anchor/window configuration, presentation-ready period stacks, filtered totals, and selected trend without transport-side aggregation; the accounting-history range remains a separate read, and required response collections encode as arrays, including when empty.
 - Account, Category, Tag, Member, Transaction Template, and Recurring Definition search operations map typed contexts, caller limits, exclusions, bounded entity-shaped rows, and `has_more` without transport-side eligibility, hierarchy derivation, or scoring. Account, Category, and Tag creation-availability reads map stable advisory reasons; only Account exposes `reserved_namespace`.
 - Hierarchical entity and Member lists forward shared fuzzy membership and typed filters without transport-side matching; Account type is repeated so one or several values use the same contract.
-- Recurring-occurrence lists materialize only through the server's current civil date, while exact reads return permanent provenance and definition availability without catch-up; future-positioned transaction responses mark non-persisted recurring projections explicitly.
+- Transaction lists are non-mutating and future-positioned responses mark non-persisted recurring projections explicitly. Expected and early confirmation map the transaction returned by their atomic service mutation without a follow-up read; expected dismissal is also a transaction lifecycle operation. Direct recurring provenance includes definition identity, FQN, and active availability, including on opt-in tombstoned transaction reads.
 - Accounting-schema inspection maps the embedded service artifact directly and never reads the opened database or its catalog.
 - Health maps runtime-supplied development-build metadata into the version subtype alongside database status without deriving build information in transport.
 - Background-operation discovery maps every closed-registry ID to concrete status, start, typed-run, and filtered-history links.

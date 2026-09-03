@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 
 import {
-  apiErrorDetails,
   apiErrorMessage,
   getRecurringDefinition,
-  getRecurringOccurrence,
   type RecurringDefinition,
   type Transaction,
 } from "@/api";
@@ -19,7 +17,6 @@ export interface RecurringDefinitionProvenance {
 
 export interface RecurringDefinitionProvenanceView {
   readonly applicable: boolean;
-  readonly errorDetails: string | undefined;
   readonly errorMessage: string | undefined;
   readonly loading: boolean;
   readonly provenance: RecurringDefinitionProvenance | undefined;
@@ -27,153 +24,91 @@ export interface RecurringDefinitionProvenanceView {
   readonly retry: () => void;
 }
 
-interface ProvenanceState {
-  readonly errorDetails: string | undefined;
+interface ProjectionState {
+  readonly definitionId: number;
   readonly errorMessage: string | undefined;
-  readonly key: ProvenanceKey;
-  readonly provenance: RecurringDefinitionProvenance | undefined;
   readonly projectionDefinition: RecurringDefinition | undefined;
 }
 
-type ProvenanceKey = `occurrence:${number}` | `projection:${number}`;
-
-interface ProvenanceResult {
-  readonly error: unknown;
-  readonly provenance: RecurringDefinitionProvenance | undefined;
-  readonly projectionDefinition: RecurringDefinition | undefined;
-}
-
-const provenanceKey = (transaction: Transaction): ProvenanceKey | undefined => {
-  if (transaction.recurring_occurrence_id != null) {
-    return `occurrence:${transaction.recurring_occurrence_id}`;
+const directProvenance = (
+  transaction: Transaction | undefined,
+): RecurringDefinitionProvenance | undefined => {
+  if (
+    transaction?.recurring_definition_id == null ||
+    transaction.recurring_definition_fqn == null ||
+    transaction.recurring_definition_active == null
+  ) {
+    return undefined;
   }
-  if (transaction.recurring_projection_definition_id != null) {
-    return `projection:${transaction.recurring_projection_definition_id}`;
-  }
-  return undefined;
-};
-
-const loadProvenance = async (
-  key: ProvenanceKey,
-): Promise<ProvenanceResult> => {
-  const [kind, rawId] = key.split(":");
-  const id = Number(rawId);
-  if (kind === "occurrence") {
-    const result = await getRecurringOccurrence({
-      path: { recurring_occurrence_id: id },
-    });
-    return {
-      error: result.error,
-      provenance: result.data
-        ? {
-            definitionActive: result.data.recurring_definition_active,
-            definitionFqn: result.data.recurring_definition_fqn,
-            definitionId: result.data.recurring_definition_id,
-          }
-        : undefined,
-      projectionDefinition: undefined,
-    };
-  }
-
-  const result = await getRecurringDefinition({
-    path: { recurring_definition_id: id },
-  });
   return {
-    error: result.error,
-    provenance: result.data
-      ? {
-          definitionActive: true,
-          definitionFqn: result.data.fqn,
-          definitionId: result.data.recurring_definition_id,
-        }
-      : undefined,
-    projectionDefinition: result.data,
+    definitionActive: transaction.recurring_definition_active,
+    definitionFqn: transaction.recurring_definition_fqn,
+    definitionId: transaction.recurring_definition_id,
   };
 };
 
 export const useRecurringDefinitionProvenance = (
   transaction: Transaction | undefined,
 ): RecurringDefinitionProvenanceView => {
-  const key = transaction ? provenanceKey(transaction) : undefined;
-  const [state, setState] = useState<ProvenanceState>();
+  const responseProvenance = directProvenance(transaction);
+  const projectionDefinitionId =
+    transaction?.transaction_id != null &&
+    transaction.transaction_id < 0 &&
+    transaction.recurring_projection_is_next === true
+      ? transaction.recurring_definition_id
+      : undefined;
+  const [state, setState] = useState<ProjectionState>();
   const [retryGeneration, setRetryGeneration] = useState(0);
 
   const retry = useCallback(() => {
-    if (!key) {
-      return;
+    if (projectionDefinitionId != null) {
+      setState((current) =>
+        current?.definitionId === projectionDefinitionId ? undefined : current,
+      );
+      setRetryGeneration((current) => current + 1);
     }
-    setState((current) => (current?.key === key ? undefined : current));
-    setRetryGeneration((current) => current + 1);
-  }, [key]);
+  }, [projectionDefinitionId]);
 
   useEffect(() => {
-    if (!key) {
-      return;
-    }
+    if (projectionDefinitionId == null) return;
     const refresh = () => {
       setRetryGeneration((current) => current + 1);
     };
     window.addEventListener(recurringDefinitionMutationEvent, refresh);
-    return () => {
+    return () =>
       window.removeEventListener(recurringDefinitionMutationEvent, refresh);
-    };
-  }, [key]);
+  }, [projectionDefinitionId]);
 
   useEffect(() => {
-    if (!key) {
-      return;
-    }
-
+    if (projectionDefinitionId == null) return;
     let active = true;
-    const load = async () => {
-      const result = await loadProvenance(key);
-      if (!active) {
-        return;
-      }
+    void getRecurringDefinition({
+      path: { recurring_definition_id: projectionDefinitionId },
+    }).then((result) => {
+      if (!active) return;
       setState({
-        errorDetails: result.provenance
-          ? undefined
-          : apiErrorDetails(
-              result.error,
-              "Recurring definition could not be loaded.",
-            ),
-        errorMessage: result.provenance
+        definitionId: projectionDefinitionId,
+        errorMessage: result.data
           ? undefined
           : apiErrorMessage(
               result.error,
               "Recurring definition could not be loaded.",
             ),
-        key,
-        provenance: result.provenance,
-        projectionDefinition: result.projectionDefinition,
+        projectionDefinition: result.data,
       });
-    };
-
-    void load();
+    });
     return () => {
       active = false;
     };
-  }, [key, retryGeneration]);
+  }, [projectionDefinitionId, retryGeneration]);
 
-  if (!key) {
-    return {
-      applicable: false,
-      errorDetails: undefined,
-      errorMessage: undefined,
-      loading: false,
-      provenance: undefined,
-      projectionDefinition: undefined,
-      retry,
-    };
-  }
-
-  const current = state?.key === key ? state : undefined;
+  const current =
+    state?.definitionId === projectionDefinitionId ? state : undefined;
   return {
-    applicable: true,
-    errorDetails: current?.errorDetails,
+    applicable: responseProvenance !== undefined,
     errorMessage: current?.errorMessage,
-    loading: current === undefined,
-    provenance: current?.provenance,
+    loading: projectionDefinitionId != null && current === undefined,
+    provenance: responseProvenance,
     projectionDefinition: current?.projectionDefinition,
     retry,
   };

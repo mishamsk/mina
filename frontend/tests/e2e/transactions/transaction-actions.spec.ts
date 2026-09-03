@@ -1,10 +1,10 @@
 import type { Locator, Page } from "@playwright/test";
 import { test } from "@tests/e2e/test";
 import {
+  activateTransactionRow,
   clickRowAction,
   createAccount,
   createCategory,
-  createExpectedRecurringFixture,
   createTag,
   expect,
   formatLocalDate,
@@ -293,7 +293,6 @@ test("Split controls follow frontend transaction eligibility", async ({
     `/api/transactions/${cancelled.transaction_id}/cancel`,
   );
   expect(cancelResponse.ok(), await cancelResponse.text()).toBe(true);
-  const expected = await createExpectedRecurringFixture(page, `${unique}Split`);
 
   const projectionDate = shiftLocalDate(formatLocalDate(new Date()), 30);
   const projectionMemo = `${memoPrefix} projected`;
@@ -355,19 +354,6 @@ test("Split controls follow frontend transaction eligibility", async ({
     ).toHaveCount(item.eligible ? 1 : 0);
     await page.keyboard.press("Escape");
   }
-  const expectedRow = page.locator(
-    `[data-transaction-id="${expected.transactionId}"]`,
-  );
-  await expect(
-    expectedRow.getByRole("button", { name: "Confirm occurrence" }),
-  ).toBeVisible();
-  await expectedRow.click();
-  const detail = page.getByTestId("transaction-detail-panel");
-  await expect(detail).toBeVisible();
-  await expect(
-    detail.getByRole("button", { exact: true, name: "Split" }),
-  ).toHaveCount(0);
-
   await page.goto(
     `/transactions?page=1&pageSize=50&q=${encodeURIComponent(unique)}`,
   );
@@ -381,6 +367,21 @@ test("Split controls follow frontend transaction eligibility", async ({
     projectionRow.getByRole("button", { name: "Confirm next" }),
   ).toBeVisible();
   await projectionRow.click();
+  const detail = page.getByTestId("transaction-detail-panel");
+  await expect(detail).toBeVisible();
+  await expect(
+    detail.getByRole("button", { exact: true, name: "Split" }),
+  ).toHaveCount(0);
+
+  await page.goto(
+    "/transactions?page=1&pageSize=50&q=Streaming%20subscription&filter=lifecycle%3Aexpected",
+  );
+  const expectedRow = page
+    .locator('[data-transaction-row="true"]')
+    .filter({ has: page.getByRole("img", { name: "Expected" }) })
+    .first();
+  await expect(expectedRow).toBeVisible();
+  await activateTransactionRow(expectedRow);
   await expect(detail).toBeVisible();
   await expect(
     detail.getByRole("button", { exact: true, name: "Split" }),

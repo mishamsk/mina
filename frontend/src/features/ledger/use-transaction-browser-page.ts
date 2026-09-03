@@ -17,10 +17,10 @@ import {
 import {
   apiErrorMessage,
   cancelTransactionById,
-  confirmRecurringOccurrenceById,
+  confirmExpectedTransactionById,
   deferRecurringDefinition,
   deleteTransactionById,
-  dismissRecurringOccurrenceById,
+  dismissExpectedTransactionById,
   fetchTransactionById,
   getRecurringDefinition,
   type RecurringDefinition,
@@ -64,6 +64,7 @@ import {
   predictEditMode,
   summarizeEditModeSkips,
 } from "./edit-mode-prediction";
+import { isMaterializedExpectedRecurringTransaction } from "./format";
 import {
   type AmountSavePageRefresh,
   TransactionAmountConflictError,
@@ -527,19 +528,24 @@ export const useTransactionBrowserPage = ({
     [detail, displayedPageParams, showNotice],
   );
 
-  const confirmRecurringOccurrenceFromRow = useCallback(
+  const confirmExpectedTransactionFromRow = useCallback(
     async (transaction: Transaction, actualDate: string) => {
-      if (transaction.recurring_occurrence_id === null) {
-        throw new Error("This transaction is not a recurring occurrence.");
+      if (!isMaterializedExpectedRecurringTransaction(transaction)) {
+        throw new Error(
+          "This transaction is not a materialized expected transaction.",
+        );
       }
 
-      const result = await confirmRecurringOccurrenceById({
+      const result = await confirmExpectedTransactionById({
         actual_date: actualDate,
-        recurring_occurrence_id: transaction.recurring_occurrence_id,
+        transaction_id: transaction.transaction_id,
       });
       if (result.error) {
         throw new Error(
-          apiErrorMessage(result.error, "Occurrence could not be confirmed."),
+          apiErrorMessage(
+            result.error,
+            "Expected transaction could not be confirmed.",
+          ),
         );
       }
 
@@ -554,20 +560,20 @@ export const useTransactionBrowserPage = ({
       } catch {
         invalidateTransactionPages();
         showNotice(
-          "Occurrence confirmed, but transactions could not be refreshed.",
+          "Expected transaction confirmed, but transactions could not be refreshed.",
           "warning",
         );
         return;
       }
       await detail.refreshSelectedTransactionDetail(transaction.transaction_id);
-      showNotice("Occurrence confirmed.");
+      showNotice("Expected transaction confirmed.");
     },
     [detail, displayedPageParams, showNotice],
   );
 
   const loadRecurringDefinitionForProjection = useCallback(
     async (transaction: Transaction): Promise<RecurringDefinition> => {
-      const definitionId = transaction.recurring_projection_definition_id;
+      const definitionId = transaction.recurring_definition_id;
       if (definitionId == null) {
         throw new Error("This transaction is not a recurring projection.");
       }
@@ -591,8 +597,8 @@ export const useTransactionBrowserPage = ({
     async (
       transaction: Transaction,
       origin: "detail" | "row" = "detail",
-    ): Promise<number | undefined> => {
-      const definitionId = transaction.recurring_projection_definition_id;
+    ): Promise<number> => {
+      const definitionId = transaction.recurring_definition_id;
       if (
         definitionId == null ||
         transaction.recurring_projection_is_next !== true
@@ -614,8 +620,7 @@ export const useTransactionBrowserPage = ({
           );
         }
 
-        const confirmedTransactionId =
-          result.data.generated_transaction_id ?? undefined;
+        const confirmedTransactionId = result.data.transaction_id;
         let refreshedTransactions: readonly Transaction[];
         try {
           [, refreshedTransactions] = await Promise.all([
@@ -675,7 +680,7 @@ export const useTransactionBrowserPage = ({
       transaction: Transaction,
       request: RecurringDefinitionDeferRequest,
     ) => {
-      const definitionId = transaction.recurring_projection_definition_id;
+      const definitionId = transaction.recurring_definition_id;
       if (
         definitionId == null ||
         transaction.recurring_projection_is_next !== true
@@ -722,25 +727,30 @@ export const useTransactionBrowserPage = ({
       showNotice("Next occurrence deferred.");
       return refreshedTransactions.find(
         (candidate) =>
-          candidate.recurring_projection_definition_id === definitionId &&
+          candidate.recurring_definition_id === definitionId &&
           candidate.recurring_projection_is_next === true,
       )?.transaction_id;
     },
     [detail, displayedPageParams, showNotice],
   );
 
-  const dismissRecurringOccurrenceFromRow = useCallback(
+  const dismissExpectedTransactionFromRow = useCallback(
     async (transaction: Transaction) => {
-      if (transaction.recurring_occurrence_id === null) {
-        throw new Error("This transaction is not a recurring occurrence.");
+      if (!isMaterializedExpectedRecurringTransaction(transaction)) {
+        throw new Error(
+          "This transaction is not a materialized expected transaction.",
+        );
       }
 
-      const result = await dismissRecurringOccurrenceById({
-        recurring_occurrence_id: transaction.recurring_occurrence_id,
+      const result = await dismissExpectedTransactionById({
+        transaction_id: transaction.transaction_id,
       });
       if (result.error) {
         throw new Error(
-          apiErrorMessage(result.error, "Occurrence could not be dismissed."),
+          apiErrorMessage(
+            result.error,
+            "Expected transaction could not be dismissed.",
+          ),
         );
       }
 
@@ -754,7 +764,7 @@ export const useTransactionBrowserPage = ({
         [],
         { pageRefreshMode: "blocking" },
       );
-      showNotice("Occurrence dismissed.");
+      showNotice("Expected transaction dismissed.");
     },
     [detail, displayedPageParams, showNotice],
   );
@@ -1221,7 +1231,7 @@ export const useTransactionBrowserPage = ({
     clearTransactionSelection,
     confirmNextRecurringProjection,
     confirmingProjectionDefinitionId,
-    confirmRecurringOccurrenceFromRow,
+    confirmExpectedTransactionFromRow,
     deferRecurringProjection,
     dateJumpAnchor,
     dateJumpEnabled,
@@ -1229,7 +1239,7 @@ export const useTransactionBrowserPage = ({
     dateJumpValue,
     deleteSelectedTransaction,
     deleteTransactionFromRow,
-    dismissRecurringOccurrenceFromRow,
+    dismissExpectedTransactionFromRow,
     loadRecurringDefinitionForProjection,
     detail,
     dismissNotice,

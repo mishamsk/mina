@@ -3,13 +3,13 @@ import type { Transaction } from "@/api";
 import {
   canSplitTransaction,
   isActiveWhollyPendingTransaction,
-  isExpectedRecurringOccurrence,
+  isMaterializedExpectedRecurringTransaction,
   isProjectedRecurringTransaction,
 } from "./format";
 
 export interface TransactionActionApplicability {
   readonly confirmNextProjection: boolean;
-  readonly confirmOccurrence: boolean;
+  readonly confirmExpected: boolean;
   readonly createRecurring: boolean;
   readonly createTemplate: boolean;
   readonly delete: boolean;
@@ -24,27 +24,28 @@ export interface TransactionActionApplicability {
 export const transactionActionApplicability = (
   transaction: Transaction,
 ): TransactionActionApplicability => {
-  const expectedOccurrence = isExpectedRecurringOccurrence(transaction);
-  const projectedOccurrence = isProjectedRecurringTransaction(transaction);
+  const materializedExpected =
+    isMaterializedExpectedRecurringTransaction(transaction);
+  const projectedRecurring = isProjectedRecurringTransaction(transaction);
   const active = transaction.lifecycle_status === "active";
   const cancelled = transaction.lifecycle_status === "cancelled";
-  const reusable = !expectedOccurrence && (active || cancelled);
+  const reusable = !materializedExpected && (active || cancelled);
   const whollyPending =
-    !expectedOccurrence && isActiveWhollyPendingTransaction(transaction);
+    !materializedExpected && isActiveWhollyPendingTransaction(transaction);
 
   return {
     confirmNextProjection:
-      projectedOccurrence && transaction.recurring_projection_is_next === true,
-    confirmOccurrence: expectedOccurrence,
+      projectedRecurring && transaction.recurring_projection_is_next === true,
+    confirmExpected: materializedExpected,
     createRecurring: reusable,
     createTemplate: reusable,
     delete: reusable,
     deferProjection:
-      projectedOccurrence && transaction.recurring_projection_is_next === true,
+      projectedRecurring && transaction.recurring_projection_is_next === true,
     duplicate: reusable,
-    edit: !expectedOccurrence && active,
+    edit: !materializedExpected && active,
     post: whollyPending,
     restore: cancelled,
-    split: !expectedOccurrence && active && canSplitTransaction(transaction),
+    split: !materializedExpected && active && canSplitTransaction(transaction),
   };
 };

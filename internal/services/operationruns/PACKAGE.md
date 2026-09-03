@@ -10,8 +10,9 @@
 - Runs are app-local disposable runtime state. The repository assigns numeric IDs at creation, so they are not portable accounting identifiers.
 - Manual starts require runtime to connect the service to the background runner; without that connection, the service rejects the request rather than executing work itself.
 - Status summaries exclude active runs from the latest-result fields, run count, and completed-run revision; an active run affects only the `running`/`idle` state.
+- Status schedules retain their execution basis: configurable operation schedules are UTC, while recurring catch-up reports its fixed server-local schedule.
 - A concrete operation's run lookup returns not found for a run belonging to another operation.
-- The closed registry contains exchange-rate loading, database backup, and API audit-log compaction, each with concrete status and typed run projections.
+- The closed registry contains exchange-rate loading, database backup, API audit-log compaction, and recurring catch-up, each with concrete status and typed run projections.
 
 ## Boundaries
 

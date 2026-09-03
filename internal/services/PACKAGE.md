@@ -2,11 +2,12 @@
 
 ## Purpose
 
-- Provides shared service-layer errors, list values, creation-availability values, display-label rules, and fully qualified name (FQN) hierarchy helpers.
+- Provides shared service-layer errors, timestamp ETags, list values, creation-availability values, display-label rules, and fully qualified name (FQN) hierarchy helpers.
 
 ## Implicit Contracts
 
 - Expected invalid-request, missing-resource, conflict, and precondition-failure outcomes must be returned as `*services.Error`; `internal/httpapi` maps only that type to stable API errors, so services translate repository sentinel errors before returning them to adapters.
+- Timestamp ETags are canonical quoted UTC `updated_at` values; malformed strong validators are invalid requests, while well-formed noncanonical or stale validators are failed preconditions.
 - FQN containment and conflicts respect colon-segment boundaries, not arbitrary string prefixes; changing that matching would merge unrelated paths.
 - Shared FQN search helpers treat an omitted parent as unscoped, an explicit empty parent as root-only, and a nonempty parent as direct-child scope; they remove the active parent prefix before ranking and derive final-segment labels for entity-owned candidates.
 - FQN validation permits literal asterisks.

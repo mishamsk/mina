@@ -8,7 +8,7 @@ Preferred workflows:
 - Use server-computed totals and balances, including transactions_month_totals and accounts_list_balances, instead of aggregating records client-side.
 - Keep list and search calls bounded with their limit and server-side filter parameters. Prefer narrow filters and the documented defaults.
 - Send monetary amounts as decimal strings, not JSON numbers. Send dates and timestamps in ISO 8601 format.
-- Use recurring_list_occurrences as the recurring-occurrence review queue, then recurring_confirm_occurrence or recurring_dismiss_occurrence for each expected transaction.
+- Use transaction lifecycle filtering to review expected transactions, then transactions_confirm_expected or transactions_dismiss_expected for each one.
 
 Safety rules:
 - Never call a destructive or bulk-mutating tool without explicit user intent.

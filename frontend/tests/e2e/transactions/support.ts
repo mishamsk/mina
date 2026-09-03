@@ -127,7 +127,7 @@ const createAccount = async (
   return (await response.json()) as AccountFixture;
 };
 
-const createExpectedRecurringFixture = async (
+const createRecurringTransactionFixture = async (
   page: Page,
   unique: string,
 ): Promise<{
@@ -142,25 +142,25 @@ const createExpectedRecurringFixture = async (
   const anchorDate = formatLocalDate(new Date());
   const checking = await createAccount(
     page,
-    `e2e:ExpectedFilter:${unique}:Checking${unique}`,
+    `e2e:RecurringFilter:${unique}:Checking${unique}`,
     "owned",
     "USD",
   );
   const merchant = await createAccount(
     page,
-    `e2e:ExpectedFilter:${unique}:Merchant${unique}`,
+    `e2e:RecurringFilter:${unique}:Merchant${unique}`,
     "flow",
   );
   const category = await createCategory(
     page,
-    `e2e:ExpectedFilter:${unique}:Category`,
+    `e2e:RecurringFilter:${unique}:Category`,
     "expense",
   );
-  const memo = `E2E expected filter ${unique}`;
+  const memo = `E2E recurring filter ${unique}`;
   const definition = await page.request.post("/api/recurring-definitions", {
     data: {
       anchor_date: anchorDate,
-      fqn: `E2E:ExpectedFilter:${unique}`,
+      fqn: `E2E:RecurringFilter:${unique}`,
       schedule_rule: {
         every: 1,
         kind: "interval",
@@ -191,24 +191,15 @@ const createExpectedRecurringFixture = async (
   expect(definition.ok(), definitionBody).toBe(true);
   const created = JSON.parse(definitionBody) as RecurringDefinitionFixture;
 
-  const materialized = await page.request.get(
-    `/api/recurring-occurrences?recurring_definition_id=${created.recurring_definition_id}` +
-      "&status=expected&limit=500&offset=0",
+  const confirmed = await page.request.post(
+    `/api/recurring-definitions/${created.recurring_definition_id}/confirm-next`,
+    { data: { status: "posted" } },
   );
-  const materializedBody = await materialized.text();
-  expect(materialized.ok(), materializedBody).toBe(true);
-  const occurrenceList = JSON.parse(materializedBody) as {
-    readonly recurring_occurrences: readonly {
-      readonly generated_transaction_id: number | null;
-    }[];
-  };
-  const transactionId =
-    occurrenceList.recurring_occurrences[0]?.generated_transaction_id;
-  expect(transactionId).not.toBeNull();
-  expect(transactionId).not.toBeUndefined();
-  if (transactionId === null || transactionId === undefined) {
-    throw new Error("Expected occurrence has no generated transaction");
-  }
+  const confirmedBody = await confirmed.text();
+  expect(confirmed.ok(), confirmedBody).toBe(true);
+  const transactionId = (
+    JSON.parse(confirmedBody) as { readonly transaction_id: number }
+  ).transaction_id;
 
   return {
     category,
@@ -370,8 +361,8 @@ export {
   clickRowAction,
   createAccount,
   createCategory,
-  createExpectedRecurringFixture,
   createMember,
+  createRecurringTransactionFixture,
   createSearchSpend,
   createTag,
   deleteTransaction,

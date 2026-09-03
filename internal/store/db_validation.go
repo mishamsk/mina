@@ -19,7 +19,7 @@ import (
 )
 
 // PinnedMigrationContentHash is the validator-reviewed sha256 of embedded migration SQL.
-const PinnedMigrationContentHash = "3bddea27c78b7ce9c63bfcbfdfbdf1b2e3d75427032a74b67b1f9193f978663d"
+const PinnedMigrationContentHash = "3a7aa989b0c52414676cf07d5862e73a6ee38ef0b61a270fd937e8078c07cb2c"
 
 const validationTrimSpaceCharactersSQL = `' ' || ` +
 	`chr(9) || chr(10) || chr(11) || chr(12) || chr(13) || ` +
@@ -198,7 +198,7 @@ func (s *DBValidationStore) InvariantFindings(ctx context.Context) ([]dbvalidati
 		s.accountCurrencyFindings,
 		s.unbalancedRecurringDefinitionFindings,
 		s.shortRecurringDefinitionFindings,
-		s.expectedTransactionOccurrenceFindings,
+		s.expectedTransactionRecurringDefinitionFindings,
 		s.nonPositiveExchangeRateFindings,
 		s.zeroAmountFindings,
 		s.zeroAmountUSDFindings,
@@ -500,34 +500,17 @@ ORDER BY rd.recurring_definition_id`,
 	return findings, nil
 }
 
-func (s *DBValidationStore) expectedTransactionOccurrenceFindings(ctx context.Context) ([]dbvalidation.Finding, error) {
+func (s *DBValidationStore) expectedTransactionRecurringDefinitionFindings(ctx context.Context) ([]dbvalidation.Finding, error) {
 	rows, err := s.db.query().QueryContext(
 		ctx,
-		`SELECT t.transaction_id,
-	CASE
-		WHEN t.lifecycle_status = CAST('EXPECTED' AS `+s.db.accountingName("transaction_lifecycle_status")+`)
-			AND ro.recurring_occurrence_id IS NULL THEN 'expected lifecycle has no recurring occurrence'
-		WHEN t.lifecycle_status = CAST('EXPECTED' AS `+s.db.accountingName("transaction_lifecycle_status")+`)
-			AND ro.status <> CAST('EXPECTED' AS `+s.db.accountingName("recurring_occurrence_status")+`) THEN 'expected lifecycle disagrees with occurrence status'
-		WHEN t.lifecycle_status IN (
-				CAST('ACTIVE' AS `+s.db.accountingName("transaction_lifecycle_status")+`),
-				CAST('CANCELLED' AS `+s.db.accountingName("transaction_lifecycle_status")+`)
-			)
-			AND ro.status <> CAST('CONFIRMED' AS `+s.db.accountingName("recurring_occurrence_status")+`) THEN 'reviewed lifecycle disagrees with occurrence status'
-		ELSE NULL
-	END AS violation
+		`SELECT t.transaction_id
 FROM `+s.db.accountingName("transaction")+` AS t
-LEFT JOIN `+s.db.accountingName("recurring_occurrence")+` AS ro
-  ON ro.recurring_occurrence_id = t.recurring_occurrence_id
 WHERE t.tombstoned_at IS NULL
-	AND (
-		t.recurring_occurrence_id IS NOT NULL
-		OR t.lifecycle_status = CAST('EXPECTED' AS `+s.db.accountingName("transaction_lifecycle_status")+`)
-	)
-	AND violation IS NOT NULL
+	AND t.lifecycle_status = CAST('EXPECTED' AS `+s.db.accountingName("transaction_lifecycle_status")+`)
+	AND t.recurring_definition_id IS NULL
 ORDER BY t.transaction_id`)
 	if err != nil {
-		return nil, fmt.Errorf("check expected transaction occurrence references: %w", err)
+		return nil, fmt.Errorf("check expected transaction recurring definition references: %w", err)
 	}
 	defer func() {
 		_ = rows.Close()
@@ -536,14 +519,13 @@ ORDER BY t.transaction_id`)
 	findings := []dbvalidation.Finding{}
 	for rows.Next() {
 		var transactionID int64
-		var violation string
-		if err := rows.Scan(&transactionID, &violation); err != nil {
-			return nil, fmt.Errorf("scan expected transaction occurrence finding: %w", err)
+		if err := rows.Scan(&transactionID); err != nil {
+			return nil, fmt.Errorf("scan expected transaction recurring definition finding: %w", err)
 		}
-		findings = append(findings, invariantFinding(dbvalidation.SeverityError, fmt.Sprintf("transaction %d %s", transactionID, violation)))
+		findings = append(findings, invariantFinding(dbvalidation.SeverityError, fmt.Sprintf("expected transaction %d has no recurring definition", transactionID)))
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate expected transaction occurrence findings: %w", err)
+		return nil, fmt.Errorf("iterate expected transaction recurring definition findings: %w", err)
 	}
 
 	return findings, nil
@@ -1057,12 +1039,6 @@ func activeUniquenessChecks() []activeUniquenessCheck {
 			},
 		},
 		{
-			message: "duplicate recurring_occurrence recurring_definition_id/scheduled_date",
-			query: func(s *DBValidationStore) string {
-				return duplicateCompositeQuery(s, "recurring_occurrence", "recurring_definition_id", "scheduled_date")
-			},
-		},
-		{
 			message: "duplicate active tag.fqn",
 			query: func(s *DBValidationStore) string {
 				return duplicateActiveQuery(s, "tag", "fqn")
@@ -1097,20 +1073,6 @@ func duplicateActiveCompositeQuery(s *DBValidationStore, table string, columns .
 	SELECT 1
 	FROM ` + s.db.accountingName(table) + `
 	WHERE tombstoned_at IS NULL
-	GROUP BY ` + strings.Join(quotedColumns, ", ") + `
-	HAVING COUNT(*) > 1
-)`
-}
-
-func duplicateCompositeQuery(s *DBValidationStore, table string, columns ...string) string {
-	quotedColumns := make([]string, 0, len(columns))
-	for _, column := range columns {
-		quotedColumns = append(quotedColumns, QuoteIdentifier(column))
-	}
-
-	return `SELECT EXISTS (
-	SELECT 1
-	FROM ` + s.db.accountingName(table) + `
 	GROUP BY ` + strings.Join(quotedColumns, ", ") + `
 	HAVING COUNT(*) > 1
 )`
@@ -1163,7 +1125,7 @@ func validationReferences() []validationReference {
 		{childTable: "imported_record_metadata", childColumn: "record_id", parentTable: "journal_record", parentColumn: "record_id", severity: dbvalidation.SeverityError, allowTombstonedParent: true},
 		{childTable: "record_link", childColumn: "origin_record_id", parentTable: "journal_record", parentColumn: "record_id", severity: dbvalidation.SeverityError},
 		{childTable: "record_link", childColumn: "settlement_record_id", parentTable: "journal_record", parentColumn: "record_id", severity: dbvalidation.SeverityError},
-		{childTable: "transaction", childColumn: "recurring_occurrence_id", parentTable: "recurring_occurrence", parentColumn: "recurring_occurrence_id", severity: dbvalidation.SeverityError},
+		{childTable: "transaction", childColumn: "recurring_definition_id", parentTable: "recurring_definition", parentColumn: "recurring_definition_id", severity: dbvalidation.SeverityError, allowTombstonedParent: true},
 		{childTable: "transaction_template_record", childColumn: "transaction_template_id", parentTable: "transaction_template", parentColumn: "transaction_template_id", severity: dbvalidation.SeverityError},
 		{childTable: "transaction_template_record", childColumn: "category_id", parentTable: "category", parentColumn: "category_id", severity: dbvalidation.SeverityError},
 		{childTable: "transaction_template_record", childColumn: "account_id", parentTable: "account", parentColumn: "account_id", severity: dbvalidation.SeverityWarning},
@@ -1174,7 +1136,6 @@ func validationReferences() []validationReference {
 		{childTable: "recurring_definition_record", childColumn: "category_id", parentTable: "category", parentColumn: "category_id", severity: dbvalidation.SeverityError},
 		{childTable: "recurring_definition_record", childColumn: "member_id", parentTable: "member", parentColumn: "member_id", severity: dbvalidation.SeverityWarning},
 		{childTable: "recurring_definition_record", childColumn: "tag_ids", parentTable: "tag", parentColumn: "tag_id", kind: validationReferenceArray, severity: dbvalidation.SeverityWarning},
-		{childTable: "recurring_occurrence", childColumn: "recurring_definition_id", parentTable: "recurring_definition", parentColumn: "recurring_definition_id", severity: dbvalidation.SeverityError, allowTombstonedParent: true},
 		{childTable: "credit_limit_history", childColumn: "account_id", parentTable: "account", parentColumn: "account_id", severity: dbvalidation.SeverityWarning},
 		{childTable: "budget", childColumn: "category_fqn", parentTable: "category", parentColumn: "fqn", severity: dbvalidation.SeverityWarning},
 	}
@@ -1244,28 +1205,8 @@ func (s *DBValidationStore) scalarReferenceCounts(ctx context.Context, reference
 	if reference.parentColumn == "fqn" {
 		return s.fqnReferenceCounts(ctx, reference)
 	}
-	childPredicates := []string{"c." + QuoteIdentifier(reference.childColumn) + " IS NOT NULL"}
-	if validationReferenceTableHasTombstones(reference.childTable) {
-		childPredicates = append([]string{"c.tombstoned_at IS NULL"}, childPredicates...)
-	}
+	childPredicates := []string{"c.tombstoned_at IS NULL", "c." + QuoteIdentifier(reference.childColumn) + " IS NOT NULL"}
 	childWhere := strings.Join(childPredicates, "\n  AND ")
-	if !validationReferenceTableHasTombstones(reference.parentTable) {
-		query := `SELECT
-	COALESCE(SUM(CASE WHEN p.` + QuoteIdentifier(reference.parentColumn) + ` IS NULL THEN 1 ELSE 0 END), 0) AS missing_count
-FROM ` + s.db.accountingName(reference.childTable) + ` AS c
-LEFT JOIN ` + s.db.accountingName(reference.parentTable) + ` AS p
-  ON p.` + QuoteIdentifier(reference.parentColumn) + ` = c.` + QuoteIdentifier(reference.childColumn) + `
-WHERE ` + childWhere + `
-  AND p.` + QuoteIdentifier(reference.parentColumn) + ` IS NULL`
-
-		var missingCount int64
-		if err := s.db.query().QueryRowContext(ctx, query).Scan(&missingCount); err != nil {
-			return 0, 0, fmt.Errorf("check %s.%s reference: %w", reference.childTable, reference.childColumn, err)
-		}
-
-		return missingCount, 0, nil
-	}
-
 	query := `SELECT
 	COALESCE(SUM(CASE WHEN p.` + QuoteIdentifier(reference.parentColumn) + ` IS NULL THEN 1 ELSE 0 END), 0) AS missing_count,
 	COALESCE(SUM(CASE WHEN p.` + QuoteIdentifier(reference.parentColumn) + ` IS NOT NULL AND p.tombstoned_at IS NOT NULL THEN 1 ELSE 0 END), 0) AS tombstoned_count
@@ -1282,10 +1223,6 @@ WHERE ` + childWhere + `
 	}
 
 	return missingCount, tombstonedCount, nil
-}
-
-func validationReferenceTableHasTombstones(table string) bool {
-	return table != "recurring_occurrence"
 }
 
 func (s *DBValidationStore) fqnReferenceCounts(ctx context.Context, reference validationReference) (int64, int64, error) {

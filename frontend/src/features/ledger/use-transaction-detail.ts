@@ -180,7 +180,8 @@ export const useTransactionDetail = ({
       detailRestoreFocusRef.current = opener ?? null;
       if (
         typeof nextTransaction !== "number" &&
-        nextTransaction.recurring_projection_definition_id != null
+        nextTransaction.transaction_id < 0 &&
+        nextTransaction.recurring_definition_id != null
       ) {
         setFetchedDetail(undefined);
         setResponseLocalDetail({
@@ -263,7 +264,7 @@ export const useTransactionDetail = ({
     (
       deferredTransactionId: Transaction["transaction_id"],
       recurringDefinitionId: NonNullable<
-        Transaction["recurring_projection_definition_id"]
+        Transaction["recurring_definition_id"]
       >,
       refreshedTransactions: readonly Transaction[],
       options: {
@@ -274,8 +275,8 @@ export const useTransactionDetail = ({
       const currentResponseLocalDetail = responseLocalDetailRef.current;
       if (
         options.autoFocusOnTransactionChange !== undefined &&
-        currentResponseLocalDetail?.transaction
-          .recurring_projection_definition_id === recurringDefinitionId &&
+        currentResponseLocalDetail?.transaction.recurring_definition_id ===
+          recurringDefinitionId &&
         currentResponseLocalDetail.transaction.transaction_id ===
           deferredTransactionId
       ) {
@@ -286,7 +287,7 @@ export const useTransactionDetail = ({
       setResponseLocalDetail((current) => {
         if (
           !current ||
-          current.transaction.recurring_projection_definition_id !==
+          current.transaction.recurring_definition_id !==
             recurringDefinitionId ||
           (options.onlyIfSourceSelected === true &&
             current.transaction.transaction_id !== deferredTransactionId)
@@ -298,8 +299,7 @@ export const useTransactionDetail = ({
           current.transaction.transaction_id === deferredTransactionId
             ? refreshedTransactions.find(
                 (candidate) =>
-                  candidate.recurring_projection_definition_id ===
-                    recurringDefinitionId &&
+                  candidate.recurring_definition_id === recurringDefinitionId &&
                   candidate.recurring_projection_is_next === true,
               )
             : refreshedTransactions.find(

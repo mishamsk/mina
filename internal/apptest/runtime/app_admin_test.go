@@ -139,6 +139,12 @@ func TestSeedDemoMonthEndAnchorCoversSixCalendarMonths(t *testing.T) {
 	if definitions.StatusCode() != http.StatusOK {
 		t.Fatalf("list seeded recurring definitions status = %d, want %d; body %s", definitions.StatusCode(), http.StatusOK, definitions.Body)
 	}
+	expected := listExpectedTransactions(t, client, nil)
+	for _, transaction := range expected {
+		if transaction.RecurringDefinitionFqn != nil && *transaction.RecurringDefinitionFqn == "Savings:WeeklyTransfer" && transaction.InitiatedDate.After(latestWeeklyTransferDate) {
+			latestWeeklyTransferDate = transaction.InitiatedDate.Time
+		}
+	}
 	for _, definition := range definitions.JSON200.RecurringDefinitions {
 		if definition.Fqn != "Savings:WeeklyTransfer" {
 			continue
@@ -438,35 +444,20 @@ func assertSeededRecurringDemoData(t *testing.T, client *apptest.Client, seeded 
 	if expectedTransactions.StatusCode() != http.StatusOK {
 		t.Fatalf("list expected seeded transactions status = %d, want %d; body %s", expectedTransactions.StatusCode(), http.StatusOK, expectedTransactions.Body)
 	}
-	if len(expectedTransactions.JSON200.Transactions) != seeded.RecurringOccurrences {
-		t.Fatalf("listed expected seeded transactions = %d, want %d", len(expectedTransactions.JSON200.Transactions), seeded.RecurringOccurrences)
-	}
 	for _, transaction := range expectedTransactions.JSON200.Transactions {
-		if transaction.RecurringOccurrenceId == nil {
-			t.Fatalf("expected seeded transaction %d missing recurring occurrence", transaction.TransactionId)
+		if transaction.RecurringDefinitionId == nil || transaction.RecurringDefinitionFqn == nil || transaction.RecurringDefinitionActive == nil || !*transaction.RecurringDefinitionActive {
+			t.Fatalf("expected seeded transaction %d missing active recurring provenance", transaction.TransactionId)
 		}
-		if transaction.LifecycleStatus != httpclient.TransactionLifecycleStatusExpected {
+		if transaction.LifecycleStatus != httpclient.Expected {
 			t.Fatalf("expected seeded transaction lifecycle = %q, want expected", transaction.LifecycleStatus)
 		}
 		for _, record := range transaction.Records {
-			if record.LifecycleStatus != httpclient.TransactionLifecycleStatusExpected || record.Source != httpclient.RecurringTemplate {
+			if record.LifecycleStatus != httpclient.Expected || record.Source != httpclient.RecurringTemplate || record.ReconciliationStatus != httpclient.Reconciled {
 				t.Fatalf("expected seeded transaction record = %+v, want expected recurring-template record", record)
 			}
 		}
 	}
-
-	occurrences, err := client.REST().ListRecurringOccurrencesWithResponse(ctx, nil)
-	if err != nil {
-		t.Fatalf("list seeded recurring occurrences request: %v", err)
-	}
-	if occurrences.StatusCode() != http.StatusOK {
-		t.Fatalf("list seeded recurring occurrences status = %d, want %d; body %s", occurrences.StatusCode(), http.StatusOK, occurrences.Body)
-	}
-	if len(occurrences.JSON200.RecurringOccurrences) != seeded.RecurringOccurrences {
-		t.Fatalf("listed recurring occurrences = %d, want %d", len(occurrences.JSON200.RecurringOccurrences), seeded.RecurringOccurrences)
-	}
-
-	assertSeededRecurringDemoSeries(t, definitions.JSON200.RecurringDefinitions, occurrences.JSON200.RecurringOccurrences)
+	assertSeededRecurringDemoSeries(t, definitions.JSON200.RecurringDefinitions, expectedTransactions.JSON200.Transactions)
 
 	hasUpcomingSchedule := false
 	for _, definition := range definitions.JSON200.RecurringDefinitions {
@@ -481,49 +472,44 @@ func assertSeededRecurringDemoData(t *testing.T, client *apptest.Client, seeded 
 }
 
 type expectedRecurringDemoSeries struct {
-	fqn             string
-	anchorDate      string
-	every           int
-	unit            string
-	nextDueDate     string
-	occurrenceDates []string
+	fqn              string
+	anchorDate       string
+	every            int
+	unit             string
+	transactionDates []string
 }
 
-func assertSeededRecurringDemoSeries(t *testing.T, definitions []httpclient.RecurringDefinition, occurrences []httpclient.RecurringOccurrence) {
+func assertSeededRecurringDemoSeries(t *testing.T, definitions []httpclient.RecurringDefinition, transactions []httpclient.Transaction) {
 	t.Helper()
 
 	want := []expectedRecurringDemoSeries{
 		{
-			fqn:             "Household:Mortgage",
-			anchorDate:      "2026-05-20",
-			every:           1,
-			unit:            "MONTH",
-			nextDueDate:     "2026-07-20",
-			occurrenceDates: []string{"2026-05-20", "2026-06-20"},
+			fqn:              "Household:Mortgage",
+			anchorDate:       "2026-07-20",
+			every:            1,
+			unit:             "MONTH",
+			transactionDates: []string{"2026-05-20", "2026-06-20"},
 		},
 		{
-			fqn:             "Subscriptions:Netflix",
-			anchorDate:      "2026-05-25",
-			every:           1,
-			unit:            "MONTH",
-			nextDueDate:     "2026-07-25",
-			occurrenceDates: []string{"2026-05-25", "2026-06-25"},
+			fqn:              "Subscriptions:Netflix",
+			anchorDate:       "2026-07-25",
+			every:            1,
+			unit:             "MONTH",
+			transactionDates: []string{"2026-05-25", "2026-06-25"},
 		},
 		{
-			fqn:             "Savings:WeeklyTransfer",
-			anchorDate:      "2026-06-09",
-			every:           1,
-			unit:            "WEEK",
-			nextDueDate:     "2026-07-21",
-			occurrenceDates: []string{"2026-06-09", "2026-06-16", "2026-06-23", "2026-06-30", "2026-07-07", "2026-07-14"},
+			fqn:              "Savings:WeeklyTransfer",
+			anchorDate:       "2026-07-21",
+			every:            1,
+			unit:             "WEEK",
+			transactionDates: []string{"2026-06-09", "2026-06-16", "2026-06-23", "2026-06-30", "2026-07-07", "2026-07-14"},
 		},
 		{
-			fqn:             "Debt:CreditCardPayment",
-			anchorDate:      "2026-05-27",
-			every:           1,
-			unit:            "MONTH",
-			nextDueDate:     "2026-07-27",
-			occurrenceDates: []string{"2026-05-27", "2026-06-27"},
+			fqn:              "Debt:CreditCardPayment",
+			anchorDate:       "2026-07-27",
+			every:            1,
+			unit:             "MONTH",
+			transactionDates: []string{"2026-05-27", "2026-06-27"},
 		},
 	}
 
@@ -531,18 +517,12 @@ func assertSeededRecurringDemoSeries(t *testing.T, definitions []httpclient.Recu
 	for _, definition := range definitions {
 		definitionsByFQN[definition.Fqn] = definition
 	}
-	occurrenceDatesByDefinitionFQN := map[string][]string{}
-	for _, occurrence := range occurrences {
-		if occurrence.Status != httpclient.RecurringOccurrenceStatusExpected {
-			t.Fatalf("seeded recurring occurrence = %+v, want EXPECTED status", occurrence)
+	transactionDatesByDefinitionFQN := map[string][]string{}
+	for _, transaction := range transactions {
+		if transaction.RecurringDefinitionFqn == nil {
+			t.Fatalf("seeded recurring transaction missing definition FQN: %+v", transaction)
 		}
-		if occurrence.GeneratedTransactionId == nil {
-			t.Fatalf("seeded recurring occurrence = %+v, want generated transaction", occurrence)
-		}
-		occurrenceDatesByDefinitionFQN[occurrence.RecurringDefinitionFqn] = append(
-			occurrenceDatesByDefinitionFQN[occurrence.RecurringDefinitionFqn],
-			occurrence.ScheduledDate.Format("2006-01-02"),
-		)
+		transactionDatesByDefinitionFQN[*transaction.RecurringDefinitionFqn] = append(transactionDatesByDefinitionFQN[*transaction.RecurringDefinitionFqn], transaction.InitiatedDate.Format("2006-01-02"))
 	}
 
 	for _, expected := range want {
@@ -550,7 +530,7 @@ func assertSeededRecurringDemoSeries(t *testing.T, definitions []httpclient.Recu
 		if !ok {
 			t.Fatalf("seeded recurring definitions missing %q; definitions = %+v", expected.fqn, definitions)
 		}
-		sort.Strings(occurrenceDatesByDefinitionFQN[expected.fqn])
+		sort.Strings(transactionDatesByDefinitionFQN[expected.fqn])
 		if got := definition.AnchorDate.Format("2006-01-02"); got != expected.anchorDate {
 			t.Fatalf("%s anchor_date = %s, want %s", expected.fqn, got, expected.anchorDate)
 		}
@@ -558,8 +538,8 @@ func assertSeededRecurringDemoSeries(t *testing.T, definitions []httpclient.Recu
 			t.Fatalf("%s schedule_class = %s, want %s", expected.fqn, definition.ScheduleClass, httpclient.Interval)
 		}
 		assertRecurringIntervalRule(t, expected.fqn, definition.ScheduleRule, expected.every, expected.unit)
-		assertDatePtr(t, definition.NextDueDate, expected.nextDueDate)
-		assertStringSlicesEqual(t, expected.fqn+" occurrence dates", occurrenceDatesByDefinitionFQN[expected.fqn], expected.occurrenceDates)
+		assertDatePtr(t, definition.NextDueDate, expected.anchorDate)
+		assertStringSlicesEqual(t, expected.fqn+" transaction dates", transactionDatesByDefinitionFQN[expected.fqn], expected.transactionDates)
 	}
 }
 

@@ -92,7 +92,7 @@ func TestTransactionDirectionalTitleUsesExplicitAndFallbackDisplayLabels(t *test
 	})
 	requireClientResponse(t, "update referenced account display label", err, updated.StatusCode(), http.StatusOK, updated.Body)
 
-	reread, err := client.REST().GetTransactionWithResponse(context.Background(), transaction.TransactionId)
+	reread, err := client.REST().GetTransactionWithResponse(context.Background(), transaction.TransactionId, nil)
 	requireClientResponse(t, "reread transaction after display-label update", err, reread.StatusCode(), http.StatusOK, reread.Body)
 	assertTransactionDisplayTitle(t, "updated display-label spend", *reread.JSON200, "wallet:Everyday → Amazon Store")
 
@@ -101,7 +101,7 @@ func TestTransactionDirectionalTitleUsesExplicitAndFallbackDisplayLabels(t *test
 	})
 	requireClientResponse(t, "clear referenced account display label", err, cleared.StatusCode(), http.StatusOK, cleared.Body)
 
-	reread, err = client.REST().GetTransactionWithResponse(context.Background(), transaction.TransactionId)
+	reread, err = client.REST().GetTransactionWithResponse(context.Background(), transaction.TransactionId, nil)
 	requireClientResponse(t, "reread transaction after display-label clear", err, reread.StatusCode(), http.StatusOK, reread.Body)
 	assertTransactionDisplayTitle(t, "cleared display-label spend", *reread.JSON200, "wallet:Everyday → Amazon:flow")
 }
@@ -156,7 +156,7 @@ func TestShorthandTransactionCreateOptionalFieldsAmountUSDAndReadShapes(t *testi
 	assertRecordAmountUSD(t, created, refs.checkingAccountID, "-7.89000000")
 	assertRecordAmountUSD(t, created, refs.merchantAccountID, "7.89000000")
 
-	read, err := client.REST().GetTransactionWithResponse(context.Background(), created.TransactionId)
+	read, err := client.REST().GetTransactionWithResponse(context.Background(), created.TransactionId, nil)
 	if err != nil {
 		t.Fatalf("get shorthand transaction request: %v", err)
 	}

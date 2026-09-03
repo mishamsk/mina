@@ -342,6 +342,59 @@ func Operations() []Operation {
 			Invoke: invokeClassifyTransaction,
 		},
 		{
+			ID:          "confirmExpectedTransaction",
+			Method:      "POST",
+			Path:        "/api/transactions/{transaction_id}/confirm-expected",
+			Summary:     "Confirm a materialized expected recurring transaction.",
+			Description: "",
+			CLI:         CLIOperation{Area: "transactions", Name: "confirm-expected"},
+			Input: InputDescriptor{
+				Path: []ParameterDescriptor{
+					{
+						Name:        "transaction_id",
+						Type:        "integer",
+						Description: "Numeric identifier of the expected transaction.",
+						Required:    true,
+					},
+				},
+				Body: BodyDescriptor{
+					Present:  true,
+					Required: true,
+					Type:     "object",
+					Properties: []BodyPropertyDescriptor{
+						{
+							Name:        "actual_date",
+							Type:        "string",
+							Description: "Actual transaction date; defaults to the expected transaction's initiated date and must not be after the server's current civil date.",
+							Required:    false,
+						},
+						{
+							Name:        "pending_date",
+							Type:        "string",
+							Description: "Exact UTC time the balance record entered pending; omitted manual values are derived by the service.",
+							Required:    false,
+						},
+						{
+							Name:        "posted_date",
+							Type:        "string",
+							Description: "Exact UTC time the balance record posted; omitted manual values are derived by the service.",
+							Required:    false,
+						},
+						{
+							Name:        "status",
+							Type:        "string",
+							Description: "Server-derived balance-record settlement.",
+							Required:    true,
+							Enum:        []string{"pending", "posted"},
+						},
+					},
+					RequiredProperties: []string{"status"},
+					Simple:             false,
+				},
+			},
+			Invoke: invokeConfirmExpectedTransaction,
+		},
+		{
 			ID:          "confirmNextRecurringDefinition",
 			Method:      "POST",
 			Path:        "/api/recurring-definitions/{recurring_definition_id}/confirm-next",
@@ -387,59 +440,6 @@ func Operations() []Operation {
 				},
 			},
 			Invoke: invokeConfirmNextRecurringDefinition,
-		},
-		{
-			ID:          "confirmRecurringOccurrence",
-			Method:      "POST",
-			Path:        "/api/recurring-occurrences/{recurring_occurrence_id}/confirm",
-			Summary:     "Confirm a recurring occurrence.",
-			Description: "",
-			CLI:         CLIOperation{Area: "recurring", Name: "confirm-occurrence"},
-			Input: InputDescriptor{
-				Path: []ParameterDescriptor{
-					{
-						Name:        "recurring_occurrence_id",
-						Type:        "integer",
-						Description: "Numeric identifier of the recurring occurrence.",
-						Required:    true,
-					},
-				},
-				Body: BodyDescriptor{
-					Present:  true,
-					Required: true,
-					Type:     "object",
-					Properties: []BodyPropertyDescriptor{
-						{
-							Name:        "actual_date",
-							Type:        "string",
-							Description: "Actual transaction date; defaults to the occurrence's scheduled date and must not be after the server's current civil date.",
-							Required:    false,
-						},
-						{
-							Name:        "pending_date",
-							Type:        "string",
-							Description: "Exact UTC time the balance record entered pending; omitted manual values are derived by the service.",
-							Required:    false,
-						},
-						{
-							Name:        "posted_date",
-							Type:        "string",
-							Description: "Exact UTC time the balance record posted; omitted manual values are derived by the service.",
-							Required:    false,
-						},
-						{
-							Name:        "status",
-							Type:        "string",
-							Description: "Server-derived balance-record settlement.",
-							Required:    true,
-							Enum:        []string{"pending", "posted"},
-						},
-					},
-					RequiredProperties: []string{"status"},
-					Simple:             false,
-				},
-			},
-			Invoke: invokeConfirmRecurringOccurrence,
 		},
 		{
 			ID:          "createAccount",
@@ -871,7 +871,7 @@ func Operations() []Operation {
 						{
 							Name:        "anchor_date",
 							Type:        "string",
-							Description: "Schedule floor in YYYY-MM-DD format. The next occurrence is the first unoccupied schedule slot on or after this date. Creation accepts historical anchors for backfill; replacement accepts a changed anchor only on or after the server's current civil date, while an unchanged historical anchor remains valid.",
+							Description: "Requested first occurrence date in YYYY-MM-DD format. Interval schedules persist it directly. Date-rule schedules treat it as a floor and persist the first rule-produced occurrence on or after it, so the returned anchor_date may be later. Creation accepts historical inputs for backfill.",
 							Required:    true,
 						},
 						{
@@ -883,7 +883,7 @@ func Operations() []Operation {
 						{
 							Name:        "records",
 							Type:        "array",
-							Description: "Complete balanced record shape copied to each generated occurrence transaction.",
+							Description: "Complete balanced record shape copied to each generated transaction.",
 							Required:    false,
 							Array:       true,
 							ItemType:    "object",
@@ -1284,7 +1284,7 @@ func Operations() []Operation {
 			ID:          "deferRecurringDefinition",
 			Method:      "POST",
 			Path:        "/api/recurring-definitions/{recurring_definition_id}/defer",
-			Summary:     "Defer the next non-materialized recurring occurrence.",
+			Summary:     "Defer the next virtual recurring occurrence.",
 			Description: "",
 			CLI:         CLIOperation{Area: "recurring", Name: "defer"},
 			Input: InputDescriptor{
@@ -1492,23 +1492,23 @@ func Operations() []Operation {
 			Invoke: invokeDeleteTransactionTemplate,
 		},
 		{
-			ID:          "dismissRecurringOccurrence",
+			ID:          "dismissExpectedTransaction",
 			Method:      "POST",
-			Path:        "/api/recurring-occurrences/{recurring_occurrence_id}/dismiss",
-			Summary:     "Dismiss a recurring occurrence.",
+			Path:        "/api/transactions/{transaction_id}/dismiss-expected",
+			Summary:     "Dismiss a materialized expected recurring transaction.",
 			Description: "",
-			CLI:         CLIOperation{Area: "recurring", Name: "dismiss-occurrence"},
+			CLI:         CLIOperation{Area: "transactions", Name: "dismiss-expected"},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
 					{
-						Name:        "recurring_occurrence_id",
+						Name:        "transaction_id",
 						Type:        "integer",
-						Description: "Numeric identifier of the recurring occurrence.",
+						Description: "Numeric identifier of the expected transaction.",
 						Required:    true,
 					},
 				},
 			},
-			Invoke: invokeDismissRecurringOccurrence,
+			Invoke: invokeDismissExpectedTransaction,
 		},
 		{
 			ID:          "getAccount",
@@ -1947,6 +1947,35 @@ func Operations() []Operation {
 			Invoke: invokeGetMember,
 		},
 		{
+			ID:          "getRecurringCatchUpRun",
+			Method:      "GET",
+			Path:        "/api/background-operations/recurring-catch-up/runs/{operation_run_id}",
+			Summary:     "Get one recurring catch-up run.",
+			Description: "",
+			CLI:         CLIOperation{Area: "operations", Name: "get-recurring-catch-up-run"},
+			Input: InputDescriptor{
+				Path: []ParameterDescriptor{
+					{
+						Name:        "operation_run_id",
+						Type:        "integer",
+						Description: "Numeric identifier of the background-operation run.",
+						Required:    true,
+					},
+				},
+			},
+			Invoke: invokeGetRecurringCatchUpRun,
+		},
+		{
+			ID:          "getRecurringCatchUpStatus",
+			Method:      "GET",
+			Path:        "/api/background-operations/recurring-catch-up/status",
+			Summary:     "Get recurring catch-up operation status.",
+			Description: "",
+			CLI:         CLIOperation{Area: "operations", Name: "recurring-catch-up-status"},
+			Input:       InputDescriptor{},
+			Invoke:      invokeGetRecurringCatchUpStatus,
+		},
+		{
 			ID:          "getRecurringDefinition",
 			Method:      "GET",
 			Path:        "/api/recurring-definitions/{recurring_definition_id}",
@@ -1964,25 +1993,6 @@ func Operations() []Operation {
 				},
 			},
 			Invoke: invokeGetRecurringDefinition,
-		},
-		{
-			ID:          "getRecurringOccurrence",
-			Method:      "GET",
-			Path:        "/api/recurring-occurrences/{recurring_occurrence_id}",
-			Summary:     "Get a recurring occurrence.",
-			Description: "Returns only the existing occurrence with this ID; it does not run catch-up materialization or create due occurrences. Use the occurrence list endpoint when catch-up through the current civil date is required.",
-			CLI:         CLIOperation{Area: "recurring", Name: "get-occurrence"},
-			Input: InputDescriptor{
-				Path: []ParameterDescriptor{
-					{
-						Name:        "recurring_occurrence_id",
-						Type:        "integer",
-						Description: "Numeric identifier of the recurring occurrence.",
-						Required:    true,
-					},
-				},
-			},
-			Invoke: invokeGetRecurringOccurrence,
 		},
 		{
 			ID:          "getSettings",
@@ -2169,6 +2179,14 @@ func Operations() []Operation {
 						Type:        "integer",
 						Description: "Numeric identifier of the transaction.",
 						Required:    true,
+					},
+				},
+				Query: []ParameterDescriptor{
+					{
+						Name:        "include_tombstoned",
+						Type:        "boolean",
+						Description: "Include a tombstoned transaction and its tombstoned journal records; defaults to false.",
+						Required:    false,
 					},
 				},
 			},
@@ -2388,7 +2406,7 @@ func Operations() []Operation {
 						Type:        "string",
 						Description: "Filter run history to one registered background-operation type.",
 						Required:    false,
-						Enum:        []string{"exchange-rate-loading", "database-backup", "audit-log-compaction"},
+						Enum:        []string{"exchange-rate-loading", "database-backup", "audit-log-compaction", "recurring-catch-up"},
 					},
 					{
 						Name:        "limit",
@@ -2769,60 +2787,6 @@ func Operations() []Operation {
 			Invoke: invokeListRecurringDefinitions,
 		},
 		{
-			ID:          "listRecurringOccurrences",
-			Method:      "GET",
-			Path:        "/api/recurring-occurrences",
-			Summary:     "List recurring occurrences.",
-			Description: "Runs catch-up materialization through the server's current civil date before listing.",
-			CLI:         CLIOperation{Area: "recurring", Name: "list-occurrences"},
-			Input: InputDescriptor{
-				Query: []ParameterDescriptor{
-					{
-						Name:        "recurring_definition_id",
-						Type:        "integer",
-						Description: "Numeric identifier of the recurring definition to target or filter by.",
-						Required:    false,
-					},
-					{
-						Name:        "status",
-						Type:        "array",
-						Description: "Filter by one or more recurring-occurrence lifecycle statuses.",
-						Required:    false,
-						Array:       true,
-						ItemType:    "string",
-						Enum:        []string{"expected", "confirmed", "dismissed", "deferred"},
-					},
-					{
-						Name:        "sort",
-						Type:        "string",
-						Description: "Field used to sort matching results; defaults to `scheduled_date`.",
-						Required:    false,
-						Enum:        []string{"scheduled_date", "created_at", "updated_at"},
-					},
-					{
-						Name:        "sort_dir",
-						Type:        "string",
-						Description: "Sort direction for matching results; defaults to `asc`.",
-						Required:    false,
-						Enum:        []string{"asc", "desc"},
-					},
-					{
-						Name:        "limit",
-						Type:        "integer",
-						Description: "Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.",
-						Required:    false,
-					},
-					{
-						Name:        "offset",
-						Type:        "integer",
-						Description: "Zero-based number of matching results to skip.",
-						Required:    false,
-					},
-				},
-			},
-			Invoke: invokeListRecurringOccurrences,
-		},
-		{
 			ID:          "listTagGroups",
 			Method:      "GET",
 			Path:        "/api/tags/groups",
@@ -2954,7 +2918,7 @@ func Operations() []Operation {
 			Method:      "GET",
 			Path:        "/api/transactions",
 			Summary:     "List transactions with journal records.",
-			Description: "Defaults to `initiated_date` descending. Every sort uses `transaction_id` in the same direction as the stable tiebreaker. A future anchor_date computes read-only recurring projections through that date before applying the transaction filters, then merges matching projected rows without creating recurring occurrences or transactions. Requests that would generate more than 10,000 projections are rejected.",
+			Description: "Lists transactions without mutating recurring state. Defaults to `initiated_date` descending. Every sort uses `transaction_id` in the same direction as the stable tiebreaker. A future anchor_date computes read-only recurring projections through that date before applying the transaction filters, then merges matching projected rows without creating future transactions. Requests that would generate more than 10,000 projections are rejected.",
 			CLI:         CLIOperation{Area: "transactions", Name: "list"},
 			Input: InputDescriptor{
 				Query: []ParameterDescriptor{
@@ -3039,7 +3003,7 @@ func Operations() []Operation {
 			Method:      "PUT",
 			Path:        "/api/recurring-definitions/{recurring_definition_id}",
 			Summary:     "Replace a recurring definition.",
-			Description: "Replaces the schedule and full complete record set atomically. The recurring_definition_id is preserved, definition_version increments, and previous active records are tombstoned.",
+			Description: "Replaces the schedule and full complete record set atomically. The recurring_definition_id is preserved, definition_version increments, and previous active records are tombstoned. Omit or null anchor_date to retain the current server anchor; supply a date only to intentionally re-anchor the schedule.",
 			CLI:         CLIOperation{Area: "recurring", Name: "replace-definition"},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -3047,6 +3011,14 @@ func Operations() []Operation {
 						Name:        "recurring_definition_id",
 						Type:        "integer",
 						Description: "Numeric identifier of the recurring definition to target or filter by.",
+						Required:    true,
+					},
+				},
+				Header: []ParameterDescriptor{
+					{
+						Name:        "If-Match",
+						Type:        "string",
+						Description: "Strong ETag from the recurring definition response being replaced.",
 						Required:    true,
 					},
 				},
@@ -3058,8 +3030,8 @@ func Operations() []Operation {
 						{
 							Name:        "anchor_date",
 							Type:        "string",
-							Description: "Schedule floor in YYYY-MM-DD format. The next occurrence is the first unoccupied schedule slot on or after this date. Creation accepts historical anchors for backfill; replacement accepts a changed anchor only on or after the server's current civil date, while an unchanged historical anchor remains valid.",
-							Required:    true,
+							Description: "Intentional replacement anchor in YYYY-MM-DD format. Omit or null to preserve the current server anchor. Interval schedules persist a supplied date directly; date-rule schedules treat it as a floor and may persist a later rule-produced occurrence.",
+							Required:    false,
 						},
 						{
 							Name:        "fqn",
@@ -3070,7 +3042,7 @@ func Operations() []Operation {
 						{
 							Name:        "records",
 							Type:        "array",
-							Description: "Complete balanced record shape copied to each generated occurrence transaction.",
+							Description: "Complete balanced record shape copied to each generated transaction.",
 							Required:    false,
 							Array:       true,
 							ItemType:    "object",
@@ -3084,11 +3056,11 @@ func Operations() []Operation {
 						{
 							Name:        "template_id",
 							Type:        "integer",
-							Description: "Optional template identifier whose record shape is copied once when creating the definition.",
+							Description: "Optional template identifier whose record shape is copied once when replacing the definition.",
 							Required:    false,
 						},
 					},
-					RequiredProperties: []string{"anchor_date", "fqn", "schedule_rule"},
+					RequiredProperties: []string{"fqn", "schedule_rule"},
 					Simple:             false,
 				},
 			},
@@ -4176,6 +4148,26 @@ func Operations() []Operation {
 			Invoke: invokeStartExchangeRateLoadingRun,
 		},
 		{
+			ID:          "startRecurringCatchUpRun",
+			Method:      "POST",
+			Path:        "/api/background-operations/recurring-catch-up/runs",
+			Summary:     "Start a recurring catch-up run.",
+			Description: "",
+			CLI: CLIOperation{
+				Area: "operations", Name: "start-recurring-catch-up",
+				RunWait: &RunWait{
+					StatusOperationID:   "getRecurringCatchUpRun",
+					RunIDResponseField:  "operation_run_id",
+					StatusPathParameter: "operation_run_id",
+					TerminalField:       "outcome",
+					TerminalValues:      []string{"succeeded", "failed", "skipped", "canceled"},
+					FailureValues:       []string{"failed", "canceled"},
+				},
+			},
+			Input:  InputDescriptor{},
+			Invoke: invokeStartRecurringCatchUpRun,
+		},
+		{
 			ID:          "updateAccount",
 			Method:      "PATCH",
 			Path:        "/api/accounts/{account_id}",
@@ -4656,6 +4648,29 @@ func invokeClassifyTransaction(ctx context.Context, client httpclient.ClientWith
 	return normalizeInvocationResult(response.Body, response.HTTPResponse)
 }
 
+func invokeConfirmExpectedTransaction(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
+	if err := validateInvocationInput(input, []string{"transaction_id"}, nil, nil, true, true); err != nil {
+		return InvocationResult{}, err
+	}
+	var pathValue0 int64
+	if err := parseInvocationValue(input.Path[0], false, &pathValue0); err != nil {
+		return InvocationResult{}, &InvocationInputError{
+			Location: "path",
+			Name:     "transaction_id",
+			Value:    input.Path[0],
+			Err:      err,
+		}
+	}
+	response, err := client.ConfirmExpectedTransactionWithBodyWithResponse(ctx, pathValue0, "application/json", bytes.NewReader(input.Body))
+	if err != nil {
+		return InvocationResult{}, err
+	}
+	if response == nil {
+		return InvocationResult{}, errors.New("generated client returned no operation response")
+	}
+	return normalizeInvocationResult(response.Body, response.HTTPResponse)
+}
+
 func invokeConfirmNextRecurringDefinition(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
 	if err := validateInvocationInput(input, []string{"recurring_definition_id"}, nil, nil, true, true); err != nil {
 		return InvocationResult{}, err
@@ -4670,29 +4685,6 @@ func invokeConfirmNextRecurringDefinition(ctx context.Context, client httpclient
 		}
 	}
 	response, err := client.ConfirmNextRecurringDefinitionWithBodyWithResponse(ctx, pathValue0, "application/json", bytes.NewReader(input.Body))
-	if err != nil {
-		return InvocationResult{}, err
-	}
-	if response == nil {
-		return InvocationResult{}, errors.New("generated client returned no operation response")
-	}
-	return normalizeInvocationResult(response.Body, response.HTTPResponse)
-}
-
-func invokeConfirmRecurringOccurrence(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"recurring_occurrence_id"}, nil, nil, true, true); err != nil {
-		return InvocationResult{}, err
-	}
-	var pathValue0 int64
-	if err := parseInvocationValue(input.Path[0], false, &pathValue0); err != nil {
-		return InvocationResult{}, &InvocationInputError{
-			Location: "path",
-			Name:     "recurring_occurrence_id",
-			Value:    input.Path[0],
-			Err:      err,
-		}
-	}
-	response, err := client.ConfirmRecurringOccurrenceWithBodyWithResponse(ctx, pathValue0, "application/json", bytes.NewReader(input.Body))
 	if err != nil {
 		return InvocationResult{}, err
 	}
@@ -5137,20 +5129,20 @@ func invokeDeleteTransactionTemplate(ctx context.Context, client httpclient.Clie
 	return normalizeInvocationResult(response.Body, response.HTTPResponse)
 }
 
-func invokeDismissRecurringOccurrence(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"recurring_occurrence_id"}, nil, nil, false, false); err != nil {
+func invokeDismissExpectedTransaction(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
+	if err := validateInvocationInput(input, []string{"transaction_id"}, nil, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
 	if err := parseInvocationValue(input.Path[0], false, &pathValue0); err != nil {
 		return InvocationResult{}, &InvocationInputError{
 			Location: "path",
-			Name:     "recurring_occurrence_id",
+			Name:     "transaction_id",
 			Value:    input.Path[0],
 			Err:      err,
 		}
 	}
-	response, err := client.DismissRecurringOccurrenceWithResponse(ctx, pathValue0)
+	response, err := client.DismissExpectedTransactionWithResponse(ctx, pathValue0)
 	if err != nil {
 		return InvocationResult{}, err
 	}
@@ -6026,6 +6018,43 @@ func invokeGetMember(ctx context.Context, client httpclient.ClientWithResponsesI
 	return normalizeInvocationResult(response.Body, response.HTTPResponse)
 }
 
+func invokeGetRecurringCatchUpRun(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
+	if err := validateInvocationInput(input, []string{"operation_run_id"}, nil, nil, false, false); err != nil {
+		return InvocationResult{}, err
+	}
+	var pathValue0 int64
+	if err := parseInvocationValue(input.Path[0], false, &pathValue0); err != nil {
+		return InvocationResult{}, &InvocationInputError{
+			Location: "path",
+			Name:     "operation_run_id",
+			Value:    input.Path[0],
+			Err:      err,
+		}
+	}
+	response, err := client.GetRecurringCatchUpRunWithResponse(ctx, pathValue0)
+	if err != nil {
+		return InvocationResult{}, err
+	}
+	if response == nil {
+		return InvocationResult{}, errors.New("generated client returned no operation response")
+	}
+	return normalizeInvocationResult(response.Body, response.HTTPResponse)
+}
+
+func invokeGetRecurringCatchUpStatus(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
+	if err := validateInvocationInput(input, nil, nil, nil, false, false); err != nil {
+		return InvocationResult{}, err
+	}
+	response, err := client.GetRecurringCatchUpStatusWithResponse(ctx)
+	if err != nil {
+		return InvocationResult{}, err
+	}
+	if response == nil {
+		return InvocationResult{}, errors.New("generated client returned no operation response")
+	}
+	return normalizeInvocationResult(response.Body, response.HTTPResponse)
+}
+
 func invokeGetRecurringDefinition(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
 	if err := validateInvocationInput(input, []string{"recurring_definition_id"}, nil, nil, false, false); err != nil {
 		return InvocationResult{}, err
@@ -6040,29 +6069,6 @@ func invokeGetRecurringDefinition(ctx context.Context, client httpclient.ClientW
 		}
 	}
 	response, err := client.GetRecurringDefinitionWithResponse(ctx, pathValue0)
-	if err != nil {
-		return InvocationResult{}, err
-	}
-	if response == nil {
-		return InvocationResult{}, errors.New("generated client returned no operation response")
-	}
-	return normalizeInvocationResult(response.Body, response.HTTPResponse)
-}
-
-func invokeGetRecurringOccurrence(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"recurring_occurrence_id"}, nil, nil, false, false); err != nil {
-		return InvocationResult{}, err
-	}
-	var pathValue0 int64
-	if err := parseInvocationValue(input.Path[0], false, &pathValue0); err != nil {
-		return InvocationResult{}, &InvocationInputError{
-			Location: "path",
-			Name:     "recurring_occurrence_id",
-			Value:    input.Path[0],
-			Err:      err,
-		}
-	}
-	response, err := client.GetRecurringOccurrenceWithResponse(ctx, pathValue0)
 	if err != nil {
 		return InvocationResult{}, err
 	}
@@ -6481,7 +6487,7 @@ func invokeGetTagOverview(ctx context.Context, client httpclient.ClientWithRespo
 }
 
 func invokeGetTransaction(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"transaction_id"}, nil, nil, false, false); err != nil {
+	if err := validateInvocationInput(input, []string{"transaction_id"}, []string{"include_tombstoned"}, nil, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -6493,7 +6499,28 @@ func invokeGetTransaction(ctx context.Context, client httpclient.ClientWithRespo
 			Err:      err,
 		}
 	}
-	response, err := client.GetTransactionWithResponse(ctx, pathValue0)
+	params := &httpclient.GetTransactionParams{}
+	queryValues0, querySupplied0 := input.Query["include_tombstoned"]
+	if querySupplied0 {
+		if len(queryValues0) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "include_tombstoned",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues0)),
+			}
+		}
+		var queryValue0 bool
+		if err := parseInvocationValue(queryValues0[0], false, &queryValue0); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "include_tombstoned",
+				Value:    queryValues0[0],
+				Err:      err,
+			}
+		}
+		params.IncludeTombstoned = &queryValue0
+	}
+	response, err := client.GetTransactionWithResponse(ctx, pathValue0, params)
 	if err != nil {
 		return InvocationResult{}, err
 	}
@@ -7977,143 +8004,6 @@ func invokeListRecurringDefinitions(ctx context.Context, client httpclient.Clien
 	return normalizeInvocationResult(response.Body, response.HTTPResponse)
 }
 
-func invokeListRecurringOccurrences(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, []string{"limit", "offset", "recurring_definition_id", "sort", "sort_dir", "status"}, nil, false, false); err != nil {
-		return InvocationResult{}, err
-	}
-	params := &httpclient.ListRecurringOccurrencesParams{}
-	queryValues0, querySupplied0 := input.Query["recurring_definition_id"]
-	if querySupplied0 {
-		if len(queryValues0) != 1 {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "recurring_definition_id",
-				Err:      fmt.Errorf("got %d values, want 1", len(queryValues0)),
-			}
-		}
-		var queryValue0 int64
-		if err := parseInvocationValue(queryValues0[0], false, &queryValue0); err != nil {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "recurring_definition_id",
-				Value:    queryValues0[0],
-				Err:      err,
-			}
-		}
-		params.RecurringDefinitionId = &queryValue0
-	}
-	queryValues1, querySupplied1 := input.Query["status"]
-	if querySupplied1 {
-		if len(queryValues1) == 0 {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "status",
-				Err:      errors.New("value is required"),
-			}
-		}
-		queryValue1 := make([]httpclient.RecurringOccurrenceStatus, len(queryValues1))
-		for valueIndex, raw := range queryValues1 {
-			if err := parseInvocationValue(raw, true, &queryValue1[valueIndex]); err != nil {
-				return InvocationResult{}, &InvocationInputError{
-					Location: "query",
-					Name:     "status",
-					Value:    raw,
-					Err:      err,
-				}
-			}
-		}
-		params.Status = &queryValue1
-	}
-	queryValues2, querySupplied2 := input.Query["sort"]
-	if querySupplied2 {
-		if len(queryValues2) != 1 {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "sort",
-				Err:      fmt.Errorf("got %d values, want 1", len(queryValues2)),
-			}
-		}
-		var queryValue2 httpclient.ListRecurringOccurrencesParamsSort
-		if err := parseInvocationValue(queryValues2[0], true, &queryValue2); err != nil {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "sort",
-				Value:    queryValues2[0],
-				Err:      err,
-			}
-		}
-		params.Sort = &queryValue2
-	}
-	queryValues3, querySupplied3 := input.Query["sort_dir"]
-	if querySupplied3 {
-		if len(queryValues3) != 1 {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "sort_dir",
-				Err:      fmt.Errorf("got %d values, want 1", len(queryValues3)),
-			}
-		}
-		var queryValue3 httpclient.ListRecurringOccurrencesParamsSortDir
-		if err := parseInvocationValue(queryValues3[0], true, &queryValue3); err != nil {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "sort_dir",
-				Value:    queryValues3[0],
-				Err:      err,
-			}
-		}
-		params.SortDir = &queryValue3
-	}
-	queryValues4, querySupplied4 := input.Query["limit"]
-	if querySupplied4 {
-		if len(queryValues4) != 1 {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "limit",
-				Err:      fmt.Errorf("got %d values, want 1", len(queryValues4)),
-			}
-		}
-		var queryValue4 int
-		if err := parseInvocationValue(queryValues4[0], false, &queryValue4); err != nil {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "limit",
-				Value:    queryValues4[0],
-				Err:      err,
-			}
-		}
-		params.Limit = &queryValue4
-	}
-	queryValues5, querySupplied5 := input.Query["offset"]
-	if querySupplied5 {
-		if len(queryValues5) != 1 {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "offset",
-				Err:      fmt.Errorf("got %d values, want 1", len(queryValues5)),
-			}
-		}
-		var queryValue5 int
-		if err := parseInvocationValue(queryValues5[0], false, &queryValue5); err != nil {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "offset",
-				Value:    queryValues5[0],
-				Err:      err,
-			}
-		}
-		params.Offset = &queryValue5
-	}
-	response, err := client.ListRecurringOccurrencesWithResponse(ctx, params)
-	if err != nil {
-		return InvocationResult{}, err
-	}
-	if response == nil {
-		return InvocationResult{}, errors.New("generated client returned no operation response")
-	}
-	return normalizeInvocationResult(response.Body, response.HTTPResponse)
-}
-
 func invokeListTagGroups(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
 	if err := validateInvocationInput(input, nil, []string{"include_hidden"}, nil, false, false); err != nil {
 		return InvocationResult{}, err
@@ -8640,7 +8530,7 @@ func invokePauseRecurringDefinition(ctx context.Context, client httpclient.Clien
 }
 
 func invokeReplaceRecurringDefinition(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"recurring_definition_id"}, nil, nil, true, true); err != nil {
+	if err := validateInvocationInput(input, []string{"recurring_definition_id"}, nil, []string{"If-Match"}, true, true); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -8652,7 +8542,24 @@ func invokeReplaceRecurringDefinition(ctx context.Context, client httpclient.Cli
 			Err:      err,
 		}
 	}
-	response, err := client.ReplaceRecurringDefinitionWithBodyWithResponse(ctx, pathValue0, "application/json", bytes.NewReader(input.Body))
+	params := &httpclient.ReplaceRecurringDefinitionParams{}
+	headerValues0, headerSupplied0 := input.Header["If-Match"]
+	if !headerSupplied0 {
+		return InvocationResult{}, &InvocationInputError{
+			Location: "header",
+			Name:     "If-Match",
+			Err:      errors.New("value is required"),
+		}
+	}
+	if len(headerValues0) != 1 {
+		return InvocationResult{}, &InvocationInputError{
+			Location: "header",
+			Name:     "If-Match",
+			Err:      fmt.Errorf("got %d values, want 1", len(headerValues0)),
+		}
+	}
+	params.IfMatch = headerValues0[0]
+	response, err := client.ReplaceRecurringDefinitionWithBodyWithResponse(ctx, pathValue0, params, "application/json", bytes.NewReader(input.Body))
 	if err != nil {
 		return InvocationResult{}, err
 	}
@@ -10844,6 +10751,20 @@ func invokeStartExchangeRateLoadingRun(ctx context.Context, client httpclient.Cl
 		return InvocationResult{}, err
 	}
 	response, err := client.StartExchangeRateLoadingRunWithResponse(ctx)
+	if err != nil {
+		return InvocationResult{}, err
+	}
+	if response == nil {
+		return InvocationResult{}, errors.New("generated client returned no operation response")
+	}
+	return normalizeInvocationResult(response.Body, response.HTTPResponse)
+}
+
+func invokeStartRecurringCatchUpRun(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
+	if err := validateInvocationInput(input, nil, nil, nil, false, false); err != nil {
+		return InvocationResult{}, err
+	}
+	response, err := client.StartRecurringCatchUpRunWithResponse(ctx)
 	if err != nil {
 		return InvocationResult{}, err
 	}

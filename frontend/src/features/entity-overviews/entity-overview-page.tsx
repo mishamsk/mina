@@ -1317,7 +1317,7 @@ const TransactionPreview = ({
         hasNextPage={false}
         loading={false}
         lookups={lookups.snapshot}
-        onConfirmRecurringOccurrence={noopAsync}
+        onConfirmExpectedTransaction={noopAsync}
         onChangeTransactionLifecycle={noopAsync}
         onClearSelection={noop}
         onFilterCategory={(categoryId) => {
@@ -1330,7 +1330,7 @@ const TransactionPreview = ({
           void addPreviewFilter("tag", tagId);
         }}
         onDeleteTransaction={noopAsync}
-        onDismissRecurringOccurrence={noopAsync}
+        onDismissExpectedTransaction={noopAsync}
         onNextPage={noop}
         onOpenTransaction={detail.openTransactionDetail}
         onPageSizeChange={noop}

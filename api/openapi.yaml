@@ -523,6 +523,72 @@ paths:
           $ref: "#/components/responses/NotFound"
         "405":
           $ref: "#/components/responses/MethodNotAllowed"
+  /api/background-operations/recurring-catch-up/status:
+    get:
+      operationId: getRecurringCatchUpStatus
+      tags:
+        - operations
+      summary: Get recurring catch-up operation status.
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "200":
+          description: Recurring catch-up status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecurringCatchUpStatusResponse"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+  /api/background-operations/recurring-catch-up/runs:
+    post:
+      operationId: startRecurringCatchUpRun
+      tags:
+        - operations
+      summary: Start a recurring catch-up run.
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "202":
+          description: Recurring catch-up was invoked.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationRunReferenceResponse"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+  /api/background-operations/recurring-catch-up/runs/{operation_run_id}:
+    parameters:
+      - name: operation_run_id
+        description: "Numeric identifier of the background-operation run."
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+    get:
+      operationId: getRecurringCatchUpRun
+      tags:
+        - operations
+      summary: Get one recurring catch-up run.
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "200":
+          description: Recurring catch-up run status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecurringCatchUpRun"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
   /api/categories:
     get:
       operationId: listCategories
@@ -2808,13 +2874,21 @@ paths:
       tags:
         - recurring
       summary: Replace a recurring definition.
-      description: Replaces the schedule and full complete record set atomically. The recurring_definition_id is preserved, definition_version increments, and previous active records are tombstoned.
+      description: Replaces the schedule and full complete record set atomically. The recurring_definition_id is preserved, definition_version increments, and previous active records are tombstoned. Omit or null anchor_date to retain the current server anchor; supply a date only to intentionally re-anchor the schedule.
+      parameters:
+        - name: If-Match
+          in: header
+          required: true
+          description: Strong ETag from the recurring definition response being replaced.
+          schema:
+            type: string
+            minLength: 2
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/RecurringDefinitionWriteRequest"
+              $ref: "#/components/schemas/RecurringDefinitionReplaceRequest"
       responses:
         "401":
           $ref: "#/components/responses/Unauthenticated"
@@ -2832,6 +2906,10 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
     delete:
       operationId: deleteRecurringDefinition
       tags:
@@ -2875,11 +2953,11 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
         "200":
-          description: Next occurrence materialized and confirmed.
+          description: Next occurrence materialized as an active transaction and confirmed.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/RecurringOccurrence"
+                $ref: "#/components/schemas/Transaction"
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "404":
@@ -2900,7 +2978,7 @@ paths:
       operationId: deferRecurringDefinition
       tags:
         - recurring
-      summary: Defer the next non-materialized recurring occurrence.
+      summary: Defer the next virtual recurring occurrence.
       requestBody:
         required: false
         content:
@@ -2913,11 +2991,11 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
         "200":
-          description: Next recurring occurrence deferred.
+          description: Next occurrence deferred and definition schedule advanced.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/RecurringOccurrence"
+                $ref: "#/components/schemas/RecurringDefinition"
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "404":
@@ -2984,188 +3062,13 @@ paths:
           $ref: "#/components/responses/InvalidRequest"
         "404":
           $ref: "#/components/responses/NotFound"
-  /api/recurring-occurrences:
-    get:
-      operationId: listRecurringOccurrences
-      tags:
-        - recurring
-      summary: List recurring occurrences.
-      description: Runs catch-up materialization through the server's current civil date before listing.
-      parameters:
-        - name: recurring_definition_id
-          description: "Numeric identifier of the recurring definition to target or filter by."
-          in: query
-          required: false
-          schema:
-            type: integer
-            format: int64
-            minimum: 1
-        - name: status
-          description: "Filter by one or more recurring-occurrence lifecycle statuses."
-          in: query
-          required: false
-          style: form
-          explode: true
-          schema:
-            type: array
-            items:
-              $ref: "#/components/schemas/RecurringOccurrenceStatus"
-        - name: sort
-          description: "Field used to sort matching results; defaults to `scheduled_date`."
-          in: query
-          required: false
-          schema:
-            type: string
-            default: scheduled_date
-            enum:
-              - scheduled_date
-              - created_at
-              - updated_at
-            x-enum-varnames:
-              - ScheduledDate
-              - CreatedAt
-              - UpdatedAt
-        - name: sort_dir
-          description: "Sort direction for matching results; defaults to `asc`."
-          in: query
-          required: false
-          schema:
-            type: string
-            default: asc
-            enum:
-              - asc
-              - desc
-            x-enum-varnames:
-              - Asc
-              - Desc
-        - name: limit
-          description: "Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded."
-          in: query
-          required: false
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 500
-        - name: offset
-          description: "Zero-based number of matching results to skip."
-          in: query
-          required: false
-          schema:
-            type: integer
-            minimum: 0
-      responses:
-        "401":
-          $ref: "#/components/responses/Unauthenticated"
-        "200":
-          description: Recurring occurrences in caller-selected deterministic order.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RecurringOccurrenceListResponse"
-        "400":
-          $ref: "#/components/responses/InvalidRequest"
-  /api/recurring-occurrences/{recurring_occurrence_id}:
-    parameters:
-      - name: recurring_occurrence_id
-        description: "Numeric identifier of the recurring occurrence."
-        in: path
-        required: true
-        schema:
-          type: integer
-          format: int64
-          minimum: 1
-    get:
-      operationId: getRecurringOccurrence
-      tags:
-        - recurring
-      summary: Get a recurring occurrence.
-      description: Returns only the existing occurrence with this ID; it does not run catch-up materialization or create due occurrences. Use the occurrence list endpoint when catch-up through the current civil date is required.
-      responses:
-        "401":
-          $ref: "#/components/responses/Unauthenticated"
-        "200":
-          description: Recurring occurrence found.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RecurringOccurrence"
-        "400":
-          $ref: "#/components/responses/InvalidRequest"
-        "404":
-          $ref: "#/components/responses/NotFound"
-  /api/recurring-occurrences/{recurring_occurrence_id}/confirm:
-    parameters:
-      - name: recurring_occurrence_id
-        description: "Numeric identifier of the recurring occurrence."
-        in: path
-        required: true
-        schema:
-          type: integer
-          format: int64
-          minimum: 1
-    post:
-      operationId: confirmRecurringOccurrence
-      tags:
-        - recurring
-      summary: Confirm a recurring occurrence.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/RecurringOccurrenceConfirmRequest"
-      responses:
-        "401":
-          $ref: "#/components/responses/Unauthenticated"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "200":
-          description: Occurrence confirmed and generated balance records settled.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RecurringOccurrence"
-        "400":
-          $ref: "#/components/responses/InvalidRequest"
-        "404":
-          $ref: "#/components/responses/NotFound"
-  /api/recurring-occurrences/{recurring_occurrence_id}/dismiss:
-    parameters:
-      - name: recurring_occurrence_id
-        description: "Numeric identifier of the recurring occurrence."
-        in: path
-        required: true
-        schema:
-          type: integer
-          format: int64
-          minimum: 1
-    post:
-      operationId: dismissRecurringOccurrence
-      tags:
-        - recurring
-      summary: Dismiss a recurring occurrence.
-      responses:
-        "401":
-          $ref: "#/components/responses/Unauthenticated"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "200":
-          description: Occurrence dismissed and generated transaction tombstoned.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RecurringOccurrence"
-        "400":
-          $ref: "#/components/responses/InvalidRequest"
-        "404":
-          $ref: "#/components/responses/NotFound"
   /api/transactions:
     get:
       operationId: listTransactions
       tags:
         - transactions
       summary: List transactions with journal records.
-      description: Defaults to `initiated_date` descending. Every sort uses `transaction_id` in the same direction as the stable tiebreaker. A future anchor_date computes read-only recurring projections through that date before applying the transaction filters, then merges matching projected rows without creating recurring occurrences or transactions. Requests that would generate more than 10,000 projections are rejected.
+      description: Lists transactions without mutating recurring state. Defaults to `initiated_date` descending. Every sort uses `transaction_id` in the same direction as the stable tiebreaker. A future anchor_date computes read-only recurring projections through that date before applying the transaction filters, then merges matching projected rows without creating future transactions. Requests that would generate more than 10,000 projections are rejected.
       parameters:
         - name: sort
           description: "Field used to sort matching results; defaults to `initiated_date`. `updated_at` includes transaction and nested journal-record changes."
@@ -4033,6 +3936,14 @@ paths:
       tags:
         - transactions
       summary: Get a transaction with journal records.
+      parameters:
+        - name: include_tombstoned
+          description: "Include a tombstoned transaction and its tombstoned journal records; defaults to false."
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
       responses:
         "401":
           $ref: "#/components/responses/Unauthenticated"
@@ -4131,6 +4042,68 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Transaction"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/transactions/{transaction_id}/confirm-expected:
+    parameters:
+      - name: transaction_id
+        description: "Numeric identifier of the expected transaction."
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+    post:
+      operationId: confirmExpectedTransaction
+      tags:
+        - transactions
+      summary: Confirm a materialized expected recurring transaction.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExpectedTransactionConfirmRequest"
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "200":
+          description: Expected transaction activated and its balance records settled.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/transactions/{transaction_id}/dismiss-expected:
+    parameters:
+      - name: transaction_id
+        description: "Numeric identifier of the expected transaction."
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+    post:
+      operationId: dismissExpectedTransaction
+      tags:
+        - transactions
+      summary: Dismiss a materialized expected recurring transaction.
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "204":
+          description: Expected transaction and its journal records tombstoned.
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "404":
@@ -4445,7 +4418,6 @@ components:
         - transaction_templates
         - transactions
         - recurring_definitions
-        - recurring_occurrences
       properties:
         members:
           type: integer
@@ -4472,9 +4444,6 @@ components:
           type: integer
           minimum: 0
         recurring_definitions:
-          type: integer
-          minimum: 0
-        recurring_occurrences:
           type: integer
           minimum: 0
     Account:
@@ -6425,7 +6394,7 @@ components:
         schedule_rule:
           $ref: "#/components/schemas/RecurringScheduleRule"
         anchor_date:
-          description: "Schedule floor in YYYY-MM-DD format. The next occurrence is the first unoccupied schedule slot on or after this date. Creation accepts historical anchors for backfill; replacement accepts a changed anchor only on or after the server's current civil date, while an unchanged historical anchor remains valid."
+          description: "Requested first occurrence date in YYYY-MM-DD format. Interval schedules persist it directly. Date-rule schedules treat it as a floor and persist the first rule-produced occurrence on or after it, so the returned anchor_date may be later. Creation accepts historical inputs for backfill."
           type: string
           pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
           format: date
@@ -6436,7 +6405,36 @@ components:
           minimum: 1
           nullable: true
         records:
-          description: "Complete balanced record shape copied to each generated occurrence transaction."
+          description: "Complete balanced record shape copied to each generated transaction."
+          type: array
+          items:
+            $ref: "#/components/schemas/RecurringDefinitionRecordRequest"
+    RecurringDefinitionReplaceRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - fqn
+        - schedule_rule
+      properties:
+        fqn:
+          description: "Colon-separated hierarchical FQN for the recurring definition leaf."
+          type: string
+        schedule_rule:
+          $ref: "#/components/schemas/RecurringScheduleRule"
+        anchor_date:
+          description: "Intentional replacement anchor in YYYY-MM-DD format. Omit or null to preserve the current server anchor. Interval schedules persist a supplied date directly; date-rule schedules treat it as a floor and may persist a later rule-produced occurrence."
+          type: string
+          pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+          format: date
+          nullable: true
+        template_id:
+          description: "Optional template identifier whose record shape is copied once when replacing the definition."
+          type: integer
+          format: int64
+          minimum: 1
+          nullable: true
+        records:
+          description: "Complete balanced record shape copied to each generated transaction."
           type: array
           items:
             $ref: "#/components/schemas/RecurringDefinitionRecordRequest"
@@ -6583,10 +6581,12 @@ components:
         - exchange-rate-loading
         - database-backup
         - audit-log-compaction
+        - recurring-catch-up
       x-enum-varnames:
         - BackgroundOperationIdExchangeRateLoading
         - BackgroundOperationIdDatabaseBackup
         - BackgroundOperationIdAuditLogCompaction
+        - BackgroundOperationIdRecurringCatchUp
     BackgroundOperationRunOutcome:
       type: string
       enum:
@@ -6778,6 +6778,56 @@ components:
           type: integer
           format: int64
           minimum: 0
+    RecurringCatchUpStatusResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - operation_id
+        - enabled
+        - schedule_local
+        - state
+        - run_count
+        - completed_run_revision
+      properties:
+        operation_id:
+          type: string
+          enum:
+            - recurring-catch-up
+        enabled:
+          type: boolean
+        schedule_local:
+          type: string
+          description: Fixed five-field cron-style schedule interpreted in the server's local time.
+        state:
+          type: string
+          enum:
+            - idle
+            - running
+          x-enum-varnames:
+            - RecurringCatchUpStatusResponseStateIdle
+            - RecurringCatchUpStatusResponseStateRunning
+        last_started_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_success:
+          type: boolean
+          nullable: true
+        last_error:
+          type: string
+          nullable: true
+        run_count:
+          type: integer
+          format: int64
+          minimum: 0
+        completed_run_revision:
+          type: integer
+          format: int64
+          minimum: 0
     OperationRunReferenceResponse:
       type: object
       additionalProperties: false
@@ -6796,6 +6846,7 @@ components:
             - exchange-rate-loading
             - database-backup
             - audit-log-compaction
+            - recurring-catch-up
         status_url:
           type: string
     BackgroundOperationRun:
@@ -6860,6 +6911,17 @@ components:
               type: string
               enum:
                 - audit-log-compaction
+    RecurringCatchUpRun:
+      allOf:
+        - $ref: "#/components/schemas/BackgroundOperationRun"
+        - type: object
+          required:
+            - operation_id
+          properties:
+            operation_id:
+              type: string
+              enum:
+                - recurring-catch-up
     BackgroundOperationRunListResponse:
       type: object
       additionalProperties: false
@@ -7269,7 +7331,7 @@ components:
           description: Exact UTC time the balance record posted; omitted manual values are derived by the service.
           nullable: true
           format: date-time
-    RecurringOccurrenceConfirmRequest:
+    ExpectedTransactionConfirmRequest:
       type: object
       additionalProperties: false
       required:
@@ -7279,7 +7341,7 @@ components:
           type: string
           pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
           format: date
-          description: Actual transaction date; defaults to the occurrence's scheduled date and must not be after the server's current civil date.
+          description: Actual transaction date; defaults to the expected transaction's initiated date and must not be after the server's current civil date.
         status:
           $ref: "#/components/schemas/SettlementStatus"
         pending_date:
@@ -7571,6 +7633,7 @@ components:
       additionalProperties: false
       required:
         - recurring_definition_id
+        - etag
         - fqn
         - schedule_rule
         - schedule_class
@@ -7590,6 +7653,10 @@ components:
         recurring_definition_id:
           type: integer
           format: int64
+        etag:
+          type: string
+          minLength: 3
+          description: Strong ETag derived directly from updated_at; send this exact value in If-Match for complete replacement.
         fqn:
           type: string
         schedule_rule:
@@ -7739,84 +7806,6 @@ components:
         title: {type: string, description: Final FQN segment for leaves and navigation groups.}
         fqn: {type: string, description: Complete authoritative recurring-definition leaf or group path.}
         child_count: {type: integer, minimum: 1, description: Descendant leaf count for navigation groups.}
-    RecurringOccurrenceStatus:
-      type: string
-      enum:
-        - expected
-        - confirmed
-        - dismissed
-        - deferred
-    RecurringOccurrence:
-      type: object
-      additionalProperties: false
-      required:
-        - recurring_occurrence_id
-        - recurring_definition_id
-        - recurring_definition_fqn
-        - recurring_definition_active
-        - scheduled_date
-        - status
-        - materialized_definition_version
-        - materialized_at
-        - reviewed_at
-        - generated_transaction_id
-        - created_at
-        - updated_at
-      properties:
-        recurring_occurrence_id:
-          type: integer
-          format: int64
-        recurring_definition_id:
-          type: integer
-          format: int64
-        recurring_definition_fqn:
-          type: string
-        recurring_definition_active:
-          type: boolean
-          description: Whether the definition has not been cancelled (tombstoned); paused definitions remain true.
-        scheduled_date:
-          type: string
-          pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
-          format: date
-        status:
-          $ref: "#/components/schemas/RecurringOccurrenceStatus"
-        materialized_definition_version:
-          type: integer
-          format: int64
-          minimum: 1
-        materialized_at:
-          type: string
-          format: date-time
-        reviewed_at:
-          type: string
-          format: date-time
-          nullable: true
-        generated_transaction_id:
-          type: integer
-          format: int64
-          nullable: true
-        created_at:
-          type: string
-          format: date-time
-        updated_at:
-          type: string
-          format: date-time
-    RecurringOccurrenceListResponse:
-      type: object
-      additionalProperties: false
-      required:
-        - recurring_occurrences
-        - total_count
-      properties:
-        recurring_occurrences:
-          type: array
-          items:
-            $ref: "#/components/schemas/RecurringOccurrence"
-        total_count:
-          type: integer
-          format: int64
-          minimum: 0
-          description: Count of matching recurring occurrences before limit and offset are applied.
     Transaction:
       type: object
       additionalProperties: false
@@ -7824,7 +7813,9 @@ components:
         - transaction_id
         - etag
         - initiated_date
-        - recurring_occurrence_id
+        - recurring_definition_id
+        - recurring_definition_fqn
+        - recurring_definition_active
         - lifecycle_status
         - settlement
         - transaction_class
@@ -7838,7 +7829,7 @@ components:
         transaction_id:
           type: integer
           format: int64
-          description: Durable positive identifier, or a response-local negative row identity when recurring_projection_definition_id is non-null.
+          description: Durable positive identifier, or a response-local negative row identity for a future recurring projection.
         etag:
           type: string
           minLength: 3
@@ -7847,21 +7838,23 @@ components:
           type: string
           pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
           format: date
-        recurring_occurrence_id:
+        recurring_definition_id:
           type: integer
           format: int64
           nullable: true
-          description: Occurrence this transaction was generated from; null for non-recurring transactions; the definition is reached via the occurrence.
-        recurring_projection_definition_id:
-          type: integer
-          format: int64
-          minimum: 1
+          description: Recurring definition that generated this persisted transaction or future projection; null for non-recurring transactions.
+        recurring_definition_fqn:
+          type: string
           nullable: true
-          description: Recurring definition for a read-only future row computed by transaction-list date navigation; null or omitted when the transaction is persisted.
+          description: Definition FQN retained as usable provenance after definition cancellation.
+        recurring_definition_active:
+          type: boolean
+          nullable: true
+          description: Whether the referenced definition remains active; null for non-recurring transactions.
         recurring_projection_is_next:
           type: boolean
           nullable: true
-          description: True only for the definition's next non-materialized projected occurrence; false for its later projections and null or omitted when the transaction is persisted.
+          description: True only for the definition's next projected occurrence; false for later projections and null or omitted when the transaction is persisted.
         lifecycle_status:
           $ref: "#/components/schemas/TransactionLifecycleStatus"
         settlement:

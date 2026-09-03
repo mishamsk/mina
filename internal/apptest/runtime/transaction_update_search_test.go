@@ -57,7 +57,7 @@ func TestTransactionReplaceBoundary(t *testing.T) {
 		t.Fatalf("amount-unbalanced replace status = %d, want %d; body %s", rejected.StatusCode(), http.StatusBadRequest, rejected.Body)
 	}
 
-	readAfterRejected, err := client.REST().GetTransactionWithResponse(context.Background(), created.JSON201.TransactionId)
+	readAfterRejected, err := client.REST().GetTransactionWithResponse(context.Background(), created.JSON201.TransactionId, nil)
 	requireNoTransportError(t, "get transaction", err)
 	if readAfterRejected.StatusCode() != http.StatusOK {
 		t.Fatalf("read after amount-unbalanced replace status = %d, want %d; body %s", readAfterRejected.StatusCode(), http.StatusOK, readAfterRejected.Body)
@@ -82,7 +82,7 @@ func TestTransactionReplaceBoundary(t *testing.T) {
 		t.Fatalf("usd-unbalanced replace status = %d, want %d; body %s", usdUpdated.StatusCode(), http.StatusOK, usdUpdated.Body)
 	}
 
-	read, err := client.REST().GetTransactionWithResponse(context.Background(), created.JSON201.TransactionId)
+	read, err := client.REST().GetTransactionWithResponse(context.Background(), created.JSON201.TransactionId, nil)
 	requireNoTransportError(t, "get transaction", err)
 	if read.StatusCode() != http.StatusOK {
 		t.Fatalf("read after usd-unbalanced replace status = %d, want %d; body %s", read.StatusCode(), http.StatusOK, read.Body)
@@ -632,6 +632,11 @@ func TestTransactionDeleteTombstonesRecordsBoundary(t *testing.T) {
 	if created.StatusCode() != http.StatusCreated {
 		t.Fatalf("create status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
 	}
+	replaced, err := client.ReplaceTransactionWithNewRecords(context.Background(), created.JSON201, replacementTransactionRequest(refs))
+	requireNoTransportError(t, "replace transaction before delete", err)
+	if replaced.StatusCode() != http.StatusOK {
+		t.Fatalf("replace before delete status = %d, want %d; body %s", replaced.StatusCode(), http.StatusOK, replaced.Body)
+	}
 
 	deleted, err := client.REST().DeleteTransactionWithResponse(context.Background(), created.JSON201.TransactionId)
 	requireNoTransportError(t, "delete transaction", err)
@@ -639,11 +644,18 @@ func TestTransactionDeleteTombstonesRecordsBoundary(t *testing.T) {
 		t.Fatalf("delete status = %d, want %d; body %s", deleted.StatusCode(), http.StatusNoContent, deleted.Body)
 	}
 
-	read, err := client.REST().GetTransactionWithResponse(context.Background(), created.JSON201.TransactionId)
+	read, err := client.REST().GetTransactionWithResponse(context.Background(), created.JSON201.TransactionId, nil)
 	requireNoTransportError(t, "get transaction", err)
 	if read.StatusCode() != http.StatusNotFound {
 		t.Fatalf("read tombstoned transaction status = %d, want %d; body %s", read.StatusCode(), http.StatusNotFound, read.Body)
 	}
+	includeTombstoned := true
+	tombstoned, err := client.REST().GetTransactionWithResponse(context.Background(), created.JSON201.TransactionId, &httpclient.GetTransactionParams{IncludeTombstoned: &includeTombstoned})
+	requireNoTransportError(t, "get tombstoned transaction with records", err)
+	if tombstoned.StatusCode() != http.StatusOK {
+		t.Fatalf("read included tombstoned transaction status = %d, want %d; body %s", tombstoned.StatusCode(), http.StatusOK, tombstoned.Body)
+	}
+	assertRecordIDs(t, tombstoned.JSON200.Records, recordIDs(replaced.JSON200.Records))
 
 	list, err := client.REST().ListTransactionsWithResponse(context.Background(), nil)
 	requireNoTransportError(t, "list transactions", err)
@@ -688,7 +700,7 @@ func TestTransactionCancelBoundary(t *testing.T) {
 	if cancelled.StatusCode() != http.StatusOK {
 		t.Fatalf("cancel transaction status = %d, want %d; body %s", cancelled.StatusCode(), http.StatusOK, cancelled.Body)
 	}
-	apptest.AssertTransactionLifecycle(t, cancelled.JSON200, httpclient.TransactionLifecycleStatusCancelled)
+	apptest.AssertTransactionLifecycle(t, cancelled.JSON200, httpclient.Cancelled)
 	assertTransactionCancelPreservedFields(t, created.JSON201.Records, cancelled.JSON200.Records)
 
 	replaced, err := client.ReplaceTransactionRetainingRecords(context.Background(), cancelled.JSON200, replacementTransactionRequest(refs))
@@ -729,7 +741,7 @@ func TestTransactionCancelBoundary(t *testing.T) {
 	if repeated.StatusCode() != http.StatusOK {
 		t.Fatalf("repeat cancel transaction status = %d, want %d; body %s", repeated.StatusCode(), http.StatusOK, repeated.Body)
 	}
-	apptest.AssertTransactionLifecycle(t, repeated.JSON200, httpclient.TransactionLifecycleStatusCancelled)
+	apptest.AssertTransactionLifecycle(t, repeated.JSON200, httpclient.Cancelled)
 	if repeated.JSON200.Etag != cancelled.JSON200.Etag || !repeated.JSON200.UpdatedAt.Equal(cancelled.JSON200.UpdatedAt) {
 		t.Fatalf("repeat cancel etag/updated_at = %q/%s, want %q/%s", repeated.JSON200.Etag, repeated.JSON200.UpdatedAt, cancelled.JSON200.Etag, cancelled.JSON200.UpdatedAt)
 	}
@@ -756,7 +768,7 @@ func TestTransactionCancelBoundary(t *testing.T) {
 	if restored.StatusCode() != http.StatusOK {
 		t.Fatalf("restore transaction status = %d, want %d; body %s", restored.StatusCode(), http.StatusOK, restored.Body)
 	}
-	apptest.AssertTransactionLifecycle(t, restored.JSON200, httpclient.TransactionLifecycleStatusActive)
+	apptest.AssertTransactionLifecycle(t, restored.JSON200, httpclient.Active)
 	assertTransactionCancelPreservedFields(t, created.JSON201.Records, restored.JSON200.Records)
 
 	restoredAgain, err := client.REST().RestoreTransactionWithResponse(context.Background(), created.JSON201.TransactionId)
@@ -1703,7 +1715,7 @@ func TestAccountRecordRunningBalanceBoundary(t *testing.T) {
 	if first.JSON201.Records[0].RemainingCredit != nil {
 		t.Fatalf("create response remaining_credit = %v, want nil", first.JSON201.Records[0].RemainingCredit)
 	}
-	transactionRead, err := client.REST().GetTransactionWithResponse(context.Background(), first.JSON201.TransactionId)
+	transactionRead, err := client.REST().GetTransactionWithResponse(context.Background(), first.JSON201.TransactionId, nil)
 	requireNoTransportError(t, "read transaction without remaining credit", err)
 	if transactionRead.StatusCode() != http.StatusOK {
 		t.Fatalf("read transaction status = %d, want %d; body %s", transactionRead.StatusCode(), http.StatusOK, transactionRead.Body)

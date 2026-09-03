@@ -19,7 +19,6 @@ func (s *strictServer) SeedDemo(ctx context.Context, request openapi.SeedDemoReq
 		ExchangeRates:        summary.ExchangeRates,
 		Members:              summary.Members,
 		RecurringDefinitions: summary.RecurringDefinitions,
-		RecurringOccurrences: summary.RecurringOccurrences,
 		Tags:                 summary.Tags,
 		TransactionTemplates: summary.TransactionTemplates,
 		Transactions:         summary.Transactions,

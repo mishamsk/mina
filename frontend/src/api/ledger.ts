@@ -29,7 +29,6 @@ import type {
   HouseholdFlowGrain,
   HouseholdFlowTrend,
   ReconciliationStatus,
-  RecurringOccurrence,
   RestructureRequest,
   SetHiddenByPathRequest,
   SettlementStatus,
@@ -51,7 +50,7 @@ import {
   bulkUpdateJournalRecordTags,
   cancelTransaction,
   classifyTransaction,
-  confirmRecurringOccurrence as confirmGeneratedRecurringOccurrence,
+  confirmExpectedTransaction as confirmGeneratedExpectedTransaction,
   createAccount as createGeneratedAccount,
   createCategory as createGeneratedCategory,
   createCreditLimitHistory as createGeneratedCreditLimitHistory,
@@ -71,7 +70,7 @@ import {
   deleteTag as deleteGeneratedTag,
   deleteTransaction,
   deleteTransactionTemplate as deleteGeneratedTransactionTemplate,
-  dismissRecurringOccurrence as dismissGeneratedRecurringOccurrence,
+  dismissExpectedTransaction as dismissGeneratedExpectedTransaction,
   getAccount,
   getAccountingHistoryRange,
   getCategoryGroupOverview,
@@ -88,8 +87,6 @@ import {
   listCategoryGroups,
   listCreditLimitHistory as listGeneratedCreditLimitHistory,
   listMembers,
-  listRecurringDefinitions,
-  listRecurringOccurrences,
   listTagGroups,
   listTags,
   listTransactions,
@@ -471,14 +468,6 @@ export const fetchTransactionPage = (params: TransactionPageParams) =>
       ),
       sort: params.sort,
       sort_dir: params.sortDirection,
-    },
-  });
-
-export const triggerRecurringOccurrenceCatchup = () =>
-  listRecurringOccurrences({
-    query: {
-      limit: 1,
-      offset: 0,
     },
   });
 
@@ -942,169 +931,24 @@ export const fetchMembersPage = (
   shouldContinue: () => boolean = () => true,
 ) => listAllMembersForManagement(params, shouldContinue);
 
-const listExpectedRecurringOccurrencesPage = (offset: number) =>
-  listRecurringOccurrences({
-    query: {
-      limit: lookupLimit,
-      offset,
-      sort: "scheduled_date",
-      sort_dir: "asc",
-      status: ["expected"],
-    },
-  });
-
-const listRecurringDefinitionsPageForReview = (offset: number) =>
-  listRecurringDefinitions({
-    query: {
-      limit: lookupLimit,
-      offset,
-      sort: "fqn",
-      sort_dir: "asc",
-    },
-  });
-
-const listAllRecurringDefinitionsForReview = async () => {
-  const firstPage = await listRecurringDefinitionsPageForReview(0);
-  if (
-    !firstPage.data ||
-    firstPage.data.recurring_definitions.length >= firstPage.data.total_count
-  ) {
-    return firstPage;
-  }
-
-  const recurringDefinitions = [...firstPage.data.recurring_definitions];
-  for (
-    let offset = lookupLimit;
-    offset < firstPage.data.total_count;
-    offset += lookupLimit
-  ) {
-    const page = await listRecurringDefinitionsPageForReview(offset);
-    if (!page.data) {
-      return page;
-    }
-    recurringDefinitions.push(...page.data.recurring_definitions);
-  }
-
-  return {
-    ...firstPage,
-    data: {
-      ...firstPage.data,
-      recurring_definitions: recurringDefinitions,
-    },
-  };
-};
-
-export const fetchRecurringReviewPage = async () => {
-  const firstOccurrencesPage = await listExpectedRecurringOccurrencesPage(0);
-  let occurrences = firstOccurrencesPage;
-
-  if (!occurrences.data) {
-    return {
-      definitionError: undefined,
-      definitions: [],
-      occurrences,
-      transactionError: undefined,
-      transactions: [],
-    };
-  }
-
-  if (
-    occurrences.data.recurring_occurrences.length < occurrences.data.total_count
-  ) {
-    const recurringOccurrences = [...occurrences.data.recurring_occurrences];
-    for (
-      let offset = lookupLimit;
-      offset < occurrences.data.total_count;
-      offset += lookupLimit
-    ) {
-      const page = await listExpectedRecurringOccurrencesPage(offset);
-      if (!page.data) {
-        return {
-          definitionError: undefined,
-          definitions: [],
-          occurrences: page,
-          transactionError: undefined,
-          transactions: [],
-        };
-      }
-      recurringOccurrences.push(...page.data.recurring_occurrences);
-    }
-
-    occurrences = {
-      ...occurrences,
-      data: {
-        ...occurrences.data,
-        recurring_occurrences: recurringOccurrences,
-      },
-    };
-  }
-
-  const definitions = await listAllRecurringDefinitionsForReview();
-  if (!definitions.data) {
-    return {
-      definitionError: definitions.error,
-      definitions: [],
-      occurrences,
-      transactionError: undefined,
-      transactions: [],
-    };
-  }
-
-  const transactions: Transaction[] = [];
-  for (const occurrence of occurrences.data.recurring_occurrences) {
-    if (occurrence.generated_transaction_id === null) {
-      continue;
-    }
-    const transaction = await getTransaction({
-      path: {
-        transaction_id: occurrence.generated_transaction_id,
-      },
-    });
-    if (!transaction.data) {
-      return {
-        definitionError: undefined,
-        definitions,
-        occurrences,
-        transactionError: transaction.error,
-        transactions,
-      };
-    }
-    transactions.push(transaction.data);
-  }
-
-  return {
-    definitionError: undefined,
-    definitions: definitions.data.recurring_definitions.filter((definition) =>
-      occurrences.data.recurring_occurrences.some(
-        (occurrence) =>
-          occurrence.recurring_definition_id ===
-          definition.recurring_definition_id,
-      ),
-    ),
-    occurrences,
-    transactionError: undefined,
-    transactions,
-  };
-};
-
-export const confirmRecurringOccurrenceById = (
-  occurrence: Pick<RecurringOccurrence, "recurring_occurrence_id"> & {
+export const confirmExpectedTransactionById = (
+  transaction: Pick<Transaction, "transaction_id"> & {
     readonly actual_date?: string;
   },
 ) =>
-  confirmGeneratedRecurringOccurrence({
-    body: { actual_date: occurrence.actual_date, status: "posted" },
+  confirmGeneratedExpectedTransaction({
+    body: { actual_date: transaction.actual_date, status: "posted" },
     path: {
-      recurring_occurrence_id: occurrence.recurring_occurrence_id,
+      transaction_id: transaction.transaction_id,
     },
   });
 
-export const dismissRecurringOccurrenceById = (
-  occurrence: Pick<RecurringOccurrence, "recurring_occurrence_id">,
+export const dismissExpectedTransactionById = (
+  transaction: Pick<Transaction, "transaction_id">,
 ) =>
-  dismissGeneratedRecurringOccurrence({
+  dismissGeneratedExpectedTransaction({
     path: {
-      recurring_occurrence_id: occurrence.recurring_occurrence_id,
+      transaction_id: transaction.transaction_id,
     },
   });
 

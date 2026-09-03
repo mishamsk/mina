@@ -38,24 +38,23 @@ const (
 
 // Definition is a recurring transaction definition with nested active record shape.
 type Definition struct {
-	ID                 int64
-	FQN                string
-	ScheduleRule       json.RawMessage
-	ScheduleClass      ScheduleClass
-	AnchorDate         values.CivilDate
-	DefinitionVersion  int64
-	PausedAt           *time.Time
-	LastOccurrenceDate *values.CivilDate
-	ParentFQN          *string
-	Name               string
-	Level              int
-	NextDueDate        *values.CivilDate
-	Class              transactions.TransactionClass
-	DisplayAmounts     []transactions.DisplayAmount
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
-	TombstonedAt       *time.Time
-	Records            []DefinitionRecord
+	ID                int64
+	FQN               string
+	ScheduleRule      json.RawMessage
+	ScheduleClass     ScheduleClass
+	AnchorDate        values.CivilDate
+	DefinitionVersion int64
+	PausedAt          *time.Time
+	ParentFQN         *string
+	Name              string
+	Level             int
+	NextDueDate       *values.CivilDate
+	Class             transactions.TransactionClass
+	DisplayAmounts    []transactions.DisplayAmount
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	TombstonedAt      *time.Time
+	Records           []DefinitionRecord
 }
 
 // ActiveFQN is the active recurring definition path data needed for hierarchy checks.
@@ -80,13 +79,25 @@ type DefinitionRecord struct {
 	TombstonedAt          *time.Time
 }
 
-// WriteInput contains fields for creating or replacing a recurring definition.
+// WriteInput contains the shared fields for creating or replacing a recurring definition.
 type WriteInput struct {
 	FQN          string
 	ScheduleRule json.RawMessage
-	AnchorDate   values.CivilDate
 	TemplateID   *int64
 	Records      []RecordInput
+}
+
+// CreateInput contains fields for creating a recurring definition.
+type CreateInput struct {
+	WriteInput
+	AnchorDate values.CivilDate
+}
+
+// ReplaceInput contains fields and the revision precondition for replacing a recurring definition.
+type ReplaceInput struct {
+	WriteInput
+	AnchorDate   *values.CivilDate
+	ExpectedETag string
 }
 
 // DefinitionListOptions controls recurring-definition filtering, sorting, and pagination.
@@ -112,8 +123,8 @@ type DeferInput struct {
 	Unit  *string
 }
 
-// ConfirmOccurrenceInput contains the actual transaction date and settlement intent for occurrence review.
-type ConfirmOccurrenceInput struct {
+// ConfirmExpectedInput contains the actual transaction date and settlement intent for expected-transaction review.
+type ConfirmExpectedInput struct {
 	ActualDate *values.CivilDate
 	Settlement transactions.SettlementIntent
 }
@@ -138,10 +149,11 @@ type OptionalString struct {
 
 // SaveInput contains fully validated fields persisted by the recurring repository.
 type SaveInput struct {
-	FQN          string
-	ScheduleRule json.RawMessage
-	AnchorDate   values.CivilDate
-	Records      []DefinitionRecordInput
+	FQN               string
+	ScheduleRule      json.RawMessage
+	AnchorDate        values.CivilDate
+	ExpectedUpdatedAt *time.Time
+	Records           []DefinitionRecordInput
 }
 
 // DefinitionRecordInput is one complete record shape persisted for a recurring definition.
@@ -155,74 +167,36 @@ type DefinitionRecordInput struct {
 	Memo       *string
 }
 
-// OccurrenceStatus is a recurring occurrence lifecycle state.
-type OccurrenceStatus string
-
-const (
-	// OccurrenceStatusExpected identifies a materialized occurrence awaiting review.
-	OccurrenceStatusExpected OccurrenceStatus = "expected"
-	// OccurrenceStatusConfirmed identifies a reviewed and posted occurrence.
-	OccurrenceStatusConfirmed OccurrenceStatus = "confirmed"
-	// OccurrenceStatusDismissed identifies a reviewed and discarded occurrence.
-	OccurrenceStatusDismissed OccurrenceStatus = "dismissed"
-	// OccurrenceStatusDeferred identifies a skipped audit occurrence slot.
-	OccurrenceStatusDeferred OccurrenceStatus = "deferred"
-)
-
-// Occurrence is one scheduled slot for a recurring definition.
-type Occurrence struct {
-	ID                            int64
-	RecurringDefinitionID         int64
-	RecurringDefinitionFQN        string
-	RecurringDefinitionActive     bool
-	ScheduledDate                 values.CivilDate
-	Status                        OccurrenceStatus
-	MaterializedDefinitionVersion int64
-	MaterializedAt                time.Time
-	ReviewedAt                    *time.Time
-	GeneratedTransactionID        *int64
-	CreatedAt                     time.Time
-	UpdatedAt                     time.Time
-}
-
-// OccurrenceConfirmationRecord contains the persisted amount inputs needed to revalue a materialized occurrence.
-type OccurrenceConfirmationRecord struct {
+// ExpectedConfirmationRecord contains the persisted amount inputs needed to revalue an expected transaction.
+type ExpectedConfirmationRecord struct {
 	ID       int64
 	Currency string
 	Amount   values.Decimal
 }
 
-// OccurrenceConfirmation contains an occurrence and its generated transaction's active records.
-type OccurrenceConfirmation struct {
-	Occurrence Occurrence
-	Records    []OccurrenceConfirmationRecord
+// ExpectedConfirmation contains an expected recurring transaction and its active records.
+type ExpectedConfirmation struct {
+	ScheduledDate values.CivilDate
+	Records       []ExpectedConfirmationRecord
 }
 
-// OccurrenceRecordValuation carries one actual-date USD valuation into atomic confirmation.
-type OccurrenceRecordValuation struct {
+// ExpectedRecordValuation carries one actual-date USD valuation into atomic confirmation.
+type ExpectedRecordValuation struct {
 	ID        int64
 	AmountUSD *values.Decimal
 }
 
-// MaterializationDefinition is an active definition plus existing occurrence slots.
-type MaterializationDefinition struct {
-	Definition
-	OccurrenceDates []values.CivilDate
-}
-
-// ExpectedOccurrenceInput contains one catch-up occurrence and generated record shape.
-type ExpectedOccurrenceInput struct {
-	Definition    Definition
+// ExpectedTransactionInput contains one catch-up slot and generated record shape.
+type ExpectedTransactionInput struct {
 	ScheduledDate values.CivilDate
 	Records       []transactions.PersistJournalRecordInput
 }
 
-// OccurrenceListOptions controls occurrence filtering and pagination.
-type OccurrenceListOptions struct {
-	services.ListOptions
-	Today                 values.CivilDate
-	RecurringDefinitionID *int64
-	Statuses              []OccurrenceStatus
+// CatchUpInput contains every due transaction for one definition and its resulting next anchor.
+type CatchUpInput struct {
+	Definition   Definition
+	Transactions []ExpectedTransactionInput
+	NextAnchor   values.CivilDate
 }
 
 // Repository persists recurring definition state.
@@ -233,19 +207,15 @@ type Repository interface {
 	ListActiveFQNs(context.Context) ([]ActiveFQN, error)
 	Replace(context.Context, int64, SaveInput) (Definition, error)
 	Tombstone(context.Context, int64) error
-	ListMaterializationDefinitions(context.Context, values.CivilDate) ([]MaterializationDefinition, error)
-	CreateExpectedOccurrences(context.Context, []ExpectedOccurrenceInput) error
-	CreateConfirmedOccurrence(context.Context, Definition, values.CivilDate, values.CivilDate, []transactions.PersistJournalRecordInput, time.Time) (Occurrence, error)
-	GetOccurrence(context.Context, int64) (Occurrence, error)
-	ListOccurrences(context.Context, OccurrenceListOptions) (services.PaginatedList[Occurrence], error)
-	ListOccurrenceDates(context.Context, int64, values.CivilDate) ([]values.CivilDate, error)
-	ListOccurrenceDatesByDefinitionIDs(context.Context, []int64, values.CivilDate) (map[int64][]values.CivilDate, error)
-	GetOccurrenceConfirmation(context.Context, int64) (OccurrenceConfirmation, error)
-	ConfirmOccurrence(context.Context, int64, values.CivilDate, []OccurrenceRecordValuation, *time.Time, *time.Time, time.Time) (Occurrence, error)
-	DismissOccurrence(context.Context, int64, time.Time) (Occurrence, error)
-	DeferOccurrenceAndShiftAnchor(context.Context, Definition, values.CivilDate, values.CivilDate) (Occurrence, error)
+	ListMaterializationDefinitions(context.Context) ([]Definition, error)
+	MaterializeExpectedTransactions(context.Context, []CatchUpInput) error
+	CreateConfirmedTransaction(context.Context, Definition, values.CivilDate, values.CivilDate, []transactions.PersistJournalRecordInput) (transactions.Transaction, error)
+	GetExpectedConfirmation(context.Context, int64) (ExpectedConfirmation, error)
+	ConfirmExpectedTransaction(context.Context, int64, values.CivilDate, []ExpectedRecordValuation, *time.Time, *time.Time, time.Time) (transactions.Transaction, error)
+	DismissExpectedTransaction(context.Context, int64, time.Time) error
+	ShiftAnchor(context.Context, Definition, values.CivilDate) (Definition, error)
 	PauseDefinition(context.Context, int64) (Definition, error)
-	ResumeDefinition(context.Context, Definition, values.CivilDate, []values.CivilDate) (Definition, error)
+	ResumeDefinition(context.Context, Definition, values.CivilDate) (Definition, error)
 }
 
 // AccountReferenceValidator resolves active account references for definition validation.
@@ -285,8 +255,8 @@ type ReferenceCoordinator interface {
 	WithExclusiveLease(context.Context, func(context.Context) error) error
 }
 
-// OccurrenceWriter serializes recurring occurrence slot and lifecycle writes.
-type OccurrenceWriter interface {
+// StateCoordinator serializes recurring anchor and generated-transaction changes.
+type StateCoordinator interface {
 	WithSharedLease(context.Context, func(context.Context) error) error
 	WithExclusiveLease(context.Context, func(context.Context) error) error
 }
@@ -301,7 +271,7 @@ type Service struct {
 	templates            TemplateReader
 	amountUSD            AmountUSDDeriver
 	refs                 ReferenceCoordinator
-	occurrences          OccurrenceWriter
+	state                StateCoordinator
 	clock                transactions.Clock
 	currencyUsageChanged func()
 }
@@ -316,7 +286,7 @@ func NewService(
 	templates TemplateReader,
 	amountUSD AmountUSDDeriver,
 	refs ReferenceCoordinator,
-	occurrences OccurrenceWriter,
+	state StateCoordinator,
 	clock transactions.Clock,
 	currencyUsageChanged func(),
 ) *Service {
@@ -329,16 +299,16 @@ func NewService(
 		templates:            templates,
 		amountUSD:            amountUSD,
 		refs:                 refs,
-		occurrences:          occurrences,
+		state:                state,
 		clock:                clock,
 		currencyUsageChanged: currencyUsageChanged,
 	}
 }
 
 // Create validates and creates a recurring definition.
-func (s *Service) Create(ctx context.Context, input WriteInput) (Definition, error) {
+func (s *Service) Create(ctx context.Context, input CreateInput) (Definition, error) {
 	var definition Definition
-	if err := s.refs.WithExclusiveLease(ctx, func(ctx context.Context) error {
+	if err := lease.Combine(ctx, []lease.Func{s.refs.WithExclusiveLease, s.state.WithExclusiveLease}, func(ctx context.Context) error {
 		save, err := s.prepareCreateInput(ctx, input)
 		if err != nil {
 			return err
@@ -357,10 +327,7 @@ func (s *Service) Create(ctx context.Context, input WriteInput) (Definition, err
 		if err != nil {
 			return err
 		}
-		withDueDate, err := s.withNextDueDate(ctx, created)
-		if err != nil {
-			return err
-		}
+		withDueDate := withNextDueDate(created)
 		withDisplay, err := s.withDisplayAmounts(ctx, withDueDate)
 		if err != nil {
 			return err
@@ -381,7 +348,7 @@ func (s *Service) Get(ctx context.Context, id int64) (Definition, error) {
 	}
 
 	var result Definition
-	if err := s.occurrences.WithSharedLease(ctx, func(ctx context.Context) error {
+	if err := s.state.WithSharedLease(ctx, func(ctx context.Context) error {
 		definition, err := s.repo.Get(ctx, id)
 		if errors.Is(err, services.ErrNotFound) {
 			return services.NotFound("recurring definition not found")
@@ -389,10 +356,7 @@ func (s *Service) Get(ctx context.Context, id int64) (Definition, error) {
 		if err != nil {
 			return err
 		}
-		withDueDate, err := s.withNextDueDate(ctx, definition)
-		if err != nil {
-			return err
-		}
+		withDueDate := withNextDueDate(definition)
 		withDisplay, err := s.withDisplayAmounts(ctx, withDueDate)
 		if err != nil {
 			return err
@@ -422,7 +386,7 @@ func (s *Service) List(ctx context.Context, opts DefinitionListOptions) (service
 		repoOpts.SortDirection = services.SortDirectionAsc
 	}
 	var result services.PaginatedList[Definition]
-	if err := s.occurrences.WithSharedLease(ctx, func(ctx context.Context) error {
+	if err := s.state.WithSharedLease(ctx, func(ctx context.Context) error {
 		list, err := s.repo.List(ctx, repoOpts)
 		if err != nil {
 			return err
@@ -430,9 +394,7 @@ func (s *Service) List(ctx context.Context, opts DefinitionListOptions) (service
 		if opts.Query != "" {
 			list.Items = filterDefinitionsByQuery(list.Items, opts.Query)
 		}
-		if err := s.withListNextDueDates(ctx, list.Items); err != nil {
-			return err
-		}
+		withListNextDueDates(list.Items)
 		if opts.List.SortKey == services.SortKeyNextDueDate {
 			sortDefinitionsByNextDueDate(list.Items, opts.List.SortDirection)
 		}
@@ -482,39 +444,15 @@ func definitionHasMatchedAncestor(fqn string, groups map[string]bool) bool {
 	return false
 }
 
-// GetOccurrence returns one permanent recurring occurrence by ID.
-func (s *Service) GetOccurrence(ctx context.Context, id int64) (Occurrence, error) {
-	if id <= 0 {
-		return Occurrence{}, services.InvalidRequest("recurring_occurrence_id must be positive")
-	}
-
-	occurrence, err := s.repo.GetOccurrence(ctx, id)
-	if errors.Is(err, services.ErrNotFound) {
-		return Occurrence{}, services.NotFound("recurring occurrence not found")
-	}
-	if err != nil {
-		return Occurrence{}, err
-	}
-
-	return occurrence, nil
-}
-
-// ListOccurrences materializes due slots through today, then returns matching occurrences.
-func (s *Service) ListOccurrences(ctx context.Context, opts OccurrenceListOptions) (services.PaginatedList[Occurrence], error) {
-	if err := validateOccurrenceListOptions(opts); err != nil {
-		return services.PaginatedList[Occurrence]{}, err
-	}
-	if err := s.materializeDueOccurrences(ctx, opts.Today); err != nil {
-		return services.PaginatedList[Occurrence]{}, err
-	}
-
-	return s.repo.ListOccurrences(ctx, opts)
-}
-
-// WithProjectedTransactions supplies read-only future recurring rows while preventing occurrence changes during use.
-func (s *Service) WithProjectedTransactions(ctx context.Context, through values.CivilDate, opts transactions.ListOptions, use func(context.Context, []transactions.Transaction) error) error {
-	return lease.Combine(ctx, []lease.Func{s.refs.WithSharedLease, s.occurrences.WithExclusiveLease}, func(ctx context.Context) error {
-		projected, err := s.projectTransactionsWithReferences(ctx, through, opts)
+// WithProjectedTransactions supplies optional read-only future rows under one recurring-state snapshot.
+func (s *Service) WithProjectedTransactions(ctx context.Context, through *values.CivilDate, opts transactions.ListOptions, use func(context.Context, []transactions.Transaction) error) error {
+	return lease.Combine(ctx, []lease.Func{s.refs.WithSharedLease, s.state.WithSharedLease}, func(ctx context.Context) error {
+		today := values.LocalCivilDateFromTime(s.clock.Now())
+		projected := []transactions.Transaction{}
+		var err error
+		if through != nil && through.Time().After(today.Time()) {
+			projected, err = s.projectTransactionsWithReferences(ctx, *through, today, opts)
+		}
 		if err != nil {
 			return err
 		}
@@ -522,41 +460,35 @@ func (s *Service) WithProjectedTransactions(ctx context.Context, through values.
 	})
 }
 
-func (s *Service) projectTransactionsWithReferences(ctx context.Context, through values.CivilDate, opts transactions.ListOptions) ([]transactions.Transaction, error) {
-	today := values.LocalCivilDateFromTime(s.clock.Now())
+func (s *Service) projectTransactionsWithReferences(ctx context.Context, through values.CivilDate, today values.CivilDate, opts transactions.ListOptions) ([]transactions.Transaction, error) {
 	if !through.Time().After(today.Time()) {
 		return []transactions.Transaction{}, nil
 	}
-	definitions, err := s.repo.ListMaterializationDefinitions(ctx, through)
+	definitions, err := s.repo.ListMaterializationDefinitions(ctx)
 	if err != nil {
 		return nil, err
 	}
 	projected := []transactions.Transaction{}
 	projectionCount := 0
-	for _, materialization := range definitions {
+	for _, definition := range definitions {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		definition := materialization.Definition
 		refs, err := s.projectionReferences(ctx, definition)
 		if err != nil {
 			return nil, err
 		}
-		existing := civilDateSet(materialization.OccurrenceDates)
 		nextProjectionFound := false
 		err = visitDueSlotsUntil(ctx, definition.ScheduleRule, definition.AnchorDate, through, func(slot values.CivilDate) error {
+			isNext := !nextProjectionFound
+			nextProjectionFound = true
 			if !slot.Time().After(today.Time()) {
-				return nil
-			}
-			if _, ok := existing[slot.String()]; ok {
 				return nil
 			}
 			projectionCount++
 			if projectionCount > maxFutureProjections {
 				return services.InvalidRequest("future recurring projection exceeds the 10000-projection request limit")
 			}
-			isNext := !nextProjectionFound
-			nextProjectionFound = true
 			transaction, err := projectedTransaction(definition, slot, refs, isNext)
 			if err != nil {
 				return err
@@ -642,23 +574,27 @@ func projectedTransaction(definition Definition, slot values.CivilDate, refs tra
 			EconomicIntent:              economicIntent,
 			TagIDs:                      slices.Clone(definitionRecord.TagIDs),
 			Memo:                        definitionRecord.Memo,
-			ReconciliationStatus:        transactions.ReconciliationStatusUnreconciled,
+			ReconciliationStatus:        transactions.ReconciliationStatusReconciled,
 			Source:                      transactions.SourceRecurringTemplate,
 			CreatedAt:                   slot.Time(),
 			UpdatedAt:                   slot.Time(),
 		})
 	}
 	return transactions.ClassifyTransaction(transactions.Transaction{
-		ID:                              id,
-		InitiatedDate:                   slot,
-		RecurringProjectionDefinitionID: &recurringDefinitionID,
-		RecurringProjectionIsNext:       &isNext,
-		LifecycleStatus:                 transactions.LifecycleStatusExpected,
-		CreatedAt:                       slot.Time(),
-		UpdatedAt:                       slot.Time(),
-		Records:                         records,
+		ID:                        id,
+		InitiatedDate:             slot,
+		RecurringDefinitionID:     &recurringDefinitionID,
+		RecurringDefinitionFQN:    &definition.FQN,
+		RecurringDefinitionActive: recurringBoolPtr(true),
+		RecurringProjectionIsNext: &isNext,
+		LifecycleStatus:           transactions.LifecycleStatusExpected,
+		CreatedAt:                 slot.Time(),
+		UpdatedAt:                 slot.Time(),
+		Records:                   records,
 	})
 }
+
+func recurringBoolPtr(value bool) *bool { return &value }
 
 func recurringProjectionID(kind string, definitionID int64, slot values.CivilDate, index int) int64 {
 	hash := fnv.New64a()
@@ -706,39 +642,39 @@ func projectedSearchMatches(records []transactions.JournalRecord, term string, r
 	})
 }
 
-// ConfirmOccurrence posts an EXPECTED occurrence's generated transaction records on its actual date.
-func (s *Service) ConfirmOccurrence(ctx context.Context, id int64, input ConfirmOccurrenceInput) (Occurrence, error) {
+// ConfirmExpected activates an expected recurring transaction on its actual date.
+func (s *Service) ConfirmExpected(ctx context.Context, id int64, input ConfirmExpectedInput) (transactions.Transaction, error) {
 	if id <= 0 {
-		return Occurrence{}, services.InvalidRequest("recurring_occurrence_id must be positive")
+		return transactions.Transaction{}, services.InvalidRequest("transaction_id must be positive")
 	}
 	clockNow := s.clock.Now()
 	now := clockNow.UTC()
 	today := values.LocalCivilDateFromTime(clockNow)
 	if input.ActualDate != nil && input.ActualDate.Time().After(today.Time()) {
-		return Occurrence{}, services.InvalidRequest("actual_date must not be after the current date")
+		return transactions.Transaction{}, services.InvalidRequest("actual_date must not be after the current date")
 	}
 	pendingDate, postedDate, err := transactions.NormalizeSettlementIntent("settlement", input.Settlement, now)
 	if err != nil {
-		return Occurrence{}, err
+		return transactions.Transaction{}, err
 	}
-	var occurrence Occurrence
-	if err := s.occurrences.WithExclusiveLease(ctx, func(ctx context.Context) error {
-		confirmation, err := s.repo.GetOccurrenceConfirmation(ctx, id)
+	var confirmed transactions.Transaction
+	if err := s.state.WithExclusiveLease(ctx, func(ctx context.Context) error {
+		confirmation, err := s.repo.GetExpectedConfirmation(ctx, id)
 		if errors.Is(err, services.ErrNotFound) {
-			return services.NotFound("recurring occurrence not found")
+			return services.NotFound("expected transaction not found")
+		}
+		if errors.Is(err, services.ErrConflict) {
+			return services.InvalidRequest("transaction must be an expected recurring transaction")
 		}
 		if err != nil {
 			return err
 		}
-		if confirmation.Occurrence.Status != OccurrenceStatusExpected {
-			return services.InvalidRequest("recurring occurrence must be expected")
-		}
-		actualDate := confirmation.Occurrence.ScheduledDate
+		actualDate := confirmation.ScheduledDate
 		if input.ActualDate != nil {
 			actualDate = *input.ActualDate
 		}
 		if input.ActualDate != nil &&
-			!actualDate.Time().Equal(confirmation.Occurrence.ScheduledDate.Time()) &&
+			!actualDate.Time().Equal(confirmation.ScheduledDate.Time()) &&
 			input.Settlement.Status == transactions.SettlementStatusPosted &&
 			input.Settlement.PostedDate == nil {
 			actualPostedDate := transactions.SettlementTimestampFromInitiatedDate(actualDate)
@@ -747,76 +683,64 @@ func (s *Service) ConfirmOccurrence(ctx context.Context, id int64, input Confirm
 			}
 			postedDate = &actualPostedDate
 		}
-		var valuations []OccurrenceRecordValuation
+		var valuations []ExpectedRecordValuation
 		if input.ActualDate != nil {
-			valuations = make([]OccurrenceRecordValuation, 0, len(confirmation.Records))
+			valuations = make([]ExpectedRecordValuation, 0, len(confirmation.Records))
 			for _, record := range confirmation.Records {
 				amountUSD, err := s.amountUSD.SignedAmountUSD(ctx, record.Currency, record.Amount, actualDate)
 				if err != nil {
 					return err
 				}
-				valuations = append(valuations, OccurrenceRecordValuation{ID: record.ID, AmountUSD: amountUSD})
+				valuations = append(valuations, ExpectedRecordValuation{ID: record.ID, AmountUSD: amountUSD})
 			}
 		}
-		confirmed, err := s.repo.ConfirmOccurrence(ctx, id, actualDate, valuations, pendingDate, postedDate, now)
+		confirmed, err = s.repo.ConfirmExpectedTransaction(ctx, id, actualDate, valuations, pendingDate, postedDate, now)
 		if errors.Is(err, services.ErrNotFound) {
-			return services.NotFound("recurring occurrence not found")
+			return services.NotFound("expected transaction not found")
 		}
 		if errors.Is(err, services.ErrConflict) {
-			return services.InvalidRequest("recurring occurrence must be expected")
+			return services.InvalidRequest("transaction must be an expected recurring transaction")
 		}
-		if err != nil {
-			return err
-		}
-		occurrence = confirmed
-		return nil
+		return err
 	}); err != nil {
-		return Occurrence{}, err
+		return transactions.Transaction{}, err
 	}
 	s.notifyCurrencyUsageChanged()
 
-	return occurrence, nil
+	return transactions.ClassifyTransaction(confirmed)
 }
 
-// DismissOccurrence tombstones an EXPECTED occurrence's generated transaction.
-func (s *Service) DismissOccurrence(ctx context.Context, id int64) (Occurrence, error) {
+// DismissExpected tombstones an expected recurring transaction.
+func (s *Service) DismissExpected(ctx context.Context, id int64) error {
 	if id <= 0 {
-		return Occurrence{}, services.InvalidRequest("recurring_occurrence_id must be positive")
+		return services.InvalidRequest("transaction_id must be positive")
 	}
-	var occurrence Occurrence
-	if err := s.occurrences.WithExclusiveLease(ctx, func(ctx context.Context) error {
-		dismissed, err := s.repo.DismissOccurrence(ctx, id, s.clock.Now().UTC())
+	if err := s.state.WithExclusiveLease(ctx, func(ctx context.Context) error {
+		err := s.repo.DismissExpectedTransaction(ctx, id, s.clock.Now().UTC())
 		if errors.Is(err, services.ErrNotFound) {
-			return services.NotFound("recurring occurrence not found")
+			return services.NotFound("expected transaction not found")
 		}
 		if errors.Is(err, services.ErrConflict) {
-			return services.InvalidRequest("recurring occurrence must be expected")
+			return services.InvalidRequest("transaction must be an expected recurring transaction")
 		}
-		if err != nil {
-			return err
-		}
-		occurrence = dismissed
-		return nil
+		return err
 	}); err != nil {
-		return Occurrence{}, err
+		return err
 	}
 
-	return occurrence, nil
+	return nil
 }
 
-// ConfirmNext materializes and confirms a definition's next non-materialized slot.
-func (s *Service) ConfirmNext(ctx context.Context, definitionID int64, today values.CivilDate, settlement transactions.SettlementIntent) (Occurrence, error) {
+// ConfirmNext materializes the current virtual slot as active and advances the anchor.
+func (s *Service) ConfirmNext(ctx context.Context, definitionID int64, today values.CivilDate, settlement transactions.SettlementIntent) (transactions.Transaction, error) {
 	if definitionID <= 0 {
-		return Occurrence{}, services.InvalidRequest("recurring_definition_id must be positive")
+		return transactions.Transaction{}, services.InvalidRequest("recurring_definition_id must be positive")
 	}
-	var occurrence Occurrence
+	var transaction transactions.Transaction
 	if err := lease.Combine(ctx, []lease.Func{
 		s.refs.WithSharedLease,
-		s.occurrences.WithExclusiveLease,
+		s.state.WithExclusiveLease,
 	}, func(ctx context.Context) error {
-		if err := s.materializeDueOccurrencesSerialized(ctx, today); err != nil {
-			return err
-		}
 		definition, err := s.repo.Get(ctx, definitionID)
 		if errors.Is(err, services.ErrNotFound) {
 			return services.NotFound("recurring definition not found")
@@ -827,7 +751,7 @@ func (s *Service) ConfirmNext(ctx context.Context, definitionID int64, today val
 		if definition.PausedAt != nil {
 			return services.InvalidRequest("recurring definition is paused")
 		}
-		scheduledDate, err := s.nextDueDate(ctx, definition)
+		nextAnchor, err := nextScheduleSlot(definition.ScheduleRule, definition.AnchorDate)
 		if err != nil {
 			return err
 		}
@@ -836,39 +760,33 @@ func (s *Service) ConfirmNext(ctx context.Context, definitionID int64, today val
 		if err != nil {
 			return err
 		}
-		created, err := s.repo.CreateConfirmedOccurrence(ctx, definition, scheduledDate, today, records, now)
-		if errors.Is(err, services.ErrConflict) {
-			return services.Conflict("recurring occurrence slot already exists")
-		}
+		created, err := s.repo.CreateConfirmedTransaction(ctx, definition, today, nextAnchor, records)
 		if errors.Is(err, services.ErrNotFound) {
 			return services.NotFound("recurring definition not found")
 		}
 		if err != nil {
 			return err
 		}
-		occurrence = created
+		transaction = created
 		return nil
 	}); err != nil {
-		return Occurrence{}, err
+		return transactions.Transaction{}, err
 	}
 	s.notifyCurrencyUsageChanged()
 
-	return occurrence, nil
+	return transactions.ClassifyTransaction(transaction)
 }
 
-// Defer materializes current due slots, then defers the next non-materialized slot.
-func (s *Service) Defer(ctx context.Context, definitionID int64, today values.CivilDate, input DeferInput) (Occurrence, error) {
+// Defer consumes the current virtual slot and advances the definition anchor.
+func (s *Service) Defer(ctx context.Context, definitionID int64, today values.CivilDate, input DeferInput) (Definition, error) {
 	if definitionID <= 0 {
-		return Occurrence{}, services.InvalidRequest("recurring_definition_id must be positive")
+		return Definition{}, services.InvalidRequest("recurring_definition_id must be positive")
 	}
-	var occurrence Occurrence
+	var result Definition
 	if err := lease.Combine(ctx, []lease.Func{
 		s.refs.WithExclusiveLease,
-		s.occurrences.WithExclusiveLease,
+		s.state.WithExclusiveLease,
 	}, func(ctx context.Context) error {
-		if err := s.materializeDueOccurrencesSerialized(ctx, today); err != nil {
-			return err
-		}
 		definition, err := s.repo.Get(ctx, definitionID)
 		if errors.Is(err, services.ErrNotFound) {
 			return services.NotFound("recurring definition not found")
@@ -879,31 +797,31 @@ func (s *Service) Defer(ctx context.Context, definitionID int64, today values.Ci
 		if definition.PausedAt != nil {
 			return services.InvalidRequest("recurring definition is paused")
 		}
-		scheduledDate, err := s.nextDueDate(ctx, definition)
-		if err != nil {
-			return err
-		}
+		scheduledDate := definition.AnchorDate
 		newAnchor, err := deferredAnchor(definition, scheduledDate, input)
 		if err != nil {
 			return err
 		}
-		deferred, err := s.repo.DeferOccurrenceAndShiftAnchor(ctx, definition, scheduledDate, newAnchor)
-		if errors.Is(err, services.ErrConflict) {
-			return services.Conflict("recurring occurrence slot already exists")
+		display, err := s.withDisplayAmounts(ctx, definition)
+		if err != nil {
+			return err
 		}
-		if errors.Is(err, services.ErrNotFound) {
-			return services.NotFound("recurring definition not found")
+		deferred, err := s.repo.ShiftAnchor(ctx, definition, newAnchor)
+		if errors.Is(err, services.ErrConflict) {
+			return services.Conflict("recurring definition anchor changed concurrently")
 		}
 		if err != nil {
 			return err
 		}
-		occurrence = deferred
+		deferred.Class = display.Class
+		deferred.DisplayAmounts = display.DisplayAmounts
+		result = withNextDueDate(deferred)
 		return nil
 	}); err != nil {
-		return Occurrence{}, err
+		return Definition{}, err
 	}
 
-	return occurrence, nil
+	return result, nil
 }
 
 // Pause marks a definition paused so materialization skips it.
@@ -912,7 +830,7 @@ func (s *Service) Pause(ctx context.Context, definitionID int64) (Definition, er
 		return Definition{}, services.InvalidRequest("recurring_definition_id must be positive")
 	}
 	var definition Definition
-	if err := s.refs.WithExclusiveLease(ctx, func(ctx context.Context) error {
+	if err := lease.Combine(ctx, []lease.Func{s.refs.WithExclusiveLease, s.state.WithExclusiveLease}, func(ctx context.Context) error {
 		paused, err := s.repo.PauseDefinition(ctx, definitionID)
 		if errors.Is(err, services.ErrNotFound) {
 			return services.NotFound("recurring definition not found")
@@ -920,10 +838,7 @@ func (s *Service) Pause(ctx context.Context, definitionID int64) (Definition, er
 		if err != nil {
 			return err
 		}
-		withDueDate, err := s.withNextDueDate(ctx, paused)
-		if err != nil {
-			return err
-		}
+		withDueDate := withNextDueDate(paused)
 		withDisplay, err := s.withDisplayAmounts(ctx, withDueDate)
 		if err != nil {
 			return err
@@ -945,7 +860,7 @@ func (s *Service) Resume(ctx context.Context, definitionID int64, today values.C
 	var resumed Definition
 	if err := lease.Combine(ctx, []lease.Func{
 		s.refs.WithExclusiveLease,
-		s.occurrences.WithExclusiveLease,
+		s.state.WithExclusiveLease,
 	}, func(ctx context.Context) error {
 		definition, err := s.repo.Get(ctx, definitionID)
 		if errors.Is(err, services.ErrNotFound) {
@@ -956,18 +871,16 @@ func (s *Service) Resume(ctx context.Context, definitionID int64, today values.C
 		}
 		resumed = definition
 		if definition.PausedAt != nil {
-			newAnchor := definition.AnchorDate
-			skippedSlots := []values.CivilDate{}
+			var newAnchor values.CivilDate
 			if definition.ScheduleClass == ScheduleClassInterval {
 				newAnchor = today
 			} else {
-				skipThrough := values.CivilDateFromTime(today.Time().AddDate(0, 0, -1))
-				skippedSlots, err = s.skippedDateRuleSlots(ctx, definition, skipThrough)
+				newAnchor, err = firstScheduleSlot(definition.ScheduleRule, today)
 				if err != nil {
 					return err
 				}
 			}
-			updated, err := s.repo.ResumeDefinition(ctx, definition, newAnchor, skippedSlots)
+			updated, err := s.repo.ResumeDefinition(ctx, definition, newAnchor)
 			if errors.Is(err, services.ErrNotFound) {
 				return services.NotFound("recurring definition not found")
 			}
@@ -976,10 +889,7 @@ func (s *Service) Resume(ctx context.Context, definitionID int64, today values.C
 			}
 			resumed = updated
 		}
-		withDueDate, err := s.withNextDueDate(ctx, resumed)
-		if err != nil {
-			return err
-		}
+		withDueDate := withNextDueDate(resumed)
 		withDisplay, err := s.withDisplayAmounts(ctx, withDueDate)
 		if err != nil {
 			return err
@@ -993,13 +903,17 @@ func (s *Service) Resume(ctx context.Context, definitionID int64, today values.C
 }
 
 // Replace validates and atomically updates a recurring definition's schedule and active records.
-func (s *Service) Replace(ctx context.Context, id int64, input WriteInput) (Definition, error) {
+func (s *Service) Replace(ctx context.Context, id int64, input ReplaceInput) (Definition, error) {
 	if id <= 0 {
 		return Definition{}, services.InvalidRequest("recurring_definition_id must be positive")
 	}
+	expectedUpdatedAt, err := services.UpdatedAtFromETag(input.ExpectedETag, "recurring definition")
+	if err != nil {
+		return Definition{}, err
+	}
 
 	var definition Definition
-	if err := s.refs.WithExclusiveLease(ctx, func(ctx context.Context) error {
+	if err := lease.Combine(ctx, []lease.Func{s.refs.WithExclusiveLease, s.state.WithExclusiveLease}, func(ctx context.Context) error {
 		current, err := s.repo.Get(ctx, id)
 		if errors.Is(err, services.ErrNotFound) {
 			return services.NotFound("recurring definition not found")
@@ -1007,16 +921,24 @@ func (s *Service) Replace(ctx context.Context, id int64, input WriteInput) (Defi
 		if err != nil {
 			return err
 		}
-		if !input.AnchorDate.Time().Equal(current.AnchorDate.Time()) {
+		if services.ETag(current.UpdatedAt) != input.ExpectedETag {
+			return services.PreconditionFailed("recurring definition changed since it was read")
+		}
+		anchorDate := current.AnchorDate
+		if input.AnchorDate != nil {
+			anchorDate = *input.AnchorDate
+		}
+		if !anchorDate.Time().Equal(current.AnchorDate.Time()) {
 			today := values.LocalCivilDateFromTime(s.clock.Now())
-			if input.AnchorDate.Time().Before(today.Time()) {
+			if anchorDate.Time().Before(today.Time()) {
 				return services.InvalidRequest("anchor_date must be on or after the current date when changed")
 			}
 		}
-		save, err := s.prepareInput(ctx, input)
+		save, err := s.prepareInput(ctx, input.WriteInput, anchorDate)
 		if err != nil {
 			return err
 		}
+		save.ExpectedUpdatedAt = &expectedUpdatedAt
 		if save.FQN != current.FQN {
 			if err := s.ensureFQNAvailable(ctx, id, save.FQN); err != nil {
 				return err
@@ -1030,13 +952,13 @@ func (s *Service) Replace(ctx context.Context, id int64, input WriteInput) (Defi
 		if errors.Is(err, services.ErrNotFound) {
 			return services.NotFound("recurring definition not found")
 		}
+		if errors.Is(err, services.ErrPreconditionFailed) {
+			return services.PreconditionFailed("recurring definition changed since it was read")
+		}
 		if err != nil {
 			return err
 		}
-		withDueDate, err := s.withNextDueDate(ctx, replaced)
-		if err != nil {
-			return err
-		}
+		withDueDate := withNextDueDate(replaced)
 		withDisplay, err := s.withDisplayAmounts(ctx, withDueDate)
 		if err != nil {
 			return err
@@ -1056,7 +978,7 @@ func (s *Service) Cancel(ctx context.Context, id int64) error {
 		return services.InvalidRequest("recurring_definition_id must be positive")
 	}
 
-	if err := s.refs.WithExclusiveLease(ctx, func(ctx context.Context) error {
+	if err := lease.Combine(ctx, []lease.Func{s.refs.WithExclusiveLease, s.state.WithExclusiveLease}, func(ctx context.Context) error {
 		if err := s.repo.Tombstone(ctx, id); errors.Is(err, services.ErrNotFound) {
 			return services.NotFound("recurring definition not found")
 		} else if err != nil {
@@ -1071,60 +993,58 @@ func (s *Service) Cancel(ctx context.Context, id int64) error {
 	return nil
 }
 
-func (s *Service) materializeDueOccurrences(ctx context.Context, today values.CivilDate) error {
+// CatchUp materializes every due slot through today and advances affected anchors.
+func (s *Service) CatchUp(ctx context.Context, today values.CivilDate) error {
 	return lease.Combine(ctx, []lease.Func{
 		s.refs.WithSharedLease,
-		s.occurrences.WithExclusiveLease,
+		s.state.WithExclusiveLease,
 	}, func(ctx context.Context) error {
-		return s.materializeDueOccurrencesSerialized(ctx, today)
-	})
-}
-
-func (s *Service) materializeDueOccurrencesSerialized(ctx context.Context, today values.CivilDate) error {
-	definitions, err := s.repo.ListMaterializationDefinitions(ctx, today)
-	if err != nil {
-		return err
-	}
-	occurrences := []ExpectedOccurrenceInput{}
-	for _, definition := range definitions {
-		existing := civilDateSet(definition.OccurrenceDates)
-		slots, err := DueSlotsUntil(ctx, definition.ScheduleRule, definition.AnchorDate, today)
+		definitions, err := s.repo.ListMaterializationDefinitions(ctx)
 		if err != nil {
 			return err
 		}
-		var accountRefs map[int64]accounts.Reference
-		for _, slot := range slots {
-			if _, ok := existing[slot.String()]; ok {
-				continue
-			}
-			if accountRefs == nil {
-				accountRefs, err = s.validateDefinitionAccountReferences(ctx, definition.Definition)
-				if err != nil {
-					return err
-				}
-			}
-			records, err := s.generatedJournalRecordsFromValidatedDefinition(ctx, definition.Definition, slot, accountRefs, nil, nil)
+		catchUps := []CatchUpInput{}
+		for _, definition := range definitions {
+			slots, err := DueSlotsUntil(ctx, definition.ScheduleRule, definition.AnchorDate, today)
 			if err != nil {
 				return err
 			}
-			occurrences = append(occurrences, ExpectedOccurrenceInput{
-				Definition:    definition.Definition,
-				ScheduledDate: slot,
-				Records:       records,
-			})
-			existing[slot.String()] = struct{}{}
+			if len(slots) == 0 {
+				continue
+			}
+			accountRefs, err := s.validateDefinitionAccountReferences(ctx, definition)
+			if err != nil {
+				return err
+			}
+			generated := make([]ExpectedTransactionInput, 0, len(slots))
+			for _, slot := range slots {
+				records, err := s.generatedJournalRecordsFromValidatedDefinition(ctx, definition, slot, accountRefs, nil, nil)
+				if err != nil {
+					return err
+				}
+				generated = append(generated, ExpectedTransactionInput{
+					ScheduledDate: slot,
+					Records:       records,
+				})
+			}
+			lastSlot := slots[len(slots)-1]
+			nextAnchor, err := nextScheduleSlot(definition.ScheduleRule, lastSlot)
+			if err != nil {
+				return err
+			}
+			catchUps = append(catchUps, CatchUpInput{Definition: definition, Transactions: generated, NextAnchor: nextAnchor})
 		}
-	}
-	if len(occurrences) == 0 {
+		if len(catchUps) == 0 {
+			return nil
+		}
+
+		if err := s.repo.MaterializeExpectedTransactions(ctx, catchUps); err != nil {
+			return err
+		}
+		s.notifyCurrencyUsageChanged()
+
 		return nil
-	}
-
-	if err := s.repo.CreateExpectedOccurrences(ctx, occurrences); err != nil {
-		return err
-	}
-	s.notifyCurrencyUsageChanged()
-
-	return nil
+	})
 }
 
 func (s *Service) notifyCurrencyUsageChanged() {
@@ -1170,7 +1090,7 @@ func (s *Service) generatedJournalRecordsFromValidatedDefinition(ctx context.Con
 			Memo:                 record.Memo,
 			PendingDate:          recordPendingDate,
 			PostedDate:           recordPostedDate,
-			ReconciliationStatus: transactions.ReconciliationStatusUnreconciled,
+			ReconciliationStatus: transactions.ReconciliationStatusReconciled,
 			Source:               transactions.SourceRecurringTemplate,
 		})
 	}
@@ -1296,38 +1216,22 @@ func (s *Service) validateDefinitionAccountReferences(
 	return accountRefs, nil
 }
 
-func (s *Service) skippedDateRuleSlots(ctx context.Context, definition Definition, today values.CivilDate) ([]values.CivilDate, error) {
-	dueSlots, err := DueSlotsUntil(ctx, definition.ScheduleRule, definition.AnchorDate, today)
-	if err != nil {
-		return nil, err
-	}
-	existingDates, err := s.repo.ListOccurrenceDates(ctx, definition.ID, today)
-	if err != nil {
-		return nil, err
-	}
-	existing := civilDateSet(existingDates)
-	skipped := []values.CivilDate{}
-	for _, slot := range dueSlots {
-		if _, ok := existing[slot.String()]; !ok {
-			skipped = append(skipped, slot)
-		}
-	}
-
-	return skipped, nil
-}
-
-func (s *Service) prepareCreateInput(ctx context.Context, input WriteInput) (SaveInput, error) {
+func (s *Service) prepareCreateInput(ctx context.Context, input CreateInput) (SaveInput, error) {
 	if input.TemplateID != nil && *input.TemplateID <= 0 {
 		return SaveInput{}, services.InvalidRequest("template_id must be positive")
 	}
-	return s.prepareInput(ctx, input)
+	return s.prepareInput(ctx, input.WriteInput, input.AnchorDate)
 }
 
-func (s *Service) prepareInput(ctx context.Context, input WriteInput) (SaveInput, error) {
+func (s *Service) prepareInput(ctx context.Context, input WriteInput, anchorDate values.CivilDate) (SaveInput, error) {
 	if err := services.ValidateFQN(input.FQN); err != nil {
 		return SaveInput{}, err
 	}
 	rule, err := validateScheduleRule(input.ScheduleRule)
+	if err != nil {
+		return SaveInput{}, err
+	}
+	anchor, err := firstScheduleSlot(rule, anchorDate)
 	if err != nil {
 		return SaveInput{}, err
 	}
@@ -1338,7 +1242,7 @@ func (s *Service) prepareInput(ctx context.Context, input WriteInput) (SaveInput
 	save := SaveInput{
 		FQN:          input.FQN,
 		ScheduleRule: rule,
-		AnchorDate:   input.AnchorDate,
+		AnchorDate:   anchor,
 		Records:      records,
 	}
 	if err := validateCompleteRecords(save.Records); err != nil {
@@ -1648,83 +1552,20 @@ func (s *Service) ensureFQNAvailable(ctx context.Context, currentID int64, fqn s
 	return nil
 }
 
-func (s *Service) withNextDueDate(ctx context.Context, definition Definition) (Definition, error) {
+func withNextDueDate(definition Definition) Definition {
 	if definition.PausedAt != nil || definition.TombstonedAt != nil {
 		definition.NextDueDate = nil
-		return definition, nil
+		return definition
 	}
-	next, err := s.nextDueDate(ctx, definition)
-	if err != nil {
-		return Definition{}, err
-	}
+	next := definition.AnchorDate
 	definition.NextDueDate = &next
 
-	return definition, nil
+	return definition
 }
 
-func (s *Service) withListNextDueDates(ctx context.Context, definitions []Definition) error {
-	definitionIDs := make([]int64, 0, len(definitions))
-	var through values.CivilDate
-	for _, definition := range definitions {
-		if definition.PausedAt == nil && definition.TombstonedAt == nil && definition.LastOccurrenceDate != nil {
-			definitionIDs = append(definitionIDs, definition.ID)
-			if through.Time().IsZero() || definition.LastOccurrenceDate.Time().After(through.Time()) {
-				through = *definition.LastOccurrenceDate
-			}
-		}
-	}
-
-	occurrenceDatesByDefinitionID, err := s.repo.ListOccurrenceDatesByDefinitionIDs(ctx, definitionIDs, through)
-	if err != nil {
-		return err
-	}
+func withListNextDueDates(definitions []Definition) {
 	for index := range definitions {
-		definition := definitions[index]
-		if definition.PausedAt != nil || definition.TombstonedAt != nil {
-			definitions[index].NextDueDate = nil
-			continue
-		}
-		next, err := nextDueDateFromOccurrenceDates(definition, occurrenceDatesByDefinitionID[definition.ID])
-		if err != nil {
-			return err
-		}
-		definitions[index].NextDueDate = &next
-	}
-
-	return nil
-}
-
-func (s *Service) nextDueDate(ctx context.Context, definition Definition) (values.CivilDate, error) {
-	first, err := firstScheduleSlot(definition.ScheduleRule, definition.AnchorDate)
-	if err != nil {
-		return values.CivilDate{}, err
-	}
-	if definition.LastOccurrenceDate == nil || definition.LastOccurrenceDate.Time().Before(first.Time()) {
-		return first, nil
-	}
-
-	occurrenceDates, err := s.repo.ListOccurrenceDates(ctx, definition.ID, *definition.LastOccurrenceDate)
-	if err != nil {
-		return values.CivilDate{}, err
-	}
-	return nextDueDateFromOccurrenceDates(definition, occurrenceDates)
-}
-
-func nextDueDateFromOccurrenceDates(definition Definition, occurrenceDates []values.CivilDate) (values.CivilDate, error) {
-	first, err := firstScheduleSlot(definition.ScheduleRule, definition.AnchorDate)
-	if err != nil {
-		return values.CivilDate{}, err
-	}
-	existing := civilDateSet(occurrenceDates)
-	next := first
-	for {
-		if _, ok := existing[next.String()]; !ok {
-			return next, nil
-		}
-		next, err = firstScheduleSlotAfter(definition.ScheduleRule, definition.AnchorDate, next)
-		if err != nil {
-			return values.CivilDate{}, err
-		}
+		definitions[index] = withNextDueDate(definitions[index])
 	}
 }
 
@@ -1778,7 +1619,7 @@ func visitDueSlotsUntil(ctx context.Context, raw json.RawMessage, anchor values.
 		if err := visit(next); err != nil {
 			return err
 		}
-		next, err = firstScheduleSlotAfter(raw, anchor, next)
+		next, err = nextScheduleSlot(raw, next)
 		if err != nil {
 			return err
 		}
@@ -1895,7 +1736,7 @@ func firstScheduleSlot(raw json.RawMessage, anchor values.CivilDate) (values.Civ
 	}
 }
 
-func firstScheduleSlotAfter(raw json.RawMessage, anchor values.CivilDate, after values.CivilDate) (values.CivilDate, error) {
+func nextScheduleSlot(raw json.RawMessage, current values.CivilDate) (values.CivilDate, error) {
 	var payload map[string]any
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.UseNumber()
@@ -1903,61 +1744,35 @@ func firstScheduleSlotAfter(raw json.RawMessage, anchor values.CivilDate, after 
 		return values.CivilDate{}, err
 	}
 	kind, _ := payload["kind"].(string)
+	var next values.CivilDate
+	var err error
 	switch kind {
 	case "interval":
-		return firstIntervalDueAfter(payload, anchor, after)
+		everyNumber, _ := payload["every"].(json.Number)
+		every, parseErr := strconv.Atoi(everyNumber.String())
+		if parseErr != nil {
+			return values.CivilDate{}, parseErr
+		}
+		unit, _ := payload["unit"].(string)
+		next = IntervalDueDate(current, every, unit)
 	case "day_of_month":
 		dayNumber, _ := payload["day"].(json.Number)
 		day, _ := strconv.Atoi(dayNumber.String())
-		return firstDayOfMonthDueAfter(anchor, after, day), nil
+		nextMonth := firstOfMonth(current.Time()).AddDate(0, 1, 0)
+		next = values.CivilDateFromTime(dateWithClampedDay(nextMonth.Year(), nextMonth.Month(), day))
 	case "last_day_of_month":
-		return firstLastDayOfMonthDueAfter(anchor, after), nil
+		nextMonth := firstOfMonth(current.Time()).AddDate(0, 1, 0)
+		next = values.CivilDateFromTime(lastDayOfMonth(nextMonth.Year(), nextMonth.Month()))
 	default:
 		return values.CivilDate{}, fmt.Errorf("unknown schedule kind %q", kind)
 	}
-}
-
-func firstIntervalDueAfter(payload map[string]any, anchor values.CivilDate, after values.CivilDate) (values.CivilDate, error) {
-	everyNumber, _ := payload["every"].(json.Number)
-	every, err := strconv.Atoi(everyNumber.String())
 	if err != nil {
 		return values.CivilDate{}, err
 	}
-	unit, _ := payload["unit"].(string)
-	if after.Time().Before(anchor.Time()) {
-		return anchor, nil
+	if year := next.Time().Year(); year < 1 || year > 9999 {
+		return values.CivilDate{}, services.InvalidRequest("schedule moves the anchor outside the supported date range")
 	}
-	step := intervalStepAtOrBefore(anchor, after, every, unit) + 1
-	candidate := IntervalDueDate(anchor, step*every, unit)
-	for !candidate.Time().After(after.Time()) {
-		step++
-		candidate = IntervalDueDate(anchor, step*every, unit)
-	}
-	return candidate, nil
-}
-
-func intervalStepAtOrBefore(anchor values.CivilDate, target values.CivilDate, every int, unit string) int {
-	switch unit {
-	case "DAY":
-		return int(target.Time().Sub(anchor.Time()).Hours()/24) / every
-	case "WEEK":
-		return int(target.Time().Sub(anchor.Time()).Hours()/24) / (every * 7)
-	case "MONTH", "YEAR":
-		anchorYear, anchorMonth, _ := anchor.Time().Date()
-		targetYear, targetMonth, _ := target.Time().Date()
-		months := (targetYear-anchorYear)*12 + int(targetMonth-anchorMonth)
-		cadenceMonths := every
-		if unit == "YEAR" {
-			cadenceMonths *= 12
-		}
-		step := months / cadenceMonths
-		for step > 0 && IntervalDueDate(anchor, step*every, unit).Time().After(target.Time()) {
-			step--
-		}
-		return step
-	default:
-		return 0
-	}
+	return next, nil
 }
 
 // IntervalDueDate returns the date count intervals before or after anchor.
@@ -2000,17 +1815,6 @@ func firstDayOfMonthDue(anchor values.CivilDate, day int) values.CivilDate {
 	return values.CivilDateFromTime(candidate)
 }
 
-func firstDayOfMonthDueAfter(anchor values.CivilDate, after values.CivilDate, day int) values.CivilDate {
-	t := firstOfMonth(after.Time())
-	for {
-		candidate := dateWithClampedDay(t.Year(), t.Month(), day)
-		if !candidate.Before(anchor.Time()) && candidate.After(after.Time()) {
-			return values.CivilDateFromTime(candidate)
-		}
-		t = firstOfMonth(t.AddDate(0, 1, 0))
-	}
-}
-
 func firstLastDayOfMonthDue(anchor values.CivilDate) values.CivilDate {
 	t := anchor.Time()
 	candidate := lastDayOfMonth(t.Year(), t.Month())
@@ -2020,17 +1824,6 @@ func firstLastDayOfMonthDue(anchor values.CivilDate) values.CivilDate {
 	}
 
 	return values.CivilDateFromTime(candidate)
-}
-
-func firstLastDayOfMonthDueAfter(anchor values.CivilDate, after values.CivilDate) values.CivilDate {
-	t := firstOfMonth(after.Time())
-	for {
-		candidate := lastDayOfMonth(t.Year(), t.Month())
-		if !candidate.Before(anchor.Time()) && candidate.After(after.Time()) {
-			return values.CivilDateFromTime(candidate)
-		}
-		t = firstOfMonth(t.AddDate(0, 1, 0))
-	}
 }
 
 func firstOfMonth(t time.Time) time.Time {
@@ -2084,53 +1877,6 @@ func validateListOptions(opts services.ListOptions) error {
 	}
 
 	return nil
-}
-
-func validateOccurrenceListOptions(opts OccurrenceListOptions) error {
-	switch opts.SortKey {
-	case "", services.SortKeyScheduledDate, services.SortKeyCreatedAt, services.SortKeyUpdatedAt:
-	default:
-		return services.InvalidRequest("sort must be scheduled_date, created_at, or updated_at")
-	}
-	switch opts.SortDirection {
-	case "", services.SortDirectionAsc, services.SortDirectionDesc:
-	default:
-		return services.InvalidRequest("sort_dir must be asc or desc")
-	}
-	if opts.Limit != nil && *opts.Limit <= 0 {
-		return services.InvalidRequest("limit must be positive")
-	}
-	if opts.Offset < 0 {
-		return services.InvalidRequest("offset must be non-negative")
-	}
-	if opts.RecurringDefinitionID != nil && *opts.RecurringDefinitionID <= 0 {
-		return services.InvalidRequest("recurring_definition_id must be positive")
-	}
-	for _, status := range opts.Statuses {
-		if !validOccurrenceStatus(status) {
-			return services.InvalidRequest("status values must be expected, confirmed, dismissed, or deferred")
-		}
-	}
-
-	return nil
-}
-
-func validOccurrenceStatus(status OccurrenceStatus) bool {
-	switch status {
-	case OccurrenceStatusExpected, OccurrenceStatusConfirmed, OccurrenceStatusDismissed, OccurrenceStatusDeferred:
-		return true
-	default:
-		return false
-	}
-}
-
-func civilDateSet(dates []values.CivilDate) map[string]struct{} {
-	set := make(map[string]struct{}, len(dates))
-	for _, date := range dates {
-		set[date.String()] = struct{}{}
-	}
-
-	return set
 }
 
 func indexedField(index int, name string) string {

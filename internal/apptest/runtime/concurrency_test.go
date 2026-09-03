@@ -17,6 +17,7 @@ type concurrentHTTPResult struct {
 	status int
 	body   []byte
 	err    error
+	runID  int64
 }
 
 func assertOneCreatedOneConflict(t *testing.T, results []concurrentHTTPResult) {
@@ -900,20 +901,24 @@ func TestConcurrentRecurringDefinitionReplacementAndMaterialization(t *testing.T
 	id := definition.JSON201.RecurringDefinitionId
 
 	materialize := func(editor httpclient.RequestEditorFn) concurrentHTTPResult {
-		response, err := client.REST().ListRecurringOccurrencesWithResponse(context.Background(), &httpclient.ListRecurringOccurrencesParams{RecurringDefinitionId: &id}, editor)
+		response, err := client.REST().StartRecurringCatchUpRunWithResponse(context.Background(), editor)
 		if err != nil {
 			return concurrentHTTPResult{err: err}
 		}
-		return concurrentHTTPResult{status: response.StatusCode(), body: response.Body}
+		result := concurrentHTTPResult{status: response.StatusCode(), body: response.Body}
+		if response.JSON202 != nil {
+			result.runID = response.JSON202.OperationRunId
+		}
+		return result
 	}
 	replace := func(editor httpclient.RequestEditorFn) concurrentHTTPResult {
-		response, err := client.REST().ReplaceRecurringDefinitionWithResponse(context.Background(), id, recurringDefinitionRequest(
+		response, err := client.REST().ReplaceRecurringDefinitionWithResponse(context.Background(), id, &httpclient.ReplaceRecurringDefinitionParams{IfMatch: definition.JSON201.Etag}, recurringDefinitionReplacementRequest(
 			"ConcurrentRecurringReplacement:Weekly",
 			refs,
 			"-20.00000000",
 			"20.00000000",
 			intervalRule(1, "WEEK"),
-			formatDate(today),
+			nil,
 		), editor)
 		if err != nil {
 			return concurrentHTTPResult{err: err}
@@ -925,28 +930,38 @@ func TestConcurrentRecurringDefinitionReplacementAndMaterialization(t *testing.T
 		if result.err != nil {
 			t.Fatalf("concurrent recurring replacement/materialization request: %v", result.err)
 		}
-		if result.status != http.StatusOK {
-			t.Fatalf("concurrent recurring replacement/materialization status = %d, want 200; body %s", result.status, result.body)
-		}
+	}
+	if results[0].status != http.StatusAccepted || results[0].runID <= 0 {
+		t.Fatalf("concurrent recurring catch-up start = %d/%d, want accepted run; body %s", results[0].status, results[0].runID, results[0].body)
+	}
+	if results[1].status != http.StatusOK && results[1].status != http.StatusPreconditionFailed {
+		t.Fatalf("concurrent recurring replacement status = %d, want 200 or 412; body %s", results[1].status, results[1].body)
+	}
+	if run := client.AwaitRecurringCatchUpRun(results[0].runID); run.Outcome != httpclient.BackgroundOperationRunOutcomeSucceeded {
+		t.Fatalf("concurrent recurring catch-up run = %+v, want success", run)
 	}
 
-	final := listRecurringOccurrences(t, client, &httpclient.ListRecurringOccurrencesParams{RecurringDefinitionId: &id})
-	if len(final.JSON200.RecurringOccurrences) != 1 {
-		t.Fatalf("recurring replacement/materialization occurrence count = %d, want 1; occurrences = %+v", len(final.JSON200.RecurringOccurrences), final.JSON200.RecurringOccurrences)
+	final := listExpectedTransactions(t, client, nil)
+	if len(final) != 1 {
+		t.Fatalf("recurring replacement/materialization transaction count = %d, want 1; transactions = %+v", len(final), final)
 	}
-	occurrence := final.JSON200.RecurringOccurrences[0]
-	transaction := getTransaction(t, client, *occurrence.GeneratedTransactionId)
-	switch occurrence.MaterializedDefinitionVersion {
-	case 1:
-		assertTransactionCheckingAmount(t, transaction.JSON200.Records, refs.CheckingAccountID, "-10.00000000")
-	case 2:
-		assertTransactionCheckingAmount(t, transaction.JSON200.Records, refs.CheckingAccountID, "-20.00000000")
-	default:
-		t.Fatalf("materialized definition version = %d, want 1 or 2", occurrence.MaterializedDefinitionVersion)
+	for _, transaction := range final {
+		if transaction.RecurringDefinitionId == nil || *transaction.RecurringDefinitionId != id {
+			t.Fatalf("materialized transaction provenance = %v, want definition %d", transaction.RecurringDefinitionId, id)
+		}
+		checkingAmount := ""
+		for _, record := range transaction.Records {
+			if record.AccountId == refs.CheckingAccountID {
+				checkingAmount = record.Amount
+			}
+		}
+		if checkingAmount != "-10.00000000" && checkingAmount != "-20.00000000" {
+			t.Fatalf("materialized checking amount = %q, want old or replacement definition shape", checkingAmount)
+		}
 	}
 }
 
-func TestConcurrentRecurringOccurrenceSlotWriters(t *testing.T) {
+func TestConcurrentRecurringStateWriters(t *testing.T) {
 	t.Run("materialization", func(t *testing.T) {
 		client := newSharedClient(t)
 		refs := createRecurringDefinitionRefs(t, client, "ConcurrentMaterialization")
@@ -954,19 +969,30 @@ func TestConcurrentRecurringOccurrenceSlotWriters(t *testing.T) {
 		definition := createRecurringDefinition(t, client, recurringDefinitionRequest("ConcurrentMaterialization:Daily", refs, "-5.00000000", "5.00000000", intervalRule(1, "DAY"), formatDate(today)))
 		id := definition.JSON201.RecurringDefinitionId
 		request := func(editor httpclient.RequestEditorFn) concurrentHTTPResult {
-			response, err := client.REST().ListRecurringOccurrencesWithResponse(context.Background(), &httpclient.ListRecurringOccurrencesParams{RecurringDefinitionId: &id}, editor)
+			response, err := client.REST().StartRecurringCatchUpRunWithResponse(context.Background(), editor)
 			if err != nil {
 				return concurrentHTTPResult{err: err}
 			}
-			return concurrentHTTPResult{status: response.StatusCode(), body: response.Body}
+			result := concurrentHTTPResult{status: response.StatusCode(), body: response.Body}
+			if response.JSON202 != nil {
+				result.runID = response.JSON202.OperationRunId
+			}
+			return result
 		}
 		results := apptest.RunConcurrentRequests(t, request, request)
 		for _, result := range results {
-			if result.err != nil || result.status != http.StatusOK {
+			if result.err != nil || result.status != http.StatusAccepted || result.runID <= 0 {
 				t.Fatalf("concurrent materialization = status %d err %v body %s", result.status, result.err, result.body)
 			}
+			run := client.AwaitRecurringCatchUpRun(result.runID)
+			if run.Outcome != httpclient.BackgroundOperationRunOutcomeSucceeded && run.Outcome != httpclient.BackgroundOperationRunOutcomeSkipped {
+				t.Fatalf("concurrent materialization run = %+v, want succeeded or skipped", run)
+			}
 		}
-		assertUniqueRecurringSlots(t, listRecurringOccurrences(t, client, &httpclient.ListRecurringOccurrencesParams{RecurringDefinitionId: &id}).JSON200.RecurringOccurrences)
+		materialized := listExpectedTransactions(t, client, nil)
+		if len(materialized) != 1 || materialized[0].RecurringDefinitionId == nil || *materialized[0].RecurringDefinitionId != id {
+			t.Fatalf("concurrent catch-up transactions = %+v, want one direct recurring transaction", materialized)
+		}
 	})
 
 	t.Run("confirm next", func(t *testing.T) {
@@ -988,7 +1014,12 @@ func TestConcurrentRecurringOccurrenceSlotWriters(t *testing.T) {
 				t.Fatalf("concurrent confirm-next = status %d err %v body %s", result.status, result.err, result.body)
 			}
 		}
-		assertUniqueRecurringSlots(t, listRecurringOccurrences(t, client, &httpclient.ListRecurringOccurrencesParams{RecurringDefinitionId: &id}).JSON200.RecurringOccurrences)
+		active, err := client.REST().ListTransactionsWithResponse(context.Background(), nil)
+		requireNoTransportError(t, "list concurrent confirm-next transactions", err)
+		if len(active.JSON200.Transactions) != 2 {
+			t.Fatalf("concurrent confirm-next transaction count = %d, want 2", len(active.JSON200.Transactions))
+		}
+		assertDatePtr(t, getRecurringDefinition(t, client, id).JSON200.NextDueDate, formatDate(today.AddDate(0, 0, 3)))
 	})
 
 	t.Run("defer", func(t *testing.T) {
@@ -1004,18 +1035,18 @@ func TestConcurrentRecurringOccurrenceSlotWriters(t *testing.T) {
 			}
 			return concurrentHTTPResult{status: response.StatusCode(), body: response.Body}
 		}
-		assertRecurringWriterResults(t, apptest.RunConcurrentRequests(t, request, request), "defer")
-		assertUniqueRecurringSlots(t, listRecurringOccurrences(t, client, &httpclient.ListRecurringOccurrencesParams{RecurringDefinitionId: &id}).JSON200.RecurringOccurrences)
+		successes := assertRecurringWriterResults(t, apptest.RunConcurrentRequests(t, request, request), "defer")
+		assertDatePtr(t, getRecurringDefinition(t, client, id).JSON200.NextDueDate, formatDate(today.AddDate(0, 0, successes+1)))
 	})
 
 	t.Run("resume", func(t *testing.T) {
-		client := newSharedClient(t)
+		client := newSharedClient(t, apptest.WithClock(apptest.NewFakeClock(apptest.Timestamp("2024-01-15T12:00:00Z"))))
 		refs := createRecurringDefinitionRefs(t, client, "ConcurrentResume")
 		today := civilDateOnly(client.Now())
-		definition := createRecurringDefinition(t, client, recurringDefinitionRequest("ConcurrentResume:Monthly", refs, "-8.00000000", "8.00000000", dayOfMonthRule(today.Day()), formatDate(today)))
+		definition := createRecurringDefinition(t, client, recurringDefinitionRequest("ConcurrentResume:Monthly", refs, "-8.00000000", "8.00000000", dayOfMonthRule(31), formatDate(today)))
 		id := definition.JSON201.RecurringDefinitionId
 		pauseRecurringDefinition(t, client, id)
-		client.SetTime(today.AddDate(0, 1, 0))
+		client.SetTime(apptest.Timestamp("2024-02-10T12:00:00Z"))
 		request := func(editor httpclient.RequestEditorFn) concurrentHTTPResult {
 			response, err := client.REST().ResumeRecurringDefinitionWithResponse(context.Background(), id, editor)
 			if err != nil {
@@ -1024,11 +1055,15 @@ func TestConcurrentRecurringOccurrenceSlotWriters(t *testing.T) {
 			return concurrentHTTPResult{status: response.StatusCode(), body: response.Body}
 		}
 		assertRecurringWriterResults(t, apptest.RunConcurrentRequests(t, request, request), "resume")
-		assertUniqueRecurringSlots(t, listRecurringOccurrences(t, client, &httpclient.ListRecurringOccurrencesParams{RecurringDefinitionId: &id}).JSON200.RecurringOccurrences)
+		resumed := getRecurringDefinition(t, client, id).JSON200
+		if resumed.PausedAt != nil {
+			t.Fatalf("concurrent resume definition = %+v, want active next slot", resumed)
+		}
+		assertDatePtr(t, resumed.NextDueDate, "2024-02-29")
 	})
 }
 
-func assertRecurringWriterResults(t *testing.T, results []concurrentHTTPResult, operation string) {
+func assertRecurringWriterResults(t *testing.T, results []concurrentHTTPResult, operation string) int {
 	t.Helper()
 	successes := 0
 	for _, result := range results {
@@ -1046,29 +1081,7 @@ func assertRecurringWriterResults(t *testing.T, results []concurrentHTTPResult, 
 	if successes == 0 {
 		t.Fatalf("concurrent recurring %s had no successful writer", operation)
 	}
-}
-
-func assertUniqueRecurringSlots(t *testing.T, occurrences []httpclient.RecurringOccurrence) {
-	t.Helper()
-	if len(occurrences) == 0 {
-		t.Fatal("recurring occurrence slots are empty, want at least one persisted slot")
-	}
-	dates := map[string]struct{}{}
-	transactions := map[int64]struct{}{}
-	for _, occurrence := range occurrences {
-		date := occurrence.ScheduledDate.Format("2006-01-02")
-		if _, duplicate := dates[date]; duplicate {
-			t.Fatalf("duplicate recurring occurrence slot for %s: %+v", date, occurrences)
-		}
-		dates[date] = struct{}{}
-		if occurrence.GeneratedTransactionId == nil {
-			continue
-		}
-		if _, duplicate := transactions[*occurrence.GeneratedTransactionId]; duplicate {
-			t.Fatalf("duplicate generated transaction %d: %+v", *occurrence.GeneratedTransactionId, occurrences)
-		}
-		transactions[*occurrence.GeneratedTransactionId] = struct{}{}
-	}
+	return successes
 }
 
 func TestConcurrentTransactionReplacementPrecondition(t *testing.T) {
@@ -1183,8 +1196,8 @@ func TestConcurrentTransactionCancellationAndPosting(t *testing.T) {
 	}
 
 	final := getTransaction(t, client, transactionID).JSON200
-	legalCancelled := final.LifecycleStatus == httpclient.TransactionLifecycleStatusCancelled && final.Settlement == httpclient.TransactionSettlementPending
-	legalPosted := final.LifecycleStatus == httpclient.TransactionLifecycleStatusActive && final.Settlement == httpclient.TransactionSettlementPosted
+	legalCancelled := final.LifecycleStatus == httpclient.Cancelled && final.Settlement == httpclient.TransactionSettlementPending
+	legalPosted := final.LifecycleStatus == httpclient.Active && final.Settlement == httpclient.TransactionSettlementPosted
 	if !legalCancelled && !legalPosted {
 		t.Fatalf("final cancellation/posting state = lifecycle %q settlement %q, want cancelled/pending or active/posted", final.LifecycleStatus, final.Settlement)
 	}

@@ -10,7 +10,7 @@
 - Starting an operation refreshes its operation list, status, and runs, then selects the returned run on the first page.
 - A manual start that finishes after Background operations unmounts does not update route state.
 - Every generated background-operation ID requires an operation-specific module for status, start, and typed detail; the browser and detail frame stay shared, with no generic detail fallback.
-- The complete module registry presents exchange-rate loading, database backup, and API audit-log compaction through the same operation browser.
+- The complete module registry presents exchange-rate loading, database backup, API audit-log compaction, and recurring catch-up through the same operation browser while preserving each schedule's UTC or server-local basis.
 - Run rows remain keyboard-activatable and expose the URL-selected run as expanded.
 - `auditMethod`, `auditOperation`, `auditSurface`, `auditPage`, `auditPageSize`, and `auditEntry` are URL-owned state. Filter or pagination changes clear the selected entry, and audit rows stay newest-first and backend-paginated.
 - The operation-filter draft follows URL history changes while retaining unapplied typing until navigation or submission.

@@ -363,15 +363,17 @@ export const isActiveWhollyPendingTransaction = (
   transaction.lifecycle_status === "active" &&
   transaction.settlement === "pending";
 
-export const isExpectedRecurringOccurrence = (
+export const isMaterializedExpectedRecurringTransaction = (
   transaction: Transaction,
 ): boolean =>
   transaction.lifecycle_status === "expected" &&
-  transaction.recurring_occurrence_id !== null;
+  transaction.transaction_id > 0 &&
+  transaction.recurring_definition_id != null;
 
 export const isProjectedRecurringTransaction = (
   transaction: Transaction,
-): boolean => transaction.recurring_projection_definition_id != null;
+): boolean =>
+  transaction.transaction_id < 0 && transaction.recurring_definition_id != null;
 
 export const canSplitTransaction = (transaction: Transaction): boolean => {
   const splitRole =

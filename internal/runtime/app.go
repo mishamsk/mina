@@ -70,9 +70,9 @@ type appServices struct {
 }
 
 type accountingLeases struct {
-	references    *lease.Lease
-	exchangeRates *lease.Lease
-	occurrences   *lease.Lease
+	references     *lease.Lease
+	exchangeRates  *lease.Lease
+	recurringState *lease.Lease
 }
 
 // New opens the configured database, applies migrations, and wires the composed HTTP handler.
@@ -334,9 +334,9 @@ func newAppServices(
 	authenticationService *authentication.Service,
 ) (appServices, error) {
 	leases := accountingLeases{
-		references:    lease.New(lease.SharedCapable),
-		exchangeRates: lease.New(lease.ExclusiveOnly),
-		occurrences:   lease.New(lease.ExclusiveOnly),
+		references:     lease.New(lease.SharedCapable),
+		exchangeRates:  lease.New(lease.ExclusiveOnly),
+		recurringState: lease.New(lease.ExclusiveOnly),
 	}
 	services, err := newAccountingServices(appDB, cfg, opts, operationRepo, leases)
 	if err != nil {
@@ -434,6 +434,10 @@ func newAccountingServices(
 				Enabled:     true,
 				ScheduleUTC: cfg.AuditLog.CompactionScheduleUTC,
 			},
+			RecurringCatchUp: operationruns.RecurringCatchUpConfig{
+				Enabled:       true,
+				ScheduleLocal: recurringCatchUpScheduleLocal,
+			},
 		},
 		operationRepo,
 		opts.clock(),
@@ -482,13 +486,13 @@ func newAccountingServices(
 		templateService,
 		exchangeRates,
 		leases.references,
-		leases.occurrences,
+		leases.recurringState,
 		opts.clock(),
 		currencyUsageChanged,
 	)
 	accountService.SetTypeChangeValidator(transactionService)
 	accountService.SetSearchTransactionFacts(transactionService)
-	transactionService.SetFutureProjectionProvider(recurringService)
+	transactionService.SetRecurringProjector(recurringService)
 	return appServices{
 		Dependencies: httpapi.Dependencies{
 			AccountingSchema: accountingschema.NewService(),
@@ -586,7 +590,7 @@ func newDemoService(appDB *store.AppDB, cfg appconfig.Config, opts Options, main
 			return lease.Combine(ctx, []lease.Func{
 				mainServices.Leases.references.WithExclusiveLease,
 				mainServices.Leases.exchangeRates.WithExclusiveLease,
-				mainServices.Leases.occurrences.WithExclusiveLease,
+				mainServices.Leases.recurringState.WithExclusiveLease,
 			}, func(ctx context.Context) error {
 				if err := appDB.WithTx(ctx, nil, func(txAppDB *store.AppDB) error {
 					txServices, err := newAccountingServices(txAppDB, cfg, opts, nil, mainServices.Leases)
@@ -736,6 +740,26 @@ func newAppBackgroundRunner(cfg appconfig.Config, opts Options, services appServ
 		return nil, err
 	}
 
+	recurringCatchUpOp := background.Operation{
+		ID:            operationruns.RecurringCatchUpOperationID,
+		Key:           string(operationruns.RecurringCatchUpOperationID),
+		ScheduleLocal: true,
+		Invocation: background.Invocation{
+			Run: func(ctx context.Context) error {
+				return services.Recurring.CatchUp(ctx, values.LocalCivilDateFromTime(opts.clock().Now()))
+			},
+			Timeout: 2 * time.Minute,
+		},
+		MaxRetries: 0,
+	}
+	if opts.automaticOperationsEnabled() {
+		recurringCatchUpOp.Schedule = recurringCatchUpScheduleLocal
+		recurringCatchUpOp.Startup = true
+	}
+	if err := runner.Register(recurringCatchUpOp); err != nil {
+		return nil, err
+	}
+
 	services.Operations.SetTrigger(runner)
 
 	return runner, nil
@@ -768,6 +792,7 @@ func startupExchangeRateLoad(
 const (
 	exchangeRateLoadTimeout            = 2 * time.Minute
 	frankfurterInitialCacheLoadTimeout = 15 * time.Minute
+	recurringCatchUpScheduleLocal      = "1 0 * * *"
 )
 
 func populatesFrankfurterCacheAtStartup(cfg appconfig.Config, opts Options) bool {

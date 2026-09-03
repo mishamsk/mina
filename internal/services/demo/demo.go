@@ -55,7 +55,6 @@ type Summary struct {
 	TransactionTemplates int
 	Transactions         int
 	RecurringDefinitions int
-	RecurringOccurrences int
 }
 
 // DefaultMaxMonths is the default demo history window.
@@ -520,12 +519,12 @@ func (b *seedBuilder) seedRecurringHistory(ctx context.Context) error {
 	mortgageAnchor := mustCivilDate(b.templateDate("2026-06-05"))
 	chasePaymentAnchor := mustCivilDate(b.templateDate("2026-06-12"))
 	streamingAnchor := mustCivilDate(b.templateDate("2026-06-10"))
-	mortgageOccurrenceAnchor := b.monthlyOccurrenceAnchor("2026-06-05")
-	chasePaymentOccurrenceAnchor := b.monthlyOccurrenceAnchor("2026-06-12")
-	streamingOccurrenceAnchor := b.monthlyOccurrenceAnchor("2026-06-10")
+	mortgageNextSlot := b.monthlyNextSlot("2026-06-05")
+	chasePaymentNextSlot := b.monthlyNextSlot("2026-06-12")
+	streamingNextSlot := b.monthlyNextSlot("2026-06-10")
 	for month := 0; month < DefaultMaxMonths; month++ {
 		mortgageDate := recurring.IntervalDueDate(mortgageAnchor, month-DefaultMaxMonths, "MONTH").Time()
-		if !mortgageDate.After(b.anchorDate.Time()) && mortgageDate.Before(mortgageOccurrenceAnchor.Time()) {
+		if !mortgageDate.After(b.anchorDate.Time()) && mortgageDate.Before(mortgageNextSlot.Time()) {
 			if err := b.tx(ctx, formatDate(mortgageDate),
 				b.rec("bank:Chase:joint_checking", "", "USD", -300000, -300000, "", []string{"Shared:Family"}, "Mortgage payment"),
 				b.rec("bank:Rocket:mortgage", "", "USD", 220000, 220000, "Housing:Mortgage:Principal", []string{"Shared:Family"}, "Mortgage principal"),
@@ -538,7 +537,7 @@ func (b *seedBuilder) seedRecurringHistory(ctx context.Context) error {
 		}
 
 		chasePaymentDate := recurring.IntervalDueDate(chasePaymentAnchor, month-DefaultMaxMonths, "MONTH").Time()
-		if !chasePaymentDate.After(b.anchorDate.Time()) && chasePaymentDate.Before(chasePaymentOccurrenceAnchor.Time()) {
+		if !chasePaymentDate.After(b.anchorDate.Time()) && chasePaymentDate.Before(chasePaymentNextSlot.Time()) {
 			if err := b.tx(ctx, formatDate(chasePaymentDate),
 				b.rec("bank:Chase:joint_checking", "", "USD", -45000, -45000, "", []string{"CardPayment"}, "Credit card payment"),
 				b.rec("bank:Chase:Sapphire", "", "USD", 45000, 45000, "", []string{"CardPayment"}, "Credit card payment"),
@@ -563,14 +562,14 @@ func (b *seedBuilder) seedRecurringHistory(ctx context.Context) error {
 			}
 		}
 		streamingDate := recurring.IntervalDueDate(streamingAnchor, month-DefaultMaxMonths, "MONTH").Time()
-		if !streamingDate.After(b.anchorDate.Time()) && streamingDate.Before(streamingOccurrenceAnchor.Time()) {
+		if !streamingDate.After(b.anchorDate.Time()) && streamingDate.Before(streamingNextSlot.Time()) {
 			if err := b.simpleSpend(ctx, formatDate(streamingDate), "bank:Chase:joint_checking", "merchant:Netflix", "Entertainment:Streaming", 2199, "Streaming subscription", []string{"Shared:Family"}); err != nil {
 				return err
 			}
 		}
 	}
-	weeklyOccurrenceAnchor := b.weeklyOccurrenceAnchor()
-	for date := b.weeklyTransferStartDate(); date.Before(weeklyOccurrenceAnchor.Time()); date = date.AddDate(0, 0, 7) {
+	weeklyNextSlot := b.weeklyNextSlot()
+	for date := b.weeklyTransferStartDate(); date.Before(weeklyNextSlot.Time()); date = date.AddDate(0, 0, 7) {
 		if err := b.tx(ctx, formatDate(date),
 			b.rec("bank:Chase:joint_checking", "", "USD", -25000, -25000, "", []string{"Shared:Family"}, "Weekly savings transfer"),
 			b.rec("bank:Ally:emergency_savings", "", "USD", 25000, 25000, "", []string{"Shared:Family"}, "Weekly savings transfer"),
@@ -583,45 +582,53 @@ func (b *seedBuilder) seedRecurringHistory(ctx context.Context) error {
 }
 
 func (b *seedBuilder) seedRecurringDefinitions(ctx context.Context) error {
-	definitions := []recurring.WriteInput{
+	definitions := []recurring.CreateInput{
 		{
-			FQN:          "Household:Mortgage",
-			ScheduleRule: intervalScheduleRule(1, "MONTH"),
-			AnchorDate:   b.monthlyOccurrenceAnchor("2026-06-05"),
-			Records: []recurring.RecordInput{
-				b.recurringRecord("bank:Chase:joint_checking", "USD", -300000, "", []string{"Shared:Family"}, "Mortgage payment"),
-				b.recurringRecord("bank:Rocket:mortgage", "USD", 220000, "Housing:Mortgage:Principal", []string{"Shared:Family"}, "Mortgage principal"),
-				b.recurringRecord("bank:Rocket:mortgage", "USD", 45000, "Housing:Mortgage:Interest", []string{"Shared:Family"}, "Mortgage interest"),
-				b.recurringRecord("bank:Rocket:mortgage", "USD", 25000, "Housing:Mortgage:Escrow", []string{"Shared:Family"}, "Mortgage escrow"),
-				b.recurringRecord("bank:Rocket:mortgage", "USD", 10000, "Housing:Mortgage:Insurance", []string{"Shared:Family"}, "Mortgage insurance"),
+			WriteInput: recurring.WriteInput{
+				FQN:          "Household:Mortgage",
+				ScheduleRule: intervalScheduleRule(1, "MONTH"),
+				Records: []recurring.RecordInput{
+					b.recurringRecord("bank:Chase:joint_checking", "USD", -300000, "", []string{"Shared:Family"}, "Mortgage payment"),
+					b.recurringRecord("bank:Rocket:mortgage", "USD", 220000, "Housing:Mortgage:Principal", []string{"Shared:Family"}, "Mortgage principal"),
+					b.recurringRecord("bank:Rocket:mortgage", "USD", 45000, "Housing:Mortgage:Interest", []string{"Shared:Family"}, "Mortgage interest"),
+					b.recurringRecord("bank:Rocket:mortgage", "USD", 25000, "Housing:Mortgage:Escrow", []string{"Shared:Family"}, "Mortgage escrow"),
+					b.recurringRecord("bank:Rocket:mortgage", "USD", 10000, "Housing:Mortgage:Insurance", []string{"Shared:Family"}, "Mortgage insurance"),
+				},
 			},
+			AnchorDate: b.monthlyNextSlot("2026-06-05"),
 		},
 		{
-			FQN:          "Subscriptions:Netflix",
-			ScheduleRule: intervalScheduleRule(1, "MONTH"),
-			AnchorDate:   b.monthlyOccurrenceAnchor("2026-06-10"),
-			Records: []recurring.RecordInput{
-				b.recurringRecord("bank:Chase:joint_checking", "USD", -2199, "", []string{"Shared:Family"}, "Streaming subscription"),
-				b.recurringRecord("merchant:Netflix", "USD", 2199, "Entertainment:Streaming", []string{"Shared:Family"}, "Streaming subscription"),
+			WriteInput: recurring.WriteInput{
+				FQN:          "Subscriptions:Netflix",
+				ScheduleRule: intervalScheduleRule(1, "MONTH"),
+				Records: []recurring.RecordInput{
+					b.recurringRecord("bank:Chase:joint_checking", "USD", -2199, "", []string{"Shared:Family"}, "Streaming subscription"),
+					b.recurringRecord("merchant:Netflix", "USD", 2199, "Entertainment:Streaming", []string{"Shared:Family"}, "Streaming subscription"),
+				},
 			},
+			AnchorDate: b.monthlyNextSlot("2026-06-10"),
 		},
 		{
-			FQN:          "Savings:WeeklyTransfer",
-			ScheduleRule: intervalScheduleRule(1, "WEEK"),
-			AnchorDate:   b.weeklyOccurrenceAnchor(),
-			Records: []recurring.RecordInput{
-				b.recurringRecord("bank:Chase:joint_checking", "USD", -25000, "", []string{"Shared:Family"}, "Weekly savings transfer"),
-				b.recurringRecord("bank:Ally:emergency_savings", "USD", 25000, "", []string{"Shared:Family"}, "Weekly savings transfer"),
+			WriteInput: recurring.WriteInput{
+				FQN:          "Savings:WeeklyTransfer",
+				ScheduleRule: intervalScheduleRule(1, "WEEK"),
+				Records: []recurring.RecordInput{
+					b.recurringRecord("bank:Chase:joint_checking", "USD", -25000, "", []string{"Shared:Family"}, "Weekly savings transfer"),
+					b.recurringRecord("bank:Ally:emergency_savings", "USD", 25000, "", []string{"Shared:Family"}, "Weekly savings transfer"),
+				},
 			},
+			AnchorDate: b.weeklyNextSlot(),
 		},
 		{
-			FQN:          "Debt:CreditCardPayment",
-			ScheduleRule: intervalScheduleRule(1, "MONTH"),
-			AnchorDate:   b.monthlyOccurrenceAnchor("2026-06-12"),
-			Records: []recurring.RecordInput{
-				b.recurringRecord("bank:Chase:joint_checking", "USD", -45000, "", []string{"CardPayment"}, "Credit card payment"),
-				b.recurringRecord("bank:Chase:Sapphire", "USD", 45000, "", []string{"CardPayment"}, "Credit card payment"),
+			WriteInput: recurring.WriteInput{
+				FQN:          "Debt:CreditCardPayment",
+				ScheduleRule: intervalScheduleRule(1, "MONTH"),
+				Records: []recurring.RecordInput{
+					b.recurringRecord("bank:Chase:joint_checking", "USD", -45000, "", []string{"CardPayment"}, "Credit card payment"),
+					b.recurringRecord("bank:Chase:Sapphire", "USD", 45000, "", []string{"CardPayment"}, "Credit card payment"),
+				},
 			},
+			AnchorDate: b.monthlyNextSlot("2026-06-12"),
 		},
 	}
 	for _, input := range definitions {
@@ -631,14 +638,9 @@ func (b *seedBuilder) seedRecurringDefinitions(ctx context.Context) error {
 		b.summary.RecurringDefinitions++
 	}
 
-	occurrences, err := b.services.Recurring.ListOccurrences(ctx, recurring.OccurrenceListOptions{
-		ListOptions: services.ListOptions{IncludeTotalCount: true},
-		Today:       b.anchorDate,
-	})
-	if err != nil {
-		return fmt.Errorf("materialize recurring occurrences: %w", err)
+	if err := b.services.Recurring.CatchUp(ctx, b.anchorDate); err != nil {
+		return fmt.Errorf("materialize due recurring transactions: %w", err)
 	}
-	b.summary.RecurringOccurrences = int(occurrences.TotalCount)
 
 	return nil
 }
@@ -1063,7 +1065,7 @@ func (b *seedBuilder) nextWeeklyTransferDate() time.Time {
 	return date
 }
 
-func (b *seedBuilder) monthlyOccurrenceAnchor(nextTemplateDate string) values.CivilDate {
+func (b *seedBuilder) monthlyNextSlot(nextTemplateDate string) values.CivilDate {
 	nextDate := mustCivilDate(b.templateDate(nextTemplateDate))
 	historyStart := b.historyStart()
 	for offset := -2; ; offset++ {
@@ -1074,7 +1076,7 @@ func (b *seedBuilder) monthlyOccurrenceAnchor(nextTemplateDate string) values.Ci
 	}
 }
 
-func (b *seedBuilder) weeklyOccurrenceAnchor() values.CivilDate {
+func (b *seedBuilder) weeklyNextSlot() values.CivilDate {
 	anchor := b.nextWeeklyTransferDate().AddDate(0, 0, -6*7)
 	for anchor.Before(b.historyStart()) {
 		anchor = anchor.AddDate(0, 0, 7)

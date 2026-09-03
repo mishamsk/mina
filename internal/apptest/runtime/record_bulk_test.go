@@ -715,7 +715,7 @@ func TestRecordBulkReassignToFixedSystemAccountBoundary(t *testing.T) {
 	selectedRecordID := created.JSON201.Records[0].RecordId
 	assertBulkResponse(t, reassigned.JSON200, []int64{selectedRecordID})
 
-	read, err := client.REST().GetTransactionWithResponse(context.Background(), created.JSON201.TransactionId)
+	read, err := client.REST().GetTransactionWithResponse(context.Background(), created.JSON201.TransactionId, nil)
 	requireNoTransportError(t, "read system-reassigned transaction", err)
 	if read.StatusCode() != http.StatusOK {
 		t.Fatalf("read reassigned transaction status = %d, want %d; body %s", read.StatusCode(), http.StatusOK, read.Body)
@@ -1003,7 +1003,7 @@ func TestRecordBulkSettlementAndTransactionLifecycleBoundary(t *testing.T) {
 	if cancelled.StatusCode() != http.StatusOK {
 		t.Fatalf("cancel status = %d, want %d; body %s", cancelled.StatusCode(), http.StatusOK, cancelled.Body)
 	}
-	apptest.AssertTransactionLifecycle(t, cancelled.JSON200, httpclient.TransactionLifecycleStatusCancelled)
+	apptest.AssertTransactionLifecycle(t, cancelled.JSON200, httpclient.Cancelled)
 	if cancelled.JSON200.Settlement != httpclient.TransactionSettlementPending {
 		t.Fatalf("cancelled transaction settlement = %q, want pending", cancelled.JSON200.Settlement)
 	}
@@ -1043,7 +1043,7 @@ func TestRecordBulkSettlementAndTransactionLifecycleBoundary(t *testing.T) {
 	if restored.StatusCode() != http.StatusOK {
 		t.Fatalf("restore status = %d, want %d; body %s", restored.StatusCode(), http.StatusOK, restored.Body)
 	}
-	apptest.AssertTransactionLifecycle(t, restored.JSON200, httpclient.TransactionLifecycleStatusActive)
+	apptest.AssertTransactionLifecycle(t, restored.JSON200, httpclient.Active)
 }
 
 func TestRecordBulkSettlementAcceptsExplicitEventTimesBoundary(t *testing.T) {

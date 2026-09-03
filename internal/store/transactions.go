@@ -35,11 +35,11 @@ func (s *TransactionStore) Create(ctx context.Context, req transactions.PersistI
 	err := s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
 		row := tx.QueryRowContext(
 			ctx,
-			`INSERT INTO `+s.db.accountingName("transaction")+` (initiated_date, recurring_occurrence_id, lifecycle_status)
+			`INSERT INTO `+s.db.accountingName("transaction")+` (initiated_date, recurring_definition_id, lifecycle_status)
 VALUES (?, ?, CAST(? AS `+s.db.accountingName("transaction_lifecycle_status")+`))
-RETURNING transaction_id, initiated_date, recurring_occurrence_id, CAST(lifecycle_status AS VARCHAR), created_at, updated_at, tombstoned_at`,
+RETURNING transaction_id, initiated_date, recurring_definition_id, CAST(lifecycle_status AS VARCHAR), created_at, updated_at, tombstoned_at`,
 			civilDateArg(req.InitiatedDate),
-			req.RecurringOccurrenceID,
+			req.RecurringDefinitionID,
 			enumValue(req.LifecycleStatus),
 		)
 		var err error
@@ -51,11 +51,10 @@ RETURNING transaction_id, initiated_date, recurring_occurrence_id, CAST(lifecycl
 		if err := insertJournalRecords(ctx, tx, s.db, transaction.ID, req.Records); err != nil {
 			return err
 		}
-		records, err := recordsByTransactionIDs(ctx, tx, s.db, []int64{transaction.ID})
+		transaction, err = transactionByID(ctx, tx, s.db, transaction.ID, false)
 		if err != nil {
 			return err
 		}
-		transaction.Records = records[transaction.ID]
 
 		return nil
 	})
@@ -75,7 +74,7 @@ func (s *TransactionStore) Replace(ctx context.Context, id int64, req transactio
 	err := s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
 		row := tx.QueryRowContext(
 			ctx,
-			`SELECT transaction_id, initiated_date, recurring_occurrence_id, CAST(lifecycle_status AS VARCHAR), created_at, updated_at, tombstoned_at
+			`SELECT transaction_id, initiated_date, recurring_definition_id, CAST(lifecycle_status AS VARCHAR), created_at, updated_at, tombstoned_at
 FROM `+s.db.accountingName("transaction")+`
 WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 			id,
@@ -92,7 +91,7 @@ WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 			return services.ErrPreconditionFailed
 		}
 
-		currentByTransaction, err := recordsByTransactionIDs(ctx, tx, s.db, []int64{id})
+		currentByTransaction, err := recordsByTransactionIDs(ctx, tx, s.db, []int64{id}, false)
 		if err != nil {
 			return err
 		}
@@ -156,7 +155,7 @@ SET initiated_date = ?,
     lifecycle_status = CAST(? AS `+s.db.accountingName("transaction_lifecycle_status")+`),
     updated_at = CURRENT_TIMESTAMP
 WHERE transaction_id = ? AND tombstoned_at IS NULL AND updated_at = ?
-RETURNING transaction_id, initiated_date, recurring_occurrence_id, CAST(lifecycle_status AS VARCHAR), created_at, updated_at, tombstoned_at`, civilDateArg(req.InitiatedDate), enumValue(req.LifecycleStatus), id, timestampArg(*req.ExpectedUpdatedAt)))
+RETURNING transaction_id, initiated_date, recurring_definition_id, CAST(lifecycle_status AS VARCHAR), created_at, updated_at, tombstoned_at`, civilDateArg(req.InitiatedDate), enumValue(req.LifecycleStatus), id, timestampArg(*req.ExpectedUpdatedAt)))
 			if errors.Is(err, sql.ErrNoRows) {
 				return services.ErrPreconditionFailed
 			}
@@ -164,11 +163,10 @@ RETURNING transaction_id, initiated_date, recurring_occurrence_id, CAST(lifecycl
 				return fmt.Errorf("update reconciled transaction: %w", err)
 			}
 		}
-		records, err := recordsByTransactionIDs(ctx, tx, s.db, []int64{transaction.ID})
+		transaction, err = transactionByID(ctx, tx, s.db, transaction.ID, false)
 		if err != nil {
 			return err
 		}
-		transaction.Records = records[transaction.ID]
 
 		return nil
 	})
@@ -178,7 +176,6 @@ RETURNING transaction_id, initiated_date, recurring_occurrence_id, CAST(lifecycl
 		}
 		return transactions.Transaction{}, err
 	}
-
 	return transaction, nil
 }
 
@@ -340,83 +337,28 @@ RETURNING transaction_id`)
 }
 
 // Get returns a transaction with nested journal records.
-func (s *TransactionStore) Get(ctx context.Context, id int64) (transactions.Transaction, error) {
-	transaction, err := scanTransaction(s.db.query().QueryRowContext(
-		ctx,
-		`SELECT transaction_id, initiated_date, recurring_occurrence_id, CAST(lifecycle_status AS VARCHAR), created_at, updated_at, tombstoned_at
-FROM `+s.db.accountingName("transaction")+`
-WHERE transaction_id = ? AND tombstoned_at IS NULL`,
-		id,
-	))
+func (s *TransactionStore) Get(ctx context.Context, id int64, includeTombstoned bool) (transactions.Transaction, error) {
+	transaction, err := transactionByID(ctx, s.db.query(), s.db, id, includeTombstoned)
 	if errors.Is(err, sql.ErrNoRows) {
 		return transactions.Transaction{}, services.ErrNotFound
 	}
 	if err != nil {
-		return transactions.Transaction{}, fmt.Errorf("get transaction: %w", err)
-	}
-
-	records, err := s.RecordsByTransactionIDs(ctx, []int64{id})
-	if err != nil {
 		return transactions.Transaction{}, err
 	}
-	transaction.Records = records[id]
 
 	return transaction, nil
 }
 
 // TransactionsByIDs returns active transactions and their records in request order.
 func (s *TransactionStore) TransactionsByIDs(ctx context.Context, transactionIDs []int64) ([]transactions.Transaction, error) {
-	if len(transactionIDs) == 0 {
-		return []transactions.Transaction{}, nil
-	}
-	rows, err := s.db.query().QueryContext(
-		ctx,
-		`SELECT transaction_id, initiated_date, recurring_occurrence_id, CAST(lifecycle_status AS VARCHAR), created_at, updated_at, tombstoned_at
-FROM `+s.db.accountingName("transaction")+`
-WHERE transaction_id IN (`+placeholders(len(transactionIDs))+`) AND tombstoned_at IS NULL`,
-		int64Args(transactionIDs)...,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("list transactions by IDs: %w", err)
-	}
-	byID := make(map[int64]transactions.Transaction, len(transactionIDs))
-	for rows.Next() {
-		transaction, scanErr := scanTransaction(rows)
-		if scanErr != nil {
-			_ = rows.Close()
-			return nil, fmt.Errorf("scan transaction by IDs: %w", scanErr)
-		}
-		byID[transaction.ID] = transaction
-	}
-	if err := rows.Err(); err != nil {
-		_ = rows.Close()
-		return nil, fmt.Errorf("iterate transactions by IDs: %w", err)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, fmt.Errorf("close transactions by IDs: %w", err)
-	}
-
-	records, err := s.RecordsByTransactionIDs(ctx, transactionIDs)
-	if err != nil {
-		return nil, err
-	}
-	result := make([]transactions.Transaction, 0, len(byID))
-	for _, id := range transactionIDs {
-		transaction, ok := byID[id]
-		if !ok {
-			continue
-		}
-		transaction.Records = records[id]
-		result = append(result, transaction)
-	}
-	return result, nil
+	return activeTransactionsByIDs(ctx, s.db.query(), s.db, transactionIDs)
 }
 
 // List returns transactions with nested journal records in deterministic date order.
 func (s *TransactionStore) List(ctx context.Context, opts transactions.ListOptions) (transactions.ListResult, error) {
 	predicate := s.transactionListPredicate(opts)
-	query := `SELECT tx.transaction_id, tx.initiated_date, tx.recurring_occurrence_id, CAST(tx.lifecycle_status AS VARCHAR), tx.created_at, tx.updated_at, tx.tombstoned_at
-` + predicate.query
+	query := `SELECT ` + transactionSelectColumns("tx") + `
+` + predicate.from + transactionDefinitionJoin(s.db, "tx") + predicate.where
 	position, err := s.transactionListPosition(ctx, opts, predicate)
 	if err != nil {
 		return transactions.ListResult{}, err
@@ -448,7 +390,7 @@ func (s *TransactionStore) List(ctx context.Context, opts transactions.ListOptio
 	transactionItems := []transactions.Transaction{}
 	transactionIDs := []int64{}
 	for rows.Next() {
-		transaction, err := scanTransaction(rows)
+		transaction, err := scanTransactionWithProvenance(rows)
 		if err != nil {
 			return transactions.ListResult{}, fmt.Errorf("scan transaction: %w", err)
 		}
@@ -472,7 +414,6 @@ func (s *TransactionStore) List(ctx context.Context, opts transactions.ListOptio
 	for index := range transactionItems {
 		transactionItems[index].Records = records[transactionItems[index].ID]
 	}
-
 	return transactions.ListResult{
 		Items:      transactionItems,
 		Offset:     position.Offset,
@@ -486,7 +427,7 @@ func (s *TransactionStore) ListPosition(ctx context.Context, opts transactions.L
 }
 
 func (s *TransactionStore) transactionListPosition(ctx context.Context, opts transactions.ListOptions, predicate transactionListPredicate) (transactions.PagePosition, error) {
-	totalCount, err := countMatchingRows(ctx, s.db.query(), "SELECT COUNT(*) "+predicate.query, predicate.args, "transactions", opts.IncludeTotalCount)
+	totalCount, err := countMatchingRows(ctx, s.db.query(), "SELECT COUNT(*) "+predicate.from+predicate.where, predicate.args, "transactions", opts.IncludeTotalCount)
 	if err != nil {
 		return transactions.PagePosition{}, err
 	}
@@ -501,30 +442,32 @@ func (s *TransactionStore) transactionListPosition(ctx context.Context, opts tra
 }
 
 type transactionListPredicate struct {
-	query string
+	from  string
+	where string
 	args  []any
 }
 
 func (s *TransactionStore) transactionListPredicate(opts transactions.ListOptions) transactionListPredicate {
-	query := `FROM ` + s.db.accountingName("transaction") + ` tx
+	from := `FROM ` + s.db.accountingName("transaction") + ` tx`
+	where := `
 WHERE tx.tombstoned_at IS NULL`
 	args := []any{}
 	if opts.Filter == nil {
-		query += " AND tx.lifecycle_status <> CAST('EXPECTED' AS " + s.db.accountingName("transaction_lifecycle_status") + ")"
+		where += " AND tx.lifecycle_status <> CAST('EXPECTED' AS " + s.db.accountingName("transaction_lifecycle_status") + ")"
 	}
 	if len(opts.TransactionClasses) > 0 {
-		query += " AND " + s.transactionListClassExpression() + " IN (" + placeholders(len(opts.TransactionClasses)) + ")"
+		where += " AND " + s.transactionListClassExpression() + " IN (" + placeholders(len(opts.TransactionClasses)) + ")"
 		for _, class := range opts.TransactionClasses {
 			args = append(args, string(class))
 		}
 	}
 	if opts.Filter != nil {
-		query += " AND " + s.transactionFilterExpressionSQL(opts.Filter.Expression, &args)
+		where += " AND " + s.transactionFilterExpressionSQL(opts.Filter.Expression, &args)
 	}
 	if opts.Search != nil {
 		searchTerm := strings.ToLower(*opts.Search)
 		searchPattern := "%" + escapeLikePattern(searchTerm) + "%"
-		query += ` AND EXISTS (
+		where += ` AND EXISTS (
 	SELECT 1
 	FROM ` + s.db.accountingName("journal_record") + ` jr
 	LEFT JOIN ` + s.db.accountingName("category") + ` c ON c.category_id = jr.category_id
@@ -558,7 +501,7 @@ WHERE tx.tombstoned_at IS NULL`
 		)
 	}
 
-	return transactionListPredicate{query: query, args: args}
+	return transactionListPredicate{from: from, where: where, args: args}
 }
 
 func (s *TransactionStore) transactionSettlementExpression() string {
@@ -836,7 +779,7 @@ func (s *TransactionStore) transactionAnchorOffset(ctx context.Context, anchor v
 	var totalCount int64
 	if err := s.db.query().QueryRowContext(
 		ctx,
-		`SELECT COUNT(*) `+predicate.query,
+		`SELECT COUNT(*) `+predicate.from+predicate.where,
 		predicate.args...,
 	).Scan(&totalCount); err != nil {
 		return 0, fmt.Errorf("count transactions for anchor offset: %w", err)
@@ -849,7 +792,7 @@ func (s *TransactionStore) transactionAnchorOffset(ctx context.Context, anchor v
 	anchorArgs := append(slices.Clone(predicate.args), civilDateArg(anchor))
 	err := s.db.query().QueryRowContext(
 		ctx,
-		`SELECT COUNT(*) `+predicate.query+` AND tx.initiated_date > ?`,
+		`SELECT COUNT(*) `+predicate.from+predicate.where+` AND tx.initiated_date > ?`,
 		anchorArgs...,
 	).Scan(&anchorIndex)
 	if err != nil {
@@ -946,12 +889,12 @@ WHERE transaction_id = ?
 	  AND jr.tombstoned_at IS NULL
 	  AND jr.posted_date IS NOT NULL
   )
-RETURNING transaction_id, initiated_date, recurring_occurrence_id, CAST(lifecycle_status AS VARCHAR), created_at, updated_at, tombstoned_at`,
+RETURNING transaction_id, initiated_date, recurring_definition_id, CAST(lifecycle_status AS VARCHAR), created_at, updated_at, tombstoned_at`,
 			id,
 			id,
 		))
 		if errors.Is(err, sql.ErrNoRows) {
-			current, lookupErr := scanTransaction(tx.QueryRowContext(ctx, `SELECT transaction_id, initiated_date, recurring_occurrence_id,
+			current, lookupErr := scanTransaction(tx.QueryRowContext(ctx, `SELECT transaction_id, initiated_date, recurring_definition_id,
 	CAST(lifecycle_status AS VARCHAR), created_at, updated_at, tombstoned_at
 FROM `+s.db.accountingName("transaction")+`
 WHERE transaction_id = ? AND tombstoned_at IS NULL`, id))
@@ -961,13 +904,8 @@ WHERE transaction_id = ? AND tombstoned_at IS NULL`, id))
 				return fmt.Errorf("inspect rejected transaction cancellation: %w", lookupErr)
 			}
 			if current.LifecycleStatus == transactions.LifecycleStatusCancelled {
-				records, recordsErr := recordsByTransactionIDs(ctx, tx, s.db, []int64{id})
-				if recordsErr != nil {
-					return recordsErr
-				}
-				current.Records = records[id]
-				transaction = current
-				return nil
+				transaction, err = transactionByID(ctx, tx, s.db, id, false)
+				return err
 			}
 			if current.LifecycleStatus != transactions.LifecycleStatusActive {
 				return transactions.ErrInactiveTransactionMutation
@@ -978,17 +916,12 @@ WHERE transaction_id = ? AND tombstoned_at IS NULL`, id))
 			return fmt.Errorf("get transaction for cancel: %w", err)
 		}
 
-		records, err := recordsByTransactionIDs(ctx, tx, s.db, []int64{id})
-		if err != nil {
-			return err
-		}
-		transaction.Records = records[id]
-
-		return nil
+		transaction, err = transactionByID(ctx, tx, s.db, id, false)
+		return err
 	})
 	if err != nil {
 		if isDuckDBTransactionConflictError(err) {
-			current, getErr := s.Get(ctx, id)
+			current, getErr := s.Get(ctx, id, false)
 			if getErr != nil {
 				if errors.Is(getErr, services.ErrNotFound) {
 					return transactions.Transaction{}, getErr
@@ -1010,7 +943,6 @@ WHERE transaction_id = ? AND tombstoned_at IS NULL`, id))
 		}
 		return transactions.Transaction{}, err
 	}
-
 	return transaction, nil
 }
 
@@ -1027,11 +959,11 @@ SET lifecycle_status = CAST('ACTIVE' AS `+s.db.accountingName("transaction_lifec
 WHERE transaction_id = ?
   AND tombstoned_at IS NULL
   AND lifecycle_status = CAST('CANCELLED' AS `+s.db.accountingName("transaction_lifecycle_status")+`)
-RETURNING transaction_id, initiated_date, recurring_occurrence_id, CAST(lifecycle_status AS VARCHAR), created_at, updated_at, tombstoned_at`,
+RETURNING transaction_id, initiated_date, recurring_definition_id, CAST(lifecycle_status AS VARCHAR), created_at, updated_at, tombstoned_at`,
 			id,
 		))
 		if errors.Is(err, sql.ErrNoRows) {
-			current, lookupErr := scanTransaction(tx.QueryRowContext(ctx, `SELECT transaction_id, initiated_date, recurring_occurrence_id,
+			current, lookupErr := scanTransaction(tx.QueryRowContext(ctx, `SELECT transaction_id, initiated_date, recurring_definition_id,
 	CAST(lifecycle_status AS VARCHAR), created_at, updated_at, tombstoned_at
 FROM `+s.db.accountingName("transaction")+`
 WHERE transaction_id = ? AND tombstoned_at IS NULL`, id))
@@ -1044,27 +976,18 @@ WHERE transaction_id = ? AND tombstoned_at IS NULL`, id))
 			if current.LifecycleStatus != transactions.LifecycleStatusActive {
 				return transactions.ErrInactiveTransactionMutation
 			}
-			records, recordsErr := recordsByTransactionIDs(ctx, tx, s.db, []int64{id})
-			if recordsErr != nil {
-				return recordsErr
-			}
-			current.Records = records[id]
-			transaction = current
-			return nil
+			transaction, err = transactionByID(ctx, tx, s.db, id, false)
+			return err
 		}
 		if err != nil {
 			return fmt.Errorf("restore transaction: %w", err)
 		}
-		records, err := recordsByTransactionIDs(ctx, tx, s.db, []int64{id})
-		if err != nil {
-			return err
-		}
-		transaction.Records = records[id]
-		return nil
+		transaction, err = transactionByID(ctx, tx, s.db, id, false)
+		return err
 	})
 	if err != nil {
 		if isDuckDBTransactionConflictError(err) {
-			current, getErr := s.Get(ctx, id)
+			current, getErr := s.Get(ctx, id, false)
 			if getErr != nil {
 				if errors.Is(getErr, services.ErrNotFound) {
 					return transactions.Transaction{}, getErr
@@ -1668,28 +1591,49 @@ type transactionScanner interface {
 }
 
 func scanTransaction(scanner transactionScanner) (transactions.Transaction, error) {
+	return scanTransactionFields(scanner, false)
+}
+
+func scanTransactionWithProvenance(scanner transactionScanner) (transactions.Transaction, error) {
+	return scanTransactionFields(scanner, true)
+}
+
+func scanTransactionFields(scanner transactionScanner, withProvenance bool) (transactions.Transaction, error) {
 	var transaction transactions.Transaction
 	var initiatedDate time.Time
-	var recurringOccurrenceID sql.NullInt64
+	var recurringDefinitionID sql.NullInt64
+	var recurringDefinitionFQN sql.NullString
+	var recurringDefinitionActive sql.NullBool
 	var lifecycleStatus string
 	var createdAt time.Time
 	var updatedAt time.Time
 	var tombstonedAt sql.NullTime
-	if err := scanner.Scan(
+	destinations := []any{
 		&transaction.ID,
 		&initiatedDate,
-		&recurringOccurrenceID,
+		&recurringDefinitionID,
 		&lifecycleStatus,
 		&createdAt,
 		&updatedAt,
 		&tombstonedAt,
-	); err != nil {
+	}
+	if withProvenance {
+		destinations = append(destinations, &recurringDefinitionFQN, &recurringDefinitionActive)
+	}
+	if err := scanner.Scan(destinations...); err != nil {
 		return transactions.Transaction{}, err
 	}
 	transaction.InitiatedDate = values.CivilDateFromTime(initiatedDate)
 	transaction.LifecycleStatus = transactions.LifecycleStatus(strings.ToLower(lifecycleStatus))
-	if recurringOccurrenceID.Valid {
-		transaction.RecurringOccurrenceID = &recurringOccurrenceID.Int64
+	if recurringDefinitionID.Valid {
+		transaction.RecurringDefinitionID = &recurringDefinitionID.Int64
+		if withProvenance {
+			if !recurringDefinitionFQN.Valid || !recurringDefinitionActive.Valid {
+				return transactions.Transaction{}, fmt.Errorf("transaction %d references missing recurring definition %d", transaction.ID, recurringDefinitionID.Int64)
+			}
+			transaction.RecurringDefinitionFQN = &recurringDefinitionFQN.String
+			transaction.RecurringDefinitionActive = &recurringDefinitionActive.Bool
+		}
 	}
 	transaction.CreatedAt = createdAt.UTC()
 	transaction.UpdatedAt = updatedAt.UTC()
@@ -1998,7 +1942,7 @@ func scanJournalRecord(scanner journalRecordScanner) (transactions.JournalRecord
 	return record, nil
 }
 
-func recordsByTransactionIDs(ctx context.Context, queryer rowsQuerier, db *AppDB, transactionIDs []int64) (map[int64][]transactions.JournalRecord, error) {
+func recordsByTransactionIDs(ctx context.Context, queryer rowsQuerier, db *AppDB, transactionIDs []int64, includeTombstoned bool) (map[int64][]transactions.JournalRecord, error) {
 	recordsByTransactionID := map[int64][]transactions.JournalRecord{}
 	for _, id := range transactionIDs {
 		recordsByTransactionID[id] = []transactions.JournalRecord{}
@@ -2007,6 +1951,10 @@ func recordsByTransactionIDs(ctx context.Context, queryer rowsQuerier, db *AppDB
 		return recordsByTransactionID, nil
 	}
 
+	tombstonePredicate := " AND jr.tombstoned_at IS NULL"
+	if includeTombstoned {
+		tombstonePredicate = " AND jr.tombstoned_at = tx.tombstoned_at"
+	}
 	rows, err := queryer.QueryContext(
 		ctx,
 		`SELECT jr.record_id, jr.transaction_id, jr.account_id, jr.member_id, jr.currency, jr.amount, jr.amount_usd, jr.category_id,
@@ -2017,7 +1965,7 @@ FROM `+db.accountingName("journal_record")+` jr
 JOIN `+db.accountingName("transaction")+` tx ON tx.transaction_id = jr.transaction_id
 JOIN `+db.accountingName("account")+` a ON a.account_id = jr.account_id
 LEFT JOIN `+db.accountingName("category")+` c ON c.category_id = jr.category_id
-WHERE jr.transaction_id IN (`+placeholders(len(transactionIDs))+`) AND jr.tombstoned_at IS NULL
+WHERE jr.transaction_id IN (`+placeholders(len(transactionIDs))+`)`+tombstonePredicate+`
 ORDER BY jr.transaction_id ASC, jr.record_id ASC`,
 		int64Args(transactionIDs)...,
 	)
@@ -2047,14 +1995,100 @@ ORDER BY jr.transaction_id ASC, jr.record_id ASC`,
 
 // RecordsByTransactionIDs returns active journal records grouped by transaction ID.
 func (s *TransactionStore) RecordsByTransactionIDs(ctx context.Context, transactionIDs []int64) (map[int64][]transactions.JournalRecord, error) {
-	return recordsByTransactionIDs(ctx, s.db.query(), s.db, transactionIDs)
+	return recordsByTransactionIDs(ctx, s.db.query(), s.db, transactionIDs, false)
 }
 
 type rowsQuerier interface {
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 }
 
-func transactionsByRecordIDs(ctx context.Context, queryer rowsQuerier, db *AppDB, recordIDs []int64) ([]transactions.Transaction, error) {
+type transactionQueryer interface {
+	rowQuerier
+	rowsQuerier
+}
+
+func transactionSelectColumns(alias string) string {
+	return alias + `.transaction_id, ` + alias + `.initiated_date, ` + alias + `.recurring_definition_id, CAST(` + alias + `.lifecycle_status AS VARCHAR), ` + alias + `.created_at, ` + alias + `.updated_at, ` + alias + `.tombstoned_at,
+	rd.fqn, CASE WHEN rd.recurring_definition_id IS NULL THEN NULL ELSE rd.tombstoned_at IS NULL END`
+}
+
+func transactionDefinitionJoin(db *AppDB, alias string) string {
+	return ` LEFT JOIN ` + db.accountingName("recurring_definition") + ` rd ON rd.recurring_definition_id = ` + alias + `.recurring_definition_id`
+}
+
+func transactionByID(ctx context.Context, queryer transactionQueryer, db *AppDB, id int64, includeTombstoned bool) (transactions.Transaction, error) {
+	tombstonePredicate := " AND tx.tombstoned_at IS NULL"
+	if includeTombstoned {
+		tombstonePredicate = ""
+	}
+	transaction, err := scanTransactionWithProvenance(queryer.QueryRowContext(ctx,
+		`SELECT `+transactionSelectColumns("tx")+`
+FROM `+db.accountingName("transaction")+` tx`+transactionDefinitionJoin(db, "tx")+`
+WHERE tx.transaction_id = ?`+tombstonePredicate,
+		id,
+	))
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return transactions.Transaction{}, err
+		}
+		return transactions.Transaction{}, fmt.Errorf("get transaction: %w", err)
+	}
+
+	records, err := recordsByTransactionIDs(ctx, queryer, db, []int64{id}, includeTombstoned && transaction.TombstonedAt != nil)
+	if err != nil {
+		return transactions.Transaction{}, err
+	}
+	transaction.Records = records[id]
+	return transaction, nil
+}
+
+func activeTransactionsByIDs(ctx context.Context, queryer transactionQueryer, db *AppDB, transactionIDs []int64) ([]transactions.Transaction, error) {
+	if len(transactionIDs) == 0 {
+		return []transactions.Transaction{}, nil
+	}
+	rows, err := queryer.QueryContext(ctx,
+		`SELECT `+transactionSelectColumns("tx")+`
+FROM `+db.accountingName("transaction")+` tx`+transactionDefinitionJoin(db, "tx")+`
+WHERE tx.transaction_id IN (`+placeholders(len(transactionIDs))+`) AND tx.tombstoned_at IS NULL`,
+		int64Args(transactionIDs)...,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list transactions by IDs: %w", err)
+	}
+	byID := make(map[int64]transactions.Transaction, len(transactionIDs))
+	for rows.Next() {
+		transaction, scanErr := scanTransactionWithProvenance(rows)
+		if scanErr != nil {
+			_ = rows.Close()
+			return nil, fmt.Errorf("scan transaction by IDs: %w", scanErr)
+		}
+		byID[transaction.ID] = transaction
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return nil, fmt.Errorf("iterate transactions by IDs: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, fmt.Errorf("close transactions by IDs: %w", err)
+	}
+
+	records, err := recordsByTransactionIDs(ctx, queryer, db, transactionIDs, false)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]transactions.Transaction, 0, len(byID))
+	for _, id := range transactionIDs {
+		transaction, ok := byID[id]
+		if !ok {
+			continue
+		}
+		transaction.Records = records[id]
+		result = append(result, transaction)
+	}
+	return result, nil
+}
+
+func transactionsByRecordIDs(ctx context.Context, queryer transactionQueryer, db *AppDB, recordIDs []int64) ([]transactions.Transaction, error) {
 	transactionIDs, err := transactionIDsByRecordIDs(ctx, queryer, db, recordIDs)
 	if err != nil {
 		return nil, err
@@ -2063,25 +2097,10 @@ func transactionsByRecordIDs(ctx context.Context, queryer rowsQuerier, db *AppDB
 		return nil, services.ErrInvalidReference
 	}
 
-	records, err := recordsByTransactionIDs(ctx, queryer, db, transactionIDs)
-	if err != nil {
-		return nil, err
-	}
-	affected := make([]transactions.Transaction, 0, len(transactionIDs))
-	for _, transactionID := range transactionIDs {
-		transactionRecords := records[transactionID]
-		transaction := transactions.Transaction{ID: transactionID, Records: transactionRecords}
-		if len(transactionRecords) > 0 {
-			transaction.InitiatedDate = transactionRecords[0].InitiatedDate
-			transaction.LifecycleStatus = transactionRecords[0].LifecycleStatus
-		}
-		affected = append(affected, transaction)
-	}
-
-	return affected, nil
+	return activeTransactionsByIDs(ctx, queryer, db, transactionIDs)
 }
 
-func transactionsByAccountID(ctx context.Context, queryer rowsQuerier, db *AppDB, accountID int64) ([]transactions.Transaction, error) {
+func transactionsByAccountID(ctx context.Context, queryer transactionQueryer, db *AppDB, accountID int64) ([]transactions.Transaction, error) {
 	transactionIDs, err := transactionIDsByAccountID(ctx, queryer, db, accountID)
 	if err != nil {
 		return nil, err
@@ -2090,22 +2109,7 @@ func transactionsByAccountID(ctx context.Context, queryer rowsQuerier, db *AppDB
 		return []transactions.Transaction{}, nil
 	}
 
-	records, err := recordsByTransactionIDs(ctx, queryer, db, transactionIDs)
-	if err != nil {
-		return nil, err
-	}
-	affected := make([]transactions.Transaction, 0, len(transactionIDs))
-	for _, transactionID := range transactionIDs {
-		transactionRecords := records[transactionID]
-		transaction := transactions.Transaction{ID: transactionID, Records: transactionRecords}
-		if len(transactionRecords) > 0 {
-			transaction.InitiatedDate = transactionRecords[0].InitiatedDate
-			transaction.LifecycleStatus = transactionRecords[0].LifecycleStatus
-		}
-		affected = append(affected, transaction)
-	}
-
-	return affected, nil
+	return activeTransactionsByIDs(ctx, queryer, db, transactionIDs)
 }
 
 func transactionIDsByRecordIDs(ctx context.Context, queryer rowsQuerier, db *AppDB, recordIDs []int64) ([]int64, error) {
@@ -2232,11 +2236,10 @@ func validateJournalRecordsForMutation(ctx context.Context, queryer rowQuerier, 
 		ctx,
 		`SELECT
 	COUNT(DISTINCT jr.record_id),
-	COUNT(*) FILTER (WHERE o.status = CAST('EXPECTED' AS `+db.accountingName("recurring_occurrence_status")+`)),
+	COUNT(*) FILTER (WHERE tr.recurring_definition_id IS NOT NULL AND tr.lifecycle_status = CAST('EXPECTED' AS `+db.accountingName("transaction_lifecycle_status")+`)),
 	COUNT(*) FILTER (WHERE tr.lifecycle_status <> CAST('ACTIVE' AS `+db.accountingName("transaction_lifecycle_status")+`))
 FROM `+db.accountingName("journal_record")+` AS jr
 JOIN `+db.accountingName("transaction")+` AS tr ON tr.transaction_id = jr.transaction_id
-LEFT JOIN `+db.accountingName("recurring_occurrence")+` AS o ON o.recurring_occurrence_id = tr.recurring_occurrence_id
 WHERE jr.record_id IN (`+placeholders(len(recordIDs))+`)
   AND jr.tombstoned_at IS NULL
   AND tr.tombstoned_at IS NULL`,
@@ -2269,18 +2272,15 @@ func (s *TransactionStore) classifyActiveJournalRecordConflict(ctx context.Conte
 
 func validateTransactionNotExpected(ctx context.Context, queryer rowQuerier, db *AppDB, transactionID int64) error {
 	var expected bool
-	err := queryer.QueryRowContext(ctx, `SELECT COALESCE(
-	o.status = CAST('EXPECTED' AS `+db.accountingName("recurring_occurrence_status")+`),
-	FALSE
-)
+	err := queryer.QueryRowContext(ctx, `SELECT
+	recurring_definition_id IS NOT NULL AND lifecycle_status = CAST('EXPECTED' AS `+db.accountingName("transaction_lifecycle_status")+`)
 FROM `+db.accountingName("transaction")+` AS tr
-LEFT JOIN `+db.accountingName("recurring_occurrence")+` AS o ON o.recurring_occurrence_id = tr.recurring_occurrence_id
 WHERE tr.transaction_id = ? AND tr.tombstoned_at IS NULL`, transactionID).Scan(&expected)
 	if errors.Is(err, sql.ErrNoRows) {
 		return services.ErrNotFound
 	}
 	if err != nil {
-		return fmt.Errorf("validate transaction recurring occurrence state: %w", err)
+		return fmt.Errorf("validate expected recurring transaction state: %w", err)
 	}
 	if expected {
 		return transactions.ErrExpectedRecurringMutation

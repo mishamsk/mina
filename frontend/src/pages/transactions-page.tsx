@@ -331,8 +331,8 @@ export const TransactionsPage = () => {
             onConfirmNextRecurringProjection={
               browser.confirmNextRecurringProjection
             }
-            onConfirmRecurringOccurrence={
-              browser.confirmRecurringOccurrenceFromRow
+            onConfirmExpectedTransaction={
+              browser.confirmExpectedTransactionFromRow
             }
             onDeferRecurringProjection={browser.deferRecurringProjection}
             onChangeTransactionLifecycle={browser.changeTransactionLifecycle}
@@ -363,8 +363,8 @@ export const TransactionsPage = () => {
             onDiscardTransactionAmountConflict={
               browser.discardTransactionAmountConflict
             }
-            onDismissRecurringOccurrence={
-              browser.dismissRecurringOccurrenceFromRow
+            onDismissExpectedTransaction={
+              browser.dismissExpectedTransactionFromRow
             }
             onLoadRecurringDefinitionForProjection={
               browser.loadRecurringDefinitionForProjection
@@ -437,10 +437,10 @@ export const TransactionsPage = () => {
             onChangeLifecycle={browser.changeTransactionLifecycle}
             onClose={browser.detail.closeTransactionDetail}
             onConfirmNextProjection={browser.confirmNextRecurringProjection}
-            onConfirmOccurrence={browser.confirmRecurringOccurrenceFromRow}
+            onConfirmExpected={browser.confirmExpectedTransactionFromRow}
             onDeferProjection={browser.deferRecurringProjection}
             onDelete={browser.deleteSelectedTransaction}
-            onDismissOccurrence={browser.dismissRecurringOccurrenceFromRow}
+            onDismissExpected={browser.dismissExpectedTransactionFromRow}
             onDuplicate={duplicateTransaction}
             onEdit={editTransaction}
             onPost={browser.postTransaction}

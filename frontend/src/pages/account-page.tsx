@@ -372,9 +372,9 @@ const AccountPageContent = ({ accountId }: { readonly accountId: number }) => {
           lookups={resource.lookups.snapshot}
           onChangeLifecycle={registerDetail.changeTransactionLifecycle}
           onClose={registerDetail.detail.closeTransactionDetail}
-          onConfirmOccurrence={registerDetail.confirmRecurringOccurrence}
+          onConfirmExpected={registerDetail.confirmExpectedTransaction}
           onDelete={registerDetail.deleteTransaction}
-          onDismissOccurrence={registerDetail.dismissRecurringOccurrence}
+          onDismissExpected={registerDetail.dismissExpectedTransaction}
           onDuplicate={(transaction) => {
             openEntry(transaction, "duplicate");
           }}
