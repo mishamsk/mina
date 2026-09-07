@@ -38,6 +38,9 @@ This repository is Mina, a local-first personal finance system implemented in Go
 
 ## Development Workflow
 
+- Complete authorized, in-scope work using repository evidence and reasonable assumptions for routine choices. Ask only when a missing decision materially changes the result; in unattended sessions, report the blocker and complete independent authorized work.
+- User instructions take precedence over skill guidance. If a skill blocks progress, identify the exact file and instruction and explain the conflict rather than inferring an approval requirement.
+
 For every commit:
 
 - For application code changes, run `just pre-commit`, `just test` during developement and before committing.

@@ -3,10 +3,10 @@ import? "~/.justfile"
 set shell := ["bash", "-euo", "pipefail", "-c"]
 set windows-shell := ["pwsh", "-NoLogo", "-Command"]
 
-default_codex_model := "gpt-5.6-sol"
-default_codex_reasoning_effort := "high"
-planning_codex_reasoning_effort := "xhigh"
-agent_model_thinking_levels := "claude-opus-5-high\nclaude-opus-5-xhigh\ncodex-5.6-sol-high\ncodex-5.6-sol-xhigh\ncodex-5.6-terra-high\ncodex-5.6-terra-xhigh"
+default_codex_model := "gpt-6-astra"
+default_codex_reasoning_effort := "medium"
+planning_codex_reasoning_effort := "medium"
+agent_model_thinking_levels := "claude-opus-5-high\nclaude-opus-5-xhigh\ncodex-6-astra-medium\ncodex-6-astra-high\ncodex-5.6-terra-high\ncodex-5.6-terra-xhigh"
 
 [private]
 @default:
@@ -484,7 +484,7 @@ garden-docs limit="" codex="5.6-terra/high":
 
 # Run the repository-local review loop through local Codex and Claude CLI sessions.
 [group('agents')]
-review-loop mode context branch_or_commit="" base_ref="" max_iterations="" claude_review_percent="" claude_model="opus" codex_reviewer="5.6-sol/xhigh" codex_aggregator="5.6-sol/medium" codex_validator="5.6-sol/high" codex_fixer="5.6-sol/high":
+review-loop mode context branch_or_commit="" base_ref="" max_iterations="" claude_review_percent="" claude_model="opus" codex_reviewer="6-astra/medium" codex_aggregator="6-astra/medium" codex_validator="6-astra/medium" codex_fixer="6-astra/medium":
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -597,7 +597,7 @@ codex-goal-fleet plan_file="":
     }
     [ -f "$plan_file" ] || { echo "fleet plan not found: $plan_file" >&2; exit 1; }
 
-    command codex -m gpt-5.6-sol -c model_reasoning_effort=xhigh --dangerously-bypass-approvals-and-sandbox "/goal Operate @${plan_file}. The plan's completion criteria define when the goal is complete."
+    command codex -m gpt-6-astra -c model_reasoning_effort=high --dangerously-bypass-approvals-and-sandbox "/goal Operate @${plan_file}. The plan's completion criteria define when the goal is complete."
 
 # List currently actionable, unclaimed parent Kata issues as tab-separated rows.
 [private]
@@ -715,8 +715,8 @@ kata-implement:
         claude-opus-5-*)
             exec claude --model claude-opus-5 --effort "$thinking_effort" --dangerously-skip-permissions "$prompt"
             ;;
-        codex-5.6-sol-*)
-            exec codex -m gpt-5.6-sol -c "model_reasoning_effort=$thinking_effort" --dangerously-bypass-approvals-and-sandbox "$prompt"
+        codex-6-astra-*)
+            exec codex -m gpt-6-astra -c "model_reasoning_effort=$thinking_effort" --dangerously-bypass-approvals-and-sandbox "$prompt"
             ;;
         codex-5.6-terra-*)
             exec codex -m gpt-5.6-terra -c "model_reasoning_effort=$thinking_effort" --dangerously-bypass-approvals-and-sandbox "$prompt"
