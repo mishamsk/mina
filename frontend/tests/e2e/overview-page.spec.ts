@@ -121,8 +121,19 @@ const createMultiPartSpend = async (
 
 test("overview changes the household flow report to yearly activity", async ({
   page,
+  browserName,
 }) => {
   await page.goto("/overview");
+
+  const heading = page.getByRole("heading", { level: 1, name: "Overview" });
+  await expect(heading).toBeFocused();
+  await expect(heading).toHaveCSS("outline-style", "none");
+  await page.keyboard.press(browserName === "webkit" ? "Alt+Tab" : "Tab");
+  const focusedControl = page.locator(":focus");
+  await expect(focusedControl).toHaveRole("button");
+  await expect(focusedControl).toHaveCSS("outline-style", "solid");
+  await expect(focusedControl).toHaveCSS("outline-width", "2px");
+  await expect(focusedControl).toHaveCSS("outline-offset", "2px");
 
   const chart = page.getByTestId("entity-overview-chart");
   const grain = page.getByTestId("flow-grain-select");

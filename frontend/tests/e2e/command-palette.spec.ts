@@ -82,6 +82,9 @@ const createSearchFixtureTransaction = async (
 test("command palette navigates to Status", async ({ page }) => {
   await page.goto("/overview");
   await openPalette(page);
+  await expect(
+    page.getByRole("combobox", { name: "Command search" }),
+  ).toHaveCSS("outline-style", "solid");
 
   const dialog = page.getByRole("dialog", { name: "Command Palette" });
   await page.keyboard.insertText("status");

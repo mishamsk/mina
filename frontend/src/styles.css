@@ -194,6 +194,36 @@
     @apply font-sans;
   }
   :focus-visible {
+    outline: none;
+  }
+  :is(
+    a[href],
+    button,
+    input,
+    select,
+    textarea,
+    summary,
+    [contenteditable=""],
+    [contenteditable="true"],
+    [contenteditable="plaintext-only"],
+    [tabindex]:not([tabindex="-1"]),
+    [role="button"],
+    [role="link"],
+    [role="checkbox"],
+    [role="radio"],
+    [role="switch"],
+    [role="tab"],
+    [role="menuitem"],
+    [role="menuitemcheckbox"],
+    [role="menuitemradio"],
+    [role="option"],
+    [role="combobox"],
+    [role="listbox"],
+    [role="slider"],
+    [role="spinbutton"],
+    [role="textbox"],
+    [role="treeitem"]
+  ):focus-visible {
     outline: 2px solid var(--ring);
     outline-offset: 2px;
   }

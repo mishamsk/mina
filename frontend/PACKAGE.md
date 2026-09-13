@@ -10,6 +10,7 @@
 - The shell stays behind the bootstrap splash until the authentication-status request and persisted UI-state hydration complete; bootstrap failures remain outside the shell.
 - Authentication state is in memory only. A `401` from the current authentication generation returns the browser to login, while stale request results cannot overwrite a newer login or logout.
 - Global initial heading focus waits for bootstrap and yields to a user or feature focus target.
+- Global focus rings apply to native controls, editable content, keyboard-tab stops, and interactive ARIA roles; programmatic focus on passive headings and surfaces stays unstyled.
 - Frontend lint rejects handwritten `fetch`, `XMLHttpRequest`, and `sendBeacon` throughout `src`.
 - Outside `src/api`, frontend code imports generated REST runtime operations through configured API entry points; handwritten modules inside `src/api` import them through `generated-access`.
 - Global styles define complementary compact/roomy shell variants, fix compact Popover and Select surfaces above the app toolbar, keep transaction action columns bounded, coordinate direct controls with fit-driven and permanent overflow states, and compose phone transaction rows into two visual tiers without changing table semantics.
