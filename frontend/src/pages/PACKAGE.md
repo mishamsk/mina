@@ -6,6 +6,7 @@
 
 ## Implicit Contracts
 
+- Single-account registers link to Transactions using an exact stable account-ID filter in a fresh URL, independent of register pagination and detail state.
 - Route-local query updates preserve parameters owned by other layers; transaction sorting resets pagination while preserving filters and overlays.
 - Categories owns the optional typed `economic_intent` query parameter; omitting it represents the All selection, while a selected intent seeds new-category creation.
 - Management routes retain an opened Account, Category, Tag, or Member independently of filtered resource snapshots so a mutation or toolbar change that removes it from current membership cannot invalidate the editor or its focus lifecycle; Categories may reconcile refreshed API deleteability without replacing its draft.

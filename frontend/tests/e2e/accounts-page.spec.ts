@@ -290,6 +290,28 @@ test("account register walks transaction detail by keyboard", async ({
   await expect(detail).toBeHidden();
   await expect(page).not.toHaveURL(/[?&]transaction=/);
   await expect(oldestRow).toBeFocused();
+
+  const shortcut = page
+    .locator('section[aria-labelledby="account-title"]')
+    .getByRole("link", { name: "Transactions", exact: true });
+  await shortcut.focus();
+  await expect(shortcut).toBeFocused();
+  await shortcut.press("Enter");
+  await expect(page).toHaveURL(
+    (url) =>
+      url.pathname === "/transactions" &&
+      url.searchParams.get("filter") === `account:#${account.account_id}`,
+  );
+  const transactionRow = page.locator(
+    `[data-transaction-row="true"][data-transaction-id="${newestTransaction.transaction_id}"]`,
+  );
+  await expect(transactionRow).toBeVisible();
+  await page.reload();
+  await expect(transactionRow).toBeVisible();
+  await expect(page).toHaveURL(
+    (url) =>
+      url.searchParams.get("filter") === `account:#${account.account_id}`,
+  );
 });
 
 test("account group register shows its subtotal and combined activity", async ({
