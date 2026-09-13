@@ -37,7 +37,7 @@ export const transactionActionApplicability = (
     confirmNextProjection:
       projectedRecurring && transaction.recurring_projection_is_next === true,
     confirmExpected: materializedExpected,
-    createRecurring: reusable,
+    createRecurring: reusable && transaction.recurring_definition_id == null,
     createTemplate: reusable,
     delete: reusable,
     deferProjection:

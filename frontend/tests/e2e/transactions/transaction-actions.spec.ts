@@ -100,6 +100,21 @@ test("pending transaction cancels from its row", async ({ page }, testInfo) => {
     page.getByRole("status").filter({ hasText: "Transaction cancelled." }),
   ).toBeVisible();
   await expect(row.getByRole("img", { name: "Cancelled" })).toBeVisible();
+  await row.getByRole("button", { name: "More row actions" }).click();
+  await expect(
+    page.locator(".row-actions-menu:visible").getByRole("button", {
+      exact: true,
+      name: "Create recurring",
+    }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await activateTransactionRow(row);
+  await expect(
+    page.getByTestId("transaction-detail-panel").getByRole("button", {
+      exact: true,
+      name: "Create recurring",
+    }),
+  ).toBeVisible();
 });
 
 test("cancelled transaction restores from its row", async ({

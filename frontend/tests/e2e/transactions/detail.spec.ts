@@ -1,6 +1,7 @@
 import { test } from "@tests/e2e/test";
 import {
   type AccountFixture,
+  activateTransactionRow,
   createRecurringTransactionFixture,
   createSearchSpend,
   expect,
@@ -20,14 +21,29 @@ test("recurring transaction detail links back to its definition", async ({
   const recurring = await createRecurringTransactionFixture(page, unique);
 
   await page.goto(
-    `/transactions?page=1&pageSize=50&transaction=${recurring.transactionId}`,
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(unique)}`,
   );
+  const row = page.locator(
+    `[data-transaction-id="${recurring.transactionId}"]`,
+  );
+  await row.getByRole("button", { name: "More row actions" }).click();
+  const menu = page.locator(".row-actions-menu:visible");
+  await expect(menu).toBeVisible();
+  await expect(
+    menu.getByRole("button", { exact: true, name: "Create recurring" }),
+  ).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await activateTransactionRow(row);
   const panel = page.getByTestId("transaction-detail-panel");
   const definitionLink = panel.getByRole("link", {
     name: recurring.recurringDefinitionFqn,
   });
   await expect(panel).toBeVisible();
   await expect(definitionLink).toBeVisible();
+  await expect(
+    panel.getByRole("button", { exact: true, name: "Create recurring" }),
+  ).toHaveCount(0);
+
   await expect(
     panel.getByTestId("transaction-recurring-definition"),
   ).toContainText(recurring.recurringDefinitionFqn);
