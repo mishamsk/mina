@@ -288,7 +288,6 @@ export const CategoriesPage = () => {
                   <SelectTrigger
                     id="categories-economic-intent"
                     className="min-w-32"
-                    size="compact"
                   >
                     <SelectValue />
                   </SelectTrigger>
