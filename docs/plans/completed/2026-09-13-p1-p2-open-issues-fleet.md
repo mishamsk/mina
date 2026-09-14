@@ -68,10 +68,26 @@ Task scope details live in the Kata issues (`kata show <ref> --agent`). Respect 
 
 ## Final Verification
 
-- [ ] On the main working branch with all merged branches: `just test` passes
-- [ ] `just test-integration` passes
-- [ ] `just pre-commit` passes
-- [ ] `just test-frontend-e2e` passes
-- [ ] Deviation from template, per operator rules: NO fleet-level `just review-loop` (each branch already ran its one allowed loop) — unless merges needed conflict resolution or cross-branch interactions were never covered, in which case run `just review-loop --plan "<this fleet plan's repo-relative path>"` exactly once and fold unresolved comments into a final fix plan (no further review-loop)
-- [ ] Final report: per task — merged/failed, fix plans used, live-verification evidence, governance interventions, Kata refs closed, residual findings and unmerged branches (per-task evidence recorded on each closed Kata issue)
-- [ ] Move this plan to `docs/plans/completed/`
+- [x] On the main working branch with all merged branches: `just test` passes
+- [x] `just test-integration` passes
+- [x] `just pre-commit` passes
+- [x] `just test-frontend-e2e` passes
+- [x] Deviation from template, per operator rules: NO fleet-level `just review-loop` (each branch already ran its one allowed loop) — unless merges needed conflict resolution or cross-branch interactions were never covered, in which case run `just review-loop --plan "<this fleet plan's repo-relative path>"` exactly once and fold unresolved comments into a final fix plan (no further review-loop)
+- [x] Final report: per task — merged/failed, fix plans used, live-verification evidence, governance interventions, Kata refs closed, residual findings and unmerged branches (per-task evidence recorded on each closed Kata issue)
+- [x] Move this plan to `docs/plans/completed/`
+
+## Final Report (2026-09-14)
+
+All nine tasks merged into `fleet-p1-p2-open-issues`; final `just test`, `just test-integration`, `just pre-commit`, and `just test-frontend-e2e` (300/300 chromium+webkit) pass; no fleet-level review-loop was needed (no merge conflicts, no uncovered cross-branch interactions).
+
+- Task 1 `k2gk`: merged; 1 fix plan (account summary flush alignment, shared shadow-reservation class). Live-verified zero window overflow on every fixed route at 1280×633 in both browsers.
+- Task 2 `dhg3`: merged; 0 fix plans; operator doc typo fix. Converted routing to the react-router data router to use `useBlocker`; the editor's View transactions link now closes the editor (dirty drafts prompt). Live-verified backlink, navigation, Back/Forward, Keep/Discard.
+- Task 3 `kp0d`: merged; 0 fix plans. Root cause was tooltip trigger spans adding tab stops inside the shared confirmation dialog plus a focus-stealing init effect; fix applies to every confirmation dialog. Live-verified in chromium and webkit.
+- Task 4 `nwv6`: merged; 0 fix plans. Live-verified Transfer and Advanced clears keep their tab, including after reopen.
+- Task 5 `7gs0`: merged; 1 fix plan (re-seed after Clear draft and template apply). Decision: unanchored Transactions seeds today; other surfaces leave the date empty and required. Live-verified all entry points plus Duplicate/Edit.
+- Task 6 `b2p2`: merged; 0 fix plans. Display-only; date-free flow/system rows fall back to the initiated date. Live-verified against API timestamps in a pinned timezone.
+- Task 7 `me5f`: merged; 0 fix plans. Live-measured equal height and top edge for the three toolbar controls.
+- Task 8 `f6qg`: merged; 1 fix plan (shortcuts fired beneath the entry modal, dead overlay groups, close-button tooltip flash, import consistency). "focus list search" removed from the design doc as unimplemented. Live-verified on six routes, Edit mode, palette action, phone width.
+- Task 9 `r1yn`: merged; 1 fix plan (subtitle clause wrapping and review nits). Live-verified Cmd+Enter, Cmd+click on a group, plain Enter, help catalog row.
+- Governance interventions: none reverted; all design-doc edits were targeted and required by the issues. Operator-owned doc commit: one apostrophe fix (dhg3).
+- Kata closed: k2gk, dhg3, kp0d, nwv6, 7gs0, b2p2, me5f, f6qg, r1yn. Residual findings: entity-picker full-path reveal remains Meta-only (documented as such); no unmerged branches.
