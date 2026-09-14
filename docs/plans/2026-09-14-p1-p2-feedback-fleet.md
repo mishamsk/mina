@@ -97,7 +97,7 @@ Per-task checklist — every task below runs the full per-task workflow; tick a 
 3. Operator review passed (testing gate, docs gate, audit, live verification; fix plans used ≤2)
 4. Squash-merged into the main working branch; worktree and branch removed
 
-- [ ] Task 1: Brief A — Entity list keyboard navigation and focus styling (foundational table behavior; first) — branch `fb-entity-list-keyboard`
+- [x] Task 1: Brief A — Entity list keyboard navigation and focus styling (foundational table behavior; first) — branch `fb-entity-list-keyboard`
 - [ ] Task 2: Brief B — Keyboard shortcuts help corrections (shell overlay stacking; before palette and chords work that register help content) — branch `fb-shortcuts-help`
 - [ ] Task 3: Brief C — Command palette keyboard-only rows, stable heights, modifier ribbon (depends on Task 2 for the help group removal) — branch `fb-palette-rows-ribbon`
 - [ ] Task 4: Brief D — Entry chords (registers help content; after Task 2) — branch `fb-entry-chords`
