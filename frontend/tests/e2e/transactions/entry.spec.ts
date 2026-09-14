@@ -60,6 +60,164 @@ const createImportedSpendFixture = async (
   ).transaction_id;
 };
 
+test("new entry follows the active day without persisting its seed", async ({
+  page,
+}, testInfo) => {
+  const templateFqn = `E2E:${testSlug(testInfo.project.name)}:Launch date`;
+  const templateMemo = "Launch date template";
+  const templateResponse = await page.request.post(
+    "/api/transaction-templates",
+    { data: { fqn: templateFqn, records: [{ memo: templateMemo }] } },
+  );
+  expect(templateResponse.ok()).toBe(true);
+  await page.goto("/transactions");
+  const day = "2026-08-12";
+  await page.getByLabel("Go to day").fill(day);
+  await expect(page).toHaveURL(
+    (url) => url.searchParams.get("anchor_date") === day,
+  );
+  await page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" })
+    .click();
+  const editor = page.getByRole("dialog", { name: "Transaction editor" });
+  await expect(editor.getByLabel("Date", { exact: true })).toHaveValue(day);
+  await editor
+    .getByRole("button", { name: "Close transaction editor" })
+    .click();
+  for (const { route, expectedDate } of [
+    {
+      route: `/transactions?anchor_date=${day}&entry=new:journal`,
+      expectedDate: day,
+    },
+    { route: "/overview?entry=new:journal", expectedDate: "" },
+  ]) {
+    await page.goto(route);
+    await editor.getByRole("tab", { name: "Transfer" }).click();
+    await editor.getByLabel("Memo").fill("Clear this draft");
+    await editor.getByRole("button", { name: "Clear draft" }).click();
+    await page
+      .getByRole("alertdialog", { name: "Clear entry draft?" })
+      .getByRole("button", { name: "Clear draft" })
+      .click();
+    await expect(editor.getByLabel("Memo")).toHaveValue("");
+    await expect(editor.getByLabel("Date", { exact: true })).toHaveValue(
+      expectedDate,
+    );
+    for (const tab of ["Spend", "Income", "Refund", "Exchange", "Advanced"]) {
+      await editor.getByRole("tab", { name: tab, exact: true }).click();
+      await expect(editor.getByLabel("Date", { exact: true })).toHaveValue(
+        expectedDate,
+      );
+    }
+    await editor
+      .getByRole("button", { name: "Close transaction editor" })
+      .click();
+    await page.goto("/overview?entry=new:journal");
+    await expect(editor.getByLabel("Date", { exact: true })).toHaveValue("");
+    await editor
+      .getByRole("button", { name: "Close transaction editor" })
+      .click();
+    await page.goto(route);
+    await editor.getByLabel("Record 1 memo").fill("Replace this draft");
+    await editor.getByRole("combobox", { name: "Template" }).fill(templateFqn);
+    await page
+      .getByRole("alertdialog", { name: "Replace entry draft?" })
+      .getByRole("button", { name: "Replace draft" })
+      .click();
+    await expect(editor.getByLabel("Record 1 memo")).toHaveValue(templateMemo);
+    for (const tab of [
+      "Spend",
+      "Income",
+      "Refund",
+      "Transfer",
+      "Exchange",
+      "Advanced",
+    ]) {
+      await editor.getByRole("tab", { name: tab, exact: true }).click();
+      await expect(editor.getByLabel("Date", { exact: true })).toHaveValue(
+        expectedDate,
+      );
+    }
+    await editor
+      .getByRole("button", { name: "Close transaction editor" })
+      .click();
+    await page.goto("/overview?entry=new:journal");
+    await expect(editor.getByLabel("Record 1 memo")).toHaveValue(templateMemo);
+    await expect(editor.getByLabel("Date", { exact: true })).toHaveValue("");
+    await editor
+      .getByRole("button", { name: "Close transaction editor" })
+      .click();
+  }
+
+  await page.goto("/transactions");
+  await page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" })
+    .click();
+  const today = await page.evaluate(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  });
+  await expect(editor.getByLabel("Date", { exact: true })).toHaveValue(today);
+});
+
+test("entry retains edited fields but drops launch dates when recovering elsewhere", async ({
+  page,
+}) => {
+  await page.goto("/transactions?anchor_date=2026-08-12&entry=new:transfer");
+  const editor = page.getByRole("dialog", { name: "Transaction editor" });
+  const date = editor.getByLabel("Date", { exact: true });
+  await expect(date).toHaveValue("2026-08-12");
+  await editor.getByLabel("Memo").fill("Remember my entry");
+  await editor
+    .getByRole("button", { name: "Close transaction editor" })
+    .click();
+  await page.goto("/overview?entry=new:transfer");
+  await expect(editor.getByLabel("Memo")).toHaveValue("Remember my entry");
+  await expect(date).toHaveValue("");
+  await editor
+    .getByRole("button", { name: "Close transaction editor" })
+    .click();
+  await page.goto("/transactions?anchor_date=2026-08-12&entry=new:transfer");
+  await expect(date).toHaveValue("2026-08-12");
+  await date.fill("2026-08-10");
+  await editor
+    .getByRole("button", { name: "Close transaction editor" })
+    .click();
+  await page.goto("/transactions?anchor_date=2026-08-14&entry=new:transfer");
+  await expect(date).toHaveValue("2026-08-10");
+});
+
+test("entry outside Transactions requires a date and focuses its inline error", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto("/overview");
+  await page.getByRole("heading", { name: "Overview", exact: true }).click();
+  await page.keyboard.press("n");
+  const editor = page.getByRole("dialog", { name: "Transaction editor" });
+  await expect(editor.getByLabel("Date", { exact: true })).toHaveValue("");
+  await editor.getByRole("button", { name: "Save and add another" }).click();
+  await expect(
+    editor.getByText("Date is required.", { exact: true }),
+  ).toBeVisible();
+  await expect(editor.getByLabel("Date", { exact: true })).toBeFocused();
+  await editor.getByRole("tab", { name: "Advanced" }).click();
+  await expect(editor.getByLabel("Date", { exact: true })).toHaveValue("");
+  await editor.getByLabel("Record 1 memo").press("ControlOrMeta+Enter");
+  await expect(
+    editor.getByText("Date is required.", { exact: true }),
+  ).toBeVisible();
+  await expect(editor.getByLabel("Date", { exact: true })).toBeFocused();
+  await editor
+    .getByRole("button", { name: /fields? needs? attention/ })
+    .click();
+  await expect(editor.locator(":focus")).toHaveAccessibleName(
+    /^Record \d+ (account|amount|currency)$/,
+  );
+});
+
 test("create drafts recover after closing and can be cleared", async ({
   page,
 }, testInfo) => {
@@ -813,6 +971,20 @@ test("saving a template replacement keeps cleared tabs clean before edit launche
   await editor.getByRole("tab", { name: "Advanced" }).click();
   await editor.getByRole("combobox", { name: "Template" }).fill(templateFqn);
   await expect(editor.getByLabel("Record 1 memo")).toHaveValue(unique);
+  await expect(editor.getByLabel("Date", { exact: true })).not.toHaveValue("");
+  await expect(editor.getByTestId("classification-preview")).toContainText(
+    "Transfer",
+  );
+  await expect(
+    editor.getByRole("region", { name: "Journal record 1" }),
+  ).toContainText("Balance");
+  await editor.getByLabel("Date", { exact: true }).fill("");
+  await editor.getByRole("button", { name: "Save and close" }).click();
+  await expect(
+    editor.getByText("Date is required.", { exact: true }),
+  ).toBeVisible();
+  await expect(editor.getByLabel("Date", { exact: true })).toBeFocused();
+  await editor.getByLabel("Date", { exact: true }).fill("2026-08-15");
   await expect(page.getByRole("alertdialog")).toHaveCount(0);
   await editor.getByRole("button", { name: "Save and close" }).click();
   await expect(editor).toHaveCount(0);
@@ -848,6 +1020,36 @@ test("palette templates replace sticky defaults and protect modified drafts", as
   await editor.getByRole("button", { name: "Save and close" }).click();
   await expect(editor).toHaveCount(0);
   await page.reload();
+  const launcher = page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" });
+  await launcher.click();
+  await expect(editor.getByLabel("Date", { exact: true })).not.toHaveValue("");
+  const savedDate = await editor
+    .getByLabel("Date", { exact: true })
+    .inputValue();
+  await editor.getByLabel("Date", { exact: true }).fill("");
+  await editor
+    .getByRole("button", { name: "Close transaction editor" })
+    .click();
+  await expect(editor).toHaveCount(0);
+  await launcher.click();
+  await expect(editor.getByLabel("Date", { exact: true })).not.toHaveValue("");
+  await editor.getByRole("tab", { name: "Advanced" }).click();
+  await editor.getByRole("combobox", { name: "Template" }).fill(templateFqn);
+  const clearedDateConfirmation = page.getByRole("alertdialog", {
+    name: "Replace entry draft?",
+  });
+  await expect(clearedDateConfirmation).toBeVisible();
+  await clearedDateConfirmation
+    .getByRole("button", { name: "Keep draft" })
+    .click();
+  await editor.getByRole("tab", { name: "Spend" }).click();
+  await editor.getByLabel("Date", { exact: true }).fill(savedDate);
+  await editor
+    .getByRole("button", { name: "Close transaction editor" })
+    .click();
+  await expect(editor).toHaveCount(0);
   await page.keyboard.press("Control+K");
 
   const palette = page.getByRole("dialog", { name: "Command Palette" });

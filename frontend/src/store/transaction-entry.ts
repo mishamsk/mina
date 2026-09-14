@@ -25,6 +25,7 @@ export type TransactionEntryRecentTransaction =
   Transaction | TransactionEntryRegisterSummary;
 
 export interface TransactionEntryLaunchContext {
+  readonly initiatedDate?: string;
   readonly recentTransactions: readonly TransactionEntryRecentTransaction[];
 }
 
@@ -39,6 +40,7 @@ export interface TransactionEntryLaunch {
 }
 
 interface TransactionEntryModalState {
+  readonly initiatedDate: string | undefined;
   readonly errorMessage: string | undefined;
   readonly initialTab: TransactionEntryType | undefined;
   readonly initialTemplate: TransactionTemplate | undefined;
@@ -50,6 +52,7 @@ interface TransactionEntryModalState {
 }
 
 const initialTransactionEntryModalState: TransactionEntryModalState = {
+  initiatedDate: undefined,
   errorMessage: undefined,
   initialTab: undefined,
   initialTemplate: undefined,
@@ -71,6 +74,7 @@ export const useTransactionEntryPanelStore = transactionEntryModalStore;
 export const useTransactionEntryPanelView = (): TransactionEntryModalState =>
   useTransactionEntryPanelStore(
     useShallow((state) => ({
+      initiatedDate: state.initiatedDate,
       errorMessage: state.errorMessage,
       initialTab: state.initialTab,
       initialTemplate: state.initialTemplate,
@@ -99,6 +103,7 @@ export const openTransactionEntryPanel = (
   prepareEntryOpen(() => {
     useTransactionEntryPanelStore.setState(
       {
+        initiatedDate: context.initiatedDate,
         errorMessage: undefined,
         initialTab,
         initialTemplate: undefined,
@@ -123,6 +128,7 @@ export const openTransactionEntryLaunch = (
   prepareEntryOpen(() => {
     useTransactionEntryPanelStore.setState(
       {
+        initiatedDate: undefined,
         errorMessage: undefined,
         initialTab: undefined,
         initialTemplate: undefined,
@@ -146,6 +152,7 @@ export const loadTransactionEntryRoute = (
   prepareEntryOpen(() => {
     useTransactionEntryPanelStore.setState(
       {
+        initiatedDate: undefined,
         errorMessage: undefined,
         initialTab: undefined,
         initialTemplate: undefined,
@@ -202,6 +209,7 @@ export const openTransactionEntryRoute = (
   prepareEntryOpen(() => {
     useTransactionEntryPanelStore.setState(
       {
+        initiatedDate: context.initiatedDate,
         errorMessage: undefined,
         initialTab,
         initialTemplate: undefined,
@@ -228,6 +236,7 @@ export const openTransactionEntryTemplate = (
         : "advanced";
     useTransactionEntryPanelStore.setState(
       {
+        initiatedDate: context.initiatedDate,
         errorMessage: undefined,
         initialTab,
         initialTemplate: template,
@@ -247,6 +256,7 @@ export const closeTransactionEntryPanel = (): void => {
   cancelDeferredTransactionEntryOpen();
   useTransactionEntryPanelStore.setState(
     {
+      initiatedDate: undefined,
       errorMessage: undefined,
       initialTab: undefined,
       initialTemplate: undefined,

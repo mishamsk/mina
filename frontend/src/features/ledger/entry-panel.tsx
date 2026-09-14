@@ -82,7 +82,6 @@ import {
   openTransactionEntryPanel,
   setTransactionEntryActiveTab,
 } from "@/store";
-import { localTodayISODate } from "@/utils/date";
 
 import { AmountText } from "./amount-text";
 import { ClassBadge } from "./class-badge";
@@ -130,6 +129,7 @@ import { refreshLedgerLookups } from "./use-transactions-resource";
 
 export interface EntryPanelProps {
   readonly closeRequestRef?: MutableRefObject<(() => void) | null>;
+  readonly initiatedDate?: string;
   readonly initialTab?: TransactionEntryType;
   readonly initialTemplate?: TransactionTemplate;
   readonly launch?: EntryPanelLaunch;
@@ -381,7 +381,7 @@ const blankTabDraft = (): TransactionEntryTabDraft => ({
   chargeCategoryId: undefined,
   chargeEnabled: false,
   currency: "USD",
-  date: localTodayISODate(),
+  date: "",
   destinationAccountId: undefined,
   fundingAccountId: undefined,
   memberId: undefined,
@@ -424,7 +424,7 @@ const blankRecordRowDraft = (): JournalRecordRowDraft => ({
 });
 
 const blankAdvancedDraft = (): AdvancedTransactionEntryDraft => ({
-  date: localTodayISODate(),
+  date: "",
   records: [blankRecordRowDraft(), blankRecordRowDraft()],
 });
 
@@ -603,7 +603,7 @@ const shorthandDraftToAdvanced = (
               ];
 
   return {
-    date: draft.date || localTodayISODate(),
+    date: draft.date,
     records,
   };
 };
@@ -694,7 +694,7 @@ const advancedDraftFromTemplate = (
       tagIds: [...record.tag_ids],
     }));
   return {
-    date: localTodayISODate(),
+    date: "",
     records: records.length > 0 ? records : blankAdvancedDraft().records,
   };
 };
@@ -1255,6 +1255,26 @@ const draftHasUserInput = (
 ): boolean =>
   JSON.stringify(draftUserInput(draft)) !==
   JSON.stringify(draftUserInput(baseline));
+
+const mapDraftDates = (
+  draft: TransactionEntryDraft,
+  dateForTab: (date: string, tab: TransactionEntryType) => string,
+): TransactionEntryDraft => {
+  const tabs = { ...draft.tabs };
+  for (const tab of entryTypes) {
+    if (tab !== "advanced") {
+      tabs[tab] = { ...tabs[tab], date: dateForTab(tabs[tab].date, tab) };
+    }
+  }
+  return {
+    ...draft,
+    tabs,
+    advanced: {
+      ...draft.advanced,
+      date: dateForTab(draft.advanced.date, "advanced"),
+    },
+  };
+};
 
 const draftFingerprint = (draft: TransactionEntryDraft): string =>
   JSON.stringify(draft);
@@ -2956,6 +2976,7 @@ const isRegisterSummary = (
 
 export const EntryPanel = ({
   closeRequestRef,
+  initiatedDate,
   initialTab,
   initialTemplate,
   launch,
@@ -3094,6 +3115,8 @@ export const EntryPanel = ({
     undefined,
   );
   const userSelectedActiveTabRef = useRef(false);
+  const initialDateOverrideRef = useRef(new Set<TransactionEntryType>());
+  const userChangedDateRef = useRef(new Set<TransactionEntryType>());
   const initializedLaunchKeyRef = useRef<string | undefined>(undefined);
   const initializedLaunchRef = useRef<EntryPanelLaunch | undefined>(undefined);
   const wasOpenRef = useRef(open);
@@ -3113,6 +3136,44 @@ export const EntryPanel = ({
   const cancelledConflictSavePendingRef = useRef(false);
   const preserveFocusOnReplacementChangeRef = useRef(false);
 
+  const seedDraftDates = useCallback(
+    (nextDraft: TransactionEntryDraft, seed = true): TransactionEntryDraft => {
+      initialDateOverrideRef.current.clear();
+      userChangedDateRef.current.clear();
+      return mapDraftDates(nextDraft, (date, tab) => {
+        if (seed && initiatedDate && !date) {
+          initialDateOverrideRef.current.add(tab);
+          return initiatedDate;
+        }
+        return date;
+      });
+    },
+    [initiatedDate],
+  );
+
+  const draftForStorage = useCallback(
+    (
+      nextDraft: TransactionEntryDraft,
+      { preserveDates = false }: { preserveDates?: boolean } = {},
+    ): TransactionEntryDraft => {
+      const storedDraft = mapDraftDates(nextDraft, (date, tab) =>
+        !preserveDates &&
+        initialDateOverrideRef.current.has(tab) &&
+        !userChangedDateRef.current.has(tab)
+          ? ""
+          : date,
+      );
+      if (initialTabOverrideRef.current && !userSelectedActiveTabRef.current) {
+        return {
+          ...storedDraft,
+          activeTab: rememberedActiveTabRef.current,
+        };
+      }
+      return storedDraft;
+    },
+    [],
+  );
+
   const currentDraftHasUserInput = useCallback(
     (currentDraft: TransactionEntryDraft): boolean => {
       const baseline =
@@ -3120,10 +3181,14 @@ export const EntryPanel = ({
           ? launchDraftBaselineRef.current
           : ordinaryDraftBaselineRef.current;
       return (
-        baseline !== undefined && draftHasUserInput(currentDraft, baseline)
+        baseline !== undefined &&
+        draftHasUserInput(
+          draftForStorage(currentDraft),
+          draftForStorage(baseline, { preserveDates: true }),
+        )
       );
     },
-    [],
+    [draftForStorage],
   );
 
   const publishRefreshedReplacement = useCallback(() => {
@@ -3202,19 +3267,6 @@ export const EntryPanel = ({
     latestDraftPersistenceRef.current = draftPersistence;
     latestReplacementRef.current = replacement;
   }, [draft, draftPersistence, replacement]);
-
-  const draftForStorage = useCallback(
-    (nextDraft: TransactionEntryDraft): TransactionEntryDraft => {
-      if (initialTabOverrideRef.current && !userSelectedActiveTabRef.current) {
-        return {
-          ...nextDraft,
-          activeTab: rememberedActiveTabRef.current,
-        };
-      }
-      return nextDraft;
-    },
-    [],
-  );
 
   const activeTab = draft.activeTab;
   const activeShorthandTab = activeTab === "advanced" ? undefined : activeTab;
@@ -3300,6 +3352,8 @@ export const EntryPanel = ({
 
   useEffect(() => {
     if (!open) {
+      initialDateOverrideRef.current.clear();
+      userChangedDateRef.current.clear();
       initializedLaunchKeyRef.current = undefined;
       initializedLaunchRef.current = undefined;
       window.queueMicrotask(() => {
@@ -3355,8 +3409,9 @@ export const EntryPanel = ({
               ...migratedDraft,
               activeTab: rememberedActiveTab,
             };
+        const seededOrdinaryDraft = seedDraftDates(ordinaryDraft, !launchDraft);
         const nextDraft = launchDraft ?? {
-          draft: ordinaryDraft,
+          draft: seededOrdinaryDraft,
           persistence: "ordinary" as const,
         };
         rememberedActiveTabRef.current = rememberedActiveTab;
@@ -3430,6 +3485,7 @@ export const EntryPanel = ({
     launchKey,
     launchLookupsReady,
     open,
+    seedDraftDates,
   ]);
 
   useEffect(() => {
@@ -3442,7 +3498,7 @@ export const EntryPanel = ({
       return;
     }
     const storedDraft = draftForStorage(draft);
-    const baseline = draftForStorage(ordinaryBaseline);
+    const baseline = draftForStorage(ordinaryBaseline, { preserveDates: true });
     const fingerprint = draftFingerprint(storedDraft);
     if (
       ordinaryDraftStoredRef.current &&
@@ -3601,7 +3657,8 @@ export const EntryPanel = ({
     hasAdvancedSettlementDateErrors(advancedFieldErrors) ||
     hasAdvancedSettlementDateErrors(localAdvancedErrors);
   const advancedCanSubmit =
-    !hasAdvancedErrors(localAdvancedErrors) && allCurrenciesBalanced(balances);
+    Object.keys(localAdvancedErrors).every((field) => field === "date") &&
+    allCurrenciesBalanced(balances);
   const exchangeDraft = draft.tabs.exchange;
   const exchangeSoldAccountCurrency = accountCurrency(
     lookups,
@@ -3638,7 +3695,7 @@ export const EntryPanel = ({
       !open ||
       activeTab !== "advanced" ||
       !lookups ||
-      hasAdvancedErrors(localAdvancedErrors)
+      Object.keys(localAdvancedErrors).some((field) => field !== "date")
     ) {
       const timeout = window.setTimeout(() => {
         setClassification(undefined);
@@ -3660,7 +3717,9 @@ export const EntryPanel = ({
         if (result.data) {
           setClassification(result.data);
           setClassificationError(undefined);
-          setAdvancedFieldErrors({});
+          setAdvancedFieldErrors((current): AdvancedFieldErrors =>
+            current.date ? { date: current.date } : {},
+          );
           return;
         }
         const message = apiErrorMessage(
@@ -3783,33 +3842,41 @@ export const EntryPanel = ({
     merchantFieldErrors,
   ]);
 
-  const focusFirstError = useCallback(() => {
-    window.requestAnimationFrame(() => {
+  const focusFirstError = useCallback(
+    (prioritizeDate = true) => {
       window.requestAnimationFrame(() => {
-        const error =
-          offscreenFieldErrors()[0] ??
-          entryScrollRegionRef.current?.querySelector<HTMLElement>(
-            "[data-entry-field-error]",
-          );
-        if (!error) {
-          return;
-        }
-        error.scrollIntoView({ block: "center" });
-        const fieldSelector = "input, textarea, button, [role='combobox']";
-        const previousElement = error.previousElementSibling;
-        const adjacentField =
-          previousElement instanceof HTMLElement
-            ? previousElement.matches(fieldSelector)
-              ? previousElement
-              : previousElement.querySelector<HTMLElement>(fieldSelector)
-            : null;
-        const field =
-          adjacentField ??
-          error.parentElement?.querySelector<HTMLElement>(fieldSelector);
-        focusWithoutTooltip(field, { preventScroll: true });
+        window.requestAnimationFrame(() => {
+          const error =
+            (prioritizeDate
+              ? dateInputRef.current?.parentElement?.querySelector<HTMLElement>(
+                  "[data-entry-field-error]",
+                )
+              : undefined) ??
+            offscreenFieldErrors()[0] ??
+            entryScrollRegionRef.current?.querySelector<HTMLElement>(
+              "[data-entry-field-error]",
+            );
+          if (!error) {
+            return;
+          }
+          error.scrollIntoView({ block: "center" });
+          const fieldSelector = "input, textarea, button, [role='combobox']";
+          const previousElement = error.previousElementSibling;
+          const adjacentField =
+            previousElement instanceof HTMLElement
+              ? previousElement.matches(fieldSelector)
+                ? previousElement
+                : previousElement.querySelector<HTMLElement>(fieldSelector)
+              : null;
+          const field =
+            adjacentField ??
+            error.parentElement?.querySelector<HTMLElement>(fieldSelector);
+          focusWithoutTooltip(field, { preventScroll: true });
+        });
       });
-    });
-  }, [offscreenFieldErrors]);
+    },
+    [offscreenFieldErrors],
+  );
 
   const focusSpendMerchantError = useCallback(
     (
@@ -3839,6 +3906,9 @@ export const EntryPanel = ({
     (patch: Partial<TransactionEntryTabDraft>) => {
       if (!activeShorthandTab || !activeTabDraft) {
         return;
+      }
+      if ("date" in patch) {
+        userChangedDateRef.current.add(activeShorthandTab);
       }
       const nextTabDraft = { ...activeTabDraft, ...patch };
       setDraft((currentDraft) => ({
@@ -3952,6 +4022,9 @@ export const EntryPanel = ({
 
   const updateAdvancedDraft = useCallback(
     (patch: Partial<AdvancedTransactionEntryDraft>) => {
+      if ("date" in patch) {
+        userChangedDateRef.current.add("advanced");
+      }
       setDraft((currentDraft) => ({
         ...currentDraft,
         advanced: {
@@ -4062,6 +4135,16 @@ export const EntryPanel = ({
     }
     templateApplicationRequestGenerationRef.current += 1;
 
+    if (
+      initialDateOverrideRef.current.has(activeShorthandTab) &&
+      !userChangedDateRef.current.has(activeShorthandTab)
+    ) {
+      initialDateOverrideRef.current.add("advanced");
+      userChangedDateRef.current.delete("advanced");
+    } else {
+      initialDateOverrideRef.current.delete("advanced");
+    }
+
     let advancedDraft = shorthandDraftToAdvanced(
       activeShorthandTab,
       activeTabDraft,
@@ -4088,14 +4171,21 @@ export const EntryPanel = ({
         ...advancedDraft,
         originatingShorthandTab: activeShorthandTab,
         originatingShorthandInput: JSON.stringify(
-          tabDraftUserInput(activeTabDraft),
+          tabDraftUserInput(draftForStorage(draft).tabs[activeShorthandTab]),
         ),
       },
     }));
     setFieldErrors({});
     setAdvancedFieldErrors({});
     setGeneralError(undefined);
-  }, [activeShorthandTab, activeTabDraft, lookups, replacement]);
+  }, [
+    activeShorthandTab,
+    activeTabDraft,
+    draft,
+    draftForStorage,
+    lookups,
+    replacement,
+  ]);
 
   const updateActiveTab = (entryType: TransactionEntryType) => {
     if (!tabIsAvailable(entryType)) {
@@ -4130,7 +4220,7 @@ export const EntryPanel = ({
       setTransactionEntryActiveTab(targetTab);
       setPickerLifecycle((current) => current + 1);
       ordinaryDraftBaselineRef.current = defaultDraft();
-      setDraft(draftFromTemplate(template, targetTab, lookups));
+      setDraft(seedDraftDates(draftFromTemplate(template, targetTab, lookups)));
       setFieldErrors({});
       setMerchantFieldErrors({});
       setAdvancedFieldErrors({});
@@ -4141,7 +4231,7 @@ export const EntryPanel = ({
       setExchangeRateError(undefined);
       focusTemplatePicker();
     },
-    [focusTemplatePicker, lookups],
+    [focusTemplatePicker, lookups, seedDraftDates],
   );
 
   const requestTemplateApplication = useCallback(
@@ -4242,7 +4332,7 @@ export const EntryPanel = ({
     rememberedActiveTabRef.current = activeTab;
     setTransactionEntryActiveTab(activeTab);
     setDraftPersistence("ordinary");
-    setDraft(blankDraft);
+    setDraft(seedDraftDates(blankDraft));
     setPickerLifecycle((current) => current + 1);
     setPendingTemplateApplication(undefined);
     setConfirmTemplateReplaceOpen(false);
@@ -4257,7 +4347,7 @@ export const EntryPanel = ({
     setExchangeRateError(undefined);
     setClearingDraft(false);
     focusTemplatePicker();
-  }, [clearingDraft, draft.activeTab, focusTemplatePicker]);
+  }, [clearingDraft, draft.activeTab, focusTemplatePicker, seedDraftDates]);
 
   const requestClearDraft = useCallback(() => {
     templateApplicationRequestGenerationRef.current += 1;
@@ -4686,7 +4776,9 @@ export const EntryPanel = ({
               draft.advanced.originatingShorthandInput ===
                 JSON.stringify(
                   tabDraftUserInput(
-                    draft.tabs[draft.advanced.originatingShorthandTab],
+                    draftForStorage(draft).tabs[
+                      draft.advanced.originatingShorthandTab
+                    ],
                   ),
                 )
                 ? draft.advanced.originatingShorthandTab
@@ -4725,6 +4817,7 @@ export const EntryPanel = ({
               draftPersistence === "ordinary" ||
               draftPersistence === "launch"
             ) {
+              userChangedDateRef.current.add(activeTab);
               const storedNextDraft = draftForStorage(nextDraft);
               const previousBaseline =
                 ordinaryDraftBaselineRef.current ?? defaultDraft();
@@ -5013,6 +5106,7 @@ export const EntryPanel = ({
             draftPersistence === "ordinary" ||
             draftPersistence === "launch"
           ) {
+            userChangedDateRef.current.add(activeTab);
             const storedNextDraft = draftForStorage(nextDraft);
             const previousBaseline =
               ordinaryDraftBaselineRef.current ?? defaultDraft();
@@ -5281,7 +5375,11 @@ export const EntryPanel = ({
                       updateAdvancedDraft({ date: event.target.value });
                     }}
                   />
-                  <FieldError message={advancedFieldErrors.date} />
+                  <FieldError
+                    message={
+                      advancedFieldErrors.date ?? localAdvancedErrors.date
+                    }
+                  />
                 </div>
 
                 <Button
@@ -6564,7 +6662,7 @@ export const EntryPanel = ({
               <button
                 type="button"
                 className="font-heading w-full border-2 border-[var(--color-class-adjustment-ink)] bg-[var(--color-class-adjustment-bright)] px-2 py-1 text-left text-xs font-semibold text-[var(--color-class-adjustment-ink)] uppercase"
-                onClick={focusFirstError}
+                onClick={() => focusFirstError(false)}
               >
                 {attentionErrorCount}{" "}
                 {attentionErrorCount === 1 ? "field needs" : "fields need"}{" "}

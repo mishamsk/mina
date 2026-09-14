@@ -30,6 +30,7 @@ import {
 interface EntryModalProps {
   readonly errorMessage?: string;
   readonly globalNotice?: string;
+  readonly initiatedDate?: string;
   readonly initialTab?: TransactionEntryType;
   readonly initialTemplate?: TransactionTemplate;
   readonly launch?: EntryPanelLaunch;
@@ -138,6 +139,7 @@ const EntryLoadingSkeleton = ({ create }: { readonly create: boolean }) => (
 export const EntryModal = ({
   errorMessage,
   globalNotice,
+  initiatedDate,
   initialTab,
   initialTemplate,
   launch,
@@ -504,6 +506,7 @@ export const EntryModal = ({
             <>
               <EntryPanel
                 closeRequestRef={closeRequestRef}
+                initiatedDate={initiatedDate}
                 initialTab={initialTab}
                 initialTemplate={initialTemplate}
                 launch={launch}

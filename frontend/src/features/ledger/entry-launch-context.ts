@@ -4,6 +4,9 @@ import {
   type TransactionEntryLaunchContext,
   type TransactionEntryRecentTransaction,
 } from "@/store";
+import { localTodayISODate } from "@/utils/date";
+
+import { readTransactionAnchorDateFromSearchParams } from "./transaction-page-position";
 
 const currentRegisterRecords = () => {
   const accountsSnapshot = getAccountsSnapshot();
@@ -42,6 +45,12 @@ const currentRegisterRecords = () => {
 
 export const captureTransactionEntryLaunchContext =
   (): TransactionEntryLaunchContext => {
+    const initiatedDate =
+      window.location.pathname === "/transactions"
+        ? (readTransactionAnchorDateFromSearchParams(
+            new URLSearchParams(window.location.search),
+          ) ?? localTodayISODate())
+        : undefined;
     const transactionsSnapshot = getTransactionsSnapshot();
     if (window.location.pathname === "/overview") {
       return {
@@ -97,10 +106,13 @@ export const captureTransactionEntryLaunchContext =
     }
 
     if (!document.querySelector("[data-transaction-detail-restore-target]")) {
-      return { recentTransactions: [] };
+      return { initiatedDate, recentTransactions: [] };
     }
     const page = transactionsSnapshot.lastLoadedPageKey
       ? transactionsSnapshot.pages[transactionsSnapshot.lastLoadedPageKey]
       : undefined;
-    return { recentTransactions: page?.transactions.slice(0, 12) ?? [] };
+    return {
+      initiatedDate,
+      recentTransactions: page?.transactions.slice(0, 12) ?? [],
+    };
   };

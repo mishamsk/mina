@@ -1209,6 +1209,7 @@ export const AppShell = () => {
       <EntryModal
         errorMessage={entryModal.errorMessage}
         globalNotice={logoutError}
+        initiatedDate={entryModal.initiatedDate}
         initialTab={entryModal.initialTab}
         initialTemplate={entryModal.initialTemplate}
         launch={entryModal.launch}
