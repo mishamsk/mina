@@ -4230,7 +4230,8 @@ export const EntryPanel = ({
       return;
     }
 
-    const blankDraft = defaultDraft();
+    const activeTab = draft.activeTab;
+    const blankDraft = { ...defaultDraft(), activeTab };
     ordinaryDraftBaselineRef.current = blankDraft;
     ordinaryBaselineMustPersistRef.current = false;
     ordinaryDraftStoredRef.current = false;
@@ -4238,8 +4239,8 @@ export const EntryPanel = ({
     launchDraftBaselineRef.current = undefined;
     initialTabOverrideRef.current = undefined;
     userSelectedActiveTabRef.current = true;
-    rememberedActiveTabRef.current = "spend";
-    setTransactionEntryActiveTab("spend");
+    rememberedActiveTabRef.current = activeTab;
+    setTransactionEntryActiveTab(activeTab);
     setDraftPersistence("ordinary");
     setDraft(blankDraft);
     setPickerLifecycle((current) => current + 1);
@@ -4256,7 +4257,7 @@ export const EntryPanel = ({
     setExchangeRateError(undefined);
     setClearingDraft(false);
     focusTemplatePicker();
-  }, [clearingDraft, focusTemplatePicker]);
+  }, [clearingDraft, draft.activeTab, focusTemplatePicker]);
 
   const requestClearDraft = useCallback(() => {
     templateApplicationRequestGenerationRef.current += 1;

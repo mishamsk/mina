@@ -71,6 +71,8 @@ test("create drafts recover after closing and can be cleared", async ({
   await launcher.click();
 
   const editor = page.getByRole("dialog", { name: "Transaction editor" });
+  await editor.getByRole("tab", { name: "Transfer" }).click();
+  await editor.getByLabel("Amount", { exact: true }).fill("25");
   await editor.getByLabel("Memo").fill(memo);
   await editor
     .getByRole("button", { name: "Close transaction editor" })
@@ -78,6 +80,11 @@ test("create drafts recover after closing and can be cleared", async ({
   await expect(launcher).toBeFocused();
 
   await launcher.click();
+  await expect(editor.getByRole("tab", { name: "Transfer" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(editor.getByLabel("Amount", { exact: true })).toHaveValue("25");
   await expect(editor.getByLabel("Memo")).toHaveValue(memo);
   await editor.getByRole("button", { name: "Clear draft" }).click();
   await page
@@ -86,7 +93,48 @@ test("create drafts recover after closing and can be cleared", async ({
     .click();
 
   await expect(editor.getByLabel("Memo")).toHaveValue("");
-  await expect(editor.getByRole("tab", { name: "Spend" })).toHaveAttribute(
+  await expect(editor.getByLabel("Amount", { exact: true })).toHaveValue("");
+  await expect(editor.getByRole("tab", { name: "Transfer" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(
+    editor.getByRole("combobox", { name: "Start from a template" }),
+  ).toBeFocused();
+  await editor
+    .getByRole("button", { name: "Close transaction editor" })
+    .click();
+  await page.reload();
+  await launcher.click();
+  await expect(editor.getByRole("tab", { name: "Transfer" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(editor.getByLabel("Memo")).toHaveValue("");
+
+  await editor.getByRole("tab", { name: "Advanced" }).click();
+  await editor.getByLabel("Record 1 amount", { exact: true }).fill("-25");
+  await editor.getByLabel("Record 1 memo", { exact: true }).fill(memo);
+  await editor.getByRole("button", { name: "Clear draft" }).click();
+  await page
+    .getByRole("alertdialog", { name: "Clear entry draft?" })
+    .getByRole("button", { name: "Clear draft" })
+    .click();
+  await expect(editor.getByRole("tab", { name: "Advanced" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(
+    editor.getByLabel("Record 1 amount", { exact: true }),
+  ).toHaveValue("");
+  await expect(editor.getByLabel("Record 1 memo", { exact: true })).toHaveValue(
+    "",
+  );
+  await editor
+    .getByRole("button", { name: "Close transaction editor" })
+    .click();
+  await launcher.click();
+  await expect(editor.getByRole("tab", { name: "Advanced" })).toHaveAttribute(
     "aria-selected",
     "true",
   );
