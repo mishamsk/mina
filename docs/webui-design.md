@@ -63,7 +63,7 @@ Structure and navigation only; how any of it looks is owned by the theme specifi
 - Content area is fluid; data tables may use the full content width.
 - Every page uses one header pattern: title (with optional breadcrumb for detail pages) on the left, primary actions on the right, filter/toolbar row beneath when applicable.
 - Pages carry no standing description text. Each page header includes a small help icon button that reveals a short explanatory paragraph on demand (popover or collapsible); the explanation is hidden by default.
-- Overlays: side transaction detail panels, the route-bound recurring-definition editor side panel, the transaction editor modal for all transaction create/edit/split/duplicate, the template editor modal for template create/edit/capture, and centered dialogs only for confirmations.
+- Overlays: side transaction detail panels, the route-bound recurring-definition editor side panel, the transaction editor modal for all transaction create/edit/split/duplicate, the template editor modal for template create/edit/capture, and centered dialogs for confirmations and keyboard shortcuts help.
 - Side detail panels are non-modal: no backdrop, no focus trap, no modal semantics; the underlying list stays interactive so row navigation can drive the panel. `Esc` closes the panel and returns focus to the originating row. Clicking outside the panel also closes it — the click still performs its normal action on the underlying content (a click that opens another record simply moves the panel). Transaction and template editor modals are true modals: focus traps, focus restoration to invokers, and no outside-interaction close; backdrop clicks are absorbed with a one-step outline flash and never activate underlying content. Centered dialogs remain modal and trap focus.
 - The recurring-definition editor is an app-shell-owned non-modal working side panel: quick actions bind it to the current pathname, and outside interaction never closes it. Navigation to another pathname closes a clean editor immediately; a dirty draft prompts with "Discard definition changes?", "Discard changes", and "Keep editing" before navigation completes. Search and fragment changes on the same pathname preserve the draft. It takes initial focus, suppresses global transaction-entry and command-palette shortcuts, stays above transaction detail, and yields Escape to a true modal stacked above it. The Recurring route is inert while the editor is open; other route content and navigation remain interactive. Escape or an explicit close discards the draft and restores focus to a connected visible invoker, its live row or overflow replacement, or the current route heading.
 - Table density (comfortable/compact) is a persisted UI preference.
@@ -91,7 +91,7 @@ A launcher-style command palette (VS Code / Spotlight pattern) is available ever
 - Entity discovery groups hidden-inclusive ranked results as Accounts, Categories, Tags, and Members; each group preserves backend order, while one viewport-derived shared row limit truncates groups in that surface order.
 - Entry: "new spend / income / refund / transfer / exchange" commands; typing a template name uses backend-ranked template discovery and starts a prefilled entry by stable template ID. Both open the transaction editor modal in place — no navigation.
 - Transaction search: free-text search across transactions/records following the `GET /api/transactions?search=` semantics owned by `api/openapi.yaml`; entered by typing a leading ASCII apostrophe (Space on an empty input inserts the apostrophe; later spaces stay part of the query); result rows show date, class, title/memo, and amount; selecting a result navigates to the URL-addressable transaction detail.
-- App actions: trigger backup, reload exchange rates, toggle density, open settings.
+- App actions: trigger backup, reload exchange rates, toggle density, open settings, open keyboard shortcuts help.
 
 ## Theme-Agnostic Presentation Rules
 
@@ -173,7 +173,7 @@ Canonical rendering rules; every screen uses these so the product reads as one s
 ### Keyboard
 
 - Keyboard-complete tables: up/down moves row focus; in the transactions browser click, Enter, and Space open detail in browse mode and toggle selection in Edit mode; open detail, Edit-mode selection, dock editing, and eligible amount editing stay keyboard-driven — batch review sessions never need the mouse.
-- Global shortcuts: open command palette, new transaction (opens the transaction editor modal in place on any screen), focus list search, `Esc` closes overlays, `Cmd+Enter` submits forms, `Cmd+Shift+Enter` saves and closes in the entry modal, arrows + `Enter` drive pickers; hierarchical pickers add segment completion per Pickers — Tab/ArrowRight commit a segment, ArrowLeft/Backspace back out.
+- Global shortcuts: open command palette, new transaction (opens the transaction editor modal in place on any screen), `?` opens page-aware keyboard shortcuts help, `Esc` closes overlays, `Cmd+Enter` submits forms, `Cmd+Shift+Enter` saves and closes in the entry modal, arrows + `Enter` drive pickers; hierarchical pickers add segment completion per Pickers — Tab/ArrowRight commit a segment, ArrowLeft/Backspace back out.
 - Toggling Edit mode is available from the toolbar and the command palette; in-mode selection keys follow Edit mode.
 
 ### Tables and filtering
@@ -367,6 +367,8 @@ Mina-specific building blocks used across screens (names indicative; placement p
 - `EntryModal` — the centered modal transaction editor: hierarchical template picker, generic clear-draft action, shorthand tabs, journal editor, session tally, modal rail (session + recent context), create/edit/split/duplicate launches, `?entry=` deep links.
 - `TemplateEditorModal` — the app-shell-owned date-free partial-record editor for create/edit and transaction capture launches.
 - `CommandPalette` — navigation, entry launcher, transaction search, app actions.
+- `KeyboardShortcutsDialog` — Global, Transaction entry, and mounted page/overlay shortcuts, opened with `?` or the palette, traps focus, and restores the invoker on close; `?` is suppressed while typing or a shortcut-blocking overlay is open; non-modal transaction detail panels do not block it.
+- `Kbd` — shared keyboard hint chip for help rows and palette commands; `Mod` displays as `Cmd/Ctrl`.
 - `BalanceStrip` — featured-account balances in roomy navigation and the compact Navigation sheet.
 - `AmountText` — signed, tabular, currency-code-aware amount with class-aware emphasis.
 - `FqnPath` — de-emphasized-ancestors path renderer with truncation and tooltip.

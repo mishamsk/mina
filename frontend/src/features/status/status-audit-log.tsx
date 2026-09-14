@@ -29,6 +29,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useShortcutGroup } from "@/hooks/use-shortcut-group";
+import {
+  registerShortcutGroup,
+  type ShortcutGroup,
+  unregisterShortcutGroup,
+} from "@/store";
 
 const auditPageSizes = [25, 50, 100] as const;
 const defaultAuditPageSize = auditPageSizes[0];
@@ -117,11 +123,35 @@ const rowKeyDown = (
   onActivate();
 };
 
+const auditShortcuts: ShortcutGroup = {
+  id: "audit-log",
+  title: "Audit log",
+  order: 11,
+  shortcuts: [
+    {
+      id: "audit-log-0",
+      keys: ["↑", "↓"],
+      label: "Move row focus",
+    },
+    {
+      id: "audit-log-1",
+      keys: ["Enter", "Space"],
+      label: "Open audit entry",
+    },
+  ],
+};
+
 export const StatusAuditLog = ({
   refreshRevision,
 }: {
   readonly refreshRevision: number;
 }) => {
+  useShortcutGroup(
+    auditShortcuts,
+    registerShortcutGroup,
+    unregisterShortcutGroup,
+    true,
+  );
   const [searchParams, setSearchParams] = useSearchParams();
   const replaceUnavailablePage = useEffectEvent(
     (availablePageCount: number) => {

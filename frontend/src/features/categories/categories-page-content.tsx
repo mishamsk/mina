@@ -326,6 +326,7 @@ export const CategoriesPageContent = ({
       ) : null}
       <div className="min-h-0 flex-1">
         <ReferenceTree
+          shortcutGroupTitle="Categories"
           badgeHeader="Intent"
           emptyDescription={
             economicIntent

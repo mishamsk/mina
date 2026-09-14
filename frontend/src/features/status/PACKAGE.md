@@ -6,6 +6,8 @@
 
 ## Implicit Contracts
 
+- The audit browser registers row keyboard help only while that tab is mounted.
+
 - `operation`, `runsPage`, `runsPageSize`, and `run` are URL-owned state. Changing operation or pagination clears `run`, resets the page when needed, and preserves unrelated query parameters.
 - Starting an operation refreshes its operation list, status, and runs, then selects the returned run on the first page.
 - A manual start that finishes after Background operations unmounts does not update route state.

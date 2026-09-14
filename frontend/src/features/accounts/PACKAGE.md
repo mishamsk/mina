@@ -6,6 +6,8 @@
 
 ## Implicit Contracts
 
+- Account trees and registers register their own keyboard help while mounted; register detail dismissal remains owned by the shared ledger detail panel.
+
 - Register dates use the ledger formatter's browser-local posted day, then pending day, then initiated civil date without a marker; ordering, pagination, and running balances retain server-owned initiated-date semantics.
 
 - Account/group registers use the shared fixed-page bound; account-tree loading, error, and empty surfaces use the shared state bound, while loaded rows scroll within the reference table frame in roomy shells.

@@ -6,6 +6,11 @@
 
 ## Implicit Contracts
 
+- Keyboard help renders Global and static Transaction entry groups before mounted surface groups, initially focuses the catalog scroll region without a tooltip, blocks underlying global shortcuts as a true modal, and restores the captured opener or route heading on close.
+- Keyboard help marks its backdrop as a modal overlay so outside-pointer dismissal preserves underlying non-modal detail panels.
+
+- Global shortcut overlay detection is shared with help; shortcut catalogs describe behavior while each surface retains its own handlers.
+
 - The shell is the browser data router layout and renders route content through its outlet and holds the recurring editor navigation-guard ref, blocking pathname changes while dirty or saving; leaving the blocked state clears the editor's deferred navigation and confirmation before paint, including after same-path navigation resets the blocker. Draft comparison, save completion, and discard-dialog focus remain editor-owned.
 - Roomy fixed pages own canvas-overflow containment through the shared `fixedPageClassName`; the shell supplies the matching top/bottom insets and leaves document-scrolling reports, Status, and Settings to their route-owned scroll models.
 - Conflict close and discard refresh the current transaction page before publishing detail; the final fetched version invalidates every account register it introduces, while a failed final detail lookup leaves the refreshed page snapshot authoritative.

@@ -44,12 +44,16 @@ import {
   MixedAmounts,
 } from "@/features/ledger";
 import { refreshOverview } from "@/features/overview";
+import { useShortcutGroup } from "@/hooks/use-shortcut-group";
 import { cn } from "@/lib/utils";
 import {
   invalidateAccountHeaders,
   invalidateAllAccountRegisterPages,
   invalidateAllAccountTransactionCache,
   invalidateGroupRegisterPages,
+  registerShortcutGroup,
+  type ShortcutGroup,
+  unregisterShortcutGroup,
 } from "@/store";
 import { formatLocalCivilDate } from "@/utils/date";
 
@@ -330,6 +334,19 @@ const RecurringDefinitionsSkeleton = () => (
   </div>
 );
 
+const recurringShortcuts: ShortcutGroup = {
+  id: "recurring",
+  title: "Recurring",
+  order: 10,
+  shortcuts: [
+    {
+      id: "recurring-0",
+      keys: ["Enter", "Space"],
+      label: "Open a definition",
+    },
+  ],
+};
+
 export const RecurringPageContent = ({
   errorMessage,
   filtered,
@@ -340,6 +357,12 @@ export const RecurringPageContent = ({
   refresh,
   snapshot,
 }: RecurringPageContentProps) => {
+  useShortcutGroup(
+    recurringShortcuts,
+    registerShortcutGroup,
+    unregisterShortcutGroup,
+    true,
+  );
   const [actionErrorMessage, setActionErrorMessage] = useState<string>();
   const [cancelTarget, setCancelTarget] = useState<CancelTarget>();
   const [deferTarget, setDeferTarget] = useState<DeferTarget>();

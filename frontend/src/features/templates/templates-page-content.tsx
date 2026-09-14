@@ -383,6 +383,7 @@ export const TemplatesPageContent = ({
       ) : null}
       <div className="min-h-0 flex-1">
         <ReferenceTree
+          shortcutGroupTitle="Templates"
           actionsColumnWidthClassName="sm:[--reference-tree-actions-width:15.25rem]"
           badgeHeader="Defaults"
           emptyDescription="Reusable transaction shapes will appear here once templates exist."

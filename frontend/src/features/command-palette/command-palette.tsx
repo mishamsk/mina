@@ -7,6 +7,7 @@ import {
   Folder,
   Hash,
   Home,
+  InfoBox,
   ListBox,
   Plus,
   SettingsCog2,
@@ -47,6 +48,7 @@ import {
 } from "@/api";
 import { Toast, toastDurationMs } from "@/components/toast";
 import { focusWithoutTooltip, Tooltip } from "@/components/tooltip";
+import { Kbd } from "@/components/ui/kbd";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   AmountText,
@@ -79,6 +81,7 @@ import type { TransactionEntryType } from "@/models/ui-state";
 import {
   closeCommandPalette,
   getTransactionEntryPanelSnapshot,
+  openKeyboardShortcuts,
   openTransactionEntryPanel,
   openTransactionEntryTemplate,
   setTransactionEditModeEnabled,
@@ -103,7 +106,7 @@ type CommandGroup =
 
 interface CommandItem {
   readonly accessibleLabel?: string;
-  readonly action?: () => void;
+  readonly action?: (opener?: HTMLElement) => void;
   readonly detail?: string;
   readonly group: CommandGroup;
   readonly hiddenLabel?: string;
@@ -113,6 +116,7 @@ interface CommandItem {
   readonly label: string;
   readonly renderLabel?: ReactNode;
   readonly serverRanked?: boolean;
+  readonly shortcut?: readonly string[];
   readonly to?: To;
 }
 
@@ -602,6 +606,7 @@ export const CommandPalette = () => {
           openEntryCommand("spend");
         },
         group: "New transaction",
+        shortcut: ["n"],
         icon: Plus,
         id: "entry-spend",
         keywords: ["spend", "expense"],
@@ -612,6 +617,7 @@ export const CommandPalette = () => {
           openEntryCommand("income");
         },
         group: "New transaction",
+        shortcut: ["n"],
         icon: Plus,
         id: "entry-income",
         keywords: ["income"],
@@ -622,6 +628,7 @@ export const CommandPalette = () => {
           openEntryCommand("refund");
         },
         group: "New transaction",
+        shortcut: ["n"],
         icon: Plus,
         id: "entry-refund",
         keywords: ["refund"],
@@ -632,6 +639,7 @@ export const CommandPalette = () => {
           openEntryCommand("transfer");
         },
         group: "New transaction",
+        shortcut: ["n"],
         icon: Plus,
         id: "entry-transfer",
         keywords: ["transfer"],
@@ -642,6 +650,7 @@ export const CommandPalette = () => {
           openEntryCommand("exchange");
         },
         group: "New transaction",
+        shortcut: ["n"],
         icon: Plus,
         id: "entry-exchange",
         keywords: ["exchange", "currency", "fx"],
@@ -691,6 +700,15 @@ export const CommandPalette = () => {
     );
 
     const actionCommands: readonly CommandItem[] = [
+      {
+        action: openKeyboardShortcuts,
+        group: "Actions",
+        icon: InfoBox,
+        id: "action-keyboard-shortcuts",
+        keywords: ["help", "keys", "hotkeys"],
+        label: "Keyboard shortcuts",
+        shortcut: ["?"],
+      },
       ...(transactionEditModeAvailable
         ? [
             {
@@ -962,8 +980,9 @@ export const CommandPalette = () => {
       activationGenerationRef.current += 1;
 
       if (command.action) {
+        const opener = restoreFocusRef.current ?? undefined;
         closeCommandPalette();
-        command.action();
+        command.action(opener);
         return;
       }
       if (command.to) {
@@ -1418,9 +1437,7 @@ export const CommandPalette = () => {
                 >
                   Command Palette
                 </h2>
-                <kbd className="bg-muted border-2 border-[var(--border-ink)] px-1.5 py-0.5 font-mono text-xs shadow-[var(--shadow-chip)]">
-                  Cmd/Ctrl K
-                </kbd>
+                <Kbd>Cmd/Ctrl K</Kbd>
               </div>
               <input
                 ref={inputRef}
@@ -1683,6 +1700,9 @@ export const CommandPalette = () => {
                                     </span>
                                   </Tooltip>
                                 ) : null}
+                                {command.shortcut?.map((key) => (
+                                  <Kbd key={key}>{key}</Kbd>
+                                ))}
                                 {command.detail ? (
                                   <span className="text-muted-foreground ml-auto text-xs">
                                     {command.detail}

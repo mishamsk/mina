@@ -4,6 +4,13 @@ import { Tabs } from "radix-ui";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router";
 
+import { useShortcutGroup } from "@/hooks/use-shortcut-group";
+import {
+  registerShortcutGroup,
+  type ShortcutGroup,
+  unregisterShortcutGroup,
+} from "@/store";
+
 import { getHealth, type HealthResponse, isNetworkFailure } from "../api";
 import { PageHelp } from "../components/page-help";
 import { Badge } from "../components/ui/badge";
@@ -299,7 +306,36 @@ const ServerInfoPopover = ({ health, serverTime }: ServerInfoPopoverProps) => {
   );
 };
 
+const statusShortcuts: ShortcutGroup = {
+  id: "status",
+  title: "Status",
+  order: 10,
+  shortcuts: [
+    {
+      id: "status-0",
+      keys: ["←", "→"],
+      label: "Switch tabs",
+    },
+    {
+      id: "status-1",
+      keys: ["Home"],
+      label: "Go to the first tab",
+    },
+    {
+      id: "status-2",
+      keys: ["End"],
+      label: "Go to the last tab",
+    },
+  ],
+};
+
 export const StatusPage = () => {
+  useShortcutGroup(
+    statusShortcuts,
+    registerShortcutGroup,
+    unregisterShortcutGroup,
+    true,
+  );
   const [searchParams, setSearchParams] = useSearchParams();
   const [health, setHealth] = useState<HealthState>(initialHealthState);
   const [refreshRevision, setRefreshRevision] = useState(0);

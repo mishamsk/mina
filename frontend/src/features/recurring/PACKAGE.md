@@ -6,6 +6,8 @@
 
 ## Implicit Contracts
 
+- Definition lists register row help while mounted; the editor registers draft-discard help only while open.
+
 - The editor owns its draft signature baseline and exposes navigation dirtiness, saving state, and discard confirmation through a shell-held ref; Keep editing restores panel focus, while Escape and explicit close discard immediately. Navigation requested during saving waits without a discard dialog, continues after successful save and refresh, and offers the discard choice after failure; the shell clears the deferred callback and confirmation when the router stops blocking. Successful writes reset the saved baseline; a failed pause/resume remains an unsaved change.
 - The definitions list flexes beneath route and action banners within the shared fixed-page bound; loaded rows use `referenceTableFrameClassName` and `recurring-definitions-table-scroll`, while skeleton/error/empty surfaces remain bounded and oversized state content stays reachable; empty content centers only when it fits.
 - Existing-definition editors link to the shared Transactions browser with direct definition-ID scope; navigation closes the editor after confirming discard when its draft is dirty.

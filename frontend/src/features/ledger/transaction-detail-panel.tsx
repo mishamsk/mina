@@ -36,11 +36,15 @@ import {
 } from "@/features/recurring";
 import { transactionTemplateRecordsFromTransaction } from "@/features/templates";
 import { useOutsidePointerClose } from "@/hooks/use-outside-pointer-close";
+import { useShortcutGroup } from "@/hooks/use-shortcut-group";
 import { cn } from "@/lib/utils";
 import {
   type LedgerLookupsSnapshot,
   openNewRecurringDefinitionEditor,
   openNewTemplateEditor,
+  registerShortcutGroup,
+  type ShortcutGroup,
+  unregisterShortcutGroup,
 } from "@/store";
 import { formatInstantTimestamp, localCivilDate } from "@/utils/date";
 
@@ -815,6 +819,19 @@ export const TransactionDetailContent = ({
   );
 };
 
+const detailShortcuts: ShortcutGroup = {
+  id: "transaction-detail",
+  title: "Transaction detail",
+  order: 15,
+  shortcuts: [
+    {
+      id: "transaction-detail-0",
+      keys: ["Esc"],
+      label: "Close detail and return to the row",
+    },
+  ],
+};
+
 export const TransactionDetailPanel = ({
   autoFocusOnTransactionChange = true,
   confirmingProjectionDefinitionId,
@@ -840,6 +857,12 @@ export const TransactionDetailPanel = ({
   transaction,
   transactionId,
 }: TransactionDetailPanelProps) => {
+  useShortcutGroup(
+    detailShortcuts,
+    registerShortcutGroup,
+    unregisterShortcutGroup,
+    true,
+  );
   const panelRef = useRef<HTMLElement | null>(null);
   const confirmNextProjectionButtonRef = useRef<HTMLButtonElement | null>(null);
   const confirmExpectedButtonRef = useRef<HTMLButtonElement | null>(null);

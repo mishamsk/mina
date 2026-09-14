@@ -31,7 +31,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AmountText, FqnPath } from "@/features/ledger";
+import { useShortcutGroup } from "@/hooks/use-shortcut-group";
 import { cn } from "@/lib/utils";
+import {
+  registerShortcutGroup,
+  type ShortcutGroup,
+  unregisterShortcutGroup,
+} from "@/store";
 
 import { AccountTypeBadge } from "./account-type-badge";
 import { CreditLimitIndicator } from "./credit-limit-indicator";
@@ -265,6 +271,19 @@ const AccountsTreeSkeleton = () => (
   </div>
 );
 
+const accountsShortcuts: ShortcutGroup = {
+  id: "accounts",
+  title: "Accounts",
+  order: 10,
+  shortcuts: [
+    {
+      id: "accounts-0",
+      keys: ["Enter", "Space"],
+      label: "Open the account or group",
+    },
+  ],
+};
+
 export const AccountsTree = ({
   accounts,
   balances,
@@ -279,6 +298,12 @@ export const AccountsTree = ({
   onRestructurePath,
   onRetry,
 }: AccountsTreeProps) => {
+  useShortcutGroup(
+    accountsShortcuts,
+    registerShortcutGroup,
+    unregisterShortcutGroup,
+    true,
+  );
   const [deleteTarget, setDeleteTarget] = useState<
     AccountDeleteTarget | undefined
   >();

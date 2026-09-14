@@ -7,7 +7,9 @@ import {
   type Member,
   updateLedgerMemberHidden,
 } from "@/api";
+import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { activateRowLink } from "@/components/link-activation";
+import { ReferenceEntityDeleteDescription } from "@/components/reference-entity-delete-description";
 import {
   compactReferenceTableActionsColumnClassName,
   compactReferenceTableFrameClassName,
@@ -21,8 +23,14 @@ import { type RowAction, RowActions } from "@/components/row-actions";
 import { focusWithoutTooltip, Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useShortcutGroup } from "@/hooks/use-shortcut-group";
 import { cn } from "@/lib/utils";
-import type { MembersPageSnapshot } from "@/store";
+import {
+  type MembersPageSnapshot,
+  registerShortcutGroup,
+  type ShortcutGroup,
+  unregisterShortcutGroup,
+} from "@/store";
 
 import { memberAPIErrorMessage } from "./member-api-error-message";
 import {
@@ -109,6 +117,19 @@ const MembersListSkeleton = () => (
   </div>
 );
 
+const membersShortcuts: ShortcutGroup = {
+  id: "members",
+  title: "Members",
+  order: 10,
+  shortcuts: [
+    {
+      id: "members-0",
+      keys: ["Enter", "Space"],
+      label: "Open the member",
+    },
+  ],
+};
+
 const MembersList = ({
   errorMessage,
   filtered,
@@ -128,6 +149,12 @@ const MembersList = ({
   readonly onMemberDeleted: (memberId: number) => void;
   readonly onNotice: (message: string) => void;
 }) => {
+  useShortcutGroup(
+    membersShortcuts,
+    registerShortcutGroup,
+    unregisterShortcutGroup,
+    true,
+  );
   const [deleteTarget, setDeleteTarget] = useState<
     MemberDeleteTarget | undefined
   >();
@@ -491,5 +518,3 @@ export const MembersPageContent = ({
     </div>
   );
 };
-import { ConfirmationDialog } from "@/components/confirmation-dialog";
-import { ReferenceEntityDeleteDescription } from "@/components/reference-entity-delete-description";

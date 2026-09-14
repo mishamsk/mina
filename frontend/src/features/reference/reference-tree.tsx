@@ -21,7 +21,13 @@ import { Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FqnPath } from "@/features/ledger";
+import { useShortcutGroup } from "@/hooks/use-shortcut-group";
 import { cn } from "@/lib/utils";
+import {
+  registerShortcutGroup,
+  type ShortcutGroup,
+  unregisterShortcutGroup,
+} from "@/store";
 
 export interface ReferenceLeaf {
   readonly fqn: string;
@@ -194,6 +200,7 @@ const actionsColumnWidthClass = (hasBadgeColumn: boolean, compact: boolean) =>
       : "w-[24%] px-3 py-2 text-center sm:w-[18%]";
 
 interface ReferenceTreeProps<TLeaf extends ReferenceLeaf, TGroup> {
+  readonly shortcutGroupTitle: string;
   readonly actionsColumnWidthClassName?: string;
   readonly badgeHeader?: string;
   readonly compact?: boolean;
@@ -244,10 +251,24 @@ const isInteractiveTarget = (
   return interactiveTarget !== null && interactiveTarget !== currentTarget;
 };
 
+const referenceShortcuts: ShortcutGroup = {
+  id: "reference-tables",
+  title: "Reference tables",
+  order: 10,
+  shortcuts: [
+    {
+      id: "reference-tables-0",
+      keys: ["Enter", "Space"],
+      label: "Open the row destination",
+    },
+  ],
+};
+
 export const ReferenceTree = <
   TLeaf extends ReferenceLeaf,
   TGroup extends ReferenceGroup,
 >({
+  shortcutGroupTitle,
   actionsColumnWidthClassName,
   badgeHeader,
   compact = false,
@@ -271,6 +292,16 @@ export const ReferenceTree = <
   renderBadge,
   rowTestId = "reference-tree-row",
 }: ReferenceTreeProps<TLeaf, TGroup>) => {
+  const shortcutGroup = useMemo(
+    () => ({ ...referenceShortcuts, title: shortcutGroupTitle }),
+    [shortcutGroupTitle],
+  );
+  useShortcutGroup(
+    shortcutGroup,
+    registerShortcutGroup,
+    unregisterShortcutGroup,
+    Boolean(rowHref || onRowClick),
+  );
   const hasBadgeColumn = Boolean(badgeHeader);
   const rows = useMemo(
     () => (leaves ? referenceTreeRows(leaves, groups ?? []) : []),

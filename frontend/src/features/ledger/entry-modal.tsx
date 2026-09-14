@@ -272,6 +272,7 @@ export const EntryModal = ({
           onPointerDown={flashAttention}
         />
         <Dialog.Content
+          data-global-shortcut-blocking-overlay
           ref={contentRef}
           tabIndex={-1}
           className={`bg-card fixed inset-0 z-[70] h-dvh w-screen overflow-hidden border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)] outline-none motion-safe:animate-[entry-stage-in_120ms_steps(2)] sm:top-1/2 sm:left-1/2 sm:h-[calc(100dvh-32px)] sm:w-[calc(100vw-32px)] sm:-translate-x-1/2 sm:-translate-y-1/2 lg:h-[calc(100dvh-48px)] lg:w-[calc(100vw-64px)] xl:h-[calc(100dvh-64px)] xl:w-[min(1200px,calc(100vw-96px))] ${

@@ -25,7 +25,13 @@ import {
   StatusIcon,
   transactionTitleAccountFqnContext,
 } from "@/features/ledger";
+import { useShortcutGroup } from "@/hooks/use-shortcut-group";
 import { cn } from "@/lib/utils";
+import {
+  registerShortcutGroup,
+  type ShortcutGroup,
+  unregisterShortcutGroup,
+} from "@/store";
 
 interface AccountRegisterTableProps {
   readonly errorMessage: string | undefined;
@@ -150,6 +156,24 @@ const AccountRegisterSkeleton = ({
   );
 };
 
+const registerShortcuts: ShortcutGroup = {
+  id: "account-register",
+  title: "Account register",
+  order: 10,
+  shortcuts: [
+    {
+      id: "account-register-0",
+      keys: ["↑", "↓"],
+      label: "Move row focus",
+    },
+    {
+      id: "account-register-1",
+      keys: ["Enter"],
+      label: "Open transaction detail",
+    },
+  ],
+};
+
 export const AccountRegisterTable = ({
   errorMessage,
   loading,
@@ -171,6 +195,12 @@ export const AccountRegisterTable = ({
   showRunningBalance = true,
   totalCount,
 }: AccountRegisterTableProps) => {
+  useShortcutGroup(
+    registerShortcuts,
+    registerShortcutGroup,
+    unregisterShortcutGroup,
+    true,
+  );
   const rootRef = useRef<HTMLDivElement | null>(null);
   const showRemainingCredit =
     showRunningBalance &&

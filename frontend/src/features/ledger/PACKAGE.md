@@ -6,6 +6,8 @@
 
 ## Implicit Contracts
 
+- The entry modal blocks global shortcuts; its help catalog belongs to the shell and is visible on every route. Mounted transaction surfaces register browse and detail keyboard help; Edit mode replaces browse activation hints and adds selection/dock hints only while enabled.
+
 - Record-date formatting selects posted then pending timestamps by presence alone and converts them to browser-local calendar days; date-free records use the initiated civil date with the same day/year geometry.
 
 - Recurring-definition filters reuse the entity picker for exact FQNs and hierarchy scopes, retain removable ID literals, and restore selected FQNs through bounded ranked search instead of loading complete definitions.

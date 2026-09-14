@@ -6,6 +6,8 @@
 
 ## Implicit Contracts
 
+- Shortcut groups and help launches stay transient; closing help retains the launch opener for close-time focus restoration.
+
 - Bootstrap installs protected-request invalidation before loading authentication, then settles UI persistence before the app shell replaces its splash state; failure becomes bootstrap state rather than preventing the shell from mounting.
 - Authentication generation rejects late status and logout completions so an older request cannot restore a superseded session state.
 - Preference writes update memory first; an IndexedDB failure leaves that value active and records the persistence error.

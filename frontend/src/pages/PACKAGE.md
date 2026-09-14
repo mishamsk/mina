@@ -6,6 +6,8 @@
 
 ## Implicit Contracts
 
+- The Status route registers tab-navigation keyboard help; the active feature owns its additional row shortcuts.
+
 - The browser data router renders every page through the AppShell layout outlet and rethrows route render errors to the application error boundary for its status panel and logging; routes do not own loaders or actions.
 - Single-account registers link to Transactions using an exact stable account-ID filter in a fresh URL, independent of register pagination and detail state.
 - Roomy single-account summaries use a capped, keyboard-accessible scroller with compensated shadow padding to align cards with the register and an inward focus outline to avoid page-frame clipping; arbitrary currency balances and expanded header errors remain reachable while reserving space for register rows and pagination. Compact summaries stay in document flow.

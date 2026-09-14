@@ -55,13 +55,17 @@ import {
 } from "@/features/recurring";
 import { transactionTemplateRecordsFromTransaction } from "@/features/templates";
 import { useElementOverflow } from "@/hooks/use-element-overflow";
+import { useShortcutGroup } from "@/hooks/use-shortcut-group";
 import { cn } from "@/lib/utils";
 import type { LedgerLookupsSnapshot } from "@/store";
 import {
   openNewRecurringDefinitionEditor,
   openNewTemplateEditor,
+  registerShortcutGroup,
   setTransactionAmountDraftInvalid,
   setTransactionAmountSavePending,
+  type ShortcutGroup,
+  unregisterShortcutGroup,
   useTransactionEditModeStore,
 } from "@/store";
 import { localTodayISODate } from "@/utils/date";
@@ -527,6 +531,90 @@ interface AmountEditorRetention {
   readonly transaction: Transaction;
 }
 
+const transactionBrowseShortcuts: ShortcutGroup = {
+  id: "transactions",
+  title: "Transactions",
+  order: 10,
+  shortcuts: [
+    {
+      id: "transactions-0",
+      keys: ["↑", "↓"],
+      label: "Move row focus",
+    },
+    {
+      id: "transactions-1",
+      keys: ["Enter", "Space"],
+      label: "Open transaction detail",
+    },
+  ],
+};
+
+const transactionRowShortcuts: ShortcutGroup = {
+  id: "transactions",
+  title: "Transactions",
+  order: 10,
+  shortcuts: [
+    { id: "transactions-0", keys: ["↑", "↓"], label: "Move row focus" },
+  ],
+};
+
+const transactionEditShortcuts: ShortcutGroup = {
+  id: "transaction-edit",
+  title: "Transactions · Edit mode",
+  order: 11,
+  shortcuts: [
+    {
+      id: "edit-0",
+      keys: ["Mod", "A"],
+      label: "Select all",
+    },
+    {
+      id: "edit-1",
+      keys: ["Shift", "↑", "↓"],
+      label: "Extend selection",
+    },
+    {
+      id: "edit-2",
+      keys: ["Shift", "Space"],
+      label: "Extend selection to this row",
+    },
+    {
+      id: "edit-3",
+      keys: ["Enter", "Space"],
+      label: "Toggle selection",
+    },
+    {
+      id: "edit-4",
+      keys: ["a"],
+      label: "Open Account dock",
+      detail: "From a selected row.",
+    },
+    {
+      id: "edit-5",
+      keys: ["c"],
+      label: "Open Category dock",
+      detail: "From a selected row.",
+    },
+    {
+      id: "edit-6",
+      keys: ["m"],
+      label: "Open Member dock",
+      detail: "From a selected row.",
+    },
+    {
+      id: "edit-7",
+      keys: ["t"],
+      label: "Open Tags dock",
+      detail: "From a selected row.",
+    },
+    {
+      id: "edit-8",
+      keys: ["Esc"],
+      label: "Close dock, clear selection, then leave Edit mode",
+    },
+  ],
+};
+
 export const TransactionBrowser = ({
   amountDisplayMode,
   confirmingProjectionDefinitionId,
@@ -576,6 +664,18 @@ export const TransactionBrowser = ({
   totalCount,
   transactions,
 }: TransactionBrowserProps) => {
+  useShortcutGroup(
+    transactionEditShortcuts,
+    registerShortcutGroup,
+    unregisterShortcutGroup,
+    editMode,
+  );
+  useShortcutGroup(
+    editMode ? transactionRowShortcuts : transactionBrowseShortcuts,
+    registerShortcutGroup,
+    unregisterShortcutGroup,
+    true,
+  );
   const openMobileTableEditPanel = useOpenMobileTableEditPanel();
   const [deleteDialog, setDeleteDialog] = useState<{
     readonly opener: HTMLElement;

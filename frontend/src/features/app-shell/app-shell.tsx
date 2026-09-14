@@ -87,6 +87,7 @@ import {
   loadTransactionEntryRoute,
   logoutAuthentication,
   openCommandPalette,
+  openKeyboardShortcuts,
   openTransactionEntryPanel,
   openTransactionEntryRoute,
   resolveTransactionEntryRoute,
@@ -102,6 +103,9 @@ import {
   useTemplateEditorView,
   useTransactionEntryPanelView,
 } from "@/store";
+
+import { hasActiveOverlay, isEditableTarget } from "./global-shortcuts";
+import { KeyboardShortcutsDialog } from "./keyboard-shortcuts-dialog";
 
 type PixelIcon = ComponentType<SVGProps<SVGSVGElement>>;
 
@@ -123,12 +127,6 @@ const utilityNavItems: readonly NavItem[] = [
   { icon: Chart, label: "Status", to: "/status" },
   { icon: SettingsCog2, label: "Settings", to: "/settings" },
 ];
-
-const modalOverlaySelector =
-  "[role='alertdialog'], [role='dialog'][aria-modal='true'], [data-global-shortcut-blocking-overlay], [data-recurring-definition-editor], [data-page-help-content], [data-slot='popover-content'], [data-slot='select-content'][data-state='open']";
-
-const isVisibleOverlay = (element: Element): boolean =>
-  element instanceof HTMLElement && element.getClientRects().length > 0;
 
 const isTransactionRowWithinViewport = (row: HTMLElement): boolean => {
   const viewport = row.closest<HTMLElement>(
@@ -155,11 +153,6 @@ const isTransactionRowWithinViewport = (row: HTMLElement): boolean => {
     rowBounds.bottom <= compactToolbarTop
   );
 };
-
-const hasActiveOverlay = (): boolean =>
-  Array.from(document.querySelectorAll(modalOverlaySelector)).some(
-    isVisibleOverlay,
-  );
 
 const resolveRecurringDefinitionFocusTarget = (
   opener: HTMLElement | undefined,
@@ -940,8 +933,6 @@ export const AppShell = () => {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      const target =
-        event.target instanceof HTMLElement ? event.target : undefined;
       if (
         event.key.toLowerCase() !== "n" ||
         event.metaKey ||
@@ -949,7 +940,7 @@ export const AppShell = () => {
         event.altKey ||
         event.shiftKey ||
         hasActiveOverlay() ||
-        target?.matches("input, textarea, select, [contenteditable='true']")
+        isEditableTarget(event.target)
       ) {
         return;
       }
@@ -963,6 +954,28 @@ export const AppShell = () => {
     return () => {
       window.removeEventListener("keydown", onKeyDown);
     };
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.key !== "?" ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.altKey ||
+        hasActiveOverlay() ||
+        isEditableTarget(event.target)
+      )
+        return;
+      event.preventDefault();
+      openKeyboardShortcuts(
+        document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : undefined,
+      );
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
   return (
@@ -1132,6 +1145,7 @@ export const AppShell = () => {
         </MobileTableControlsProvider>
       </main>
       <CommandPalette />
+      <KeyboardShortcutsDialog />
       {recurringDefinitionEditor.launch ? (
         <DefinitionEditorPanel
           key={recurringDefinitionEditor.launch.key}

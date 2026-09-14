@@ -45,7 +45,13 @@ import {
   useLedgerLookupsResource,
   useResolvedEntityOptions,
 } from "@/features/ledger";
+import { useShortcutGroup } from "@/hooks/use-shortcut-group";
 import { cn } from "@/lib/utils";
+import {
+  registerShortcutGroup,
+  type ShortcutGroup,
+  unregisterShortcutGroup,
+} from "@/store";
 import { localTodayISODate } from "@/utils/date";
 
 type ScheduleKind = "day_of_month" | "interval" | "last_day_of_month";
@@ -206,6 +212,19 @@ const recordErrorKey = (row: number, field: string) =>
 const FieldError = ({ message }: { readonly message: string | undefined }) =>
   message ? <p className="text-destructive mt-1 text-xs">{message}</p> : null;
 
+const definitionShortcuts: ShortcutGroup = {
+  id: "recurring-editor",
+  title: "Recurring editor",
+  order: 20,
+  shortcuts: [
+    {
+      id: "recurring-editor-0",
+      keys: ["Esc"],
+      label: "Discard the editor draft and close",
+    },
+  ],
+};
+
 export const DefinitionEditorPanel = ({
   definition,
   initialRecords = [],
@@ -216,6 +235,12 @@ export const DefinitionEditorPanel = ({
   open,
   resolveReturnFocusTo,
 }: DefinitionEditorPanelProps) => {
+  useShortcutGroup(
+    definitionShortcuts,
+    registerShortcutGroup,
+    unregisterShortcutGroup,
+    open,
+  );
   const lookups = useLedgerLookupsResource();
   const panelRef = useRef<HTMLElement | null>(null);
   const [draft, setDraft] = useState<DefinitionDraft>(() =>

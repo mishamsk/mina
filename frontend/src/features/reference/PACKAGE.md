@@ -6,6 +6,8 @@
 
 ## Implicit Contracts
 
+- A mounted reference tree registers row-activation help under its caller-supplied group title only when its caller supplies a destination or activation handler.
+
 - Roomy reference trees use the shared reference table frame and bounded loading/error/empty surfaces; callers provide a shrinking flex slot beneath page headers and banners, and the inner viewport alone scrolls loaded rows. Loading/error wrappers reserve shadow padding without shifting their cards.
 - The toolbar owns only URL parameters `q` and `hidden`: trim and omit an empty search, encode enabled hidden items as `hidden=true`, preserve unrelated parameters, allow a caller-owned reset version to discard its focused draft after an external clear, and render feature-supplied standing controls without owning their state.
 - The toolbar search field opts out of browser value-history suggestions so Mina's server-filtered search remains the only search experience.

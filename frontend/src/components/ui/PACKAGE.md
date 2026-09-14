@@ -6,6 +6,8 @@
 
 ## Implicit Contracts
 
+- Keyboard chips render the Mod token deterministically as Cmd/Ctrl; they carry no keyboard behavior.
+
 - Treat shadcn-generated files as app source, not replaceable dependencies.
 - Preserve overlay portals, stack order, `data-slot` names, and Radix state attributes: feature close logic and global shortcut blocking coordinate through them.
 - Popover and Select option surfaces owned by compact table controls become viewport-fixed, full-width bottom sheets; compact Select triggers keep controlling their viewport listbox, and feature picker Popovers opt into a compact Back action outside any listbox semantics.

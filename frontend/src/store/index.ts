@@ -83,6 +83,7 @@ export {
   useCommandPaletteStore,
   useCommandPaletteView,
 } from "./command-palette";
+export * from "./keyboard-shortcuts";
 export {
   clearMembersPageLoading,
   getMembersSnapshot,
