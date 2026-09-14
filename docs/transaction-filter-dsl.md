@@ -15,13 +15,14 @@ This document owns the filter expression language for `GET /api/transactions`: g
 
 ## Fields
 
-- Membership fields: `account`, `category`, `tag`, `member`, `currency`, `role`, `class`, `lifecycle`, `settlement`, `shape`.
+- Membership fields: `account`, `category`, `tag`, `member`, `recurring_definition`, `currency`, `role`, `class`, `lifecycle`, `settlement`, `shape`.
 - Comparison fields: `amount`, `amount_usd`, `initiated`, `pending`, `posted`.
 - Field names are lowercase and case-sensitive.
 
 ### Value vocabularies
 
-- `account`, `category`, and `tag` take exact FQN or prefix-scoped values (for example `account:"checking:Chase"` and `category:"Food:*"`) as defined in Hierarchy scoping; `member` takes an exact household-member name. All four entity-valued fields also take an unquoted `#<entity-id>` literal, which matches that stable positive signed 64-bit ID from 1 through 9223372036854775807 exactly; quote a human-readable value beginning with `#` to keep it in name/FQN form.
+- `account`, `category`, `tag`, and `recurring_definition` take exact FQN or prefix-scoped values (for example `account:"checking:Chase"` and `category:"Food:*"`) as defined in Hierarchy scoping; `member` takes an exact household-member name. All five entity-valued fields also take an unquoted `#<entity-id>` literal, which matches that stable positive signed 64-bit ID from 1 through 9223372036854775807 exactly; quote a human-readable value beginning with `#` to keep it in name/FQN form.
+- `recurring_definition` matches direct definition provenance, independently of lifecycle selection, including expected, active, and cancelled transactions and future projections. IDs also match provenance from cancelled definitions; FQNs and hierarchy scopes use active definitions, as for other entities. Negation includes transactions without recurring provenance.
 - `currency` takes ISO 4217 codes or quoted crypto codes prefixed with `C::`, for example `currency:"C::BTC"`. Fiat values normalize to uppercase and must be exactly three letters; the `C::` prefix keeps the remainder of the value verbatim.
 - `role` takes a `RecordRole` enum value: `expense`, `refund`, `income`, `clawback`, `exchange`, `adjustment`, `balance`.
 - `class` takes a `TransactionClass` enum value: `spend`, `income`, `refund`, `clawback`, `transfer`, `currency_exchange`, `adjustment`, `mixed`.
@@ -34,20 +35,20 @@ This document owns the filter expression language for `GET /api/transactions`: g
 ### Field cardinality
 
 - `account`, `category`, `tag`, `member`, `currency`, `role`, and `shape` are multi-valued per transaction.
-- `class`, `lifecycle`, and `settlement` are single-valued per transaction; contradictory conjoined terms still parse and simply match nothing.
+- `class`, `lifecycle`, `settlement`, and `recurring_definition` are single-valued per transaction; contradictory conjoined terms still parse and simply match nothing.
 - Browser presentation and editing behavior for these cardinalities is owned by the [web UI design](webui-design.md#tables-and-filtering).
 
 ## Matching semantics
 
 - Every leaf term is a transaction-level predicate. For record-derived fields — account, category, tag, member, currency, role, amount, amount_usd, pending, posted — the term means "at least one active journal record satisfies this". Transaction-derived fields test the attribute directly: `lifecycle` reads the lifecycle column, `settlement`, `shape`, and `class` use their server-derived summaries, and `initiated` compares the transaction's initiated civil date. Boolean operators compose these transaction-level predicates.
-- Entity-ID literals compare journal-record references directly by stable ID without name/FQN resolution. A well-formed ID that does not exist validly matches nothing.
+- Entity-ID literals compare journal-record references or direct recurring-definition provenance directly by stable ID without name/FQN resolution. A well-formed ID that does not exist validly matches nothing.
 - Same-record conjunction is out of scope: `account:A and account:B` matches a transaction holding records on both accounts, because each term is an independent record-level existence test.
 - `not term` matches transactions where no active record satisfies `term` (or the direct attribute test fails). Negation respects hierarchy scoping identically to the positive form.
 - Single-valued transaction attributes conjoined with contradictory terms simply match nothing; validation does not special-case them.
 
 ## Hierarchy scoping
 
-- For `account`, `category`, and `tag`, a quoted value ending in an unescaped `:*` scopes the term to that node and all its active descendants (for example `category:"Food:*"`); the quoted value without the suffix matches that exact FQN only. A bare `*` scopes to all entities of the kind. A literal asterisk is otherwise ordinary FQN content; an exact FQN equal to `*` or ending in `:*` escapes the relevant asterisk (for example `tag:"\*"` and `category:"Compat:\*"`).
+- For `account`, `category`, `tag`, and `recurring_definition`, a quoted value ending in an unescaped `:*` scopes the term to that node and all its active descendants (for example `category:"Food:*"`); the quoted value without the suffix matches that exact FQN only. A bare `*` scopes to all entities of the kind. A literal asterisk is otherwise ordinary FQN content; an exact FQN equal to `*` or ending in `:*` escapes the relevant asterisk (for example `tag:"\*"` and `category:"Compat:\*"`).
 - Scope values need not name an existing entity, because intermediate hierarchy segments are implicit groups rather than stored entities; an empty result is valid. Exact human-readable FQN values must resolve to an existing active entity; entity-ID literals compare directly without reference resolution.
 - Member values never scope; they match one name exactly.
 
@@ -61,14 +62,14 @@ This document owns the filter expression language for `GET /api/transactions`: g
 
 ## Limits
 
-- Structural expression syntax outside quoted `account`, `category`, `tag`, and `member` values is limited to 4096 characters; quoted reference payloads are excluded so every otherwise-valid existing FQN or member name remains filterable. Expressions containing more than 100 terms, nested deeper than 10 levels, or using a relative-offset magnitude above 100000 units are rejected as invalid requests. These caps are deliberate guardrails against pathological input, not semantic boundaries.
+- Structural expression syntax outside quoted `account`, `category`, `tag`, `member`, and `recurring_definition` values is limited to 4096 characters; quoted reference payloads are excluded so every otherwise-valid existing FQN or member name remains filterable. Expressions containing more than 100 terms, nested deeper than 10 levels, or using a relative-offset magnitude above 100000 units are rejected as invalid requests. These caps are deliberate guardrails against pathological input, not semantic boundaries.
 
 ## Errors
 
 - Parse failures return the standard invalid-request envelope with a message naming the offending token and its byte offset. Missing boolean operators, malformed term forms, and violated limits report the applicable requirement.
 - Exact human-readable entity values that do not resolve to an existing active entity return HTTP 400 with public code `invalid_request` and message `transaction filters reference missing or inactive resource`. Hierarchy scopes and well-formed missing entity-ID literals validly match nothing; hidden entities resolve normally.
 - Invalid value shapes — unknown fields, bad enum values, malformed dates, and out-of-range decimals — are invalid requests.
-- A malformed entity-ID literal is an invalid request with `entity-ID literal must use # followed by a positive base-10 integer`; fields outside `account`, `category`, `tag`, and `member` reject entity-ID literals as unsupported.
+- A malformed entity-ID literal is an invalid request with `entity-ID literal must use # followed by a positive base-10 integer`; fields outside `account`, `category`, `tag`, `member`, and `recurring_definition` reject entity-ID literals as unsupported.
 
 ## Reference zone
 

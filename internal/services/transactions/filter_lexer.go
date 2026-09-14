@@ -37,7 +37,7 @@ func countedFilterLength(text string, tokens []filterToken) int {
 			continue
 		}
 		field, _, rawValue, _, err := splitFilterTerm(token.text)
-		if err != nil || (FilterField(field) != FilterFieldAccount && FilterField(field) != FilterFieldCategory && FilterField(field) != FilterFieldTag && FilterField(field) != FilterFieldMember) || !filterValueIsQuoted(rawValue) {
+		if err != nil || (FilterField(field) != FilterFieldAccount && FilterField(field) != FilterFieldCategory && FilterField(field) != FilterFieldTag && FilterField(field) != FilterFieldMember && FilterField(field) != FilterFieldRecurringDefinition) || !filterValueIsQuoted(rawValue) {
 			continue
 		}
 		count -= utf8.RuneCountInString(rawValue[1 : len(rawValue)-1])

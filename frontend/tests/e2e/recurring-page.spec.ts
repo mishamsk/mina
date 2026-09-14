@@ -111,6 +111,17 @@ test("recurring definition row actions stay reachable across widths", async ({
     row.getByRole("button", { name: "More row actions" }),
   ).toBeHidden();
 
+  const editButton = row.getByRole("button", {
+    name: "Edit definition",
+    exact: true,
+  });
+  await editButton.click();
+  await page
+    .getByRole("complementary", { name: "Edit recurring definition" })
+    .getByRole("button", { name: "Cancel", exact: true })
+    .click();
+  await expect(editButton).toBeFocused();
+
   await page.setViewportSize({ width: 390, height: 900 });
   const overflow = row.getByRole("button", { name: "More row actions" });
   await expect(overflow).toBeVisible();
@@ -242,4 +253,85 @@ test("recurring editor guards interaction across route navigation", async ({
   await editor.getByRole("button", { name: "Close definition editor" }).click();
   await expect(editor).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Accounts" })).toBeFocused();
+});
+
+test("definition drill-down preserves drafts and shareable editable transaction scope", async ({
+  page,
+}) => {
+  await page.goto("/recurring");
+  const row = definitionRow(page, "Household:Mortgage");
+  await row.click();
+  const editor = page.getByRole("complementary", {
+    name: "Edit recurring definition",
+  });
+  const id = await row.getAttribute("data-recurring-definition-id");
+  await editor.getByLabel("Every").fill("2");
+  const link = editor.getByRole("link", { name: "View transactions" });
+  await link.focus();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(
+    new RegExp(`/transactions\\?filter=recurring_definition%3A%23${id}`),
+  );
+  await expect(editor.getByLabel("Every")).toHaveValue("2");
+  await editor.getByRole("button", { name: "Close definition editor" }).click();
+  const chip = page.getByRole("button", {
+    name: `Edit Recurring definition #${id} · any of`,
+    exact: true,
+  });
+  await expect(chip).toBeVisible();
+  const rows = page.locator('[data-transaction-row="true"]');
+  await expect(rows.first()).toBeVisible();
+  await rows.first().focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("transaction-detail-panel")).toContainText(
+    "Household:Mortgage",
+  );
+  await page.keyboard.press("Escape");
+  await page.reload();
+  await expect(chip).toBeVisible();
+  await expect(rows.first()).toBeVisible();
+  await chip.click();
+  await expect(
+    page.getByRole("button", { name: `Remove #${id}`, exact: true }),
+  ).toBeVisible();
+  const picker = page.getByRole("combobox", {
+    name: "Recurring definitions",
+    exact: true,
+  });
+  await picker.fill("Household:Mortgage");
+  await expect(
+    page.getByRole("button", {
+      name: "Remove Household:Mortgage (Mortgage)",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: `Remove #${id}`, exact: true })
+    .click();
+  await page.keyboard.press("Escape");
+  await expect(page).toHaveURL(
+    /filter=recurring_definition%3A%22Household%3AMortgage%22/,
+  );
+  await expect(rows.first()).toBeVisible();
+  await page.reload();
+  const namedChip = page.getByRole("button", {
+    name: /Edit Recurring definition Household:Mortgage \(Mortgage\) · any of/,
+  });
+  await expect(namedChip).toBeVisible();
+  await namedChip.click();
+  await expect(
+    page.getByRole("button", { name: /Remove Household:Mortgage/ }),
+  ).toBeVisible();
+  await page.getByLabel("Filter operator").click();
+  await page.getByRole("option", { name: "None of", exact: true }).click();
+  await page.keyboard.press("Escape");
+  await expect(page).toHaveURL(
+    /filter=not\+recurring_definition%3A%22Household%3AMortgage%22/,
+  );
+  await page.goBack();
+  await expect(namedChip).toBeVisible();
+  await expect(rows.first()).toBeVisible();
+  await page.goto("/recurring");
+  await definitionRow(page, "Household:Mortgage").click();
+  await expect(editor.getByLabel("Every")).toHaveValue("1");
 });

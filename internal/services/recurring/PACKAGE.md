@@ -17,6 +17,7 @@
 - Account-reference validation rechecks saved definition currencies during every materialization, so an account mode change cannot authorize incompatible generated records. Display enrichment intentionally resolves active account metadata without that currency revalidation.
 - Generated transactions derive signed USD amounts for the scheduled date during catch-up, retain those valuations when materialized confirmation defaults to that date, revalue for an explicitly supplied actual date, and derive for today during early confirmation. A changed actual date also supplies the default posted timestamp so later valuation backfill follows the ordinary posted-date rule; explicit settlement timestamps remain authoritative. Successful materialization and confirmation signal runtime currency-usage cache invalidation.
 - Definition lists apply shared FQN fuzzy membership before requested sorting and pagination, retaining descendants when an implicit group matches. Next-due-date ordering reads the anchor directly; missing next dates stay last, and equal dates use ascending FQN and definition ID tie-breakers.
+- Exact active FQN references resolve under the existing shared reference lease, including re-entry from transaction filtering; they do not acquire the recurring-state lease.
 - Ranked definition search derives navigation-only groups from active leaves and returns caller-bounded shared-policy order without materializing transactions.
 
 ## Boundaries

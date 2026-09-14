@@ -64,6 +64,7 @@ import {
   categoryPickerOption,
   memberPickerLoader,
   memberPickerOption,
+  recurringDefinitionPickerLoader,
   tagPickerLoader,
   tagPickerOption,
 } from "./entity-picker-loaders";
@@ -73,7 +74,8 @@ import {
   transactionClassLabel,
 } from "./format";
 
-type EntityDimension = "account" | "category" | "tag" | "member";
+type EntityDimension =
+  "account" | "category" | "tag" | "member" | "recurring_definition";
 type RangeDimension = "amount" | "amountUsd" | "initiated";
 type MembershipDimension =
   | EntityDimension
@@ -86,6 +88,7 @@ type MembershipDimension =
 export type TransactionFilterDimension = MembershipDimension | RangeDimension;
 
 const entityDimensionLabels: Record<EntityDimension, string> = {
+  recurring_definition: "Recurring definitions",
   account: "Accounts",
   category: "Categories",
   member: "Members",
@@ -104,6 +107,7 @@ interface DimensionDefinition {
     TransactionFilterMembershipField | "amount_usd" | "amount" | "initiated";
   readonly id: TransactionFilterDimension;
   readonly label: string;
+  readonly menuLabel?: string;
   readonly modes?: readonly TransactionFilterMembershipMode[];
 }
 
@@ -168,6 +172,13 @@ const dimensions: readonly DimensionDefinition[] = [
   { field: "amount", id: "amount", label: "Amount" },
   { field: "amount_usd", id: "amountUsd", label: "Amount USD" },
   { field: "initiated", id: "initiated", label: "Initiated date" },
+  {
+    field: "recurring_definition",
+    id: "recurring_definition",
+    label: "Recurring definition",
+    menuLabel: "Recurring def.",
+    modes: singleValueModes,
+  },
 ];
 
 const dimensionById = new Map(
@@ -732,6 +743,57 @@ export const TransactionFilterControls = ({
   const [pickerOptionsByValue, setPickerOptionsByValue] = useState<
     ReadonlyMap<string, EntityOption>
   >(new Map());
+  const recurringFQNs = JSON.stringify(
+    rows.flatMap((row) =>
+      row.chips.flatMap((chip) =>
+        chip.kind === "membership" && chip.field === "recurring_definition"
+          ? chip.values.filter(
+              (value) =>
+                chip.humanEntityValues?.includes(value) ||
+                (!chip.entityIdValues?.includes(value) &&
+                  !chip.scopedValues?.includes(value)),
+            )
+          : [],
+      ),
+    ),
+  );
+  useEffect(() => {
+    let cancelled = false;
+    const fqns = (JSON.parse(recurringFQNs) as string[]).filter(
+      (fqn) => !pickerOptionsByValue.has(`recurring_definition:${fqn}`),
+    );
+    if (fqns.length === 0) return;
+    void Promise.all(
+      fqns.map(async (fqn) => {
+        const result = await recurringDefinitionPickerLoader({
+          query: fqn,
+          excludedIds: [],
+          parentFqn: undefined,
+        });
+        return result.rows.flatMap((row) =>
+          row.kind === "leaf" && row.option.searchLabel === fqn
+            ? [row.option]
+            : [],
+        );
+      }),
+    )
+      .then((results) => {
+        const options = results.flat();
+        if (cancelled || options.length === 0) return;
+        setPickerOptionsByValue((current) => {
+          const next = new Map(current);
+          for (const option of options)
+            next.set(`recurring_definition:${option.searchLabel}`, option);
+          return next;
+        });
+      })
+      .catch(() => {
+        /* The picker retains its normal search and retry controls. */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [recurringFQNs, pickerOptionsByValue]);
   const controlsRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<HTMLDivElement>(null);
   const editorAutoFocusKeyRef = useRef<string | undefined>(undefined);
@@ -1191,6 +1253,15 @@ export const TransactionFilterControls = ({
       return undefined;
     };
     const configs = {
+      recurring_definition: {
+        humanValue: (id: number) =>
+          pickerHumanValue("recurring_definition", id),
+        loadOptions: recurringDefinitionPickerLoader,
+        options: [...pickerOptionsByValue].flatMap(([key, option]) =>
+          key.startsWith("recurring_definition:") ? [option] : [],
+        ),
+        selectedIds: selectedIds("recurring_definition", []),
+      },
       account: {
         humanValue: (id: number) =>
           accountById.get(id)?.fqn ?? pickerHumanValue("account", id),
@@ -1274,18 +1345,20 @@ export const TransactionFilterControls = ({
         : `transactions-filter-row-${rowIndex}-${dimension}-${mode}`;
     return (
       <div className="flex flex-col gap-3">
-        <label className="flex items-center gap-2">
-          <Checkbox
-            checked={includeHidden[dimension] ?? false}
-            onCheckedChange={(checked) => {
-              setIncludeHidden((current) => ({
-                ...current,
-                [dimension]: checked === true,
-              }));
-            }}
-          />
-          <span className="font-mono text-sm">Include hidden</span>
-        </label>
+        {dimension !== "recurring_definition" ? (
+          <label className="flex items-center gap-2">
+            <Checkbox
+              checked={includeHidden[dimension] ?? false}
+              onCheckedChange={(checked) => {
+                setIncludeHidden((current) => ({
+                  ...current,
+                  [dimension]: checked === true,
+                }));
+              }}
+            />
+            <span className="font-mono text-sm">Include hidden</span>
+          </label>
+        ) : null}
         <EntityMultiPicker
           key={`${rowIndex}:${dimension}:${mode}`}
           hierarchical={dimension !== "member"}
@@ -1453,7 +1526,8 @@ export const TransactionFilterControls = ({
       dimension === "account" ||
       dimension === "category" ||
       dimension === "tag" ||
-      dimension === "member"
+      dimension === "member" ||
+      dimension === "recurring_definition"
     ) {
       return renderEntityEditor(rowIndex, dimension, mode);
     }
@@ -1565,7 +1639,7 @@ export const TransactionFilterControls = ({
                 });
               }}
             >
-              {dimension.label}
+              {dimension.menuLabel ?? dimension.label}
             </Button>
           ))}
         </div>
@@ -1689,7 +1763,9 @@ export const TransactionFilterControls = ({
               ? categoryById.get(id)
               : field === "tag"
                 ? tagById.get(id)
-                : memberById.get(id);
+                : field === "member"
+                  ? memberById.get(id)
+                  : undefined;
       return {
         displayTitle: entity
           ? "display_label" in entity
@@ -1719,12 +1795,18 @@ export const TransactionFilterControls = ({
         tooltip: value,
       };
     }
-    if (field === "category" || field === "tag") {
+    if (
+      field === "category" ||
+      field === "tag" ||
+      field === "recurring_definition"
+    ) {
       const fqn = scoped && value !== "*" ? value.slice(0, -2) : value;
       const candidate =
         field === "category"
           ? lookups?.categories.find((item) => item.fqn === fqn)
-          : lookups?.tags.find((item) => item.fqn === fqn);
+          : field === "tag"
+            ? lookups?.tags.find((item) => item.fqn === fqn)
+            : undefined;
       const pickerOption = pickerOptionsByValue.get(`${field}:${fqn}`);
       return {
         displayTitle:

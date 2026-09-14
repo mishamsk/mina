@@ -595,12 +595,13 @@ func filterComparisonSQL(operator transactions.FilterCompareOp) string {
 	}
 }
 
-// transactionFilterEntityCondition builds the record-level EXISTS predicate for
-// one account, category, or tag FQN scope.
+// transactionFilterEntityCondition matches entity IDs or active FQN scopes.
 func (s *TransactionStore) transactionFilterEntityCondition(term *transactions.FilterEntityTerm, args *[]any) string {
 	if !term.Scoped {
 		*args = append(*args, term.EntityID)
 		switch term.Field {
+		case transactions.FilterFieldRecurringDefinition:
+			return "COALESCE(tx.recurring_definition_id = ?, FALSE)"
 		case transactions.FilterFieldAccount:
 			return s.transactionListRecordExists("jr.account_id = ?")
 		case transactions.FilterFieldCategory:
@@ -617,6 +618,13 @@ func (s *TransactionStore) transactionFilterEntityCondition(term *transactions.F
 		return "(" + column + " = ? OR starts_with(" + column + ", ? || ':'))"
 	}
 	switch term.Field {
+	case transactions.FilterFieldRecurringDefinition:
+		return `EXISTS (
+	SELECT 1 FROM ` + s.db.accountingName("recurring_definition") + ` rd
+	WHERE rd.recurring_definition_id = tx.recurring_definition_id
+	  AND rd.tombstoned_at IS NULL
+	  AND ` + fqnCondition("rd.fqn") + `
+)`
 	case transactions.FilterFieldAccount:
 		return `EXISTS (
 	SELECT 1

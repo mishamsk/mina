@@ -187,7 +187,7 @@ func (p *filterParser) parseTermLeaf(token filterToken) (FilterExpression, error
 		}
 		valueOffset := token.offset + valueOffsetInToken
 		if filterValueStartsEntityIDLiteral(rawValue) {
-			if field != FilterFieldAccount && field != FilterFieldCategory && field != FilterFieldTag && field != FilterFieldMember {
+			if field != FilterFieldAccount && field != FilterFieldCategory && field != FilterFieldTag && field != FilterFieldMember && field != FilterFieldRecurringDefinition {
 				return nil, filterErrorf(valueOffset, "field %s does not accept entity-ID literals", fieldText)
 			}
 			entityID, err := parseFilterEntityIDLiteral(rawValue)
@@ -199,7 +199,7 @@ func (p *filterParser) parseTermLeaf(token filterToken) (FilterExpression, error
 			}
 			return &FilterEntityTerm{Field: field, EntityID: entityID}, nil
 		}
-		if field == FilterFieldAccount || field == FilterFieldCategory || field == FilterFieldTag {
+		if field == FilterFieldAccount || field == FilterFieldCategory || field == FilterFieldTag || field == FilterFieldRecurringDefinition {
 			return parseFilterEntityTermLeaf(token.offset, valueOffset, field, rawValue)
 		}
 		value, escapeOffset, err := decodeFilterValue(rawValue)

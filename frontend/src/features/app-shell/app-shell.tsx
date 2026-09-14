@@ -175,7 +175,9 @@ const resolveRecurringDefinitionFocusTarget = (
     );
     if (liveRow) {
       revealRecurringDefinitionActionRow(liveRow);
-      return liveRow;
+      return opener?.isConnected && opener.getClientRects().length > 0
+        ? opener
+        : liveRow;
     }
     return routeFallback ?? opener;
   }

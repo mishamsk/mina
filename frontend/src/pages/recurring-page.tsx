@@ -18,9 +18,7 @@ import { Toast, toastDurationMs } from "@/components/toast";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/features/app-shell";
 import {
-  DefinitionEditorPanel,
   RecurringPageContent,
-  refreshAfterRecurringDefinitionMutation,
   revealRecurringDefinitionActionRow,
   useRecurringDefinitionsResource,
 } from "@/features/recurring";
@@ -30,6 +28,7 @@ import {
 } from "@/features/reference";
 import {
   openEditRecurringDefinitionEditor,
+  openNewRecurringDefinitionEditor,
   takeConsumedRecurringDefinitionFragmentNavigation,
   useCommandPaletteOpen,
   useRecurringDefinitionEditorView,
@@ -40,12 +39,6 @@ interface Notice {
   readonly id: number;
   readonly message: string;
   readonly tone: "error" | "success";
-}
-
-interface EditorTarget {
-  readonly definition: RecurringDefinition | undefined;
-  readonly key: string | number;
-  readonly opener: HTMLElement | undefined;
 }
 
 interface FragmentLookupFailure {
@@ -69,7 +62,6 @@ export const RecurringPage = () => {
   const recurringDefinitionEditor = useRecurringDefinitionEditorView();
   const templateEditor = useTemplateEditorView();
   const [notice, setNotice] = useState<Notice | undefined>();
-  const [editorTarget, setEditorTarget] = useState<EditorTarget>();
   const [fragmentLookupFailure, setFragmentLookupFailure] =
     useState<FragmentLookupFailure>();
   const [fragmentLookupRetryVersion, setFragmentLookupRetryVersion] =
@@ -120,15 +112,6 @@ export const RecurringPage = () => {
       templateEditor.open
     ) {
       deferredFragmentNavigationRef.current = fragmentNavigation;
-      return;
-    }
-    if (editorTarget) {
-      handledFragmentNavigationRef.current = fragmentNavigation;
-      deferredFragmentNavigationRef.current = undefined;
-      void navigate(
-        { pathname: location.pathname, search: location.search },
-        { replace: true },
-      );
       return;
     }
     if (!recurringDefinitions.snapshot) {
@@ -221,7 +204,6 @@ export const RecurringPage = () => {
     };
   }, [
     commandPaletteOpen,
-    editorTarget,
     location.hash,
     location.key,
     location.pathname,
@@ -268,11 +250,7 @@ export const RecurringPage = () => {
             type="button"
             onClick={(event) => {
               clearDefinitionFragment();
-              setEditorTarget({
-                definition: undefined,
-                key: "new",
-                opener: event.currentTarget,
-              });
+              openNewRecurringDefinitionEditor(event.currentTarget);
             }}
           >
             <Plus aria-hidden="true" />
@@ -348,11 +326,7 @@ export const RecurringPage = () => {
           }}
           onEdit={(definition, opener) => {
             clearDefinitionFragment();
-            setEditorTarget({
-              definition,
-              key: definition.recurring_definition_id,
-              opener,
-            });
+            openEditRecurringDefinitionEditor(definition, opener);
           }}
           onNotice={showNotice}
           refresh={recurringDefinitions.refresh}
@@ -372,36 +346,6 @@ export const RecurringPage = () => {
           setNotice(undefined);
         }}
       />
-      {editorTarget ? (
-        <DefinitionEditorPanel
-          key={editorTarget.key}
-          definition={editorTarget.definition}
-          onClose={() => {
-            setEditorTarget(undefined);
-          }}
-          onNotice={showNotice}
-          onSaved={() =>
-            refreshAfterRecurringDefinitionMutation(
-              recurringDefinitions.refresh,
-            )
-          }
-          open
-          resolveReturnFocusTo={() => {
-            const liveOpener = editorTarget.opener?.isConnected
-              ? editorTarget.opener
-              : editorTarget.definition
-                ? document.querySelector<HTMLElement>(
-                    `[data-recurring-definition-id="${editorTarget.definition.recurring_definition_id}"]`,
-                  )
-                : undefined;
-            const target = liveOpener ?? newDefinitionButtonRef.current;
-            if (target) {
-              revealRecurringDefinitionActionRow(target);
-            }
-            return target ?? undefined;
-          }}
-        />
-      ) : null}
     </section>
   );
 };

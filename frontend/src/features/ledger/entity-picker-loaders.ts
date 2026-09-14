@@ -16,6 +16,7 @@ import {
   type SearchCategoriesData,
   searchMembers,
   type SearchMembersData,
+  searchRecurringDefinitions,
   searchTags,
   type SearchTagsData,
   searchTransactionTemplates,
@@ -193,6 +194,7 @@ const hierarchicalRows = (
     readonly category_id?: number;
     readonly tag_id?: number;
     readonly transaction_template_id?: number;
+    readonly recurring_definition_id?: number;
     readonly account_type?: string;
     readonly currency?: string | null;
     readonly economic_intent?: string;
@@ -218,7 +220,8 @@ const hierarchicalRows = (
       item.account_id ??
       item.category_id ??
       item.tag_id ??
-      item.transaction_template_id;
+      item.transaction_template_id ??
+      item.recurring_definition_id;
     if (id === undefined) {
       return [];
     }
@@ -395,3 +398,25 @@ export const tagCreationAvailabilityLoader = creationAvailability(
   (fqn) => getTagCreationAvailability({ query: { fqn } }),
   "Tag creation availability could not be loaded.",
 );
+
+export const recurringDefinitionPickerLoader: EntityOptionLoader = async (
+  request,
+) => {
+  const result = await searchRecurringDefinitions({
+    query: {
+      context: "navigation",
+      limit: pickerResultLimit,
+      q: request.query,
+      parent_fqn: request.parentFqn,
+      exclude_ids: [...request.excludedIds],
+    },
+  });
+  if (!result.data)
+    throw new Error(
+      apiErrorMessage(
+        result.error,
+        "Recurring definitions could not be loaded.",
+      ),
+    );
+  return hierarchyResult(result.data.items, result.data.has_more);
+};

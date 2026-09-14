@@ -452,8 +452,9 @@ type ReferenceCoordinator interface {
 	WithSharedLease(context.Context, func(context.Context) error) error
 }
 
-// RecurringProjector supplies non-persisted future rows under one read-only snapshot.
-type RecurringProjector interface {
+// RecurringDefinitions resolves definition references and supplies read-only future rows.
+type RecurringDefinitions interface {
+	ActiveReferenceIDByFQN(context.Context, string) (int64, error)
 	WithProjectedTransactions(context.Context, *values.CivilDate, ListOptions, func(context.Context, []Transaction) error) error
 }
 
@@ -468,12 +469,12 @@ type Service struct {
 	refs                 ReferenceCoordinator
 	clock                Clock
 	currencyUsageChanged func()
-	recurring            RecurringProjector
+	recurring            RecurringDefinitions
 }
 
-// SetRecurringProjector connects transaction listing to recurring projection.
-func (s *Service) SetRecurringProjector(projector RecurringProjector) {
-	s.recurring = projector
+// SetRecurringDefinitions connects transaction listing to recurring references and projection.
+func (s *Service) SetRecurringDefinitions(definitions RecurringDefinitions) {
+	s.recurring = definitions
 }
 
 // Clock supplies operation timestamps at the service boundary.

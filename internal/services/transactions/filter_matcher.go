@@ -28,6 +28,12 @@ func filterExpressionMatchesTransaction(transaction Transaction, expression Filt
 	case *FilterNot:
 		return !filterExpressionMatchesTransaction(transaction, node.Term, referenceFQN)
 	case *FilterEntityTerm:
+		if node.Field == FilterFieldRecurringDefinition {
+			if !node.Scoped {
+				return transaction.RecurringDefinitionID != nil && *transaction.RecurringDefinitionID == node.EntityID
+			}
+			return transaction.RecurringDefinitionActive != nil && *transaction.RecurringDefinitionActive && transaction.RecurringDefinitionFQN != nil && (node.FQN == "" || services.FQNAtOrUnder(*transaction.RecurringDefinitionFQN, node.FQN))
+		}
 		return slices.ContainsFunc(transaction.Records, func(record JournalRecord) bool {
 			return filterEntityMatchesRecord(record, node, referenceFQN)
 		})

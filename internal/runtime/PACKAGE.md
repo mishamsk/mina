@@ -16,7 +16,7 @@
 - Built-in Frankfurter-file startup gives the initial cache read 15 minutes and retains the ordinary two-minute allowance to load safe progress afterward; API-only, injected, manual, and scheduled loads keep the ordinary short deadline.
 - Runtime resolves the accounting location, encryption key, and connection limit before delegating database open, migration, and read-only inspection mechanics to `store`.
 - Runtime composes the data-aggregate service's Household, Category, and Tag flow reports from the DuckDB repository, Category/Tag readers, transaction classifier, and runtime clock.
-- Runtime connects recurring's read-only transaction projector after both services are constructed.
+- Runtime connects recurring's reference resolver and read-only transaction projector after both services are constructed.
 - Runtime connects the account service's bulk-search seam to transaction-owned common-source and affected-currency facts after both services are constructed.
 - Runtime composes portable API audit persistence into trusted and externally protected REST trees so protection rejections are captured; audit insert failures do not change the determined REST outcome.
 - Runtime registers API audit-log compaction for manual execution in every app and schedules it only under long-running automatic-operation policy; compaction uses the shared runtime clock and configured retention.

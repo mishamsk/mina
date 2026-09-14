@@ -6,6 +6,7 @@
 
 ## Implicit Contracts
 
+- Recurring-definition filters share entity reference resolution and compare direct provenance; ID literals also match cancelled definitions; lifecycle predicates remain independent and projections use the same predicate.
 - Create, replace, and reference-sensitive bulk operations hold a shared reference lease across validation and persistence; concurrent material bulk changes to one transaction surface as retryable conflicts. Cancellation, restoration, deletion, settlement, reconciliation, and backfill are fact-only mutations and do not take that lease.
 - Complete replacement validates one desired transaction aggregate while reconciling journal records by explicit identity: retained IDs must be unique active members of that transaction, and omitted IDs are removals rather than positional matches.
 - Existing-record replacement input cannot change creation provenance. Store replacement reports imported or linked omission blockers atomically; the service translates them into the rule that those identities cannot be removed ordinarily, while whole-transaction deletion removes active links without detaching importer metadata.

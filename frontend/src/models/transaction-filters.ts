@@ -78,6 +78,7 @@ export type TransactionFilterExpression =
     };
 
 export type TransactionFilterMembershipField =
+  | "recurring_definition"
   | "account"
   | "category"
   | "tag"
@@ -183,6 +184,7 @@ const joinedExpression = (
 };
 
 const membershipFields = new Set<TransactionFilterMembershipField>([
+  "recurring_definition",
   "account",
   "category",
   "tag",
@@ -196,6 +198,7 @@ const membershipFields = new Set<TransactionFilterMembershipField>([
 ]);
 
 const entityMembershipFields = new Set<TransactionFilterMembershipField>([
+  "recurring_definition",
   "account",
   "category",
   "tag",
@@ -389,7 +392,8 @@ const serializeTransactionFilterExpression = (
                 !expression.scoped &&
                 (expression.field === "account" ||
                   expression.field === "category" ||
-                  expression.field === "tag"),
+                  expression.field === "tag" ||
+                  expression.field === "recurring_definition"),
               expression.operator === ":" &&
                 entityMembershipFields.has(
                   expression.field as TransactionFilterMembershipField,
@@ -643,7 +647,8 @@ const parseTransactionFilterExpression = (
       split.operator === ":" &&
       (split.field === "account" ||
         split.field === "category" ||
-        split.field === "tag") &&
+        split.field === "tag" ||
+        split.field === "recurring_definition") &&
       filterValueHasScopeMarker(split.rawValue);
     const value = decodeFilterValue(split.rawValue);
     return value === undefined || (split.operator !== ":" && value === "")
@@ -772,7 +777,10 @@ const membershipTerms = (
       scopeByValue.has(provenanceKey) &&
       scopeByValue.get(provenanceKey) !== scoped &&
       (candidate.entityId ||
-        (field !== "account" && field !== "category" && field !== "tag"))
+        (field !== "account" &&
+          field !== "category" &&
+          field !== "tag" &&
+          field !== "recurring_definition"))
     ) {
       return undefined;
     }

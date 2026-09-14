@@ -1,5 +1,6 @@
-import { Check, Close, Plus, Trash } from "pixelarticons/react";
+import { Check, Close, ListBox, Plus, Trash } from "pixelarticons/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router";
 
 import {
   apiErrorMessage,
@@ -1035,7 +1036,17 @@ export const DefinitionEditorPanel = ({
           </div>
         </div>
       </div>
-      <footer className="flex justify-end gap-2 border-t-2 border-[var(--border-ink)] p-4">
+      <footer className="flex flex-wrap justify-end gap-2 border-t-2 border-[var(--border-ink)] p-4">
+        {definition ? (
+          <Button asChild variant="outline">
+            <Link
+              to={`/transactions?${new URLSearchParams({ filter: `recurring_definition:#${definition.recurring_definition_id}` }).toString()}`}
+            >
+              <ListBox aria-hidden="true" />
+              View transactions
+            </Link>
+          </Button>
+        ) : null}
         <Button type="button" variant="outline" onClick={() => closeEditor()}>
           Cancel
         </Button>

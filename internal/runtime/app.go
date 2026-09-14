@@ -492,7 +492,7 @@ func newAccountingServices(
 	)
 	accountService.SetTypeChangeValidator(transactionService)
 	accountService.SetSearchTransactionFacts(transactionService)
-	transactionService.SetRecurringProjector(recurringService)
+	transactionService.SetRecurringDefinitions(recurringService)
 	return appServices{
 		Dependencies: httpapi.Dependencies{
 			AccountingSchema: accountingschema.NewService(),

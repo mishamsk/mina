@@ -36,6 +36,8 @@ func (s *Service) resolveFilterReferences(ctx context.Context, expression Filter
 			err         error
 		)
 		switch node.Field {
+		case FilterFieldRecurringDefinition:
+			referenceID, err = s.recurring.ActiveReferenceIDByFQN(ctx, node.FQN)
 		case FilterFieldAccount:
 			reference, referenceErr := s.accounts.ActiveReferenceByFQN(ctx, node.FQN, accounts.ReferenceOptions{AllowHidden: true})
 			err = referenceErr

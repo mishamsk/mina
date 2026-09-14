@@ -341,6 +341,25 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (Definition, er
 	return definition, nil
 }
 
+// ActiveReferenceIDByFQN resolves an exact active definition under the shared reference lease.
+func (s *Service) ActiveReferenceIDByFQN(ctx context.Context, fqn string) (int64, error) {
+	var id int64
+	err := s.refs.WithSharedLease(ctx, func(ctx context.Context) error {
+		refs, err := s.repo.ListActiveFQNs(ctx)
+		if err != nil {
+			return err
+		}
+		for _, ref := range refs {
+			if ref.FQN == fqn {
+				id = ref.ID
+				return nil
+			}
+		}
+		return services.ErrInvalidReference
+	})
+	return id, err
+}
+
 // Get returns an active recurring definition with nested active records by ID.
 func (s *Service) Get(ctx context.Context, id int64) (Definition, error) {
 	if id <= 0 {

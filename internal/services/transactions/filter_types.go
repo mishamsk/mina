@@ -10,21 +10,22 @@ import (
 type FilterField string
 
 const (
-	FilterFieldAccount    FilterField = "account"
-	FilterFieldCategory   FilterField = "category"
-	FilterFieldTag        FilterField = "tag"
-	FilterFieldMember     FilterField = "member"
-	FilterFieldCurrency   FilterField = "currency"
-	FilterFieldRole       FilterField = "role"
-	FilterFieldClass      FilterField = "class"
-	FilterFieldLifecycle  FilterField = "lifecycle"
-	FilterFieldSettlement FilterField = "settlement"
-	FilterFieldShape      FilterField = "shape"
-	FilterFieldAmount     FilterField = "amount"
-	FilterFieldAmountUSD  FilterField = "amount_usd"
-	FilterFieldInitiated  FilterField = "initiated"
-	FilterFieldPending    FilterField = "pending"
-	FilterFieldPosted     FilterField = "posted"
+	FilterFieldRecurringDefinition FilterField = "recurring_definition"
+	FilterFieldAccount             FilterField = "account"
+	FilterFieldCategory            FilterField = "category"
+	FilterFieldTag                 FilterField = "tag"
+	FilterFieldMember              FilterField = "member"
+	FilterFieldCurrency            FilterField = "currency"
+	FilterFieldRole                FilterField = "role"
+	FilterFieldClass               FilterField = "class"
+	FilterFieldLifecycle           FilterField = "lifecycle"
+	FilterFieldSettlement          FilterField = "settlement"
+	FilterFieldShape               FilterField = "shape"
+	FilterFieldAmount              FilterField = "amount"
+	FilterFieldAmountUSD           FilterField = "amount_usd"
+	FilterFieldInitiated           FilterField = "initiated"
+	FilterFieldPending             FilterField = "pending"
+	FilterFieldPosted              FilterField = "posted"
 )
 
 // FilterCompareOp is a comparison-term operator.
@@ -68,9 +69,9 @@ type FilterNot struct {
 	Term FilterExpression
 }
 
-// FilterEntityTerm matches active journal records by an account, category, or
-// tag ID or under an FQN. An empty FQN with Scoped true matches any entity of
-// the kind.
+// FilterEntityTerm matches journal-record entities or direct recurring-definition
+// provenance by ID or FQN scope. An empty FQN with Scoped true matches any active
+// entity of the kind.
 type FilterEntityTerm struct {
 	Field    FilterField
 	FQN      string
@@ -127,16 +128,17 @@ func (*FilterDateTerm) filterExpression()      {}
 func (*FilterTimestampTerm) filterExpression() {}
 
 var membershipFilterFields = map[FilterField]bool{
-	FilterFieldAccount:    true,
-	FilterFieldCategory:   true,
-	FilterFieldTag:        true,
-	FilterFieldMember:     true,
-	FilterFieldCurrency:   true,
-	FilterFieldRole:       true,
-	FilterFieldClass:      true,
-	FilterFieldLifecycle:  true,
-	FilterFieldSettlement: true,
-	FilterFieldShape:      true,
+	FilterFieldRecurringDefinition: true,
+	FilterFieldAccount:             true,
+	FilterFieldCategory:            true,
+	FilterFieldTag:                 true,
+	FilterFieldMember:              true,
+	FilterFieldCurrency:            true,
+	FilterFieldRole:                true,
+	FilterFieldClass:               true,
+	FilterFieldLifecycle:           true,
+	FilterFieldSettlement:          true,
+	FilterFieldShape:               true,
 }
 
 var comparisonFilterFields = map[FilterField]bool{
