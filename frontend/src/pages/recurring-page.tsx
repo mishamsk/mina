@@ -30,7 +30,6 @@ import {
 import {
   openEditRecurringDefinitionEditor,
   openNewRecurringDefinitionEditor,
-  takeConsumedRecurringDefinitionFragmentNavigation,
   useCommandPaletteOpen,
   useRecurringDefinitionEditorView,
   useTemplateEditorView,
@@ -95,15 +94,6 @@ export const RecurringPage = () => {
       return;
     }
     const fragmentNavigation = `${location.key}:${location.hash}`;
-    if (takeConsumedRecurringDefinitionFragmentNavigation(fragmentNavigation)) {
-      handledFragmentNavigationRef.current = fragmentNavigation;
-      deferredFragmentNavigationRef.current = undefined;
-      void navigate(
-        { pathname: location.pathname, search: location.search },
-        { replace: true },
-      );
-      return;
-    }
     if (handledFragmentNavigationRef.current === fragmentNavigation) {
       return;
     }
@@ -155,7 +145,6 @@ export const RecurringPage = () => {
         openEditRecurringDefinitionEditor(
           definition,
           opener instanceof HTMLElement ? opener : undefined,
-          fragmentNavigation,
         );
       };
       frame = window.requestAnimationFrame(() => {

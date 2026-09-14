@@ -77,6 +77,7 @@ test("editing a tag display label makes its row searchable", async ({
   await row.getByRole("button", { name: "Edit tag" }).click();
 
   const panel = page.getByRole("dialog", { name: "Edit tag" });
+  await expect(panel).toBeFocused();
   await panel.getByLabel("Display label (optional)").fill(label);
   await panel.getByRole("button", { name: "Save" }).click();
 

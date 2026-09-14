@@ -1,12 +1,12 @@
 import { AlertCircle } from "lucide-react";
 import { useEffect } from "react";
-import { BrowserRouter } from "react-router";
+import { RouterProvider } from "react-router";
 
 import { ErrorBoundary } from "./components/error-boundary";
 import { AppTooltipProvider } from "./components/tooltip";
 import { Card, CardContent, CardHeader, CardTitle } from "./components/ui/card";
 import { LoginScreen } from "./features/authentication";
-import { AppRoutes } from "./pages/router";
+import { router } from "./pages/router";
 import { useAuthenticationView } from "./store/authentication";
 import { useBootstrapView } from "./store/bootstrap";
 
@@ -89,9 +89,7 @@ export const App = () => {
         {authentication.phase === "unauthenticated" ? (
           <LoginScreen />
         ) : (
-          <BrowserRouter>
-            <AppRoutes />
-          </BrowserRouter>
+          <RouterProvider router={router} />
         )}
       </AppTooltipProvider>
     </ErrorBoundary>

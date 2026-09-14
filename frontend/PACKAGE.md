@@ -7,6 +7,7 @@
 
 ## Implicit Contracts
 
+- The authenticated application mounts the shared browser data router inside the application error boundary and tooltip provider.
 - The shell stays behind the bootstrap splash until the authentication-status request and persisted UI-state hydration complete; bootstrap failures remain outside the shell.
 - Authentication state is in memory only. A `401` from the current authentication generation returns the browser to login, while stale request results cannot overwrite a newer login or logout.
 - Global initial heading focus waits for bootstrap and yields to a user or feature focus target.

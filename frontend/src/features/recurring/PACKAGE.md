@@ -6,8 +6,9 @@
 
 ## Implicit Contracts
 
+- The editor owns its draft signature baseline and exposes navigation dirtiness, saving state, and discard confirmation through a shell-held ref; Keep editing restores panel focus, while Escape and explicit close discard immediately. Navigation requested during saving waits without a discard dialog, continues after successful save and refresh, and offers the discard choice after failure; the shell clears the deferred callback and confirmation when the router stops blocking. Successful writes reset the saved baseline; a failed pause/resume remains an unsaved change.
 - The definitions list flexes beneath route and action banners within the shared fixed-page bound; loaded rows use `referenceTableFrameClassName` and `recurring-definitions-table-scroll`, while skeleton/error/empty surfaces remain bounded and oversized state content stays reachable; empty content centers only when it fits.
-- Existing-definition editors link to the shared Transactions browser with direct definition-ID scope; navigation preserves the unsaved draft and does not write or close the editor.
+- Existing-definition editors link to the shared Transactions browser with direct definition-ID scope; navigation closes the editor after confirming discard when its draft is dirty.
 
 - Load every definition page using backend next-due-date ordering and the route's normalized search query; retry page sets affected by concurrent reordering, retain a nonempty prior snapshot while another query loads, replace a cross-query empty snapshot with loading, never let stale or unmounted loads replace the current snapshot, and distinguish filtered zero matches from the first-use empty state.
 - Every definition mutation refreshes the `/recurring` route's sole mounted definition snapshot using its latest query when present and invalidates transaction/register views; transaction-list refresh is read-only. The shared posted confirm-next operation coalesces route-overlapping consumers and publishes its pending state through refresh, while its refresh path also updates account headers, featured balances, and Overview because it posts a transaction.

@@ -90,6 +90,7 @@ test("audit log opens a mutation made through the web UI", async ({ page }) => {
   await page.goto("/members");
   await page.getByRole("button", { name: "New member" }).click();
   const panel = page.getByRole("dialog", { name: "Create member" });
+  await expect(panel).toBeFocused();
   await panel.getByLabel("Name").fill(memberName);
   await panel.getByRole("button", { name: "Create" }).click();
   await expect(page.getByText("Member created.")).toBeVisible();

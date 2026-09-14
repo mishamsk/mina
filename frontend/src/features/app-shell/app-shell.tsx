@@ -15,11 +15,19 @@ import {
   User,
   Wallet,
 } from "pixelarticons/react";
-import type { ComponentType, ReactNode, Ref, SVGProps } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import type { ComponentType, Ref, SVGProps } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   NavLink,
+  Outlet,
   type To,
+  useBlocker,
   useLocation,
   useNavigate,
   useSearchParams,
@@ -59,6 +67,7 @@ import {
 } from "@/features/ledger";
 import {
   DefinitionEditorPanel,
+  type DefinitionNavigationGuard,
   refreshAfterRecurringDefinitionMutation,
   refreshMountedRecurringDefinitions,
   revealRecurringDefinitionActionRow,
@@ -73,7 +82,6 @@ import {
   closeRecurringDefinitionEditor,
   closeTemplateEditor,
   closeTransactionEntryPanel,
-  consumeRecurringDefinitionFragmentNavigation,
   failTransactionEntryRoute,
   getCommandPaletteSnapshot,
   loadTransactionEntryRoute,
@@ -152,14 +160,6 @@ const hasActiveOverlay = (): boolean =>
   Array.from(document.querySelectorAll(modalOverlaySelector)).some(
     isVisibleOverlay,
   );
-
-const currentHistoryKey = (): string | undefined => {
-  const state: unknown = window.history.state;
-  if (typeof state !== "object" || state === null || !("key" in state)) {
-    return undefined;
-  }
-  return typeof state.key === "string" ? state.key : undefined;
-};
 
 const resolveRecurringDefinitionFocusTarget = (
   opener: HTMLElement | undefined,
@@ -293,10 +293,6 @@ const createEntryTypes: Readonly<Record<string, TransactionEntryType>> = {
 };
 
 const savedEntryPattern = /^(duplicate|edit|split):([1-9]\d*)$/;
-
-interface AppShellProps {
-  readonly children: ReactNode;
-}
 
 const navLinkClass = ({ collapsed }: { collapsed: boolean }) =>
   cn(
@@ -483,7 +479,7 @@ const NavigationSections = ({
   </div>
 );
 
-export const AppShell = ({ children }: AppShellProps) => {
+export const AppShell = () => {
   const {
     preferences: { sidebarCollapsed },
   } = usePreferencesView();
@@ -491,6 +487,9 @@ export const AppShell = ({ children }: AppShellProps) => {
   const commandPaletteOpen = useCommandPaletteOpen();
   const entryModal = useTransactionEntryPanelView();
   const recurringDefinitionEditor = useRecurringDefinitionEditorView();
+  const definitionNavigationGuardRef = useRef<DefinitionNavigationGuard | null>(
+    null,
+  );
   const templateEditor = useTemplateEditorView();
   const [logoutPending, setLogoutPending] = useState(false);
   const [logoutError, setLogoutError] = useState<string>();
@@ -517,6 +516,46 @@ export const AppShell = ({ children }: AppShellProps) => {
   );
   const location = useLocation();
   const navigate = useNavigate();
+  const definitionOriginPathname =
+    recurringDefinitionEditor.launch?.originPathname;
+  const definitionBlocker = useBlocker(
+    ({ nextLocation }) =>
+      definitionOriginPathname !== undefined &&
+      nextLocation.pathname !== definitionOriginPathname &&
+      Boolean(
+        definitionNavigationGuardRef.current?.dirty ||
+        definitionNavigationGuardRef.current?.saving,
+      ),
+  );
+
+  useLayoutEffect(() => {
+    const guard = definitionNavigationGuardRef.current;
+    if (definitionBlocker.state !== "blocked") {
+      guard?.clearPendingNavigation();
+      return;
+    }
+    if (!guard) {
+      definitionBlocker.proceed();
+      return;
+    }
+    guard.requestDiscard(definitionBlocker.proceed, definitionBlocker.reset);
+  }, [definitionBlocker, recurringDefinitionEditor.launch]);
+
+  useLayoutEffect(() => {
+    if (
+      definitionOriginPathname !== undefined &&
+      location.pathname !== definitionOriginPathname
+    ) {
+      closeRecurringDefinitionEditor();
+      window.requestAnimationFrame(() => {
+        if (document.activeElement !== document.body) return;
+        focusWithoutTooltip(
+          document.querySelector<HTMLElement>("main h1[tabindex='-1']"),
+          { preventScroll: true },
+        );
+      });
+    }
+  }, [definitionOriginPathname, location.pathname]);
   const [searchParams, setSearchParams] = useSearchParams();
   const entryParam = searchParams.get("entry");
   const previousEntryParamRef = useRef(entryParam);
@@ -1011,7 +1050,7 @@ export const AppShell = ({ children }: AppShellProps) => {
               }
               className="mx-auto flex w-full max-w-7xl flex-col gap-6"
             >
-              {children}
+              <Outlet />
             </div>
             <div
               className={cn(
@@ -1097,28 +1136,17 @@ export const AppShell = ({ children }: AppShellProps) => {
         <DefinitionEditorPanel
           key={recurringDefinitionEditor.launch.key}
           definition={recurringDefinitionEditor.launch.definition}
+          navigationGuardRef={definitionNavigationGuardRef}
           initialRecords={recurringDefinitionEditor.launch.initialRecords}
           onClose={() => {
-            const fragmentNavigation =
-              recurringDefinitionEditor.launch?.fragmentNavigation;
-            if (fragmentNavigation) {
-              const currentLocation = new URL(window.location.href);
-              if (
-                fragmentNavigation ===
-                `${currentHistoryKey()}:${currentLocation.hash}`
-              ) {
-                void navigate(
-                  {
-                    pathname: currentLocation.pathname,
-                    search: currentLocation.search,
-                  },
-                  { replace: true },
-                );
-              } else {
-                consumeRecurringDefinitionFragmentNavigation(
-                  fragmentNavigation,
-                );
-              }
+            if (
+              location.pathname === "/recurring" &&
+              /^#definition-[1-9][0-9]*$/.test(location.hash)
+            ) {
+              void navigate(
+                { pathname: location.pathname, search: location.search },
+                { replace: true },
+              );
             }
             closeRecurringDefinitionEditor();
           }}

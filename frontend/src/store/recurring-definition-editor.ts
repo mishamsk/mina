@@ -9,7 +9,7 @@ import type {
 
 export interface RecurringDefinitionEditorLaunch {
   readonly definition: RecurringDefinition | undefined;
-  readonly fragmentNavigation?: string;
+  readonly originPathname: string;
   readonly initialRecords: readonly RecurringDefinitionRecordRequest[];
   readonly key: number;
   readonly opener: HTMLElement | undefined;
@@ -34,18 +34,6 @@ export const useRecurringDefinitionEditorStore =
   );
 
 let nextRecurringDefinitionEditorLaunchKey = 0;
-const consumedFragmentNavigations = new Set<string>();
-
-export const consumeRecurringDefinitionFragmentNavigation = (
-  fragmentNavigation: string,
-): void => {
-  consumedFragmentNavigations.add(fragmentNavigation);
-};
-
-export const takeConsumedRecurringDefinitionFragmentNavigation = (
-  fragmentNavigation: string,
-): boolean => consumedFragmentNavigations.delete(fragmentNavigation);
-
 export const useRecurringDefinitionEditorView =
   (): RecurringDefinitionEditorView =>
     useRecurringDefinitionEditorStore(
@@ -69,6 +57,7 @@ export const openNewRecurringDefinitionEditor = (
         definition: undefined,
         initialRecords,
         key: nextRecurringDefinitionEditorLaunchKey,
+        originPathname: window.location.pathname,
         opener,
       },
     },
@@ -80,7 +69,6 @@ export const openNewRecurringDefinitionEditor = (
 export const openEditRecurringDefinitionEditor = (
   definition: RecurringDefinition,
   opener: HTMLElement | undefined,
-  fragmentNavigation?: string,
 ): void => {
   if (useRecurringDefinitionEditorStore.getState().launch !== undefined) {
     return;
@@ -90,9 +78,9 @@ export const openEditRecurringDefinitionEditor = (
     {
       launch: {
         definition,
-        fragmentNavigation,
         initialRecords: [],
         key: nextRecurringDefinitionEditorLaunchKey,
+        originPathname: window.location.pathname,
         opener,
       },
     },

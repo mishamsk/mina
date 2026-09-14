@@ -1,5 +1,13 @@
 import { Check, Close, ListBox, Plus, Trash } from "pixelarticons/react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type RefObject,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Link } from "react-router";
 
 import {
@@ -15,6 +23,7 @@ import {
   replaceRecurringDefinition,
   resumeRecurringDefinition,
 } from "@/api";
+import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { focusWithoutTooltip, Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import {
@@ -69,7 +78,18 @@ interface ReplacementBaseline {
   readonly etag: string;
 }
 
+export interface DefinitionNavigationGuard {
+  readonly clearPendingNavigation: () => void;
+  readonly dirty: boolean;
+  readonly saving: boolean;
+  readonly requestDiscard: (
+    onDiscard: () => void,
+    onKeepEditing: () => void,
+  ) => void;
+}
+
 interface DefinitionEditorPanelProps {
+  readonly navigationGuardRef: RefObject<DefinitionNavigationGuard | null>;
   readonly definition: RecurringDefinition | undefined;
   readonly initialRecords?: readonly RecurringDefinitionRecordRequest[];
   readonly onClose: () => void;
@@ -189,6 +209,7 @@ const FieldError = ({ message }: { readonly message: string | undefined }) =>
 export const DefinitionEditorPanel = ({
   definition,
   initialRecords = [],
+  navigationGuardRef,
   onClose,
   onNotice,
   onSaved,
@@ -200,6 +221,42 @@ export const DefinitionEditorPanel = ({
   const [draft, setDraft] = useState<DefinitionDraft>(() =>
     definitionDraft(definition, initialRecords),
   );
+  const [initialDraftSignature, setInitialDraftSignature] = useState(() =>
+    JSON.stringify(draft),
+  );
+  const dirty = JSON.stringify(draft) !== initialDraftSignature;
+  const [saving, setSaving] = useState(false);
+  const [discardRequest, setDiscardRequest] = useState<{
+    readonly onDiscard: () => void;
+    readonly onKeepEditing: () => void;
+  }>();
+  const discardRestoreTargetRef = useRef<HTMLElement | null>(null);
+  const pendingNavigationRef = useRef<(() => void) | undefined>(undefined);
+
+  useLayoutEffect(() => {
+    navigationGuardRef.current = {
+      clearPendingNavigation: () => {
+        pendingNavigationRef.current = undefined;
+        setDiscardRequest(undefined);
+      },
+      dirty,
+      saving,
+      requestDiscard: (onDiscard, onKeepEditing) => {
+        pendingNavigationRef.current = onDiscard;
+        const activeElement = document.activeElement;
+        discardRestoreTargetRef.current =
+          activeElement instanceof HTMLElement &&
+          panelRef.current?.contains(activeElement)
+            ? activeElement
+            : panelRef.current;
+        setDiscardRequest({ onDiscard, onKeepEditing });
+      },
+    };
+    return () => {
+      navigationGuardRef.current = null;
+    };
+  }, [dirty, navigationGuardRef, saving]);
+
   const [replacementBaseline, setReplacementBaseline] = useState<
     ReplacementBaseline | undefined
   >(() =>
@@ -209,7 +266,6 @@ export const DefinitionEditorPanel = ({
   );
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [generalError, setGeneralError] = useState<string>();
-  const [saving, setSaving] = useState(false);
   const [serverToday, setServerToday] = useState<string>();
   const [serverTodayLoading, setServerTodayLoading] = useState(
     Boolean(definition),
@@ -615,6 +671,9 @@ export const DefinitionEditorPanel = ({
         etag: result.data.etag,
       });
     }
+    setInitialDraftSignature(
+      JSON.stringify({ ...draft, paused: Boolean(result.data.paused_at) }),
+    );
     const shouldPause = draft.paused;
     const isPaused = Boolean(result.data.paused_at);
     if (shouldPause !== isPaused) {
@@ -640,429 +699,476 @@ export const DefinitionEditorPanel = ({
         return;
       }
     }
+    setInitialDraftSignature(JSON.stringify(draft));
     await onSaved();
     onNotice(definition ? "Definition updated." : "Definition created.");
     setSaving(false);
-    closeEditor(true);
+    const completeNavigation = pendingNavigationRef.current;
+    if (completeNavigation) {
+      pendingNavigationRef.current = undefined;
+      setDiscardRequest(undefined);
+      completeNavigation();
+    } else {
+      closeEditor(true);
+    }
   };
 
   if (!open) return null;
   return (
-    <aside
-      ref={panelRef}
-      className="bg-card compact-shell:bottom-[calc(4.75rem+env(safe-area-inset-bottom))] compact-shell:h-auto fixed top-0 right-0 z-50 flex h-svh w-[min(44rem,calc(100vw-1rem))] flex-col border-l-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]"
-      data-recurring-definition-editor
-      aria-label={
-        definition ? "Edit recurring definition" : "New recurring definition"
-      }
-      tabIndex={-1}
-    >
-      <header className="flex items-center justify-between border-b-2 border-[var(--border-ink)] p-4">
-        <div>
-          <p className="font-heading text-base font-bold uppercase">
-            {definition ? "Edit definition" : "New definition"}
-          </p>
-          <p className="text-muted-foreground text-sm">
-            A complete balanced transaction schedule.
-          </p>
-        </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="icon-sm"
-          aria-label="Close definition editor"
-          onClick={() => closeEditor()}
-        >
-          <Close aria-hidden="true" />
-        </Button>
-      </header>
-      <div className="min-h-0 flex-1 overflow-y-auto p-4">
-        {lookups.errorMessage ? (
-          <p className="text-destructive mb-3 text-sm">
-            {lookups.errorMessage}
-          </p>
-        ) : null}
-        {generalError ? (
-          <p
-            className="border-destructive text-destructive mb-3 border-2 p-2 text-sm"
-            role="alert"
+    <>
+      <aside
+        ref={panelRef}
+        className="bg-card compact-shell:bottom-[calc(4.75rem+env(safe-area-inset-bottom))] compact-shell:h-auto fixed top-0 right-0 z-50 flex h-svh w-[min(44rem,calc(100vw-1rem))] flex-col border-l-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]"
+        data-recurring-definition-editor
+        aria-label={
+          definition ? "Edit recurring definition" : "New recurring definition"
+        }
+        tabIndex={-1}
+      >
+        <header className="flex items-center justify-between border-b-2 border-[var(--border-ink)] p-4">
+          <div>
+            <p className="font-heading text-base font-bold uppercase">
+              {definition ? "Edit definition" : "New definition"}
+            </p>
+            <p className="text-muted-foreground text-sm">
+              A complete balanced transaction schedule.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon-sm"
+            aria-label="Close definition editor"
+            onClick={() => closeEditor()}
           >
-            {generalError}
-          </p>
-        ) : null}
-        <div className="grid gap-4">
-          <label className="grid gap-1 font-mono text-sm">
-            Definition FQN
-            <input
-              className="border-input bg-card h-9 border px-2"
-              value={draft.fqn}
-              onChange={(event) => patch({ fqn: event.target.value })}
-            />
-          </label>
-          <FieldError message={errors.fqn} />
-          <div className="grid grid-cols-2 gap-3">
+            <Close aria-hidden="true" />
+          </Button>
+        </header>
+        <div className="min-h-0 flex-1 overflow-y-auto p-4">
+          {lookups.errorMessage ? (
+            <p className="text-destructive mb-3 text-sm">
+              {lookups.errorMessage}
+            </p>
+          ) : null}
+          {generalError ? (
+            <p
+              className="border-destructive text-destructive mb-3 border-2 p-2 text-sm"
+              role="alert"
+            >
+              {generalError}
+            </p>
+          ) : null}
+          <div className="grid gap-4">
             <label className="grid gap-1 font-mono text-sm">
-              Schedule
-              <select
-                className="border-input bg-card h-9 border px-2"
-                value={draft.scheduleKind}
-                onChange={(event) =>
-                  patch({ scheduleKind: event.target.value as ScheduleKind })
-                }
-              >
-                <option value="interval">Interval</option>
-                <option value="day_of_month">Day of month</option>
-                <option value="last_day_of_month">Last day of month</option>
-              </select>
-            </label>
-            <label className="grid gap-1 font-mono text-sm">
-              Anchor date
+              Definition FQN
               <input
                 className="border-input bg-card h-9 border px-2"
-                type="date"
-                value={draft.anchorDate}
-                onChange={(event) => patch({ anchorDate: event.target.value })}
+                value={draft.fqn}
+                onChange={(event) => patch({ fqn: event.target.value })}
               />
             </label>
-          </div>
-          <FieldError message={errors.anchorDate} />
-          {draft.scheduleKind === "interval" ? (
+            <FieldError message={errors.fqn} />
             <div className="grid grid-cols-2 gap-3">
               <label className="grid gap-1 font-mono text-sm">
-                Every
+                Schedule
+                <select
+                  className="border-input bg-card h-9 border px-2"
+                  value={draft.scheduleKind}
+                  onChange={(event) =>
+                    patch({ scheduleKind: event.target.value as ScheduleKind })
+                  }
+                >
+                  <option value="interval">Interval</option>
+                  <option value="day_of_month">Day of month</option>
+                  <option value="last_day_of_month">Last day of month</option>
+                </select>
+              </label>
+              <label className="grid gap-1 font-mono text-sm">
+                Anchor date
                 <input
                   className="border-input bg-card h-9 border px-2"
-                  min={1}
-                  type="number"
-                  value={draft.every}
+                  type="date"
+                  value={draft.anchorDate}
                   onChange={(event) =>
-                    patch({ every: Number(event.target.value) })
+                    patch({ anchorDate: event.target.value })
                   }
                 />
               </label>
+            </div>
+            <FieldError message={errors.anchorDate} />
+            {draft.scheduleKind === "interval" ? (
+              <div className="grid grid-cols-2 gap-3">
+                <label className="grid gap-1 font-mono text-sm">
+                  Every
+                  <input
+                    className="border-input bg-card h-9 border px-2"
+                    min={1}
+                    type="number"
+                    value={draft.every}
+                    onChange={(event) =>
+                      patch({ every: Number(event.target.value) })
+                    }
+                  />
+                </label>
+                <label className="grid gap-1 font-mono text-sm">
+                  Unit
+                  <select
+                    className="border-input bg-card h-9 border px-2"
+                    value={draft.unit}
+                    onChange={(event) =>
+                      patch({ unit: event.target.value as IntervalUnit })
+                    }
+                  >
+                    <option value="DAY">Days</option>
+                    <option value="WEEK">Weeks</option>
+                    <option value="MONTH">Months</option>
+                    <option value="YEAR">Years</option>
+                  </select>
+                </label>
+              </div>
+            ) : null}
+            {draft.scheduleKind === "day_of_month" ? (
               <label className="grid gap-1 font-mono text-sm">
-                Unit
-                <select
+                Day of month
+                <input
                   className="border-input bg-card h-9 border px-2"
-                  value={draft.unit}
+                  min={1}
+                  max={31}
+                  type="number"
+                  value={draft.day}
                   onChange={(event) =>
-                    patch({ unit: event.target.value as IntervalUnit })
+                    patch({ day: Number(event.target.value) })
+                  }
+                />
+              </label>
+            ) : null}
+            <FieldError message={errors.every ?? errors.day} />
+            <label className="flex items-center gap-2 font-mono text-sm">
+              <input
+                type="checkbox"
+                checked={draft.paused}
+                onChange={(event) => patch({ paused: event.target.checked })}
+              />
+              Create paused
+            </label>
+            <div className="border-t-2 border-[var(--border-ink)] pt-4">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="font-heading text-sm font-bold uppercase">
+                  Balanced records
+                </h2>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    patch({ records: [...draft.records, newRecord()] })
                   }
                 >
-                  <option value="DAY">Days</option>
-                  <option value="WEEK">Weeks</option>
-                  <option value="MONTH">Months</option>
-                  <option value="YEAR">Years</option>
-                </select>
-              </label>
-            </div>
-          ) : null}
-          {draft.scheduleKind === "day_of_month" ? (
-            <label className="grid gap-1 font-mono text-sm">
-              Day of month
-              <input
-                className="border-input bg-card h-9 border px-2"
-                min={1}
-                max={31}
-                type="number"
-                value={draft.day}
-                onChange={(event) => patch({ day: Number(event.target.value) })}
-              />
-            </label>
-          ) : null}
-          <FieldError message={errors.every ?? errors.day} />
-          <label className="flex items-center gap-2 font-mono text-sm">
-            <input
-              type="checkbox"
-              checked={draft.paused}
-              onChange={(event) => patch({ paused: event.target.checked })}
-            />
-            Create paused
-          </label>
-          <div className="border-t-2 border-[var(--border-ink)] pt-4">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="font-heading text-sm font-bold uppercase">
-                Balanced records
-              </h2>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  patch({ records: [...draft.records, newRecord()] })
-                }
-              >
-                <Plus aria-hidden="true" />
-                Add record
-              </Button>
-            </div>
-            <FieldError message={errors.records ?? errors.balance} />
-            <div className="grid gap-3" aria-label="Definition records">
-              {draft.records.map((row, index) => (
-                <section
-                  key={row.id}
-                  className="border-2 border-[var(--border-ink)] p-3 shadow-[var(--shadow-chip)]"
-                >
-                  <div className="mb-2 flex justify-between">
-                    <h3 className="font-heading text-xs font-bold uppercase">
-                      Record {index + 1}
-                    </h3>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon-sm"
-                      aria-label={`Remove record ${index + 1}`}
-                      onClick={() =>
-                        patch({
-                          records: draft.records.filter(
-                            (_row, rowIndex) => rowIndex !== index,
-                          ),
-                        })
-                      }
-                    >
-                      <Trash aria-hidden="true" />
-                    </Button>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="col-span-full">
-                      <EntityPicker
-                        id={`recurring-record-${row.id}-account`}
-                        label="Account"
-                        loadOptions={accountPickerLoader({
-                          context: "record_assignment",
-                        })}
-                        options={accountOptions}
-                        onLoadedOptions={(options) => {
-                          setAccountPickerOptionsById((current) => {
-                            const next = new Map(current);
-                            for (const option of options) {
-                              next.set(option.id, option);
-                            }
-                            return next;
-                          });
-                        }}
-                        value={row.accountId}
-                        onChange={(accountId, selectedOption) => {
-                          if (selectedOption) {
-                            setAccountPickerOptionsById((current) => {
-                              const next = new Map(current);
-                              next.set(selectedOption.id, selectedOption);
-                              return next;
-                            });
-                          }
-                          const account = lookups.snapshot?.accounts.find(
-                            (item) => item.account_id === accountId,
-                          );
-                          const pickerOption =
-                            selectedOption ??
-                            (accountId === undefined
-                              ? undefined
-                              : accountPickerOptionsById.get(accountId));
-                          const accountType =
-                            account?.account_type ?? pickerOption?.accountType;
-                          patchRow(index, {
-                            accountId,
-                            categoryId:
-                              accountType && accountType !== "flow"
-                                ? undefined
-                                : row.categoryId,
-                            currency:
-                              account?.currency ??
-                              pickerOption?.currency ??
-                              row.currency,
-                          });
-                        }}
-                      />
-                      <FieldError
-                        message={errors[recordErrorKey(index, "account")]}
-                      />
-                    </div>
-                    <label className="grid gap-1 font-mono text-xs">
-                      Amount
-                      <input
-                        className="border-input bg-card h-9 border px-2"
-                        placeholder="-12.34"
-                        value={row.amount}
-                        onChange={(event) =>
-                          patchRow(index, { amount: event.target.value })
-                        }
-                      />
-                    </label>
-                    <label className="grid gap-1 font-mono text-xs">
-                      Currency
-                      <input
-                        className="border-input bg-card h-9 border px-2"
-                        value={row.currency}
-                        onChange={(event) =>
-                          patchRow(index, {
-                            currency: normalizedCurrencyInput(
-                              event.target.value,
+                  <Plus aria-hidden="true" />
+                  Add record
+                </Button>
+              </div>
+              <FieldError message={errors.records ?? errors.balance} />
+              <div className="grid gap-3" aria-label="Definition records">
+                {draft.records.map((row, index) => (
+                  <section
+                    key={row.id}
+                    className="border-2 border-[var(--border-ink)] p-3 shadow-[var(--shadow-chip)]"
+                  >
+                    <div className="mb-2 flex justify-between">
+                      <h3 className="font-heading text-xs font-bold uppercase">
+                        Record {index + 1}
+                      </h3>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon-sm"
+                        aria-label={`Remove record ${index + 1}`}
+                        onClick={() =>
+                          patch({
+                            records: draft.records.filter(
+                              (_row, rowIndex) => rowIndex !== index,
                             ),
                           })
                         }
-                      />
-                    </label>
-                    <div className="col-span-full">
-                      {(lookups.snapshot?.accounts.find(
-                        (account) => account.account_id === row.accountId,
-                      )?.account_type ??
-                        accountOptions.find(
-                          (option) => option.id === row.accountId,
-                        )?.accountType) === "flow" ? (
+                      >
+                        <Trash aria-hidden="true" />
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="col-span-full">
                         <EntityPicker
-                          id={`recurring-record-${row.id}-category`}
-                          label="Category"
-                          loadOptions={categoryPickerLoader({
+                          id={`recurring-record-${row.id}-account`}
+                          label="Account"
+                          loadOptions={accountPickerLoader({
                             context: "record_assignment",
                           })}
-                          options={categoryOptions}
-                          value={row.categoryId}
-                          onChange={(categoryId) =>
-                            patchRow(index, { categoryId })
+                          options={accountOptions}
+                          onLoadedOptions={(options) => {
+                            setAccountPickerOptionsById((current) => {
+                              const next = new Map(current);
+                              for (const option of options) {
+                                next.set(option.id, option);
+                              }
+                              return next;
+                            });
+                          }}
+                          value={row.accountId}
+                          onChange={(accountId, selectedOption) => {
+                            if (selectedOption) {
+                              setAccountPickerOptionsById((current) => {
+                                const next = new Map(current);
+                                next.set(selectedOption.id, selectedOption);
+                                return next;
+                              });
+                            }
+                            const account = lookups.snapshot?.accounts.find(
+                              (item) => item.account_id === accountId,
+                            );
+                            const pickerOption =
+                              selectedOption ??
+                              (accountId === undefined
+                                ? undefined
+                                : accountPickerOptionsById.get(accountId));
+                            const accountType =
+                              account?.account_type ??
+                              pickerOption?.accountType;
+                            patchRow(index, {
+                              accountId,
+                              categoryId:
+                                accountType && accountType !== "flow"
+                                  ? undefined
+                                  : row.categoryId,
+                              currency:
+                                account?.currency ??
+                                pickerOption?.currency ??
+                                row.currency,
+                            });
+                          }}
+                        />
+                        <FieldError
+                          message={errors[recordErrorKey(index, "account")]}
+                        />
+                      </div>
+                      <label className="grid gap-1 font-mono text-xs">
+                        Amount
+                        <input
+                          className="border-input bg-card h-9 border px-2"
+                          placeholder="-12.34"
+                          value={row.amount}
+                          onChange={(event) =>
+                            patchRow(index, { amount: event.target.value })
                           }
                         />
-                      ) : row.categoryId !== undefined ? (
-                        <div className="grid gap-1 font-mono text-xs">
-                          <span>Category</span>
-                          <div className="border-input flex min-h-9 items-center justify-between gap-2 border px-2">
-                            <Tooltip
-                              className="min-w-0"
-                              label={
-                                categoryFqnById.get(row.categoryId) ??
-                                `Category ${row.categoryId}`
-                              }
-                              triggerLabel="Show full category path"
-                            >
-                              <span className="block min-w-0 truncate">
-                                {categoryFqnById.get(row.categoryId) ??
-                                  `Category ${row.categoryId}`}
-                              </span>
-                            </Tooltip>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() =>
-                                patchRow(index, { categoryId: undefined })
-                              }
-                            >
-                              <Close aria-hidden="true" />
-                              Clear category
-                            </Button>
+                      </label>
+                      <label className="grid gap-1 font-mono text-xs">
+                        Currency
+                        <input
+                          className="border-input bg-card h-9 border px-2"
+                          value={row.currency}
+                          onChange={(event) =>
+                            patchRow(index, {
+                              currency: normalizedCurrencyInput(
+                                event.target.value,
+                              ),
+                            })
+                          }
+                        />
+                      </label>
+                      <div className="col-span-full">
+                        {(lookups.snapshot?.accounts.find(
+                          (account) => account.account_id === row.accountId,
+                        )?.account_type ??
+                          accountOptions.find(
+                            (option) => option.id === row.accountId,
+                          )?.accountType) === "flow" ? (
+                          <EntityPicker
+                            id={`recurring-record-${row.id}-category`}
+                            label="Category"
+                            loadOptions={categoryPickerLoader({
+                              context: "record_assignment",
+                            })}
+                            options={categoryOptions}
+                            value={row.categoryId}
+                            onChange={(categoryId) =>
+                              patchRow(index, { categoryId })
+                            }
+                          />
+                        ) : row.categoryId !== undefined ? (
+                          <div className="grid gap-1 font-mono text-xs">
+                            <span>Category</span>
+                            <div className="border-input flex min-h-9 items-center justify-between gap-2 border px-2">
+                              <Tooltip
+                                className="min-w-0"
+                                label={
+                                  categoryFqnById.get(row.categoryId) ??
+                                  `Category ${row.categoryId}`
+                                }
+                                triggerLabel="Show full category path"
+                              >
+                                <span className="block min-w-0 truncate">
+                                  {categoryFqnById.get(row.categoryId) ??
+                                    `Category ${row.categoryId}`}
+                                </span>
+                              </Tooltip>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                  patchRow(index, { categoryId: undefined })
+                                }
+                              >
+                                <Close aria-hidden="true" />
+                                Clear category
+                              </Button>
+                            </div>
                           </div>
-                        </div>
-                      ) : (
-                        <span className="inline-flex h-9" aria-hidden />
-                      )}
-                      <FieldError
-                        message={errors[recordErrorKey(index, "category")]}
-                      />
-                    </div>
-                    <div className="col-span-full">
-                      <EntityMultiPicker
-                        id={`recurring-record-${row.id}-tags`}
-                        label="Tags"
-                        loadOptions={tagPickerLoader({
+                        ) : (
+                          <span className="inline-flex h-9" aria-hidden />
+                        )}
+                        <FieldError
+                          message={errors[recordErrorKey(index, "category")]}
+                        />
+                      </div>
+                      <div className="col-span-full">
+                        <EntityMultiPicker
+                          id={`recurring-record-${row.id}-tags`}
+                          label="Tags"
+                          loadOptions={tagPickerLoader({
+                            context: "record_assignment",
+                          })}
+                          options={tagOptions}
+                          value={row.tagIds}
+                          onChange={(tagIds) => patchRow(index, { tagIds })}
+                        />
+                      </div>
+                      <EntityPicker
+                        hierarchical={false}
+                        id={`recurring-record-${row.id}-member`}
+                        label="Member"
+                        loadOptions={memberPickerLoader({
                           context: "record_assignment",
                         })}
-                        options={tagOptions}
-                        value={row.tagIds}
-                        onChange={(tagIds) => patchRow(index, { tagIds })}
+                        options={memberOptions}
+                        placeholder="Whole household"
+                        value={row.memberId}
+                        onChange={(memberId) => patchRow(index, { memberId })}
                       />
+                      <label className="grid gap-1 font-mono text-xs">
+                        Memo
+                        <input
+                          className="border-input bg-card h-9 border px-2"
+                          value={row.memo}
+                          onChange={(event) =>
+                            patchRow(index, { memo: event.target.value })
+                          }
+                        />
+                      </label>
                     </div>
-                    <EntityPicker
-                      hierarchical={false}
-                      id={`recurring-record-${row.id}-member`}
-                      label="Member"
-                      loadOptions={memberPickerLoader({
-                        context: "record_assignment",
-                      })}
-                      options={memberOptions}
-                      placeholder="Whole household"
-                      value={row.memberId}
-                      onChange={(memberId) => patchRow(index, { memberId })}
+                    <FieldError
+                      message={
+                        errors[recordErrorKey(index, "amount")] ??
+                        errors[recordErrorKey(index, "currency")]
+                      }
                     />
-                    <label className="grid gap-1 font-mono text-xs">
-                      Memo
-                      <input
-                        className="border-input bg-card h-9 border px-2"
-                        value={row.memo}
-                        onChange={(event) =>
-                          patchRow(index, { memo: event.target.value })
-                        }
+                  </section>
+                ))}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {balances.map(([currency, amount]) => (
+                <div
+                  key={currency}
+                  className={cn(
+                    "border-2 p-2 font-mono text-xs",
+                    amount === 0n
+                      ? "text-[var(--color-money-in)]"
+                      : "text-[var(--color-class-adjustment-ink)]",
+                  )}
+                >
+                  <span>{currency}</span>
+                  <span className="float-right">
+                    {amount === 0n ? "Balanced" : "Unbalanced"}
+                  </span>
+                  <div className="mt-2 grid grid-cols-8 gap-1">
+                    {Array.from({ length: 8 }, (_, index) => (
+                      <span
+                        key={index}
+                        className={cn(
+                          "h-2 border border-[var(--border-ink)]",
+                          amount === 0n
+                            ? "bg-[var(--color-money-in)]"
+                            : "bg-[var(--color-class-adjustment-bright)]",
+                        )}
                       />
-                    </label>
+                    ))}
                   </div>
-                  <FieldError
-                    message={
-                      errors[recordErrorKey(index, "amount")] ??
-                      errors[recordErrorKey(index, "currency")]
-                    }
-                  />
-                </section>
+                </div>
               ))}
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            {balances.map(([currency, amount]) => (
-              <div
-                key={currency}
-                className={cn(
-                  "border-2 p-2 font-mono text-xs",
-                  amount === 0n
-                    ? "text-[var(--color-money-in)]"
-                    : "text-[var(--color-class-adjustment-ink)]",
-                )}
-              >
-                <span>{currency}</span>
-                <span className="float-right">
-                  {amount === 0n ? "Balanced" : "Unbalanced"}
-                </span>
-                <div className="mt-2 grid grid-cols-8 gap-1">
-                  {Array.from({ length: 8 }, (_, index) => (
-                    <span
-                      key={index}
-                      className={cn(
-                        "h-2 border border-[var(--border-ink)]",
-                        amount === 0n
-                          ? "bg-[var(--color-money-in)]"
-                          : "bg-[var(--color-class-adjustment-bright)]",
-                      )}
-                    />
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
-      </div>
-      <footer className="flex flex-wrap justify-end gap-2 border-t-2 border-[var(--border-ink)] p-4">
-        {definition ? (
-          <Button asChild variant="outline">
-            <Link
-              to={`/transactions?${new URLSearchParams({ filter: `recurring_definition:#${definition.recurring_definition_id}` }).toString()}`}
-            >
-              <ListBox aria-hidden="true" />
-              View transactions
-            </Link>
+        <footer className="flex flex-wrap justify-end gap-2 border-t-2 border-[var(--border-ink)] p-4">
+          {definition ? (
+            <Button asChild variant="outline">
+              <Link
+                to={`/transactions?${new URLSearchParams({ filter: `recurring_definition:#${definition.recurring_definition_id}` }).toString()}`}
+              >
+                <ListBox aria-hidden="true" />
+                View transactions
+              </Link>
+            </Button>
+          ) : null}
+          <Button type="button" variant="outline" onClick={() => closeEditor()}>
+            Cancel
           </Button>
-        ) : null}
-        <Button type="button" variant="outline" onClick={() => closeEditor()}>
-          Cancel
-        </Button>
-        <Button
-          type="button"
-          disabled={saving || lookups.loading || serverTodayLoading}
-          onClick={() => void save()}
-        >
-          <Check aria-hidden="true" />
-          {saving
-            ? "Saving"
-            : serverTodayLoading
-              ? "Checking date"
-              : "Save definition"}
-        </Button>
-      </footer>
-    </aside>
+          <Button
+            type="button"
+            disabled={saving || lookups.loading || serverTodayLoading}
+            onClick={() => void save()}
+          >
+            <Check aria-hidden="true" />
+            {saving
+              ? "Saving"
+              : serverTodayLoading
+                ? "Checking date"
+                : "Save definition"}
+          </Button>
+        </footer>
+      </aside>
+      <ConfirmationDialog
+        confirmIcon={<Trash aria-hidden="true" />}
+        confirmLabel="Discard changes"
+        cancelLabel="Keep editing"
+        errorMessage={undefined}
+        open={discardRequest !== undefined && !saving}
+        pending={saving}
+        pendingLabel="Saving"
+        title="Discard definition changes?"
+        onConfirm={() => {
+          pendingNavigationRef.current = undefined;
+          setDiscardRequest(undefined);
+          discardRequest?.onDiscard();
+        }}
+        onOpenChange={(nextOpen) => {
+          if (nextOpen) return;
+          pendingNavigationRef.current = undefined;
+          setDiscardRequest(undefined);
+          discardRequest?.onKeepEditing();
+          const restoreTarget = discardRestoreTargetRef.current;
+          window.requestAnimationFrame(() => {
+            window.requestAnimationFrame(() => {
+              focusWithoutTooltip(
+                restoreTarget?.isConnected ? restoreTarget : panelRef.current,
+                { preventScroll: true },
+              );
+            });
+          });
+        }}
+      >
+        <p>Your unsaved definition changes will be lost.</p>
+      </ConfirmationDialog>
+    </>
   );
 };

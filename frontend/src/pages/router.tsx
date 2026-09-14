@@ -1,4 +1,10 @@
-import { Navigate, Route, Routes } from "react-router";
+import {
+  createBrowserRouter,
+  createRoutesFromElements,
+  Navigate,
+  Route,
+  useRouteError,
+} from "react-router";
 
 import { AppShell } from "@/features/app-shell";
 
@@ -20,9 +26,13 @@ import { TagsPage } from "./tags-page";
 import { TemplatesPage } from "./templates-page";
 import { TransactionsPage } from "./transactions-page";
 
-export const AppRoutes = () => (
-  <AppShell>
-    <Routes>
+function RouteError(): never {
+  throw useRouteError();
+}
+
+export const router = createBrowserRouter(
+  createRoutesFromElements(
+    <Route element={<AppShell />} errorElement={<RouteError />}>
       <Route path="/" element={<Navigate to="/overview" replace />} />
       <Route path="/overview" element={<OverviewPage />} />
       <Route path="/transactions" element={<TransactionsPage />} />
@@ -42,6 +52,6 @@ export const AppRoutes = () => (
       <Route path="/status" element={<StatusPage />} />
       <Route path="/settings" element={<SettingsPage />} />
       <Route path="*" element={<Navigate to="/overview" replace />} />
-    </Routes>
-  </AppShell>
+    </Route>,
+  ),
 );

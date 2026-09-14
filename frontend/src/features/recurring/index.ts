@@ -1,4 +1,7 @@
-export { DefinitionEditorPanel } from "./definition-editor-panel";
+export {
+  DefinitionEditorPanel,
+  type DefinitionNavigationGuard,
+} from "./definition-editor-panel";
 export {
   RecurringDefinitionDeferDialog,
   recurringDefinitionIntervalCadence,
