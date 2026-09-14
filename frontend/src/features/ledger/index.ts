@@ -78,6 +78,7 @@ export {
   TransactionFilterControls,
 } from "./transaction-filter-controls";
 export {
+  accountTransactionsUrl,
   defaultTransactionPage,
   defaultTransactionPageSize,
   normalizeTransactionPageSize,

@@ -18,6 +18,11 @@ test("keyboard help shows route shortcuts, restores focus, and supports scrollin
     page.getByRole("tooltip", { name: "Close keyboard shortcuts" }),
   ).toBeHidden();
   await expect(
+    dialog.getByText("Open Transactions filtered to the account", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
     dialog.getByText("Open command palette", { exact: true }),
   ).toBeVisible();
   await expect(

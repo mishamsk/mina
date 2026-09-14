@@ -96,24 +96,70 @@ test("command palette navigates to Status", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Status" })).toBeVisible();
 });
 
-test("command palette discovers and navigates to an account", async ({
+test("command palette offers filtered Transactions and register account actions", async ({
   page,
 }) => {
   await page.goto("/overview");
   await openPalette(page);
 
   const dialog = page.getByRole("dialog", { name: "Command Palette" });
-  await dialog
-    .getByRole("combobox", { name: "Command search" })
-    .fill("joint_checking");
-  await dialog
-    .getByRole("option", { name: /Account bank:Chase:joint_checking/ })
-    .click();
-
+  const search = dialog.getByRole("combobox", { name: "Command search" });
+  await search.fill("joint_checking");
+  const result = dialog.getByRole("option", {
+    name: "Account bank:Chase:joint_checking",
+    exact: true,
+  });
+  await expect(result).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/accounts\/\d+$/);
   await expect(
     page.getByRole("heading", { name: /joint_checking/ }),
   ).toBeVisible();
+  const accountId = new URL(page.url()).pathname.split("/").at(-1);
+
+  await openPalette(page);
+  await search.fill("joint_checking");
+  await expect(result).toHaveAttribute("aria-selected", "true");
+  const subtitle = result.getByTestId("command-palette-action-subtitle");
+  await expect(subtitle).toHaveText(
+    "Enter opens register · Cmd/Ctrl Enter opens filtered Transactions",
+  );
+  await page.keyboard.down("ControlOrMeta");
+  await expect(subtitle).toHaveText(
+    "Cmd/Ctrl Enter opens filtered Transactions · Enter opens register",
+  );
+  await page.keyboard.press("Enter");
+  await page.keyboard.up("ControlOrMeta");
+  await expect(page).toHaveURL(
+    (url) =>
+      url.pathname === "/transactions" &&
+      url.searchParams.get("filter") === `account:#${accountId}`,
+  );
+  await expect(
+    page.getByText(`Account #${accountId} (Chase:joint_checking)`, {
+      exact: true,
+    }),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "Edit mode" }).click();
+  const editModeHeader = page.getByTestId(
+    "transaction-browser-edit-mode-header",
+  );
+  await expect(editModeHeader).toBeVisible();
+  const opener = page.getByRole("button", {
+    name: "Command palette",
+    exact: true,
+  });
+  await opener.focus();
+  const filteredUrl = page.url();
+  await openPalette(page);
+  await search.fill("joint_checking");
+  await expect(result).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("ControlOrMeta+Enter");
+  await expect(dialog).toBeHidden();
+  await expect(page).toHaveURL(filteredUrl);
+  await expect(editModeHeader).toBeVisible();
+  await expect(opener).toBeFocused();
 });
 
 test("command palette searches transactions and opens the selected detail", async ({

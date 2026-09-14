@@ -88,6 +88,7 @@ Structure and navigation only; how any of it looks is owned by the theme specifi
 A launcher-style command palette (VS Code / Spotlight pattern) is available everywhere via a global shortcut. It serves:
 
 - Navigation: jump to any page and any entity page by typed name — accounts, groups, categories, tags, members, templates.
+- Account and account-group results open their register with Enter or Transactions filtered to the exact account ID or descendant group scope with Cmd/Ctrl+Enter. The active result shows both actions in a subtitle that emphasizes the held accelerator action, follows arrow navigation, and exposes the current action to assistive technology.
 - Entity discovery groups hidden-inclusive ranked results as Accounts, Categories, Tags, and Members; each group preserves backend order, while one viewport-derived shared row limit truncates groups in that surface order.
 - Entry: "new spend / income / refund / transfer / exchange" commands; typing a template name uses backend-ranked template discovery and starts a prefilled entry by stable template ID. Both open the transaction editor modal in place — no navigation.
 - Transaction search: free-text search across transactions/records following the `GET /api/transactions?search=` semantics owned by `api/openapi.yaml`; entered by typing a leading ASCII apostrophe (Space on an empty input inserts the apostrophe; later spaces stay part of the query); result rows show date, class, title/memo, and amount; selecting a result navigates to the URL-addressable transaction detail.
@@ -366,8 +367,8 @@ Mina-specific building blocks used across screens (names indicative; placement p
 - `TransactionBrowser` — the shared browsing system: transaction lines with URL-addressable detail and Edit-mode dock/amount controls, plus register rows opening the same detail; filtering, pagination, selection, and keyboard behavior stay shared.
 - `EntryModal` — the centered modal transaction editor: hierarchical template picker, generic clear-draft action, shorthand tabs, journal editor, session tally, modal rail (session + recent context), create/edit/split/duplicate launches, `?entry=` deep links.
 - `TemplateEditorModal` — the app-shell-owned date-free partial-record editor for create/edit and transaction capture launches.
-- `CommandPalette` — navigation, entry launcher, transaction search, app actions.
-- `KeyboardShortcutsDialog` — Global, Transaction entry, and mounted page/overlay shortcuts, opened with `?` or the palette, traps focus, and restores the invoker on close; `?` is suppressed while typing or a shortcut-blocking overlay is open; non-modal transaction detail panels do not block it.
+- `CommandPalette` — navigation with modifier-aware account actions and an active action subtitle, entry launcher, transaction search, app actions.
+- `KeyboardShortcutsDialog` — Global, Command palette, Transaction entry, and mounted page/overlay shortcuts, opened with `?` or the palette, traps focus, and restores the invoker on close; `?` is suppressed while typing or a shortcut-blocking overlay is open; non-modal transaction detail panels do not block it.
 - `Kbd` — shared keyboard hint chip for help rows and palette commands; `Mod` displays as `Cmd/Ctrl`.
 - `BalanceStrip` — featured-account balances in roomy navigation and the compact Navigation sheet.
 - `AmountText` — signed, tabular, currency-code-aware amount with class-aware emphasis.

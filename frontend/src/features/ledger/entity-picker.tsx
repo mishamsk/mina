@@ -16,6 +16,7 @@ import {
   PopoverContent,
 } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAcceleratorHeld } from "@/hooks/use-accelerator-held";
 import { cn } from "@/lib/utils";
 
 export interface EntityOption {
@@ -153,37 +154,6 @@ const optionAccessibleLabel = (option: EntityOption): string =>
   ]
     .filter(Boolean)
     .join(" · ");
-
-const useMetaKeyPressed = (): boolean => {
-  const [pressed, setPressed] = useState(false);
-
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Meta") {
-        setPressed(true);
-      }
-    };
-    const handleKeyUp = (event: KeyboardEvent) => {
-      if (event.key === "Meta") {
-        setPressed(false);
-      }
-    };
-    const clearPressed = () => {
-      setPressed(false);
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    window.addEventListener("keyup", handleKeyUp);
-    window.addEventListener("blur", clearPressed);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-      window.removeEventListener("keyup", handleKeyUp);
-      window.removeEventListener("blur", clearPressed);
-    };
-  }, []);
-
-  return pressed;
-};
 
 interface EntityOptionPresentationProps {
   readonly className?: string;
@@ -1766,7 +1736,7 @@ const EntityPickerContent = ({
 };
 
 export const EntityPicker = (props: EntityPickerProps) => {
-  const metaKeyPressed = useMetaKeyPressed();
+  const metaKeyPressed = useAcceleratorHeld({ enabled: true, metaOnly: true });
   return <EntityPickerContent {...props} metaKeyPressed={metaKeyPressed} />;
 };
 
@@ -1812,7 +1782,7 @@ export const EntityMultiPicker = ({
   placeholder = "Search",
   value,
 }: EntityMultiPickerProps) => {
-  const metaKeyPressed = useMetaKeyPressed();
+  const metaKeyPressed = useAcceleratorHeld({ enabled: true, metaOnly: true });
   const [focusedSelectedId, setFocusedSelectedId] = useState<number>();
   const [createdOptions, setCreatedOptions] = useState<readonly EntityOption[]>(
     [],

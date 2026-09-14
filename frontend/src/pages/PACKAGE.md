@@ -6,6 +6,8 @@
 
 ## Implicit Contracts
 
+- Account header Transactions links use the shared ledger URL builder.
+
 - The Status route registers tab-navigation keyboard help; the active feature owns its additional row shortcuts.
 
 - The browser data router renders every page through the AppShell layout outlet and rethrows route render errors to the application error boundary for its status panel and logging; routes do not own loaders or actions.

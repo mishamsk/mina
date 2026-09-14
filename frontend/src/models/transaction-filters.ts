@@ -1150,7 +1150,7 @@ export const transactionFilterRows = (
 
 export const withTransactionFilterEntityScope = (
   filters: TransactionFilters,
-  field: "category" | "tag",
+  field: "account" | "category" | "tag",
   fqn: string,
   scoped: boolean,
 ): TransactionFilters =>

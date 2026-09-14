@@ -26,7 +26,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { type To, useLocation, useNavigate } from "react-router";
+import { parsePath, type To, useLocation, useNavigate } from "react-router";
 
 import {
   type AccountSearchItem,
@@ -51,6 +51,7 @@ import { focusWithoutTooltip, Tooltip } from "@/components/tooltip";
 import { Kbd } from "@/components/ui/kbd";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  accountTransactionsUrl,
   AmountText,
   buildLookupMaps,
   captureTransactionEntryLaunchContext,
@@ -72,6 +73,7 @@ import {
 } from "@/features/ledger";
 import { formatDecimalAmount } from "@/features/ledger/format";
 import { useTransactionTemplatesResource } from "@/features/templates/use-transaction-templates-resource";
+import { useAcceleratorHeld } from "@/hooks/use-accelerator-held";
 import { cn } from "@/lib/utils";
 import {
   defaultTransactionSort,
@@ -107,6 +109,8 @@ type CommandGroup =
 interface CommandItem {
   readonly accessibleLabel?: string;
   readonly action?: (opener?: HTMLElement) => void;
+  readonly alternateAction?: { readonly label: string; readonly to: To };
+  readonly defaultActionLabel?: string;
   readonly detail?: string;
   readonly group: CommandGroup;
   readonly hiddenLabel?: string;
@@ -175,6 +179,7 @@ const commandGroups: readonly CommandGroup[] = [
   "Actions",
 ];
 const defaultEntityResultLimit = 8;
+// A floor: the active account subtitle can make one result taller.
 const entityResultRowHeightPx = 44;
 const entitySearchDebounceMs = 180;
 const maxEntityResultLimit = 500;
@@ -391,6 +396,7 @@ export const CommandPalette = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { open } = useCommandPaletteView();
+  const acceleratorHeld = useAcceleratorHeld({ enabled: open });
   const transactionEditModeAvailable = useTransactionEditModeAvailable();
   const lookups = useLedgerLookupsView();
   const lastTransactionsPageSearch = useLastTransactionsPageSearch();
@@ -759,6 +765,13 @@ export const CommandPalette = () => {
         item.kind === "leaf"
           ? `Account ${item.fqn}`
           : `Account group ${item.fqn}`,
+      defaultActionLabel: "opens register",
+      alternateAction: {
+        label: "opens filtered Transactions",
+        to: accountTransactionsUrl(
+          item.kind === "leaf" ? item.account_id! : item.fqn,
+        ),
+      },
       detail: item.kind === "leaf" ? "Account" : "Account group",
       group: "Accounts",
       hiddenLabel: item.is_hidden
@@ -930,6 +943,13 @@ export const CommandPalette = () => {
   const activeCommand = transactionSearchMode
     ? undefined
     : visibleCommands[activeIndex];
+  // Stable clauses avoid repeating the same live hint on plain arrow navigation;
+  // aria-activedescendant already announces the new option and its description.
+  const actionAnnouncement = activeCommand?.alternateAction
+    ? acceleratorHeld
+      ? `Cmd/Ctrl Enter ${activeCommand.alternateAction.label}.`
+      : `Enter ${activeCommand.defaultActionLabel}.`
+    : "";
   const activeTransaction = transactionSearchMode
     ? transactionResults[activeIndex]
     : undefined;
@@ -952,17 +972,11 @@ export const CommandPalette = () => {
 
   const commandIsCurrent = useCallback(
     (to: To): boolean => {
-      if (typeof to === "string") {
-        return (
-          normalizePathname(location.pathname) === normalizePathname(to) &&
-          location.search === ""
-        );
-      }
-
+      const target = typeof to === "string" ? parsePath(to) : to;
       return (
         normalizePathname(location.pathname) ===
-          normalizePathname(to.pathname ?? location.pathname) &&
-        location.search === (to.search ?? "")
+          normalizePathname(target.pathname ?? location.pathname) &&
+        location.search === (target.search ?? "")
       );
     },
     [location.pathname, location.search],
@@ -973,7 +987,7 @@ export const CommandPalette = () => {
   }, [location.key]);
 
   const activateCommand = useCallback(
-    (command: CommandItem | undefined) => {
+    (command: CommandItem | undefined, alternate: boolean) => {
       if (!command) {
         return;
       }
@@ -985,15 +999,19 @@ export const CommandPalette = () => {
         command.action(opener);
         return;
       }
-      if (command.to) {
-        const isCurrent = commandIsCurrent(command.to);
+      const to =
+        alternate && command.alternateAction
+          ? command.alternateAction.to
+          : command.to;
+      if (to) {
+        const isCurrent = commandIsCurrent(to);
         if (!isCurrent) {
           restoreFocusRef.current = null;
           setTransactionEditModeEnabled(false);
         }
         closeCommandPalette();
         if (!isCurrent) {
-          void navigate(command.to);
+          void navigate(to);
         }
         return;
       }
@@ -1405,7 +1423,7 @@ export const CommandPalette = () => {
         activateTransaction(activeTransaction);
         return;
       }
-      activateCommand(activeCommand);
+      activateCommand(activeCommand, event.metaKey || event.ctrlKey);
     }
   };
 
@@ -1429,6 +1447,9 @@ export const CommandPalette = () => {
             className="bg-card text-foreground flex h-[min(38rem,76svh)] w-full max-w-2xl flex-col border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]"
             onKeyDownCapture={handleDialogKeyDownCapture}
           >
+            <span className="sr-only" role="status" aria-live="polite">
+              {actionAnnouncement}
+            </span>
             <div className="bg-card sticky top-0 z-10 flex flex-col gap-3 border-b-2 border-[var(--border-ink)] p-4">
               <div className="flex items-center justify-between gap-4">
                 <h2
@@ -1659,6 +1680,11 @@ export const CommandPalette = () => {
                                 type="button"
                                 role="option"
                                 aria-selected={active}
+                                aria-describedby={
+                                  command.alternateAction
+                                    ? `${commandOptionId(command.id)}-action`
+                                    : undefined
+                                }
                                 className={cn(
                                   "flex w-full items-center gap-3 border-2 border-transparent px-3 py-2 text-left font-mono text-sm",
                                   "hover:bg-muted hover:border-[var(--border-ink)]",
@@ -1671,8 +1697,20 @@ export const CommandPalette = () => {
                                     query,
                                   });
                                 }}
-                                onClick={() => {
-                                  activateCommand(command);
+                                onKeyDown={(event) => {
+                                  if (event.key === "Enter") {
+                                    event.preventDefault();
+                                    activateCommand(
+                                      command,
+                                      event.metaKey || event.ctrlKey,
+                                    );
+                                  }
+                                }}
+                                onClick={(event) => {
+                                  activateCommand(
+                                    command,
+                                    event.metaKey || event.ctrlKey,
+                                  );
                                 }}
                                 aria-label={command.accessibleLabel}
                               >
@@ -1680,8 +1718,51 @@ export const CommandPalette = () => {
                                   className="size-4 shrink-0"
                                   aria-hidden="true"
                                 />
-                                <span className="min-w-0 flex-1 truncate font-semibold">
-                                  {command.renderLabel ?? command.label}
+                                <span className="min-w-0 flex-1 font-semibold">
+                                  <span className="block truncate">
+                                    {command.renderLabel ?? command.label}
+                                  </span>
+                                  {active && command.alternateAction ? (
+                                    <span
+                                      data-testid="command-palette-action-subtitle"
+                                      aria-hidden="true"
+                                      className="text-muted-foreground mt-1 block text-xs leading-7 font-normal"
+                                    >
+                                      <span className="inline-flex items-center gap-1 font-semibold whitespace-nowrap">
+                                        {acceleratorHeld ? (
+                                          <>
+                                            <Kbd>Mod</Kbd>{" "}
+                                          </>
+                                        ) : null}
+                                        <Kbd>Enter</Kbd>{" "}
+                                        {acceleratorHeld
+                                          ? command.alternateAction.label
+                                          : command.defaultActionLabel}
+                                      </span>
+                                      {" · "}
+                                      <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                                        {acceleratorHeld ? null : (
+                                          <>
+                                            <Kbd>Mod</Kbd>{" "}
+                                          </>
+                                        )}
+                                        <Kbd>Enter</Kbd>{" "}
+                                        {acceleratorHeld
+                                          ? command.defaultActionLabel
+                                          : command.alternateAction.label}
+                                      </span>
+                                    </span>
+                                  ) : null}
+                                  {command.alternateAction ? (
+                                    <span
+                                      id={`${commandOptionId(command.id)}-action`}
+                                      className="sr-only"
+                                    >
+                                      {acceleratorHeld
+                                        ? `Cmd/Ctrl Enter ${command.alternateAction.label}; Enter ${command.defaultActionLabel}.`
+                                        : `Enter ${command.defaultActionLabel}; Cmd/Ctrl Enter ${command.alternateAction.label}.`}
+                                    </span>
+                                  ) : null}
                                 </span>
                                 {command.hiddenLabel ? (
                                   <Tooltip

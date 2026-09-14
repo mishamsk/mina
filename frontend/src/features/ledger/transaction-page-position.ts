@@ -3,6 +3,7 @@ import {
   normalizeTransactionFilters,
   transactionClasses,
   type TransactionFilters,
+  withTransactionFilterEntityScope,
 } from "@/models/transaction-filters";
 import {
   defaultTransactionSort,
@@ -178,4 +179,26 @@ export const writeTransactionFiltersToSearchParams = (
   }
 
   return next;
+};
+
+export const accountTransactionsUrl = (account: number | string): string => {
+  const filters: TransactionFilters =
+    typeof account === "number"
+      ? {
+          classes: [],
+          expression: {
+            kind: "term",
+            field: "account",
+            operator: ":",
+            value: `#${account}`,
+            entityId: true,
+          },
+        }
+      : withTransactionFilterEntityScope(
+          { classes: [] },
+          "account",
+          account,
+          true,
+        );
+  return `/transactions?${writeTransactionFiltersToSearchParams(new URLSearchParams(), filters).toString()}`;
 };

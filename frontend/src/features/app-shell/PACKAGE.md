@@ -6,7 +6,7 @@
 
 ## Implicit Contracts
 
-- Keyboard help renders Global and static Transaction entry groups before mounted surface groups, initially focuses the catalog scroll region without a tooltip, blocks underlying global shortcuts as a true modal, and restores the captured opener or route heading on close.
+- Keyboard help renders Global, Command palette, and Transaction entry static groups before mounted surface groups, initially focuses the catalog scroll region without a tooltip, blocks underlying global shortcuts as a true modal, and restores the captured opener or route heading on close.
 - Keyboard help marks its backdrop as a modal overlay so outside-pointer dismissal preserves underlying non-modal detail panels.
 
 - Global shortcut overlay detection is shared with help; shortcut catalogs describe behavior while each surface retains its own handlers.

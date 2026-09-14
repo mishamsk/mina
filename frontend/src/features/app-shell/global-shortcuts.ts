@@ -27,10 +27,25 @@ export const globalShortcutGroup: ShortcutGroup = {
   ],
 };
 
+export const commandPaletteShortcutGroup: ShortcutGroup = {
+  id: "command-palette",
+  title: "Command palette",
+  order: 1,
+  shortcuts: [
+    {
+      id: "account-transactions",
+      keys: ["Mod", "Enter"],
+      label: "Open Transactions filtered to the account",
+      detail:
+        "On an account or account-group result; Enter alone opens its register.",
+    },
+  ],
+};
+
 export const transactionEntryShortcutGroup: ShortcutGroup = {
   id: "entry",
   title: "Transaction entry",
-  order: 1,
+  order: 2,
   shortcuts: [
     {
       id: "entry-0",

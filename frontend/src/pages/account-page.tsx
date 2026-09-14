@@ -24,6 +24,7 @@ import {
 import { PageHeader } from "@/features/app-shell";
 import {
   AccountDisplayLabel,
+  accountTransactionsUrl,
   buildLookupMaps,
   captureTransactionEntryLaunchContext,
   defaultTransactionPageSize,
@@ -146,19 +147,6 @@ const AccountPageContent = ({ accountId }: { readonly accountId: number }) => {
     [resource.lookups.snapshot],
   );
   const account = resource.header.snapshot?.account;
-  const transactionsParams = writeTransactionFiltersToSearchParams(
-    new URLSearchParams(),
-    {
-      classes: [],
-      expression: {
-        kind: "term",
-        field: "account",
-        operator: ":",
-        value: `#${accountId}`,
-        entityId: true,
-      },
-    },
-  );
   const toggleAccountFeatured = async () => {
     if (!account || favoriteTogglePendingRef.current) {
       return;
@@ -255,9 +243,7 @@ const AccountPageContent = ({ accountId }: { readonly accountId: number }) => {
         actions={
           account && !account.tombstoned_at ? (
             <Button asChild variant="outline">
-              <Link to={`/transactions?${transactionsParams.toString()}`}>
-                Transactions
-              </Link>
+              <Link to={accountTransactionsUrl(accountId)}>Transactions</Link>
             </Button>
           ) : undefined
         }

@@ -6,6 +6,8 @@
 
 ## Implicit Contracts
 
+- Accelerator observation listens only while enabled, clears on blur or visibility changes, and supports Meta-only picker presentation; activation decisions belong to event handlers.
+
 - Shortcut registration requires a stable group identity and unregisters when disabled or unmounted; each mounted owner supplies a unique group ID and stable registration callbacks, keeping the hook independent of stores.
 
 - `useElementOverflow` tracks the attached element through layout, child, and content changes; a detached ref is not overflowing.

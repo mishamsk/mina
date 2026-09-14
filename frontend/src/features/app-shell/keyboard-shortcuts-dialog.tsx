@@ -8,6 +8,7 @@ import { Kbd } from "@/components/ui/kbd";
 import { closeKeyboardShortcuts, useKeyboardShortcutsView } from "@/store";
 
 import {
+  commandPaletteShortcutGroup,
   globalShortcutGroup,
   transactionEntryShortcutGroup,
 } from "./global-shortcuts";
@@ -17,6 +18,7 @@ export const KeyboardShortcutsDialog = () => {
   const { groups, launch, open } = useKeyboardShortcutsView();
   const orderedGroups = [
     globalShortcutGroup,
+    commandPaletteShortcutGroup,
     transactionEntryShortcutGroup,
     ...Array.from(groups.values()).sort(
       (a, b) => a.order - b.order || a.title.localeCompare(b.title),
