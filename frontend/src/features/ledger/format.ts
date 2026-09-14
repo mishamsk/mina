@@ -12,7 +12,11 @@ import type {
   TransactionLifecycleStatus,
 } from "@/api";
 import type { LedgerLookupsSnapshot } from "@/store";
-import { formatLocalCivilDate, formatLocalCivilDateParts } from "@/utils/date";
+import {
+  formatLocalCivilDate,
+  formatLocalCivilDateParts,
+  timestampDateValue,
+} from "@/utils/date";
 
 export interface LookupMaps {
   readonly accountsById: ReadonlyMap<number, Account>;
@@ -151,6 +155,18 @@ export const formatInitiatedDateParts = (
   value: string,
 ): { readonly day: string; readonly year: string } => {
   return formatLocalCivilDateParts(value);
+};
+
+export const formatRecordDateParts = (
+  record: Pick<
+    JournalRecord,
+    "posted_date" | "pending_date" | "initiated_date"
+  >,
+): { readonly day: string; readonly year: string } => {
+  const timestamp = record.posted_date ?? record.pending_date;
+  return formatLocalCivilDateParts(
+    timestamp == null ? record.initiated_date : timestampDateValue(timestamp),
+  );
 };
 
 const formatWhole = (value: string): string =>

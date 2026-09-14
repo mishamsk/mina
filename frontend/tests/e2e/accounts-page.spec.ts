@@ -721,3 +721,86 @@ test("account register stays usable across representative widths", async ({
     "tablet account chart has no horizontal overflow",
   ).toBe(true);
 });
+
+test.describe("register settlement dates", () => {
+  test.use({ timezoneId: "America/Los_Angeles" });
+
+  test("account rows show settlement days and group flow rows keep initiated days", async ({
+    page,
+  }) => {
+    const prefix = "e2e:settlement-dates";
+    const [funding, merchant, category] = await Promise.all([
+      createAccount(page, `${prefix}:Funding`),
+      createAccount(page, `${prefix}:Merchant`, "flow"),
+      createCategory(page, "E2E:SettlementDates"),
+    ]);
+    for (const settlement of [
+      {
+        status: "posted",
+        pending_date: "2026-07-25T01:00:00Z",
+        posted_date: "2026-07-28T01:00:00Z",
+      },
+      {
+        status: "pending",
+        pending_date: "2026-07-25T01:00:00Z",
+        posted_date: null,
+      },
+    ]) {
+      const response = await page.request.post("/api/transactions", {
+        data: {
+          initiated_date: "2026-07-20",
+          records: [
+            {
+              account_id: funding.account_id,
+              amount: "-7.00",
+              category_id: null,
+              currency: "USD",
+              memo: `${settlement.status} settlement day`,
+              settlement,
+              reconciliation_status: "unreconciled",
+              source: "manual",
+              tag_ids: [],
+            },
+            {
+              account_id: merchant.account_id,
+              amount: "7.00",
+              category_id: category.category_id,
+              currency: "USD",
+              memo: `${settlement.status} flow day`,
+              settlement: null,
+              reconciliation_status: "unreconciled",
+              source: "manual",
+              tag_ids: [],
+            },
+          ],
+        },
+      });
+      expect(response.ok(), await response.text()).toBe(true);
+    }
+
+    await page.goto(`/accounts/${funding.account_id}`);
+    const rows = page.getByTestId("account-register-row");
+    const postedDate = rows
+      .filter({ hasText: "posted settlement day" })
+      .getByTestId("account-register-date");
+    const pendingDate = rows
+      .filter({ hasText: "pending settlement day" })
+      .getByTestId("account-register-date");
+    await expect(postedDate).toHaveText("Jul 272026");
+    await expect(pendingDate).toHaveText("Jul 242026");
+    await expect(postedDate).not.toContainText("Jul 20");
+    await expect(pendingDate).not.toContainText("Jul 20");
+
+    await page.getByRole("link", { name: "Accounts", exact: true }).click();
+    await page.getByRole("searchbox", { name: "Search" }).fill(prefix);
+    await page
+      .getByRole("row", { name: `Open account group ${prefix}`, exact: true })
+      .getByRole("link")
+      .click();
+    await expect(
+      rows
+        .filter({ hasText: "posted flow day" })
+        .getByTestId("account-register-date"),
+    ).toHaveText("Jul 202026");
+  });
+});

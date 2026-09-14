@@ -39,6 +39,7 @@ export {
   formatDecimalAmount,
   formatInitiatedDate,
   formatInitiatedDateParts,
+  formatRecordDateParts,
   isMaterializedExpectedRecurringTransaction,
   lifecycleStatusLabel,
   lineDisplayAmounts,

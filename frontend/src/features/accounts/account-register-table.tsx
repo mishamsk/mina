@@ -18,6 +18,7 @@ import {
   AccountDisplayLabel,
   AmountText,
   displayStatusLabel,
+  formatRecordDateParts,
   FqnPath,
   type LookupMaps,
   recordStatus,
@@ -25,7 +26,6 @@ import {
   transactionTitleAccountFqnContext,
 } from "@/features/ledger";
 import { cn } from "@/lib/utils";
-import { formatLocalCivilDateParts } from "@/utils/date";
 
 interface AccountRegisterTableProps {
   readonly errorMessage: string | undefined;
@@ -359,7 +359,7 @@ export const AccountRegisterTable = ({
           </thead>
           <tbody>
             {records.map((record, index) => {
-              const date = formatLocalCivilDateParts(record.initiated_date);
+              const date = formatRecordDateParts(record);
               const transactionTitle = record.transaction_display_title;
               const account = maps.accountsById.get(record.account_id);
               const category =
@@ -445,7 +445,10 @@ export const AccountRegisterTable = ({
                     }
                   }}
                 >
-                  <td className="account-register-date-column px-3 py-2 font-mono">
+                  <td
+                    data-testid="account-register-date"
+                    className="account-register-date-column px-3 py-2 font-mono"
+                  >
                     <div>{date.day}</div>
                     <div className="text-muted-foreground text-xs">
                       {date.year}

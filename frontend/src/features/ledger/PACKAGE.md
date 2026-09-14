@@ -6,6 +6,8 @@
 
 ## Implicit Contracts
 
+- Record-date formatting selects posted then pending timestamps by presence alone and converts them to browser-local calendar days; date-free records use the initiated civil date with the same day/year geometry.
+
 - Recurring-definition filters reuse the entity picker for exact FQNs and hierarchy scopes, retain removable ID literals, and restore selected FQNs through bounded ranked search instead of loading complete definitions.
 - REST transaction responses own classes, shapes, roles, display titles, and amounts; every transaction surface uses the display title, and contextual overflow tooltips include current account FQNs. Shared views must not derive totals, and unavailable USD renders as `N/A`.
 - Transaction pages are disposable in-memory snapshots keyed by normalized request parameters, including a future date anchor while paging its projected sequence. Keep a displayed snapshot during a failed refresh, discard responses superseded by a newer page generation or background refresh for the same page, preserve errors created after an ordinary load began, and do not let detail or entry-only URL changes orphan an equivalent request.

@@ -6,6 +6,8 @@
 
 ## Implicit Contracts
 
+- Register dates use the ledger formatter's browser-local posted day, then pending day, then initiated civil date without a marker; ordering, pagination, and running balances retain server-owned initiated-date semantics.
+
 - Account/group registers use the shared fixed-page bound; account-tree loading, error, and empty surfaces use the shared state bound, while loaded rows scroll within the reference table frame in roomy shells.
 - Roomy group subtotals share a capped scrolling region with space for card shadows, reserving the remaining height for register rows and pagination.
 - Account/group register errors scroll within the available register slot so expanded API details cannot make Retry unreachable.
