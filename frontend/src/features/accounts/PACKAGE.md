@@ -6,6 +6,10 @@
 
 ## Implicit Contracts
 
+- Register roving focus keeps an open detail panel following the walked record, including Home/End; Enter and Space share pointer activation.
+
+- Chart rows follow the shared [roving focus contract](../../hooks/PACKAGE.md), [table rules](../../../../docs/webui-design.md#tables-and-filtering), and [theme](../../../../docs/webui-theme-arcade-cabinet.md); their name links retain native navigation gestures.
+
 - Account trees and registers register their own keyboard help while mounted; register detail dismissal remains owned by the shared ledger detail panel.
 
 - Register dates use the ledger formatter's browser-local posted day, then pending day, then initiated civil date without a marker; ordering, pagination, and running balances retain server-owned initiated-date semantics.

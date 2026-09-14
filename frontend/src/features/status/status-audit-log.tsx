@@ -1,7 +1,6 @@
 import { ChevronRight, WarningDiamond } from "pixelarticons/react";
 import {
   type FormEvent,
-  type KeyboardEvent,
   useEffect,
   useEffectEvent,
   useRef,
@@ -29,6 +28,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useRovingRows } from "@/hooks/use-roving-rows";
 import { useShortcutGroup } from "@/hooks/use-shortcut-group";
 import {
   registerShortcutGroup,
@@ -94,40 +94,16 @@ const formatDuration = (microseconds: number): string => {
 const pageCount = (totalCount: number | undefined, pageSize: number): number =>
   totalCount === undefined ? 1 : Math.max(1, Math.ceil(totalCount / pageSize));
 
-const rowKeyDown = (
-  event: KeyboardEvent<HTMLTableRowElement>,
-  onActivate: () => void,
-) => {
-  if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-    event.preventDefault();
-    const rows = Array.from(
-      event.currentTarget
-        .closest("tbody")
-        ?.querySelectorAll<HTMLTableRowElement>("tr[tabindex='0']") ?? [],
-    );
-    const currentIndex = rows.indexOf(event.currentTarget);
-    const nextIndex = Math.max(
-      0,
-      Math.min(
-        rows.length - 1,
-        currentIndex + (event.key === "ArrowDown" ? 1 : -1),
-      ),
-    );
-    rows[nextIndex]?.focus();
-    return;
-  }
-  if (event.key !== "Enter" && event.key !== " ") {
-    return;
-  }
-  event.preventDefault();
-  onActivate();
-};
-
 const auditShortcuts: ShortcutGroup = {
   id: "audit-log",
   title: "Audit log",
   order: 11,
   shortcuts: [
+    {
+      id: "audit-log-ends",
+      keys: ["Home", "End"],
+      label: "Focus first or last row",
+    },
     {
       id: "audit-log-0",
       keys: ["↑", "↓"],
@@ -218,7 +194,7 @@ export const StatusAuditLog = ({
     const refresh = () => {
       const rows = Array.from(
         tableBodyRef.current?.querySelectorAll<HTMLTableRowElement>(
-          "tr[tabindex='0']",
+          "tr[data-audit-row]",
         ) ?? [],
       );
       const focusedIndex = rows.findIndex(
@@ -329,7 +305,7 @@ export const StatusAuditLog = ({
     }
     const rows = Array.from(
       tableBodyRef.current?.querySelectorAll<HTMLTableRowElement>(
-        "tr[tabindex='0']",
+        "tr[data-audit-row]",
       ) ?? [],
     );
     rows[Math.min(focusedIndex, rows.length - 1)]?.focus();
@@ -394,6 +370,15 @@ export const StatusAuditLog = ({
       return next;
     });
   };
+
+  const rowProps = useRovingRows({
+    containerRef: tableBodyRef,
+    rowSelector: "tr[data-audit-row]",
+    onActivate: (index) => {
+      const entry = auditEntries.entries[index];
+      if (entry) selectEntry(entry, true);
+    },
+  });
 
   return (
     <Card className="compact-shell:py-0 min-h-0" data-testid="status-audit-log">
@@ -461,10 +446,11 @@ export const StatusAuditLog = ({
               return (
                 <tr
                   key={entry.api_audit_entry_id}
-                  tabIndex={0}
+                  data-audit-row
+                  {...rowProps(index)}
                   aria-expanded={selected}
                   aria-label={`Open audit entry ${entry.api_audit_entry_id}`}
-                  className={`focus-visible:outline-ring cursor-pointer border-t border-[var(--hairline)] outline-none hover:bg-[color-mix(in_srgb,var(--band),var(--color-interactive-bright)_28%)] focus-visible:outline-2 ${
+                  className={`compact-shell:scroll-mb-[calc(5.5rem+env(safe-area-inset-bottom))] cursor-pointer border-t border-[var(--hairline)] outline-none hover:bg-[color-mix(in_srgb,var(--band),var(--color-interactive-bright)_28%)] focus-visible:outline-none data-[active=true]:focus-within:bg-[color-mix(in_srgb,var(--band),var(--color-interactive-bright)_28%)] ${
                     selected
                       ? "bg-[color-mix(in_srgb,var(--band),var(--color-interactive-bright)_18%)]"
                       : index % 2 === 1
@@ -472,9 +458,6 @@ export const StatusAuditLog = ({
                         : "bg-card"
                   }`}
                   onClick={() => selectEntry(entry, true)}
-                  onKeyDown={(event) =>
-                    rowKeyDown(event, () => selectEntry(entry, true))
-                  }
                 >
                   <td className="truncate px-3 py-3 font-mono">
                     {formatTimestamp(entry.occurred_at)}

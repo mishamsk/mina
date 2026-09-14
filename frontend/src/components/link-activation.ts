@@ -1,5 +1,18 @@
 import type { KeyboardEvent, MouseEvent } from "react";
 
+export const isInteractiveTarget = (
+  target: EventTarget | null,
+  currentTarget: HTMLElement,
+): boolean => {
+  if (!(target instanceof Element)) return false;
+  const control = target.closest(
+    "a, button, input, select, textarea, summary, [role='button'], " +
+      "[contenteditable='true'], [data-row-interactive], " +
+      "[tabindex]:not([tabindex='-1']):not([data-slot='tooltip-trigger'])",
+  );
+  return control !== null && control !== currentTarget;
+};
+
 export const isPlainLinkClick = (event: MouseEvent<HTMLElement>): boolean =>
   !event.defaultPrevented &&
   event.button === 0 &&
@@ -26,14 +39,7 @@ export const activateRowLink = (
     return;
   }
 
-  const target = event.target;
-  if (!(target instanceof Element)) return;
-  const control = target.closest(
-    "a, button, input, select, textarea, summary, [role='button'], " +
-      "[contenteditable='true'], " +
-      "[tabindex]:not([tabindex='-1']):not([data-slot='tooltip-trigger'])",
-  );
-  if (control && control !== event.currentTarget) return;
+  if (isInteractiveTarget(event.target, event.currentTarget)) return;
 
   const link =
     event.currentTarget.querySelector<HTMLAnchorElement>("a[data-row-link]");

@@ -6,6 +6,8 @@
 
 ## Implicit Contracts
 
+- Transaction rows share roving focus and hover-fill highlighting while preserving Shift+Arrow range extension, Edit-mode selection tints, nested amount keys, and the transient date-jump outline. Inline amount Tab and Shift+Tab save before focusing the next or previous eligible amount input on the current page, adopting its row through roving focus regardless of its tab index; page boundaries return to ordinary controls outside the rows.
+
 - Account Transactions links use one fresh-URL builder for stable leaf IDs or descendant group FQNs; entity pickers observe the shared accelerator hook in Meta-only mode.
 
 - The entry modal blocks global shortcuts; its help catalog belongs to the shell and is visible on every route. Mounted transaction surfaces register browse and detail keyboard help; Edit mode replaces browse activation hints and adds selection/dock hints only while enabled.

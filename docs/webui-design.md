@@ -173,7 +173,7 @@ Canonical rendering rules; every screen uses these so the product reads as one s
 
 ### Keyboard
 
-- Keyboard-complete tables: up/down moves row focus; in the transactions browser click, Enter, and Space open detail in browse mode and toggle selection in Edit mode; open detail, Edit-mode selection, dock editing, and eligible amount editing stay keyboard-driven — batch review sessions never need the mouse.
+- Keyboard-complete tables: tables have one row Tab stop; up/down moves row focus, Home/End focuses the first/last row, and Tab reaches nested controls from the active row; in the transactions browser click, Enter, and Space open detail in browse mode and toggle selection in Edit mode; open detail, Edit-mode selection, dock editing, and eligible amount editing stay keyboard-driven — batch review sessions never need the mouse.
 - Global shortcuts: open command palette, new transaction (opens the transaction editor modal in place on any screen), `?` opens page-aware keyboard shortcuts help, `Esc` closes overlays, `Cmd+Enter` submits forms, `Cmd+Shift+Enter` saves and closes in the entry modal, arrows + `Enter` drive pickers; hierarchical pickers add segment completion per Pickers — Tab/ArrowRight commit a segment, ArrowLeft/Backspace back out.
 - Toggling Edit mode is available from the toolbar and the command palette; in-mode selection keys follow Edit mode.
 

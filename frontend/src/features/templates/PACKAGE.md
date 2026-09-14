@@ -6,6 +6,8 @@
 
 ## Implicit Contracts
 
+- The management tree inherits shared roving row focus; leaf activation opens the editor with the row as its focus-recovery opener, while ancestor rows do not activate.
+
 - The management content flexes within the route’s fixed-page slot, reserving room for refresh banners; tree layout follows the [reference package contract](../reference/PACKAGE.md).
 - One transient complete template snapshot is shared by the command palette and unfiltered Templates-page rendering; entry selection and queried management results use independent current reads.
 - The snapshot consumes server-derived compatible shorthand types; transaction entry filters by active tab and mechanically copies matching raw record defaults without classifying them in the browser.

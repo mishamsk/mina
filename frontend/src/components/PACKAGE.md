@@ -6,6 +6,8 @@
 
 ## Implicit Contracts
 
+- Row keyboard and pointer handlers share the interactive-target guard with link activation so nested controls retain their own behavior.
+
 - `fixedPageClassName` in `reference-table-frame` bounds roomy pages to the canvas, establishes the containing block for absolute descendants, and clips overflow with physical padding for pixel shadows/focus outlines; compensating margins preserve the content inset, and compact pages retain document flow. Flexing content slots reserve space for headers and banners.
 - `referenceTableFrameClassName` owns the bounded roomy table frame; its inner viewport scrolls beneath sticky headers. `referenceTableStateClassName` bounds non-loaded surfaces and keeps oversized state content reachable without window overflow; `referenceTableShadowReservationClassName` adds compensated roomy shadow padding to loading/error wrappers without shifting their cards.
 - Navigable rows mark their primary anchor with `data-row-link`; shared row activation delegates to it and yields to nested controls and native gestures. Navigation side-effect callbacks run only for plain primary activation, following the [web UI link rule](../../../docs/webui-design.md#navigation-links).

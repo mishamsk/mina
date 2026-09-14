@@ -15,7 +15,6 @@ import {
 import {
   type FocusEvent,
   Fragment,
-  type KeyboardEvent,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -32,6 +31,7 @@ import type {
   Transaction,
 } from "@/api";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
+import { isInteractiveTarget } from "@/components/link-activation";
 import { MobileTableControls } from "@/components/mobile-table-controls";
 import {
   MobileTableEditPanel,
@@ -55,6 +55,7 @@ import {
 } from "@/features/recurring";
 import { transactionTemplateRecordsFromTransaction } from "@/features/templates";
 import { useElementOverflow } from "@/hooks/use-element-overflow";
+import { useRovingRows } from "@/hooks/use-roving-rows";
 import { useShortcutGroup } from "@/hooks/use-shortcut-group";
 import { cn } from "@/lib/utils";
 import type { LedgerLookupsSnapshot } from "@/store";
@@ -509,23 +510,6 @@ const TagChipsLine = ({
   );
 };
 
-const interactiveTargetSelector =
-  "a, button, input, select, textarea, summary, [role='button'], " +
-  "[contenteditable='true'], [data-transaction-row-interactive], " +
-  "[tabindex]:not([tabindex='-1']):not([data-slot='tooltip-trigger'])";
-
-const isInteractiveTarget = (
-  target: EventTarget | null,
-  currentTarget: HTMLElement,
-): boolean => {
-  if (!(target instanceof HTMLElement)) {
-    return false;
-  }
-
-  const interactiveTarget = target.closest(interactiveTargetSelector);
-  return interactiveTarget !== null && interactiveTarget !== currentTarget;
-};
-
 interface AmountEditorRetention {
   readonly records: readonly [JournalRecord, JournalRecord];
   readonly transaction: Transaction;
@@ -536,6 +520,11 @@ const transactionBrowseShortcuts: ShortcutGroup = {
   title: "Transactions",
   order: 10,
   shortcuts: [
+    {
+      id: "transactions-ends",
+      keys: ["Home", "End"],
+      label: "Focus first or last row",
+    },
     {
       id: "transactions-0",
       keys: ["↑", "↓"],
@@ -554,6 +543,11 @@ const transactionRowShortcuts: ShortcutGroup = {
   title: "Transactions",
   order: 10,
   shortcuts: [
+    {
+      id: "transactions-ends",
+      keys: ["Home", "End"],
+      label: "Focus first or last row",
+    },
     { id: "transactions-0", keys: ["↑", "↓"], label: "Move row focus" },
   ],
 };
@@ -949,6 +943,72 @@ export const TransactionBrowser = ({
     },
     [onSelectRange, rangeTransactionIds],
   );
+
+  const rowProps = useRovingRows({
+    containerRef: rootRef,
+    rowSelector: transactionRowSelector,
+    onKeyDown: (transactionIndex, _row, event) => {
+      const transaction = visibleTransactions[transactionIndex];
+      if (!transaction) return;
+      const editShortcut = {
+        a: "account",
+        c: "category",
+        m: "member",
+        t: "tags",
+      }[event.key.toLowerCase()] as EditDockAction | undefined;
+      if (
+        editMode &&
+        selectedTransactionIds.has(transaction.transaction_id) &&
+        editShortcut &&
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !event.altKey
+      ) {
+        event.preventDefault();
+        setSelectedRowFocusIndex(transactionIndex);
+        setEditDockOpenedFromRow(true);
+        if (openMobileTableEditPanel()) {
+          window.requestAnimationFrame(() => {
+            setActiveEditDock(editShortcut);
+          });
+        } else {
+          setActiveEditDock(editShortcut);
+        }
+        return;
+      }
+    },
+    onActivate: (index, row, event) => {
+      const transaction = visibleTransactions[index];
+      if (!transaction) return;
+      if (!editMode) onOpenTransaction(transaction, row);
+      else if (transaction.lifecycle_status === "active") {
+        if (event.key === " " && event.shiftKey)
+          selectRowRange(transaction.transaction_id);
+        else toggleRowSelection(transaction.transaction_id);
+      }
+    },
+    onActiveChange: (index, _row, event) => {
+      if (
+        !editMode ||
+        !event.shiftKey ||
+        !["ArrowUp", "ArrowDown"].includes(event.key)
+      )
+        return;
+      const previous = visibleTransactions.find(
+        (transaction) =>
+          String(transaction.transaction_id) ===
+          event.currentTarget.dataset.transactionId,
+      );
+      const next = visibleTransactions[index];
+      if (
+        selectionAnchorIdRef.current === null &&
+        previous?.lifecycle_status === "active"
+      )
+        selectionAnchorIdRef.current = previous.transaction_id;
+      if (next?.lifecycle_status === "active")
+        selectRowRange(next.transaction_id);
+    },
+  });
 
   useEffect(() => {
     if (!editMode) {
@@ -1730,37 +1790,6 @@ export const TransactionBrowser = ({
                         amounts.length === 1));
                   const expectedActionBusy =
                     confirmingExpectedTransactionId !== undefined || dismissing;
-                  const walkRowFocus = (
-                    event: KeyboardEvent<HTMLTableRowElement>,
-                    direction: -1 | 1,
-                  ) => {
-                    const nextTransaction =
-                      visibleTransactions[transactionIndex + direction];
-                    if (!nextTransaction) {
-                      return;
-                    }
-                    event.preventDefault();
-                    const rows = Array.from(
-                      event.currentTarget
-                        .closest("tbody")
-                        ?.querySelectorAll<HTMLTableRowElement>(
-                          transactionRowSelector,
-                        ) ?? [],
-                    );
-                    const nextRow = rows[transactionIndex + direction];
-                    nextRow?.scrollIntoView({ block: "nearest" });
-                    nextRow?.focus({ preventScroll: true });
-
-                    if (!editMode || !event.shiftKey) {
-                      return;
-                    }
-                    if (selectionAnchorIdRef.current === null && selectable) {
-                      selectionAnchorIdRef.current = transaction.transaction_id;
-                    }
-                    if (nextTransaction.lifecycle_status === "active") {
-                      selectRowRange(nextTransaction.transaction_id);
-                    }
-                  };
                   const categoryEditValue =
                     category === "mixed" ? (
                       <MixedSentinel />
@@ -1781,24 +1810,27 @@ export const TransactionBrowser = ({
                     ) : null;
                   const rowHoverFill =
                     transactionIndex % 2 === 0
-                      ? "hover:bg-[color-mix(in_srgb,var(--card),var(--table-header)_28%)]"
-                      : "hover:bg-[color-mix(in_srgb,var(--band),var(--table-header)_28%)]";
+                      ? "hover:bg-[color-mix(in_srgb,var(--card),var(--table-header)_28%)] data-[active=true]:focus-within:bg-[color-mix(in_srgb,var(--card),var(--table-header)_28%)]"
+                      : "hover:bg-[color-mix(in_srgb,var(--band),var(--table-header)_28%)] data-[active=true]:focus-within:bg-[color-mix(in_srgb,var(--band),var(--table-header)_28%)]";
                   return (
                     <tr
                       key={transaction.transaction_id}
                       className={cn(
-                        "compact-shell:scroll-mb-[calc(5.5rem+env(safe-area-inset-bottom))] border-b border-[var(--hairline)] align-middle focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--ring)]",
+                        "compact-shell:scroll-mb-[calc(5.5rem+env(safe-area-inset-bottom))] border-b border-[var(--hairline)] align-middle",
+                        dateJumpHighlight?.transactionId !==
+                          transaction.transaction_id &&
+                          "focus-visible:outline-none",
                         transactionIndex % 2 === 0
                           ? "bg-card"
                           : "bg-[var(--band)]",
                         editMode
                           ? selectable
-                            ? "cursor-pointer hover:bg-[color-mix(in_srgb,var(--band),var(--table-header)_28%)]"
-                            : "cursor-default"
+                            ? "cursor-pointer hover:bg-[color-mix(in_srgb,var(--band),var(--table-header)_28%)] data-[active=true]:focus-within:bg-[color-mix(in_srgb,var(--band),var(--table-header)_28%)]"
+                            : "cursor-default data-[active=true]:focus-within:bg-[color-mix(in_srgb,var(--band),var(--table-header)_28%)]"
                           : `cursor-pointer ${rowHoverFill}`,
                         editMode &&
                           selected &&
-                          "bg-[color-mix(in_srgb,var(--band),var(--color-interactive-bright)_12%)] hover:bg-[color-mix(in_srgb,var(--band),var(--color-interactive-bright)_15%)]",
+                          "bg-[color-mix(in_srgb,var(--band),var(--color-interactive-bright)_12%)] hover:bg-[color-mix(in_srgb,var(--band),var(--color-interactive-bright)_15%)] data-[active=true]:focus-within:bg-[color-mix(in_srgb,var(--band),var(--color-interactive-bright)_15%)]",
                         dateJumpHighlight?.transactionId ===
                           transaction.transaction_id &&
                           "outline-2 outline-offset-[-2px] outline-[var(--ring)]",
@@ -1823,7 +1855,7 @@ export const TransactionBrowser = ({
                         projectedRecurring ? "true" : undefined
                       }
                       data-transaction-row="true"
-                      tabIndex={0}
+                      {...rowProps(transactionIndex)}
                       onClick={(event) => {
                         if (
                           isInteractiveTarget(event.target, event.currentTarget)
@@ -1842,78 +1874,6 @@ export const TransactionBrowser = ({
                           return;
                         }
                         onOpenTransaction(transaction, event.currentTarget);
-                      }}
-                      onKeyDown={(event) => {
-                        if (
-                          isInteractiveTarget(event.target, event.currentTarget)
-                        ) {
-                          return;
-                        }
-
-                        const editShortcut = {
-                          a: "account",
-                          c: "category",
-                          m: "member",
-                          t: "tags",
-                        }[event.key.toLowerCase()] as
-                          EditDockAction | undefined;
-                        if (
-                          editMode &&
-                          selected &&
-                          editShortcut &&
-                          !event.metaKey &&
-                          !event.ctrlKey &&
-                          !event.altKey
-                        ) {
-                          event.preventDefault();
-                          setSelectedRowFocusIndex(transactionIndex);
-                          setEditDockOpenedFromRow(true);
-                          if (openMobileTableEditPanel()) {
-                            window.requestAnimationFrame(() => {
-                              setActiveEditDock(editShortcut);
-                            });
-                          } else {
-                            setActiveEditDock(editShortcut);
-                          }
-                          return;
-                        }
-
-                        if (event.key === "ArrowDown") {
-                          walkRowFocus(event, 1);
-                          return;
-                        }
-
-                        if (event.key === "ArrowUp") {
-                          walkRowFocus(event, -1);
-                          return;
-                        }
-
-                        if (event.key === "Enter") {
-                          event.preventDefault();
-                          if (editMode) {
-                            if (selectable) {
-                              toggleRowSelection(transaction.transaction_id);
-                            }
-                          } else {
-                            onOpenTransaction(transaction, event.currentTarget);
-                          }
-                          return;
-                        }
-
-                        if (event.key !== " ") {
-                          return;
-                        }
-
-                        event.preventDefault();
-                        if (!editMode) {
-                          onOpenTransaction(transaction, event.currentTarget);
-                        } else if (selectable) {
-                          if (event.shiftKey) {
-                            selectRowRange(transaction.transaction_id);
-                          } else {
-                            toggleRowSelection(transaction.transaction_id);
-                          }
-                        }
                       }}
                     >
                       {editMode ? (

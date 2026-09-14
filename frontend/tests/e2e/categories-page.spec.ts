@@ -94,7 +94,7 @@ test("editing a category display label makes its row searchable", async ({
 }) => {
   const unique = `${browserName}${Date.now()}`;
   const category = await createCategory(page, {
-    fqn: `E2EEdit:${unique}:Groceries`,
+    fqn: `E2EEdit${unique}:Groceries`,
   });
   const label = `Weekly food ${unique}`;
 
@@ -111,8 +111,16 @@ test("editing a category display label makes its row searchable", async ({
   await panel.getByRole("button", { name: "Save" }).click();
 
   await expect(page.getByText("Category updated.")).toBeVisible();
+  await expect(row).toBeVisible();
   await page.getByLabel("Search").fill(label);
   await expect(row).toBeVisible();
+  await page.getByRole("button", { name: "Include hidden" }).focus();
+  await page.keyboard.press("Tab");
+  await expect(row).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(
+    new RegExp("/categories/" + category.category_id + "$"),
+  );
 });
 
 test("deleting a category removes it from the list", async ({

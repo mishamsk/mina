@@ -6,6 +6,8 @@
 
 ## Implicit Contracts
 
+- Member rows follow the shared [roving focus contract](../../hooks/PACKAGE.md), [table rules](../../../../docs/webui-design.md#tables-and-filtering), and [theme](../../../../docs/webui-theme-arcade-cabinet.md).
+
 - The mounted member list owns its row-activation keyboard help registration.
 
 - The list flexes within the route’s fixed-page slot beneath refresh banners; loaded rows use the shared reference table frame, and loading/error/empty surfaces use the shared state bound in roomy shells. Loading/error wrappers reserve shadow padding without shifting their cards.

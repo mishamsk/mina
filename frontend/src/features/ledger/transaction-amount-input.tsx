@@ -43,9 +43,28 @@ const adjacentFocusableElement = (
   backwards: boolean,
 ): HTMLElement | undefined => {
   const root = input.closest<HTMLElement>("[data-transaction-browser='true']");
+  const rows = Array.from(input.closest("tbody")?.rows ?? []);
+  const row = input.closest("tr");
+  const rowIndex = rows.findIndex((candidate) => candidate === row);
+  const direction = backwards ? -1 : 1;
+  for (
+    let index = rowIndex + direction;
+    index >= 0 && index < rows.length;
+    index += direction
+  ) {
+    const amountInput = rows[index]?.querySelector<HTMLInputElement>(
+      "input[data-testid$='-amount-input']:not(:disabled):not([readonly])",
+    );
+    if (amountInput) return amountInput;
+  }
   const elements = Array.from(
     (root ?? document).querySelectorAll<HTMLElement>(focusableSelector),
-  ).filter((element) => element.getClientRects().length > 0);
+  ).filter(
+    (element) =>
+      (element === input || !element.closest("tbody")) &&
+      element.tabIndex >= 0 &&
+      element.getClientRects().length > 0,
+  );
   const index = elements.indexOf(input);
   return elements[index + (backwards ? -1 : 1)];
 };
@@ -256,7 +275,7 @@ export const TransactionAmountInput = ({
           disabled &&
             "bg-muted text-muted-foreground cursor-not-allowed border-[var(--muted-foreground)] shadow-none",
         )}
-        data-transaction-row-interactive
+        data-row-interactive
       >
         <input
           ref={inputRef}

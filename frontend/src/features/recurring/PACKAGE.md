@@ -6,6 +6,8 @@
 
 ## Implicit Contracts
 
+- Definition rows follow the shared [roving focus contract](../../hooks/PACKAGE.md), [table rules](../../../../docs/webui-design.md#tables-and-filtering), and [theme](../../../../docs/webui-theme-arcade-cabinet.md); editor activation retains the row opener.
+
 - Definition lists register row help while mounted; the editor registers draft-discard help only while open.
 
 - The editor owns its draft signature baseline and exposes navigation dirtiness, saving state, and discard confirmation through a shell-held ref; Keep editing restores panel focus, while Escape and explicit close discard immediately. Navigation requested during saving waits without a discard dialog, continues after successful save and refresh, and offers the discard choice after failure; the shell clears the deferred callback and confirmation when the router stops blocking. Successful writes reset the saved baseline; a failed pause/resume remains an unsaved change.

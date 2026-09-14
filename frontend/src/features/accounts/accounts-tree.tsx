@@ -31,6 +31,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AmountText, FqnPath } from "@/features/ledger";
+import { useRovingRows } from "@/hooks/use-roving-rows";
 import { useShortcutGroup } from "@/hooks/use-shortcut-group";
 import { cn } from "@/lib/utils";
 import {
@@ -276,6 +277,12 @@ const accountsShortcuts: ShortcutGroup = {
   title: "Accounts",
   order: 10,
   shortcuts: [
+    { id: "accounts-move", keys: ["↑", "↓"], label: "Move row focus" },
+    {
+      id: "accounts-ends",
+      keys: ["Home", "End"],
+      label: "Focus first or last row",
+    },
     {
       id: "accounts-0",
       keys: ["Enter", "Space"],
@@ -312,6 +319,11 @@ export const AccountsTree = ({
   >();
   const [deleting, setDeleting] = useState(false);
   const accountsTableScrollRef = useRef<HTMLDivElement | null>(null);
+  const rowProps = useRovingRows({
+    containerRef: accountsTableScrollRef,
+    rowSelector: "tr[data-active]",
+    onActivate: (_index, _row, event) => activateRowLink(event),
+  });
   const accountBalancesById = useMemo(
     () => balancesByAccountId(balances),
     [balances],
@@ -684,20 +696,19 @@ export const AccountsTree = ({
                     key={row.fqn}
                     data-testid="accounts-tree-row"
                     aria-description="Press Enter or Space to open."
-                    aria-keyshortcuts="Enter Space"
+                    aria-keyshortcuts="ArrowUp ArrowDown Home End Enter Space"
                     aria-label={
                       account
                         ? `Open account ${accountTreeName(account)}`
                         : `Open account group ${row.fqn}`
                     }
-                    tabIndex={0}
+                    {...rowProps(index)}
                     className={cn(
                       index % 2 === 0 ? "bg-card" : "bg-[var(--band)]",
                       account ? "text-foreground" : "text-muted-foreground",
-                      "cursor-pointer hover:bg-[color-mix(in_srgb,var(--band),var(--table-header)_28%)]",
+                      "compact-shell:scroll-mb-[calc(5.5rem+env(safe-area-inset-bottom))] cursor-pointer hover:bg-[color-mix(in_srgb,var(--band),var(--table-header)_28%)] focus-visible:outline-none data-[active=true]:focus-within:bg-[color-mix(in_srgb,var(--band),var(--table-header)_28%)]",
                     )}
                     onClick={activateRowLink}
-                    onKeyDown={activateRowLink}
                   >
                     <td className="overflow-hidden px-3 py-2 align-middle">
                       <div

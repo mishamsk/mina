@@ -6,6 +6,8 @@
 
 ## Implicit Contracts
 
+- Audit rows share roving focus and focus-scoped hover-fill highlighting independently of the selected-entry tint; stable data markers resolve all rows for mutation focus recovery independently of their tab index.
+
 - The audit browser registers row keyboard help only while that tab is mounted.
 
 - `operation`, `runsPage`, `runsPageSize`, and `run` are URL-owned state. Changing operation or pagination clears `run`, resets the page when needed, and preserves unrelated query parameters.

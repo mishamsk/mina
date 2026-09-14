@@ -1,5 +1,5 @@
 import { Eye, EyeOff, MagicEdit, Reload, Trash } from "pixelarticons/react";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Link } from "react-router";
 
 import {
@@ -23,6 +23,7 @@ import { type RowAction, RowActions } from "@/components/row-actions";
 import { focusWithoutTooltip, Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useRovingRows } from "@/hooks/use-roving-rows";
 import { useShortcutGroup } from "@/hooks/use-shortcut-group";
 import { cn } from "@/lib/utils";
 import {
@@ -69,7 +70,7 @@ type MemberDeleteTarget = {
 const memberListClickableRowClassName =
   "cursor-pointer " +
   "hover:bg-[color-mix(in_srgb,var(--band),var(--table-header)_28%)] " +
-  "focus-within:bg-[color-mix(in_srgb,var(--band),var(--table-header)_28%)]";
+  "data-[active=true]:focus-within:bg-[color-mix(in_srgb,var(--band),var(--table-header)_28%)]";
 
 const HiddenRowIndicator = () => (
   <Tooltip
@@ -122,6 +123,12 @@ const membersShortcuts: ShortcutGroup = {
   title: "Members",
   order: 10,
   shortcuts: [
+    { id: "members-move", keys: ["↑", "↓"], label: "Move row focus" },
+    {
+      id: "members-ends",
+      keys: ["Home", "End"],
+      label: "Focus first or last row",
+    },
     {
       id: "members-0",
       keys: ["Enter", "Space"],
@@ -163,6 +170,12 @@ const MembersList = ({
   >();
   const [deleting, setDeleting] = useState(false);
   const rows = members ?? [];
+  const tableBodyRef = useRef<HTMLTableSectionElement>(null);
+  const rowProps = useRovingRows({
+    containerRef: tableBodyRef,
+    rowSelector: "tr[data-active]",
+    onActivate: (_index, _row, event) => activateRowLink(event),
+  });
 
   const closeDeleteDialog = useCallback(() => {
     if (deleting) {
@@ -354,22 +367,21 @@ const MembersList = ({
               />
             </tr>
           </thead>
-          <tbody>
+          <tbody ref={tableBodyRef}>
             {rows.map((member, index) => (
               <tr
                 key={member.member_id}
                 data-testid="members-list-row"
                 className={cn(
-                  "group/reference-row align-middle",
+                  "group/reference-row compact-shell:scroll-mb-[calc(5.5rem+env(safe-area-inset-bottom))] align-middle focus-visible:outline-none",
                   index % 2 === 0 ? "bg-card" : "bg-[var(--band)]",
                   memberListClickableRowClassName,
                 )}
                 aria-description="Press Enter or Space to open."
-                aria-keyshortcuts="Enter Space"
+                aria-keyshortcuts="ArrowUp ArrowDown Home End Enter Space"
                 aria-label={`Open member ${member.name}`}
-                tabIndex={0}
+                {...rowProps(index)}
                 onClick={activateRowLink}
-                onKeyDown={activateRowLink}
               >
                 <td className="min-w-0 px-3 py-2">
                   <div className="flex min-w-0 items-center gap-2">

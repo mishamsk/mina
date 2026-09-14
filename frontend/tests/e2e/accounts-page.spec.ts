@@ -286,6 +286,17 @@ test("account register walks transaction detail by keyboard", async ({
     detail.getByTestId("transaction-detail-summary-memo"),
   ).toHaveText(oldestMemo);
 
+  await page.keyboard.press("Home");
+  await expect(newestRow).toBeFocused();
+  await expect(
+    detail.getByTestId("transaction-detail-summary-memo"),
+  ).toHaveText(newestMemo);
+  await page.keyboard.press("End");
+  await expect(oldestRow).toBeFocused();
+  await expect(
+    detail.getByTestId("transaction-detail-summary-memo"),
+  ).toHaveText(oldestMemo);
+
   await page.keyboard.press("Escape");
   await expect(detail).toBeHidden();
   await expect(page).not.toHaveURL(/[?&]transaction=/);

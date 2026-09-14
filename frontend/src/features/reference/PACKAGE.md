@@ -6,13 +6,15 @@
 
 ## Implicit Contracts
 
+- Tree rows follow the shared [roving focus contract](../../hooks/PACKAGE.md), [table rules](../../../../docs/webui-design.md#tables-and-filtering), and [theme](../../../../docs/webui-theme-arcade-cabinet.md); navigation and leaf editor activation preserve the row opener and native link gestures.
+
 - A mounted reference tree registers row-activation help under its caller-supplied group title only when its caller supplies a destination or activation handler.
 
 - Roomy reference trees use the shared reference table frame and bounded loading/error/empty surfaces; callers provide a shrinking flex slot beneath page headers and banners, and the inner viewport alone scrolls loaded rows. Loading/error wrappers reserve shadow padding without shifting their cards.
 - The toolbar owns only URL parameters `q` and `hidden`: trim and omit an empty search, encode enabled hidden items as `hidden=true`, preserve unrelated parameters, allow a caller-owned reset version to discard its focused draft after an external clear, and render feature-supplied standing controls without owning their state.
 - The toolbar search field opts out of browser value-history suggestions so Mina's server-filtered search remains the only search experience.
 - Tree rows preserve the canonical order of server-filtered leaves and derive only their ancestors; group API data supplies group state only. Do not perform another substring match, render orphan groups, or use a group's hidden state to hide visible descendants.
-- Tree navigation uses caller-supplied `rowHref` destinations for name links and shared row shortcuts. Editor actions use `onRowClick` and return the opener for focus recovery; embedded controls never activate the row.
+- Tree navigation uses caller-supplied `rowHref` destinations for name links and shared row shortcuts. Editor actions use `onRowClick`, whose caller guards leaf eligibility, and return the opener for focus recovery; embedded controls never activate the row.
 - Member drill-down callers supply the resolved member name. The shell keeps that scope outside browser-controlled URL filters and reapplies it to each transaction request, so the toolbar cannot clear or broaden it.
 - Drill-down transaction sorting uses the shared URL-backed ledger controls and keeps the scoped entity filter intact.
 - Drill-down transaction browsers pass through ledger's next-projection Defer operation and refresh coordination without interpreting recurring applicability.

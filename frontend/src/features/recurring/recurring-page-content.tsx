@@ -27,6 +27,7 @@ import {
   resumeRecurringDefinition,
 } from "@/api";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
+import { isInteractiveTarget } from "@/components/link-activation";
 import {
   referenceTableFrameClassName,
   referenceTableStateClassName,
@@ -44,6 +45,7 @@ import {
   MixedAmounts,
 } from "@/features/ledger";
 import { refreshOverview } from "@/features/overview";
+import { useRovingRows } from "@/hooks/use-roving-rows";
 import { useShortcutGroup } from "@/hooks/use-shortcut-group";
 import { cn } from "@/lib/utils";
 import {
@@ -254,23 +256,6 @@ export const refreshAfterRecurringDefinitionConfirmation = async (
   return definitionsRefreshed;
 };
 
-const interactiveTargetSelector =
-  "a, button, input, select, textarea, summary, [role='button'], " +
-  "[contenteditable='true'], " +
-  "[tabindex]:not([tabindex='-1']):not([data-slot='tooltip-trigger'])";
-
-const isInteractiveTarget = (
-  target: EventTarget | null,
-  currentTarget: HTMLElement,
-): boolean => {
-  if (!(target instanceof HTMLElement)) {
-    return false;
-  }
-
-  const interactiveTarget = target.closest(interactiveTargetSelector);
-  return interactiveTarget !== null && interactiveTarget !== currentTarget;
-};
-
 export const revealRecurringDefinitionActionRow = (opener: HTMLElement) => {
   const row = opener.closest("tr");
   row?.scrollIntoView({ block: "nearest" });
@@ -339,6 +324,12 @@ const recurringShortcuts: ShortcutGroup = {
   title: "Recurring",
   order: 10,
   shortcuts: [
+    { id: "recurring-move", keys: ["↑", "↓"], label: "Move row focus" },
+    {
+      id: "recurring-ends",
+      keys: ["Home", "End"],
+      label: "Focus first or last row",
+    },
     {
       id: "recurring-0",
       keys: ["Enter", "Space"],
@@ -379,6 +370,15 @@ export const RecurringPageContent = ({
   const focusFallbackRef = useRef<HTMLDivElement>(null);
 
   const definitions = snapshot?.definitions ?? [];
+  const tableBodyRef = useRef<HTMLTableSectionElement>(null);
+  const rowProps = useRovingRows({
+    containerRef: tableBodyRef,
+    rowSelector: "tr[data-active]",
+    onActivate: (index, opener) => {
+      const definition = definitions[index];
+      if (definition) onEdit(definition, opener);
+    },
+  });
   const restoreFocus = useCallback((opener: HTMLElement | undefined) => {
     window.requestAnimationFrame(() => {
       const activeElement = document.activeElement;
@@ -607,7 +607,7 @@ export const RecurringPageContent = ({
                   <th scope="col" className="w-[18%] px-3 py-2" />
                 </tr>
               </thead>
-              <tbody>
+              <tbody ref={tableBodyRef}>
                 {definitions.map((definition, index) => {
                   const rowAction = actionByDefinition.get(
                     definition.recurring_definition_id,
@@ -743,29 +743,24 @@ export const RecurringPageContent = ({
                     <tr
                       key={definition.recurring_definition_id}
                       className={cn(
-                        "align-middle",
+                        "compact-shell:scroll-mb-[calc(5.5rem+env(safe-area-inset-bottom))] align-middle focus-visible:outline-none",
                         index % 2 === 0 ? "bg-card" : "bg-[var(--band)]",
-                        "focus-within:bg-[color-mix(in_srgb,var(--band),var(--table-header)_28%)] hover:bg-[color-mix(in_srgb,var(--band),var(--table-header)_28%)]",
+                        "hover:bg-[color-mix(in_srgb,var(--band),var(--table-header)_28%)] data-[active=true]:focus-within:bg-[color-mix(in_srgb,var(--band),var(--table-header)_28%)]",
                       )}
                       data-recurring-definition-id={
                         definition.recurring_definition_id
                       }
                       data-testid="recurring-definition-row"
                       id={`definition-${definition.recurring_definition_id}`}
-                      tabIndex={0}
-                      onClick={(event) =>
-                        onEdit(definition, event.currentTarget)
-                      }
-                      onKeyDown={(event) => {
+                      {...rowProps(index)}
+                      onClick={(event) => {
                         if (
-                          isInteractiveTarget(event.target, event.currentTarget)
-                        ) {
-                          return;
-                        }
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
+                          !isInteractiveTarget(
+                            event.target,
+                            event.currentTarget,
+                          )
+                        )
                           onEdit(definition, event.currentTarget);
-                        }
                       }}
                     >
                       <td className="min-w-0 px-3 py-2 align-middle">

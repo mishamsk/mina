@@ -1,8 +1,11 @@
 import { EyeOff, Reload } from "pixelarticons/react";
-import { type ReactNode, useMemo } from "react";
+import { type ReactNode, useMemo, useRef } from "react";
 import { Link } from "react-router";
 
-import { activateRowLink } from "@/components/link-activation";
+import {
+  activateRowLink,
+  isInteractiveTarget,
+} from "@/components/link-activation";
 import {
   compactReferenceTableActionsColumnClassName,
   compactReferenceTableFrameClassName,
@@ -21,6 +24,7 @@ import { Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FqnPath } from "@/features/ledger";
+import { useRovingRows } from "@/hooks/use-roving-rows";
 import { useShortcutGroup } from "@/hooks/use-shortcut-group";
 import { cn } from "@/lib/utils";
 import {
@@ -131,8 +135,7 @@ const referenceTreeSkeletonColumnClasses = (hasBadgeColumn: boolean) =>
 
 const referenceTreeClickableRowClassName =
   "cursor-pointer " +
-  "hover:bg-[color-mix(in_srgb,var(--band),var(--table-header)_28%)] " +
-  "focus-within:bg-[color-mix(in_srgb,var(--band),var(--table-header)_28%)]";
+  "hover:bg-[color-mix(in_srgb,var(--band),var(--table-header)_28%)]";
 
 const referenceTreeActionsWidthClassName =
   "[--reference-tree-actions-width:11.25rem]";
@@ -234,28 +237,17 @@ interface ReferenceTreeProps<TLeaf extends ReferenceLeaf, TGroup> {
   readonly rowTestId?: string;
 }
 
-const interactiveTargetSelector =
-  "a, button, input, select, textarea, summary, [role='button'], " +
-  "[contenteditable='true'], " +
-  "[tabindex]:not([tabindex='-1']):not([data-slot='tooltip-trigger'])";
-
-const isInteractiveTarget = (
-  target: EventTarget | null,
-  currentTarget: HTMLElement,
-): boolean => {
-  if (!(target instanceof HTMLElement)) {
-    return false;
-  }
-
-  const interactiveTarget = target.closest(interactiveTargetSelector);
-  return interactiveTarget !== null && interactiveTarget !== currentTarget;
-};
-
 const referenceShortcuts: ShortcutGroup = {
   id: "reference-tables",
   title: "Reference tables",
   order: 10,
   shortcuts: [
+    { id: "reference-tables-move", keys: ["↑", "↓"], label: "Move row focus" },
+    {
+      id: "reference-tables-ends",
+      keys: ["Home", "End"],
+      label: "Focus first or last row",
+    },
     {
       id: "reference-tables-0",
       keys: ["Enter", "Space"],
@@ -307,6 +299,18 @@ export const ReferenceTree = <
     () => (leaves ? referenceTreeRows(leaves, groups ?? []) : []),
     [groups, leaves],
   );
+
+  const tableBodyRef = useRef<HTMLTableSectionElement>(null);
+  const rowProps = useRovingRows({
+    containerRef: tableBodyRef,
+    rowSelector: "tr[data-active]",
+    onActivate: (index, opener, event) => {
+      const row = rows[index];
+      if (!row) return;
+      if (rowHref?.(row)) activateRowLink(event);
+      else onRowClick?.(row, opener);
+    },
+  });
 
   if (loading && !leaves) {
     return (
@@ -423,7 +427,7 @@ export const ReferenceTree = <
               />
             </tr>
           </thead>
-          <tbody>
+          <tbody ref={tableBodyRef}>
             {rows.map((row, index) => {
               const rowHidden =
                 row.leaf?.is_hidden ?? row.group?.is_hidden ?? false;
@@ -446,20 +450,24 @@ export const ReferenceTree = <
                   key={row.fqn}
                   data-testid={rowTestId}
                   className={cn(
-                    "group/reference-row align-middle",
+                    "group/reference-row compact-shell:scroll-mb-[calc(5.5rem+env(safe-area-inset-bottom))] align-middle focus-visible:outline-none data-[active=true]:focus-within:bg-[color-mix(in_srgb,var(--band),var(--table-header)_28%)]",
                     index % 2 === 0 ? "bg-card" : "bg-[var(--band)]",
                     clickable && referenceTreeClickableRowClassName,
                   )}
                   aria-description={
                     clickable ? "Press Enter or Space to open." : undefined
                   }
-                  aria-keyshortcuts={clickable ? "Enter Space" : undefined}
+                  aria-keyshortcuts={
+                    clickable
+                      ? "ArrowUp ArrowDown Home End Enter Space"
+                      : "ArrowUp ArrowDown Home End"
+                  }
                   aria-label={
                     clickable
                       ? (rowActivationLabel?.(row) ?? `Open ${row.fqn}`)
                       : undefined
                   }
-                  tabIndex={clickable ? 0 : undefined}
+                  {...rowProps(index)}
                   onClick={(event) => {
                     if (href) {
                       activateRowLink(event);
@@ -471,25 +479,6 @@ export const ReferenceTree = <
                     ) {
                       return;
                     }
-                    onRowClick(row, event.currentTarget);
-                  }}
-                  onKeyDown={(event) => {
-                    if (href) {
-                      activateRowLink(event);
-                      return;
-                    }
-                    if (!onRowClick || event.defaultPrevented) {
-                      return;
-                    }
-                    if (event.key !== "Enter" && event.key !== " ") {
-                      return;
-                    }
-                    if (
-                      isInteractiveTarget(event.target, event.currentTarget)
-                    ) {
-                      return;
-                    }
-                    event.preventDefault();
                     onRowClick(row, event.currentTarget);
                   }}
                 >

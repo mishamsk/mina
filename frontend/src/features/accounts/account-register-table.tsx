@@ -1,7 +1,8 @@
 import { Reload } from "pixelarticons/react";
-import { type KeyboardEvent, useRef } from "react";
+import { useRef } from "react";
 
 import type { JournalRecord } from "@/api";
+import { isInteractiveTarget } from "@/components/link-activation";
 import { MobileTableControls } from "@/components/mobile-table-controls";
 import { referenceTableStateClassName } from "@/components/reference-table-frame";
 import { Tooltip } from "@/components/tooltip";
@@ -25,6 +26,7 @@ import {
   StatusIcon,
   transactionTitleAccountFqnContext,
 } from "@/features/ledger";
+import { useRovingRows } from "@/hooks/use-roving-rows";
 import { useShortcutGroup } from "@/hooks/use-shortcut-group";
 import { cn } from "@/lib/utils";
 import {
@@ -54,23 +56,6 @@ interface AccountRegisterTableProps {
   readonly showRunningBalance?: boolean;
   readonly totalCount: number | undefined;
 }
-
-const interactiveTargetSelector =
-  "a, button, input, select, textarea, summary, [role='button'], " +
-  "[contenteditable='true'], " +
-  "[tabindex]:not([tabindex='-1']):not([data-slot='tooltip-trigger'])";
-
-const isInteractiveTarget = (
-  target: EventTarget | null,
-  currentTarget: HTMLElement,
-): boolean => {
-  if (!(target instanceof HTMLElement)) {
-    return false;
-  }
-
-  const interactiveTarget = target.closest(interactiveTargetSelector);
-  return interactiveTarget !== null && interactiveTarget !== currentTarget;
-};
 
 const pageCount = (totalCount: number | undefined, pageSize: number): number =>
   totalCount === undefined ? 1 : Math.max(1, Math.ceil(totalCount / pageSize));
@@ -162,13 +147,18 @@ const registerShortcuts: ShortcutGroup = {
   order: 10,
   shortcuts: [
     {
+      id: "account-register-ends",
+      keys: ["Home", "End"],
+      label: "Focus first or last row",
+    },
+    {
       id: "account-register-0",
       keys: ["↑", "↓"],
       label: "Move row focus",
     },
     {
       id: "account-register-1",
-      keys: ["Enter"],
+      keys: ["Enter", "Space"],
       label: "Open transaction detail",
     },
   ],
@@ -202,6 +192,19 @@ export const AccountRegisterTable = ({
     true,
   );
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const rowProps = useRovingRows({
+    containerRef: rootRef,
+    rowSelector: "[data-testid='account-register-row']",
+    onActivate: (index, row) => {
+      const record = records?.[index];
+      if (record) onOpenRecord(record, row);
+    },
+    onActiveChange: (index, row) => {
+      const record = records?.[index];
+      if (record && selectedTransactionId !== undefined)
+        onOpenRecord(record, row);
+    },
+  });
   const showRemainingCredit =
     showRunningBalance &&
     (records
@@ -410,29 +413,6 @@ export const AccountRegisterTable = ({
               const pending = displayStatus === "pending";
               const expected = displayStatus === "expected";
               const showStatus = displayStatus !== undefined;
-              const walkRowFocus = (
-                event: KeyboardEvent<HTMLTableRowElement>,
-                direction: -1 | 1,
-              ) => {
-                const nextRecord = records[index + direction];
-                if (!nextRecord) {
-                  return;
-                }
-                event.preventDefault();
-                const rows = Array.from(
-                  event.currentTarget
-                    .closest("tbody")
-                    ?.querySelectorAll<HTMLTableRowElement>(
-                      "[data-testid='account-register-row']",
-                    ) ?? [],
-                );
-                const nextRow = rows[index + direction];
-                nextRow?.scrollIntoView({ block: "nearest" });
-                nextRow?.focus({ preventScroll: true });
-                if (selectedTransactionId !== undefined && nextRow) {
-                  onOpenRecord(nextRecord, nextRow);
-                }
-              };
 
               return (
                 <tr
@@ -441,12 +421,12 @@ export const AccountRegisterTable = ({
                   data-transaction-id={record.transaction_id}
                   data-testid="account-register-row"
                   className={cn(
-                    "compact-shell:scroll-mb-[calc(5.5rem+env(safe-area-inset-bottom))] border-b border-[var(--hairline)] align-middle focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--ring)]",
+                    "compact-shell:scroll-mb-[calc(5.5rem+env(safe-area-inset-bottom))] border-b border-[var(--hairline)] align-middle focus-visible:outline-none",
                     index % 2 === 0 ? "bg-card" : "bg-[var(--band)]",
-                    "cursor-pointer hover:bg-[color-mix(in_srgb,var(--band),var(--table-header)_28%)]",
+                    "cursor-pointer hover:bg-[color-mix(in_srgb,var(--band),var(--table-header)_28%)] data-[active=true]:focus-within:bg-[color-mix(in_srgb,var(--band),var(--table-header)_28%)]",
                     inactive && "text-muted-foreground line-through",
                   )}
-                  tabIndex={0}
+                  {...rowProps(index)}
                   onClick={(event) => {
                     if (
                       isInteractiveTarget(event.target, event.currentTarget)
@@ -454,25 +434,6 @@ export const AccountRegisterTable = ({
                       return;
                     }
                     onOpenRecord(record, event.currentTarget);
-                  }}
-                  onKeyDown={(event) => {
-                    if (
-                      isInteractiveTarget(event.target, event.currentTarget)
-                    ) {
-                      return;
-                    }
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      onOpenRecord(record, event.currentTarget);
-                      return;
-                    }
-                    if (event.key === "ArrowDown") {
-                      walkRowFocus(event, 1);
-                      return;
-                    }
-                    if (event.key === "ArrowUp") {
-                      walkRowFocus(event, -1);
-                    }
                   }}
                 >
                   <td
