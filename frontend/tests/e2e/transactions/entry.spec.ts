@@ -92,6 +92,63 @@ test("create drafts recover after closing and can be cleared", async ({
   );
 });
 
+test("entry-draft discard confirmation supports keyboard choices", async ({
+  page,
+}, testInfo) => {
+  const unique = testSlug(testInfo.project.name);
+  const savedMemo = `E2E keyboard edit target ${unique}`;
+  const draftMemo = `Unsaved keyboard draft ${unique}`;
+  await createSearchSpend(page, savedMemo);
+  await page.goto(
+    `/transactions?page=1&pageSize=25&q=${encodeURIComponent(unique)}`,
+  );
+  await page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" })
+    .click();
+  const editor = page.getByRole("dialog", { name: "Transaction editor" });
+  await editor.getByLabel("Memo").fill(draftMemo);
+  await editor
+    .getByRole("button", { name: "Close transaction editor" })
+    .click();
+  await page.reload();
+
+  const savedRow = page.getByRole("row").filter({ hasText: savedMemo });
+  await clickRowAction(page, savedRow, "Edit transaction");
+  const dialog = page.getByRole("alertdialog", {
+    name: "Discard entry draft",
+  });
+  const discard = dialog.getByRole("button", { name: "Discard draft" });
+  const keep = dialog.getByRole("button", { name: "Keep draft" });
+  await expect(discard).toBeFocused();
+  await expect(page.getByRole("listbox", { includeHidden: true })).toBeHidden();
+  await page.keyboard.press("Tab");
+  await expect(keep).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(discard).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(keep).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(discard).toBeFocused();
+
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(editor).toBeVisible();
+  await expect(editor.getByLabel("Memo")).toHaveValue(draftMemo);
+  await expect(editor.locator(":focus")).toHaveCount(1);
+  await editor
+    .getByRole("button", { name: "Close transaction editor" })
+    .click();
+  await clickRowAction(page, savedRow, "Edit transaction");
+  await expect(discard).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(dialog).toHaveCount(0);
+  await expect(editor.getByLabel("Memo")).toHaveValue(savedMemo);
+  await expect(
+    editor.getByRole("button", { name: "Update transaction" }),
+  ).toBeVisible();
+});
+
 test("editing a transaction updates its visible detail", async ({
   page,
 }, testInfo) => {

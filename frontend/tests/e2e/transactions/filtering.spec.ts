@@ -201,9 +201,22 @@ test("transactions occurrence review confirms an expected transaction", async ({
     name: "Confirm expected transaction",
   });
   await expect(dialog).toBeVisible();
-  await dialog
-    .getByRole("button", { name: "Confirm expected transaction" })
-    .click();
+  const actualDate = dialog.getByLabel("Actual date");
+  const scheduledDate = await actualDate.inputValue();
+  const confirm = dialog.getByRole("button", {
+    name: "Confirm expected transaction",
+  });
+  await actualDate.fill("");
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).focus();
+  await page.keyboard.press("Tab");
+  await expect(confirm).toBeFocused();
+  await expect(confirm).toBeDisabled();
+  await expect(page.getByRole("tooltip")).toHaveText("Choose an actual date.");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Space");
+  await expect(dialog).toBeVisible();
+  await actualDate.fill(scheduledDate);
+  await confirm.click();
 
   await expect(
     page

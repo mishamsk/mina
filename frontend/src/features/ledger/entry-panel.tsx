@@ -3480,7 +3480,7 @@ export const EntryPanel = ({
     if (!open) {
       return;
     }
-    if (!currentDraftReady) {
+    if (!currentDraftReady || confirmDiscardDraftOpen) {
       return;
     }
     if (preserveFocusOnReplacementChangeRef.current) {
@@ -3506,7 +3506,7 @@ export const EntryPanel = ({
     return () => {
       window.cancelAnimationFrame(animationFrame);
     };
-  }, [currentDraftReady, open, replacement]);
+  }, [confirmDiscardDraftOpen, currentDraftReady, open, replacement]);
 
   const currencies = useMemo(() => lookupCurrencies(lookups), [lookups]);
   const createFlowAccountOption = async (fqn: string) => {
@@ -6704,6 +6704,7 @@ export const EntryPanel = ({
         confirmLabel="Discard draft"
         confirmPendingTooltip="Draft deletion is already in progress."
         errorMessage={undefined}
+        initialFocus="confirm"
         onConfirm={() => {
           void discardPendingLaunch();
         }}

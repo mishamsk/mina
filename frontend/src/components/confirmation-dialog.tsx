@@ -4,6 +4,7 @@ import {
   type ReactNode,
   type RefObject,
   useLayoutEffect,
+  useRef,
 } from "react";
 
 import { Tooltip } from "@/components/tooltip";
@@ -20,6 +21,7 @@ interface ConfirmationDialogProps {
   readonly confirmPendingTooltip?: string;
   readonly confirmVariant?: ComponentProps<typeof Button>["variant"];
   readonly errorMessage: string | undefined;
+  readonly initialFocus?: "cancel" | "confirm";
   readonly initialFocusRef?: RefObject<HTMLElement | null>;
   readonly onConfirm: () => void;
   readonly onOpenChange: (open: boolean) => void;
@@ -40,6 +42,7 @@ export const ConfirmationDialog = ({
   confirmPendingTooltip,
   confirmVariant = "destructive",
   errorMessage,
+  initialFocus = "cancel",
   initialFocusRef,
   onConfirm,
   onOpenChange,
@@ -48,6 +51,7 @@ export const ConfirmationDialog = ({
   pendingLabel,
   title,
 }: ConfirmationDialogProps) => {
+  const confirmRef = useRef<HTMLButtonElement>(null);
   useLayoutEffect(() => {
     if (!open) {
       return;
@@ -69,6 +73,7 @@ export const ConfirmationDialog = ({
   const cancelControl = (
     <AlertDialog.Cancel asChild>
       <Button
+        tabIndex={0}
         type="button"
         variant="outline"
         aria-disabled={pending && cancelPendingTooltip ? true : undefined}
@@ -83,12 +88,21 @@ export const ConfirmationDialog = ({
       </Button>
     </AlertDialog.Cancel>
   );
+  const confirmTooltip = pending
+    ? confirmPendingTooltip
+    : confirmDisabled
+      ? confirmDisabledTooltip
+      : undefined;
   const confirmControl = (
     <Button
+      ref={confirmRef}
+      tabIndex={0}
       type="button"
       variant={confirmVariant}
-      aria-disabled={pending && confirmPendingTooltip ? true : undefined}
-      disabled={confirmDisabled || (pending && !confirmPendingTooltip)}
+      aria-disabled={
+        (pending || confirmDisabled) && confirmTooltip ? true : undefined
+      }
+      disabled={(pending || confirmDisabled) && !confirmTooltip}
       onClick={() => {
         if (!pending && !confirmDisabled) {
           onConfirm();
@@ -99,11 +113,6 @@ export const ConfirmationDialog = ({
       {pending ? pendingLabel : confirmLabel}
     </Button>
   );
-  const confirmTooltip = pending
-    ? confirmPendingTooltip
-    : confirmDisabled
-      ? confirmDisabledTooltip
-      : undefined;
   const configuredConfirmTooltip =
     confirmPendingTooltip ?? confirmDisabledTooltip;
 
@@ -115,9 +124,12 @@ export const ConfirmationDialog = ({
           data-slot="confirmation-dialog-content"
           className="bg-card fixed top-1/2 left-1/2 z-[80] flex max-h-[calc(100dvh-2rem)] w-[min(480px,calc(100%-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col border-2 border-[var(--border-ink)] p-4 shadow-[var(--shadow-pixel)]"
           onOpenAutoFocus={(event) => {
-            if (initialFocusRef?.current) {
+            const target =
+              initialFocusRef?.current ??
+              (initialFocus === "confirm" ? confirmRef.current : null);
+            if (target) {
               event.preventDefault();
-              initialFocusRef.current.focus({ preventScroll: true });
+              target.focus({ preventScroll: true });
             }
           }}
           onCloseAutoFocus={(event) => {
@@ -152,6 +164,7 @@ export const ConfirmationDialog = ({
                   pending || confirmDisabled ? "cursor-not-allowed" : undefined
                 }
                 disabled={!pending && !confirmDisabled}
+                focusable={false}
                 label={cancelPendingTooltip}
               >
                 {cancelControl}
@@ -163,6 +176,7 @@ export const ConfirmationDialog = ({
               <Tooltip
                 className={confirmTooltip ? "cursor-not-allowed" : undefined}
                 disabled={!confirmTooltip}
+                focusable={false}
                 label={confirmTooltip ?? configuredConfirmTooltip}
               >
                 {confirmControl}
