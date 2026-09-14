@@ -26,6 +26,7 @@ import {
 } from "react-router";
 
 import { apiErrorMessage, fetchTransactionById } from "@/api";
+import { isPlainLinkClick } from "@/components/link-activation";
 import {
   MobileTableControlsProvider,
   MobileTableControlsTrigger,
@@ -322,7 +323,9 @@ const SidebarNav = ({
           }
           key={item.label}
           to={item.to}
-          onClick={onNavigate}
+          onClick={(event) => {
+            if (isPlainLinkClick(event)) onNavigate?.();
+          }}
         >
           <item.icon className="size-4 shrink-0" aria-hidden="true" />
           <span className={cn(collapsed && "sr-only")}>{item.label}</span>

@@ -1,12 +1,13 @@
 import { Eye, EyeOff, MagicEdit, Reload, Trash } from "pixelarticons/react";
 import { useCallback, useState } from "react";
-import { useNavigate } from "react-router";
+import { Link } from "react-router";
 
 import {
   deleteLedgerMemberById,
   type Member,
   updateLedgerMemberHidden,
 } from "@/api";
+import { activateRowLink } from "@/components/link-activation";
 import {
   compactReferenceTableActionsColumnClassName,
   compactReferenceTableFrameClassName,
@@ -125,7 +126,6 @@ const MembersList = ({
   readonly onMemberDeleted: (memberId: number) => void;
   readonly onNotice: (message: string) => void;
 }) => {
-  const navigate = useNavigate();
   const [deleteTarget, setDeleteTarget] = useState<
     MemberDeleteTarget | undefined
   >();
@@ -326,28 +326,18 @@ const MembersList = ({
                 aria-keyshortcuts="Enter Space"
                 aria-label={`Open member ${member.name}`}
                 tabIndex={0}
-                onClick={() => {
-                  void navigate(`/members/${member.member_id}`);
-                }}
-                onKeyDown={(event) => {
-                  if (
-                    event.defaultPrevented ||
-                    event.target !== event.currentTarget
-                  ) {
-                    return;
-                  }
-                  if (event.key !== "Enter" && event.key !== " ") {
-                    return;
-                  }
-                  event.preventDefault();
-                  void navigate(`/members/${member.member_id}`);
-                }}
+                onClick={activateRowLink}
+                onKeyDown={activateRowLink}
               >
                 <td className="min-w-0 px-3 py-2">
                   <div className="flex min-w-0 items-center gap-2">
-                    <span className="min-w-0 font-mono font-semibold break-words">
+                    <Link
+                      data-row-link
+                      to={`/members/${member.member_id}`}
+                      className="min-w-0 font-mono font-semibold break-words"
+                    >
                       {member.name}
-                    </span>
+                    </Link>
                     {member.is_hidden ? <HiddenRowIndicator /> : null}
                   </div>
                 </td>

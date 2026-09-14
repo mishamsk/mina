@@ -6,7 +6,6 @@ import {
   Trash,
 } from "pixelarticons/react";
 import { useRef, useState } from "react";
-import { useNavigate } from "react-router";
 
 import type { Category, CategoryEconomicIntent, GroupState } from "@/api";
 import {
@@ -71,7 +70,6 @@ export const CategoriesPageContent = ({
   onRestructurePath,
   search,
 }: CategoriesPageContentProps) => {
-  const navigate = useNavigate();
   const [deleteTarget, setDeleteTarget] = useState<
     CategoryDeleteTarget | undefined
   >();
@@ -341,22 +339,17 @@ export const CategoriesPageContent = ({
           }
           filtered={economicIntent !== undefined || search.trim() !== ""}
           groups={categoriesPage.snapshot?.groups}
-          groupRowsClickable
           leaves={categoriesPage.snapshot?.categories}
           loading={categoriesPage.loading}
           loadErrorTitle="Categories could not be loaded."
           onRetry={() => {
             void refreshCategoriesPage();
           }}
-          onRowClick={(row) => {
-            if (row.leaf) {
-              void navigate(`/categories/${row.leaf.category_id}`);
-            } else {
-              void navigate(
-                `/categories/group?prefix=${encodeURIComponent(row.fqn)}`,
-              );
-            }
-          }}
+          rowHref={(row) =>
+            row.leaf
+              ? `/categories/${row.leaf.category_id}`
+              : `/categories/group?prefix=${encodeURIComponent(row.fqn)}`
+          }
           indicatorSlots={["featured", "hidden"]}
           renderActions={renderActions}
           renderBadge={renderCategoryBadge}

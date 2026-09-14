@@ -1,6 +1,7 @@
 import { RefreshCw } from "lucide-react";
 import { Banknote } from "pixelarticons/react";
 
+import { isPlainLinkClick } from "@/components/link-activation";
 import { Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -249,6 +250,7 @@ export const BalanceStrip = ({ collapsed, onNavigate }: BalanceStripProps) => {
       onClickCapture={(event) => {
         if (
           onNavigate &&
+          isPlainLinkClick(event) &&
           event.target instanceof Element &&
           event.target.closest("a[href]")
         ) {

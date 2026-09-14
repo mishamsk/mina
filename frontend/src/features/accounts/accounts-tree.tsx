@@ -8,7 +8,7 @@ import {
   Trash,
 } from "pixelarticons/react";
 import { useCallback, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router";
+import { Link } from "react-router";
 
 import type { Account, AccountBalance, AccountType, GroupState } from "@/api";
 import {
@@ -19,6 +19,7 @@ import {
 } from "@/api";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { FavoriteStarIcon } from "@/components/favorite-star-icon";
+import { activateRowLink } from "@/components/link-activation";
 import { ReferenceEntityDeleteDescription } from "@/components/reference-entity-delete-description";
 import { referenceTableFrameClassName } from "@/components/reference-table-frame";
 import { type RowAction, RowActions } from "@/components/row-actions";
@@ -76,23 +77,6 @@ const accountHasNonZeroStanding = (
   (balancesByAccountId.get(account.account_id) ?? []).some(
     (balance) => Number(primaryStanding(balance)) !== 0,
   );
-
-const interactiveTargetSelector =
-  "a, button, input, select, textarea, summary, [role='button'], " +
-  "[contenteditable='true'], " +
-  "[tabindex]:not([tabindex='-1']):not([data-slot='tooltip-trigger'])";
-
-const isInteractiveTarget = (
-  target: EventTarget | null,
-  currentTarget: HTMLElement,
-): boolean => {
-  if (!(target instanceof HTMLElement)) {
-    return false;
-  }
-
-  const interactiveTarget = target.closest(interactiveTargetSelector);
-  return interactiveTarget !== null && interactiveTarget !== currentTarget;
-};
 
 export const accountTreeRows = (
   accounts: readonly Account[],
@@ -289,7 +273,6 @@ export const AccountsTree = ({
   onRestructurePath,
   onRetry,
 }: AccountsTreeProps) => {
-  const navigate = useNavigate();
   const [deleteTarget, setDeleteTarget] = useState<
     AccountDeleteTarget | undefined
   >();
@@ -661,7 +644,6 @@ export const AccountsTree = ({
                   <tr
                     key={row.fqn}
                     data-testid="accounts-tree-row"
-                    role="button"
                     aria-description="Press Enter or Space to open."
                     aria-keyshortcuts="Enter Space"
                     aria-label={
@@ -675,41 +657,21 @@ export const AccountsTree = ({
                       account ? "text-foreground" : "text-muted-foreground",
                       "cursor-pointer hover:bg-[color-mix(in_srgb,var(--band),var(--table-header)_28%)]",
                     )}
-                    onClick={() => {
-                      if (account) {
-                        void navigate(`/accounts/${account.account_id}`);
-                        return;
-                      }
-                      void navigate(
-                        `/accounts/group?prefix=${encodeURIComponent(row.fqn)}`,
-                      );
-                    }}
-                    onKeyDown={(event) => {
-                      if (
-                        isInteractiveTarget(event.target, event.currentTarget)
-                      ) {
-                        return;
-                      }
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        if (account) {
-                          void navigate(`/accounts/${account.account_id}`);
-                          return;
-                        }
-                        void navigate(
-                          `/accounts/group?prefix=${encodeURIComponent(row.fqn)}`,
-                        );
-                      }
-                    }}
+                    onClick={activateRowLink}
+                    onKeyDown={activateRowLink}
                   >
                     <td className="overflow-hidden px-3 py-2 align-middle">
                       <div
-                        className="min-w-0 overflow-hidden"
+                        className="min-w-0"
                         style={{ paddingLeft: `${row.depth * 1.25}rem` }}
                       >
                         {account ? (
                           <div className="flex min-w-0 flex-wrap items-center gap-2">
-                            <span className="min-w-0 flex-1 overflow-hidden">
+                            <Link
+                              data-row-link
+                              to={`/accounts/${account.account_id}`}
+                              className="min-w-0 flex-1 overflow-hidden"
+                            >
                               <Tooltip
                                 focusable={false}
                                 label={accountTreeName(account)}
@@ -730,7 +692,7 @@ export const AccountsTree = ({
                                   </span>
                                 ) : null}
                               </Tooltip>
-                            </span>
+                            </Link>
                             {hasCreditLimit ? <CreditLimitIndicator /> : null}
                             {rowHidden ? (
                               <HiddenRowIndicator label="Hidden account" />
@@ -738,7 +700,9 @@ export const AccountsTree = ({
                           </div>
                         ) : (
                           <div className="flex min-w-0 items-center gap-2">
-                            <span
+                            <Link
+                              data-row-link
+                              to={`/accounts/group?prefix=${encodeURIComponent(row.fqn)}`}
                               data-testid="accounts-tree-fqn"
                               className="min-w-0"
                             >
@@ -747,7 +711,7 @@ export const AccountsTree = ({
                                 focusable={false}
                                 value={row.fqn}
                               />
-                            </span>
+                            </Link>
                             {rowHidden ? (
                               <HiddenRowIndicator label="Hidden account group" />
                             ) : null}

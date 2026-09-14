@@ -6,7 +6,6 @@ import {
   Trash,
 } from "pixelarticons/react";
 import { useRef, useState } from "react";
-import { useNavigate } from "react-router";
 
 import type { GroupState, Tag } from "@/api";
 import {
@@ -58,7 +57,6 @@ export const TagsPageContent = ({
   search,
   tagsPage,
 }: TagsPageContentProps) => {
-  const navigate = useNavigate();
   const focusFallbackRef = useRef<HTMLDivElement | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<TagDeleteTarget>();
   const [deleteErrorMessage, setDeleteErrorMessage] = useState<
@@ -333,22 +331,17 @@ export const TagsPageContent = ({
           errorMessage={tagsPage.snapshot ? undefined : tagsPage.errorMessage}
           filtered={search.trim() !== ""}
           groups={tagsPage.snapshot?.groups}
-          groupRowsClickable
           leaves={tagsPage.snapshot?.tags}
           loading={tagsPage.loading}
           loadErrorTitle="Tags could not be loaded."
           onRetry={() => {
             void refreshTagsPage();
           }}
-          onRowClick={(row) => {
-            if (row.leaf) {
-              void navigate(`/tags/${row.leaf.tag_id}`);
-            } else {
-              void navigate(
-                `/tags/group?prefix=${encodeURIComponent(row.fqn)}`,
-              );
-            }
-          }}
+          rowHref={(row) =>
+            row.leaf
+              ? `/tags/${row.leaf.tag_id}`
+              : `/tags/group?prefix=${encodeURIComponent(row.fqn)}`
+          }
           indicatorSlots={["featured", "hidden"]}
           renderActions={renderActions}
           rowActivationLabel={(row) => `Open tag ${row.fqn}`}

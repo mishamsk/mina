@@ -6,6 +6,7 @@
 
 ## Implicit Contracts
 
+- Navigable rows mark their primary anchor with `data-row-link`; shared row activation delegates to it and yields to nested controls and native gestures. Navigation side-effect callbacks run only for plain primary activation, following the [web UI link rule](../../../docs/webui-design.md#navigation-links).
 - Tooltip Escape dismisses the tooltip, then forwards one Escape to the original target so the active overlay's Escape ladder can continue.
 - Persistent forced tooltips ignore hover-close transitions but retain ordinary Escape dismissal and forwarding.
 - Focusable tooltip wrapper triggers must supply an accessible trigger label.

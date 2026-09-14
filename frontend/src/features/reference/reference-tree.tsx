@@ -1,6 +1,8 @@
 import { EyeOff, Reload } from "pixelarticons/react";
 import { type ReactNode, useMemo } from "react";
+import { Link } from "react-router";
 
+import { activateRowLink } from "@/components/link-activation";
 import {
   compactReferenceTableActionsColumnClassName,
   compactReferenceTableFrameClassName,
@@ -201,12 +203,14 @@ interface ReferenceTreeProps<TLeaf extends ReferenceLeaf, TGroup> {
   readonly errorMessage?: string;
   readonly filtered: boolean;
   readonly groups: readonly TGroup[] | undefined;
-  readonly groupRowsClickable?: boolean;
   readonly indicatorSlots?: readonly RowActionIndicatorSlot[];
   readonly leaves: readonly TLeaf[] | undefined;
   readonly loading: boolean;
   readonly loadErrorTitle: string;
   readonly onRetry?: () => void;
+  readonly rowHref?: (
+    row: ReferenceTreeRow<TLeaf, TGroup>,
+  ) => string | undefined;
   readonly onRowClick?: (
     row: ReferenceTreeRow<TLeaf, TGroup>,
     opener: HTMLElement,
@@ -253,12 +257,12 @@ export const ReferenceTree = <
   errorMessage,
   filtered,
   groups,
-  groupRowsClickable = false,
   indicatorSlots,
   leaves,
   loading,
   loadErrorTitle,
   onRetry,
+  rowHref,
   onRowClick,
   rowActivationLabel,
   renderActions,
@@ -384,8 +388,18 @@ export const ReferenceTree = <
               const rowHidden =
                 row.leaf?.is_hidden ?? row.group?.is_hidden ?? false;
               const actions = renderActions?.(row) ?? [];
+              const href = rowHref?.(row);
               const clickable = Boolean(
-                onRowClick && (row.kind === "leaf" || groupRowsClickable),
+                href || (onRowClick && row.kind === "leaf"),
+              );
+              const name = (
+                <FqnPath
+                  value={row.fqn}
+                  focusable={false}
+                  leafClassName={
+                    row.kind === "leaf" ? "font-semibold" : undefined
+                  }
+                />
               );
               return (
                 <tr
@@ -407,6 +421,10 @@ export const ReferenceTree = <
                   }
                   tabIndex={clickable ? 0 : undefined}
                   onClick={(event) => {
+                    if (href) {
+                      activateRowLink(event);
+                      return;
+                    }
                     if (
                       !onRowClick ||
                       isInteractiveTarget(event.target, event.currentTarget)
@@ -416,6 +434,10 @@ export const ReferenceTree = <
                     onRowClick(row, event.currentTarget);
                   }}
                   onKeyDown={(event) => {
+                    if (href) {
+                      activateRowLink(event);
+                      return;
+                    }
                     if (!onRowClick || event.defaultPrevented) {
                       return;
                     }
@@ -438,13 +460,18 @@ export const ReferenceTree = <
                         paddingLeft: `${Math.min(row.depth, 7) * 1.25}rem`,
                       }}
                     >
-                      <FqnPath
-                        value={row.fqn}
-                        focusable={false}
-                        leafClassName={
-                          row.kind === "leaf" ? "font-semibold" : undefined
-                        }
-                      />
+                      {href ? (
+                        <Link
+                          data-row-link
+                          to={href}
+                          aria-label={row.fqn}
+                          className="min-w-0"
+                        >
+                          {name}
+                        </Link>
+                      ) : (
+                        name
+                      )}
                       {rowHidden ? (
                         <HiddenRowIndicator
                           label={

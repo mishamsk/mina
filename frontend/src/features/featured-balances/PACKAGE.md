@@ -6,7 +6,7 @@
 
 ## Implicit Contracts
 
-- Account-link activation notifies the owning navigation surface so compact overlays close after navigation.
+- Plain primary link activation notifies the owning navigation surface so compact overlays close after in-app navigation; native modified gestures leave that surface open.
 - Navigation consumers coalesce an initial featured-balance load; explicit refreshes supersede pending work. The newest load may publish after its initiating surface unmounts while another consumer remains mounted, while unmounting the last consumer invalidates and releases the load so an authenticated-shell teardown cannot publish stale data.
 
 ## Boundaries

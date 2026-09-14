@@ -116,7 +116,7 @@ test("account form creates an account in the chart", async ({ page }) => {
   await panel.getByRole("button", { name: "Create" }).click();
 
   await expect(page.getByText("Account created.")).toBeVisible();
-  const row = page.getByRole("button", { name: `Open account ${fqn}` });
+  const row = page.getByRole("row", { name: `Open account ${fqn}` });
   await expect(row.getByTestId("accounts-tree-fqn")).toHaveText(fqn);
   await expect(row.getByTestId("accounts-tree-display-label")).toHaveText(
     `(${displayLabel})`,
@@ -145,7 +145,7 @@ test("account editor changes a multi-currency account to single currency", async
   await createAccount(page, fqn, "owned", null);
 
   await page.goto(`/accounts?q=${encodeURIComponent(fqn)}`);
-  const row = page.getByRole("button", { name: `Open account ${fqn}` });
+  const row = page.getByRole("row", { name: `Open account ${fqn}` });
   await row.getByRole("button", { name: "Edit account" }).click();
 
   const panel = page.getByRole("dialog", { name: "Edit account" });
@@ -169,7 +169,7 @@ test("account group restructure moves its visible subtree", async ({
   ]);
 
   await page.goto(`/accounts?q=${encodeURIComponent(sourcePrefix)}`);
-  const sourceGroup = page.getByRole("button", {
+  const sourceGroup = page.getByRole("row", {
     exact: true,
     name: `Open account group ${sourcePrefix}`,
   });
@@ -182,18 +182,18 @@ test("account group restructure moves its visible subtree", async ({
   await expect(page.getByText("Moved 2 account(s).")).toBeVisible();
   await page.getByLabel("Search").fill(destinationPrefix);
   await expect(
-    page.getByRole("button", {
+    page.getByRole("row", {
       exact: true,
       name: `Open account group ${destinationPrefix}`,
     }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", {
+    page.getByRole("row", {
       name: `Open account ${destinationPrefix}:Checking`,
     }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", {
+    page.getByRole("row", {
       name: `Open account ${destinationPrefix}:Savings`,
     }),
   ).toBeVisible();
@@ -239,7 +239,7 @@ test("account register walks transaction detail by keyboard", async ({
   });
 
   await page.goto(`/accounts?q=${encodeURIComponent(accountFqn)}`);
-  const accountRow = page.getByRole("button", {
+  const accountRow = page.getByRole("row", {
     name: `Open account ${accountFqn}`,
   });
   await accountRow.focus();
@@ -337,7 +337,7 @@ test("account group register shows its subtotal and combined activity", async ({
 
   await page.goto(`/accounts?q=${encodeURIComponent(prefix)}`);
   await page
-    .getByRole("button", {
+    .getByRole("row", {
       exact: true,
       name: `Open account group ${prefix}`,
     })
@@ -359,7 +359,7 @@ test("account editor adds a credit limit", async ({ page }) => {
   await createAccount(page, accountFqn);
 
   await page.goto(`/accounts?q=${encodeURIComponent(accountFqn)}`);
-  const row = page.getByRole("button", {
+  const row = page.getByRole("row", {
     name: `Open account ${accountFqn}`,
   });
   await row.getByRole("button", { name: "Edit account" }).click();
@@ -381,7 +381,7 @@ test("system account is visible with read-only UI", async ({ page }) => {
   const fqn = "system:exchange";
 
   await page.goto(`/accounts?q=${encodeURIComponent(fqn)}`);
-  const row = page.getByRole("button", { name: `Open account ${fqn}` });
+  const row = page.getByRole("row", { name: `Open account ${fqn}` });
   await expect(row).toBeVisible();
   await expect(row.getByText("System", { exact: true })).toBeVisible();
   await expect(row.getByRole("button", { name: "Edit account" })).toHaveCount(
@@ -428,7 +428,7 @@ test("account deletion is available or explained from the backend signal", async
   });
 
   await page.goto(`/accounts?q=${encodeURIComponent(deletableFqn)}`);
-  const deletableRow = page.getByRole("button", {
+  const deletableRow = page.getByRole("row", {
     name: `Open account ${deletableFqn}`,
   });
   await deletableRow.getByRole("button", { name: "Delete account" }).click();
@@ -441,7 +441,7 @@ test("account deletion is available or explained from the backend signal", async
   await expect(deletableRow).toHaveCount(0);
 
   await page.getByLabel("Search").fill(dependentFqn);
-  const dependentRow = page.getByRole("button", {
+  const dependentRow = page.getByRole("row", {
     name: `Open account ${dependentFqn}`,
   });
   const rowDelete = dependentRow.getByRole("button", {
@@ -468,7 +468,7 @@ test("account deletion is available or explained from the backend signal", async
   await page.keyboard.press("Enter");
   await expect(deleteDialog).toHaveCount(0);
 
-  const groupRow = page.getByRole("button", {
+  const groupRow = page.getByRole("row", {
     exact: true,
     name: `Open account group ${groupFqn}`,
   });
@@ -483,7 +483,7 @@ test("hidden account can be included", async ({ page }) => {
   await createAccount(page, fqn);
 
   await page.goto(`/accounts?q=${encodeURIComponent(fqn)}`);
-  const row = page.getByRole("button", { name: `Open account ${fqn}` });
+  const row = page.getByRole("row", { name: `Open account ${fqn}` });
   await row.getByRole("button", { name: "Hide account" }).click();
   await expect(row).toHaveCount(0);
 
@@ -500,7 +500,7 @@ test("legacy credit limit locks a party account currency until deletion", async 
   await createCreditLimit(page, account.account_id);
 
   await page.goto(`/accounts?q=${encodeURIComponent(fqn)}`);
-  const row = page.getByRole("button", { name: `Open account ${fqn}` });
+  const row = page.getByRole("row", { name: `Open account ${fqn}` });
   await row.getByRole("button", { name: "Edit account" }).click();
   const panel = page.getByRole("dialog", { name: "Edit account" });
   const lockReason =
@@ -661,7 +661,7 @@ test("account register stays usable across representative widths", async ({
 
   await page.setViewportSize({ width: 768, height: 900 });
   await page.goto(`/accounts?q=${encodeURIComponent(longCurrencyFqn)}`);
-  const longCurrencyRow = page.getByRole("button", {
+  const longCurrencyRow = page.getByRole("row", {
     name: `Open account ${longCurrencyFqn}`,
   });
   await expect(

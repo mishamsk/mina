@@ -68,6 +68,14 @@ Structure and navigation only; how any of it looks is owned by the theme specifi
 - The recurring-definition editor is an app-shell-owned non-modal working side panel: quick actions open it in place, route navigation neither represents nor discards its draft, and outside interaction never closes it. It takes initial focus, suppresses global transaction-entry and command-palette shortcuts, stays above transaction detail, and yields Escape to a true modal stacked above it. The Recurring route is inert while the editor is open; other route content and navigation remain interactive. Escape or an explicit close discards the draft and restores focus to a connected visible invoker, its live row or overflow replacement, or the current route heading.
 - Table density (comfortable/compact) is a persisted UI preference.
 
+### Navigation links
+
+- Page-navigation affordances, including entity names, breadcrumbs, and navigation menus, are real links with destination URLs. Use React Router links for in-app destinations so ordinary clicks and Enter navigate without a full-page reload; external destinations use native anchors.
+- Preserve native Cmd/Ctrl/Shift/Alt-click, middle-click, context-menu, copy-link, and explicit target/download behavior. Modified activation must not navigate the current page or trigger ordinary-navigation side effects such as closing its navigation sheet.
+- A navigable table row keeps its table-row semantics and exposes its destination through a visible name link. Optional unmodified row-click and Enter/Space shortcuts activate that same link and yield to nested controls; they never replace the link or intercept browser gestures.
+- Links retain visible, unclipped keyboard focus indicators and meaningful accessible names. Keep text truncation inside the focusable link's surrounding space.
+- Controls that mutate data, apply filters, open editors or detail overlays, or execute commands remain actions with their owning button, row, or command-menu semantics, even when the resulting state is URL-addressable.
+
 ## Authentication
 
 - Browser startup checks public authentication status before rendering the app shell. When authentication is disabled, the shell opens unchanged.
@@ -99,7 +107,7 @@ Rules every theme must satisfy:
 - Three affordance classes stay visually distinct in every theme, so a glance separates "describes", "filters", and "acts":
   - Indicators: descriptive marks — class icons, status markers, hidden markers, type/intent badges. Read-only; never interactive beyond a tooltip.
   - Entity chips: reference values (category, tags, member) rendered as chips; activating a chip adds that entity to the current view's filters.
-  - Actions: controls that change state or open another surface. Surface-opening actions render as buttons — labeled buttons in page headers, panels, and dialogs; compact icon buttons with tooltips in table rows. In-place state toggles (hide, feature) render as flat toggle icons whose current state is visible in the icon itself.
+  - Actions: controls that change state or open another surface. Editor, dialog, and detail-opening actions render as buttons — labeled buttons in page headers, panels, and dialogs; compact icon buttons with tooltips in table rows. In-place state toggles (hide, feature) render as flat toggle icons whose current state is visible in the icon itself.
 
 ## Domain Display Rules
 
