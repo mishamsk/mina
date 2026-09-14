@@ -4,6 +4,7 @@ import { useSearchParams } from "react-router";
 
 import { apiErrorMessage, restructureLedgerTransactionTemplates } from "@/api";
 import { PageHelp } from "@/components/page-help";
+import { fixedPageClassName } from "@/components/reference-table-frame";
 import { Toast, toastDurationMs } from "@/components/toast";
 import { focusWithoutTooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
@@ -103,10 +104,7 @@ export const TemplatesPage = () => {
   };
 
   return (
-    <section
-      className="roomy-shell:h-[calc(100svh-2.5rem)] flex min-h-0 flex-col gap-6"
-      aria-labelledby="templates-title"
-    >
+    <section className={fixedPageClassName} aria-labelledby="templates-title">
       <PageHeader
         actions={
           <Button
@@ -139,7 +137,7 @@ export const TemplatesPage = () => {
           />
         }
       />
-      <div className="min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1 flex-col">
         <TemplatesPageContent
           onCreateTemplate={openNewTemplateEditor}
           onEditTemplate={(template, opener) => {

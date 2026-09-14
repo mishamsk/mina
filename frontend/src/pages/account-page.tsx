@@ -9,6 +9,7 @@ import {
 } from "@/api";
 import { apiErrorMessage } from "@/api";
 import { PageHelp } from "@/components/page-help";
+import { fixedPageClassName } from "@/components/reference-table-frame";
 import { Toast, toastDurationMs } from "@/components/toast";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -249,10 +250,7 @@ const AccountPageContent = ({ accountId }: { readonly accountId: number }) => {
     );
   };
   return (
-    <section
-      className="roomy-shell:h-[calc(100svh-2.5rem)] flex min-h-0 flex-col gap-6"
-      aria-labelledby="account-title"
-    >
+    <section className={fixedPageClassName} aria-labelledby="account-title">
       <PageHeader
         actions={
           account && !account.tombstoned_at ? (
@@ -285,25 +283,37 @@ const AccountPageContent = ({ accountId }: { readonly accountId: number }) => {
         }
       />
 
-      {resource.header.loading && !resource.header.snapshot ? (
-        <AccountHeaderSkeleton />
-      ) : null}
-      {resource.header.errorMessage ? (
-        <AccountPageError message={resource.header.errorMessage} />
-      ) : null}
-      {account?.tombstoned_at ? (
-        <AccountPageError message="This account has been deleted." />
-      ) : null}
-      {resource.header.snapshot && !account?.tombstoned_at ? (
-        <AccountHeader
-          account={resource.header.snapshot.account}
-          balances={resource.header.snapshot.balances}
-          creditLimitHistory={resource.header.snapshot.creditLimitHistory}
-          featuredTogglePending={favoriteTogglePending}
-          onToggleFeatured={() => {
-            void toggleAccountFeatured();
-          }}
-        />
+      {resource.header.loading ||
+      resource.header.errorMessage ||
+      resource.header.snapshot ? (
+        <div
+          className="roomy-shell:-m-1 roomy-shell:max-h-[40%] roomy-shell:shrink-0 roomy-shell:overflow-auto roomy-shell:p-1 roomy-shell:focus-visible:outline-offset-[-2px] grid auto-rows-max gap-6"
+          aria-label="Account summary"
+          role="region"
+          tabIndex={0}
+        >
+          {resource.header.loading && !resource.header.snapshot ? (
+            <AccountHeaderSkeleton />
+          ) : null}
+          {resource.header.errorMessage ? (
+            <AccountPageError message={resource.header.errorMessage} />
+          ) : null}
+          {account?.tombstoned_at ? (
+            <AccountPageError message="This account has been deleted." />
+          ) : null}
+
+          {resource.header.snapshot && !account?.tombstoned_at ? (
+            <AccountHeader
+              account={resource.header.snapshot.account}
+              balances={resource.header.snapshot.balances}
+              creditLimitHistory={resource.header.snapshot.creditLimitHistory}
+              featuredTogglePending={favoriteTogglePending}
+              onToggleFeatured={() => {
+                void toggleAccountFeatured();
+              }}
+            />
+          ) : null}
+        </div>
       ) : null}
 
       <div
@@ -426,7 +436,7 @@ export const AccountPage = () => {
 
   if (!accountId) {
     return (
-      <section className="roomy-shell:h-[calc(100svh-2.5rem)] flex min-h-0 flex-col gap-6">
+      <section className={fixedPageClassName}>
         <PageHeader title="Account" eyebrow="Register" />
         <AccountPageError message="The account id in the URL is invalid." />
       </section>

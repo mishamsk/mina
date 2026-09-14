@@ -10,6 +10,7 @@ import {
   type Transaction,
 } from "@/api";
 import { MobileTableControls } from "@/components/mobile-table-controls";
+import { referenceTableStateClassName } from "@/components/reference-table-frame";
 import { Toast, toastDurationMs } from "@/components/toast";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -27,6 +28,7 @@ import {
   useTransactionBrowserPage,
   writeTransactionFiltersToSearchParams,
 } from "@/features/ledger";
+import { cn } from "@/lib/utils";
 import {
   addRequiredTransactionFilterMembership,
   addTransactionFilterMembership,
@@ -43,29 +45,28 @@ export interface ReferenceDrilldownPageProps {
 
 export const ReferenceDrilldownSkeleton = () => (
   <div
-    className="roomy-shell:h-full flex h-auto min-h-0 flex-col"
+    className={cn(
+      referenceTableStateClassName,
+      "bg-card border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]",
+    )}
     aria-hidden="true"
   >
-    <div className="min-h-0 flex-1">
-      <div className="bg-card border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]">
-        {Array.from({ length: 6 }).map((_, index) => (
-          <div
-            key={index}
-            className="grid grid-cols-[5fr_10fr_4fr_27fr_13fr_15fr_7fr_14fr_5fr] gap-3 border-b border-[var(--hairline)] p-3 last:border-b-0"
-          >
-            <Skeleton className="h-6" />
-            <Skeleton className="h-6" />
-            <Skeleton className="h-6" />
-            <Skeleton className="h-6" />
-            <Skeleton className="h-6" />
-            <Skeleton className="h-6" />
-            <Skeleton className="h-6" />
-            <Skeleton className="h-6" />
-            <Skeleton className="h-6" />
-          </div>
-        ))}
+    {Array.from({ length: 6 }).map((_, index) => (
+      <div
+        key={index}
+        className="grid grid-cols-[5fr_10fr_4fr_27fr_13fr_15fr_7fr_14fr_5fr] gap-3 border-b border-[var(--hairline)] p-3 last:border-b-0"
+      >
+        <Skeleton className="h-6" />
+        <Skeleton className="h-6" />
+        <Skeleton className="h-6" />
+        <Skeleton className="h-6" />
+        <Skeleton className="h-6" />
+        <Skeleton className="h-6" />
+        <Skeleton className="h-6" />
+        <Skeleton className="h-6" />
+        <Skeleton className="h-6" />
       </div>
-    </div>
+    ))}
   </div>
 );
 
@@ -79,7 +80,10 @@ export const ReferenceDrilldownError = ({
   readonly title: string;
 }) => (
   <div
-    className="border-destructive bg-card border-2 p-4 shadow-[var(--shadow-pixel)]"
+    className={cn(
+      referenceTableStateClassName,
+      "border-destructive bg-card border-2 p-4 shadow-[var(--shadow-pixel)]",
+    )}
     role="alert"
   >
     <p className="text-destructive font-semibold">{title}</p>

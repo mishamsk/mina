@@ -3,6 +3,7 @@ import { useParams } from "react-router";
 
 import { apiErrorMessage, getMember, type Member } from "@/api";
 import { PageHelp } from "@/components/page-help";
+import { fixedPageClassName } from "@/components/reference-table-frame";
 import { PageHeader } from "@/features/app-shell";
 import {
   ReferenceDrilldownError,
@@ -71,10 +72,7 @@ export const MemberPage = () => {
   const current = loadState.requestKey === requestKey ? loadState : undefined;
   const member = current?.member;
   return (
-    <section
-      className="roomy-shell:h-[calc(100svh-2.5rem)] flex min-h-0 flex-col gap-6"
-      aria-labelledby="member-title"
-    >
+    <section className={fixedPageClassName} aria-labelledby="member-title">
       <PageHeader
         title={member?.name ?? "Member"}
         titleId="member-title"

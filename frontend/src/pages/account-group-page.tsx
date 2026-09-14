@@ -1,10 +1,11 @@
 import { useSearchParams } from "react-router";
 
+import { fixedPageClassName } from "@/components/reference-table-frame";
 import { AccountGroupPageContent } from "@/features/accounts";
 import { PageHeader } from "@/features/app-shell";
 
 const AccountGroupPageError = ({ message }: { readonly message: string }) => (
-  <section className="roomy-shell:h-[calc(100svh-2.5rem)] flex min-h-0 flex-col gap-6">
+  <section className={fixedPageClassName}>
     <PageHeader title="Account group" eyebrow="Group register" />
     <div
       className="border-destructive bg-card border-2 p-4 shadow-[var(--shadow-pixel)]"

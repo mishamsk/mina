@@ -6,6 +6,7 @@
 
 ## Implicit Contracts
 
+- The list flexes within the route’s fixed-page slot beneath refresh banners; loaded rows use the shared reference table frame, and loading/error/empty surfaces use the shared state bound in roomy shells. Loading/error wrappers reserve shadow padding without shifting their cards.
 - Member snapshots are keyed by normalized search and hidden visibility; each load follows every server-filtered page in canonical name order without browser substring matching.
 - Keep the last loaded member list visible while a different key loads, and retain the matching snapshot with a refresh error instead of replacing it with an error screen; late responses cannot replace a newer request.
 - Every successful member mutation refreshes the member list and ledger lookups; a rename also invalidates transaction snapshots so cached member labels cannot persist.

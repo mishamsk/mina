@@ -7,6 +7,7 @@
 ## Implicit Contracts
 
 - Single-account registers link to Transactions using an exact stable account-ID filter in a fresh URL, independent of register pagination and detail state.
+- Roomy single-account summaries use a capped, keyboard-accessible scroller with compensated shadow padding to align cards with the register and an inward focus outline to avoid page-frame clipping; arbitrary currency balances and expanded header errors remain reachable while reserving space for register rows and pagination. Compact summaries stay in document flow.
 - Route-local query updates preserve parameters owned by other layers; transaction sorting resets pagination while preserving filters and overlays.
 - Categories owns the optional typed `economic_intent` query parameter; omitting it represents the All selection, while a selected intent seeds new-category creation.
 - Management routes retain an opened Account, Category, Tag, or Member independently of filtered resource snapshots so a mutation or toolbar change that removes it from current membership cannot invalidate the editor or its focus lifecycle; Categories may reconcile refreshed API deleteability without replacing its draft.
@@ -21,7 +22,8 @@
 - The member drill-down reads the exact member by stable route ID before applying its current name as a transaction scope; route changes abort obsolete reads without reacting to query-only list-state changes.
 - Status owns the `tab` query parameter, places its Background operations and Audit log feature views directly below the header, and exposes REST-backed runtime, database, and development-build metadata through the Server info popup.
 - Status tabs use roving focus with arrow, Home, and End navigation and label their shared tab panel.
-- Full-page table routes are fixed-height only in the roomy shell; compact layouts keep route headers/actions and rows in document flow while the app shell supplies the fixed toolbar inset.
+- Roomy fixed routes use `fixedPageClassName`: Transactions, Accounts, account/account-group registers, Categories, Tags, Members, member drill-down, Templates, and Recurring. Their designated table/list/register owns vertical scrolling, including bounded loading, error, and empty states; compact layouts keep headers/actions and rows in document flow.
+- Overview and Category/Tag leaf/group reports scroll the document. Status also scrolls the document while capping its audit table internally; Settings is hybrid, retaining its own bounded route-level internal scroller in every shell.
 
 ## Boundaries
 

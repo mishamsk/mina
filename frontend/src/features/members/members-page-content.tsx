@@ -14,6 +14,8 @@ import {
   compactReferenceTableGridClassName,
   referenceTableFrameClassName,
   referenceTableFrameTestId,
+  referenceTableShadowReservationClassName,
+  referenceTableStateClassName,
 } from "@/components/reference-table-frame";
 import { type RowAction, RowActions } from "@/components/row-actions";
 import { focusWithoutTooltip, Tooltip } from "@/components/tooltip";
@@ -222,7 +224,13 @@ const MembersList = ({
 
   if (loading && !members) {
     return (
-      <div className={compactReferenceTableFrameClassName}>
+      <div
+        className={cn(
+          referenceTableStateClassName,
+          compactReferenceTableFrameClassName,
+          referenceTableShadowReservationClassName,
+        )}
+      >
         <MembersListSkeleton />
       </div>
     );
@@ -230,7 +238,13 @@ const MembersList = ({
 
   if (errorMessage) {
     return (
-      <div className={compactReferenceTableFrameClassName}>
+      <div
+        className={cn(
+          referenceTableStateClassName,
+          compactReferenceTableFrameClassName,
+          referenceTableShadowReservationClassName,
+        )}
+      >
         <div
           className="border-destructive bg-card border-2 p-4 shadow-[var(--shadow-pixel)]"
           role="alert"
@@ -267,6 +281,7 @@ const MembersList = ({
       <div
         className={cn(
           "bg-card flex flex-col items-start gap-3 border-2 border-[var(--border-ink)] p-6 shadow-[var(--shadow-pixel)]",
+          referenceTableStateClassName,
           compactReferenceTableFrameClassName,
         )}
       >
@@ -436,7 +451,7 @@ export const MembersPageContent = ({
     : undefined;
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3">
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
       {refreshErrorMessage ? (
         <div
           className="border-destructive bg-card flex flex-wrap items-center justify-between gap-3 border-2 p-3 shadow-[var(--shadow-pixel)]"

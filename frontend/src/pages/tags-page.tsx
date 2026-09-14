@@ -4,6 +4,7 @@ import { useSearchParams } from "react-router";
 
 import { apiErrorMessage, restructureLedgerTags, type Tag } from "@/api";
 import { PageHelp } from "@/components/page-help";
+import { fixedPageClassName } from "@/components/reference-table-frame";
 import { Toast, toastDurationMs } from "@/components/toast";
 import { focusWithoutTooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
@@ -160,10 +161,7 @@ export const TagsPage = () => {
   };
 
   return (
-    <section
-      className="roomy-shell:h-[calc(100svh-2.5rem)] flex min-h-0 flex-col gap-6"
-      aria-labelledby="tags-title"
-    >
+    <section className={fixedPageClassName} aria-labelledby="tags-title">
       <PageHeader
         title="Tags"
         titleId="tags-title"
@@ -200,7 +198,7 @@ export const TagsPage = () => {
         }
       />
 
-      <div className="min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1 flex-col">
         <TagsPageContent
           onEditTag={openEditPanel}
           onTagDeleted={closeDeletedTagEditor}

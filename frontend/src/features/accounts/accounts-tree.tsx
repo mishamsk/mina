@@ -21,7 +21,10 @@ import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { FavoriteStarIcon } from "@/components/favorite-star-icon";
 import { activateRowLink } from "@/components/link-activation";
 import { ReferenceEntityDeleteDescription } from "@/components/reference-entity-delete-description";
-import { referenceTableFrameClassName } from "@/components/reference-table-frame";
+import {
+  referenceTableFrameClassName,
+  referenceTableStateClassName,
+} from "@/components/reference-table-frame";
 import { type RowAction, RowActions } from "@/components/row-actions";
 import { focusWithoutTooltip, Tooltip } from "@/components/tooltip";
 import { Badge } from "@/components/ui/badge";
@@ -225,7 +228,10 @@ const accountTreeSkeletonColumnClasses = [
 
 const AccountsTreeSkeleton = () => (
   <div
-    className="bg-card border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]"
+    className={cn(
+      referenceTableStateClassName,
+      "bg-card border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]",
+    )}
     aria-hidden="true"
   >
     <div
@@ -418,7 +424,10 @@ export const AccountsTree = ({
   if (errorMessage) {
     return (
       <div
-        className="border-destructive bg-card border-2 p-4 shadow-[var(--shadow-pixel)]"
+        className={cn(
+          referenceTableStateClassName,
+          "border-destructive bg-card border-2 p-4 shadow-[var(--shadow-pixel)]",
+        )}
         role="alert"
       >
         <p className="text-destructive font-semibold">
@@ -449,7 +458,12 @@ export const AccountsTree = ({
 
   if (!accounts || rows.length === 0) {
     return (
-      <div className="bg-card flex flex-col items-start gap-3 border-2 border-[var(--border-ink)] p-6 shadow-[var(--shadow-pixel)]">
+      <div
+        className={cn(
+          "bg-card flex flex-col items-start gap-3 border-2 border-[var(--border-ink)] p-6 shadow-[var(--shadow-pixel)]",
+          referenceTableStateClassName,
+        )}
+      >
         <div className="space-y-1">
           <p className="font-heading text-base font-semibold uppercase">
             No accounts

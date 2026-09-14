@@ -10,6 +10,7 @@ import {
   restructureLedgerCategories,
 } from "@/api";
 import { PageHelp } from "@/components/page-help";
+import { fixedPageClassName } from "@/components/reference-table-frame";
 import { Toast, toastDurationMs } from "@/components/toast";
 import { focusWithoutTooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
@@ -247,10 +248,7 @@ export const CategoriesPage = () => {
   };
 
   return (
-    <section
-      className="roomy-shell:h-[calc(100svh-2.5rem)] flex min-h-0 flex-col gap-6"
-      aria-labelledby="categories-title"
-    >
+    <section className={fixedPageClassName} aria-labelledby="categories-title">
       <PageHeader
         title="Categories"
         titleId="categories-title"
@@ -314,7 +312,7 @@ export const CategoriesPage = () => {
         }
       />
 
-      <div className="min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1 flex-col">
         <CategoriesPageContent
           categoriesPage={categoriesPage}
           economicIntent={economicIntent}

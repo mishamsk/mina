@@ -6,6 +6,9 @@
 
 ## Implicit Contracts
 
+- Account/group registers use the shared fixed-page bound; account-tree loading, error, and empty surfaces use the shared state bound, while loaded rows scroll within the reference table frame in roomy shells.
+- Roomy group subtotals share a capped scrolling region with space for card shadows, reserving the remaining height for register rows and pagination.
+- Account/group register errors scroll within the available register slot so expanded API details cannot make Retry unreachable.
 - A failed group-register entity-filter lookup warns without navigating. Leaving the register or unmounting aborts and discards pending lookups; same-route query changes keep them alive.
 - Chart snapshots are keyed by normalized `q`, repeated `type`, and `hidden`; each load follows all server-filtered pages in canonical FQN order, and only `nonzero` remains a local balance-presentation filter. Repeated types use any-of matching; no valid type selects all. The modal type picker absorbs its dismissing pointer event so it cannot activate an underlying tree row; its trigger names the current selection and exposes the full summary in a tooltip.
 - The focused account search field retains its raw draft, including trailing whitespace; its URL query normalizes on each change without navigating for normalized no-ops, and blur or browser history navigation releases the draft.

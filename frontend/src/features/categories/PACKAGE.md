@@ -6,6 +6,7 @@
 
 ## Implicit Contracts
 
+- The management content flexes within the route’s fixed-page slot, reserving room for refresh banners; tree layout follows the [reference package contract](../reference/PACKAGE.md).
 - The route and `reference` own URL state; this package sends normalized search, hidden visibility, and economic intent to the category list API and renders its canonical membership without browser matching.
 - An empty intent-filtered response uses the filtered-empty explanation even when the ledger contains categories under another intent.
 - Category resource snapshots are keyed by normalized search, hidden visibility, and economic intent; loads follow every filtered page, derive ancestors only from returned leaves, and keep the last loaded tree visible while a different key loads.

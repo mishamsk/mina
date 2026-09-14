@@ -6,6 +6,7 @@
 
 ## Implicit Contracts
 
+- The management content flexes within the route’s fixed-page slot, reserving room for refresh banners; tree layout follows the [reference package contract](../reference/PACKAGE.md).
 - Tag snapshots are keyed by normalized search and hidden visibility; each load follows every server-filtered page in canonical FQN order and derives ancestors only from returned leaves, while group reads supply canonical hidden metadata without creating orphan rows.
 - Keep the last loaded tree visible while another key loads or when refresh fails; only the latest load may replace it.
 - Every successful tag mutation refreshes the tag tree, ledger lookups, and Overview; path restructuring also invalidates transaction-page snapshots.

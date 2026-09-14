@@ -9,6 +9,8 @@ import {
   compactReferenceTableGridClassName,
   referenceTableFrameClassName,
   referenceTableFrameTestId,
+  referenceTableShadowReservationClassName,
+  referenceTableStateClassName,
 } from "@/components/reference-table-frame";
 import {
   type RowAction,
@@ -279,7 +281,9 @@ export const ReferenceTree = <
     return (
       <div
         className={cn(
+          referenceTableStateClassName,
           referenceTreeActionsWidthClassName,
+          referenceTableShadowReservationClassName,
           actionsColumnWidthClassName,
           compact && compactReferenceTableFrameClassName,
         )}
@@ -295,7 +299,11 @@ export const ReferenceTree = <
   if (errorMessage) {
     return (
       <div
-        className={compact ? compactReferenceTableFrameClassName : undefined}
+        className={cn(
+          referenceTableStateClassName,
+          compact && compactReferenceTableFrameClassName,
+          referenceTableShadowReservationClassName,
+        )}
       >
         <div
           className="border-destructive bg-card border-2 p-4 shadow-[var(--shadow-pixel)]"
@@ -331,6 +339,7 @@ export const ReferenceTree = <
       <div
         className={cn(
           "bg-card flex flex-col items-start gap-3 border-2 border-[var(--border-ink)] p-6 shadow-[var(--shadow-pixel)]",
+          referenceTableStateClassName,
           compact && compactReferenceTableFrameClassName,
         )}
       >

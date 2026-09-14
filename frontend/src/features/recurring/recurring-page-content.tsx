@@ -27,6 +27,10 @@ import {
   resumeRecurringDefinition,
 } from "@/api";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
+import {
+  referenceTableFrameClassName,
+  referenceTableStateClassName,
+} from "@/components/reference-table-frame";
 import { type RowAction, RowActions } from "@/components/row-actions";
 import { focusWithoutTooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
@@ -295,7 +299,10 @@ export const revealRecurringDefinitionActionRow = (opener: HTMLElement) => {
 
 const RecurringDefinitionsSkeleton = () => (
   <div
-    className="bg-card border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]"
+    className={cn(
+      referenceTableStateClassName,
+      "bg-card border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]",
+    )}
     aria-label="Loading recurring definitions"
   >
     <div className="grid grid-cols-[minmax(12rem,1.2fr)_minmax(10rem,1fr)_6rem_8rem_10rem_11rem] bg-[var(--table-header)] py-2">
@@ -454,7 +461,10 @@ export const RecurringPageContent = ({
     return (
       <div
         ref={focusFallbackRef}
-        className="border-destructive bg-card border-2 p-4 shadow-[var(--shadow-pixel)]"
+        className={cn(
+          referenceTableStateClassName,
+          "border-destructive bg-card border-2 p-4 shadow-[var(--shadow-pixel)]",
+        )}
         role="alert"
         tabIndex={-1}
       >
@@ -486,7 +496,10 @@ export const RecurringPageContent = ({
     return (
       <div
         ref={focusFallbackRef}
-        className="bg-card roomy-shell:h-full roomy-shell:min-h-64 flex flex-col items-start justify-center gap-3 border-2 border-[var(--border-ink)] p-6 shadow-[var(--shadow-pixel)]"
+        className={cn(
+          referenceTableFrameClassName,
+          "roomy-shell:overflow-auto items-start justify-center-safe gap-3 p-6",
+        )}
         tabIndex={-1}
       >
         <Repeat
@@ -523,7 +536,7 @@ export const RecurringPageContent = ({
 
   return (
     <>
-      <div className="roomy-shell:h-full flex h-auto min-h-0 flex-col gap-3">
+      <div className="flex min-h-0 flex-1 flex-col gap-3">
         {actionErrorMessage ? (
           <div
             className="border-destructive bg-card border-2 p-3 shadow-[var(--shadow-pixel)]"
@@ -539,11 +552,17 @@ export const RecurringPageContent = ({
         ) : null}
         <div
           ref={focusFallbackRef}
-          className="bg-card roomy-shell:overflow-hidden flex min-h-0 flex-1 flex-col overflow-visible border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]"
+          className={cn(
+            referenceTableFrameClassName,
+            "roomy-shell:h-auto flex-1",
+          )}
           data-testid="recurring-definitions-table"
           tabIndex={-1}
         >
-          <div className="roomy-shell:overflow-auto min-h-0 flex-1 overflow-visible">
+          <div
+            className="roomy-shell:overflow-auto min-h-0 flex-1 overflow-visible"
+            data-testid="recurring-definitions-table-scroll"
+          >
             <table className="recurring-review-table w-full table-fixed border-collapse text-sm">
               <thead className="text-foreground roomy-shell:sticky roomy-shell:top-0 roomy-shell:z-10 bg-[var(--table-header)]">
                 <tr className="font-heading text-left text-xs font-semibold uppercase">

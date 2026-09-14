@@ -6,6 +6,7 @@
 
 ## Implicit Contracts
 
+- The definitions list flexes beneath route and action banners within the shared fixed-page bound; loaded rows use `referenceTableFrameClassName` and `recurring-definitions-table-scroll`, while skeleton/error/empty surfaces remain bounded and oversized state content stays reachable; empty content centers only when it fits.
 - Existing-definition editors link to the shared Transactions browser with direct definition-ID scope; navigation preserves the unsaved draft and does not write or close the editor.
 
 - Load every definition page using backend next-due-date ordering and the route's normalized search query; retry page sets affected by concurrent reordering, retain a nonempty prior snapshot while another query loads, replace a cross-query empty snapshot with loading, never let stale or unmounted loads replace the current snapshot, and distinguish filtered zero matches from the first-use empty state.

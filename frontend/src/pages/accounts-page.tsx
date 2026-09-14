@@ -8,6 +8,7 @@ import {
   restructureLedgerAccounts,
 } from "@/api";
 import { PageHelp } from "@/components/page-help";
+import { fixedPageClassName } from "@/components/reference-table-frame";
 import { Toast, toastDurationMs } from "@/components/toast";
 import { focusWithoutTooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
@@ -171,10 +172,7 @@ export const AccountsPage = () => {
   };
 
   return (
-    <section
-      className="roomy-shell:h-[calc(100svh-2.5rem)] flex min-h-0 flex-col gap-6"
-      aria-labelledby="accounts-title"
-    >
+    <section className={fixedPageClassName} aria-labelledby="accounts-title">
       <PageHeader
         title="Accounts"
         titleId="accounts-title"

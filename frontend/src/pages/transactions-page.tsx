@@ -11,6 +11,7 @@ import {
   type Transaction,
 } from "@/api";
 import { PageHelp } from "@/components/page-help";
+import { fixedPageClassName } from "@/components/reference-table-frame";
 import { Toast, toastDurationMs } from "@/components/toast";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/features/app-shell";
@@ -246,7 +247,7 @@ export const TransactionsPage = () => {
 
   return (
     <section
-      className="roomy-shell:h-[calc(100svh-2.5rem)] flex min-h-0 flex-col gap-6"
+      className={fixedPageClassName}
       aria-labelledby="transactions-title"
       data-transaction-detail-restore-target
       tabIndex={-1}

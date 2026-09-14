@@ -11,6 +11,7 @@ import {
   type Transaction,
 } from "@/api";
 import { PageHelp } from "@/components/page-help";
+import { fixedPageClassName } from "@/components/reference-table-frame";
 import { Toast, toastDurationMs } from "@/components/toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -442,7 +443,7 @@ export const AccountGroupPageContent = ({
 
   return (
     <section
-      className="roomy-shell:h-[calc(100svh-2.5rem)] flex min-h-0 flex-col gap-6"
+      className={fixedPageClassName}
       aria-labelledby="account-group-title"
     >
       <PageHeader
@@ -484,21 +485,28 @@ export const AccountGroupPageContent = ({
       ) : null}
       {accountsResource.snapshot ? (
         <>
-          {ownedAccounts.length > 0 ? (
-            <GroupSubtotals
-              accountType="owned"
-              balances={matchingBalances}
-              balanceAccounts={ownedAccounts}
-              prefix={prefix}
-            />
-          ) : null}
-          {partyAccounts.length > 0 ? (
-            <GroupSubtotals
-              accountType="party"
-              balances={matchingBalances}
-              balanceAccounts={partyAccounts}
-              prefix={prefix}
-            />
+          {ownedAccounts.length > 0 || partyAccounts.length > 0 ? (
+            <div
+              className="roomy-shell:-m-1 roomy-shell:max-h-[40%] roomy-shell:shrink-0 roomy-shell:overflow-auto roomy-shell:p-1 grid auto-rows-max gap-6"
+              data-testid="account-group-subtotals-scroll"
+            >
+              {ownedAccounts.length > 0 ? (
+                <GroupSubtotals
+                  accountType="owned"
+                  balances={matchingBalances}
+                  balanceAccounts={ownedAccounts}
+                  prefix={prefix}
+                />
+              ) : null}
+              {partyAccounts.length > 0 ? (
+                <GroupSubtotals
+                  accountType="party"
+                  balances={matchingBalances}
+                  balanceAccounts={partyAccounts}
+                  prefix={prefix}
+                />
+              ) : null}
+            </div>
           ) : null}
           <GroupRegister prefix={prefix} />
         </>

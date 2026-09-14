@@ -3,6 +3,7 @@ import { type KeyboardEvent, useRef } from "react";
 
 import type { JournalRecord } from "@/api";
 import { MobileTableControls } from "@/components/mobile-table-controls";
+import { referenceTableStateClassName } from "@/components/reference-table-frame";
 import { Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import {
@@ -199,7 +200,10 @@ export const AccountRegisterTable = ({
     return (
       <div
         ref={rootRef}
-        className="border-destructive bg-card border-2 p-4 shadow-[var(--shadow-pixel)]"
+        className={cn(
+          referenceTableStateClassName,
+          "border-destructive bg-card border-2 p-4 shadow-[var(--shadow-pixel)]",
+        )}
         role="alert"
       >
         <p className="text-destructive font-semibold">

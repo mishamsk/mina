@@ -295,7 +295,7 @@ export const TagsPageContent = ({
   return (
     <div
       ref={focusFallbackRef}
-      className="flex h-full min-h-0 flex-col gap-3"
+      className="flex min-h-0 flex-1 flex-col gap-3"
       tabIndex={-1}
     >
       {refreshErrorMessage ? (

@@ -14,6 +14,7 @@ import {
   type RecurringDefinition,
 } from "@/api";
 import { PageHelp } from "@/components/page-help";
+import { fixedPageClassName } from "@/components/reference-table-frame";
 import { Toast, toastDurationMs } from "@/components/toast";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/features/app-shell";
@@ -236,10 +237,7 @@ export const RecurringPage = () => {
   };
 
   return (
-    <section
-      className="roomy-shell:h-[calc(100svh-2.5rem)] flex min-h-0 flex-col gap-6"
-      aria-labelledby="recurring-title"
-    >
+    <section className={fixedPageClassName} aria-labelledby="recurring-title">
       <PageHeader
         title="Recurring"
         titleId="recurring-title"
@@ -301,7 +299,7 @@ export const RecurringPage = () => {
           </Button>
         </div>
       ) : null}
-      <div className="min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1 flex-col">
         <RecurringPageContent
           errorMessage={recurringDefinitions.errorMessage}
           filtered={search.trim() !== ""}

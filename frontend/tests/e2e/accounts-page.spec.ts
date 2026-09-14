@@ -352,6 +352,49 @@ test("account group register shows its subtotal and combined activity", async ({
   await expect(
     page.getByTestId("account-register-row").filter({ hasText: memo }),
   ).toBeVisible();
+
+  for (let index = 0; index < 28; index += 1) {
+    const account = await createAccount(page, `${prefix}:Extra${index}`);
+    await createSpend(page, {
+      amount: "1",
+      categoryId: category.category_id,
+      fundingAccountId: account.account_id,
+      memo: `Group activity ${index}`,
+      merchantAccountId: merchant.account_id,
+    });
+  }
+  await page.setViewportSize({ width: 1280, height: 633 });
+  await page.goto(
+    `/accounts/group?prefix=${encodeURIComponent(prefix)}&pageSize=25`,
+  );
+  const subtotals = page.getByTestId("account-group-subtotals-scroll");
+  await expect(subtotals).toContainText("Owned funds · 30 accounts");
+  await subtotals.hover();
+  await page.mouse.wheel(0, 10_000);
+  await expect(
+    subtotals.getByTestId("account-group-balance-row").last(),
+  ).toBeInViewport();
+  const register = page.getByTestId("account-register-table-scroll");
+  await expect(
+    register.getByTestId("account-register-row").first(),
+  ).toBeInViewport();
+  await register.hover();
+  await page.mouse.wheel(0, 10_000);
+  await expect(
+    register.getByTestId("account-register-row").last(),
+  ).toBeInViewport();
+  await expect(register.getByRole("columnheader").first()).toBeInViewport();
+  const footer = page.getByTestId("account-register-pagination-footer");
+  await expect(footer).toBeInViewport();
+  await footer.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(page).toHaveURL(/page=2/);
+  expect(
+    await page.evaluate(
+      () =>
+        document.documentElement.scrollHeight <=
+        document.documentElement.clientHeight + 1,
+    ),
+  ).toBe(true);
 });
 
 test("account editor adds a credit limit", async ({ page }) => {

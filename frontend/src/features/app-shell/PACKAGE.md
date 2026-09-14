@@ -6,6 +6,7 @@
 
 ## Implicit Contracts
 
+- Roomy fixed pages own canvas-overflow containment through the shared `fixedPageClassName`; the shell supplies the matching top/bottom insets and leaves document-scrolling reports, Status, and Settings to their route-owned scroll models.
 - Conflict close and discard refresh the current transaction page before publishing detail; the final fetched version invalidates every account register it introduces, while a failed final detail lookup leaves the refreshed page snapshot authoritative.
 - Saved-entry deep links enforce the same lifecycle availability as visible row and detail actions; cancelled transactions must be restored before Edit is available.
 - Route-level entry closure falls back to the visible Transactions navigation link in roomy shells or the compact Navigation trigger when no launch control or transaction-list target is available.
