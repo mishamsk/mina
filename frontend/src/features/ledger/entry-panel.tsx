@@ -3113,6 +3113,19 @@ export const EntryPanel = ({
   const cancelledConflictSavePendingRef = useRef(false);
   const preserveFocusOnReplacementChangeRef = useRef(false);
 
+  const currentDraftHasUserInput = useCallback(
+    (currentDraft: TransactionEntryDraft): boolean => {
+      const baseline =
+        latestDraftPersistenceRef.current === "launch"
+          ? launchDraftBaselineRef.current
+          : ordinaryDraftBaselineRef.current;
+      return (
+        baseline !== undefined && draftHasUserInput(currentDraft, baseline)
+      );
+    },
+    [],
+  );
+
   const publishRefreshedReplacement = useCallback(() => {
     if (
       !replacement ||
@@ -3143,9 +3156,7 @@ export const EntryPanel = ({
       return;
     }
     const modifiedReplacement =
-      replacement !== undefined &&
-      launchDraftBaselineRef.current !== undefined &&
-      JSON.stringify(draft) !== JSON.stringify(launchDraftBaselineRef.current);
+      replacement !== undefined && currentDraftHasUserInput(draft);
     if (modifiedReplacement) {
       setConfirmCloseDiscardOpen(true);
       return;
@@ -3156,7 +3167,13 @@ export const EntryPanel = ({
       return;
     }
     onClose();
-  }, [draft, onClose, publishRefreshedReplacement, replacement]);
+  }, [
+    currentDraftHasUserInput,
+    draft,
+    onClose,
+    publishRefreshedReplacement,
+    replacement,
+  ]);
 
   useEffect(() => {
     if (!closeRequestRef) {
@@ -3351,9 +3368,7 @@ export const EntryPanel = ({
         setConfirmDiscardDraftOpen(false);
         const inFlightLaunchChanged =
           latestDraftPersistenceRef.current === "launch" &&
-          launchDraftBaselineRef.current !== undefined &&
-          JSON.stringify(latestDraftRef.current) !==
-            JSON.stringify(launchDraftBaselineRef.current);
+          currentDraftHasUserInput(latestDraftRef.current);
         const ordinaryDraftHasUserInput = draftHasUserInput(
           migratedDraft,
           ordinaryBaseline,
@@ -3408,6 +3423,7 @@ export const EntryPanel = ({
       active = false;
     };
   }, [
+    currentDraftHasUserInput,
     initialTab,
     initialTemplate,
     launch,
@@ -4071,6 +4087,9 @@ export const EntryPanel = ({
       advanced: {
         ...advancedDraft,
         originatingShorthandTab: activeShorthandTab,
+        originatingShorthandInput: JSON.stringify(
+          tabDraftUserInput(activeTabDraft),
+        ),
       },
     }));
     setFieldErrors({});
@@ -4110,6 +4129,7 @@ export const EntryPanel = ({
       rememberedActiveTabRef.current = targetTab;
       setTransactionEntryActiveTab(targetTab);
       setPickerLifecycle((current) => current + 1);
+      ordinaryDraftBaselineRef.current = defaultDraft();
       setDraft(draftFromTemplate(template, targetTab, lookups));
       setFieldErrors({});
       setMerchantFieldErrors({});
@@ -4126,14 +4146,14 @@ export const EntryPanel = ({
 
   const requestTemplateApplication = useCallback(
     (template: TransactionTemplate, targetTab: TransactionEntryType) => {
-      if (draftHasUserInput(draft, defaultDraft())) {
+      if (currentDraftHasUserInput(draft)) {
         setPendingTemplateApplication({ targetTab, template });
         setConfirmTemplateReplaceOpen(true);
         return;
       }
       applyTemplate(template, targetTab);
     },
-    [applyTemplate, draft],
+    [applyTemplate, currentDraftHasUserInput, draft],
   );
 
   const requestTemplateApplicationByID = useCallback(
@@ -4172,14 +4192,14 @@ export const EntryPanel = ({
         focusTemplatePicker();
         return;
       }
-      if (draftHasUserInput(latestDraftRef.current, defaultDraft())) {
+      if (currentDraftHasUserInput(latestDraftRef.current)) {
         setPendingTemplateApplication({ targetTab, template });
         setConfirmTemplateReplaceOpen(true);
         return;
       }
       applyTemplate(template, targetTab);
     },
-    [applyTemplate, focusTemplatePicker],
+    [applyTemplate, currentDraftHasUserInput, focusTemplatePicker],
   );
 
   const confirmTemplateApplication = useCallback(() => {
@@ -4241,12 +4261,12 @@ export const EntryPanel = ({
   const requestClearDraft = useCallback(() => {
     templateApplicationRequestGenerationRef.current += 1;
     setClearDraftError(undefined);
-    if (draftHasUserInput(draft, defaultDraft())) {
+    if (currentDraftHasUserInput(draft)) {
       setConfirmClearDraftOpen(true);
       return;
     }
     void resetCreateDraft();
-  }, [draft, resetCreateDraft]);
+  }, [currentDraftHasUserInput, draft, resetCreateDraft]);
 
   useEffect(() => {
     if (!open) {
@@ -4661,10 +4681,19 @@ export const EntryPanel = ({
 
           if (result.data) {
             const originatingShorthandTab =
-              draft.advanced.originatingShorthandTab;
+              draft.advanced.originatingShorthandTab &&
+              draft.advanced.originatingShorthandInput ===
+                JSON.stringify(
+                  tabDraftUserInput(
+                    draft.tabs[draft.advanced.originatingShorthandTab],
+                  ),
+                )
+                ? draft.advanced.originatingShorthandTab
+                : undefined;
             const resetPendingSettlement = Boolean(
-              originatingShorthandTab &&
-              draft.tabs[originatingShorthandTab].recordAsPending,
+              draft.advanced.originatingShorthandTab &&
+              draft.tabs[draft.advanced.originatingShorthandTab]
+                .recordAsPending,
             );
             const nextDraft = {
               ...draft,
@@ -4696,14 +4725,27 @@ export const EntryPanel = ({
               draftPersistence === "launch"
             ) {
               const storedNextDraft = draftForStorage(nextDraft);
-              ordinaryDraftBaselineRef.current = storedNextDraft;
+              const previousBaseline =
+                ordinaryDraftBaselineRef.current ?? defaultDraft();
+              const nextBaseline = {
+                ...previousBaseline,
+                advanced: storedNextDraft.advanced,
+                tabs: originatingShorthandTab
+                  ? {
+                      ...previousBaseline.tabs,
+                      [originatingShorthandTab]:
+                        storedNextDraft.tabs[originatingShorthandTab],
+                    }
+                  : previousBaseline.tabs,
+              };
+              ordinaryDraftBaselineRef.current = nextBaseline;
               ordinaryBaselineMustPersistRef.current = true;
               ordinaryDraftStoredRef.current = true;
               lastStoredDraftFingerprintRef.current =
                 draftFingerprint(storedNextDraft);
               await writeTransactionEntryDraft(
                 storedNextDraft,
-                storedNextDraft,
+                nextBaseline,
                 true,
               );
             }
@@ -4971,14 +5013,23 @@ export const EntryPanel = ({
             draftPersistence === "launch"
           ) {
             const storedNextDraft = draftForStorage(nextDraft);
-            ordinaryDraftBaselineRef.current = storedNextDraft;
+            const previousBaseline =
+              ordinaryDraftBaselineRef.current ?? defaultDraft();
+            const nextBaseline = {
+              ...previousBaseline,
+              tabs: {
+                ...previousBaseline.tabs,
+                [activeShorthandTab]: storedNextDraft.tabs[activeShorthandTab],
+              },
+            };
+            ordinaryDraftBaselineRef.current = nextBaseline;
             ordinaryBaselineMustPersistRef.current = true;
             ordinaryDraftStoredRef.current = true;
             lastStoredDraftFingerprintRef.current =
               draftFingerprint(storedNextDraft);
             await writeTransactionEntryDraft(
               storedNextDraft,
-              storedNextDraft,
+              nextBaseline,
               true,
             );
           }

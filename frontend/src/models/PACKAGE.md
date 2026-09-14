@@ -14,6 +14,7 @@
 - Category and Tag scopes encode exact FQNs or explicit `:*` prefixes in the expression; entity-ID literals retain their `#<entity-id>` representation independently from human-readable values.
 - Status view selection, filters, pagination, and detail identity are URL query state rather than frontend-owned persisted models.
 - Editable journal-record drafts retain server record identities; only newly introduced draft records lack an identity.
+- Converted journal drafts retain the originating shorthand input fingerprint so saving can distinguish unchanged source input from later edits, including after reload.
 
 ## Boundaries
 

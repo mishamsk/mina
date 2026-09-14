@@ -73,6 +73,7 @@ export interface JournalRecordRowDraft {
 export interface AdvancedTransactionEntryDraft {
   readonly date: string;
   readonly originatingShorthandTab?: Exclude<TransactionEntryType, "advanced">;
+  readonly originatingShorthandInput?: string;
   readonly records: readonly JournalRecordRowDraft[];
 }
 

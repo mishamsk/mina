@@ -518,6 +518,7 @@ test("spend entry escalates to matching journal records", async ({
     { scope: spend },
   );
   await spend.getByLabel("Memo").fill(memo);
+  await editor.getByRole("checkbox", { name: "Record as pending" }).check();
   await editor.getByRole("button", { name: "Edit as journal" }).click();
 
   const funding = journalRecord(page, 1);
@@ -526,6 +527,7 @@ test("spend entry escalates to matching journal records", async ({
     "cash:Wallet",
   );
   await expect(funding.getByLabel("Amount")).toHaveValue("-13.47");
+  await expect(editor.getByLabel("Record 1 settlement")).toHaveText("Pending");
   await expect(funding.getByLabel("Memo")).toHaveValue(memo);
   await expect(merchant.getByRole("combobox", { name: "Account" })).toHaveValue(
     "merchant:PowellsBooks",
@@ -535,9 +537,26 @@ test("spend entry escalates to matching journal records", async ({
     merchant.getByRole("combobox", { name: "Category" }),
   ).toHaveValue("Entertainment:Books");
   await expect(merchant.getByLabel("Memo")).toHaveValue(memo);
+  await editor.getByRole("tab", { name: "Spend" }).click();
+  const unsavedMemo = `${memo} unsaved`;
+  await spend.getByLabel("Memo").fill(unsavedMemo);
+  await editor.getByRole("tab", { name: "Advanced" }).click();
+  await editor.getByRole("button", { name: "Save and add another" }).click();
+  await expect(editor.getByText("Entries this session: 1")).toBeVisible();
+  await expect(editor.getByLabel("Record 1 settlement")).toHaveText("Posted");
+  await editor.getByRole("button", { name: "Clear draft" }).click();
+  await page
+    .getByRole("alertdialog", { name: "Clear entry draft?" })
+    .getByRole("button", { name: "Keep draft" })
+    .click();
+  await editor.getByRole("tab", { name: "Spend" }).click();
+  await expect(spend.getByLabel("Memo")).toHaveValue(unsavedMemo);
+  await expect(
+    editor.getByRole("checkbox", { name: "Record as pending" }),
+  ).toBeChecked();
 });
 
-test("batched entry retains sticky fields between saves", async ({
+test("batched entry keeps sticky baselines clean across entry launches", async ({
   page,
 }, testInfo) => {
   const unique = testSlug(testInfo.project.name);
@@ -611,4 +630,149 @@ test("batched entry retains sticky fields between saves", async ({
   await expect(
     page.getByRole("row").filter({ hasText: secondMemo }).first(),
   ).toBeVisible();
+
+  await page.reload();
+  const launcher = page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" });
+  await launcher.click();
+  await expect(spend.getByLabel("Funding account")).toHaveValue("cash:Wallet");
+  await expect(merchant.getByLabel("Amount")).toHaveValue("");
+  await editor
+    .getByRole("button", { name: "Close transaction editor" })
+    .click();
+
+  const savedRow = page
+    .getByRole("row")
+    .filter({ hasText: secondMemo })
+    .first();
+  await clickRowAction(page, savedRow, "Edit transaction");
+  await expect(
+    editor.getByRole("heading", { name: "Edit spend" }),
+  ).toBeVisible();
+  await expect(spend.getByLabel("Memo")).toHaveValue(secondMemo);
+  await expect(page.getByRole("alertdialog")).toHaveCount(0);
+  await editor
+    .getByRole("button", { name: "Close transaction editor" })
+    .click();
+});
+
+test("saving a template replacement keeps cleared tabs clean before edit launches", async ({
+  page,
+}, testInfo) => {
+  const unique = testSlug(testInfo.project.name);
+  const savedMemo = `E2E edit target ${unique}`;
+  await createSearchSpend(page, savedMemo);
+  const accounts = await listFixtures<AccountFixture>(
+    page,
+    "/api/accounts",
+    "accounts",
+  );
+  const templateFqn = `E2E:${unique}:Replacement baseline`;
+  const templateResponse = await page.request.post(
+    "/api/transaction-templates",
+    {
+      data: {
+        fqn: templateFqn,
+        records: [
+          {
+            account_id: findByFqn(accounts, "cash:Wallet").account_id,
+            amount: "-5",
+            currency: "USD",
+            memo: unique,
+          },
+          {
+            account_id: findByFqn(accounts, "bank:Chase:joint_checking")
+              .account_id,
+            amount: "5",
+            currency: "USD",
+          },
+        ],
+      },
+    },
+  );
+  expect(templateResponse.ok()).toBe(true);
+  await page.goto(
+    `/transactions?page=1&pageSize=25&q=${encodeURIComponent(unique)}`,
+  );
+  const editor = page.getByRole("dialog", { name: "Transaction editor" });
+  const savedRow = page.getByRole("row").filter({ hasText: savedMemo }).first();
+  await clickRowAction(page, savedRow, "Duplicate transaction");
+  await editor.getByRole("button", { name: "Save and close" }).click();
+  await expect(editor).toHaveCount(0);
+  await page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" })
+    .click();
+
+  await editor.getByRole("tab", { name: "Advanced" }).click();
+  await editor.getByRole("combobox", { name: "Template" }).fill(templateFqn);
+  await expect(editor.getByLabel("Record 1 memo")).toHaveValue(unique);
+  await expect(page.getByRole("alertdialog")).toHaveCount(0);
+  await editor.getByRole("button", { name: "Save and close" }).click();
+  await expect(editor).toHaveCount(0);
+
+  await page.reload();
+  await clickRowAction(page, savedRow, "Edit transaction");
+  await expect(editor.getByLabel("Memo")).toHaveValue(savedMemo);
+  await expect(page.getByRole("alertdialog")).toHaveCount(0);
+});
+
+test("palette templates replace sticky defaults and protect modified drafts", async ({
+  page,
+}, testInfo) => {
+  const unique = testSlug(testInfo.project.name);
+  const savedMemo = `E2E template edit target ${unique}`;
+  await createSearchSpend(page, savedMemo);
+  const templateFqn = `E2E:${unique}:Entry baseline`;
+  const templateMemo = `Template ${unique}`;
+  const templateResponse = await page.request.post(
+    "/api/transaction-templates",
+    {
+      data: { fqn: templateFqn, records: [{ memo: templateMemo }] },
+    },
+  );
+  expect(templateResponse.ok()).toBe(true);
+  await page.goto(
+    `/transactions?page=1&pageSize=25&q=${encodeURIComponent(unique)}`,
+  );
+  const editor = page.getByRole("dialog", { name: "Transaction editor" });
+  const savedRow = page.getByRole("row").filter({ hasText: savedMemo }).first();
+
+  await clickRowAction(page, savedRow, "Duplicate transaction");
+  await editor.getByRole("button", { name: "Save and close" }).click();
+  await expect(editor).toHaveCount(0);
+  await page.reload();
+  await page.keyboard.press("Control+K");
+
+  const palette = page.getByRole("dialog", { name: "Command Palette" });
+  await palette
+    .getByRole("combobox", { name: "Command search" })
+    .fill(templateFqn);
+  await palette
+    .getByRole("option", { name: new RegExp(`Use ${templateFqn}`) })
+    .click();
+  await expect(editor.getByLabel("Record 1 memo")).toHaveValue(templateMemo);
+  await expect(page.getByRole("alertdialog")).toHaveCount(0);
+
+  const changedMemo = `Unsaved ${unique}`;
+  await editor.getByLabel("Record 1 memo").fill(changedMemo);
+  await editor.getByRole("combobox", { name: "Template" }).fill(templateFqn);
+  const replaceDraft = page.getByRole("alertdialog", {
+    name: "Replace entry draft?",
+  });
+  await expect(replaceDraft).toBeVisible();
+  await replaceDraft.getByRole("button", { name: "Keep draft" }).click();
+  await expect(editor.getByLabel("Record 1 memo")).toHaveValue(changedMemo);
+  await editor
+    .getByRole("button", { name: "Close transaction editor" })
+    .click();
+  await page.reload();
+  await clickRowAction(page, savedRow, "Edit transaction");
+  const discardDraft = page.getByRole("alertdialog", {
+    name: "Discard entry draft",
+  });
+  await expect(discardDraft).toBeVisible();
+  await discardDraft.getByRole("button", { name: "Keep draft" }).click();
+  await expect(editor.getByLabel("Record 1 memo")).toHaveValue(changedMemo);
 });
