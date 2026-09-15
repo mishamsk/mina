@@ -996,7 +996,7 @@ export const AppShell = () => {
         return;
       }
       event.preventDefault();
-      timer = window.setTimeout(() => open(undefined), 500);
+      timer = window.setTimeout(() => open(undefined), 200);
     };
     window.addEventListener("keydown", onKeyDown, true);
     window.addEventListener("blur", cancel);
