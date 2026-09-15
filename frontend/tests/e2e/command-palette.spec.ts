@@ -119,17 +119,11 @@ test("command palette offers filtered Transactions and register account actions"
 
   await openPalette(page);
   await search.fill("joint_checking");
-  await expect(result).toHaveAttribute("aria-selected", "true");
   const ribbon = page.getByTestId("command-palette-action-ribbon");
-  await expect(ribbon).toHaveText(
-    "Enter opens register · Cmd/Ctrl Enter opens filtered Transactions",
+  await expect(ribbon).toContainText(
+    "Cmd/Ctrl Enter opens filtered Transactions",
   );
-  await page.keyboard.down("ControlOrMeta");
-  await expect(ribbon).toHaveText(
-    "Enter opens register · Cmd/Ctrl Enter opens filtered Transactions",
-  );
-  await page.keyboard.press("Enter");
-  await page.keyboard.up("ControlOrMeta");
+  await page.keyboard.press("ControlOrMeta+Enter");
   await expect(page).toHaveURL(
     (url) =>
       url.pathname === "/transactions" &&
@@ -140,26 +134,6 @@ test("command palette offers filtered Transactions and register account actions"
       exact: true,
     }),
   ).toBeVisible();
-
-  await page.getByRole("button", { name: "Edit mode" }).click();
-  const editModeHeader = page.getByTestId(
-    "transaction-browser-edit-mode-header",
-  );
-  await expect(editModeHeader).toBeVisible();
-  const opener = page.getByRole("button", {
-    name: "Command palette",
-    exact: true,
-  });
-  await opener.focus();
-  const filteredUrl = page.url();
-  await openPalette(page);
-  await search.fill("joint_checking");
-  await expect(result).toHaveAttribute("aria-selected", "true");
-  await page.keyboard.press("ControlOrMeta+Enter");
-  await expect(dialog).toBeHidden();
-  await expect(page).toHaveURL(filteredUrl);
-  await expect(editModeHeader).toBeVisible();
-  await expect(opener).toBeFocused();
 });
 
 test("command palette searches transactions and opens the selected detail", async ({

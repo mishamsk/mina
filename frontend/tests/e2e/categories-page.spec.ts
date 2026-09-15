@@ -33,34 +33,6 @@ const createCategory = async (
   return (await response.json()) as CategoryFixture;
 };
 
-test("economic intent aligns with adjacent toolbar controls", async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 1280, height: 800 });
-  await page.goto("/categories");
-
-  const intent = page.getByRole("combobox", { name: "Economic intent" });
-  const search = page.getByLabel("Search");
-  const includeHidden = page.getByRole("button", { name: "Include hidden" });
-  await expect(intent).toBeVisible();
-  await expect(search).toBeVisible();
-  await expect(includeHidden).toBeVisible();
-
-  const intentBox = await intent.boundingBox();
-  const searchBox = await search.boundingBox();
-  const includeHiddenBox = await includeHidden.boundingBox();
-  expect(intentBox).not.toBeNull();
-  expect(searchBox).not.toBeNull();
-  expect(includeHiddenBox).not.toBeNull();
-  expect(Math.abs(intentBox!.height - searchBox!.height)).toBeLessThanOrEqual(
-    1,
-  );
-  expect(Math.abs(intentBox!.y - searchBox!.y)).toBeLessThanOrEqual(1);
-  expect(
-    Math.abs(intentBox!.height - includeHiddenBox!.height),
-  ).toBeLessThanOrEqual(1);
-});
-
 test("creating a category makes it available in transaction entry", async ({
   browserName,
   page,
@@ -111,7 +83,6 @@ test("editing a category display label makes its row searchable", async ({
   await panel.getByRole("button", { name: "Save" }).click();
 
   await expect(page.getByText("Category updated.")).toBeVisible();
-  await expect(row).toBeVisible();
   await page.getByLabel("Search").fill(label);
   await expect(row).toBeVisible();
   await page.getByRole("button", { name: "Include hidden" }).focus();

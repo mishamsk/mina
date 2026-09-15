@@ -135,4 +135,11 @@ test("settlement timestamps render locally while initiated dates remain civil", 
     .locator("xpath=following-sibling::dd[1]");
   await expect(pendingTimestamp).toHaveText(expectedPendingTimestamp);
   await expect(pendingTimestamp).toContainText("Jul 26");
+  await page.goto(`/accounts/${fundingAccount.account_id}`);
+  await expect(
+    page
+      .getByTestId("account-register-row")
+      .filter({ hasText: `E2E lifecycle real instant ${unique}` })
+      .getByTestId("account-register-date"),
+  ).toHaveText(/Jul 26/);
 });

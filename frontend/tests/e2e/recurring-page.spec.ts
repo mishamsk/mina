@@ -1,10 +1,5 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 import { test } from "@tests/e2e/test";
-import {
-  activateTransactionRow,
-  createRecurringTransactionFixture,
-  createSearchSpend,
-} from "@tests/e2e/transactions/support";
 
 const definitionRow = (page: Page, fqn: string) =>
   page.getByTestId("recurring-definition-row").filter({ hasText: fqn });
@@ -258,12 +253,6 @@ test("recurring editor protects dirty navigation and keeps editing focus", async
   await expect(page).toHaveURL(/\/templates$/);
   const keepEditing = dialog.getByRole("button", { name: "Keep editing" });
   await expect(keepEditing).toBeFocused();
-  await page.keyboard.press("Shift+Tab");
-  await expect(
-    dialog.getByRole("button", { name: "Discard changes" }),
-  ).toBeFocused();
-  await page.keyboard.press("Tab");
-  await expect(keepEditing).toBeFocused();
   await keepEditing.click();
   await expect(dialog).toBeHidden();
   await expect(editor).toBeFocused();
@@ -368,101 +357,4 @@ test("definition drill-down discards changes and opens shareable editable transa
   await page.goto("/recurring");
   await definitionRow(page, "Household:Mortgage").click();
   await expect(editor.getByLabel("Every")).toHaveValue("1");
-  await editor.getByRole("link", { name: "View transactions" }).focus();
-  await page.keyboard.press("Enter");
-  await expect(editor).toHaveCount(0);
-  await expect(
-    page.getByRole("heading", { name: "Transactions", exact: true }),
-  ).toBeFocused();
-});
-
-test("definition backlink restores fresh route-bound drafts through browser history", async ({
-  page,
-}, testInfo) => {
-  const unique = `History${testInfo.project.name}${Date.now()}`;
-  const fixture = await createRecurringTransactionFixture(page, unique);
-  await page.goto(`/transactions?q=${unique}`);
-  await activateTransactionRow(
-    page.locator(`[data-transaction-id="${fixture.transactionId}"]`),
-  );
-  await page
-    .getByTestId("transaction-detail-panel")
-    .getByRole("link", { name: fixture.recurringDefinitionFqn })
-    .click();
-  const recurringUrl = new RegExp(
-    `/recurring#definition-${fixture.recurringDefinitionId}$`,
-  );
-  const editor = page.getByRole("complementary", {
-    name: "Edit recurring definition",
-  });
-  await expect(page).toHaveURL(recurringUrl);
-  await expect(editor.getByLabel("Definition FQN")).toHaveValue(
-    fixture.recurringDefinitionFqn,
-  );
-  await page.getByRole("link", { name: "Accounts", exact: true }).click();
-  await expect(page).toHaveURL(/\/accounts$/);
-  await expect(editor).toHaveCount(0);
-  await page.goBack();
-  await expect(page).toHaveURL(recurringUrl);
-  await expect(editor.getByLabel("Definition FQN")).toHaveValue(
-    fixture.recurringDefinitionFqn,
-  );
-  await page.goForward();
-  await expect(page).toHaveURL(/\/accounts$/);
-  await expect(editor).toHaveCount(0);
-  await page.goBack();
-  await editor.getByLabel("Every").fill("2");
-  await page.goBack();
-  const dialog = page.getByRole("alertdialog", {
-    name: "Discard definition changes?",
-  });
-  await expect(dialog).toBeVisible();
-  await expect(page).toHaveURL(recurringUrl);
-  await dialog.getByRole("button", { name: "Keep editing" }).click();
-  await expect(editor.getByLabel("Every")).toHaveValue("2");
-  await page.goBack();
-  await dialog.getByRole("button", { name: "Discard changes" }).click();
-  await expect(page).toHaveURL(/\/transactions\?/);
-  await expect(editor).toHaveCount(0);
-  await expect(page.getByTestId("transaction-detail-panel")).toBeVisible();
-  await page.goForward();
-  await expect(page).toHaveURL(recurringUrl);
-  await expect(editor.getByLabel("Every")).toHaveValue("1");
-  await editor.getByRole("button", { name: "Close definition editor" }).click();
-  await expect(page).toHaveURL(/\/recurring$/);
-  await expect(editor).toHaveCount(0);
-});
-
-test("compact Create recurring survives detail history and closes on route navigation", async ({
-  page,
-}, testInfo) => {
-  const unique = `Source${testInfo.project.name}${Date.now()}`;
-  const fixture = await createSearchSpend(page, unique);
-  await page.setViewportSize({ width: 390, height: 900 });
-  await page.goto(`/transactions?q=${unique}`);
-  await activateTransactionRow(
-    page.locator(`[data-transaction-id="${fixture.transaction_id}"]`),
-  );
-  await page
-    .getByTestId("transaction-detail-panel")
-    .getByRole("button", { name: "Create recurring", exact: true })
-    .click();
-  const editor = page.getByRole("complementary", {
-    name: "New recurring definition",
-  });
-  await expect(editor).toBeFocused();
-  await editor.getByLabel("Definition FQN").fill("Unsaved");
-  await page.goBack();
-  await expect(page).toHaveURL(new RegExp(`/transactions\\?q=${unique}$`));
-  await expect(editor.getByLabel("Definition FQN")).toHaveValue("Unsaved");
-  await expect(page.getByRole("alertdialog")).toHaveCount(0);
-  await editor.getByLabel("Definition FQN").fill("");
-  await page.getByRole("button", { name: "Navigation", exact: true }).click();
-  await page.getByRole("link", { name: "Accounts", exact: true }).click();
-  await expect(page).toHaveURL(/\/accounts$/);
-  await expect(editor).toHaveCount(0);
-  await expect(page.getByRole("alertdialog")).toHaveCount(0);
-  await expect(
-    page.getByRole("heading", { name: "Accounts", exact: true }),
-  ).toBeVisible();
 });

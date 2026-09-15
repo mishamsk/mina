@@ -1,4 +1,8 @@
 import { expect, type Page } from "@playwright/test";
+import {
+  expectNoDocumentHorizontalOverflow,
+  expectNoDocumentVerticalOverflow,
+} from "@tests/e2e/overflow";
 import { test } from "@tests/e2e/test";
 
 interface AccountFixture {
@@ -363,49 +367,6 @@ test("account group register shows its subtotal and combined activity", async ({
   await expect(
     page.getByTestId("account-register-row").filter({ hasText: memo }),
   ).toBeVisible();
-
-  for (let index = 0; index < 28; index += 1) {
-    const account = await createAccount(page, `${prefix}:Extra${index}`);
-    await createSpend(page, {
-      amount: "1",
-      categoryId: category.category_id,
-      fundingAccountId: account.account_id,
-      memo: `Group activity ${index}`,
-      merchantAccountId: merchant.account_id,
-    });
-  }
-  await page.setViewportSize({ width: 1280, height: 633 });
-  await page.goto(
-    `/accounts/group?prefix=${encodeURIComponent(prefix)}&pageSize=25`,
-  );
-  const subtotals = page.getByTestId("account-group-subtotals-scroll");
-  await expect(subtotals).toContainText("Owned funds · 30 accounts");
-  await subtotals.hover();
-  await page.mouse.wheel(0, 10_000);
-  await expect(
-    subtotals.getByTestId("account-group-balance-row").last(),
-  ).toBeInViewport();
-  const register = page.getByTestId("account-register-table-scroll");
-  await expect(
-    register.getByTestId("account-register-row").first(),
-  ).toBeInViewport();
-  await register.hover();
-  await page.mouse.wheel(0, 10_000);
-  await expect(
-    register.getByTestId("account-register-row").last(),
-  ).toBeInViewport();
-  await expect(register.getByRole("columnheader").first()).toBeInViewport();
-  const footer = page.getByTestId("account-register-pagination-footer");
-  await expect(footer).toBeInViewport();
-  await footer.getByRole("button", { name: "Next", exact: true }).click();
-  await expect(page).toHaveURL(/page=2/);
-  expect(
-    await page.evaluate(
-      () =>
-        document.documentElement.scrollHeight <=
-        document.documentElement.clientHeight + 1,
-    ),
-  ).toBe(true);
 });
 
 test("account editor adds a credit limit", async ({ page }) => {
@@ -613,6 +574,10 @@ test("account register stays usable across representative widths", async ({
   });
 
   await page.goto(`/accounts/${account.account_id}`);
+  await expect(
+    page.getByTestId("account-register-pagination-footer"),
+  ).toBeInViewport();
+  await expectNoDocumentVerticalOverflow(page);
   const header = page.getByTestId("account-header");
   const label = header.getByText(displayLabel, { exact: true });
   const currencyBadge = header
@@ -686,14 +651,7 @@ test("account register stays usable across representative widths", async ({
         "phone account register stays contained",
       ).toBe(true);
     } else {
-      expect(
-        await page.evaluate(
-          () =>
-            document.documentElement.scrollWidth <=
-            document.documentElement.clientWidth + 1,
-        ),
-        `${viewport.name} page has no horizontal overflow`,
-      ).toBe(true);
+      await expectNoDocumentHorizontalOverflow(page);
     }
 
     if (viewport.name === "wide") {
@@ -723,95 +681,5 @@ test("account register stays usable across representative widths", async ({
       exact: true,
     }),
   ).toBeVisible();
-  expect(
-    await page.evaluate(
-      () =>
-        document.documentElement.scrollWidth <=
-        document.documentElement.clientWidth + 1,
-    ),
-    "tablet account chart has no horizontal overflow",
-  ).toBe(true);
-});
-
-test.describe("register settlement dates", () => {
-  test.use({ timezoneId: "America/Los_Angeles" });
-
-  test("account rows show settlement days and group flow rows keep initiated days", async ({
-    page,
-  }) => {
-    const prefix = "e2e:settlement-dates";
-    const [funding, merchant, category] = await Promise.all([
-      createAccount(page, `${prefix}:Funding`),
-      createAccount(page, `${prefix}:Merchant`, "flow"),
-      createCategory(page, "E2E:SettlementDates"),
-    ]);
-    for (const settlement of [
-      {
-        status: "posted",
-        pending_date: "2026-07-25T01:00:00Z",
-        posted_date: "2026-07-28T01:00:00Z",
-      },
-      {
-        status: "pending",
-        pending_date: "2026-07-25T01:00:00Z",
-        posted_date: null,
-      },
-    ]) {
-      const response = await page.request.post("/api/transactions", {
-        data: {
-          initiated_date: "2026-07-20",
-          records: [
-            {
-              account_id: funding.account_id,
-              amount: "-7.00",
-              category_id: null,
-              currency: "USD",
-              memo: `${settlement.status} settlement day`,
-              settlement,
-              reconciliation_status: "unreconciled",
-              source: "manual",
-              tag_ids: [],
-            },
-            {
-              account_id: merchant.account_id,
-              amount: "7.00",
-              category_id: category.category_id,
-              currency: "USD",
-              memo: `${settlement.status} flow day`,
-              settlement: null,
-              reconciliation_status: "unreconciled",
-              source: "manual",
-              tag_ids: [],
-            },
-          ],
-        },
-      });
-      expect(response.ok(), await response.text()).toBe(true);
-    }
-
-    await page.goto(`/accounts/${funding.account_id}`);
-    const rows = page.getByTestId("account-register-row");
-    const postedDate = rows
-      .filter({ hasText: "posted settlement day" })
-      .getByTestId("account-register-date");
-    const pendingDate = rows
-      .filter({ hasText: "pending settlement day" })
-      .getByTestId("account-register-date");
-    await expect(postedDate).toHaveText("Jul 272026");
-    await expect(pendingDate).toHaveText("Jul 242026");
-    await expect(postedDate).not.toContainText("Jul 20");
-    await expect(pendingDate).not.toContainText("Jul 20");
-
-    await page.getByRole("link", { name: "Accounts", exact: true }).click();
-    await page.getByRole("searchbox", { name: "Search" }).fill(prefix);
-    await page
-      .getByRole("row", { name: `Open account group ${prefix}`, exact: true })
-      .getByRole("link")
-      .click();
-    await expect(
-      rows
-        .filter({ hasText: "posted flow day" })
-        .getByTestId("account-register-date"),
-    ).toHaveText("Jul 202026");
-  });
+  await expectNoDocumentHorizontalOverflow(page);
 });

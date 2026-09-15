@@ -64,6 +64,11 @@ test("recurring transaction detail links back to its definition", async ({
   await expect(records).toHaveCount(2);
   await expect(records.nth(0).getByLabel("Amount")).toHaveValue("-23.45000000");
   await expect(records.nth(1).getByLabel("Amount")).toHaveValue("23.45000000");
+  await page.getByRole("link", { name: "Accounts", exact: true }).click();
+  await page.goBack();
+  await expect(editor.getByLabel("Definition FQN")).toHaveValue(
+    recurring.recurringDefinitionFqn,
+  );
 });
 
 test("transaction row opens read-only balanced detail that survives reload", async ({

@@ -185,6 +185,9 @@ test("row overflow opens a seeded recurring definition", async ({
   await expect(
     records.nth(1).getByLabel("Hidden", { exact: true }),
   ).toHaveCount(1);
+  await page.getByRole("link", { name: "Accounts", exact: true }).click();
+  await expect(editor).toHaveCount(0);
+  await expect(page.getByRole("alertdialog")).toHaveCount(0);
 });
 
 test("Split controls follow frontend transaction eligibility", async ({

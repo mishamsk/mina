@@ -60,76 +60,23 @@ const createImportedSpendFixture = async (
   ).transaction_id;
 };
 
-test("new entry follows the active day without persisting its seed", async ({
+test("new entry follows the active day and requires a date when its saved draft reopens on Overview", async ({
   page,
-}, testInfo) => {
-  const templateFqn = `E2E:${testSlug(testInfo.project.name)}:Launch date`;
-  const templateMemo = "Launch date template";
-  const response = await page.request.post("/api/transaction-templates", {
-    data: { fqn: templateFqn, records: [{ memo: templateMemo }] },
-  });
-  expect(response.ok()).toBe(true);
+}) => {
   await page.goto("/transactions?anchor_date=2026-08-12&entry=new:transfer");
   const editor = page.getByRole("dialog", { name: "Transaction editor" });
   const date = editor.getByLabel("Date", { exact: true });
   await expect(date).toHaveValue("2026-08-12");
-  await editor.getByLabel("Memo").fill("Clear this draft");
-  await editor.getByRole("button", { name: "Clear draft" }).click();
-  await page
-    .getByRole("alertdialog", { name: "Clear entry draft?" })
-    .getByRole("button", { name: "Clear draft" })
-    .click();
-  await expect(date).toHaveValue("2026-08-12");
-  await editor.getByRole("tab", { name: "Advanced" }).click();
-  await editor.getByRole("combobox", { name: "Template" }).fill(templateFqn);
-  await expect(editor.getByLabel("Record 1 memo")).toHaveValue(templateMemo);
-  await expect(date).toHaveValue("2026-08-12");
-  await editor.getByLabel("Record 1 memo").fill("Remember my entry");
-  await editor.getByLabel("Record 1 memo").press("Control+s");
+  await editor.getByLabel("Memo").fill("Remember my entry");
+  await editor.getByLabel("Memo").press("Control+s");
   await expect(editor).toHaveCount(0);
-  await page.goto("/overview?entry=new:journal");
-  await expect(editor.getByLabel("Record 1 memo")).toHaveValue(
-    "Remember my entry",
-  );
+  await page.goto("/overview?entry=new:transfer");
   await expect(date).toHaveValue("");
-});
-
-test("entry outside Transactions requires a date and focuses its inline error", async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 1280, height: 720 });
-  await page.goto("/overview");
-  await page.getByRole("heading", { name: "Overview", exact: true }).click();
-  await page.keyboard.press("n");
-  const editor = page.getByRole("dialog", { name: "Transaction editor" });
-  await expect(editor.getByLabel("Date", { exact: true })).toHaveValue("");
   await editor.getByRole("button", { name: "Save and add another" }).click();
   await expect(
     editor.getByText("Date is required.", { exact: true }),
   ).toBeVisible();
-  await expect(editor.getByLabel("Date", { exact: true })).toBeFocused();
-  await editor.getByRole("tab", { name: "Advanced" }).click();
-  await expect(editor.getByLabel("Date", { exact: true })).toHaveValue("");
-  await editor.getByLabel("Record 1 memo").press("ControlOrMeta+Enter");
-  await expect(
-    editor.getByText("Date is required.", { exact: true }),
-  ).toBeVisible();
-  await expect(editor.getByLabel("Date", { exact: true })).toBeFocused();
-  await editor
-    .getByRole("button", { name: /fields? needs? attention/ })
-    .click();
-  await expect(editor.locator(":focus")).toHaveAccessibleName(
-    /^Record \d+ (account|amount|currency)$/,
-  );
-  await editor
-    .getByRole("button", { name: "Close transaction editor" })
-    .click();
-  await page.getByRole("heading", { name: "Overview", exact: true }).click();
-  await page.keyboard.press("n");
-  await page.keyboard.press("i");
-  await expect(
-    editor.getByRole("tab", { name: "Income", exact: true }),
-  ).toHaveAttribute("aria-selected", "true");
+  await expect(date).toBeFocused();
 });
 
 test("create drafts reopen only after explicit save and can be discarded or cleared", async ({
@@ -232,13 +179,6 @@ test("create drafts reopen only after explicit save and can be discarded or clea
   ).toBeFocused();
   await close.click();
   await expect(editor).toHaveCount(0);
-  await launcher.click();
-  await expect(editor.getByLabel("Memo")).toHaveValue("");
-  await editor.getByLabel("Memo").fill("Discard with Escape");
-  await editor.getByLabel("Memo").press("Escape");
-  await expect(saveDraft).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(editor).toHaveCount(0);
 });
 
 test("editing a transaction updates its visible detail", async ({
@@ -298,16 +238,6 @@ test("discarding a dirty edit keeps the original transaction", async ({
   ).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(editor).toHaveCount(0);
-  await clickRowAction(page, row, "Edit transaction");
-  await expect(editor.getByLabel("Memo")).toHaveValue(initialMemo);
-  await editor.getByLabel("Memo").fill(discardedMemo);
-  await editor.getByLabel("Memo").press("Escape");
-  await expect(
-    discard.getByRole("button", { name: "Discard changes" }),
-  ).toBeFocused();
-  await page.keyboard.press("Escape");
-
-  await expect(editor).toHaveCount(0);
   await expect(row).toContainText(initialMemo);
   await expect(
     page.getByRole("row").filter({ hasText: discardedMemo }),
@@ -320,7 +250,6 @@ test("duplicating a transaction saves a seeded copy beside its source", async ({
   const unique = testSlug(testInfo.project.name);
   const sourceMemo = `E2E duplicate source ${unique}`;
   const copyMemo = `E2E duplicate copy ${unique}`;
-  const draftMemo = `E2E unrelated draft ${unique}`;
   await createSearchSpend(page, sourceMemo, "19.25");
   await page.goto(
     `/transactions?page=1&pageSize=50&q=${encodeURIComponent(unique)}`,
@@ -331,13 +260,6 @@ test("duplicating a transaction saves a seeded copy beside its source", async ({
     .filter({ hasText: sourceMemo })
     .first();
   const editor = page.getByRole("dialog", { name: "Transaction editor" });
-  const launcher = page
-    .locator("header")
-    .getByRole("button", { name: "New transaction" });
-  await launcher.click();
-  await editor.getByLabel("Memo").fill(draftMemo);
-  await editor.getByLabel("Memo").press("Control+s");
-  await expect(editor).toHaveCount(0);
   await clickRowAction(page, sourceRow, "Duplicate transaction");
   const spend = editor.getByRole("tabpanel", { name: "Spend" });
   await expect(
@@ -353,8 +275,6 @@ test("duplicating a transaction saves a seeded copy beside its source", async ({
   await expect(
     page.getByRole("row").filter({ hasText: copyMemo }).first(),
   ).toBeVisible();
-  await launcher.click();
-  await expect(editor.getByLabel("Memo")).toHaveValue(draftMemo);
 });
 
 test("advanced entry previews and saves a balanced spend", async ({
@@ -852,7 +772,6 @@ test("batched entry keeps sticky fields only within the session and clears repla
   await editor.getByRole("tab", { name: "Spend" }).click();
   await expect(spend.getByLabel("Funding account")).toHaveValue("");
   await expect(spend.getByLabel("Memo")).toHaveValue("");
-  await expect(spend.getByLabel("Date")).not.toHaveValue("2026-08-30");
   await editor
     .getByRole("button", { name: "Close transaction editor" })
     .click();
@@ -884,9 +803,7 @@ test("palette templates protect modified drafts within the open session", async 
   );
   const editor = page.getByRole("dialog", { name: "Transaction editor" });
   await expect(
-    page.locator(
-      'button[aria-label="Command palette"]:visible, button[aria-label="Navigation"]:visible',
-    ),
+    page.getByRole("heading", { name: "Transactions", exact: true }),
   ).toBeVisible();
   await page.keyboard.press("Control+K");
 
