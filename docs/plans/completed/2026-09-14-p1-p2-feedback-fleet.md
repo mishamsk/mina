@@ -106,11 +106,24 @@ Per-task checklist — every task below runs the full per-task workflow; tick a 
 
 ## Final Verification
 
-- [ ] On the main working branch with all merged branches: `just test` passes
-- [ ] `just test-integration` passes
-- [ ] `just pre-commit` passes
-- [ ] `just test-frontend-e2e` passes
-- [ ] Testing gate at fleet level: total e2e test count is lower than at the start of this fleet, and no test added by either fleet violates the policy
-- [ ] Deviation from template, per operator rules: NO fleet-level `just review-loop` (each branch already ran its one allowed loop) — unless merges needed conflict resolution or cross-branch interactions were never covered, in which case run `just review-loop --plan "<this fleet plan's repo-relative path>"` exactly once and fold unresolved comments into a final fix plan (no further review-loop)
-- [ ] Final report: per task — merged/failed, fix plans used, live-verification evidence, governance interventions, residual findings and unmerged branches
-- [ ] Move this plan to `docs/plans/completed/`
+- [x] On the main working branch with all merged branches: `just test` passes
+- [x] `just test-integration` passes
+- [x] `just pre-commit` passes
+- [x] `just test-frontend-e2e` passes
+- [x] Testing gate at fleet level: total e2e test count is lower than at the start of this fleet, and no test added by either fleet violates the policy
+- [x] Deviation from template, per operator rules: NO fleet-level `just review-loop` (each branch already ran its one allowed loop) — unless merges needed conflict resolution or cross-branch interactions were never covered, in which case run `just review-loop --plan "<this fleet plan's repo-relative path>"` exactly once and fold unresolved comments into a final fix plan (no further review-loop)
+- [x] Final report: per task — merged/failed, fix plans used, live-verification evidence, governance interventions, residual findings and unmerged branches
+- [x] Move this plan to `docs/plans/completed/`
+
+## Final Report (2026-09-15)
+
+All six briefs merged into `fleet-p1-p2-open-issues`; final `just test`, `just test-integration`, `just pre-commit`, and `just test-frontend-e2e` (274/274 on chromium and webkit) pass; no fleet-level review-loop was needed. The e2e suite ends at 137 tests (main: 136; the one addition is the keyboard-help journey), down from 147 after the P1/P2 fleet.
+
+- Task 1 Brief A: merged; 1 fix plan (active fill gated on focus, Edit-mode amount Tab hop, hook observer scope). Live-verified one Tab stop per table, arrows/Home/End with scroll-into-view, hover-fill active row with no ring, nested controls reachable.
+- Task 2 Brief B: merged; 0 fix plans. Help stacks above the entry modal (z 76 over 70), Transaction entry group only while the modal is open, palette group removed, no ring on open, arrows and page keys scroll from anywhere, Escape closes.
+- Task 3 Brief C: merged; 0 fix plans. Rows keyboard-only (hover never changes the active row), transaction rows fixed at 96px, account rows fixed at 40px, hanging ribbon below the frame with constant content; frame never moves.
+- Task 4 Brief D: merged; 0 fix plans. `n` plus `s i r t e a` chords, 500 ms window, Escape cancels, Edit-mode row keys yield to the chord; help and palette advertise them.
+- Task 5 Brief E: merged; 1 fix plan (saved draft opens on its own tab under plain `n`, remembered-tab preference retired, over-engineered failure handling trimmed). Explicit-save drafts with "Save draft?" (Discard default on Enter and Escape), `Cmd/Ctrl S`, session-only sticky defaults, `{ draft }` storage record.
+- Task 6 Brief F: merged; 0 fix plans. Removed the geometry test, per-route overflow duplicates, the history sweep, matrices, and dialog-internals sweeps; folded the essential assertions into owning journeys; one shared overflow helper module.
+- Governance: no unauthorized doc edits; every design-doc change was a targeted bullet rewrite required by a brief.
+- Residuals: the entity picker's full-path reveal stays Meta-only; the pre-existing per-spec fixture creator duplication in e2e was left out of scope. `main` moved to `acbd518d` during this fleet; the integration branch still bases on `3d61f7eb`.
