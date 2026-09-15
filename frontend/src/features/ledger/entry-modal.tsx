@@ -14,11 +14,14 @@ import { Toast } from "@/components/toast";
 import { focusWithoutTooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useShortcutGroup } from "@/hooks/use-shortcut-group";
 import type { TransactionEntryType } from "@/models/ui-state";
 import { deleteTransactionEntryDraft } from "@/services/indexeddb";
-import type {
-  LedgerLookupsSnapshot,
-  TransactionEntryRecentTransaction,
+import {
+  type LedgerLookupsSnapshot,
+  registerShortcutGroup,
+  type TransactionEntryRecentTransaction,
+  unregisterShortcutGroup,
 } from "@/store";
 
 import {
@@ -26,6 +29,7 @@ import {
   type EntryPanelLaunch,
   type EntryPanelSaveContext,
 } from "./entry-panel";
+import { transactionEntryShortcutGroup } from "./entry-shortcuts";
 
 interface EntryModalProps {
   readonly errorMessage?: string;
@@ -158,6 +162,12 @@ export const EntryModal = ({
   requestCloseRef,
   returnFocusTo,
 }: EntryModalProps) => {
+  useShortcutGroup(
+    transactionEntryShortcutGroup,
+    registerShortcutGroup,
+    unregisterShortcutGroup,
+    open,
+  );
   const [attentionFlash, setAttentionFlash] = useState(false);
   const [clearDraftError, setClearDraftError] = useState<string>();
   const [clearDraftOpen, setClearDraftOpen] = useState(false);
@@ -273,6 +283,8 @@ export const EntryModal = ({
         />
         <Dialog.Content
           data-global-shortcut-blocking-overlay
+          data-transaction-entry-modal
+          data-testid="transaction-entry-modal"
           ref={contentRef}
           tabIndex={-1}
           className={`bg-card fixed inset-0 z-[70] h-dvh w-screen overflow-hidden border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)] outline-none motion-safe:animate-[entry-stage-in_120ms_steps(2)] sm:top-1/2 sm:left-1/2 sm:h-[calc(100dvh-32px)] sm:w-[calc(100vw-32px)] sm:-translate-x-1/2 sm:-translate-y-1/2 lg:h-[calc(100dvh-48px)] lg:w-[calc(100vw-64px)] xl:h-[calc(100dvh-64px)] xl:w-[min(1200px,calc(100vw-96px))] ${

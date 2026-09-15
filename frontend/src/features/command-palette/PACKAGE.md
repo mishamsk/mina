@@ -8,7 +8,7 @@
 
 - Account leaf and group commands resolve register or filtered Transactions targets from the activating event; held accelerator state only changes presentation. Active subtitles keep each key-and-action clause intact when wrapping, and option descriptions expose both actions, while the polite live clause stays stable across equivalent rows to avoid duplicate arrow-navigation announcements.
 
-- The keyboard-help action captures the pre-palette focus target before palette close restoration clears it, so closing help returns to the original invoker.
+- The keyboard-help action captures the pre-palette focus target before palette close restoration clears it, so closing help returns to the original invoker. The open palette suppresses `?`; its command hints stay in the palette without contributing a help group.
 
 - Navigation targets matching the current pathname and search close the palette without navigating or leaving Edit mode, and restore opener focus.
 

@@ -6,10 +6,10 @@
 
 ## Implicit Contracts
 
-- Keyboard help renders Global, Command palette, and Transaction entry static groups before mounted surface groups, initially focuses the catalog scroll region without a tooltip, blocks underlying global shortcuts as a true modal, and restores the captured opener or route heading on close.
+- Keyboard help renders Global before mounted page/overlay groups, stacks above entry/template modals and below confirmations, initially focuses the catalog without a ring or tooltip, scrolls it with arrow/page keys and Home/End from any dialog focus target, and restores the captured opener or route heading on close.
 - Keyboard help marks its backdrop as a modal overlay so outside-pointer dismissal preserves underlying non-modal detail panels.
 
-- Global shortcut overlay detection is shared with help; shortcut catalogs describe behavior while each surface retains its own handlers.
+- Global shortcuts share overlay detection; only the help predicate ignores the entry-modal marker, while editable targets and other blocking overlays still suppress `?`. Shortcut catalogs describe behavior while each surface retains its own handlers.
 
 - The shell is the browser data router layout and renders route content through its outlet and holds the recurring editor navigation-guard ref, blocking pathname changes while dirty or saving; leaving the blocked state clears the editor's deferred navigation and confirmation before paint, including after same-path navigation resets the blocker. Draft comparison, save completion, and discard-dialog focus remain editor-owned.
 - Roomy fixed pages own canvas-overflow containment through the shared `fixedPageClassName`; the shell supplies the matching top/bottom insets and leaves document-scrolling reports, Status, and Settings to their route-owned scroll models.

@@ -13,15 +13,13 @@ test("keyboard help shows route shortcuts, restores focus, and supports scrollin
   await expect(dialog).toBeVisible();
   await expect(
     dialog.getByRole("heading", { name: "Transaction entry", exact: true }),
-  ).toBeVisible();
+  ).toBeHidden();
   await expect(
     page.getByRole("tooltip", { name: "Close keyboard shortcuts" }),
   ).toBeHidden();
   await expect(
-    dialog.getByText("Open Transactions filtered to the account", {
-      exact: true,
-    }),
-  ).toBeVisible();
+    dialog.getByRole("heading", { name: "Command palette", exact: true }),
+  ).toBeHidden();
   await expect(
     dialog.getByText("Open command palette", { exact: true }),
   ).toBeVisible();
@@ -49,6 +47,13 @@ test("keyboard help shows route shortcuts, restores focus, and supports scrollin
     { exact: true },
   );
   await expect(lastShortcut).not.toBeInViewport();
+  const globalHeading = dialog.getByRole("heading", {
+    name: "Global",
+    exact: true,
+  });
+  await expect(globalHeading).toBeInViewport();
+  await page.keyboard.press("ArrowDown");
+  await expect(globalHeading).not.toBeInViewport();
   await page.keyboard.press("Tab");
   await expect(
     dialog.getByRole("region", { name: "Available keyboard shortcuts" }),
@@ -91,12 +96,14 @@ test("palette keyboard help returns focus to the pre-palette invoker", async ({
   await expect(detail).toBeVisible();
   await page.keyboard.press("?");
   await expect(dialog).toBeVisible();
-  await page.mouse.click(5, 5);
+  await page.locator("[data-modal-overlay]").click({
+    position: { x: 5, y: 5 },
+  });
   await expect(dialog).toBeHidden();
   await expect(detail).toBeVisible();
 });
 
-test("keyboard help stays closed while typing or using modal overlays", async ({
+test("keyboard help stacks above entry and stays closed while typing or using the palette", async ({
   page,
 }) => {
   await page.goto("/transactions");
@@ -121,19 +128,28 @@ test("keyboard help stays closed while typing or using modal overlays", async ({
     .getByRole("heading", { name: "Transactions", exact: true })
     .focus();
   await page.keyboard.press("n");
-  const entry = page.getByRole("dialog", {
-    name: "Transaction editor",
-    exact: true,
-  });
+  const entry = page.getByTestId("transaction-entry-modal");
   await expect(entry).toBeVisible();
-  await entry.getByRole("tab", { name: "Spend", exact: true }).focus();
-  await page.keyboard.press("?");
-  await expect(page.getByTestId("keyboard-shortcuts-dialog")).toHaveCount(0);
+  const spendTab = entry.getByRole("tab", { name: "Spend", exact: true });
+  await spendTab.focus();
   await page.keyboard.press("Control+K");
   await expect(palette).toBeHidden();
+  await expect(spendTab).toBeFocused();
+  await page.keyboard.press("?");
+  await expect(dialog).toBeVisible();
+  await expect(entry).toBeVisible();
   await expect(
-    entry.getByRole("tab", { name: "Spend", exact: true }),
-  ).toBeFocused();
+    dialog.getByRole("heading", { name: "Transaction entry", exact: true }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(spendTab).toBeFocused();
+  const memo = entry.getByLabel("Memo", { exact: true });
+  await memo.focus();
+  await page.keyboard.press("?");
+  await expect(memo).toHaveValue("?");
+  await expect(dialog).toBeHidden();
+  await memo.fill("");
   await page.keyboard.press("Escape");
   await expect(entry).toBeHidden();
 });

@@ -10,7 +10,7 @@
 
 - Account Transactions links use one fresh-URL builder for stable leaf IDs or descendant group FQNs; entity pickers observe the shared accelerator hook in Meta-only mode.
 
-- The entry modal blocks global shortcuts; its help catalog belongs to the shell and is visible on every route. Mounted transaction surfaces register browse and detail keyboard help; Edit mode replaces browse activation hints and adds selection/dock hints only while enabled.
+- The entry modal blocks global entry and palette shortcuts but allows `?` outside editable targets and blocking nested overlays; it registers Transaction entry help only while open, and stacked help restores its captured modal opener. Mounted transaction surfaces register browse and detail keyboard help; Edit mode replaces browse activation hints and adds selection/dock hints only while enabled.
 
 - Record-date formatting selects posted then pending timestamps by presence alone and converts them to browser-local calendar days; date-free records use the initiated civil date with the same day/year geometry.
 

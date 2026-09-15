@@ -7,19 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { closeKeyboardShortcuts, useKeyboardShortcutsView } from "@/store";
 
-import {
-  commandPaletteShortcutGroup,
-  globalShortcutGroup,
-  transactionEntryShortcutGroup,
-} from "./global-shortcuts";
+import { globalShortcutGroup } from "./global-shortcuts";
 
 export const KeyboardShortcutsDialog = () => {
   const catalogRef = useRef<HTMLDivElement>(null);
   const { groups, launch, open } = useKeyboardShortcutsView();
   const orderedGroups = [
     globalShortcutGroup,
-    commandPaletteShortcutGroup,
-    transactionEntryShortcutGroup,
     ...Array.from(groups.values()).sort(
       (a, b) => a.order - b.order || a.title.localeCompare(b.title),
     ),
@@ -34,17 +28,46 @@ export const KeyboardShortcutsDialog = () => {
       <Dialog.Portal>
         <Dialog.Overlay
           data-modal-overlay
-          className="fixed inset-0 z-50 bg-[color-mix(in_srgb,var(--frame),transparent_35%)]"
+          className="fixed inset-0 z-[75] bg-[color-mix(in_srgb,var(--frame),transparent_35%)]"
         />
         <Dialog.Content
           data-testid="keyboard-shortcuts-dialog"
           key={launch?.key}
           aria-modal="true"
           aria-describedby={undefined}
-          className="bg-card text-foreground fixed top-1/2 left-1/2 z-[51] flex max-h-[calc(100svh-2rem)] w-[min(640px,calc(100%-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]"
+          className="bg-card text-foreground fixed top-1/2 left-1/2 z-[76] flex max-h-[calc(100svh-2rem)] w-[min(640px,calc(100%-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]"
           onOpenAutoFocus={(event) => {
             event.preventDefault();
             focusWithoutTooltip(catalogRef.current, { preventScroll: true });
+          }}
+          onKeyDown={(event) => {
+            const catalog = catalogRef.current;
+            if (!catalog) return;
+            let top: number;
+            switch (event.key) {
+              case "ArrowDown":
+                top = catalog.scrollTop + 56;
+                break;
+              case "ArrowUp":
+                top = catalog.scrollTop - 56;
+                break;
+              case "PageDown":
+                top = catalog.scrollTop + catalog.clientHeight * 0.9;
+                break;
+              case "PageUp":
+                top = catalog.scrollTop - catalog.clientHeight * 0.9;
+                break;
+              case "Home":
+                top = 0;
+                break;
+              case "End":
+                top = catalog.scrollHeight;
+                break;
+              default:
+                return;
+            }
+            event.preventDefault();
+            catalog.scrollTo({ top });
           }}
           onCloseAutoFocus={(event) => {
             event.preventDefault();
@@ -77,7 +100,7 @@ export const KeyboardShortcutsDialog = () => {
             role="region"
             aria-label="Available keyboard shortcuts"
             tabIndex={0}
-            className="min-h-0 overflow-y-auto p-4"
+            className="min-h-0 overflow-y-auto p-4 focus-visible:outline-none"
           >
             {orderedGroups.map((group) => (
               <section

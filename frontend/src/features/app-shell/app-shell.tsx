@@ -104,7 +104,11 @@ import {
   useTransactionEntryPanelView,
 } from "@/store";
 
-import { hasActiveOverlay, isEditableTarget } from "./global-shortcuts";
+import {
+  hasActiveOverlay,
+  hasHelpBlockingOverlay,
+  isEditableTarget,
+} from "./global-shortcuts";
 import { KeyboardShortcutsDialog } from "./keyboard-shortcuts-dialog";
 
 type PixelIcon = ComponentType<SVGProps<SVGSVGElement>>;
@@ -963,7 +967,7 @@ export const AppShell = () => {
         event.metaKey ||
         event.ctrlKey ||
         event.altKey ||
-        hasActiveOverlay() ||
+        hasHelpBlockingOverlay() ||
         isEditableTarget(event.target)
       )
         return;
