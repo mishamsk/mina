@@ -216,6 +216,15 @@ test("entry outside Transactions requires a date and focuses its inline error", 
   await expect(editor.locator(":focus")).toHaveAccessibleName(
     /^Record \d+ (account|amount|currency)$/,
   );
+  await editor
+    .getByRole("button", { name: "Close transaction editor" })
+    .click();
+  await page.getByRole("heading", { name: "Overview", exact: true }).click();
+  await page.keyboard.press("n");
+  await page.keyboard.press("i");
+  await expect(
+    editor.getByRole("tab", { name: "Income", exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
 });
 
 test("create drafts recover after closing and can be cleared", async ({

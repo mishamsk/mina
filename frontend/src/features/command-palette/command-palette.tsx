@@ -610,7 +610,7 @@ export const CommandPalette = () => {
           openEntryCommand("spend");
         },
         group: "New transaction",
-        shortcut: ["n"],
+        shortcut: ["n", "s"],
         icon: Plus,
         id: "entry-spend",
         keywords: ["spend", "expense"],
@@ -621,7 +621,7 @@ export const CommandPalette = () => {
           openEntryCommand("income");
         },
         group: "New transaction",
-        shortcut: ["n"],
+        shortcut: ["n", "i"],
         icon: Plus,
         id: "entry-income",
         keywords: ["income"],
@@ -632,7 +632,7 @@ export const CommandPalette = () => {
           openEntryCommand("refund");
         },
         group: "New transaction",
-        shortcut: ["n"],
+        shortcut: ["n", "r"],
         icon: Plus,
         id: "entry-refund",
         keywords: ["refund"],
@@ -643,7 +643,7 @@ export const CommandPalette = () => {
           openEntryCommand("transfer");
         },
         group: "New transaction",
-        shortcut: ["n"],
+        shortcut: ["n", "t"],
         icon: Plus,
         id: "entry-transfer",
         keywords: ["transfer"],
@@ -654,11 +654,22 @@ export const CommandPalette = () => {
           openEntryCommand("exchange");
         },
         group: "New transaction",
-        shortcut: ["n"],
+        shortcut: ["n", "e"],
         icon: Plus,
         id: "entry-exchange",
         keywords: ["exchange", "currency", "fx"],
         label: "New exchange",
+      },
+      {
+        action: () => {
+          openEntryCommand("advanced");
+        },
+        group: "New transaction",
+        shortcut: ["n", "a"],
+        icon: Plus,
+        id: "entry-advanced",
+        keywords: ["advanced", "journal"],
+        label: "New advanced entry",
       },
     ];
     const normalizedQuery = normalizeSearch(query);

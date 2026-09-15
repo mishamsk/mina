@@ -29,6 +29,13 @@ export const globalShortcutGroup: ShortcutGroup = {
   shortcuts: [
     { id: "palette", keys: ["Mod", "K"], label: "Open command palette" },
     { id: "new", keys: ["n"], label: "New transaction" },
+    {
+      id: "new-tab",
+      keys: ["n", "s"],
+      label: "New transaction on a tab",
+      detail:
+        "n then s, i, r, t, e, or a for Spend, Income, Refund, Transfer, Exchange, or Advanced.",
+    },
     { id: "help", keys: ["?"], label: "Keyboard shortcuts" },
     { id: "close", keys: ["Esc"], label: "Close the topmost overlay" },
   ],

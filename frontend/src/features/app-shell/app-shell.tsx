@@ -936,7 +936,54 @@ export const AppShell = () => {
   }, []);
 
   useEffect(() => {
+    const tabs: Readonly<Record<string, TransactionEntryType>> = {
+      s: "spend",
+      i: "income",
+      r: "refund",
+      t: "transfer",
+      e: "exchange",
+      a: "advanced",
+    };
+    let timer: number | undefined;
+    const cancel = () => {
+      window.clearTimeout(timer);
+      timer = undefined;
+    };
+    const open = (tab: TransactionEntryType) => {
+      cancel();
+      if (hasActiveOverlay() || isEditableTarget(document.activeElement))
+        return;
+      openTransactionEntryPanel(tab, captureTransactionEntryLaunchContext());
+    };
     const onKeyDown = (event: KeyboardEvent) => {
+      if (timer !== undefined) {
+        if (["Meta", "Control", "Alt", "Shift"].includes(event.key)) return;
+        if (hasActiveOverlay() || isEditableTarget(event.target)) {
+          cancel();
+          return;
+        }
+        if (event.key === "Escape") {
+          event.preventDefault();
+          event.stopPropagation();
+          cancel();
+          return;
+        }
+        const tab = tabs[event.key.toLowerCase()];
+        if (
+          tab &&
+          !event.metaKey &&
+          !event.ctrlKey &&
+          !event.altKey &&
+          !event.shiftKey
+        ) {
+          event.preventDefault();
+          event.stopPropagation();
+          open(tab);
+        } else {
+          open("spend");
+        }
+        return;
+      }
       if (
         event.key.toLowerCase() !== "n" ||
         event.metaKey ||
@@ -949,14 +996,16 @@ export const AppShell = () => {
         return;
       }
       event.preventDefault();
-      openTransactionEntryPanel(
-        undefined,
-        captureTransactionEntryLaunchContext(),
-      );
+      timer = window.setTimeout(() => open("spend"), 500);
     };
-    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKeyDown, true);
+    window.addEventListener("blur", cancel);
+    window.addEventListener("visibilitychange", cancel);
     return () => {
-      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keydown", onKeyDown, true);
+      window.removeEventListener("blur", cancel);
+      window.removeEventListener("visibilitychange", cancel);
+      cancel();
     };
   }, []);
 
