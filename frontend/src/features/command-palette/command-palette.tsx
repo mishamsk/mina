@@ -73,7 +73,6 @@ import {
 } from "@/features/ledger";
 import { formatDecimalAmount } from "@/features/ledger/format";
 import { useTransactionTemplatesResource } from "@/features/templates/use-transaction-templates-resource";
-import { useAcceleratorHeld } from "@/hooks/use-accelerator-held";
 import { cn } from "@/lib/utils";
 import {
   defaultTransactionSort,
@@ -179,7 +178,7 @@ const commandGroups: readonly CommandGroup[] = [
   "Actions",
 ];
 const defaultEntityResultLimit = 8;
-// A floor: the active account subtitle can make one result taller.
+// Exact command-row pitch: 40px row plus 4px gap.
 const entityResultRowHeightPx = 44;
 const entitySearchDebounceMs = 180;
 const maxEntityResultLimit = 500;
@@ -187,7 +186,7 @@ const transactionResultLimit = 20;
 const transactionSearchDebounceMs = 180;
 const commandSkeletonRows = [0, 1, 2, 3] as const;
 const transactionResultGridClass =
-  "grid min-w-0 grid-cols-[3.75rem_1.5rem_minmax(0,1fr)_minmax(0,8rem)] items-center gap-2 px-2 sm:grid-cols-[4.5rem_1.75rem_2.5rem_minmax(0,1fr)_minmax(0,clamp(7rem,28vw,14rem))] sm:gap-3 sm:px-3";
+  "grid min-w-0 grid-cols-[3.75rem_1.5rem_minmax(0,1fr)_minmax(0,8rem)] items-start gap-2 px-2 sm:grid-cols-[4.5rem_1.75rem_2.5rem_minmax(0,1fr)_minmax(0,clamp(7rem,28vw,14rem))] sm:gap-3 sm:px-3";
 
 const domIdPart = (value: string): string => {
   const slug = value
@@ -396,7 +395,6 @@ export const CommandPalette = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { open } = useCommandPaletteView();
-  const acceleratorHeld = useAcceleratorHeld({ enabled: open });
   const transactionEditModeAvailable = useTransactionEditModeAvailable();
   const lookups = useLedgerLookupsView();
   const lastTransactionsPageSearch = useLastTransactionsPageSearch();
@@ -943,13 +941,6 @@ export const CommandPalette = () => {
   const activeCommand = transactionSearchMode
     ? undefined
     : visibleCommands[activeIndex];
-  // Stable clauses avoid repeating the same live hint on plain arrow navigation;
-  // aria-activedescendant already announces the new option and its description.
-  const actionAnnouncement = activeCommand?.alternateAction
-    ? acceleratorHeld
-      ? `Cmd/Ctrl Enter ${activeCommand.alternateAction.label}.`
-      : `Enter ${activeCommand.defaultActionLabel}.`
-    : "";
   const activeTransaction = transactionSearchMode
     ? transactionResults[activeIndex]
     : undefined;
@@ -1440,386 +1431,352 @@ export const CommandPalette = () => {
           }}
         >
           <div
-            ref={dialogRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="command-palette-title"
-            className="bg-card text-foreground flex h-[min(38rem,76svh)] w-full max-w-2xl flex-col border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]"
-            onKeyDownCapture={handleDialogKeyDownCapture}
+            className="flex max-h-[84svh] w-full max-w-2xl flex-col shadow-[var(--shadow-pixel)]"
+            role="presentation"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) {
+                close();
+              }
+            }}
           >
-            <span className="sr-only" role="status" aria-live="polite">
-              {actionAnnouncement}
-            </span>
-            <div className="bg-card sticky top-0 z-10 flex flex-col gap-3 border-b-2 border-[var(--border-ink)] p-4">
-              <div className="flex items-center justify-between gap-4">
-                <h2
-                  id="command-palette-title"
-                  className="font-heading text-base font-bold uppercase"
-                >
-                  Command Palette
-                </h2>
-                <Kbd>Cmd/Ctrl K</Kbd>
-              </div>
-              <input
-                ref={inputRef}
-                type="search"
-                autoComplete="off"
-                role="combobox"
-                aria-label="Command search"
-                aria-autocomplete="list"
-                aria-controls={
-                  hasPaletteResults ? "command-palette-results" : undefined
-                }
-                aria-expanded={hasPaletteResults}
-                aria-activedescendant={
-                  hasPaletteResults ? activeDescendantId : undefined
-                }
-                className="bg-card text-foreground placeholder:text-muted-foreground h-10 border-2 border-[var(--border-ink)] px-3 font-mono text-sm shadow-[var(--shadow-chip)]"
-                placeholder={
-                  transactionSearchMode
-                    ? "' search transactions"
-                    : "Type a command or page"
-                }
-                value={query}
-                onChange={(event) => {
-                  setSearchState({
-                    activeIndex: 0,
-                    query: event.target.value,
-                  });
-                }}
-                onKeyDown={handleInputKeyDown}
-              />
-            </div>
+            {/* Reserve wrapped ribbon space even when no alternate action is active. */}
             <div
-              ref={resultsViewportRef}
-              className="min-h-0 flex-1 overflow-y-auto p-2"
+              ref={dialogRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="command-palette-title"
+              className="bg-card text-foreground flex h-[min(38rem,72svh)] max-h-[calc(84svh-6rem)] min-h-0 w-full shrink-0 flex-col border-2 border-[var(--border-ink)]"
+              onKeyDownCapture={handleDialogKeyDownCapture}
             >
-              {transactionSearchMode ? (
-                <>
-                  {transactionSearchLoading ? (
-                    <TransactionSearchResultsSkeleton />
-                  ) : transactionSearchErrorMessage ? (
-                    <div
-                      className="bg-muted text-destructive px-3 py-4 font-mono text-sm"
-                      role="alert"
-                    >
-                      {transactionSearchErrorMessage}
-                    </div>
-                  ) : transactionResults.length === 0 ? (
-                    <div className="bg-muted text-muted-foreground px-3 py-4 font-mono text-sm">
-                      {transactionQuery.trim()
-                        ? "No matching transactions."
-                        : "Type after the apostrophe to search transactions."}
-                    </div>
+              <div className="bg-card sticky top-0 z-10 flex shrink-0 flex-col gap-3 border-b-2 border-[var(--border-ink)] p-4">
+                <div className="flex items-center justify-between gap-4">
+                  <h2
+                    id="command-palette-title"
+                    className="font-heading text-base font-bold uppercase"
+                  >
+                    Command Palette
+                  </h2>
+                  <Kbd>Cmd/Ctrl K</Kbd>
+                </div>
+                <input
+                  ref={inputRef}
+                  type="search"
+                  autoComplete="off"
+                  role="combobox"
+                  aria-label="Command search"
+                  aria-autocomplete="list"
+                  aria-controls={
+                    hasPaletteResults ? "command-palette-results" : undefined
+                  }
+                  aria-describedby={
+                    activeCommand?.alternateAction
+                      ? "command-palette-action-ribbon"
+                      : undefined
+                  }
+                  aria-expanded={hasPaletteResults}
+                  aria-activedescendant={
+                    hasPaletteResults ? activeDescendantId : undefined
+                  }
+                  className="bg-card text-foreground placeholder:text-muted-foreground h-10 border-2 border-[var(--border-ink)] px-3 font-mono text-sm shadow-[var(--shadow-chip)]"
+                  placeholder={
+                    transactionSearchMode
+                      ? "' search transactions"
+                      : "Type a command or page"
+                  }
+                  value={query}
+                  onChange={(event) => {
+                    setSearchState({
+                      activeIndex: 0,
+                      query: event.target.value,
+                    });
+                  }}
+                  onKeyDown={handleInputKeyDown}
+                />
+              </div>
+              <div
+                ref={resultsViewportRef}
+                className="min-h-0 flex-1 overflow-y-auto p-2"
+              >
+                {transactionSearchMode ? (
+                  <>
+                    {transactionSearchLoading ? (
+                      <TransactionSearchResultsSkeleton />
+                    ) : transactionSearchErrorMessage ? (
+                      <div
+                        className="bg-muted text-destructive px-3 py-4 font-mono text-sm"
+                        role="alert"
+                      >
+                        {transactionSearchErrorMessage}
+                      </div>
+                    ) : transactionResults.length === 0 ? (
+                      <div className="bg-muted text-muted-foreground px-3 py-4 font-mono text-sm">
+                        {transactionQuery.trim()
+                          ? "No matching transactions."
+                          : "Type after the apostrophe to search transactions."}
+                      </div>
+                    ) : (
+                      <div
+                        id="command-palette-results"
+                        role="listbox"
+                        aria-label="Transaction search results"
+                        className="flex flex-col gap-1"
+                      >
+                        {transactionResults.map((transaction, index) => {
+                          const active = index === activeIndex;
+                          const memo = lineMemo(transaction);
+                          const displayStatus = lineStatus(transaction);
+                          const amountDeemphasized =
+                            displayStatus === "expected" ||
+                            displayStatus === "pending" ||
+                            displayStatus === "mixed" ||
+                            displayStatus === "cancelled";
+                          const lineInactive = displayStatus === "cancelled";
+                          const displayTitleContext =
+                            transactionAccountFqnContext(
+                              transaction,
+                              lookupMaps,
+                            );
+                          const optionLabel = transactionResultOptionLabel(
+                            transaction,
+                            displayTitleContext,
+                            memo,
+                            displayStatus,
+                          );
+                          return (
+                            <button
+                              key={transaction.transaction_id}
+                              id={transactionOptionId(
+                                transaction.transaction_id,
+                              )}
+                              type="button"
+                              role="option"
+                              aria-selected={active}
+                              className={cn(
+                                transactionResultGridClass,
+                                "h-24 w-full shrink-0 border-2 border-transparent py-2 text-left font-mono text-sm",
+                                active &&
+                                  "border-[var(--border-ink)] bg-[var(--color-interactive-bright)] shadow-[var(--shadow-chip)]",
+                                lineInactive &&
+                                  "text-muted-foreground line-through",
+                              )}
+                              onClick={() => {
+                                activateTransaction(transaction);
+                              }}
+                              aria-label={optionLabel}
+                            >
+                              <span className="text-muted-foreground shrink-0 text-xs">
+                                {formatInitiatedDate(
+                                  transaction.initiated_date,
+                                )}
+                              </span>
+                              <ClassIcon
+                                focusable={false}
+                                transactionClass={transaction.transaction_class}
+                              />
+                              <span className="hidden h-6 w-10 shrink-0 place-items-center sm:grid">
+                                {displayStatus ? (
+                                  <StatusIcon
+                                    focusable={false}
+                                    status={displayStatus}
+                                  />
+                                ) : null}
+                              </span>
+                              <span
+                                className="grid min-w-0 gap-0.5"
+                                data-testid="transaction-result-description"
+                              >
+                                <Tooltip
+                                  focusable={false}
+                                  label={displayTitleContext}
+                                  className="block min-w-0"
+                                >
+                                  <span className="line-clamp-2 font-semibold [overflow-wrap:anywhere] whitespace-normal">
+                                    {transaction.display_title}
+                                  </span>
+                                </Tooltip>
+                                {memo ? (
+                                  <Tooltip
+                                    focusable={false}
+                                    label={memo}
+                                    className="block min-w-0"
+                                  >
+                                    <span className="text-muted-foreground line-clamp-2 text-xs [overflow-wrap:anywhere] whitespace-normal">
+                                      {memo}
+                                    </span>
+                                  </Tooltip>
+                                ) : null}
+                              </span>
+                              <span
+                                className="flex min-w-0 flex-nowrap justify-end gap-1 overflow-hidden"
+                                data-testid="transaction-result-amounts"
+                              >
+                                <TransactionResultAmounts
+                                  deemphasized={amountDeemphasized}
+                                  transaction={transaction}
+                                />
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </>
+                ) : groupedCommands.length === 0 ? (
+                  entitySearchLoading ? (
+                    <CommandPaletteResultsSkeleton />
                   ) : (
+                    <div
+                      className={cn(
+                        "bg-muted px-3 py-4 font-mono text-sm",
+                        entitySearchErrorMessage
+                          ? "text-destructive"
+                          : "text-muted-foreground",
+                      )}
+                      role={entitySearchErrorMessage ? "alert" : undefined}
+                    >
+                      {entitySearchErrorMessage ?? "No commands found."}
+                    </div>
+                  )
+                ) : (
+                  <>
                     <div
                       id="command-palette-results"
                       role="listbox"
-                      aria-label="Transaction search results"
-                      className="flex flex-col gap-1"
+                      aria-label="Command results"
+                      className="flex flex-col gap-3"
                     >
-                      {transactionResults.map((transaction, index) => {
-                        const active = index === activeIndex;
-                        const memo = lineMemo(transaction);
-                        const displayStatus = lineStatus(transaction);
-                        const amountDeemphasized =
-                          displayStatus === "expected" ||
-                          displayStatus === "pending" ||
-                          displayStatus === "mixed" ||
-                          displayStatus === "cancelled";
-                        const lineInactive = displayStatus === "cancelled";
-                        const displayTitleContext =
-                          transactionAccountFqnContext(transaction, lookupMaps);
-                        const optionLabel = transactionResultOptionLabel(
-                          transaction,
-                          displayTitleContext,
-                          memo,
-                          displayStatus,
-                        );
-                        return (
-                          <button
-                            key={transaction.transaction_id}
-                            id={transactionOptionId(transaction.transaction_id)}
-                            type="button"
-                            role="option"
-                            aria-selected={active}
-                            className={cn(
-                              transactionResultGridClass,
-                              "w-full border-2 border-transparent py-2 text-left font-mono text-sm",
-                              "hover:bg-muted hover:border-[var(--border-ink)]",
-                              active &&
-                                "border-[var(--border-ink)] bg-[var(--color-interactive-bright)] shadow-[var(--shadow-chip)]",
-                              lineInactive &&
-                                "text-muted-foreground line-through",
-                            )}
-                            onMouseEnter={() => {
-                              setSearchState({
-                                activeIndex: index,
-                                query,
-                              });
-                            }}
-                            onClick={() => {
-                              activateTransaction(transaction);
-                            }}
-                            aria-label={optionLabel}
-                          >
-                            <span className="text-muted-foreground shrink-0 text-xs">
-                              {formatInitiatedDate(transaction.initiated_date)}
-                            </span>
-                            <ClassIcon
-                              focusable={false}
-                              transactionClass={transaction.transaction_class}
-                            />
-                            <span className="hidden h-6 w-10 shrink-0 place-items-center sm:grid">
-                              {displayStatus ? (
-                                <StatusIcon
-                                  focusable={false}
-                                  status={displayStatus}
-                                />
-                              ) : null}
-                            </span>
-                            <span
-                              className="grid min-w-0 gap-0.5"
-                              data-testid="transaction-result-description"
-                            >
-                              <Tooltip
-                                focusable={false}
-                                label={displayTitleContext}
-                                className="block min-w-0"
-                              >
-                                <span
-                                  className={cn(
-                                    "block font-semibold",
-                                    active
-                                      ? "[overflow-wrap:anywhere] whitespace-normal"
-                                      : "truncate",
-                                  )}
-                                >
-                                  {transaction.display_title}
-                                </span>
-                              </Tooltip>
-                              {memo ? (
-                                <Tooltip
-                                  focusable={false}
-                                  label={memo}
-                                  className="block min-w-0"
-                                >
-                                  <span
-                                    className={cn(
-                                      "text-muted-foreground block text-xs",
-                                      active
-                                        ? "[overflow-wrap:anywhere] whitespace-normal"
-                                        : "truncate",
-                                    )}
-                                  >
-                                    {memo}
-                                  </span>
-                                </Tooltip>
-                              ) : null}
-                            </span>
-                            <span
-                              className="flex min-w-0 flex-nowrap justify-end gap-1 overflow-hidden"
-                              data-testid="transaction-result-amounts"
-                            >
-                              <TransactionResultAmounts
-                                deemphasized={amountDeemphasized}
-                                transaction={transaction}
-                              />
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </>
-              ) : groupedCommands.length === 0 ? (
-                entitySearchLoading ? (
-                  <CommandPaletteResultsSkeleton />
-                ) : (
-                  <div
-                    className={cn(
-                      "bg-muted px-3 py-4 font-mono text-sm",
-                      entitySearchErrorMessage
-                        ? "text-destructive"
-                        : "text-muted-foreground",
-                    )}
-                    role={entitySearchErrorMessage ? "alert" : undefined}
-                  >
-                    {entitySearchErrorMessage ?? "No commands found."}
-                  </div>
-                )
-              ) : (
-                <>
-                  <div
-                    id="command-palette-results"
-                    role="listbox"
-                    aria-label="Command results"
-                    className="flex flex-col gap-3"
-                  >
-                    {groupedCommands.map((group) => (
-                      <div
-                        key={group.group}
-                        role="group"
-                        aria-label={group.group}
-                      >
-                        <h3
-                          role="presentation"
-                          className="font-heading text-muted-foreground px-2 pb-1 text-xs font-semibold uppercase"
+                      {groupedCommands.map((group) => (
+                        <div
+                          key={group.group}
+                          role="group"
+                          aria-label={group.group}
                         >
-                          {group.group}
-                        </h3>
-                        <div className="flex flex-col gap-1">
-                          {group.items.map((command) => {
-                            const index = visibleCommands.indexOf(command);
-                            const active = index === activeIndex;
-                            const Icon = command.icon;
-                            return (
-                              <button
-                                key={command.id}
-                                id={commandOptionId(command.id)}
-                                type="button"
-                                role="option"
-                                aria-selected={active}
-                                aria-describedby={
-                                  command.alternateAction
-                                    ? `${commandOptionId(command.id)}-action`
-                                    : undefined
-                                }
-                                className={cn(
-                                  "flex w-full items-center gap-3 border-2 border-transparent px-3 py-2 text-left font-mono text-sm",
-                                  "hover:bg-muted hover:border-[var(--border-ink)]",
-                                  active &&
-                                    "border-[var(--border-ink)] bg-[var(--color-interactive-bright)] shadow-[var(--shadow-chip)]",
-                                )}
-                                onMouseEnter={() => {
-                                  setSearchState({
-                                    activeIndex: index,
-                                    query,
-                                  });
-                                }}
-                                onKeyDown={(event) => {
-                                  if (event.key === "Enter") {
-                                    event.preventDefault();
+                          <h3
+                            role="presentation"
+                            className="font-heading text-muted-foreground px-2 pb-1 text-xs font-semibold uppercase"
+                          >
+                            {group.group}
+                          </h3>
+                          <div className="flex flex-col gap-1">
+                            {group.items.map((command) => {
+                              const index = visibleCommands.indexOf(command);
+                              const active = index === activeIndex;
+                              const Icon = command.icon;
+                              return (
+                                <button
+                                  key={command.id}
+                                  id={commandOptionId(command.id)}
+                                  type="button"
+                                  role="option"
+                                  aria-selected={active}
+                                  className={cn(
+                                    "flex h-10 w-full shrink-0 items-center gap-3 border-2 border-transparent px-3 py-2 text-left font-mono text-sm",
+                                    active &&
+                                      "border-[var(--border-ink)] bg-[var(--color-interactive-bright)] shadow-[var(--shadow-chip)]",
+                                  )}
+                                  onKeyDown={(event) => {
+                                    if (event.key === "Enter") {
+                                      event.preventDefault();
+                                      activateCommand(
+                                        command,
+                                        event.metaKey || event.ctrlKey,
+                                      );
+                                    }
+                                  }}
+                                  onClick={(event) => {
                                     activateCommand(
                                       command,
                                       event.metaKey || event.ctrlKey,
                                     );
-                                  }
-                                }}
-                                onClick={(event) => {
-                                  activateCommand(
-                                    command,
-                                    event.metaKey || event.ctrlKey,
-                                  );
-                                }}
-                                aria-label={command.accessibleLabel}
-                              >
-                                <Icon
-                                  className="size-4 shrink-0"
-                                  aria-hidden="true"
-                                />
-                                <span className="min-w-0 flex-1 font-semibold">
-                                  <span className="block truncate">
-                                    {command.renderLabel ?? command.label}
+                                  }}
+                                  aria-label={command.accessibleLabel}
+                                >
+                                  <Icon
+                                    className="size-4 shrink-0"
+                                    aria-hidden="true"
+                                  />
+                                  <span className="min-w-0 flex-1 font-semibold">
+                                    <span className="block truncate">
+                                      {command.renderLabel ?? command.label}
+                                    </span>
                                   </span>
-                                  {active && command.alternateAction ? (
-                                    <span
-                                      data-testid="command-palette-action-subtitle"
-                                      aria-hidden="true"
-                                      className="text-muted-foreground mt-1 block text-xs leading-7 font-normal"
+                                  {command.hiddenLabel ? (
+                                    <Tooltip
+                                      focusable={false}
+                                      label={command.hiddenLabel}
+                                      className="text-foreground inline-flex shrink-0"
                                     >
-                                      <span className="inline-flex items-center gap-1 font-semibold whitespace-nowrap">
-                                        {acceleratorHeld ? (
-                                          <>
-                                            <Kbd>Mod</Kbd>{" "}
-                                          </>
-                                        ) : null}
-                                        <Kbd>Enter</Kbd>{" "}
-                                        {acceleratorHeld
-                                          ? command.alternateAction.label
-                                          : command.defaultActionLabel}
+                                      <span
+                                        aria-label={command.hiddenLabel}
+                                        className="inline-flex"
+                                      >
+                                        <EyeOff
+                                          aria-hidden="true"
+                                          className="size-4"
+                                        />
                                       </span>
-                                      {" · "}
-                                      <span className="inline-flex items-center gap-1 whitespace-nowrap">
-                                        {acceleratorHeld ? null : (
-                                          <>
-                                            <Kbd>Mod</Kbd>{" "}
-                                          </>
-                                        )}
-                                        <Kbd>Enter</Kbd>{" "}
-                                        {acceleratorHeld
-                                          ? command.defaultActionLabel
-                                          : command.alternateAction.label}
-                                      </span>
+                                    </Tooltip>
+                                  ) : null}
+                                  {command.shortcut?.map((key) => (
+                                    <Kbd key={key}>{key}</Kbd>
+                                  ))}
+                                  {command.detail ? (
+                                    <span className="text-muted-foreground ml-auto text-xs">
+                                      {command.detail}
                                     </span>
                                   ) : null}
-                                  {command.alternateAction ? (
-                                    <span
-                                      id={`${commandOptionId(command.id)}-action`}
-                                      className="sr-only"
-                                    >
-                                      {acceleratorHeld
-                                        ? `Cmd/Ctrl Enter ${command.alternateAction.label}; Enter ${command.defaultActionLabel}.`
-                                        : `Enter ${command.defaultActionLabel}; Cmd/Ctrl Enter ${command.alternateAction.label}.`}
+                                  {command.to &&
+                                  commandIsCurrent(command.to) ? (
+                                    <span className="text-muted-foreground ml-auto text-xs">
+                                      Current
                                     </span>
                                   ) : null}
-                                </span>
-                                {command.hiddenLabel ? (
-                                  <Tooltip
-                                    focusable={false}
-                                    label={command.hiddenLabel}
-                                    className="text-foreground inline-flex shrink-0"
-                                  >
-                                    <span
-                                      aria-label={command.hiddenLabel}
-                                      className="inline-flex"
-                                    >
-                                      <EyeOff
-                                        aria-hidden="true"
-                                        className="size-4"
-                                      />
-                                    </span>
-                                  </Tooltip>
-                                ) : null}
-                                {command.shortcut?.map((key) => (
-                                  <Kbd key={key}>{key}</Kbd>
-                                ))}
-                                {command.detail ? (
-                                  <span className="text-muted-foreground ml-auto text-xs">
-                                    {command.detail}
-                                  </span>
-                                ) : null}
-                                {command.to && commandIsCurrent(command.to) ? (
-                                  <span className="text-muted-foreground ml-auto text-xs">
-                                    Current
-                                  </span>
-                                ) : null}
-                              </button>
-                            );
-                          })}
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
+                      ))}
+                    </div>
+                    {entitySearchLoading ? (
+                      <div
+                        className="bg-muted text-muted-foreground mt-3 px-3 py-2 font-mono text-sm"
+                        role="status"
+                      >
+                        Searching entities…
                       </div>
-                    ))}
-                  </div>
-                  {entitySearchLoading ? (
-                    <div
-                      className="bg-muted text-muted-foreground mt-3 px-3 py-2 font-mono text-sm"
-                      role="status"
-                    >
-                      Searching entities…
-                    </div>
-                  ) : null}
-                  {entitySearchErrorMessage ? (
-                    <div
-                      className="bg-muted text-destructive mt-3 px-3 py-2 font-mono text-sm"
-                      role="alert"
-                    >
-                      {entitySearchErrorMessage}
-                    </div>
-                  ) : null}
-                </>
-              )}
+                    ) : null}
+                    {entitySearchErrorMessage ? (
+                      <div
+                        className="bg-muted text-destructive mt-3 px-3 py-2 font-mono text-sm"
+                        role="alert"
+                      >
+                        {entitySearchErrorMessage}
+                      </div>
+                    ) : null}
+                  </>
+                )}
+              </div>
             </div>
+            {activeCommand?.alternateAction ? (
+              <div
+                id="command-palette-action-ribbon"
+                data-testid="command-palette-action-ribbon"
+                className="text-foreground flex shrink-0 flex-wrap items-center gap-x-2 gap-y-2 border-2 border-t-0 border-[var(--border-ink)] bg-[var(--band)] px-3 py-2 font-mono text-xs uppercase"
+              >
+                <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                  <Kbd>Enter</Kbd> {activeCommand.defaultActionLabel}
+                </span>
+                <span aria-hidden="true" className="text-muted-foreground">
+                  {" "}
+                  ·{" "}
+                </span>
+                <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                  <Kbd>Mod</Kbd> <Kbd>Enter</Kbd>{" "}
+                  {activeCommand.alternateAction.label}
+                </span>
+              </div>
+            ) : null}
           </div>
         </div>
       ) : null}

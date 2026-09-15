@@ -120,13 +120,13 @@ test("command palette offers filtered Transactions and register account actions"
   await openPalette(page);
   await search.fill("joint_checking");
   await expect(result).toHaveAttribute("aria-selected", "true");
-  const subtitle = result.getByTestId("command-palette-action-subtitle");
-  await expect(subtitle).toHaveText(
+  const ribbon = page.getByTestId("command-palette-action-ribbon");
+  await expect(ribbon).toHaveText(
     "Enter opens register · Cmd/Ctrl Enter opens filtered Transactions",
   );
   await page.keyboard.down("ControlOrMeta");
-  await expect(subtitle).toHaveText(
-    "Cmd/Ctrl Enter opens filtered Transactions · Enter opens register",
+  await expect(ribbon).toHaveText(
+    "Enter opens register · Cmd/Ctrl Enter opens filtered Transactions",
   );
   await page.keyboard.press("Enter");
   await page.keyboard.up("ControlOrMeta");
