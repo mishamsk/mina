@@ -102,7 +102,7 @@ Per-task checklist — every task below runs the full per-task workflow; tick a 
 - [x] Task 3: Brief C — Command palette keyboard-only rows, stable heights, modifier ribbon (depends on Task 2 for the help group removal) — branch `fb-palette-rows-ribbon`
 - [x] Task 4: Brief D — Entry chords (registers help content; after Task 2) — branch `fb-entry-chords`
 - [x] Task 5: Brief E — Simplified transaction draft persistence (largest; after chords so the entry shortcut set is final) — branch `fb-draft-persistence`
-- [ ] Task 6: Brief F — Frontend e2e hygiene sweep (last; covers both fleets) — branch `fb-e2e-hygiene`
+- [x] Task 6: Brief F — Frontend e2e hygiene sweep (last; covers both fleets) — branch `fb-e2e-hygiene`
 
 ## Final Verification
 
