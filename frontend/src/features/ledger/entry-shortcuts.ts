@@ -17,31 +17,36 @@ export const transactionEntryShortcutGroup: ShortcutGroup = {
     },
     {
       id: "entry-2",
+      keys: ["Mod", "S"],
+      label: "Save the draft and close",
+    },
+    {
+      id: "entry-3",
       keys: ["Esc"],
       label: "Close the picker, then the modal",
     },
     {
-      id: "entry-3",
+      id: "entry-4",
       keys: ["↑", "↓"],
       label: "Move through picker options",
     },
     {
-      id: "entry-4",
+      id: "entry-5",
       keys: ["Enter"],
       label: "Choose a picker option",
     },
     {
-      id: "entry-5",
+      id: "entry-6",
       keys: ["Tab", "→"],
       label: "Commit a hierarchy segment",
     },
     {
-      id: "entry-6",
+      id: "entry-7",
       keys: ["←", "Backspace"],
       label: "Back out of a hierarchy segment",
     },
     {
-      id: "entry-7",
+      id: "entry-8",
       keys: ["Cmd"],
       label: "Reveal full picker paths",
       detail: "Hold while using a hierarchical picker.",

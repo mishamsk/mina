@@ -74,13 +74,10 @@ import {
   type TransactionEntryRegisterSummary,
 } from "@/store";
 import {
-  getUiPreferencesSnapshot,
   invalidateAccountsPage,
   invalidateCategoriesPage,
   invalidateTagsPage,
   openTransactionEntryLaunch,
-  openTransactionEntryPanel,
-  setTransactionEntryActiveTab,
 } from "@/store";
 
 import { AmountText } from "./amount-text";
@@ -215,14 +212,11 @@ interface ReplacementContext {
 }
 
 interface LaunchDraft {
+  readonly restoredSavedDraft?: boolean;
   readonly baseline?: TransactionEntryDraft;
   readonly draft: TransactionEntryDraft;
   readonly persistence: DraftPersistenceMode;
   readonly replacement?: ReplacementContext;
-}
-
-interface PendingLaunchDraft extends LaunchDraft {
-  readonly discardOrdinaryDraft: boolean;
 }
 
 type DraftPersistenceMode = "launch" | "ordinary";
@@ -255,48 +249,6 @@ const tabLabels: Record<TransactionEntryType, string> = {
   refund: "Refund",
   spend: "Spend",
   transfer: "Transfer",
-};
-
-const draftDiscardLaunchWaitMs = 1_000;
-
-const discardStoredTransactionEntryDraft = async (
-  ordinaryBaseline: TransactionEntryDraft | undefined,
-): Promise<void> => {
-  try {
-    await deleteTransactionEntryDraft();
-  } catch {
-    if (!ordinaryBaseline) {
-      return;
-    }
-    try {
-      await writeTransactionEntryDraft(
-        ordinaryBaseline,
-        ordinaryBaseline,
-        false,
-      );
-    } catch {
-      // Draft storage is disposable; storage failure must not block the launch.
-    }
-  }
-};
-
-const waitForStoredTransactionEntryDraftDiscard = async (
-  ordinaryBaseline: TransactionEntryDraft | undefined,
-): Promise<void> => {
-  let timeoutId: number | undefined;
-  const timeout = new Promise<void>((resolve) => {
-    timeoutId = window.setTimeout(resolve, draftDiscardLaunchWaitMs);
-  });
-  try {
-    await Promise.race([
-      discardStoredTransactionEntryDraft(ordinaryBaseline),
-      timeout,
-    ]);
-  } finally {
-    if (timeoutId !== undefined) {
-      window.clearTimeout(timeoutId);
-    }
-  }
 };
 
 const tabConfigs: Record<ShorthandTransactionEntryType, TabConfig> = {
@@ -1276,82 +1228,6 @@ const mapDraftDates = (
   };
 };
 
-const draftFingerprint = (draft: TransactionEntryDraft): string =>
-  JSON.stringify(draft);
-
-const sharedLegacyDefault = (
-  values: readonly string[],
-  fallback: string,
-): string => {
-  const counts = new Map<string, number>();
-  let sharedValue = fallback;
-  let sharedCount = 0;
-  for (const value of values) {
-    const count = (counts.get(value) ?? 0) + 1;
-    counts.set(value, count);
-    if (count > sharedCount) {
-      sharedValue = value;
-      sharedCount = count;
-    }
-  }
-  return sharedValue;
-};
-
-const legacyDraftBaseline = (
-  draft: TransactionEntryDraft,
-): TransactionEntryDraft => {
-  const baseline = defaultDraft();
-  const sharedCurrency = sharedLegacyDefault(
-    [
-      ...entryTypes
-        .filter(
-          (entryType): entryType is ShorthandTransactionEntryType =>
-            entryType !== "advanced",
-        )
-        .map((entryType) => draft.tabs[entryType].currency),
-      ...draft.advanced.records.map((row) => row.currency),
-    ],
-    baseline.tabs.spend.currency,
-  );
-  const sharedDate = sharedLegacyDefault(
-    [
-      ...entryTypes
-        .filter(
-          (entryType): entryType is ShorthandTransactionEntryType =>
-            entryType !== "advanced",
-        )
-        .map((entryType) => draft.tabs[entryType].date),
-      draft.advanced.date,
-    ],
-    baseline.tabs.spend.date,
-  );
-  const tabBaseline = (
-    entryType: ShorthandTransactionEntryType,
-  ): TransactionEntryTabDraft => ({
-    ...baseline.tabs[entryType],
-    currency: sharedCurrency,
-    date: sharedDate,
-  });
-
-  return {
-    ...baseline,
-    advanced: {
-      date: sharedDate,
-      records: baseline.advanced.records.map((row) => ({
-        ...row,
-        currency: sharedCurrency,
-      })),
-    },
-    tabs: {
-      income: tabBaseline("income"),
-      refund: tabBaseline("refund"),
-      spend: tabBaseline("spend"),
-      transfer: tabBaseline("transfer"),
-      exchange: tabBaseline("exchange"),
-    },
-  };
-};
-
 const shorthandMemberId = (
   records: readonly JournalRecord[],
 ): number | undefined => {
@@ -1737,7 +1613,7 @@ const launchDraftFromTransaction = (
             ? advancedDuplicateDraftFromTransaction(launch.transaction)
             : advancedDraftFromTransaction(launch.transaction),
       },
-      persistence: launch.type === "duplicate" ? "ordinary" : "launch",
+      persistence: "launch",
       replacement:
         launch.type === "duplicate"
           ? undefined
@@ -1760,7 +1636,7 @@ const launchDraftFromTransaction = (
         [fit.entryType]: tabDraftFromShorthandFit(launch.transaction, fit),
       },
     },
-    persistence: launch.type === "duplicate" ? "ordinary" : "launch",
+    persistence: "launch",
     replacement:
       launch.type === "duplicate"
         ? undefined
@@ -3019,7 +2895,7 @@ export const EntryPanel = ({
   const [replacementRefreshRequired, setReplacementRefreshRequired] =
     useState(false);
   const [pendingLaunchDraft, setPendingLaunchDraft] = useState<
-    PendingLaunchDraft | undefined
+    LaunchDraft | undefined
   >();
   const [initializedLaunchKey, setInitializedLaunchKey] = useState<
     string | undefined
@@ -3029,8 +2905,12 @@ export const EntryPanel = ({
   >();
   const [draftPersistence, setDraftPersistence] =
     useState<DraftPersistenceMode>("ordinary");
-  const [confirmDiscardDraftOpen, setConfirmDiscardDraftOpen] = useState(false);
-  const [discardingPendingLaunch, setDiscardingPendingLaunch] = useState(false);
+  const [confirmSaveDraftOpen, setConfirmSaveDraftOpen] = useState(false);
+  const [draftOperation, setDraftOperation] = useState<
+    "saving" | "discarding" | undefined
+  >();
+  const savingDraft = draftOperation !== undefined;
+  const [saveDraftError, setSaveDraftError] = useState<string>();
   const [pendingTemplateApplication, setPendingTemplateApplication] = useState<{
     readonly targetTab: TransactionEntryType;
     readonly template: TransactionTemplate;
@@ -3110,14 +2990,12 @@ export const EntryPanel = ({
   const merchantRemoveButtonRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const dateInputRef = useRef<HTMLInputElement>(null);
   const submitButtonRef = useRef<HTMLButtonElement>(null);
-  const rememberedActiveTabRef = useRef<TransactionEntryType>("spend");
-  const initialTabOverrideRef = useRef<TransactionEntryType | undefined>(
-    undefined,
-  );
-  const userSelectedActiveTabRef = useRef(false);
   const initialDateOverrideRef = useRef(new Set<TransactionEntryType>());
   const userChangedDateRef = useRef(new Set<TransactionEntryType>());
   const initializedLaunchKeyRef = useRef<string | undefined>(undefined);
+  const pendingLaunchSourceRef = useRef<EntryPanelLaunch | undefined>(
+    undefined,
+  );
   const initializedLaunchRef = useRef<EntryPanelLaunch | undefined>(undefined);
   const wasOpenRef = useRef(open);
   const latestLookupsRef = useRef<LedgerLookupsSnapshot | undefined>(lookups);
@@ -3127,12 +3005,10 @@ export const EntryPanel = ({
   const launchDraftBaselineRef = useRef<TransactionEntryDraft | undefined>(
     undefined,
   );
-  const ordinaryDraftBaselineRef = useRef<TransactionEntryDraft | undefined>(
+  const sessionCreateBaselineRef = useRef<TransactionEntryDraft | undefined>(
     undefined,
   );
-  const ordinaryBaselineMustPersistRef = useRef(false);
-  const ordinaryDraftStoredRef = useRef(false);
-  const lastStoredDraftFingerprintRef = useRef<string | undefined>(undefined);
+  const restoredSavedDraftRef = useRef(false);
   const cancelledConflictSavePendingRef = useRef(false);
   const preserveFocusOnReplacementChangeRef = useRef(false);
 
@@ -3163,12 +3039,6 @@ export const EntryPanel = ({
           ? ""
           : date,
       );
-      if (initialTabOverrideRef.current && !userSelectedActiveTabRef.current) {
-        return {
-          ...storedDraft,
-          activeTab: rememberedActiveTabRef.current,
-        };
-      }
       return storedDraft;
     },
     [],
@@ -3179,7 +3049,7 @@ export const EntryPanel = ({
       const baseline =
         latestDraftPersistenceRef.current === "launch"
           ? launchDraftBaselineRef.current
-          : ordinaryDraftBaselineRef.current;
+          : sessionCreateBaselineRef.current;
       return (
         baseline !== undefined &&
         draftHasUserInput(
@@ -3220,10 +3090,24 @@ export const EntryPanel = ({
     if (cancelledConflictSavePendingRef.current) {
       return;
     }
-    const modifiedReplacement =
-      replacement !== undefined && currentDraftHasUserInput(draft);
-    if (modifiedReplacement) {
-      setConfirmCloseDiscardOpen(true);
+    if (
+      saving ||
+      savingDraft ||
+      confirmSaveDraftOpen ||
+      confirmCloseDiscardOpen ||
+      confirmClearDraftOpen ||
+      confirmTemplateReplaceOpen
+    ) {
+      return;
+    }
+    templateApplicationRequestGenerationRef.current += 1;
+    if (currentDraftHasUserInput(draft)) {
+      if (latestDraftPersistenceRef.current === "launch") {
+        setConfirmCloseDiscardOpen(true);
+      } else {
+        setSaveDraftError(undefined);
+        setConfirmSaveDraftOpen(true);
+      }
       return;
     }
     const refreshedReplacement = publishRefreshedReplacement();
@@ -3237,7 +3121,12 @@ export const EntryPanel = ({
     draft,
     onClose,
     publishRefreshedReplacement,
-    replacement,
+    saving,
+    savingDraft,
+    confirmSaveDraftOpen,
+    confirmCloseDiscardOpen,
+    confirmClearDraftOpen,
+    confirmTemplateReplaceOpen,
   ]);
 
   useEffect(() => {
@@ -3290,7 +3179,7 @@ export const EntryPanel = ({
   );
   const launchKey = launch
     ? `${launch.type}:${launch.transaction.transaction_id}`
-    : `create:${initialTab ?? "remembered"}`;
+    : `create:${initialTab ?? "default"}`;
   const editorSessionRef = useRef({ generation: 0 });
   useLayoutEffect(() => {
     editorSessionRef.current = {
@@ -3305,50 +3194,100 @@ export const EntryPanel = ({
     launchLookupsReady &&
     initializedLaunchKey === launchKey &&
     (launch === undefined || initializedLaunch === launch);
-  const cancelPendingLaunch = useCallback(() => {
-    setConfirmDiscardDraftOpen(false);
-    setPendingLaunchDraft(undefined);
-    openTransactionEntryPanel(
-      undefined,
-      captureTransactionEntryLaunchContext(),
-    );
-    window.requestAnimationFrame(() => {
-      dateInputRef.current?.focus({ preventScroll: true });
-    });
+  const adoptLaunchDraft = useCallback(
+    (nextDraft: LaunchDraft) => {
+      restoredSavedDraftRef.current = nextDraft.restoredSavedDraft === true;
+      sessionCreateBaselineRef.current = nextDraft.baseline ?? nextDraft.draft;
+      launchDraftBaselineRef.current =
+        nextDraft.persistence === "launch"
+          ? (nextDraft.baseline ?? nextDraft.draft)
+          : undefined;
+      setDraft(
+        seedDraftDates(nextDraft.draft, nextDraft.persistence === "ordinary"),
+      );
+      setReplacement(nextDraft.replacement);
+      setDraftPersistence(nextDraft.persistence);
+      setPickerLifecycle((current) => current + 1);
+      setPendingLaunchDraft(undefined);
+      setConfirmSaveDraftOpen(false);
+      setConfirmCloseDiscardOpen(false);
+      setFieldErrors({});
+      setAdvancedFieldErrors({});
+      setGeneralError(undefined);
+    },
+    [seedDraftDates],
+  );
+
+  const finishDraftChoice = useCallback(() => {
+    if (pendingLaunchDraft) {
+      adoptLaunchDraft(pendingLaunchDraft);
+    } else {
+      setConfirmSaveDraftOpen(false);
+      onClose();
+    }
+  }, [adoptLaunchDraft, onClose, pendingLaunchDraft]);
+
+  const consumeSubmittedDraft = useCallback(async () => {
+    if (!restoredSavedDraftRef.current) {
+      return true;
+    }
+    try {
+      await deleteTransactionEntryDraft();
+      restoredSavedDraftRef.current = false;
+      sessionCreateBaselineRef.current = defaultDraft();
+      return true;
+    } catch {
+      setGeneralError(
+        "Transaction saved, but its saved draft could not be removed. Clear the draft before creating another transaction.",
+      );
+      return false;
+    }
   }, []);
 
-  const discardPendingLaunch = useCallback(async () => {
-    if (!pendingLaunchDraft || discardingPendingLaunch) {
-      return;
-    }
-    setDiscardingPendingLaunch(true);
-    if (pendingLaunchDraft.discardOrdinaryDraft) {
-      ordinaryDraftStoredRef.current = false;
-      lastStoredDraftFingerprintRef.current = undefined;
-      await waitForStoredTransactionEntryDraftDiscard(
-        ordinaryDraftBaselineRef.current,
-      );
-    }
-    if (pendingLaunchDraft.persistence === "ordinary") {
-      ordinaryDraftBaselineRef.current = pendingLaunchDraft.draft;
-      ordinaryBaselineMustPersistRef.current = false;
-      ordinaryDraftStoredRef.current = false;
-    }
-    setPickerLifecycle((current) => current + 1);
-    setDraft(pendingLaunchDraft.draft);
-    setReplacement(pendingLaunchDraft.replacement);
-    setDraftPersistence(pendingLaunchDraft.persistence);
-    launchDraftBaselineRef.current =
-      pendingLaunchDraft.persistence === "launch"
-        ? (pendingLaunchDraft.baseline ?? pendingLaunchDraft.draft)
-        : undefined;
-    setPendingLaunchDraft(undefined);
-    setConfirmDiscardDraftOpen(false);
-    setFieldErrors({});
-    setAdvancedFieldErrors({});
-    setGeneralError(undefined);
-    setDiscardingPendingLaunch(false);
-  }, [discardingPendingLaunch, pendingLaunchDraft]);
+  const saveCreateDraft = useCallback(
+    async (keep: boolean) => {
+      if (savingDraft || saving || !currentDraftReady) {
+        return;
+      }
+      templateApplicationRequestGenerationRef.current += 1;
+      if (
+        keep &&
+        !currentDraftHasUserInput(draft) &&
+        !restoredSavedDraftRef.current
+      ) {
+        finishDraftChoice();
+        return;
+      }
+      setDraftOperation(keep ? "saving" : "discarding");
+      setSaveDraftError(undefined);
+      try {
+        if (keep) {
+          await writeTransactionEntryDraft(draftForStorage(draft));
+        } else {
+          await deleteTransactionEntryDraft();
+        }
+        finishDraftChoice();
+      } catch {
+        if (keep) {
+          setSaveDraftError("Draft could not be saved. Try again.");
+          setConfirmSaveDraftOpen(true);
+        } else {
+          finishDraftChoice();
+        }
+      } finally {
+        setDraftOperation(undefined);
+      }
+    },
+    [
+      currentDraftReady,
+      currentDraftHasUserInput,
+      draft,
+      draftForStorage,
+      finishDraftChoice,
+      saving,
+      savingDraft,
+    ],
+  );
 
   useEffect(() => {
     if (!open) {
@@ -3372,112 +3311,58 @@ export const EntryPanel = ({
       return;
     }
 
+    const hasLiveDraft = initializedLaunchKeyRef.current !== undefined;
+    const previousLaunch = initializedLaunchRef.current;
     initializedLaunchKeyRef.current = launchKey;
     initializedLaunchRef.current = launch;
     let active = true;
     void readTransactionEntryDraft().then((storedDraft) => {
-      if (active) {
-        const storedEnvelope =
-          storedDraft && "draft" in storedDraft && "baseline" in storedDraft
-            ? storedDraft
-            : undefined;
-        const legacyStoredDraft =
-          storedDraft && !("draft" in storedDraft) ? storedDraft : undefined;
-        const migratedDraft = migrateStoredDraft(
-          storedEnvelope?.draft ?? legacyStoredDraft,
-        );
-        const ordinaryBaseline = storedEnvelope
-          ? migrateStoredDraft(storedEnvelope.baseline)
-          : legacyDraftBaseline(migratedDraft);
-        const ordinaryBaselineMustPersist =
-          storedEnvelope?.persistBaseline ?? false;
-        const launchDraft = launch
-          ? launchDraftFromTransaction(launch, latestLookupsRef.current!)
-          : undefined;
-        const rememberedActiveTab =
-          storedDraft === undefined
-            ? getUiPreferencesSnapshot().transactionEntryActiveTab
-            : migratedDraft.activeTab;
-        const launchInitialTab =
-          initialTemplate === undefined ? initialTab : undefined;
-        const ordinaryDraft = launchInitialTab
-          ? {
-              ...migratedDraft,
-              activeTab: launchInitialTab,
-            }
-          : {
-              ...migratedDraft,
-              activeTab: rememberedActiveTab,
-            };
-        const seededOrdinaryDraft = seedDraftDates(ordinaryDraft, !launchDraft);
-        const nextDraft = launchDraft ?? {
-          draft: seededOrdinaryDraft,
-          persistence: "ordinary" as const,
-        };
-        rememberedActiveTabRef.current = rememberedActiveTab;
-        initialTabOverrideRef.current = launchDraft
-          ? undefined
-          : launchInitialTab;
-        userSelectedActiveTabRef.current = false;
-        setPendingLaunchDraft(undefined);
-        setConfirmDiscardDraftOpen(false);
-        const inFlightLaunchChanged =
-          latestDraftPersistenceRef.current === "launch" &&
-          currentDraftHasUserInput(latestDraftRef.current);
-        const ordinaryDraftHasUserInput = draftHasUserInput(
-          migratedDraft,
-          ordinaryBaseline,
-        );
-        const existingOrdinaryDraftWouldBeDiscarded =
-          Boolean(launchDraft) && ordinaryDraftHasUserInput;
-        ordinaryDraftBaselineRef.current = ordinaryBaseline;
-        ordinaryBaselineMustPersistRef.current = ordinaryBaselineMustPersist;
-        ordinaryDraftStoredRef.current = storedDraft !== undefined;
-        lastStoredDraftFingerprintRef.current =
-          storedDraft === undefined ||
-          (!ordinaryBaselineMustPersist && !ordinaryDraftHasUserInput)
-            ? undefined
-            : draftFingerprint(migratedDraft);
-        if (inFlightLaunchChanged || existingOrdinaryDraftWouldBeDiscarded) {
-          setDraft(
-            inFlightLaunchChanged ? latestDraftRef.current : migratedDraft,
-          );
-          setReplacement(
-            inFlightLaunchChanged ? latestReplacementRef.current : undefined,
-          );
-          setDraftPersistence(inFlightLaunchChanged ? "launch" : "ordinary");
-          setPendingLaunchDraft({
-            ...nextDraft,
-            discardOrdinaryDraft: existingOrdinaryDraftWouldBeDiscarded,
-          });
-          setConfirmDiscardDraftOpen(true);
-        } else {
-          if (launchDraft?.persistence === "ordinary") {
-            ordinaryDraftBaselineRef.current = nextDraft.draft;
-            ordinaryBaselineMustPersistRef.current = false;
-            ordinaryDraftStoredRef.current = false;
-          }
-          setDraft(nextDraft.draft);
-          setReplacement(nextDraft.replacement);
-          setDraftPersistence(nextDraft.persistence);
-          launchDraftBaselineRef.current =
-            nextDraft.persistence === "launch"
-              ? (nextDraft.baseline ?? nextDraft.draft)
-              : undefined;
-        }
-        setPickerLifecycle((current) => current + 1);
-        setInitializedLaunchKey(launchKey);
-        setInitializedLaunch(launch);
-        setDraftReady(true);
-        setSaving(false);
-        setReplacementRefreshRequired(false);
+      if (!active) {
+        return;
       }
+      const migratedDraft = migrateStoredDraft(
+        storedDraft && "draft" in storedDraft ? storedDraft.draft : storedDraft,
+      );
+      const launchDraft = launch
+        ? launchDraftFromTransaction(launch, latestLookupsRef.current!)
+        : undefined;
+      const launchInitialTab =
+        initialTemplate === undefined ? initialTab : undefined;
+      const nextDraft: LaunchDraft = launchDraft ?? {
+        restoredSavedDraft: storedDraft !== undefined,
+        draft: {
+          ...migratedDraft,
+          activeTab: launchInitialTab ?? migratedDraft.activeTab,
+        },
+        baseline:
+          storedDraft && "draft" in storedDraft
+            ? migratedDraft
+            : defaultDraft(),
+        persistence: "ordinary",
+      };
+      if (hasLiveDraft && currentDraftHasUserInput(latestDraftRef.current)) {
+        pendingLaunchSourceRef.current = previousLaunch;
+        setPendingLaunchDraft(nextDraft);
+        if (latestDraftPersistenceRef.current === "launch") {
+          setConfirmCloseDiscardOpen(true);
+        } else {
+          setSaveDraftError(undefined);
+          setConfirmSaveDraftOpen(true);
+        }
+      } else {
+        adoptLaunchDraft(nextDraft);
+      }
+      setInitializedLaunchKey(launchKey);
+      setInitializedLaunch(launch);
+      setDraftReady(true);
+      setSaving(false);
+      setReplacementRefreshRequired(false);
     });
-
     return () => {
       active = false;
     };
   }, [
+    adoptLaunchDraft,
     currentDraftHasUserInput,
     initialTab,
     initialTemplate,
@@ -3485,58 +3370,13 @@ export const EntryPanel = ({
     launchKey,
     launchLookupsReady,
     open,
-    seedDraftDates,
   ]);
-
-  useEffect(() => {
-    if (!open || !currentDraftReady || draftPersistence !== "ordinary") {
-      return;
-    }
-
-    const ordinaryBaseline = ordinaryDraftBaselineRef.current;
-    if (!ordinaryBaseline) {
-      return;
-    }
-    const storedDraft = draftForStorage(draft);
-    const baseline = draftForStorage(ordinaryBaseline, { preserveDates: true });
-    const fingerprint = draftFingerprint(storedDraft);
-    if (
-      ordinaryDraftStoredRef.current &&
-      lastStoredDraftFingerprintRef.current === fingerprint
-    ) {
-      return;
-    }
-
-    if (!draftHasUserInput(storedDraft, baseline)) {
-      if (!ordinaryDraftStoredRef.current) {
-        return;
-      }
-      if (!ordinaryBaselineMustPersistRef.current) {
-        ordinaryDraftStoredRef.current = false;
-        lastStoredDraftFingerprintRef.current = undefined;
-        void deleteTransactionEntryDraft().catch(() => {
-          // Draft storage is disposable and the next write self-heals it.
-        });
-        return;
-      }
-    }
-
-    ordinaryDraftStoredRef.current = true;
-    lastStoredDraftFingerprintRef.current = fingerprint;
-    void writeTransactionEntryDraft(
-      storedDraft,
-      baseline,
-      ordinaryBaselineMustPersistRef.current,
-    ).catch(() => {
-      // Draft storage is disposable and later draft changes retry the write.
-    });
-  }, [currentDraftReady, draft, draftForStorage, draftPersistence, open]);
 
   useEffect(() => {
     if (!open) {
       return;
     }
-    if (!currentDraftReady || confirmDiscardDraftOpen) {
+    if (!currentDraftReady || confirmSaveDraftOpen || confirmCloseDiscardOpen) {
       return;
     }
     if (preserveFocusOnReplacementChangeRef.current) {
@@ -3562,7 +3402,13 @@ export const EntryPanel = ({
     return () => {
       window.cancelAnimationFrame(animationFrame);
     };
-  }, [confirmDiscardDraftOpen, currentDraftReady, open, replacement]);
+  }, [
+    confirmCloseDiscardOpen,
+    confirmSaveDraftOpen,
+    currentDraftReady,
+    open,
+    replacement,
+  ]);
 
   const currencies = useMemo(() => lookupCurrencies(lookups), [lookups]);
   const createFlowAccountOption = async (fqn: string) => {
@@ -4159,11 +4005,6 @@ export const EntryPanel = ({
       );
     }
 
-    userSelectedActiveTabRef.current = true;
-    if (!replacement) {
-      rememberedActiveTabRef.current = "advanced";
-      setTransactionEntryActiveTab("advanced");
-    }
     setDraft((currentDraft) => ({
       ...currentDraft,
       activeTab: "advanced",
@@ -4201,11 +4042,6 @@ export const EntryPanel = ({
       editActiveTabAsJournal();
       return;
     }
-    userSelectedActiveTabRef.current = true;
-    if (!replacement) {
-      rememberedActiveTabRef.current = entryType;
-      setTransactionEntryActiveTab(entryType);
-    }
     setDraft((currentDraft) => ({ ...currentDraft, activeTab: entryType }));
     setFieldErrors({});
     setAdvancedFieldErrors({});
@@ -4214,12 +4050,8 @@ export const EntryPanel = ({
 
   const applyTemplate = useCallback(
     (template: TransactionTemplate, targetTab: TransactionEntryType) => {
-      userSelectedActiveTabRef.current = true;
-      initialTabOverrideRef.current = undefined;
-      rememberedActiveTabRef.current = targetTab;
-      setTransactionEntryActiveTab(targetTab);
       setPickerLifecycle((current) => current + 1);
-      ordinaryDraftBaselineRef.current = defaultDraft();
+      sessionCreateBaselineRef.current = defaultDraft();
       setDraft(seedDraftDates(draftFromTemplate(template, targetTab, lookups)));
       setFieldErrors({});
       setMerchantFieldErrors({});
@@ -4322,15 +4154,9 @@ export const EntryPanel = ({
 
     const activeTab = draft.activeTab;
     const blankDraft = { ...defaultDraft(), activeTab };
-    ordinaryDraftBaselineRef.current = blankDraft;
-    ordinaryBaselineMustPersistRef.current = false;
-    ordinaryDraftStoredRef.current = false;
-    lastStoredDraftFingerprintRef.current = undefined;
+    sessionCreateBaselineRef.current = blankDraft;
     launchDraftBaselineRef.current = undefined;
-    initialTabOverrideRef.current = undefined;
-    userSelectedActiveTabRef.current = true;
-    rememberedActiveTabRef.current = activeTab;
-    setTransactionEntryActiveTab(activeTab);
+    restoredSavedDraftRef.current = false;
     setDraftPersistence("ordinary");
     setDraft(seedDraftDates(blankDraft));
     setPickerLifecycle((current) => current + 1);
@@ -4352,7 +4178,7 @@ export const EntryPanel = ({
   const requestClearDraft = useCallback(() => {
     templateApplicationRequestGenerationRef.current += 1;
     setClearDraftError(undefined);
-    if (currentDraftHasUserInput(draft)) {
+    if (currentDraftHasUserInput(draft) || restoredSavedDraftRef.current) {
       setConfirmClearDraftOpen(true);
       return;
     }
@@ -4810,6 +4636,7 @@ export const EntryPanel = ({
             setGeneralError(undefined);
             setSessionCount((count) => count + 1);
             setSessionTransactions((current) => [result.data, ...current]);
+            const draftConsumed = await consumeSubmittedDraft();
             if (draftPersistence === "launch") {
               setDraftPersistence("ordinary");
             }
@@ -4820,7 +4647,7 @@ export const EntryPanel = ({
               userChangedDateRef.current.add(activeTab);
               const storedNextDraft = draftForStorage(nextDraft);
               const previousBaseline =
-                ordinaryDraftBaselineRef.current ?? defaultDraft();
+                sessionCreateBaselineRef.current ?? defaultDraft();
               const nextBaseline = {
                 ...previousBaseline,
                 advanced: storedNextDraft.advanced,
@@ -4832,20 +4659,21 @@ export const EntryPanel = ({
                     }
                   : previousBaseline.tabs,
               };
-              ordinaryDraftBaselineRef.current = nextBaseline;
-              ordinaryBaselineMustPersistRef.current = true;
-              ordinaryDraftStoredRef.current = true;
-              lastStoredDraftFingerprintRef.current =
-                draftFingerprint(storedNextDraft);
-              await writeTransactionEntryDraft(
-                storedNextDraft,
-                nextBaseline,
-                true,
-              );
+              sessionCreateBaselineRef.current = nextBaseline;
             }
             await onSaved(result.data, { operation: "created" });
-            if (closeAfterSave) {
-              onClose();
+            if (closeAfterSave && draftConsumed) {
+              if (
+                draftHasUserInput(
+                  draftForStorage(nextDraft),
+                  sessionCreateBaselineRef.current ?? defaultDraft(),
+                )
+              ) {
+                setSaveDraftError(undefined);
+                setConfirmSaveDraftOpen(true);
+              } else {
+                onClose();
+              }
             } else {
               window.requestAnimationFrame(() => {
                 dateInputRef.current?.focus({ preventScroll: true });
@@ -5099,6 +4927,7 @@ export const EntryPanel = ({
           setGeneralError(undefined);
           setSessionCount((count) => count + 1);
           setSessionTransactions((current) => [result.data, ...current]);
+          const draftConsumed = await consumeSubmittedDraft();
           if (draftPersistence === "launch") {
             setDraftPersistence("ordinary");
           }
@@ -5109,7 +4938,7 @@ export const EntryPanel = ({
             userChangedDateRef.current.add(activeTab);
             const storedNextDraft = draftForStorage(nextDraft);
             const previousBaseline =
-              ordinaryDraftBaselineRef.current ?? defaultDraft();
+              sessionCreateBaselineRef.current ?? defaultDraft();
             const nextBaseline = {
               ...previousBaseline,
               tabs: {
@@ -5117,23 +4946,24 @@ export const EntryPanel = ({
                 [activeShorthandTab]: storedNextDraft.tabs[activeShorthandTab],
               },
             };
-            ordinaryDraftBaselineRef.current = nextBaseline;
-            ordinaryBaselineMustPersistRef.current = true;
-            ordinaryDraftStoredRef.current = true;
-            lastStoredDraftFingerprintRef.current =
-              draftFingerprint(storedNextDraft);
-            await writeTransactionEntryDraft(
-              storedNextDraft,
-              nextBaseline,
-              true,
-            );
+            sessionCreateBaselineRef.current = nextBaseline;
           }
           await onSaved(result.data, { operation: "created" });
           if (latestDraftRef.current.activeTab === activeShorthandTab) {
             setPickerLifecycle((current) => current + 1);
           }
-          if (closeAfterSave) {
-            onClose();
+          if (closeAfterSave && draftConsumed) {
+            if (
+              draftHasUserInput(
+                draftForStorage(nextDraft),
+                sessionCreateBaselineRef.current ?? defaultDraft(),
+              )
+            ) {
+              setSaveDraftError(undefined);
+              setConfirmSaveDraftOpen(true);
+            } else {
+              onClose();
+            }
           } else {
             window.requestAnimationFrame(() => {
               dateInputRef.current?.focus({ preventScroll: true });
@@ -5159,6 +4989,7 @@ export const EntryPanel = ({
       activeShorthandTab,
       activeTabDraft,
       canSubmit,
+      consumeSubmittedDraft,
       draft,
       draftForStorage,
       draftPersistence,
@@ -5210,10 +5041,23 @@ export const EntryPanel = ({
       aria-labelledby="entry-panel-title"
       onKeyDown={(event) => {
         if (
-          confirmDiscardDraftOpen ||
+          confirmSaveDraftOpen ||
+          confirmCloseDiscardOpen ||
           confirmTemplateReplaceOpen ||
           confirmClearDraftOpen
         ) {
+          return;
+        }
+        if (
+          (event.metaKey || event.ctrlKey) &&
+          !event.shiftKey &&
+          !event.altKey &&
+          event.key.toLowerCase() === "s"
+        ) {
+          event.preventDefault();
+          if (draftPersistence === "ordinary") {
+            void saveCreateDraft(true);
+          }
           return;
         }
         if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
@@ -6797,28 +6641,32 @@ export const EntryPanel = ({
         ) : null}
       </div>
       <ConfirmationDialog
-        cancelLabel="Keep draft"
-        cancelPendingTooltip="Draft deletion is in progress; the saved draft cannot be reopened yet."
+        cancelLabel={draftOperation === "saving" ? "Saving" : "Save draft"}
+        cancelPendingTooltip="Wait for the draft operation to finish."
         confirmIcon={<Trash aria-hidden="true" />}
+        confirmPendingTooltip="Wait for the draft operation to finish."
         confirmLabel="Discard draft"
-        confirmPendingTooltip="Draft deletion is already in progress."
-        errorMessage={undefined}
+        errorMessage={saveDraftError}
         initialFocus="confirm"
+        escapeAction="confirm"
         onConfirm={() => {
-          void discardPendingLaunch();
+          void saveCreateDraft(false);
         }}
         onOpenChange={(nextOpen) => {
-          if (!nextOpen && !discardingPendingLaunch) {
-            cancelPendingLaunch();
+          if (!nextOpen) {
+            void saveCreateDraft(true);
           }
         }}
-        open={confirmDiscardDraftOpen}
-        pending={discardingPendingLaunch}
-        pendingLabel="Discarding"
-        title="Discard entry draft"
+        open={confirmSaveDraftOpen}
+        pending={savingDraft}
+        pendingLabel={
+          draftOperation === "discarding" ? "Discarding" : "Discard draft"
+        }
+        title="Save draft?"
       >
         <p>
-          Opening this saved transaction will replace the current entry draft.
+          Keep this unsaved entry for next time, or discard it. Only a saved
+          draft reopens the next time you create a transaction.
         </p>
       </ConfirmationDialog>
       <ConfirmationDialog
@@ -6879,6 +6727,8 @@ export const EntryPanel = ({
         </p>
       </ConfirmationDialog>
       <ConfirmationDialog
+        initialFocus="confirm"
+        escapeAction="confirm"
         cancelLabel="Keep editing"
         cancelPendingTooltip="Transaction refresh is in progress."
         confirmIcon={<Trash aria-hidden="true" />}
@@ -6886,6 +6736,10 @@ export const EntryPanel = ({
         confirmPendingTooltip="Transaction refresh is already in progress."
         errorMessage={undefined}
         onConfirm={() => {
+          if (pendingLaunchDraft) {
+            adoptLaunchDraft(pendingLaunchDraft);
+            return;
+          }
           const refreshedReplacement = publishRefreshedReplacement();
           if (refreshedReplacement) {
             setDiscardingConflictedEdit(true);
@@ -6900,6 +6754,21 @@ export const EntryPanel = ({
         onOpenChange={(nextOpen) => {
           if (!discardingConflictedEdit) {
             setConfirmCloseDiscardOpen(nextOpen);
+            if (!nextOpen && pendingLaunchDraft) {
+              setPendingLaunchDraft(undefined);
+              const source = pendingLaunchSourceRef.current;
+              if (source) {
+                const sourceKey = `${source.type}:${source.transaction.transaction_id}`;
+                initializedLaunchKeyRef.current = sourceKey;
+                initializedLaunchRef.current = source;
+                setInitializedLaunchKey(sourceKey);
+                setInitializedLaunch(source);
+                openTransactionEntryLaunch(
+                  source,
+                  captureTransactionEntryLaunchContext(),
+                );
+              }
+            }
           }
         }}
         open={confirmCloseDiscardOpen}

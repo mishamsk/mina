@@ -949,7 +949,7 @@ export const AppShell = () => {
       window.clearTimeout(timer);
       timer = undefined;
     };
-    const open = (tab: TransactionEntryType) => {
+    const open = (tab: TransactionEntryType | undefined) => {
       cancel();
       if (hasActiveOverlay() || isEditableTarget(document.activeElement))
         return;
@@ -996,7 +996,7 @@ export const AppShell = () => {
         return;
       }
       event.preventDefault();
-      timer = window.setTimeout(() => open("spend"), 500);
+      timer = window.setTimeout(() => open(undefined), 500);
     };
     window.addEventListener("keydown", onKeyDown, true);
     window.addEventListener("blur", cancel);

@@ -6,6 +6,8 @@
 
 ## Implicit Contracts
 
+- Transactions New transaction buttons pass no tab so ledger restores the saved draft on its tab, falling back to Spend.
+
 - Account header Transactions links use the shared ledger URL builder.
 
 - The Status route registers tab-navigation keyboard help; the active feature owns its additional row shortcuts.

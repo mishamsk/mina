@@ -2,11 +2,7 @@ import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 import { useShallow } from "zustand/react/shallow";
 
-import type {
-  ThemePreference,
-  TransactionEntryType,
-  UiPreferences,
-} from "@/models/ui-state";
+import type { ThemePreference, UiPreferences } from "@/models/ui-state";
 
 import { readUiPreferences, writeUiPreferences } from "../services/indexeddb";
 import { createSelectors } from "./selectors";
@@ -14,7 +10,6 @@ import { createSelectors } from "./selectors";
 const defaultUiPreferences: UiPreferences = {
   sidebarCollapsed: false,
   theme: "system",
-  transactionEntryActiveTab: "spend",
 };
 
 interface PreferencesState {
@@ -97,28 +92,6 @@ export const setSidebarCollapsed = (sidebarCollapsed: boolean): void => {
       { errorMessage: toErrorMessage(error) },
       false,
       "PreferencesStore/setSidebarCollapsedError",
-    );
-  });
-};
-
-export const setTransactionEntryActiveTab = (
-  transactionEntryActiveTab: TransactionEntryType,
-): void => {
-  const nextPreferences = {
-    ...usePreferencesStore.getState().preferences,
-    transactionEntryActiveTab,
-  };
-  usePreferencesStore.setState(
-    { errorMessage: undefined, preferences: nextPreferences },
-    false,
-    "PreferencesStore/setTransactionEntryActiveTab",
-  );
-
-  void writeUiPreferences(nextPreferences).catch((error: unknown) => {
-    usePreferencesStore.setState(
-      { errorMessage: toErrorMessage(error) },
-      false,
-      "PreferencesStore/setTransactionEntryActiveTabError",
     );
   });
 };

@@ -10,7 +10,7 @@
 - Keyboard help marks its backdrop as a modal overlay so outside-pointer dismissal preserves underlying non-modal detail panels.
 
 - Global shortcuts share overlay detection; only the help predicate ignores the entry-modal marker, while editable targets and other blocking overlays still suppress `?`. Shortcut catalogs describe behavior while each surface retains its own handlers.
-- Entry chords use an effect-local 500 ms window and capture-phase dispatch ahead of row shortcuts; plain `n` explicitly opens Spend, pending Escape is consumed to preserve underlying selection and Edit mode, and pending entry cancels on blur, visibility changes, or cleanup and yields to editable targets and blocking overlays.
+- Entry chords use an effect-local 500 ms window and capture-phase dispatch ahead of row shortcuts; plain `n` passes no tab so ledger restores the saved tab or opens Spend, pending Escape is consumed to preserve underlying selection and Edit mode, and pending entry cancels on blur, visibility changes, or cleanup and yields to editable targets and blocking overlays.
 
 - The shell is the browser data router layout and renders route content through its outlet and holds the recurring editor navigation-guard ref, blocking pathname changes while dirty or saving; leaving the blocked state clears the editor's deferred navigation and confirmation before paint, including after same-path navigation resets the blocker. Draft comparison, save completion, and discard-dialog focus remain editor-owned.
 - Roomy fixed pages own canvas-overflow containment through the shared `fixedPageClassName`; the shell supplies the matching top/bottom insets and leaves document-scrolling reports, Status, and Settings to their route-owned scroll models.

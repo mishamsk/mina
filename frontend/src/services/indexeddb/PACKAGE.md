@@ -7,8 +7,7 @@
 ## Implicit Contracts
 
 - Persist only UI state; never REST-derived accounting data or credentials/session material. See [frontend architecture](../../../../docs/frontend-architecture.md#browser-storage).
-- Transaction-entry draft writes preserve the `baseline` and `persistBaseline` envelope fields so defaults and sticky values are not mistaken for user input.
-- Transaction-entry draft reads may return either an envelope or a bare draft; consumers must handle both.
+- Transaction-entry draft writes store only `{ draft }`; the draft owns its active tab. Reads accept legacy envelopes and bare drafts without a schema-version change.
 - Deleting a transaction-entry draft clears only that browser-persisted draft.
 - Status tabs, filters, pagination, and selected details are URL state and are not stored in IndexedDB.
 

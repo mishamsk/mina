@@ -8,9 +8,7 @@ import {
 import type { TransactionEntryDraft, UiPreferences } from "@/models/ui-state";
 
 export interface StoredTransactionEntryDraft {
-  readonly baseline: TransactionEntryDraft;
   readonly draft: TransactionEntryDraft;
-  readonly persistBaseline: boolean;
 }
 
 type TransactionEntryDraftStorageValue =
@@ -118,15 +116,9 @@ export const readTransactionEntryDraft = async (): Promise<
 
 export const writeTransactionEntryDraft = async (
   draft: TransactionEntryDraft,
-  baseline: TransactionEntryDraft,
-  persistBaseline = false,
 ): Promise<void> => {
   const database = await openMinaUiDb();
-  await database.put(
-    transactionEntryStoreName,
-    { baseline, draft, persistBaseline },
-    transactionEntryKey,
-  );
+  await database.put(transactionEntryStoreName, { draft }, transactionEntryKey);
 };
 
 export const deleteTransactionEntryDraft = async (): Promise<void> => {

@@ -20,6 +20,7 @@ interface ConfirmationDialogProps {
   readonly confirmLabel: string;
   readonly confirmPendingTooltip?: string;
   readonly confirmVariant?: ComponentProps<typeof Button>["variant"];
+  readonly escapeAction?: "cancel" | "confirm";
   readonly errorMessage: string | undefined;
   readonly initialFocus?: "cancel" | "confirm";
   readonly initialFocusRef?: RefObject<HTMLElement | null>;
@@ -42,6 +43,7 @@ export const ConfirmationDialog = ({
   confirmPendingTooltip,
   confirmVariant = "destructive",
   errorMessage,
+  escapeAction = "cancel",
   initialFocus = "cancel",
   initialFocusRef,
   onConfirm,
@@ -62,13 +64,19 @@ export const ConfirmationDialog = ({
       }
       event.preventDefault();
       event.stopPropagation();
-      onOpenChange(false);
+      if (escapeAction === "confirm") {
+        if (!confirmDisabled) {
+          onConfirm();
+        }
+      } else {
+        onOpenChange(false);
+      }
     };
     window.addEventListener("keydown", closeOnEscape, { capture: true });
     return () => {
       window.removeEventListener("keydown", closeOnEscape, { capture: true });
     };
-  }, [onOpenChange, open, pending]);
+  }, [confirmDisabled, escapeAction, onConfirm, onOpenChange, open, pending]);
 
   const cancelControl = (
     <AlertDialog.Cancel asChild>
@@ -157,7 +165,7 @@ export const ConfirmationDialog = ({
               </p>
             ) : null}
           </div>
-          <div className="mt-4 flex shrink-0 justify-end gap-2">
+          <div className="mt-4 flex shrink-0 flex-wrap justify-end gap-2">
             {cancelPendingTooltip ? (
               <Tooltip
                 className={

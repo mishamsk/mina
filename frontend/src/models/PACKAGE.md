@@ -6,6 +6,8 @@
 
 ## Implicit Contracts
 
+- Transaction-entry drafts own their active tab; UI preferences contain only theme and sidebar state.
+
 - Account, Category, and Tag hierarchy scopes share canonical descendant-filter construction.
 
 - Recurring-definition membership chips share entity FQN, scope, and string ID-literal handling and expose only any-of and none-of operators.

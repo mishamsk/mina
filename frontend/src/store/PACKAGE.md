@@ -6,6 +6,8 @@
 
 ## Implicit Contracts
 
+- Generic transaction-entry launches carry no tab; ledger selects the saved draft tab or Spend. Entry tabs belong to saved drafts, not UI preferences.
+
 - Shortcut groups and help launches stay transient; closing help retains the launch opener for close-time focus restoration.
 
 - Bootstrap installs protected-request invalidation before loading authentication, then settles UI persistence before the app shell replaces its splash state; failure becomes bootstrap state rather than preventing the shell from mounting.
