@@ -67,10 +67,10 @@ kata claim <ref> --comment "Starting plan-only worktree." --agent
 gt <name-of-the-branch> -x true
 ```
 
-9. Start a headless GPT-6 Astra Codex session in the new worktree with medium reasoning effort. Give it the outcome, completion bar, plan-only boundary, and source material; let it derive the planning mechanics from `docs/plan_template.md` and the repository.
+9. Start a headless planning session through the Justfile's shared `plan` role in the new worktree. Give it the outcome, completion bar, plan-only boundary, and source material; let it derive the planning mechanics from `docs/plan_template.md` and the repository. Model and effort settings belong to the Justfile, not this skill.
 
 ```bash
-codex exec -C "<worktree-path>" -m gpt-6-astra -c model_reasoning_effort=medium "Create the implementation plan for Kata issue <ref>: <issue title>. Use kata show <ref> --agent, repository evidence, and docs/plan_template.md. Success means a lean, sequential, outcome-oriented plan exists under docs/plans with relevant validation and task decomposition only where useful. This is plan-only work: do not implement, run tests, commit, or run review-loop. If a material unresolved decision prevents a reliable plan, report that blocker instead of guessing."
+just agent-exec plan -C "<worktree-path>" "Create the implementation plan for Kata issue <ref>: <issue title>. Use kata show <ref> --agent, repository evidence, and docs/plan_template.md. Success means a lean, sequential, outcome-oriented plan exists under docs/plans with relevant validation and task decomposition only where useful. This is plan-only work: do not implement, run tests, commit, or run review-loop. If a material unresolved decision prevents a reliable plan, report that blocker instead of guessing."
 ```
 
 ## End State

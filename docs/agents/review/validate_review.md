@@ -21,7 +21,8 @@ Exact review range: {{REVIEW_RANGE}}
 - Use temporary directories for all validation-owned side effects, created only beneath the caller-provided `$TMPDIR`. Pass `$TMPDIR` explicitly to tools such as `mktemp` rather than relying on an OS default. The caller owns cleanup; do not remove these directories yourself.
 - Reuse inherited tool caches. In particular, do not override `GOCACHE` or `GOMODCACHE` or create per-review Go caches; the shared Go caches support concurrent agents.
 - Inspect the narrowest relevant code and diff first. Run a focused smoke test when it materially strengthens or refutes the evidence.
-- Reject the finding if its evidence is not reproducible, the behavior is pre-existing or out of range, the scenario is unsupported or unrealistic, or the task intentionally requires the behavior.
+- Reject findings whose evidence is not reproducible, whose scenario is unsupported or unrealistic, or that are speculative, pre-existing, out of range, unrelated, merely stylistic, intentional task behavior, duplicate defensive validation, or based on unsupported internal misuse or corrupt state.
+- Keep local simplifications when the diff adds a redundant wrapper, one-use helper, duplicated API, single-implementation abstraction, dead exported surface, or generic mechanism with no real second use. Reject broad or aesthetic refactors and changes that would remove structure required by package boundaries.
 - Stop once the evidence is sufficient for a definite decision.
 
 ## Output

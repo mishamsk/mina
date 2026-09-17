@@ -63,7 +63,7 @@ Create and commit a self-contained operator plan. Do not implement or claim any 
    - The task order is executable from top to bottom with exactly one active sub-branch at a time.
    - No `<Replace ...>` instructions, example tasks, completed checkboxes, or stale scope from the template remain.
    - Per-task implementation-plan guidance covers the selected issue's full feature, component, bug set, or refactor slice as a substantial subplan, normally decomposed into multiple sequential tasks and commits, with only validation that provides relevant evidence.
-   - The implementor command uses `gpt-6-astra` with `medium` reasoning and directly instructs Codex to execute the named plan end to end.
+   - Planning and implementation use `just agent-exec plan` and `just agent-exec implement`, respectively, so the Justfile owns model selection. The operator is the user's current Claude or Codex session and never automatically switches providers.
 
 9. Stage only the new plan and commit it:
 

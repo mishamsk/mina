@@ -21,7 +21,6 @@ import (
 
 const (
 	modulePath        = "github.com/mishamsk/mina"
-	defaultCodexSpec  = "5.6-terra/high"
 	gardenSentinel    = "[garden-docs]"
 	maxParallelAgents = 4
 	reviewLoopActive  = "MINA_REVIEW_LOOP_ACTIVE"
@@ -255,7 +254,7 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	flags.SetOutput(stderr)
 	var limit optionalLimit
 	flags.Var(&limit, "limit", "maximum eligible PACKAGE.md files to garden")
-	codexSpec := flags.String("codex", defaultCodexSpec, "Codex model and reasoning effort as <model>/<effort>")
+	codexSpec := flags.String("codex", "", "required Codex model and reasoning effort as <model>/<effort> (supplied by just garden-docs)")
 	if err := flags.Parse(args); err != nil {
 		return options{}, err
 	}

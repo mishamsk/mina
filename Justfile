@@ -3,10 +3,46 @@ import? "~/.justfile"
 set shell := ["bash", "-euo", "pipefail", "-c"]
 set windows-shell := ["pwsh", "-NoLogo", "-Command"]
 
-default_codex_model := "gpt-6-astra"
-default_codex_reasoning_effort := "medium"
-planning_codex_reasoning_effort := "medium"
-agent_model_thinking_levels := "claude-opus-5-high\nclaude-opus-5-xhigh\ncodex-6-astra-medium\ncodex-6-astra-high\ncodex-5.6-terra-high\ncodex-5.6-terra-xhigh"
+# Shared role defaults; exported overrides survive nested recipes and agent sessions.
+# See docs/agents/model-configuration.md for Bash usage and manual fleet selection.
+implement_model := env("MINA_DEV_IMPLEMENT_MODEL", "gpt-5.6-sol")
+implement_effort := env("MINA_DEV_IMPLEMENT_EFFORT", "high")
+plan_model := env("MINA_DEV_PLAN_MODEL", "gpt-6-astra")
+plan_effort := env("MINA_DEV_PLAN_EFFORT", "high")
+fleet_model := env("MINA_DEV_FLEET_MODEL", "claude-fable-5-1")
+fleet_effort := env("MINA_DEV_FLEET_EFFORT", "high")
+fleet_codex_model := env("MINA_DEV_FLEET_CODEX_MODEL", "gpt-6-astra")
+fleet_codex_effort := env("MINA_DEV_FLEET_CODEX_EFFORT", "medium")
+review_codex_model := env("MINA_DEV_REVIEW_CODEX_MODEL", "gpt-6-astra")
+review_codex_effort := env("MINA_DEV_REVIEW_CODEX_EFFORT", "high")
+review_claude_model := env("MINA_DEV_REVIEW_CLAUDE_MODEL", "claude-opus-5")
+review_claude_effort := env("MINA_DEV_REVIEW_CLAUDE_EFFORT", "high")
+aggregate_model := env("MINA_DEV_AGGREGATE_MODEL", "gpt-5.6-terra")
+aggregate_effort := env("MINA_DEV_AGGREGATE_EFFORT", "high")
+validate_model := env("MINA_DEV_VALIDATE_MODEL", "gpt-5.6-sol")
+validate_effort := env("MINA_DEV_VALIDATE_EFFORT", "high")
+garden_model := env("MINA_DEV_GARDEN_MODEL", "gpt-5.6-terra")
+garden_effort := env("MINA_DEV_GARDEN_EFFORT", "high")
+
+export MINA_DEV_IMPLEMENT_MODEL := implement_model
+export MINA_DEV_IMPLEMENT_EFFORT := implement_effort
+export MINA_DEV_PLAN_MODEL := plan_model
+export MINA_DEV_PLAN_EFFORT := plan_effort
+export MINA_DEV_FLEET_MODEL := fleet_model
+export MINA_DEV_FLEET_EFFORT := fleet_effort
+export MINA_DEV_FLEET_CODEX_MODEL := fleet_codex_model
+export MINA_DEV_FLEET_CODEX_EFFORT := fleet_codex_effort
+export MINA_DEV_REVIEW_CODEX_MODEL := review_codex_model
+export MINA_DEV_REVIEW_CODEX_EFFORT := review_codex_effort
+export MINA_DEV_REVIEW_CLAUDE_MODEL := review_claude_model
+export MINA_DEV_REVIEW_CLAUDE_EFFORT := review_claude_effort
+export MINA_DEV_AGGREGATE_MODEL := aggregate_model
+export MINA_DEV_AGGREGATE_EFFORT := aggregate_effort
+export MINA_DEV_VALIDATE_MODEL := validate_model
+export MINA_DEV_VALIDATE_EFFORT := validate_effort
+export MINA_DEV_GARDEN_MODEL := garden_model
+export MINA_DEV_GARDEN_EFFORT := garden_effort
+agent_model_thinking_levels := implement_model + "/" + implement_effort + "\n" + review_claude_model + "/" + review_claude_effort + "\n" + review_claude_model + "/xhigh\n" + review_codex_model + "/medium\n" + review_codex_model + "/" + review_codex_effort + "\n" + garden_model + "/" + garden_effort + "\n" + garden_model + "/xhigh"
 
 [private]
 @default:
@@ -486,9 +522,97 @@ pre-commit:
 evidence-serve:
     go run ./internal/tools/evidencegallery
 
+# Start an interactive agent: role [-C workdir] [--prompt-file path | prompt].
+[group('agents')]
+[positional-arguments]
+agent role *args:
+    @just _agent interactive "$@"
+
+# Run a headless agent with the same role settings as agent.
+[group('agents')]
+[positional-arguments]
+agent-exec role *args:
+    @just _agent exec "$@"
+
+[private]
+[positional-arguments]
+_agent mode role *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    mode="$1"
+    role="$2"
+    shift 2
+    case "$role" in
+        implement|fix) model="$MINA_DEV_IMPLEMENT_MODEL"; effort="$MINA_DEV_IMPLEMENT_EFFORT" ;;
+        plan) model="$MINA_DEV_PLAN_MODEL"; effort="$MINA_DEV_PLAN_EFFORT" ;;
+        fleet) model="$MINA_DEV_FLEET_MODEL"; effort="$MINA_DEV_FLEET_EFFORT" ;;
+        fleet-codex) model="$MINA_DEV_FLEET_CODEX_MODEL"; effort="$MINA_DEV_FLEET_CODEX_EFFORT" ;;
+        review-codex) model="$MINA_DEV_REVIEW_CODEX_MODEL"; effort="$MINA_DEV_REVIEW_CODEX_EFFORT" ;;
+        review-claude) model="$MINA_DEV_REVIEW_CLAUDE_MODEL"; effort="$MINA_DEV_REVIEW_CLAUDE_EFFORT" ;;
+        aggregate) model="$MINA_DEV_AGGREGATE_MODEL"; effort="$MINA_DEV_AGGREGATE_EFFORT" ;;
+        validate) model="$MINA_DEV_VALIDATE_MODEL"; effort="$MINA_DEV_VALIDATE_EFFORT" ;;
+        garden) model="$MINA_DEV_GARDEN_MODEL"; effort="$MINA_DEV_GARDEN_EFFORT" ;;
+        *) echo "unknown agent role: $role" >&2; exit 2 ;;
+    esac
+    workdir=.
+    prompt=""
+    prompt_file=""
+    prompt_set=false
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            -C|--prompt-file|--model|--effort)
+                [ "$#" -ge 2 ] || { echo "$1 requires a value" >&2; exit 2; }
+                case "$1" in
+                    -C) workdir="$2" ;;
+                    --prompt-file) prompt_file="$2" ;;
+                    # Picker overrides affect only this launch, not inherited role defaults.
+                    --model) model="$2" ;;
+                    --effort) effort="$2" ;;
+                esac
+                shift 2
+                ;;
+            --)
+                shift
+                [ "$#" -eq 1 ] && [ "$prompt_set" = false ] || { echo "expected one prompt after --" >&2; exit 2; }
+                prompt="$1"; prompt_set=true; shift
+                ;;
+            -*) echo "unknown agent option: $1" >&2; exit 2 ;;
+            *)
+                [ "$prompt_set" = false ] || { echo "provide only one prompt; use -C for the working directory" >&2; exit 2; }
+                prompt="$1"; prompt_set=true; shift
+                ;;
+        esac
+    done
+    cd -- "$workdir"
+    if [ -n "$prompt_file" ]; then
+        [ "$prompt_set" = false ] || { echo "provide prompt or --prompt-file, not both" >&2; exit 2; }
+        prompt="$(cat -- "$prompt_file")"
+    fi
+    if [ "$mode" = exec ] && [ -z "$prompt" ]; then
+        echo "headless agents require a prompt or --prompt-file" >&2
+        exit 2
+    fi
+    case "$model" in
+        gpt-*)
+            args=(codex)
+            if [ "$mode" = exec ]; then args+=(exec); fi
+            args+=(-m "$model" -c "model_reasoning_effort=$effort" --dangerously-bypass-approvals-and-sandbox)
+            ;;
+        claude-*)
+            args=(claude)
+            if [ "$mode" = exec ]; then args+=(-p --output-format text); fi
+            args+=(--model "$model" --effort "$effort" --dangerously-skip-permissions)
+            ;;
+        *) echo "unsupported model provider: $model (use gpt- or claude-)" >&2; exit 2 ;;
+    esac
+    if [ -n "$prompt" ]; then args+=(-- "$prompt"); fi
+    printf 'agent %s: %s / %s (%s) in %s\n' "$role" "$model" "$effort" "$mode" "$PWD" >&2
+    exec "${args[@]}"
+
 # Garden eligible documentation with parallel Codex agents.
 [group('agents')]
-garden-docs limit="" codex="5.6-terra/high":
+garden-docs limit="" codex=(garden_model + "/" + garden_effort):
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -502,7 +626,7 @@ garden-docs limit="" codex="5.6-terra/high":
 
 # Run the repository-local review loop through local Codex and Claude CLI sessions.
 [group('agents')]
-review-loop mode context branch_or_commit="" base_ref="" max_iterations="" claude_review_percent="" claude_model="opus" codex_reviewer="6-astra/medium" codex_aggregator="6-astra/medium" codex_validator="6-astra/medium" codex_fixer="6-astra/medium":
+review-loop mode context branch_or_commit="" base_ref="" max_iterations="" claude_review_percent="" claude_model=review_claude_model codex_reviewer=(review_codex_model + "/" + review_codex_effort) codex_aggregator=(aggregate_model + "/" + aggregate_effort) codex_validator=(validate_model + "/" + validate_effort) codex_fixer=(implement_model + "/" + implement_effort) claude_effort=review_claude_effort:
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -513,6 +637,7 @@ review-loop mode context branch_or_commit="" base_ref="" max_iterations="" claud
 
     set -- \
         --claude-model {{ quote(claude_model) }} \
+        --claude-effort {{ quote(claude_effort) }} \
         --codex-reviewer {{ quote(codex_reviewer) }} \
         --codex-aggregator {{ quote(codex_aggregator) }} \
         --codex-validator {{ quote(codex_validator) }} \
@@ -581,7 +706,7 @@ codex-goal plan_file="":
         [ -n "$plan_file" ] || { echo "no plan selected" >&2; exit 1; }
     fi
 
-    command codex -m {{ quote(default_codex_model) }} -c {{ quote("model_reasoning_effort=" + default_codex_reasoning_effort) }} --dangerously-bypass-approvals-and-sandbox "/goal Implement @${plan_file}. The plan's completion criteria define when the goal is complete."
+    exec just agent implement "/goal Implement @${plan_file}. The plan's completion criteria define when the goal is complete."
 
 # Run a Codex operator against a sequential fleet plan.
 [group('agents')]
@@ -615,7 +740,7 @@ codex-goal-fleet plan_file="":
     }
     [ -f "$plan_file" ] || { echo "fleet plan not found: $plan_file" >&2; exit 1; }
 
-    command codex -m gpt-6-astra -c model_reasoning_effort=high --dangerously-bypass-approvals-and-sandbox "/goal Operate @${plan_file}. The plan's completion criteria define when the goal is complete."
+    exec just agent fleet-codex "/goal Operate @${plan_file}. The plan's completion criteria define when the goal is complete."
 
 # List currently actionable, unclaimed parent Kata issues as tab-separated rows.
 [private]
@@ -667,7 +792,7 @@ codex-kata-plan:
     [ -n "$selected" ] || { echo "no kata issue selected" >&2; exit 1; }
 
     issue="${selected%%$'\t'*}"
-    command codex exec -m {{ quote(default_codex_model) }} -c {{ quote("model_reasoning_effort=" + planning_codex_reasoning_effort) }} --dangerously-bypass-approvals-and-sandbox "\$kata-plan-worktree #${issue}"
+    exec just agent-exec plan "\$kata-plan-worktree #${issue}"
 
 # Create a worktree for a selected Kata issue and launch an implementation agent.
 [group('agents')]
@@ -675,8 +800,6 @@ kata-implement:
     #!/usr/bin/env bash
     set -euo pipefail
 
-    command -v claude >/dev/null || { echo "missing required tool: claude" >&2; exit 1; }
-    command -v codex >/dev/null || { echo "missing required tool: codex" >&2; exit 1; }
     command -v fzf >/dev/null || { echo "missing required tool: fzf" >&2; exit 1; }
     command -v git >/dev/null || { echo "missing required tool: git" >&2; exit 1; }
     command -v gt >/dev/null || { echo "missing required tool: gt" >&2; exit 1; }
@@ -696,7 +819,6 @@ kata-implement:
     fi
     [ -n "$selected" ] || { echo "no kata issue selected" >&2; exit 1; }
     issue="${selected%%$'\t'*}"
-    kata claim "$issue" --agent
 
     if ! agent_model_thinking="$(
         printf '%s\n' {{ quote(agent_model_thinking_levels) }} | fzf --prompt='Agent model / thinking> '
@@ -705,6 +827,14 @@ kata-implement:
         exit 1
     fi
     [ -n "$agent_model_thinking" ] || { echo "no agent model and thinking level selected" >&2; exit 1; }
+    case "${agent_model_thinking%/*}" in
+        gpt-*) agent_cli=codex ;;
+        claude-*) agent_cli=claude ;;
+        *) echo "unsupported agent model: ${agent_model_thinking%/*}" >&2; exit 2 ;;
+    esac
+    command -v "$agent_cli" >/dev/null || { echo "missing required tool: $agent_cli" >&2; exit 1; }
+
+    kata claim "$issue" --agent
 
     issue_json="$(kata show "$issue" --json)"
     title="$(jq -r '.issue.title' <<<"$issue_json")"
@@ -726,28 +856,11 @@ kata-implement:
     prompt_template="$(<docs/kata-implementation-prompt-template.md)"
     prompt="${prompt_template//\{\{issue\}\}/#$issue}"
     prompt="${prompt//\{\{issue_body\}\}/$issue_body}"
-    thinking_effort="${agent_model_thinking##*-}"
-
-    cd "$worktree_path"
-    case "$agent_model_thinking" in
-        claude-opus-5-*)
-            exec claude --model claude-opus-5 --effort "$thinking_effort" --dangerously-skip-permissions "$prompt"
-            ;;
-        codex-6-astra-*)
-            exec codex -m gpt-6-astra -c "model_reasoning_effort=$thinking_effort" --dangerously-bypass-approvals-and-sandbox "$prompt"
-            ;;
-        codex-5.6-terra-*)
-            exec codex -m gpt-5.6-terra -c "model_reasoning_effort=$thinking_effort" --dangerously-bypass-approvals-and-sandbox "$prompt"
-            ;;
-        *)
-            echo "unsupported agent model and thinking level: $agent_model_thinking" >&2
-            exit 1
-            ;;
-    esac
+    exec just agent implement -C "$worktree_path" --model "${agent_model_thinking%/*}" --effort "${agent_model_thinking##*/}" -- "$prompt"
 
 # Rebase the current branch through Codex.
 [group('agents')]
 rebase:
-    command codex exec -m {{ quote(default_codex_model) }} -c {{ quote("model_reasoning_effort=" + default_codex_reasoning_effort) }} --dangerously-bypass-approvals-and-sandbox {{ quote("$rebase") }}
+    just agent-exec implement {{ quote("$rebase") }}
 
 # Agent-only manual smoke commands should be added temporarily when a concrete uncovered risk remains outside the testscript end-to-end suite.

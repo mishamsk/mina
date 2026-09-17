@@ -71,6 +71,7 @@ type config struct {
 	scratchDir              string
 	reviewBasis             string
 	claudeModel             string
+	claudeEffort            string
 	codexReviewer           codexSettings
 	codexAggregator         codexSettings
 	codexValidator          codexSettings
@@ -87,6 +88,7 @@ type config struct {
 type reviewLoopOptions struct {
 	baseRef             string
 	claudeModel         string
+	claudeEffort        string
 	codexReviewer       string
 	codexAggregator     string
 	codexValidator      string
@@ -306,7 +308,7 @@ func loadConfig(args []string) (config, error) {
 		return config{}, err
 	}
 	if len(args) > 1 {
-		return config{}, errors.New("usage: reviewloop --claude-model <model> --codex-reviewer <model/effort> --codex-aggregator <model/effort> --codex-validator <model/effort> --codex-fixer <model/effort> (--plan <repo-relative-path> | --goal <text>) [--base <ref>] [--max-iterations <count>] [--claude-review-percent <percent>] [branch-or-commit]")
+		return config{}, errors.New("usage: reviewloop --claude-model <model> --claude-effort <effort> --codex-reviewer <model/effort> --codex-aggregator <model/effort> --codex-validator <model/effort> --codex-fixer <model/effort> (--plan <repo-relative-path> | --goal <text>) [--base <ref>] [--max-iterations <count>] [--claude-review-percent <percent>] [branch-or-commit]")
 	}
 
 	root, err := repoRoot()
@@ -330,6 +332,9 @@ func loadConfig(args []string) (config, error) {
 	}
 	if options.claudeModel == "" {
 		return config{}, errors.New("--claude-model is required")
+	}
+	if options.claudeEffort == "" {
+		return config{}, errors.New("--claude-effort is required")
 	}
 	codexReviewer, err := parseCodexSettings(options.codexReviewer, "--codex-reviewer")
 	if err != nil {
@@ -410,6 +415,7 @@ func loadConfig(args []string) (config, error) {
 		root:                    root,
 		reviewBasis:             reviewBasis,
 		claudeModel:             options.claudeModel,
+		claudeEffort:            options.claudeEffort,
 		codexReviewer:           codexReviewer,
 		codexAggregator:         codexAggregator,
 		codexValidator:          codexValidator,
@@ -430,6 +436,7 @@ func parseReviewLoopArgs(args []string) ([]string, reviewLoopOptions, error) {
 	stringOptions := map[string]*string{
 		"--base":             &options.baseRef,
 		"--claude-model":     &options.claudeModel,
+		"--claude-effort":    &options.claudeEffort,
 		"--codex-reviewer":   &options.codexReviewer,
 		"--codex-aggregator": &options.codexAggregator,
 		"--codex-validator":  &options.codexValidator,
@@ -548,8 +555,12 @@ func parseCodexSettings(value string, name string) (codexSettings, error) {
 	if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[1]) == "" {
 		return codexSettings{}, fmt.Errorf("%s must use <model>/<effort>", name)
 	}
+	model := strings.TrimSpace(parts[0])
+	if !strings.HasPrefix(model, "gpt-") {
+		model = "gpt-" + model
+	}
 	return codexSettings{
-		model:           "gpt-" + strings.TrimSpace(parts[0]),
+		model:           model,
 		reasoningEffort: strings.TrimSpace(parts[1]),
 	}, nil
 }
@@ -1380,7 +1391,7 @@ func singleValidationResult(message string) (string, error) {
 
 func runReviewerAgent(cfg config, label string, prompt string, useClaude bool) (string, error) {
 	if useClaude {
-		message, err := runClaude(cfg.root, cfg.scratchDir, label, prompt, cfg.claudeModel)
+		message, err := runClaude(cfg.root, cfg.scratchDir, label, prompt, cfg.claudeModel, cfg.claudeEffort)
 		if err == nil {
 			return message, nil
 		}
@@ -1389,12 +1400,13 @@ func runReviewerAgent(cfg config, label string, prompt string, useClaude bool) (
 	return runCodex(cfg, label, prompt, cfg.codexReviewer)
 }
 
-func runClaude(root string, scratchDir string, label string, prompt string, model string) (string, error) {
+func runClaude(root string, scratchDir string, label string, prompt string, model string, effort string) (string, error) {
 	cmd := exec.Command(
 		"claude",
 		"-p",
 		"--output-format", "text",
 		"--model", model,
+		"--effort", effort,
 		"--dangerously-skip-permissions",
 	)
 	cmd.Dir = root

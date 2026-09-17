@@ -6,6 +6,7 @@
 
 ## Implicit Contracts
 
+- Model selection is supplied by the Justfile through the required `--codex` option; this tool does not own model defaults.
 - The last sentinel commit touching a target excludes it from selection. `--limit` applies only to package documents; `PROJECT_STATE.md` and the governing web UI design and theme documents are selected separately.
 - Gardening requires a clean named branch other than `main` and creates one sentinel commit per changed target.
 - Up to four agents share one worktree. Commits begin only after the whole batch returns and validation confirms that only assigned documents changed.
