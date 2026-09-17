@@ -315,6 +315,7 @@ const GroupRegister = ({ prefix }: { readonly prefix: string }) => {
       tabIndex={-1}
     >
       <AccountRegisterTable
+        entryIdentity={prefix}
         errorMessage={resource.register.errorMessage}
         loading={resource.register.loading}
         lookupErrorMessage={resource.lookups.errorMessage}

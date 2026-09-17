@@ -26,6 +26,9 @@ test("keyboard help shows route shortcuts, restores focus, and respects entry co
   await expect(
     dialog.getByText("Move row focus", { exact: true }),
   ).toBeVisible();
+  await expect(
+    dialog.getByText("Focus list search", { exact: true }),
+  ).toHaveCount(2);
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
   await expect(row).toBeFocused();
@@ -41,7 +44,8 @@ test("keyboard help shows route shortcuts, restores focus, and respects entry co
   await expect(row).toBeFocused();
 
   const input = page.getByRole("searchbox", { name: "Search", exact: true });
-  await input.focus();
+  await page.keyboard.press("/");
+  await expect(input).toBeFocused();
   await page.keyboard.press("?");
   await expect(input).toHaveValue("?");
   await expect(dialog).toBeHidden();

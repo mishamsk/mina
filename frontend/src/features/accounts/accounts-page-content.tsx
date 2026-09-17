@@ -18,6 +18,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { useListSearchShortcuts } from "@/features/app-shell";
 import type { AccountsPageSnapshot } from "@/store";
 
 import type { AccountTypeFilter } from "./accounts-tree";
@@ -84,6 +85,7 @@ export const AccountsToolbar = ({
   setSearchParams,
   typeFilter,
 }: AccountsToolbarProps) => {
+  useListSearchShortcuts();
   const [searchInputDraft, setSearchInputDraft] = useState<
     string | undefined
   >();
@@ -201,6 +203,7 @@ export const AccountsToolbar = ({
           <input
             id="accounts-search"
             type="search"
+            data-list-search-input
             autoComplete="off"
             className="bg-card text-foreground placeholder:text-muted-foreground h-9 w-full border-2 border-[var(--border-ink)] px-8 font-mono text-sm shadow-[var(--shadow-pixel)]"
             placeholder="Full account path"

@@ -6,7 +6,7 @@
 
 ## Implicit Contracts
 
-- Definition rows follow the shared [roving focus contract](../../hooks/PACKAGE.md), [table rules](../../../../docs/webui-design.md#tables-and-filtering), and [theme](../../../../docs/webui-theme-arcade-cabinet.md); editor activation retains the row opener.
+- Definition rows opt into the shared guarded [table-entry focus contract](../app-shell/PACKAGE.md) and follow the shared [roving focus contract](../../hooks/PACKAGE.md), [table rules](../../../../docs/webui-design.md#tables-and-filtering), and [theme](../../../../docs/webui-theme-arcade-cabinet.md); editor activation retains the row opener.
 
 - Definition lists register row help while mounted; the editor registers draft-discard help only while open.
 

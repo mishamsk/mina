@@ -6,7 +6,7 @@
 
 ## Implicit Contracts
 
-- Member rows follow the shared [roving focus contract](../../hooks/PACKAGE.md), [table rules](../../../../docs/webui-design.md#tables-and-filtering), and [theme](../../../../docs/webui-theme-arcade-cabinet.md).
+- Member rows opt into the shared guarded [table-entry focus contract](../app-shell/PACKAGE.md) and follow the shared [roving focus contract](../../hooks/PACKAGE.md), [table rules](../../../../docs/webui-design.md#tables-and-filtering), and [theme](../../../../docs/webui-theme-arcade-cabinet.md).
 
 - The mounted member list owns its row-activation keyboard help registration.
 

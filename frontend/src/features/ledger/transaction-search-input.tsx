@@ -1,5 +1,7 @@
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
+import { useListSearchShortcuts } from "@/features/app-shell";
+
 interface TransactionSearchInputProps {
   readonly id: string;
   readonly onSearchChange: (value: string) => void;
@@ -11,6 +13,7 @@ export const TransactionSearchInput = ({
   onSearchChange,
   value,
 }: TransactionSearchInputProps) => {
+  useListSearchShortcuts();
   const [draftState, setDraftState] = useState({ draft: value, value });
   const draft = draftState.value === value ? draftState.draft : value;
   const pendingSearchRef = useRef<string | null>(null);
@@ -48,6 +51,7 @@ export const TransactionSearchInput = ({
     <input
       id={id}
       type="search"
+      data-list-search-input
       autoComplete="off"
       className="bg-card text-foreground placeholder:text-muted-foreground h-9 border-2 border-[var(--border-ink)] px-2 font-mono text-sm shadow-[var(--shadow-pixel)]"
       placeholder="Memo or counterparty"

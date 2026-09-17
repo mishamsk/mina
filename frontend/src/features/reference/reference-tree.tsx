@@ -23,6 +23,7 @@ import {
 import { Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useTableEntryFocus } from "@/features/app-shell";
 import { FqnPath } from "@/features/ledger";
 import { useRovingRows } from "@/hooks/use-roving-rows";
 import { useShortcutGroup } from "@/hooks/use-shortcut-group";
@@ -301,9 +302,14 @@ export const ReferenceTree = <
   );
 
   const tableBodyRef = useRef<HTMLTableSectionElement>(null);
+  const entryFocus = useTableEntryFocus({
+    initialResultReady:
+      !loading && (leaves !== undefined || errorMessage !== undefined),
+  });
   const rowProps = useRovingRows({
     containerRef: tableBodyRef,
     rowSelector: "tr[data-active]",
+    entryFocus,
     onActivate: (index, opener, event) => {
       const row = rows[index];
       if (!row) return;

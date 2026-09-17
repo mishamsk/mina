@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useTableEntryFocus } from "@/features/app-shell";
 import {
   AccountDisplayLabel,
   AmountText,
@@ -36,6 +37,7 @@ import {
 } from "@/store";
 
 interface AccountRegisterTableProps {
+  readonly entryIdentity?: string;
   readonly errorMessage: string | undefined;
   readonly loading: boolean;
   readonly lookupErrorMessage: string | undefined;
@@ -165,6 +167,7 @@ const registerShortcuts: ShortcutGroup = {
 };
 
 export const AccountRegisterTable = ({
+  entryIdentity,
   errorMessage,
   loading,
   lookupErrorMessage,
@@ -192,9 +195,15 @@ export const AccountRegisterTable = ({
     true,
   );
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const entryFocus = useTableEntryFocus({
+    identity: entryIdentity,
+    initialResultReady:
+      !loading && (records !== undefined || errorMessage !== undefined),
+  });
   const rowProps = useRovingRows({
     containerRef: rootRef,
     rowSelector: "[data-testid='account-register-row']",
+    entryFocus,
     onActivate: (index, row) => {
       const record = records?.[index];
       if (record) onOpenRecord(record, row);

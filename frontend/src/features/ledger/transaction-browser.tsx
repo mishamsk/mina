@@ -49,6 +49,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useTableEntryFocus } from "@/features/app-shell";
 import {
   RecurringDefinitionDeferDialog,
   recurringDefinitionRecordsFromTransaction,
@@ -773,6 +774,23 @@ export const TransactionBrowser = ({
     }
     return current;
   }, [amountEditorRecords, transactions]);
+  const entryFocusRowIndex = useMemo(() => {
+    const entryFocusTransaction =
+      dateJumpAnchor?.page === page
+        ? dateJumpTargetTransaction(visibleTransactions, dateJumpAnchor.date)
+        : undefined;
+    return entryFocusTransaction
+      ? visibleTransactions.findIndex(
+          (transaction) =>
+            transaction.transaction_id === entryFocusTransaction.transaction_id,
+        )
+      : undefined;
+  }, [dateJumpAnchor, page, visibleTransactions]);
+  const entryFocus = useTableEntryFocus({
+    initialResultReady:
+      !loading && (transactions !== undefined || errorMessage !== undefined),
+    rowIndex: entryFocusRowIndex === -1 ? undefined : entryFocusRowIndex,
+  });
   const projectionConfirmErrorMessage = visibleTransactions.some(
     (transaction) =>
       transaction.transaction_id === projectionConfirmError?.transactionId,
@@ -947,6 +965,7 @@ export const TransactionBrowser = ({
   const rowProps = useRovingRows({
     containerRef: rootRef,
     rowSelector: transactionRowSelector,
+    entryFocus: preview ? undefined : entryFocus,
     onKeyDown: (transactionIndex, _row, event) => {
       const transaction = visibleTransactions[transactionIndex];
       if (!transaction) return;

@@ -4,6 +4,7 @@ import type { SetURLSearchParams } from "react-router";
 
 import { Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
+import { useListSearchShortcuts } from "@/features/app-shell";
 
 export const readReferenceSearchState = (
   searchParams: URLSearchParams,
@@ -56,6 +57,7 @@ export const ReferenceToolbar = ({
   toggleOffTooltip,
   toggleOnTooltip,
 }: ReferenceToolbarProps) => {
+  useListSearchShortcuts();
   const [searchInputDraft, setSearchInputDraft] = useState<{
     readonly resetVersion: number;
     readonly value: string | undefined;
@@ -127,6 +129,7 @@ export const ReferenceToolbar = ({
           <input
             id={searchInputId}
             type="search"
+            data-list-search-input
             autoComplete="off"
             className="bg-card text-foreground placeholder:text-muted-foreground h-9 w-full border-2 border-[var(--border-ink)] px-8 font-mono text-sm shadow-[var(--shadow-pixel)]"
             placeholder={searchPlaceholder}

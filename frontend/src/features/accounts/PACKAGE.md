@@ -6,7 +6,7 @@
 
 ## Implicit Contracts
 
-- Register roving focus keeps an open detail panel following the walked record, including Home/End; Enter and Space share pointer activation.
+- Account trees and account/group registers opt into the shared guarded [table-entry focus contract](../app-shell/PACKAGE.md); a group prefix extends the route identity. Register roving focus keeps an open detail panel following the walked record, including Home/End; Enter and Space share pointer activation.
 
 - Chart rows follow the shared [roving focus contract](../../hooks/PACKAGE.md), [table rules](../../../../docs/webui-design.md#tables-and-filtering), and [theme](../../../../docs/webui-theme-arcade-cabinet.md); their name links retain native navigation gestures.
 
@@ -20,7 +20,7 @@
 - A failed group-register entity-filter lookup warns without navigating. Leaving the register or unmounting aborts and discards pending lookups; same-route query changes keep them alive.
 - Chart snapshots are keyed by normalized `q`, repeated `type`, and `hidden`; each load follows all server-filtered pages in canonical FQN order, and only `nonzero` remains a local balance-presentation filter. Repeated types use any-of matching; no valid type selects all. The modal type picker absorbs its dismissing pointer event so it cannot activate an underlying tree row; its trigger names the current selection and exposes the full summary in a tooltip.
 - The focused account search field retains its raw draft, including trailing whitespace; its URL query normalizes on each change without navigating for normalized no-ops, and blur or browser history navigation releases the draft.
-- The account search field opts out of browser value-history suggestions so Mina's server-filtered search remains the only search experience.
+- The account search field marks its native input for app-shell list-search shortcut resolution, registers List search help for exactly its mounted lifetime, and opts out of browser value-history suggestions so Mina's server-filtered search remains the only search experience.
 - A failed chart load replaces any mismatched cached chart with its error and Retry affordance until the requested snapshot loads successfully.
 - Account trees derive ancestor rows only from returned leaves and use group reads solely for canonical hidden metadata; they do not repeat server-owned search or type membership in the browser.
 - The `nonzero` chart filter follows the [Accounts toolbar rules](../../../../docs/webui-design.md#accounts).
@@ -33,7 +33,7 @@
 - Register rows render the record-search response's server-derived transaction display title and account-ID context; omitted enrichment renders as unavailable, and full transaction loading begins only when detail opens.
 - Register category chips re-read the category by stable ID before constructing a Transactions DSL filter, so external renames cannot submit stale FQNs.
 - Use API `deletable` and `has_credit_limit_history` signals as supplied; this package does not infer either rule. System accounts expose no mutation controls.
-- Management-panel callers restore focus to the opener (or New account fallback) on close; successful deletion prefers the visible search field and otherwise uses the table. Register detail delegates panel rendering, loading, URL state, and focus restoration to ledger; accounts owns register-specific mutation calls, refresh sequencing, notices, and close or reload outcomes. URL-first detail focuses the panel; walking between records keeps row focus, and moving within one transaction updates the restore row without closing detail.
+- Management-panel callers restore focus to the opener (or New account fallback) on close, and successful deletion prefers the visible search field and otherwise uses the table. Register detail delegates panel rendering, loading, URL state, and focus restoration to ledger; accounts owns register-specific mutation calls, refresh sequencing, notices, and close or reload outcomes. URL-first detail focuses the panel; walking between records keeps row focus, and moving within one transaction updates the restore row without closing detail.
 
 ## Boundaries
 

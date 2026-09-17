@@ -6,7 +6,7 @@
 
 ## Implicit Contracts
 
-- Roving rows share one row Tab stop, clamp movement and shrinking lists, adopt focused rows, and clear sticky table headers and scroll before focusing without browser scrolling; only the active row's nested controls enter the Tab sequence, with explicit indexes preserving WebKit access to native links and buttons. Reconciliation observes only the rows' parent container and rebinds when it changes. Activation, movement, and custom row-key side effects belong to callers behind the hook's interactive-target guard, and nested controls retain their own keys. Active-row fill is scoped to focus within the row.
+- Roving rows share one row Tab stop, clamp movement and shrinking lists, adopt focused rows, and clear sticky table headers and scroll before focusing without browser scrolling; an opt-in entry contract consumes one identity-keyed focus attempt when its initial result settles, can select a caller-restored initial row, and delegates live eligibility to its caller. Only the active row's nested controls enter the Tab sequence, with explicit indexes preserving WebKit access to native links and buttons. Reconciliation observes only the rows' parent container and rebinds when it changes. Activation, movement, and custom row-key side effects belong to callers behind the hook's interactive-target guard, and nested controls retain their own keys. Active-row fill is scoped to focus within the row.
 
 - Accelerator observation listens only while enabled, clears on blur or visibility changes, and supports Meta-only picker presentation; activation decisions belong to event handlers.
 

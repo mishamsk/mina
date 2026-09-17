@@ -36,6 +36,7 @@ import { type RowAction, RowActions } from "@/components/row-actions";
 import { focusWithoutTooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useTableEntryFocus } from "@/features/app-shell";
 import { refreshFeaturedBalances } from "@/features/featured-balances";
 import {
   AmountText,
@@ -371,9 +372,14 @@ export const RecurringPageContent = ({
 
   const definitions = snapshot?.definitions ?? [];
   const tableBodyRef = useRef<HTMLTableSectionElement>(null);
+  const entryFocus = useTableEntryFocus({
+    initialResultReady:
+      !loading && (snapshot !== undefined || errorMessage !== undefined),
+  });
   const rowProps = useRovingRows({
     containerRef: tableBodyRef,
     rowSelector: "tr[data-active]",
+    entryFocus,
     onActivate: (index, opener) => {
       const definition = definitions[index];
       if (definition) onEdit(definition, opener);

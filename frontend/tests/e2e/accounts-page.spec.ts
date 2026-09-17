@@ -260,7 +260,7 @@ test("account register walks transaction detail by keyboard", async ({
     .getByTestId("account-register-row")
     .filter({ hasText: oldestMemo });
   await expect(newestRow).toBeVisible();
-  await newestRow.focus();
+  await expect(newestRow).toBeFocused();
   await newestRow.press("Enter");
 
   await expect(page).toHaveURL(

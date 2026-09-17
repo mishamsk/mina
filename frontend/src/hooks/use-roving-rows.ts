@@ -2,6 +2,7 @@ import {
   type KeyboardEvent,
   type RefObject,
   useLayoutEffect,
+  useRef,
   useState,
 } from "react";
 
@@ -14,21 +15,37 @@ type RowAction = (
   event: RowEvent,
 ) => void;
 
+export interface RovingRowsEntryFocus {
+  readonly identity: string;
+  readonly initialResultReady: boolean;
+  readonly isEligible: () => boolean;
+  readonly rowIndex?: number;
+}
+
 export function useRovingRows({
   containerRef,
   rowSelector,
   onActivate,
   onActiveChange,
   onKeyDown,
+  entryFocus,
 }: {
   containerRef: RefObject<HTMLElement | null>;
   rowSelector: string;
   onActivate?: RowAction;
   onActiveChange?: RowAction;
   onKeyDown?: RowAction;
+  entryFocus?: RovingRowsEntryFocus;
 }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [container, setContainer] = useState<HTMLElement | null>(null);
+  const entryFocusAttemptRef = useRef<
+    | {
+        consumed: boolean;
+        identity: string;
+      }
+    | undefined
+  >(undefined);
 
   // Re-resolve after commits so loading/empty surfaces can replace the table.
   useLayoutEffect(() => {
@@ -75,6 +92,40 @@ export function useRovingRows({
       restore();
     };
   }, [activeIndex, rowSelector, container]);
+
+  useLayoutEffect(() => {
+    if (!entryFocus) return;
+    if (entryFocusAttemptRef.current?.identity !== entryFocus.identity) {
+      entryFocusAttemptRef.current = {
+        consumed: false,
+        identity: entryFocus.identity,
+      };
+    }
+    const attempt = entryFocusAttemptRef.current;
+    if (attempt.consumed || !entryFocus.initialResultReady) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      attempt.consumed = true;
+      if (!entryFocus.isEligible()) return;
+
+      const rows =
+        containerRef.current?.querySelectorAll<HTMLTableRowElement>(
+          rowSelector,
+        );
+      const row =
+        rows?.[
+          Math.max(
+            0,
+            Math.min(entryFocus.rowIndex ?? activeIndex, rows.length - 1),
+          )
+        ];
+      if (!row?.isConnected) return;
+      row.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeIndex, containerRef, entryFocus, rowSelector]);
 
   return (index: number) => ({
     tabIndex: index === activeIndex ? 0 : -1,

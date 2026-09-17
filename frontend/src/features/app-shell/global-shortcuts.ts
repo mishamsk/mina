@@ -22,6 +22,31 @@ export const isEditableTarget = (target: EventTarget | null): boolean =>
   target instanceof HTMLElement &&
   (target.matches("input, textarea, select") || target.isContentEditable);
 
+export const matchesListSearchShortcut = (event: KeyboardEvent): boolean =>
+  (event.key === "/" &&
+    !event.metaKey &&
+    !event.ctrlKey &&
+    !event.altKey &&
+    !event.shiftKey) ||
+  (event.key.toLocaleLowerCase() === "l" &&
+    (event.metaKey || event.ctrlKey) &&
+    !event.altKey &&
+    !event.shiftKey);
+
+export const resolveVisibleListSearchInput = (): HTMLInputElement | undefined =>
+  Array.from(
+    document.querySelectorAll<HTMLInputElement>("[data-list-search-input]"),
+  ).find(
+    (input) =>
+      input.isConnected &&
+      !input.disabled &&
+      !input.closest("[inert]") &&
+      input.getClientRects().length > 0,
+  );
+
+export const isListSearchFocusInsideDialog = (): boolean =>
+  Boolean(document.activeElement?.closest("[role='dialog']"));
+
 export const globalShortcutGroup: ShortcutGroup = {
   id: "global",
   title: "Global",

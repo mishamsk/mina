@@ -108,6 +108,9 @@ import {
   hasActiveOverlay,
   hasHelpBlockingOverlay,
   isEditableTarget,
+  isListSearchFocusInsideDialog,
+  matchesListSearchShortcut,
+  resolveVisibleListSearchInput,
 } from "./global-shortcuts";
 import { KeyboardShortcutsDialog } from "./keyboard-shortcuts-dialog";
 
@@ -927,6 +930,30 @@ export const AppShell = () => {
 
       event.preventDefault();
       toggleCommandPalette();
+    };
+
+    window.addEventListener("keydown", onKeyDown, { capture: true });
+    return () => {
+      window.removeEventListener("keydown", onKeyDown, { capture: true });
+    };
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (
+        !matchesListSearchShortcut(event) ||
+        isEditableTarget(event.target) ||
+        isListSearchFocusInsideDialog() ||
+        hasActiveOverlay()
+      ) {
+        return;
+      }
+      const input = resolveVisibleListSearchInput();
+      if (!input) return;
+
+      event.preventDefault();
+      input.focus();
+      input.select();
     };
 
     window.addEventListener("keydown", onKeyDown, { capture: true });

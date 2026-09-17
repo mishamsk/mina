@@ -30,6 +30,7 @@ import { focusWithoutTooltip, Tooltip } from "@/components/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useTableEntryFocus } from "@/features/app-shell";
 import { AmountText, FqnPath } from "@/features/ledger";
 import { useRovingRows } from "@/hooks/use-roving-rows";
 import { useShortcutGroup } from "@/hooks/use-shortcut-group";
@@ -319,9 +320,14 @@ export const AccountsTree = ({
   >();
   const [deleting, setDeleting] = useState(false);
   const accountsTableScrollRef = useRef<HTMLDivElement | null>(null);
+  const entryFocus = useTableEntryFocus({
+    initialResultReady:
+      !loading && (accounts !== undefined || errorMessage !== undefined),
+  });
   const rowProps = useRovingRows({
     containerRef: accountsTableScrollRef,
     rowSelector: "tr[data-active]",
+    entryFocus,
     onActivate: (_index, _row, event) => activateRowLink(event),
   });
   const accountBalancesById = useMemo(

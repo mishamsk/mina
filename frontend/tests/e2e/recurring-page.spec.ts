@@ -261,9 +261,7 @@ test("recurring editor protects dirty navigation and keeps editing focus", async
   await dialog.getByRole("button", { name: "Discard changes" }).click();
   await expect(page).toHaveURL(/\/accounts$/);
   await expect(editor).toHaveCount(0);
-  await expect(
-    page.getByRole("heading", { name: "Accounts", exact: true }),
-  ).toBeFocused();
+  await expect(page.getByTestId("accounts-tree-row").first()).toBeFocused();
 });
 
 test("definition drill-down discards changes and opens shareable editable transaction scope", async ({
@@ -294,17 +292,13 @@ test("definition drill-down discards changes and opens shareable editable transa
     new RegExp(`/transactions\\?filter=recurring_definition%3A%23${id}`),
   );
   await expect(editor).toHaveCount(0);
-  await expect(
-    page.getByRole("heading", { name: "Transactions", exact: true }),
-  ).toBeFocused();
+  const rows = page.locator('[data-transaction-row="true"]');
+  await expect(rows.first()).toBeFocused();
   const chip = page.getByRole("button", {
     name: `Edit Recurring definition #${id} · any of`,
     exact: true,
   });
   await expect(chip).toBeVisible();
-  const rows = page.locator('[data-transaction-row="true"]');
-  await expect(rows.first()).toBeVisible();
-  await rows.first().focus();
   await page.keyboard.press("Enter");
   await expect(page.getByTestId("transaction-detail-panel")).toContainText(
     "Household:Mortgage",
