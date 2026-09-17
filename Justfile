@@ -419,6 +419,24 @@ dev-kill:
 test:
     go test ./...
 
+# Compare test inventories with the existing main worktree; use --worktree for uncommitted changes.
+[group('dev-tooling')]
+[positional-arguments]
+test-diff *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    exec go run ./internal/tools/testdiff "$@"
+
+# Inventory app tests without executing test bodies (also used against the main worktree).
+[private]
+test-list-go root:
+    @cd {{ quote(root) }} && go test -json -list '^Test' ./internal/apptest/runtime
+
+# Inventory browser tests without building Mina or installing/launching browsers.
+[private]
+test-list-frontend root:
+    @cd {{ quote(root) }}/frontend && mise exec -- pnpm exec playwright test --list --reporter=json --forbid-only --pass-with-no-tests
+
 # Run focused concurrent app tests with the Go race detector.
 [group('dev-tooling')]
 test-race-concurrency:
