@@ -79,7 +79,7 @@ Per-task checklist — every task below runs the full per-task workflow; tick a 
 
 Task scope details live in the Kata issues (`kata show <ref> --agent`). Respect the stated dependencies; otherwise run in the listed order.
 
-- [ ] Task 1: `bmcb` — Focus first table row and add slash search shortcut (shared table focus and global shortcut infrastructure; registers `Meta+L` list-search semantics and shortcuts-help entries that Task 2 must not collide with; no blockers) — branch `bmcb-table-focus-search-shortcut`
+- [x] Task 1: `bmcb` — Focus first table row and add slash search shortcut (shared table focus and global shortcut infrastructure; registers `Meta+L` list-search semantics and shortcuts-help entries that Task 2 must not collide with; no blockers) — branch `bmcb-table-focus-search-shortcut`
 - [ ] Task 2: `cwxv` — Focus transaction entry on first empty field (entry-modal focus contract plus modal-scoped `Meta+L`; ordered after Task 1 so the modal binding is layered over the committed global list-search binding; no Kata blocker) — branch `cwxv-entry-first-empty-focus`
 - [ ] Task 3: `c53m` — Fix Templates table trailing action padding (isolated table styling polish; independent, last so it lands on the final shared table markup from Task 1) — branch `c53m-templates-action-padding`
 
