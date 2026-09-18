@@ -81,14 +81,14 @@ Task scope details live in the Kata issues (`kata show <ref> --agent`). Respect 
 
 - [x] Task 1: `bmcb` — Focus first table row and add slash search shortcut (shared table focus and global shortcut infrastructure; registers `Meta+L` list-search semantics and shortcuts-help entries that Task 2 must not collide with; no blockers) — branch `bmcb-table-focus-search-shortcut`
 - [x] Task 2: `cwxv` — Focus transaction entry on first empty field (entry-modal focus contract plus modal-scoped `Meta+L`; ordered after Task 1 so the modal binding is layered over the committed global list-search binding; no Kata blocker) — branch `cwxv-entry-first-empty-focus`
-- [ ] Task 3: `c53m` — Fix Templates table trailing action padding (isolated table styling polish; independent, last so it lands on the final shared table markup from Task 1) — branch `c53m-templates-action-padding`
+- [x] Task 3: `c53m` — Fix Templates table trailing action padding (isolated table styling polish; independent, last so it lands on the final shared table markup from Task 1) — branch `c53m-templates-action-padding`
 
 ## Final Verification
 
-- [ ] On the main working branch with all merged branches: `just test` passes
-- [ ] `just test-integration` passes
-- [ ] `just pre-commit` passes
-- [ ] `just test-frontend-e2e` passes
-- [ ] Deviation from template, per operator rules: NO fleet-level `just review-loop` (each branch already ran its one allowed loop) — unless merges needed conflict resolution or cross-branch interactions were never covered, in which case run `just review-loop --plan "<this fleet plan's repo-relative path>"` exactly once and fold unresolved comments into a final fix plan (no further review-loop)
-- [ ] Final report: per task — merged/failed, fix plans used, live-verification evidence, governance interventions, Kata refs closed, residual findings and unmerged branches (per-task evidence recorded on each closed Kata issue)
-- [ ] Move this plan to `docs/plans/completed/`
+- [x] On the main working branch with all merged branches: `just test` passes
+- [x] `just test-integration` passes
+- [x] `just pre-commit` passes
+- [x] `just test-frontend-e2e` passes
+- [x] Deviation from template, per operator rules: NO fleet-level `just review-loop` (each branch already ran its one allowed loop) — unless merges needed conflict resolution or cross-branch interactions were never covered, in which case run `just review-loop --plan "<this fleet plan's repo-relative path>"` exactly once and fold unresolved comments into a final fix plan (no further review-loop)
+- [x] Final report: per task — merged/failed, fix plans used, live-verification evidence, governance interventions, Kata refs closed, residual findings and unmerged branches (per-task evidence recorded on each closed Kata issue)
+- [x] Move this plan to `docs/plans/completed/`
