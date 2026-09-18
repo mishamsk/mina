@@ -21,6 +21,12 @@ export const transactionEntryShortcutGroup: ShortcutGroup = {
       label: "Save the draft and close",
     },
     {
+      id: "entry-template",
+      keys: ["Mod", "L"],
+      label: "Start from a template",
+      detail: "Opens when compatible templates exist.",
+    },
+    {
       id: "entry-3",
       keys: ["Esc"],
       label: "Close the picker, then the modal",

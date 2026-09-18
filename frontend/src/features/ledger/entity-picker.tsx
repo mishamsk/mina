@@ -1,7 +1,9 @@
 import { ChevronRight, Close, EyeOff, Home, Plus } from "pixelarticons/react";
 import {
+  forwardRef,
   useCallback,
   useEffect,
+  useImperativeHandle,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -69,6 +71,17 @@ export type EntityCreationAvailabilityLoader = (
   fqn: string,
 ) => Promise<boolean>;
 
+export type EntityPickerRootAvailability =
+  "available" | "unavailable" | "unknown";
+
+export interface EntityPickerHandle {
+  readonly inputId: string;
+  focus(options?: {
+    readonly open?: boolean;
+    readonly preventScroll?: boolean;
+  }): boolean;
+}
+
 type CreateEntityOption = (fqn: string) => Promise<EntityOption>;
 
 interface EntityPickerProps {
@@ -88,9 +101,12 @@ interface EntityPickerProps {
   readonly onGroupSelect?: (fqn: string) => void;
   readonly onLoadedOptions?: (options: readonly EntityOption[]) => void;
   readonly onOpenChange?: (open: boolean) => void;
-  readonly openOnFocus?: boolean;
+  readonly onRootAvailabilityChange?: (
+    availability: EntityPickerRootAvailability,
+  ) => void;
   readonly options?: readonly EntityOption[];
   readonly placeholder?: string;
+  readonly preloadRoot?: boolean;
   readonly preferredSide?: "bottom" | "top";
   readonly value: number | undefined;
   readonly selectedIds?: readonly number[];
@@ -363,32 +379,39 @@ const retainedPrefixAfterPick = (
   return committedPrefix ? `${committedPrefix}:` : "";
 };
 
-const EntityPickerContent = ({
-  autoFocus = false,
-  clearOnSelect = false,
-  createOption,
-  disabled = false,
-  excludedOptionIds = [],
-  id,
-  hierarchical = true,
-  label,
-  labelClassName,
-  loadKey,
-  loadCreationAvailability,
-  loadOptions,
-  onChange,
-  onGroupSelect,
-  onLoadedOptions,
-  onOpenChange,
-  openOnFocus = true,
-  options = [],
-  placeholder = "Search",
-  preferredSide = "bottom",
-  value,
-  selectedIds = noSelectedIds,
-  selectedGroupFqns = [],
-  metaKeyPressed,
-}: EntityPickerContentProps) => {
+const EntityPickerContent = forwardRef<
+  EntityPickerHandle,
+  EntityPickerContentProps
+>(function EntityPickerContent(
+  {
+    autoFocus = false,
+    clearOnSelect = false,
+    createOption,
+    disabled = false,
+    excludedOptionIds = [],
+    id,
+    hierarchical = true,
+    label,
+    labelClassName,
+    loadKey,
+    loadCreationAvailability,
+    loadOptions,
+    onChange,
+    onGroupSelect,
+    onLoadedOptions,
+    onOpenChange,
+    onRootAvailabilityChange,
+    options = [],
+    placeholder = "Search",
+    preloadRoot = false,
+    preferredSide = "bottom",
+    value,
+    selectedIds = noSelectedIds,
+    selectedGroupFqns = [],
+    metaKeyPressed,
+  },
+  ref,
+) {
   const [createdOptions, setCreatedOptions] = useState<readonly EntityOption[]>(
     [],
   );
@@ -415,6 +438,7 @@ const EntityPickerContent = ({
   );
   const loadOptionsRef = useRef(loadOptions);
   const onLoadedOptionsRef = useRef(onLoadedOptions);
+  const onRootAvailabilityChangeRef = useRef(onRootAvailabilityChange);
   const loadVersionRef = useRef(0);
   const lastIssuedSearchKeyRef = useRef<string | undefined>(undefined);
   const flushPendingLoadRef = useRef<(() => void) | undefined>(undefined);
@@ -425,7 +449,8 @@ const EntityPickerContent = ({
   useEffect(() => {
     loadOptionsRef.current = loadOptions;
     onLoadedOptionsRef.current = onLoadedOptions;
-  }, [loadOptions, onLoadedOptions]);
+    onRootAvailabilityChangeRef.current = onRootAvailabilityChange;
+  }, [loadOptions, onLoadedOptions, onRootAvailabilityChange]);
   const selectedIdsKey = selectedIds.join(",");
   const requestedSelectedIds = useMemo(
     () => [
@@ -462,6 +487,12 @@ const EntityPickerContent = ({
     loadOptions && loadedRequestKey !== loadRequestKey,
   );
   const [open, setOpen] = useState(false);
+  const preloadRootRequest =
+    preloadRoot &&
+    (!disabled || loading || loadedRequestKey === loadRequestKey) &&
+    query.length === 0 &&
+    remoteParentFqn === undefined;
+  const shouldLoadOptions = open || autoFocus || preloadRootRequest;
   const [inputFocused, setInputFocused] = useState(false);
   const requestPending = searchRequestPending;
   const selectedPresentation = selected?.label;
@@ -490,6 +521,7 @@ const EntityPickerContent = ({
   const deferredCloseFrameRef = useRef<number | undefined>(undefined);
   const onChangeRef = useRef(onChange);
   const skipInitialAutoFocusOpenRef = useRef(autoFocus);
+  const suppressFocusOpenRef = useRef(false);
 
   useLayoutEffect(() => {
     onChangeRef.current = onChange;
@@ -513,7 +545,7 @@ const EntityPickerContent = ({
       flushPendingLoadRef.current = undefined;
       return;
     }
-    if (!open && !autoFocus) {
+    if (!shouldLoadOptions) {
       return;
     }
 
@@ -522,6 +554,9 @@ const EntityPickerContent = ({
       if (loadVersionRef.current === version) {
         setLoading(true);
         setLoadError(undefined);
+        if (preloadRootRequest) {
+          onRootAvailabilityChangeRef.current?.("unknown");
+        }
       }
     });
     const searchKey = JSON.stringify([query, remoteParentFqn]);
@@ -555,6 +590,15 @@ const EntityPickerContent = ({
           );
           setLoadedOptions(returnedOptions);
           onLoadedOptionsRef.current?.(returnedOptions);
+          if (preloadRootRequest) {
+            onRootAvailabilityChangeRef.current?.(
+              result.rows.some(
+                (row) => row.kind === "leaf" || row.group.childCount > 0,
+              )
+                ? "available"
+                : "unavailable",
+            );
+          }
           setLoading(false);
         })
         .catch((error: unknown) => {
@@ -567,6 +611,9 @@ const EntityPickerContent = ({
               ? error.message
               : "Options could not be loaded.",
           );
+          if (preloadRootRequest) {
+            onRootAvailabilityChangeRef.current?.("unknown");
+          }
         });
     };
     const debounceSearch =
@@ -592,11 +639,12 @@ const EntityPickerContent = ({
     autoFocus,
     loadKey,
     loadRequestKey,
-    open,
+    preloadRootRequest,
     query,
     reloadVersion,
     remoteParentFqn,
     requestedSelectedIds,
+    shouldLoadOptions,
   ]);
 
   useEffect(() => {
@@ -714,6 +762,75 @@ const EntityPickerContent = ({
       onOpenChange?.(nextOpen);
     },
     [onOpenChange, open, setOpen, setTypedThisSession],
+  );
+  const openFromFocus = useCallback(
+    (respectInitialAutoFocus: boolean) => {
+      if (disabled) {
+        return;
+      }
+      const nextQuery = selected?.searchLabel ?? query;
+      if (selected) {
+        inputRef.current?.select();
+      }
+      if (respectInitialAutoFocus && skipInitialAutoFocusOpenRef.current) {
+        skipInitialAutoFocusOpenRef.current = false;
+        return;
+      }
+      updateOpen(true);
+      const focusedRows = loadOptions
+        ? optionRows
+        : rowsForQuery(
+            effectiveOptions,
+            groups,
+            deriveQueryModel(nextQuery, groupFqns),
+          );
+      const selectedIndex = focusedRows.findIndex(
+        (row) => row.kind === "leaf" && row.option.id === value,
+      );
+      setActiveIndex(value === undefined ? 0 : selectedIndex);
+    },
+    [
+      disabled,
+      effectiveOptions,
+      groupFqns,
+      groups,
+      loadOptions,
+      optionRows,
+      query,
+      selected,
+      updateOpen,
+      value,
+    ],
+  );
+  const openFromFocusRef = useRef(openFromFocus);
+  useLayoutEffect(() => {
+    openFromFocusRef.current = openFromFocus;
+  }, [openFromFocus]);
+  useImperativeHandle(
+    ref,
+    () => ({
+      inputId: id,
+      focus: ({ open: openPicker = false, preventScroll = false } = {}) => {
+        const input = inputRef.current;
+        if (!input || disabled) {
+          return false;
+        }
+        suppressFocusOpenRef.current = true;
+        try {
+          input.focus({ preventScroll });
+        } finally {
+          suppressFocusOpenRef.current = false;
+        }
+        if (document.activeElement !== input) {
+          return false;
+        }
+        if (openPicker) {
+          openFromFocusRef.current(false);
+        }
+        return true;
+      },
+    }),
+    [disabled, id],
   );
   const selectOption = useCallback(
     (option: EntityOption) => {
@@ -1041,6 +1158,14 @@ const EntityPickerContent = ({
             <input
               ref={inputRef}
               id={id}
+              data-entity-picker-input="true"
+              data-entity-picker-has-selection={
+                value !== undefined ||
+                selectedIds.length > 0 ||
+                selectedGroupFqns.length > 0
+                  ? "true"
+                  : "false"
+              }
               type="text"
               autoComplete="off"
               autoFocus={autoFocus}
@@ -1157,32 +1282,20 @@ const EntityPickerContent = ({
               }}
               onFocus={() => {
                 setInputFocused(true);
-                if (disabled || !openOnFocus) {
+                if (suppressFocusOpenRef.current) {
                   return;
                 }
-                const nextQuery = selected?.searchLabel ?? query;
-                if (selected) {
-                  inputRef.current?.select();
-                }
-                if (skipInitialAutoFocusOpenRef.current) {
-                  skipInitialAutoFocusOpenRef.current = false;
-                  return;
-                }
-                updateOpen(true);
-                const focusedRows = loadOptions
-                  ? optionRows
-                  : rowsForQuery(
-                      effectiveOptions,
-                      groups,
-                      deriveQueryModel(nextQuery, groupFqns),
-                    );
-                const selectedIndex = focusedRows.findIndex(
-                  (row) => row.kind === "leaf" && row.option.id === value,
-                );
-                setActiveIndex(value === undefined ? 0 : selectedIndex);
+                openFromFocus(true);
               }}
               onBlur={() => {
                 setInputFocused(false);
+              }}
+              onClick={() => {
+                if (document.activeElement === inputRef.current) {
+                  updateOpen(true);
+                } else {
+                  openFromFocus(false);
+                }
               }}
               onKeyDown={(event) => {
                 if (disabled) {
@@ -1733,12 +1846,23 @@ const EntityPickerContent = ({
       </div>
     </Popover>
   );
-};
+});
 
-export const EntityPicker = (props: EntityPickerProps) => {
-  const metaKeyPressed = useAcceleratorHeld({ enabled: true, metaOnly: true });
-  return <EntityPickerContent {...props} metaKeyPressed={metaKeyPressed} />;
-};
+export const EntityPicker = forwardRef<EntityPickerHandle, EntityPickerProps>(
+  function EntityPicker(props, ref) {
+    const metaKeyPressed = useAcceleratorHeld({
+      enabled: true,
+      metaOnly: true,
+    });
+    return (
+      <EntityPickerContent
+        {...props}
+        ref={ref}
+        metaKeyPressed={metaKeyPressed}
+      />
+    );
+  },
+);
 
 interface EntityMultiPickerProps {
   readonly autoFocus?: boolean;
@@ -1763,25 +1887,31 @@ interface EntityMultiPickerProps {
   readonly value: readonly number[];
 }
 
-export const EntityMultiPicker = ({
-  autoFocus = false,
-  createOption,
-  disabled = false,
-  id,
-  hierarchical = true,
-  label,
-  labelClassName,
-  loadKey,
-  loadCreationAvailability,
-  loadOptions,
-  onChange,
-  groupValues = [],
-  onGroupChange,
-  onOpenChange,
-  options = [],
-  placeholder = "Search",
-  value,
-}: EntityMultiPickerProps) => {
+export const EntityMultiPicker = forwardRef<
+  EntityPickerHandle,
+  EntityMultiPickerProps
+>(function EntityMultiPicker(
+  {
+    autoFocus = false,
+    createOption,
+    disabled = false,
+    id,
+    hierarchical = true,
+    label,
+    labelClassName,
+    loadKey,
+    loadCreationAvailability,
+    loadOptions,
+    onChange,
+    groupValues = [],
+    onGroupChange,
+    onOpenChange,
+    options = [],
+    placeholder = "Search",
+    value,
+  },
+  ref,
+) {
   const metaKeyPressed = useAcceleratorHeld({ enabled: true, metaOnly: true });
   const [focusedSelectedId, setFocusedSelectedId] = useState<number>();
   const [createdOptions, setCreatedOptions] = useState<readonly EntityOption[]>(
@@ -1828,6 +1958,7 @@ export const EntityMultiPicker = ({
   return (
     <div ref={pickerRef} className="flex min-w-0 flex-col gap-2">
       <EntityPickerContent
+        ref={ref}
         autoFocus={autoFocus}
         clearOnSelect
         createOption={
@@ -1991,4 +2122,4 @@ export const EntityMultiPicker = ({
       ) : null}
     </div>
   );
-};
+});

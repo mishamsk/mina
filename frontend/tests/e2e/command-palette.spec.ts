@@ -197,6 +197,7 @@ test("command palette suppresses global entry and opens a new spend", async ({
   const templatePicker = editor.getByRole("combobox", {
     name: "Start from a template",
   });
+  await templatePicker.click();
   await expect(templatePicker).toHaveAttribute("aria-expanded", "true");
 
   await page.keyboard.press("Escape");

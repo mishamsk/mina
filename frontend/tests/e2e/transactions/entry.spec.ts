@@ -530,7 +530,10 @@ test("transaction entry guards focus and remains usable on a phone", async ({
   await page.setViewportSize({ width: 390, height: 700 });
   const editor = page.getByRole("dialog", { name: "Transaction editor" });
   await expect(editor).toBeVisible();
-  await expect(editor.getByLabel("Start from a template")).toBeFocused();
+  const fundingAccount = editor.getByLabel("Funding account");
+  await expect(fundingAccount).toBeFocused();
+  await fundingAccount.click();
+  await expect(fundingAccount).toHaveAttribute("aria-expanded", "true");
 
   const saveAndClose = editor.getByRole("button", { name: "Save and close" });
   await saveAndClose.focus();

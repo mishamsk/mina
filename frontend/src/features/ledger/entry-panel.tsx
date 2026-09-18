@@ -86,6 +86,8 @@ import {
   EntityMultiPicker,
   type EntityOption,
   EntityPicker,
+  type EntityPickerHandle,
+  type EntityPickerRootAvailability,
 } from "./entity-picker";
 import {
   accountCreationAvailabilityLoader,
@@ -2850,6 +2852,52 @@ const isRegisterSummary = (
 ): transaction is TransactionEntryRegisterSummary =>
   "kind" in transaction && transaction.kind === "register-summary";
 
+const entryEditableSelector = "input, textarea, [role='combobox']";
+const excludedEntryInputTypes = new Set([
+  "button",
+  "checkbox",
+  "file",
+  "hidden",
+  "image",
+  "radio",
+  "reset",
+  "submit",
+]);
+
+const isEntryEditableCandidate = (element: HTMLElement): boolean => {
+  if (
+    element.closest("[hidden], [inert], [aria-hidden='true']") ||
+    element.getClientRects().length === 0 ||
+    element.getAttribute("aria-disabled") === "true"
+  ) {
+    return false;
+  }
+  if (element instanceof HTMLInputElement) {
+    return (
+      !element.disabled &&
+      !element.readOnly &&
+      !excludedEntryInputTypes.has(element.type)
+    );
+  }
+  if (element instanceof HTMLTextAreaElement) {
+    return !element.disabled && !element.readOnly;
+  }
+  return element.getAttribute("role") === "combobox";
+};
+
+const entryEditableIsEmpty = (element: HTMLElement): boolean => {
+  if (element.dataset.entityPickerInput) {
+    return element.dataset.entityPickerHasSelection !== "true";
+  }
+  if (
+    element instanceof HTMLInputElement ||
+    element instanceof HTMLTextAreaElement
+  ) {
+    return element.value.trim() === "";
+  }
+  return false;
+};
+
 export const EntryPanel = ({
   closeRequestRef,
   initiatedDate,
@@ -2912,9 +2960,12 @@ export const EntryPanel = ({
   const savingDraft = draftOperation !== undefined;
   const [saveDraftError, setSaveDraftError] = useState<string>();
   const [pendingTemplateApplication, setPendingTemplateApplication] = useState<{
+    readonly initialLaunch: boolean;
     readonly targetTab: TransactionEntryType;
     readonly template: TransactionTemplate;
   }>();
+  const [resolvedInitialTemplateSession, setResolvedInitialTemplateSession] =
+    useState<number | undefined>();
   const [confirmTemplateReplaceOpen, setConfirmTemplateReplaceOpen] =
     useState(false);
   const [confirmClearDraftOpen, setConfirmClearDraftOpen] = useState(false);
@@ -2930,8 +2981,10 @@ export const EntryPanel = ({
     readonly tags: readonly Tag[];
   }>({ accounts: [], categories: [], tags: [] });
   const [pickerLifecycle, setPickerLifecycle] = useState(0);
-  const [templatePickerOpenOnFocus, setTemplatePickerOpenOnFocus] =
-    useState(true);
+  const [templateRootAvailability, setTemplateRootAvailability] = useState<{
+    readonly availability: EntityPickerRootAvailability;
+    readonly identity: string;
+  }>();
   const [
     advancedSettlementDatesLaunchKey,
     setAdvancedSettlementDatesLaunchKey,
@@ -2982,6 +3035,21 @@ export const EntryPanel = ({
     : undefined;
   const entryPanelRef = useRef<HTMLElement>(null);
   const entryScrollRegionRef = useRef<HTMLDivElement>(null);
+  const entityPickerHandlesRef = useRef(new Map<string, EntityPickerHandle>());
+  const registerEntityPickerHandle = useCallback(
+    (handle: EntityPickerHandle | null) => {
+      if (!handle) {
+        return;
+      }
+      entityPickerHandlesRef.current.set(handle.inputId, handle);
+      return () => {
+        if (entityPickerHandlesRef.current.get(handle.inputId) === handle) {
+          entityPickerHandlesRef.current.delete(handle.inputId);
+        }
+      };
+    },
+    [],
+  );
   const addChargeButtonRef = useRef<HTMLButtonElement>(null);
   const addAdvancedRecordButtonRef = useRef<HTMLButtonElement>(null);
   const advancedRemoveButtonRefs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -3010,7 +3078,18 @@ export const EntryPanel = ({
   );
   const restoredSavedDraftRef = useRef(false);
   const cancelledConflictSavePendingRef = useRef(false);
-  const preserveFocusOnReplacementChangeRef = useRef(false);
+  const initialFocusSessionRef = useRef<
+    | {
+        readonly generation: number;
+        status: "cancelled" | "pending" | "settled";
+      }
+    | undefined
+  >(undefined);
+  const initialFocusFrameRef = useRef<number | undefined>(undefined);
+  const cancelInitialFocusFrame = useCallback(() => {
+    window.cancelAnimationFrame(initialFocusFrameRef.current ?? 0);
+    initialFocusFrameRef.current = undefined;
+  }, []);
 
   const seedDraftDates = useCallback(
     (nextDraft: TransactionEntryDraft, seed = true): TransactionEntryDraft => {
@@ -3076,13 +3155,12 @@ export const EntryPanel = ({
     });
   }, [launch, onSaved, replacement, replacementRefreshRequired]);
 
-  const focusTemplatePicker = useCallback(() => {
-    setTemplatePickerOpenOnFocus(false);
+  const focusTemplatePicker = useCallback((openPicker = false) => {
     window.requestAnimationFrame(() => {
-      focusWithoutTooltip(document.getElementById("entry-template"), {
+      entityPickerHandlesRef.current.get("entry-template")?.focus({
+        open: openPicker,
         preventScroll: true,
       });
-      setTemplatePickerOpenOnFocus(true);
     });
   }, []);
 
@@ -3182,10 +3260,17 @@ export const EntryPanel = ({
     : `create:${initialTab ?? "default"}`;
   const editorSessionRef = useRef({ generation: 0 });
   useLayoutEffect(() => {
+    cancelInitialFocusFrame();
+    const generation = editorSessionRef.current.generation + 1;
     editorSessionRef.current = {
-      generation: editorSessionRef.current.generation + 1,
+      generation,
     };
-  }, [launchKey, open]);
+    initialFocusSessionRef.current = {
+      generation,
+      status: open ? "pending" : "cancelled",
+    };
+    return cancelInitialFocusFrame;
+  }, [cancelInitialFocusFrame, launchKey, open]);
   const advancedSettlementDatesToggled =
     advancedSettlementDatesLaunchKey === launchKey;
   const launchLookupsReady = Boolean(lookups);
@@ -3194,6 +3279,23 @@ export const EntryPanel = ({
     launchLookupsReady &&
     initializedLaunchKey === launchKey &&
     (launch === undefined || initializedLaunch === launch);
+  const templatePickerIdentity = `${activeTab}:${pickerLifecycle}`;
+  const templatePickerDisabled =
+    !currentDraftReady || saving || savingDraft || clearingDraft;
+  const templateAvailability =
+    templateRootAvailability?.identity === templatePickerIdentity
+      ? templateRootAvailability.availability
+      : "unknown";
+  const retireInitialFocus = useCallback(() => {
+    const focusSession = initialFocusSessionRef.current;
+    if (
+      focusSession?.generation === editorSessionRef.current.generation &&
+      focusSession.status === "pending"
+    ) {
+      focusSession.status = "cancelled";
+    }
+    cancelInitialFocusFrame();
+  }, [cancelInitialFocusFrame]);
   const adoptLaunchDraft = useCallback(
     (nextDraft: LaunchDraft) => {
       restoredSavedDraftRef.current = nextDraft.restoredSavedDraft === true;
@@ -3373,41 +3475,151 @@ export const EntryPanel = ({
   ]);
 
   useEffect(() => {
-    if (!open) {
+    if (
+      !open ||
+      !currentDraftReady ||
+      confirmSaveDraftOpen ||
+      confirmCloseDiscardOpen ||
+      confirmClearDraftOpen ||
+      confirmTemplateReplaceOpen ||
+      (initialTemplate !== undefined &&
+        resolvedInitialTemplateSession !== editorSessionRef.current.generation)
+    ) {
       return;
     }
-    if (!currentDraftReady || confirmSaveDraftOpen || confirmCloseDiscardOpen) {
+    const editorSessionGeneration = editorSessionRef.current.generation;
+    const focusSession = initialFocusSessionRef.current;
+    if (
+      focusSession?.generation !== editorSessionGeneration ||
+      focusSession.status !== "pending"
+    ) {
       return;
     }
-    if (preserveFocusOnReplacementChangeRef.current) {
-      preserveFocusOnReplacementChangeRef.current = false;
-      return;
-    }
-    const activeElement = document.activeElement;
-    const animationFrame = window.requestAnimationFrame(() => {
-      if (
-        entryPanelRef.current?.contains(document.activeElement) &&
-        document.activeElement !== activeElement
-      ) {
+    const activeTabAtStart = activeTab;
+    const initialActiveElement = document.activeElement;
+    const canDeliverFocus = () => {
+      const currentFocusSession = initialFocusSessionRef.current;
+      return (
+        editorSessionRef.current.generation === editorSessionGeneration &&
+        currentFocusSession?.generation === editorSessionGeneration &&
+        currentFocusSession.status === "pending" &&
+        open &&
+        currentDraftReady &&
+        !confirmSaveDraftOpen &&
+        !confirmCloseDiscardOpen &&
+        !confirmClearDraftOpen &&
+        !confirmTemplateReplaceOpen &&
+        activeTab === activeTabAtStart
+      );
+    };
+    const userSupersededFocus = () =>
+      entryPanelRef.current?.contains(document.activeElement) === true &&
+      document.activeElement !== initialActiveElement;
+    const settleFocus = () => {
+      const currentFocusSession = initialFocusSessionRef.current;
+      if (currentFocusSession?.generation === editorSessionGeneration) {
+        currentFocusSession.status = "settled";
+      }
+      cancelInitialFocusFrame();
+    };
+    const scheduleAttempt = (remainingRetries: number) => {
+      cancelInitialFocusFrame();
+      initialFocusFrameRef.current = window.requestAnimationFrame(() => {
+        initialFocusFrameRef.current = undefined;
+        attemptFocus(remainingRetries);
+      });
+    };
+    const retry = (remainingRetries: number) => {
+      if (!canDeliverFocus()) {
         return;
       }
-      if (replacement) {
-        dateInputRef.current?.focus({ preventScroll: true });
+      if (remainingRetries > 0) {
+        scheduleAttempt(remainingRetries - 1);
       } else {
-        focusWithoutTooltip(document.getElementById("entry-template"), {
-          preventScroll: true,
-        });
+        settleFocus();
       }
-    });
+    };
+    const attemptFocus = (remainingRetries: number) => {
+      if (!canDeliverFocus()) {
+        return;
+      }
+      if (userSupersededFocus()) {
+        retireInitialFocus();
+        return;
+      }
+      const entryBody = entryScrollRegionRef.current;
+      const entryForm = entryBody?.closest("form");
+      if (
+        !entryBody?.isConnected ||
+        !entryPanelRef.current?.contains(entryBody) ||
+        entryForm?.id !== `${activeTabAtStart}-entry-panel`
+      ) {
+        retry(remainingRetries);
+        return;
+      }
+      const candidates = Array.from(
+        entryBody.querySelectorAll<HTMLElement>(entryEditableSelector),
+      ).filter(isEntryEditableCandidate);
+      const target = launch
+        ? dateInputRef.current
+        : (candidates.find(entryEditableIsEmpty) ?? candidates[0]);
+      if (!target) {
+        if (launch) {
+          retry(remainingRetries);
+        } else {
+          settleFocus();
+        }
+        return;
+      }
+      if (!target.isConnected || !entryBody.contains(target)) {
+        retry(remainingRetries);
+        return;
+      }
+      if (!canDeliverFocus() || userSupersededFocus()) {
+        retireInitialFocus();
+        return;
+      }
+      target.scrollIntoView({ block: "nearest", inline: "nearest" });
+      if (!canDeliverFocus() || userSupersededFocus()) {
+        retireInitialFocus();
+        return;
+      }
+      const pickerHandle = target.id
+        ? entityPickerHandlesRef.current.get(target.id)
+        : undefined;
+      if (target.dataset.entityPickerInput && !pickerHandle) {
+        retry(remainingRetries);
+        return;
+      }
+      const focusLanded = pickerHandle
+        ? pickerHandle.focus({ preventScroll: true })
+        : (() => {
+            focusWithoutTooltip(target, { preventScroll: true });
+            return document.activeElement === target;
+          })();
+      if (focusLanded) {
+        settleFocus();
+      } else {
+        retry(remainingRetries);
+      }
+    };
+    scheduleAttempt(4);
     return () => {
-      window.cancelAnimationFrame(animationFrame);
+      cancelInitialFocusFrame();
     };
   }, [
+    activeTab,
+    cancelInitialFocusFrame,
+    confirmClearDraftOpen,
     confirmCloseDiscardOpen,
     confirmSaveDraftOpen,
+    confirmTemplateReplaceOpen,
     currentDraftReady,
+    initialTemplate,
+    launch,
     open,
-    replacement,
+    retireInitialFocus,
+    resolvedInitialTemplateSession,
   ]);
 
   const currencies = useMemo(() => lookupCurrencies(lookups), [lookups]);
@@ -4032,6 +4244,7 @@ export const EntryPanel = ({
     if (!tabIsAvailable(entryType)) {
       return;
     }
+    retireInitialFocus();
     templateApplicationRequestGenerationRef.current += 1;
     if (
       entryType === "advanced" &&
@@ -4049,7 +4262,11 @@ export const EntryPanel = ({
   };
 
   const applyTemplate = useCallback(
-    (template: TransactionTemplate, targetTab: TransactionEntryType) => {
+    (
+      template: TransactionTemplate,
+      targetTab: TransactionEntryType,
+      { initialLaunch = false }: { readonly initialLaunch?: boolean } = {},
+    ) => {
       setPickerLifecycle((current) => current + 1);
       sessionCreateBaselineRef.current = defaultDraft();
       setDraft(seedDraftDates(draftFromTemplate(template, targetTab, lookups)));
@@ -4061,19 +4278,27 @@ export const EntryPanel = ({
       setClassificationError(undefined);
       setExchangeRate(undefined);
       setExchangeRateError(undefined);
-      focusTemplatePicker();
+      if (initialLaunch) {
+        setResolvedInitialTemplateSession(editorSessionRef.current.generation);
+      } else {
+        focusTemplatePicker();
+      }
     },
     [focusTemplatePicker, lookups, seedDraftDates],
   );
 
   const requestTemplateApplication = useCallback(
-    (template: TransactionTemplate, targetTab: TransactionEntryType) => {
+    (
+      template: TransactionTemplate,
+      targetTab: TransactionEntryType,
+      initialLaunch = false,
+    ) => {
       if (currentDraftHasUserInput(draft)) {
-        setPendingTemplateApplication({ targetTab, template });
+        setPendingTemplateApplication({ initialLaunch, targetTab, template });
         setConfirmTemplateReplaceOpen(true);
         return;
       }
-      applyTemplate(template, targetTab);
+      applyTemplate(template, targetTab, { initialLaunch });
     },
     [applyTemplate, currentDraftHasUserInput, draft],
   );
@@ -4115,7 +4340,11 @@ export const EntryPanel = ({
         return;
       }
       if (currentDraftHasUserInput(latestDraftRef.current)) {
-        setPendingTemplateApplication({ targetTab, template });
+        setPendingTemplateApplication({
+          initialLaunch: false,
+          targetTab,
+          template,
+        });
         setConfirmTemplateReplaceOpen(true);
         return;
       }
@@ -4131,6 +4360,7 @@ export const EntryPanel = ({
     applyTemplate(
       pendingTemplateApplication.template,
       pendingTemplateApplication.targetTab,
+      { initialLaunch: pendingTemplateApplication.initialLaunch },
     );
     setPendingTemplateApplication(undefined);
     setConfirmTemplateReplaceOpen(false);
@@ -4208,6 +4438,7 @@ export const EntryPanel = ({
       requestTemplateApplication(
         initialTemplate,
         templateEntryType(initialTemplate),
+        true,
       );
     });
     return () => {
@@ -4345,7 +4576,7 @@ export const EntryPanel = ({
             transaction: winning,
           };
           latestReplacementRef.current = nextReplacement;
-          preserveFocusOnReplacementChangeRef.current = true;
+          retireInitialFocus();
           setReplacement(nextReplacement);
           if (structurallyChanged) {
             setDraft((current) => {
@@ -5003,6 +5234,7 @@ export const EntryPanel = ({
       onSaved,
       replacement,
       replacementRefreshRequired,
+      retireInitialFocus,
     ],
   );
 
@@ -5039,6 +5271,8 @@ export const EntryPanel = ({
       ref={entryPanelRef}
       className="bg-card flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden"
       aria-labelledby="entry-panel-title"
+      onKeyDownCapture={retireInitialFocus}
+      onPointerDownCapture={retireInitialFocus}
       onKeyDown={(event) => {
         if (
           confirmSaveDraftOpen ||
@@ -5046,6 +5280,20 @@ export const EntryPanel = ({
           confirmTemplateReplaceOpen ||
           confirmClearDraftOpen
         ) {
+          return;
+        }
+        if (
+          (event.metaKey || event.ctrlKey) &&
+          !event.shiftKey &&
+          !event.altKey &&
+          event.key.toLowerCase() === "l"
+        ) {
+          if (!replacement && !templatePickerDisabled) {
+            event.preventDefault();
+            if (templateAvailability === "available") {
+              focusTemplatePicker(true);
+            }
+          }
           return;
         }
         if (
@@ -5142,16 +5390,22 @@ export const EntryPanel = ({
         >
           <div className="mx-auto flex w-full max-w-[560px] flex-col gap-1">
             <EntityPicker
-              key={`entry-template-${activeTab}-${pickerLifecycle}`}
+              key={`entry-template-${templatePickerIdentity}`}
+              ref={registerEntityPickerHandle}
               id="entry-template"
               clearOnSelect
-              disabled={!currentDraftReady || clearingDraft || saving}
+              disabled={templatePickerDisabled}
               hierarchical
               label="Start from a template"
-              loadKey={activeTab}
               loadOptions={templateOptionLoader}
-              openOnFocus={templatePickerOpenOnFocus}
+              onRootAvailabilityChange={(availability) => {
+                setTemplateRootAvailability({
+                  availability,
+                  identity: templatePickerIdentity,
+                });
+              }}
               placeholder="Type a template name or skip"
+              preloadRoot
               value={undefined}
               onChange={(templateId) => {
                 if (templateId === undefined) {
@@ -5188,7 +5442,7 @@ export const EntryPanel = ({
           <div
             ref={entryScrollRegionRef}
             data-testid="entry-scroll-region"
-            className={`min-h-0 flex-1 gap-4 overflow-y-auto overscroll-contain p-4 ${
+            className={`min-h-0 flex-1 gap-4 overflow-y-auto overscroll-contain p-4 [&_[role=combobox]]:scroll-m-1 [&_input]:scroll-m-1 [&_textarea]:scroll-m-1 ${
               activeTab === "advanced"
                 ? "flex min-w-0 flex-col"
                 : "mx-auto flex w-full max-w-[560px] flex-col"
@@ -5330,6 +5584,7 @@ export const EntryPanel = ({
                           >
                             <EntityPicker
                               key={`${pickerLifecycle}:advanced:${row.draftId}:account`}
+                              ref={registerEntityPickerHandle}
                               id={`advanced-record-${rowIndex}-account`}
                               label={`Record ${rowIndex + 1} account`}
                               labelClassName="sr-only"
@@ -5435,6 +5690,7 @@ export const EntryPanel = ({
                             "flow" ? (
                               <EntityPicker
                                 key={`${pickerLifecycle}:advanced:${row.draftId}:category`}
+                                ref={registerEntityPickerHandle}
                                 id={`advanced-record-${rowIndex}-category`}
                                 label={`Record ${rowIndex + 1} category`}
                                 labelClassName="sr-only"
@@ -5471,6 +5727,7 @@ export const EntryPanel = ({
                           >
                             <EntityMultiPicker
                               key={`${pickerLifecycle}:advanced:${row.draftId}:tags`}
+                              ref={registerEntityPickerHandle}
                               createOption={createTagOption}
                               loadCreationAvailability={
                                 tagCreationAvailabilityLoader
@@ -5491,6 +5748,7 @@ export const EntryPanel = ({
                           <AdvancedRecordField label="Member">
                             <EntityPicker
                               key={`${pickerLifecycle}:advanced:${row.draftId}:member`}
+                              ref={registerEntityPickerHandle}
                               hierarchical={false}
                               id={`advanced-record-${rowIndex}-member`}
                               label={`Record ${rowIndex + 1} member`}
@@ -5930,6 +6188,7 @@ export const EntryPanel = ({
 
                 <EntityPicker
                   key={`${pickerLifecycle}:${activeTab}:${activeConfig.primaryAccountField}`}
+                  ref={registerEntityPickerHandle}
                   id={`${activeTab}-${activeConfig.primaryAccountField}`}
                   label={activeConfig.primaryAccountLabel}
                   loadKey={`${primaryAccountContext}:${exchangeBoughtAccountCurrency ?? ""}`}
@@ -5983,6 +6242,7 @@ export const EntryPanel = ({
                             </legend>
                             <EntityPicker
                               key={`${pickerLifecycle}:${activeTab}:${merchant.draftId}:account`}
+                              ref={registerEntityPickerHandle}
                               createOption={createFlowAccountOption}
                               loadCreationAvailability={
                                 accountCreationAvailabilityLoader
@@ -6037,6 +6297,7 @@ export const EntryPanel = ({
                             </div>
                             <EntityPicker
                               key={`${pickerLifecycle}:${activeTab}:${merchant.draftId}:category`}
+                              ref={registerEntityPickerHandle}
                               createOption={(fqn) =>
                                 createCategoryOption(fqn, "expense")
                               }
@@ -6142,6 +6403,7 @@ export const EntryPanel = ({
                   <>
                     <EntityPicker
                       key={`${pickerLifecycle}:${activeTab}:${activeConfig.secondaryAccountField}`}
+                      ref={registerEntityPickerHandle}
                       createOption={
                         activeConfig.secondaryAccountOptionSet ===
                         "flowAccounts"
@@ -6253,6 +6515,7 @@ export const EntryPanel = ({
                 activeTab !== "exchange" ? (
                   <EntityPicker
                     key={`${pickerLifecycle}:${activeTab}:category`}
+                    ref={registerEntityPickerHandle}
                     createOption={(fqn) =>
                       createCategoryOption(fqn, activeCategoryCreationIntent!)
                     }
@@ -6282,6 +6545,7 @@ export const EntryPanel = ({
                 ) : null}
                 <EntityMultiPicker
                   key={`${pickerLifecycle}:${activeTab}:tags`}
+                  ref={registerEntityPickerHandle}
                   createOption={createTagOption}
                   loadCreationAvailability={tagCreationAvailabilityLoader}
                   id={`${activeTab}-tags`}
@@ -6299,6 +6563,7 @@ export const EntryPanel = ({
 
                 <EntityPicker
                   key={`${pickerLifecycle}:${activeTab}:member`}
+                  ref={registerEntityPickerHandle}
                   hierarchical={false}
                   id={`${activeTab}-member`}
                   label="Member"
@@ -6343,6 +6608,7 @@ export const EntryPanel = ({
                       </legend>
                       <EntityPicker
                         key={`${pickerLifecycle}:transfer:charge-account`}
+                        ref={registerEntityPickerHandle}
                         createOption={createFlowAccountOption}
                         loadCreationAvailability={
                           accountCreationAvailabilityLoader
@@ -6384,6 +6650,7 @@ export const EntryPanel = ({
                       </div>
                       <EntityPicker
                         key={`${pickerLifecycle}:transfer:charge-category`}
+                        ref={registerEntityPickerHandle}
                         createOption={(fqn) =>
                           createCategoryOption(fqn, "expense")
                         }
@@ -6678,8 +6945,15 @@ export const EntryPanel = ({
         onOpenChange={(nextOpen) => {
           setConfirmTemplateReplaceOpen(nextOpen);
           if (!nextOpen) {
+            if (pendingTemplateApplication?.initialLaunch) {
+              setResolvedInitialTemplateSession(
+                editorSessionRef.current.generation,
+              );
+            }
             setPendingTemplateApplication(undefined);
-            focusTemplatePicker();
+            if (!pendingTemplateApplication?.initialLaunch) {
+              focusTemplatePicker();
+            }
           }
         }}
         open={confirmTemplateReplaceOpen}
