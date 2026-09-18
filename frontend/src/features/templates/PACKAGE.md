@@ -9,6 +9,7 @@
 - The management tree inherits shared roving row focus; leaf activation opens the editor with the row as its focus-recovery opener, while ancestor rows do not activate.
 
 - The management content flexes within the route’s fixed-page slot, reserving room for refresh banners; tree layout follows the [reference package contract](../reference/PACKAGE.md).
+- The management tree renders no state toggles, so it declares no indicator slots and inherits the shared fixed action-column width; this keeps trailing actions at the standard inset without content-dependent shifts under the [table](../../../../docs/webui-design.md#tables-and-filtering) and [theme](../../../../docs/webui-theme-arcade-cabinet.md#component-notes) rules.
 - One transient complete template snapshot is shared by the command palette and unfiltered Templates-page rendering; entry selection and queried management results use independent current reads.
 - The snapshot consumes server-derived compatible shorthand types; transaction entry filters by active tab and mechanically copies matching raw record defaults without classifying them in the browser.
 - Successful template mutations update an existing complete snapshot synchronously, refresh it, and reload the current queried management tree; failed refreshes preserve previously loaded choices.

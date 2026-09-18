@@ -384,7 +384,6 @@ export const TemplatesPageContent = ({
       <div className="min-h-0 flex-1">
         <ReferenceTree
           shortcutGroupTitle="Templates"
-          actionsColumnWidthClassName="sm:[--reference-tree-actions-width:15.25rem]"
           badgeHeader="Defaults"
           emptyDescription="Reusable transaction shapes will appear here once templates exist."
           emptyFilteredDescription="No templates match the current full-path search."
@@ -404,7 +403,6 @@ export const TemplatesPageContent = ({
           errorMessage={loadErrorMessage}
           filtered={normalizedSearch !== ""}
           groups={groups}
-          indicatorSlots={["featured", "hidden"]}
           leaves={
             normalizedSearch
               ? filteredState.templates !== undefined
