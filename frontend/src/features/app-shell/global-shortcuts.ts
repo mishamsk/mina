@@ -28,10 +28,10 @@ export const matchesListSearchShortcut = (event: KeyboardEvent): boolean =>
     !event.ctrlKey &&
     !event.altKey &&
     !event.shiftKey) ||
-  (event.key.toLocaleLowerCase() === "l" &&
+  (event.key.toLocaleLowerCase() === "f" &&
     (event.metaKey || event.ctrlKey) &&
     !event.altKey &&
-    !event.shiftKey);
+    event.shiftKey);
 
 export const resolveVisibleListSearchInput = (): HTMLInputElement | undefined =>
   Array.from(

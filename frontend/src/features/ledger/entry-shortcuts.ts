@@ -22,7 +22,7 @@ export const transactionEntryShortcutGroup: ShortcutGroup = {
     },
     {
       id: "entry-template",
-      keys: ["Mod", "L"],
+      keys: ["Mod", "Shift", "F"],
       label: "Start from a template",
       detail: "Opens when compatible templates exist.",
     },

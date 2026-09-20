@@ -5284,9 +5284,9 @@ export const EntryPanel = ({
         }
         if (
           (event.metaKey || event.ctrlKey) &&
-          !event.shiftKey &&
+          event.shiftKey &&
           !event.altKey &&
-          event.key.toLowerCase() === "l"
+          event.key.toLowerCase() === "f"
         ) {
           if (!replacement && !templatePickerDisabled) {
             event.preventDefault();

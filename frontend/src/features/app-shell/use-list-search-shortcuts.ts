@@ -9,8 +9,8 @@ import {
 const listSearchShortcuts: readonly KeyboardShortcut[] = [
   { id: "list-search-slash", keys: ["/"], label: "Focus list search" },
   {
-    id: "list-search-primary-l",
-    keys: ["Mod", "L"],
+    id: "list-search-primary-shift-f",
+    keys: ["Mod", "Shift", "F"],
     label: "Focus list search",
   },
 ];
