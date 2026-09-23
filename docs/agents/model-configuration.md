@@ -16,7 +16,7 @@
 just agent plan 'Plan the transaction-filter changes'
 just agent-exec implement 'Implement docs/plans/example.md end to end.'
 just agent-exec plan -C '/absolute/path/to/worktree' --prompt-file 'planning-prompt.md'
-just --set validate_model gpt-5.6-terra review-loop --goal 'Check this change'
+just --set validate_model gpt-6-sol review-loop --goal 'Check this change'
 MINA_DEV_PLAN_EFFORT=medium just agent-exec plan -C '/absolute/path/to/worktree' 'Draft the plan'
 just --set fleet_codex_effort high agent fleet-codex
 ```

@@ -5,23 +5,23 @@ set windows-shell := ["pwsh", "-NoLogo", "-Command"]
 
 # Shared role defaults; exported overrides survive nested recipes and agent sessions.
 # See docs/agents/model-configuration.md for Bash usage and manual fleet selection.
-implement_model := env("MINA_DEV_IMPLEMENT_MODEL", "gpt-5.6-sol")
+implement_model := env("MINA_DEV_IMPLEMENT_MODEL", "gpt-6-sol")
 implement_effort := env("MINA_DEV_IMPLEMENT_EFFORT", "high")
-plan_model := env("MINA_DEV_PLAN_MODEL", "gpt-6-astra")
+plan_model := env("MINA_DEV_PLAN_MODEL", "gpt-6-sol")
 plan_effort := env("MINA_DEV_PLAN_EFFORT", "high")
 fleet_model := env("MINA_DEV_FLEET_MODEL", "claude-fable-5-1")
 fleet_effort := env("MINA_DEV_FLEET_EFFORT", "high")
-fleet_codex_model := env("MINA_DEV_FLEET_CODEX_MODEL", "gpt-6-astra")
+fleet_codex_model := env("MINA_DEV_FLEET_CODEX_MODEL", "gpt-6-sol")
 fleet_codex_effort := env("MINA_DEV_FLEET_CODEX_EFFORT", "medium")
-review_codex_model := env("MINA_DEV_REVIEW_CODEX_MODEL", "gpt-6-astra")
+review_codex_model := env("MINA_DEV_REVIEW_CODEX_MODEL", "gpt-6-sol")
 review_codex_effort := env("MINA_DEV_REVIEW_CODEX_EFFORT", "high")
-review_claude_model := env("MINA_DEV_REVIEW_CLAUDE_MODEL", "claude-opus-5")
+review_claude_model := env("MINA_DEV_REVIEW_CLAUDE_MODEL", "claude-opus-5-5")
 review_claude_effort := env("MINA_DEV_REVIEW_CLAUDE_EFFORT", "high")
-aggregate_model := env("MINA_DEV_AGGREGATE_MODEL", "gpt-5.6-terra")
+aggregate_model := env("MINA_DEV_AGGREGATE_MODEL", "gpt-6-sol")
 aggregate_effort := env("MINA_DEV_AGGREGATE_EFFORT", "high")
-validate_model := env("MINA_DEV_VALIDATE_MODEL", "gpt-5.6-sol")
+validate_model := env("MINA_DEV_VALIDATE_MODEL", "gpt-6-sol")
 validate_effort := env("MINA_DEV_VALIDATE_EFFORT", "high")
-garden_model := env("MINA_DEV_GARDEN_MODEL", "gpt-5.6-terra")
+garden_model := env("MINA_DEV_GARDEN_MODEL", "gpt-6-sol")
 garden_effort := env("MINA_DEV_GARDEN_EFFORT", "high")
 
 export MINA_DEV_IMPLEMENT_MODEL := implement_model
