@@ -15,7 +15,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -23,17 +22,13 @@ import (
 )
 
 const (
-	modulePath                           = "github.com/mishamsk/mina"
-	defaultMaxIterations                 = 4
-	defaultClaudeReviewPercent           = 25
-	reviewLoopActiveEnvName              = "MINA_REVIEW_LOOP_ACTIVE"
-	reviewLoopBaseEnvName                = "MINA_REVIEWLOOP_BASE"
-	reviewLoopMaxIterationsEnvName       = "MINA_REVIEWLOOP_MAX_ITERATIONS"
-	reviewLoopClaudeReviewPercentEnvName = "MINA_REVIEWLOOP_CLAUDE_REVIEW_PERCENT"
-	defaultReviewBaseRef                 = "main"
-	codexHeartbeatInterval               = time.Minute
-	codexTurnTimeout                     = 30 * time.Minute
-	codexNoEventTimeout                  = 30 * time.Minute
+	modulePath              = "github.com/mishamsk/mina"
+	reviewLoopActiveEnvName = "MINA_REVIEW_LOOP_ACTIVE"
+	reviewLoopBaseEnvName   = "MINA_REVIEWLOOP_BASE"
+	defaultReviewBaseRef    = "main"
+	codexHeartbeatInterval  = time.Minute
+	codexTurnTimeout        = 30 * time.Minute
+	codexNoEventTimeout     = 30 * time.Minute
 )
 
 var (
@@ -76,8 +71,7 @@ type config struct {
 	codexAggregator         codexSettings
 	codexValidator          codexSettings
 	codexFixer              codexSettings
-	maxIterations           int
-	claudeReviewIterations  map[int]bool
+	codexGuardian           codexSettings
 	previousReviewFile      string
 	reviewTarget            reviewTarget
 	templates               reviewTemplates
@@ -86,17 +80,16 @@ type config struct {
 }
 
 type reviewLoopOptions struct {
-	baseRef             string
-	claudeModel         string
-	claudeEffort        string
-	codexReviewer       string
-	codexAggregator     string
-	codexValidator      string
-	codexFixer          string
-	goal                string
-	plan                string
-	maxIterations       *int
-	claudeReviewPercent *int
+	baseRef         string
+	claudeModel     string
+	claudeEffort    string
+	codexReviewer   string
+	codexAggregator string
+	codexValidator  string
+	codexFixer      string
+	goal            string
+	plan            string
+	codexGuardian   string
 }
 
 type codexSettings struct {
@@ -126,6 +119,7 @@ type reviewTemplates struct {
 	aggregate      string
 	validator      string
 	fixer          string
+	guardian       string
 }
 
 type reviewerPrompt struct {
@@ -204,7 +198,20 @@ func run(args []string) (int, error) {
 	cfg.scratchDir = scratchDir
 	defer removeReviewScratchDir(scratchDir)
 
-	for iteration := 1; iteration <= cfg.maxIterations; iteration++ {
+	guardian, err := newReviewGuardian(cfg)
+	if err != nil {
+		return 2, err
+	}
+	state := guardianState{Phase: "before_review", FailedProviders: map[string]string{}}
+	for _, provider := range []string{"codex", "claude"} {
+		if _, err := exec.LookPath(provider); err != nil {
+			state.FailedProviders[provider] = err.Error()
+		}
+	}
+
+	for iteration := 1; ; iteration++ {
+		state.Iteration = iteration
+		state.Phase = "before_review"
 		reviewScope := cfg.reviewTarget.scope(iteration)
 		changedFiles, err := cfg.reviewTarget.changedFiles(cfg.root, iteration)
 		if err != nil {
@@ -220,16 +227,29 @@ func run(args []string) (int, error) {
 			return 2, err
 		}
 		writeProgressLine("selected reviewers: %s", strings.Join(reviewerSelectionNames(reviewerNames), ", "))
+		state.Reviewers = reviewerSelectionNames(reviewerNames)
+		state.ReviewRange = cfg.reviewTarget.diffRange(iteration)
 
-		rawReviews, err := runReviewers(cfg, reviewScope, reviewers, cfg.claudeReviewIterations[iteration])
-		if err != nil {
-			return 2, err
+		var rawReviews string
+		for {
+			decision, err := guardian.decide(cfg, state)
+			if err != nil {
+				return 2, err
+			}
+			if decision.Action == "stop" {
+				return guardianStop(cfg, state, decision)
+			}
+			state.LastProvider = decision.Provider
+			rawReviews, err = runReviewers(cfg, reviewScope, reviewers, decision.Provider == "claude")
+			if err == nil {
+				break
+			}
+			state.FailedProviders[decision.Provider] = err.Error()
+			writeProgressLine("%s review round failed; asking guardian about fallback: %v", decision.Provider, err)
 		}
 
 		aggregatePrompt, err := interpolate(cfg.templates.aggregate, cfg.placeholderValues(map[string]string{
-			"RAW_REVIEWS":  rawReviews,
-			"REVIEW_SCOPE": reviewScope,
-			"REVIEW_RANGE": cfg.reviewTarget.diffRange(iteration),
+			"RAW_REVIEWS": rawReviews,
 		}))
 		if err != nil {
 			return 2, fmt.Errorf("build aggregate prompt: %w", err)
@@ -239,6 +259,9 @@ func run(args []string) (int, error) {
 			return 2, err
 		}
 		writeProgressLine("aggregator finished")
+		if rejectedReviews(aggregateReview) != "" {
+			return 2, errors.New("aggregator returned rejected findings; only validators may reject findings")
+		}
 
 		candidateReviews := actionableReviews(aggregateReview)
 		validationReview := ""
@@ -252,7 +275,6 @@ func run(args []string) (int, error) {
 
 		finalReview := joinReviewSections(
 			actionableReviews(validationReview),
-			rejectedReviews(aggregateReview),
 			rejectedReviews(validationReview),
 		)
 		if err := appendReviewHistory(cfg.previousReviewFile, iteration, finalReview); err != nil {
@@ -260,13 +282,20 @@ func run(args []string) (int, error) {
 		}
 
 		reviews := actionableReviews(finalReview)
-		if reviews == "" {
-			fmt.Printf("review loop successful after %d iteration(s); no remaining reviews; history: %s\n", iteration, cfg.previousReviewFile)
-			return 0, nil
+		state.Phase = "after_review"
+		state.CompletedReviews++
+		state.RawReviews = rawReviews
+		state.FinalReview = finalReview
+		state.PendingFindings = len(reviewBlocks(reviews, actionableFindingHeaderRE))
+		decision, err := guardian.decide(cfg, state)
+		if err != nil {
+			return 2, err
 		}
-		if iteration == cfg.maxIterations {
-			fmt.Printf("review loop stopped after %d iteration(s) with remaining reviews; history: %s\n", cfg.maxIterations, cfg.previousReviewFile)
-			return 1, nil
+		if decision.Action == "stop" {
+			return guardianStop(cfg, state, decision)
+		}
+		if decision.Action == "continue" {
+			continue
 		}
 
 		fixPrompt, err := interpolate(cfg.templates.fixer, cfg.placeholderValues(map[string]string{
@@ -275,13 +304,27 @@ func run(args []string) (int, error) {
 		if err != nil {
 			return 2, fmt.Errorf("build fixer prompt: %w", err)
 		}
-		if _, err := runCodex(cfg, "fixer", fixPrompt, cfg.codexFixer); err != nil {
+		beforeFix, err := gitOutput(cfg.root, "rev-parse", "HEAD")
+		if err != nil {
+			return 2, err
+		}
+		fixSummary, err := runCodex(cfg, "fixer", fixPrompt, cfg.codexFixer)
+		if err != nil {
 			return 2, fmt.Errorf("%w; history: %s", err, cfg.previousReviewFile)
+		}
+		if err := requireCleanWorktree(cfg.root); err != nil {
+			return 2, fmt.Errorf("fixer left uncommitted changes: %w; history: %s", err, cfg.previousReviewFile)
+		}
+		fixCommits, err := gitOutput(cfg.root, "log", "--format=%h %s", "--stat", strings.TrimSpace(beforeFix)+"..HEAD")
+		if err != nil {
+			return 2, err
+		}
+		state.FixSummary = fixSummary + "\n\nFix commits and changed paths:\n" + fixCommits
+		if err := appendProgressHistory(cfg.previousReviewFile, fmt.Sprintf("Fixes after iteration %d", iteration), state.FixSummary); err != nil {
+			return 2, err
 		}
 		writeProgressLine("fixer finished")
 	}
-
-	return 2, errors.New("unreachable review loop state")
 }
 
 func createReviewScratchDir(root string) (string, error) {
@@ -308,7 +351,7 @@ func loadConfig(args []string) (config, error) {
 		return config{}, err
 	}
 	if len(args) > 1 {
-		return config{}, errors.New("usage: reviewloop --claude-model <model> --claude-effort <effort> --codex-reviewer <model/effort> --codex-aggregator <model/effort> --codex-validator <model/effort> --codex-fixer <model/effort> (--plan <repo-relative-path> | --goal <text>) [--base <ref>] [--max-iterations <count>] [--claude-review-percent <percent>] [branch-or-commit]")
+		return config{}, errors.New("usage: reviewloop --claude-model <model> --claude-effort <effort> --codex-reviewer <model/effort> --codex-aggregator <model/effort> --codex-validator <model/effort> --codex-fixer <model/effort> --codex-guardian <model/effort> (--plan <repo-relative-path> | --goal <text>) [--base <ref>] [branch-or-commit]")
 	}
 
 	root, err := repoRoot()
@@ -321,14 +364,6 @@ func loadConfig(args []string) (config, error) {
 	}
 	if options.baseRef == "" {
 		options.baseRef = strings.TrimSpace(os.Getenv(reviewLoopBaseEnvName))
-	}
-	maxIterations, err := configuredInt(defaultMaxIterations, reviewLoopMaxIterationsEnvName, options.maxIterations)
-	if err != nil {
-		return config{}, err
-	}
-	claudeReviewPercent, err := configuredInt(defaultClaudeReviewPercent, reviewLoopClaudeReviewPercentEnvName, options.claudeReviewPercent)
-	if err != nil {
-		return config{}, err
 	}
 	if options.claudeModel == "" {
 		return config{}, errors.New("--claude-model is required")
@@ -349,6 +384,11 @@ func loadConfig(args []string) (config, error) {
 		return config{}, err
 	}
 	codexFixer, err := parseCodexSettings(options.codexFixer, "--codex-fixer")
+	if err != nil {
+		return config{}, err
+	}
+
+	codexGuardian, err := parseCodexSettings(options.codexGuardian, "--codex-guardian")
 	if err != nil {
 		return config{}, err
 	}
@@ -420,8 +460,7 @@ func loadConfig(args []string) (config, error) {
 		codexAggregator:         codexAggregator,
 		codexValidator:          codexValidator,
 		codexFixer:              codexFixer,
-		maxIterations:           maxIterations,
-		claudeReviewIterations:  claudeReviewIterationSet(maxIterations, claudeReviewPercent),
+		codexGuardian:           codexGuardian,
 		previousReviewFile:      previousReviewFile,
 		reviewTarget:            target,
 		templates:               templates,
@@ -441,6 +480,7 @@ func parseReviewLoopArgs(args []string) ([]string, reviewLoopOptions, error) {
 		"--codex-aggregator": &options.codexAggregator,
 		"--codex-validator":  &options.codexValidator,
 		"--codex-fixer":      &options.codexFixer,
+		"--codex-guardian":   &options.codexGuardian,
 		"--goal":             &options.goal,
 		"--plan":             &options.plan,
 	}
@@ -466,32 +506,6 @@ func parseReviewLoopArgs(args []string) ([]string, reviewLoopOptions, error) {
 			}
 		}
 		switch {
-		case arg == "--max-iterations":
-			value, next, err := parseIntFlagValue(args, i, "--max-iterations")
-			if err != nil {
-				return nil, reviewLoopOptions{}, err
-			}
-			i = next
-			options.maxIterations = &value
-		case strings.HasPrefix(arg, "--max-iterations="):
-			value, err := parseIntValue(strings.TrimPrefix(arg, "--max-iterations="), "--max-iterations")
-			if err != nil {
-				return nil, reviewLoopOptions{}, err
-			}
-			options.maxIterations = &value
-		case arg == "--claude-review-percent":
-			value, next, err := parseIntFlagValue(args, i, "--claude-review-percent")
-			if err != nil {
-				return nil, reviewLoopOptions{}, err
-			}
-			i = next
-			options.claudeReviewPercent = &value
-		case strings.HasPrefix(arg, "--claude-review-percent="):
-			value, err := parseIntValue(strings.TrimPrefix(arg, "--claude-review-percent="), "--claude-review-percent")
-			if err != nil {
-				return nil, reviewLoopOptions{}, err
-			}
-			options.claudeReviewPercent = &value
 		case strings.HasPrefix(arg, "--"):
 			return nil, reviewLoopOptions{}, fmt.Errorf("unknown flag %s", arg)
 		default:
@@ -563,59 +577,6 @@ func parseCodexSettings(value string, name string) (codexSettings, error) {
 		model:           model,
 		reasoningEffort: strings.TrimSpace(parts[1]),
 	}, nil
-}
-
-func parseIntFlagValue(args []string, index int, name string) (int, int, error) {
-	if index+1 >= len(args) {
-		return 0, index, fmt.Errorf("%s requires a value", name)
-	}
-	value, err := parseIntValue(args[index+1], name)
-	return value, index + 1, err
-}
-
-func parseIntValue(value string, name string) (int, error) {
-	parsed, err := strconv.Atoi(strings.TrimSpace(value))
-	if err != nil {
-		return 0, fmt.Errorf("parse %s: %w", name, err)
-	}
-	return parsed, nil
-}
-
-func configuredInt(defaultValue int, envName string, override *int) (int, error) {
-	value := defaultValue
-	if raw := strings.TrimSpace(os.Getenv(envName)); raw != "" {
-		parsed, err := parseIntValue(raw, envName)
-		if err != nil {
-			return 0, err
-		}
-		value = parsed
-	}
-	if override != nil {
-		value = *override
-	}
-	return value, nil
-}
-
-func claudeReviewIterationSet(maxIterations int, percent int) map[int]bool {
-	iterations := map[int]bool{}
-	if percent <= 0 {
-		return iterations
-	}
-
-	count := maxIterations * percent / 100
-	if count < 1 {
-		count = 1
-	}
-	if count == 1 {
-		iterations[1] = true
-		return iterations
-	}
-
-	for i := 0; i < count; i++ {
-		iteration := 1 + i*maxIterations/count
-		iterations[iteration] = true
-	}
-	return iterations
 }
 
 func resolveBranchReviewBase(root string, branchName string, baseOverride string) (reviewBase, error) {
@@ -934,12 +895,18 @@ func loadTemplates(root string) (reviewTemplates, error) {
 		return reviewTemplates{}, err
 	}
 
+	guardian, err := readTemplate(filepath.Join(reviewRoot, "guardian.md"))
+	if err != nil {
+		return reviewTemplates{}, err
+	}
+
 	return reviewTemplates{
 		claudeReviewer: claudeReviewer,
 		codexReviewer:  codexReviewer,
 		aggregate:      aggregate,
 		validator:      validator,
 		fixer:          fixer,
+		guardian:       guardian,
 	}, nil
 }
 
@@ -1391,11 +1358,7 @@ func singleValidationResult(message string) (string, error) {
 
 func runReviewerAgent(cfg config, label string, prompt string, useClaude bool) (string, error) {
 	if useClaude {
-		message, err := runClaude(cfg.root, cfg.scratchDir, label, prompt, cfg.claudeModel, cfg.claudeEffort)
-		if err == nil {
-			return message, nil
-		}
-		writeProgressLine("%s failed with claude; falling back to codex: %v", label, err)
+		return runClaude(cfg.root, cfg.scratchDir, label, prompt, cfg.claudeModel, cfg.claudeEffort)
 	}
 	return runCodex(cfg, label, prompt, cfg.codexReviewer)
 }
@@ -1463,6 +1426,10 @@ func runClaude(root string, scratchDir string, label string, prompt string, mode
 }
 
 func runCodex(cfg config, label string, prompt string, settings codexSettings) (string, error) {
+	return runCodexSession(cfg, label, prompt, settings, nil)
+}
+
+func runCodexSession(cfg config, label string, prompt string, settings codexSettings, session *codexSession) (string, error) {
 	outputFile, err := os.CreateTemp(cfg.scratchDir, "output-"+fileSafeName(label)+"-*.md")
 	if err != nil {
 		return "", fmt.Errorf("create %s output file: %w", label, err)
@@ -1475,17 +1442,34 @@ func runCodex(cfg config, label string, prompt string, settings codexSettings) (
 		_ = os.Remove(outputPath)
 	}()
 
-	cmd := exec.Command(
-		"codex",
-		"exec",
+	args := []string{"exec"}
+	if session != nil && session.threadID != "" {
+		args = append(args, "resume")
+	}
+	args = append(args,
 		"-m", settings.model,
 		"-c", "model_reasoning_effort="+settings.reasoningEffort,
 		"--json",
-		"--dangerously-bypass-approvals-and-sandbox",
-		"--cd", cfg.root,
 		"--output-last-message", outputPath,
-		"-",
 	)
+	if session == nil {
+		args = append(args, "--dangerously-bypass-approvals-and-sandbox")
+	} else {
+		args = append(args,
+			"--output-schema", session.outputSchema,
+			"-c", `sandbox_mode="read-only"`,
+			"-c", `approval_policy="never"`,
+			"-c", "features.shell_tool=false",
+			"-c", "features.multi_agent=false",
+			"-c", `web_search="disabled"`,
+		)
+		if session.threadID != "" {
+			args = append(args, session.threadID)
+		}
+	}
+	args = append(args, "-")
+	cmd := exec.Command("codex", args...)
+	cmd.Dir = cfg.root
 	cmd.Stdin = strings.NewReader(prompt)
 	cmd.Env = reviewAgentEnv(cfg.scratchDir)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
@@ -1529,6 +1513,7 @@ func runCodex(cfg config, label string, prompt string, settings codexSettings) (
 	var waitErr error
 	var readErr error
 	var timeoutErr error
+	var observerErr error
 	processDone := false
 	eventsDone := false
 	for !processDone || !eventsDone {
@@ -1541,6 +1526,13 @@ func runCodex(cfg config, label string, prompt string, settings codexSettings) (
 				continue
 			}
 			progress.observe(event, time.Now())
+			if session != nil && event.ThreadID != "" {
+				session.threadID = event.ThreadID
+			}
+			if session != nil && (event.Type == "item.started" || event.Type == "item.completed") && event.Item.Type != "agent_message" && event.Item.Type != "reasoning" && event.Item.Type != "error" && observerErr == nil {
+				observerErr = fmt.Errorf("%s attempted %s; it must judge supplied observations without tools", label, event.Item.Type)
+				killProcessGroup(cmd.Process)
+			}
 		case err := <-waitCh:
 			waitCh = nil
 			processDone = true
@@ -1562,6 +1554,9 @@ func runCodex(cfg config, label string, prompt string, settings codexSettings) (
 		}
 	}
 
+	if observerErr != nil {
+		return "", observerErr
+	}
 	if timeoutErr != nil {
 		return "", fmt.Errorf("%w%s", timeoutErr, capturedOutput(stdout.String(), stderr.String()))
 	}
@@ -1570,6 +1565,9 @@ func runCodex(cfg config, label string, prompt string, settings codexSettings) (
 	}
 	if waitErr != nil {
 		return "", fmt.Errorf("%s failed: %w%s%s", label, waitErr, observedCodexErrors(progress.errors), capturedOutput(stdout.String(), stderr.String()))
+	}
+	if session != nil && session.threadID == "" {
+		return "", fmt.Errorf("%s must retain its session and judge supplied observations without tools", label)
 	}
 
 	message, err := os.ReadFile(outputPath)
@@ -1828,6 +1826,10 @@ func limitOutput(output string) string {
 }
 
 func appendReviewHistory(path string, iteration int, review string) (err error) {
+	return appendProgressHistory(path, fmt.Sprintf("Iteration %d", iteration), review)
+}
+
+func appendProgressHistory(path string, heading string, body string) (err error) {
 	file, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, fs.FileMode(0))
 	if err != nil {
 		return fmt.Errorf("open previous review file: %w", err)
@@ -1838,7 +1840,7 @@ func appendReviewHistory(path string, iteration int, review string) (err error) 
 		}
 	}()
 
-	if _, err := fmt.Fprintf(file, "## Iteration %d\n\n%s\n\n", iteration, review); err != nil {
+	if _, err := fmt.Fprintf(file, "## %s\n\n%s\n\n", heading, body); err != nil {
 		return fmt.Errorf("append previous review file: %w", err)
 	}
 	return nil

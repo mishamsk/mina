@@ -5,24 +5,27 @@ set windows-shell := ["pwsh", "-NoLogo", "-Command"]
 
 # Shared role defaults; exported overrides survive nested recipes and agent sessions.
 # See docs/agents/model-configuration.md for Bash usage and manual fleet selection.
-implement_model := env("MINA_DEV_IMPLEMENT_MODEL", "gpt-6-sol")
+implement_model := env("MINA_DEV_IMPLEMENT_MODEL", "gpt-6.1-sol")
 implement_effort := env("MINA_DEV_IMPLEMENT_EFFORT", "high")
-plan_model := env("MINA_DEV_PLAN_MODEL", "gpt-6-sol")
+plan_model := env("MINA_DEV_PLAN_MODEL", "gpt-6.1-sol")
 plan_effort := env("MINA_DEV_PLAN_EFFORT", "high")
-fleet_model := env("MINA_DEV_FLEET_MODEL", "claude-fable-5-1")
+fleet_model := env("MINA_DEV_FLEET_MODEL", "claude-opus-5-5")
 fleet_effort := env("MINA_DEV_FLEET_EFFORT", "high")
-fleet_codex_model := env("MINA_DEV_FLEET_CODEX_MODEL", "gpt-6-sol")
+fleet_codex_model := env("MINA_DEV_FLEET_CODEX_MODEL", "gpt-6.1-sol")
 fleet_codex_effort := env("MINA_DEV_FLEET_CODEX_EFFORT", "medium")
-review_codex_model := env("MINA_DEV_REVIEW_CODEX_MODEL", "gpt-6-sol")
+review_codex_model := env("MINA_DEV_REVIEW_CODEX_MODEL", "gpt-6.1-sol")
 review_codex_effort := env("MINA_DEV_REVIEW_CODEX_EFFORT", "high")
 review_claude_model := env("MINA_DEV_REVIEW_CLAUDE_MODEL", "claude-opus-5-5")
 review_claude_effort := env("MINA_DEV_REVIEW_CLAUDE_EFFORT", "high")
-aggregate_model := env("MINA_DEV_AGGREGATE_MODEL", "gpt-6-sol")
-aggregate_effort := env("MINA_DEV_AGGREGATE_EFFORT", "high")
-validate_model := env("MINA_DEV_VALIDATE_MODEL", "gpt-6-sol")
+aggregate_model := env("MINA_DEV_AGGREGATE_MODEL", "gpt-6-luna")
+aggregate_effort := env("MINA_DEV_AGGREGATE_EFFORT", "xhigh")
+validate_model := env("MINA_DEV_VALIDATE_MODEL", "gpt-6.1-sol")
 validate_effort := env("MINA_DEV_VALIDATE_EFFORT", "high")
-garden_model := env("MINA_DEV_GARDEN_MODEL", "gpt-6-sol")
+garden_model := env("MINA_DEV_GARDEN_MODEL", "gpt-6.1-sol")
 garden_effort := env("MINA_DEV_GARDEN_EFFORT", "high")
+
+guardian_model := env("MINA_DEV_GUARDIAN_MODEL", "gpt-6.1-sol")
+guardian_effort := env("MINA_DEV_GUARDIAN_EFFORT", "high")
 
 export MINA_DEV_IMPLEMENT_MODEL := implement_model
 export MINA_DEV_IMPLEMENT_EFFORT := implement_effort
@@ -42,6 +45,8 @@ export MINA_DEV_VALIDATE_MODEL := validate_model
 export MINA_DEV_VALIDATE_EFFORT := validate_effort
 export MINA_DEV_GARDEN_MODEL := garden_model
 export MINA_DEV_GARDEN_EFFORT := garden_effort
+export MINA_DEV_GUARDIAN_MODEL := guardian_model
+export MINA_DEV_GUARDIAN_EFFORT := guardian_effort
 agent_model_thinking_levels := implement_model + "/" + implement_effort + "\n" + review_claude_model + "/" + review_claude_effort + "\n" + review_claude_model + "/xhigh\n" + review_codex_model + "/medium\n" + review_codex_model + "/" + review_codex_effort + "\n" + garden_model + "/" + garden_effort + "\n" + garden_model + "/xhigh"
 
 [private]
@@ -552,6 +557,7 @@ _agent mode role *args:
         review-claude) model="$MINA_DEV_REVIEW_CLAUDE_MODEL"; effort="$MINA_DEV_REVIEW_CLAUDE_EFFORT" ;;
         aggregate) model="$MINA_DEV_AGGREGATE_MODEL"; effort="$MINA_DEV_AGGREGATE_EFFORT" ;;
         validate) model="$MINA_DEV_VALIDATE_MODEL"; effort="$MINA_DEV_VALIDATE_EFFORT" ;;
+        guardian) model="$MINA_DEV_GUARDIAN_MODEL"; effort="$MINA_DEV_GUARDIAN_EFFORT" ;;
         garden) model="$MINA_DEV_GARDEN_MODEL"; effort="$MINA_DEV_GARDEN_EFFORT" ;;
         *) echo "unknown agent role: $role" >&2; exit 2 ;;
     esac
@@ -626,14 +632,12 @@ garden-docs limit="" codex=(garden_model + "/" + garden_effort):
 
 # Run the repository-local review loop through local Codex and Claude CLI sessions.
 [group('agents')]
-review-loop mode context branch_or_commit="" base_ref="" max_iterations="" claude_review_percent="" claude_model=review_claude_model codex_reviewer=(review_codex_model + "/" + review_codex_effort) codex_aggregator=(aggregate_model + "/" + aggregate_effort) codex_validator=(validate_model + "/" + validate_effort) codex_fixer=(implement_model + "/" + implement_effort) claude_effort=review_claude_effort:
+review-loop mode context branch_or_commit="" base_ref="" claude_model=review_claude_model codex_reviewer=(review_codex_model + "/" + review_codex_effort) codex_aggregator=(aggregate_model + "/" + aggregate_effort) codex_validator=(validate_model + "/" + validate_effort) codex_fixer=(implement_model + "/" + implement_effort) claude_effort=review_claude_effort codex_guardian=(guardian_model + "/" + guardian_effort):
     #!/usr/bin/env bash
     set -euo pipefail
 
     branch_or_commit={{ quote(branch_or_commit) }}
     base_ref={{ quote(base_ref) }}
-    max_iterations={{ quote(max_iterations) }}
-    claude_review_percent={{ quote(claude_review_percent) }}
 
     set -- \
         --claude-model {{ quote(claude_model) }} \
@@ -641,15 +645,10 @@ review-loop mode context branch_or_commit="" base_ref="" max_iterations="" claud
         --codex-reviewer {{ quote(codex_reviewer) }} \
         --codex-aggregator {{ quote(codex_aggregator) }} \
         --codex-validator {{ quote(codex_validator) }} \
-        --codex-fixer {{ quote(codex_fixer) }}
+        --codex-fixer {{ quote(codex_fixer) }} \
+        --codex-guardian {{ quote(codex_guardian) }}
     if [ -n "$base_ref" ]; then
         set -- "$@" --base "$base_ref"
-    fi
-    if [ -n "$max_iterations" ]; then
-        set -- "$@" --max-iterations "$max_iterations"
-    fi
-    if [ -n "$claude_review_percent" ]; then
-        set -- "$@" --claude-review-percent "$claude_review_percent"
     fi
 
     log_dir="build/review-loop"
