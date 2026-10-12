@@ -11,7 +11,7 @@ This document owns the filter expression language for `GET /api/transactions`: g
 - Comparison terms use `field OP value`, where `OP` is one of `=`, `>`, `>=`, `<`, or `<=`.
 - Values containing whitespace, parentheses, quotes, or colons beyond the membership separator must be double quoted with `"…"`; inside quotes, `\"`, `\\`, and `\*` represent a quote, backslash, and literal asterisk respectively. The asterisk escape distinguishes an exact entity FQN equal to `*` or ending in `:*` from an all-entity or hierarchy scope.
 - An empty expression is invalid; `filter` must contain at least one term.
-- Valid examples include `amount > -5`, `member : "Avery Blake"`, and `(tag:A or tag:B) and not lifecycle:cancelled`.
+- Valid examples include `amount > 5`, `amount=19..20`, `member : "Avery Blake"`, and `(tag:A or tag:B) and not lifecycle:cancelled`.
 
 ## Fields
 
@@ -29,7 +29,7 @@ This document owns the filter expression language for `GET /api/transactions`: g
 - `lifecycle` takes a `LifecycleStatus` enum value: `active`, `expected`, `cancelled`.
 - `settlement` takes a `SettlementSummary` enum value: `pending`, `posted`, `mixed`, `not_applicable`.
 - `shape` takes a `TransactionShapeType` enum value: `spend`, `refund`, `income`, `clawback`, `adjustment`, `exchange`, `transfer`.
-- `amount` and `amount_usd` take signed decimals within DECIMAL(18,8) precision.
+- `amount` and `amount_usd` take nonnegative decimals within DECIMAL(18,8) precision. Equality also accepts an inclusive atomic interval `lower..upper`, with two nonnegative bounds and lower no greater than upper; equal endpoints match exactly. Intervals are unsupported for other operators and fields.
 - Date and timestamp values accept an absolute civil date (`YYYY-MM-DD`), an RFC3339 timestamp, or a signed relative offset such as `-30d` or `+1w`. Units are `s`, `m`, `h`, `d`, `w`, `mo`, `y`; `mo` means calendar months so `m` can mean minutes. Relative offsets resolve against the transactions service clock at request time, never wall time by another path. Calendar-month and calendar-year offsets preserve the clock's time and use calendar normalization rather than clamping: overflow from a nonexistent target date rolls forward (`2024-01-31 +1mo` becomes `2024-03-02`, and `2024-02-29 +1y` becomes `2025-03-01`).
 
 ### Field cardinality
@@ -40,11 +40,26 @@ This document owns the filter expression language for `GET /api/transactions`: g
 
 ## Matching semantics
 
-- Every leaf term is a transaction-level predicate. For record-derived fields — account, category, tag, member, currency, role, amount, amount_usd, pending, posted — the term means "at least one active journal record satisfies this". Transaction-derived fields test the attribute directly: `lifecycle` reads the lifecycle column, `settlement`, `shape`, and `class` use their server-derived summaries, and `initiated` compares the transaction's initiated civil date. Boolean operators compose these transaction-level predicates.
+- Every leaf term is a transaction-level predicate. For record-derived fields — account, category, tag, member, currency, role, pending, posted — the term means "at least one active journal record satisfies this". Transaction-derived fields test the attribute directly: `lifecycle` reads the lifecycle column, `settlement`, `shape`, and `class` use their server-derived summaries, and `initiated` compares the transaction's initiated civil date. Amount terms test semantic candidates below. Boolean operators compose complete transaction-level predicates.
 - Entity-ID literals compare journal-record references or direct recurring-definition provenance directly by stable ID without name/FQN resolution. A well-formed ID that does not exist validly matches nothing.
 - Same-record conjunction is out of scope: `account:A and account:B` matches a transaction holding records on both accounts, because each term is an independent record-level existence test.
 - `not term` matches transactions where no active record satisfies `term` (or the direct attribute test fails). Negation respects hierarchy scoping identically to the positive form.
 - Single-valued transaction attributes conjoined with contradictory terms simply match nothing; validation does not special-case them.
+
+### Semantic amounts
+
+- Candidates are every server-derived shape amount, separately by shape and native currency, as defined in [accounting semantics](accounting-semantics.md). Aggregate the shape's signed contributions first, then compare their absolute magnitude. Transfer candidates accompany economic shapes; compact-row primary amounts do not limit candidates. Never sum currencies or construct a transaction-wide total.
+- Ten expense records of 10 supply spend 100, not ten candidates of 10. Spend 54 plus lending 18 supplies 54 and 18, not funding 72. Spend 100 plus refund 20 supplies 100 and 20, not net 80 or total 120. Exchange supplies sold and bought amounts separately; adjustments and transfers preserve their shape aggregation, including meaningful zero.
+- `amount` compares native magnitude; `amount_usd` compares the magnitude of the same shape/currency candidate's stored USD aggregate. Missing contributors or an out-of-range USD aggregate make only that USD candidate unavailable. No partial sum, zero substitution, or query-time conversion is allowed; its native amount remains available.
+- Each comparison independently requires a candidate. Amounts 10 and 100 satisfy `amount>19 and amount<20`, including when parenthesized. `amount=19..20` requires one candidate inside both inclusive bounds and fails for those amounts. Exact equality remains an ordinary comparison; separate bounds are never fused.
+- NOT negates the complete predicate: `not amount_usd=19..20` also matches transactions with no available USD candidates. Account, category, tag, member, role, shape, and class filters select transactions without restricting or recomputing amount contributions; a category matching one expense contribution of 10 still tests the full spend amount of 100.
+
+### Currency binding
+
+- Currency terms always retain their transaction-level record-membership checks. Additionally, currency-only restrictions in an AND branch qualify every amount predicate in that branch by the candidate's native currency, including `amount_usd`; USD comparisons still use the selected candidate's stored USD value.
+- Flatten nested AND groups before binding. Direct positive currency leaves form one allowed set: `currency:USD and currency:EUR` requires transaction membership in both currencies and allows candidates in either (the editor's all-of chip). A currency-only OR group allows any listed currency (any-of). Each such OR group independently restricts candidates; multiple allowed sets intersect. Negated currency-only groups exclude their selected currencies (none-of), while still requiring the transaction-level negation to hold.
+- Restrictions outside an OR apply to each branch; restrictions inside one OR branch never affect its siblings. Parentheses around AND comparisons do not change binding. For example `(currency:EUR and amount=19..20) or (currency:USD and amount=100)` qualifies each amount only with its own branch currency.
+- NOT around an amount or a mixed expression negates its complete qualified match; outer AND restrictions still apply inside it. Currency leaves inside a mixed NOT expression never qualify amounts outside that expression. Currency-only NOT uses ordinary set complement for candidate qualification. No currency restriction means all native currencies are eligible.
 
 ## Hierarchy scoping
 
@@ -68,7 +83,7 @@ This document owns the filter expression language for `GET /api/transactions`: g
 
 - Parse failures return the standard invalid-request envelope with a message naming the offending token and its byte offset. Missing boolean operators, malformed term forms, and violated limits report the applicable requirement.
 - Exact human-readable entity values that do not resolve to an existing active entity return HTTP 400 with public code `invalid_request` and message `transaction filters reference missing or inactive resource`. Hierarchy scopes and well-formed missing entity-ID literals validly match nothing; hidden entities resolve normally.
-- Invalid value shapes — unknown fields, bad enum values, malformed dates, and out-of-range decimals — are invalid requests.
+- Invalid value shapes — unknown fields, bad enum values, malformed dates, negative or out-of-range amount operands, and missing, malformed, negative, reversed, or out-of-range interval bounds — are invalid requests. An interval counts as one term under the existing syntax and term limits.
 - A malformed entity-ID literal is an invalid request with `entity-ID literal must use # followed by a positive base-10 integer`; fields outside `account`, `category`, `tag`, `member`, and `recurring_definition` reject entity-ID literals as unsupported.
 
 ## Reference zone
