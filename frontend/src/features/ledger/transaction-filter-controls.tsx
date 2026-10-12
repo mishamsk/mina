@@ -993,14 +993,20 @@ export const TransactionFilterControls = ({
           (chip) => dimensionForChip(chip) === editor.dimension,
         ) ?? [];
       const restoredChip =
-        candidates.find(
-          (chip) =>
-            chip.kind === "membership" && chip.mode === editor.previousMode,
-        ) ??
-        candidates.find(
-          (chip) => chip.kind === "membership" && chip.mode === editor.mode,
-        ) ??
-        candidates[0];
+        editor.chipIndex !== undefined
+          ? candidates.find(
+              (chip) =>
+                parsedRows[editor.rowIndex]!.chips.indexOf(chip) ===
+                editor.chipIndex,
+            )
+          : (candidates.find(
+              (chip) =>
+                chip.kind === "membership" && chip.mode === editor.previousMode,
+            ) ??
+            candidates.find(
+              (chip) => chip.kind === "membership" && chip.mode === editor.mode,
+            ) ??
+            candidates[0]);
       if (restoredChip) {
         restoreEditedChipAfterCloseRef.current = true;
         restoreEditedChipOnCloseRef.current = {
