@@ -581,27 +581,17 @@ const CurrencyFilterEditor = ({
   );
 };
 
-interface RangeEditorProps {
-  readonly formatHint?: string;
-  readonly fromLabel: string;
+interface InitiatedDateEditorProps {
   readonly fromValue: string | undefined;
-  readonly inputMode: "decimal" | "text";
   readonly onChange: (from: string | undefined, to: string | undefined) => void;
-  readonly pattern: RegExp;
-  readonly toLabel: string;
   readonly toValue: string | undefined;
 }
 
-const RangeEditor = ({
-  formatHint,
-  fromLabel,
+const InitiatedDateEditor = ({
   fromValue,
-  inputMode,
   onChange,
-  pattern,
-  toLabel,
   toValue,
-}: RangeEditorProps) => {
+}: InitiatedDateEditorProps) => {
   const formatHintId = useId();
   const [draftState, setDraftState] = useState({
     fromDraft: fromValue ?? "",
@@ -616,9 +606,11 @@ const RangeEditor = ({
     : (fromValue ?? "");
   const toDraft = toDraftMatchesValue ? draftState.toDraft : (toValue ?? "");
   const fromInvalid = Boolean(
-    fromDraft.trim() && !pattern.test(fromDraft.trim()),
+    fromDraft.trim() && !transactionFilterDatePattern.test(fromDraft.trim()),
   );
-  const toInvalid = Boolean(toDraft.trim() && !pattern.test(toDraft.trim()));
+  const toInvalid = Boolean(
+    toDraft.trim() && !transactionFilterDatePattern.test(toDraft.trim()),
+  );
 
   const update = (side: "from" | "to", rawValue: string): void => {
     const value = rawValue.trim();
@@ -630,14 +622,16 @@ const RangeEditor = ({
       toDraft: nextToDraft,
       toValue,
     });
-    if (value && !pattern.test(value)) return;
+    if (value && !transactionFilterDatePattern.test(value)) return;
     const normalizeDraft = (
       draft: string,
       previousValue: string | undefined,
     ): string | undefined => {
       const nextValue = draft.trim();
       if (!nextValue) return undefined;
-      return !pattern.test(nextValue) ? previousValue : nextValue;
+      return !transactionFilterDatePattern.test(nextValue)
+        ? previousValue
+        : nextValue;
     };
     onChange(
       normalizeDraft(nextFromDraft, fromValue),
@@ -649,44 +643,42 @@ const RangeEditor = ({
     <div className="space-y-2">
       <div className="grid grid-cols-2 gap-3">
         <label className="flex flex-col gap-1 font-mono text-xs">
-          {fromLabel}
+          From
           <input
             type="text"
-            inputMode={inputMode}
+            inputMode="text"
             className="bg-card h-9 border-2 border-[var(--border-ink)] px-2 text-sm shadow-[var(--shadow-pixel)]"
             value={fromDraft}
-            aria-describedby={formatHint ? formatHintId : undefined}
+            aria-describedby={formatHintId}
             aria-invalid={fromInvalid || undefined}
             onChange={(event) => update("from", event.target.value)}
           />
         </label>
         <label className="flex flex-col gap-1 font-mono text-xs">
-          {toLabel}
+          To
           <input
             type="text"
-            inputMode={inputMode}
+            inputMode="text"
             className="bg-card h-9 border-2 border-[var(--border-ink)] px-2 text-sm shadow-[var(--shadow-pixel)]"
             value={toDraft}
-            aria-describedby={formatHint ? formatHintId : undefined}
+            aria-describedby={formatHintId}
             aria-invalid={toInvalid || undefined}
             onChange={(event) => update("to", event.target.value)}
           />
         </label>
       </div>
-      {formatHint ? (
-        <p
-          id={formatHintId}
-          role={fromInvalid || toInvalid ? "alert" : undefined}
-          className={cn(
-            "font-body text-xs",
-            fromInvalid || toInvalid
-              ? "text-destructive"
-              : "text-muted-foreground",
-          )}
-        >
-          {formatHint}
-        </p>
-      ) : null}
+      <p
+        id={formatHintId}
+        role={fromInvalid || toInvalid ? "alert" : undefined}
+        className={cn(
+          "font-body text-xs",
+          fromInvalid || toInvalid
+            ? "text-destructive"
+            : "text-muted-foreground",
+        )}
+      >
+        Use YYYY-MM-DD, RFC3339, or a signed offset such as -30d.
+      </p>
     </div>
   );
 };
@@ -1286,20 +1278,17 @@ export const TransactionFilterControls = ({
     return true;
   };
 
-  const updateRange = (
+  const updateInitiatedRange = (
     rowIndex: number,
-    field: "initiated",
     from: string | undefined,
     to: string | undefined,
   ): void => {
     const chips = [...(rows[rowIndex]?.chips ?? [])];
-    const chipIndex = chips.findIndex(
-      (chip) => chip.kind === "range" && chip.field === field,
-    );
+    const chipIndex = chips.findIndex((chip) => chip.kind === "range");
     if (!from && !to) {
       if (chipIndex >= 0) chips.splice(chipIndex, 1);
     } else {
-      const chip = { field, from, kind: "range", to } as const;
+      const chip = { field: "initiated", from, kind: "range", to } as const;
       if (chipIndex >= 0) chips[chipIndex] = chip;
       else chips.push(chip);
     }
@@ -1882,24 +1871,11 @@ export const TransactionFilterControls = ({
         dimensionForChip(chip) === activeEditor.dimension,
     ) as Extract<TransactionFilterChip, { readonly kind: "range" }> | undefined;
     return (
-      <RangeEditor
-        formatHint={
-          activeEditor.dimension === "initiated"
-            ? "Use YYYY-MM-DD, RFC3339, or a signed offset such as -30d."
-            : undefined
-        }
-        inputMode={activeEditor.dimension === "initiated" ? "text" : "decimal"}
-        fromLabel={activeEditor.dimension === "initiated" ? "From" : "Min"}
-        toLabel={activeEditor.dimension === "initiated" ? "To" : "Max"}
+      <InitiatedDateEditor
         fromValue={rangeChip?.from}
         toValue={rangeChip?.to}
-        pattern={
-          activeEditor.dimension === "initiated"
-            ? transactionFilterDatePattern
-            : transactionFilterDecimalPattern
-        }
         onChange={(from, to) => {
-          updateRange(rowIndex, "initiated", from, to);
+          updateInitiatedRange(rowIndex, from, to);
         }}
       />
     );
@@ -2031,14 +2007,11 @@ export const TransactionFilterControls = ({
       return { label, tooltip: label, truncateLabel: false };
     }
     if (chip.kind === "range") {
-      const dimensionLabel =
-        chip.field === "initiated" ? "Initiated" : dimension.label;
-      const label =
-        rangeLabel(dimensionLabel, chip.from, chip.to) ?? dimensionLabel;
+      const label = rangeLabel("Initiated", chip.from, chip.to) ?? "Initiated";
       return {
         label,
         tooltip: label,
-        truncateLabel: chip.field === "initiated",
+        truncateLabel: true,
       };
     }
     const values = chip.values.flatMap((value) => {
