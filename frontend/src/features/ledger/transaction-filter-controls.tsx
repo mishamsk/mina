@@ -36,9 +36,11 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import {
+  compareTransactionFilterDecimals,
   normalizeTransactionFilterCurrency,
   recordRoles,
   transactionClasses,
+  type TransactionFilterAmountOperator,
   type TransactionFilterChip,
   transactionFilterCurrencyPattern,
   transactionFilterDatePattern,
@@ -689,12 +691,148 @@ const RangeEditor = ({
   );
 };
 
+type AmountChip = Extract<TransactionFilterChip, { kind: "amount" }>;
+
+const amountConditions: readonly [TransactionFilterAmountOperator, string][] = [
+  ["between", "Between"],
+  [">=", "At least"],
+  ["<=", "At most"],
+  [">", "Greater than"],
+  ["<", "Less than"],
+  ["=", "Exactly"],
+];
+
+const AmountEditor = ({
+  chip,
+  field,
+  onChange,
+}: {
+  readonly chip: AmountChip | undefined;
+  readonly field: AmountChip["field"];
+  readonly onChange: (chip: AmountChip) => void;
+}) => {
+  const [draft, setDraft] = useState({
+    operator: chip?.operator ?? "between",
+    value: chip?.value ?? "",
+    to: chip?.to ?? "",
+  });
+  const hintId = useId();
+  const validDecimal = (value: string): boolean =>
+    transactionFilterDecimalPattern.test(value.trim());
+  const invalidValue = Boolean(
+    draft.value.trim() && !validDecimal(draft.value),
+  );
+  const invalidTo =
+    draft.operator === "between" &&
+    Boolean(draft.to.trim() && !validDecimal(draft.to));
+  const reversed =
+    draft.operator === "between" &&
+    validDecimal(draft.value) &&
+    validDecimal(draft.to) &&
+    compareTransactionFilterDecimals(draft.value.trim(), draft.to.trim()) > 0;
+  const update = (next: typeof draft): void => {
+    setDraft(next);
+    if (!validDecimal(next.value)) return;
+    if (
+      next.operator === "between" &&
+      (!validDecimal(next.to) ||
+        compareTransactionFilterDecimals(next.value.trim(), next.to.trim()) > 0)
+    )
+      return;
+    onChange({
+      kind: "amount",
+      field,
+      operator: next.operator,
+      value: next.value.trim(),
+      ...(next.operator === "between" ? { to: next.to.trim() } : {}),
+    });
+  };
+  return (
+    <div className="space-y-3">
+      <Select
+        value={draft.operator}
+        onValueChange={(operator) =>
+          update({
+            ...draft,
+            operator: operator as TransactionFilterAmountOperator,
+          })
+        }
+      >
+        <SelectTrigger aria-label="Amount condition">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {amountConditions.map(([value, label]) => (
+            <SelectItem key={value} value={value}>
+              {label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <div
+        className={cn(
+          "grid gap-3",
+          draft.operator === "between" && "grid-cols-2",
+        )}
+      >
+        <label className="flex flex-col gap-1 font-mono text-xs">
+          {draft.operator === "between" ? "Min" : "Value"}
+          <input
+            type="text"
+            inputMode="decimal"
+            className="bg-card h-9 border-2 border-[var(--border-ink)] px-2 text-sm shadow-[var(--shadow-pixel)]"
+            value={draft.value}
+            aria-describedby={hintId}
+            aria-invalid={invalidValue || reversed || undefined}
+            onChange={(event) =>
+              update({ ...draft, value: event.target.value })
+            }
+          />
+        </label>
+        {draft.operator === "between" ? (
+          <label className="flex flex-col gap-1 font-mono text-xs">
+            Max
+            <input
+              type="text"
+              inputMode="decimal"
+              className="bg-card h-9 border-2 border-[var(--border-ink)] px-2 text-sm shadow-[var(--shadow-pixel)]"
+              value={draft.to}
+              aria-describedby={hintId}
+              aria-invalid={invalidTo || reversed || undefined}
+              onChange={(event) => update({ ...draft, to: event.target.value })}
+            />
+          </label>
+        ) : null}
+      </div>
+      <p
+        id={hintId}
+        role={invalidValue || invalidTo || reversed ? "alert" : undefined}
+        className={cn(
+          "font-body text-xs",
+          invalidValue || invalidTo || reversed
+            ? "text-destructive"
+            : "text-muted-foreground",
+        )}
+      >
+        {invalidValue || invalidTo
+          ? "Use a nonnegative amount with at most 10 integer digits and 8 decimal places."
+          : reversed
+            ? "Min must not exceed Max."
+            : draft.operator === "between"
+              ? "Both bounds apply to the same transaction amount."
+              : "Matches any transaction amount satisfying this condition."}
+      </p>
+    </div>
+  );
+};
+
 interface RowState {
   readonly rows: readonly TransactionFilterRow[];
   readonly source: string;
 }
 
 interface EditorState {
+  readonly chipIndex?: number;
   readonly dimension?: TransactionFilterDimension;
   readonly mode: TransactionFilterMembershipMode;
   readonly rowIndex: number;
@@ -866,7 +1004,7 @@ export const TransactionFilterControls = ({
       if (restoredChip) {
         restoreEditedChipAfterCloseRef.current = true;
         restoreEditedChipOnCloseRef.current = {
-          editKey: `${editor.rowIndex}:${editor.dimension}:${restoredChip.kind === "membership" ? restoredChip.mode : "range"}`,
+          editKey: `${editor.rowIndex}:${editor.dimension}:${restoredChip.kind === "membership" ? restoredChip.mode : restoredChip.kind === "amount" ? `amount:${parsedRows[editor.rowIndex]!.chips.indexOf(restoredChip)}` : "range"}`,
           source,
         };
       } else if (parsedRows?.length) {
@@ -1144,7 +1282,7 @@ export const TransactionFilterControls = ({
 
   const updateRange = (
     rowIndex: number,
-    field: "amount" | "amount_usd" | "initiated",
+    field: "initiated",
     from: string | undefined,
     to: string | undefined,
   ): void => {
@@ -1632,6 +1770,10 @@ export const TransactionFilterControls = ({
                 );
                 openEditor({
                   dimension: dimension.id,
+                  ...(dimension.field === "amount" ||
+                  dimension.field === "amount_usd"
+                    ? { chipIndex: rows[rowIndex]!.chips.length }
+                    : {}),
                   mode:
                     availableMode ??
                     (existing?.kind === "membership" ? existing.mode : "any"),
@@ -1712,6 +1854,22 @@ export const TransactionFilterControls = ({
       );
     }
 
+    if (definition.field === "amount" || definition.field === "amount_usd") {
+      const chipIndex = activeEditor.chipIndex ?? rows[rowIndex]!.chips.length;
+      const selected = rows[rowIndex]?.chips[chipIndex];
+      return (
+        <AmountEditor
+          key={`${rowIndex}:${definition.field}:${chipIndex}`}
+          field={definition.field}
+          chip={selected?.kind === "amount" ? selected : undefined}
+          onChange={(chip) => {
+            const chips = [...rows[rowIndex]!.chips];
+            chips[chipIndex] = chip;
+            updateRow(rowIndex, chips);
+          }}
+        />
+      );
+    }
     const rangeChip = rows[rowIndex]?.chips.find(
       (chip) =>
         chip.kind === "range" &&
@@ -1735,12 +1893,7 @@ export const TransactionFilterControls = ({
             : transactionFilterDecimalPattern
         }
         onChange={(from, to) => {
-          updateRange(
-            rowIndex,
-            definition.field as "amount" | "amount_usd" | "initiated",
-            from,
-            to,
-          );
+          updateRange(rowIndex, "initiated", from, to);
         }}
       />
     );
@@ -1864,6 +2017,13 @@ export const TransactionFilterControls = ({
     truncateLabel?: boolean;
   } => {
     const dimension = dimensionById.get(dimensionForChip(chip))!;
+    if (chip.kind === "amount") {
+      const label =
+        chip.operator === "between"
+          ? `${dimension.label} between ${chip.value} and ${chip.to}`
+          : `${dimension.label} ${chip.operator} ${chip.value}`;
+      return { label, tooltip: label };
+    }
     if (chip.kind === "range") {
       const dimensionLabel =
         chip.field === "initiated" ? "Initiated" : dimension.label;
@@ -2085,7 +2245,7 @@ export const TransactionFilterControls = ({
                     return;
                   }
                   const currentEditKey = activeEditor?.dimension
-                    ? `${rowIndex}:${activeEditor.dimension}:${dimensionById.get(activeEditor.dimension)?.modes ? activeEditor.mode : "range"}`
+                    ? `${rowIndex}:${activeEditor.dimension}:${dimensionById.get(activeEditor.dimension)?.modes ? activeEditor.mode : activeEditor.dimension === "amount" || activeEditor.dimension === "amountUsd" ? `amount:${activeEditor.chipIndex}` : "range"}`
                     : undefined;
                   if (currentEditKey) {
                     restoreEditedChipAfterCloseRef.current = false;
@@ -2223,7 +2383,7 @@ export const TransactionFilterControls = ({
                 const presentation = chipPresentation(chip);
                 return (
                   <div
-                    key={`${chip.kind}-${chip.field}-${chip.kind === "membership" ? chip.mode : "range"}`}
+                    key={`${chip.kind}-${chip.field}-${chip.kind === "membership" ? chip.mode : chip.kind === "amount" ? `amount:${chipIndex}` : "range"}`}
                     className="flex max-w-full min-w-0 shrink-0 items-center gap-2"
                     data-filter-chip-group
                   >
@@ -2239,10 +2399,11 @@ export const TransactionFilterControls = ({
                     <div className="max-w-full min-w-0">
                       <FilterChip
                         {...presentation}
-                        editKey={`${rowIndex}:${dimensionForChip(chip)}:${chip.kind === "membership" ? chip.mode : "range"}`}
+                        editKey={`${rowIndex}:${dimensionForChip(chip)}:${chip.kind === "membership" ? chip.mode : chip.kind === "amount" ? `amount:${chipIndex}` : "range"}`}
                         onEdit={() => {
                           openEditor({
                             dimension: dimensionForChip(chip),
+                            ...(chip.kind === "amount" ? { chipIndex } : {}),
                             mode:
                               chip.kind === "membership" ? chip.mode : "any",
                             rowIndex,
@@ -2260,6 +2421,26 @@ export const TransactionFilterControls = ({
                 );
               })}
             </div>
+            {(["amount", "amount_usd"] as const).map((field) => {
+              const conditions = row.chips.filter(
+                (chip): chip is AmountChip =>
+                  chip.kind === "amount" && chip.field === field,
+              );
+              return conditions.some(
+                (chip) => chip.operator === ">" || chip.operator === ">=",
+              ) &&
+                conditions.some(
+                  (chip) => chip.operator === "<" || chip.operator === "<=",
+                ) ? (
+                <p
+                  key={field}
+                  className="font-body text-muted-foreground w-full text-xs"
+                >
+                  These conditions may match different amounts. Use Between to
+                  constrain one amount.
+                </p>
+              ) : null;
+            })}
             {rowIndex === rows.length - 1 ? (
               <Button
                 type="button"

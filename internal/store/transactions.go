@@ -557,12 +557,7 @@ func (s *TransactionStore) transactionFilterExpressionSQL(expression transaction
 	case *transactions.FilterEnumTerm:
 		return s.transactionFilterEnumCondition(node, args)
 	case *transactions.FilterDecimalTerm:
-		column := "jr.amount"
-		if node.Field == transactions.FilterFieldAmountUSD {
-			column = "jr.amount_usd"
-		}
-		*args = append(*args, node.Value.LibraryDecimal())
-		return s.transactionListRecordExists(column + " " + filterComparisonSQL(node.Op) + " ?")
+		return s.transactionFilterAmountCondition(node, args)
 	case *transactions.FilterDateTerm:
 		*args = append(*args, civilDateArg(node.Date))
 		return "tx.initiated_date " + filterComparisonSQL(node.Op) + " ?"
@@ -575,6 +570,84 @@ func (s *TransactionStore) transactionFilterExpressionSQL(expression transaction
 		return s.transactionListRecordExists(column + " " + filterComparisonSQL(node.Op) + " ?")
 	default:
 		return "FALSE"
+	}
+}
+
+// Shape contributions mirror accounting classification, independently of other
+// transaction predicates. Group before comparing, retaining native currencies.
+func (s *TransactionStore) transactionFilterAmountCondition(term *transactions.FilterDecimalTerm, args *[]any) string {
+	column := "candidate.amount"
+	if term.Field == transactions.FilterFieldAmountUSD {
+		column = "candidate.amount_usd"
+	}
+	condition := "abs(" + column + ") " + filterComparisonSQL(term.Op) + " ?"
+	*args = append(*args, term.Value.LibraryDecimal())
+	if term.Upper != nil {
+		condition = "abs(" + column + ") BETWEEN ? AND ?"
+		*args = append(*args, term.Upper.LibraryDecimal())
+	}
+	for _, constraint := range term.CurrencyConstraints {
+		condition += " AND " + filterCandidateCurrencySQL(constraint, args)
+	}
+	return `EXISTS (
+		WITH classified AS (
+			SELECT jr.record_id, jr.currency, jr.amount, jr.amount_usd, a.account_type,
+				` + s.recordRoleExpression() + ` AS role
+			FROM ` + s.db.accountingName("journal_record") + ` jr
+			JOIN ` + s.db.accountingName("account") + ` a ON a.account_id = jr.account_id
+			LEFT JOIN ` + s.db.accountingName("category") + ` c ON c.category_id = jr.category_id
+			WHERE jr.transaction_id = tx.transaction_id AND jr.tombstoned_at IS NULL
+		), flagged AS (
+			SELECT *, bool_or(role = 'exchange') OVER () AS has_exchange,
+				bool_or(role = 'balance' AND amount > 0) OVER () AS has_positive,
+				bool_or(role = 'balance' AND amount < 0) OVER () AS has_negative,
+				bool_or(role = 'balance' AND account_type = 'PARTY') OVER () AS has_party
+			FROM classified
+		), contributions AS (
+			SELECT *, CASE
+				WHEN role IN ('expense', 'refund', 'income', 'clawback', 'adjustment') THEN role
+				WHEN role = 'balance' AND has_exchange THEN 'exchange'
+				WHEN role = 'balance' AND NOT has_exchange AND has_positive AND has_negative
+					AND ((has_party AND account_type = 'PARTY') OR (NOT has_party AND amount > 0)) THEN 'transfer'
+			END AS shape
+			FROM flagged
+		), accumulated AS (
+			SELECT *, sum(amount_usd) OVER (
+				PARTITION BY shape, currency ORDER BY record_id ROWS UNBOUNDED PRECEDING
+			) AS running_usd
+			FROM contributions WHERE shape IS NOT NULL
+		)
+		SELECT 1 FROM (
+			SELECT shape, currency, CAST(sum(amount) AS DECIMAL(18,8)) AS amount,
+				CASE WHEN count(amount_usd) = count(*)
+					AND bool_and(TRY_CAST(running_usd AS DECIMAL(18,8)) IS NOT NULL)
+					THEN TRY_CAST(sum(amount_usd) AS DECIMAL(18,8)) END AS amount_usd
+			FROM accumulated GROUP BY shape, currency
+		) candidate WHERE ` + condition + `
+	)`
+}
+
+func filterCandidateCurrencySQL(expression transactions.FilterExpression, args *[]any) string {
+	switch node := expression.(type) {
+	case *transactions.FilterCurrencyTerm:
+		*args = append(*args, node.Currency)
+		return "candidate.currency = ?"
+	case *transactions.FilterNot:
+		return "(NOT " + filterCandidateCurrencySQL(node.Term, args) + ")"
+	case *transactions.FilterAnd:
+		conditions := make([]string, 0, len(node.Terms))
+		for _, child := range node.Terms {
+			conditions = append(conditions, filterCandidateCurrencySQL(child, args))
+		}
+		return "(" + strings.Join(conditions, " AND ") + ")"
+	case *transactions.FilterOr:
+		conditions := make([]string, 0, len(node.Terms))
+		for _, child := range node.Terms {
+			conditions = append(conditions, filterCandidateCurrencySQL(child, args))
+		}
+		return "(" + strings.Join(conditions, " OR ") + ")"
+	default:
+		panic("unsupported amount currency constraint")
 	}
 }
 

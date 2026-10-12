@@ -133,7 +133,7 @@ test("advanced filters preserve their exact source and clear visibly", async ({
   await createSearchSpend(page, matchingMemo, "75.00");
   await createSearchSpend(page, excludedMemo, "12.34");
 
-  const source = "  amount > 50 \t\n";
+  const source = "  amount > 50 and not amount=12.34 \t\n";
   await page.goto(
     `/transactions?page=1&pageSize=50&q=${encodeURIComponent(search)}&filter=${encodeURIComponent(source)}`,
   );

@@ -96,11 +96,15 @@ type FilterEnumTerm struct {
 	Value string
 }
 
-// FilterDecimalTerm compares one signed decimal record attribute.
+// FilterDecimalTerm tests the magnitude of one semantic shape/currency amount.
+// Upper makes equality an inclusive atomic interval. CurrencyConstraints qualify
+// candidates by native currency without changing transaction membership checks.
 type FilterDecimalTerm struct {
-	Field FilterField
-	Op    FilterCompareOp
-	Value values.Decimal
+	Field               FilterField
+	Op                  FilterCompareOp
+	Value               values.Decimal
+	Upper               *values.Decimal
+	CurrencyConstraints []FilterExpression
 }
 
 // FilterDateTerm compares the transaction initiated civil date.

@@ -50,7 +50,24 @@ export const recordRoles = [
   "balance",
 ] as const satisfies readonly RecordRole[];
 
-export const transactionFilterDecimalPattern = /^-?(?:\d{1,10})(?:\.\d{1,8})?$/;
+export const transactionFilterDecimalPattern = /^(?:\d{1,10})(?:\.\d{1,8})?$/;
+
+export type TransactionFilterAmountOperator =
+  "between" | "=" | ">" | ">=" | "<" | "<=";
+
+// Compare validated decimal text without losing precision to binary floats.
+export const compareTransactionFilterDecimals = (
+  left: string,
+  right: string,
+): number => {
+  const scaled = (value: string): bigint => {
+    const [integer, fraction = ""] = value.split(".");
+    return BigInt(`${integer}${fraction.padEnd(8, "0")}`);
+  };
+  const a = scaled(left);
+  const b = scaled(right);
+  return a < b ? -1 : a > b ? 1 : 0;
+};
 export const transactionFilterCurrencyPattern = /^(?:[A-Z]{3}|C::.+)$/;
 export const transactionFilterDatePattern =
   /^(?:\d{4}-\d{2}-\d{2}|[+-]\d+(?:s|m|h|d|w|mo|y)|\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:[.,]\d+)?(?:Z|[+-]\d{2}:\d{2}))$/;
@@ -103,9 +120,16 @@ export type TransactionFilterChip =
       readonly values: readonly string[];
     }
   | {
-      readonly field: "amount" | "amount_usd" | "initiated";
+      readonly field: "initiated";
       readonly from?: string;
       readonly kind: "range";
+      readonly to?: string;
+    }
+  | {
+      readonly field: "amount" | "amount_usd";
+      readonly kind: "amount";
+      readonly operator: TransactionFilterAmountOperator;
+      readonly value: string;
       readonly to?: string;
     };
 
@@ -258,6 +282,13 @@ const explicitMembershipHumanValues = (
 const expressionFromFilterChip = (
   chip: TransactionFilterChip,
 ): TransactionFilterExpression | undefined => {
+  if (chip.kind === "amount") {
+    return term(
+      chip.field,
+      chip.operator === "between" ? "=" : chip.operator,
+      chip.operator === "between" ? `${chip.value}..${chip.to}` : chip.value,
+    );
+  }
   if (chip.kind === "range") {
     return joinedExpression("and", [
       chip.from ? term(chip.field, ">=", chip.from) : undefined,
@@ -295,6 +326,10 @@ const normalizedFilterRows = (
 ): readonly TransactionFilterRow[] =>
   rows.map((row) => ({
     chips: row.chips.reduce<TransactionFilterChip[]>((chips, chip) => {
+      if (chip.kind === "amount") {
+        chips.push(chip);
+        return chips;
+      }
       if (chip.kind === "range") {
         const from = trimmedValue(chip.from);
         const to = trimmedValue(chip.to);
@@ -896,10 +931,7 @@ const filterRowFromExpression = (
     candidates.push(candidate);
     membershipTermsByField.set(candidate.field, candidates);
   }
-  const comparisons = new Map<
-    "amount" | "amount_usd" | "initiated",
-    { from?: string; to?: string }
-  >();
+  const comparisons = new Map<"initiated", { from?: string; to?: string }>();
   for (const candidate of expressions) {
     if (candidate.kind === "term" && candidate.operator === ":") {
       const groupedTerms = membershipTermsByField.get(candidate.field) ?? [];
@@ -920,7 +952,47 @@ const filterRowFromExpression = (
         continue;
       }
     }
+    if (
+      candidate.kind === "term" &&
+      (candidate.field === "amount" || candidate.field === "amount_usd") &&
+      candidate.operator !== ":"
+    ) {
+      const bounds = candidate.value.split("..");
+      if (
+        bounds.length === 2 &&
+        candidate.operator === "=" &&
+        bounds.every((value) => transactionFilterDecimalPattern.test(value)) &&
+        compareTransactionFilterDecimals(bounds[0]!, bounds[1]!) <= 0
+      ) {
+        chips.push({
+          kind: "amount",
+          field: candidate.field,
+          operator: "between",
+          value: bounds[0]!,
+          to: bounds[1]!,
+        });
+      } else if (
+        bounds.length === 1 &&
+        transactionFilterDecimalPattern.test(candidate.value)
+      ) {
+        chips.push({
+          kind: "amount",
+          field: candidate.field,
+          operator: candidate.operator,
+          value: candidate.value,
+        });
+      } else return undefined;
+      continue;
+    }
     if (candidate.kind === "and") {
+      const nestedRow = filterRowFromExpression(candidate);
+      if (
+        nestedRow &&
+        nestedRow.chips.every((chip) => chip.kind === "amount")
+      ) {
+        chips.push(...nestedRow.chips);
+        continue;
+      }
       const nestedComparisons = candidate.terms;
       const nestedField =
         nestedComparisons[0]?.kind === "term"
@@ -928,9 +1000,7 @@ const filterRowFromExpression = (
           : undefined;
       if (
         nestedComparisons.length > 0 &&
-        (nestedField === "amount" ||
-          nestedField === "amount_usd" ||
-          nestedField === "initiated") &&
+        nestedField === "initiated" &&
         nestedComparisons.every(
           (term) =>
             term.kind === "term" &&
@@ -958,9 +1028,7 @@ const filterRowFromExpression = (
     if (
       candidate.kind === "term" &&
       (candidate.operator === ">=" || candidate.operator === "<=") &&
-      (candidate.field === "amount" ||
-        candidate.field === "amount_usd" ||
-        candidate.field === "initiated")
+      candidate.field === "initiated"
     ) {
       const field = candidate.field;
       const firstComparison = !comparisons.has(field);

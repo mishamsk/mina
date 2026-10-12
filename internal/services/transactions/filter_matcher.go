@@ -48,12 +48,31 @@ func filterExpressionMatchesTransaction(transaction Transaction, expression Filt
 	case *FilterEnumTerm:
 		return filterEnumMatchesTransaction(transaction, node)
 	case *FilterDecimalTerm:
-		return slices.ContainsFunc(transaction.Records, func(record JournalRecord) bool {
-			if node.Field == FilterFieldAmountUSD {
-				return record.AmountUSD != nil && filterComparisonMatches(record.AmountUSD.Cmp(node.Value), node.Op)
+		for _, shape := range transaction.Shapes {
+			for _, candidate := range shape.Amounts {
+				if slices.ContainsFunc(node.CurrencyConstraints, func(constraint FilterExpression) bool {
+					return !filterCurrencyMatches(candidate.Currency, constraint)
+				}) {
+					continue
+				}
+				amount := candidate.Amount
+				if node.Field == FilterFieldAmountUSD {
+					if candidate.AmountUSD == nil {
+						continue
+					}
+					amount = *candidate.AmountUSD
+				}
+				amount = amount.Abs()
+				if node.Upper != nil {
+					if amount.Cmp(node.Value) >= 0 && amount.Cmp(*node.Upper) <= 0 {
+						return true
+					}
+				} else if filterComparisonMatches(amount.Cmp(node.Value), node.Op) {
+					return true
+				}
 			}
-			return filterComparisonMatches(record.Amount.Cmp(node.Value), node.Op)
-		})
+		}
+		return false
 	case *FilterDateTerm:
 		return filterComparisonMatches(transaction.InitiatedDate.Time().Compare(node.Date.Time()), node.Op)
 	case *FilterTimestampTerm:
@@ -64,6 +83,21 @@ func filterExpressionMatchesTransaction(transaction Transaction, expression Filt
 			}
 			return value != nil && filterComparisonMatches(value.Compare(node.Time), node.Op)
 		})
+	default:
+		return false
+	}
+}
+
+func filterCurrencyMatches(currency string, expression FilterExpression) bool {
+	switch node := expression.(type) {
+	case *FilterCurrencyTerm:
+		return currency == node.Currency
+	case *FilterNot:
+		return !filterCurrencyMatches(currency, node.Term)
+	case *FilterAnd:
+		return !slices.ContainsFunc(node.Terms, func(term FilterExpression) bool { return !filterCurrencyMatches(currency, term) })
+	case *FilterOr:
+		return slices.ContainsFunc(node.Terms, func(term FilterExpression) bool { return filterCurrencyMatches(currency, term) })
 	default:
 		return false
 	}

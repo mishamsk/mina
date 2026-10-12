@@ -394,11 +394,26 @@ func normalizeFilterCurrency(value string) string {
 func (p *filterParser) parseComparisonTermLeaf(offset int, field FilterField, op FilterCompareOp, value string) (FilterExpression, error) {
 	switch field {
 	case FilterFieldAmount, FilterFieldAmountUSD:
-		amount, err := values.ParseDecimal(value)
-		if err != nil {
-			return nil, filterErrorf(offset, "field %s needs a decimal with at most 10 integer digits and 8 fractional digits", field)
+		bounds := strings.Split(value, "..")
+		if len(bounds) > 2 || (len(bounds) == 2 && op != FilterCompareEqual) {
+			return nil, filterErrorf(offset, "field %s interval requires =lower..upper", field)
 		}
-		return &FilterDecimalTerm{Field: field, Op: op, Value: amount}, nil
+		term := &FilterDecimalTerm{Field: field, Op: op}
+		for index, bound := range bounds {
+			amount, err := values.ParseNonNegativeDecimal(bound)
+			if err != nil {
+				return nil, filterErrorf(offset, "field %s needs nonnegative decimals with at most 10 integer digits and 8 fractional digits", field)
+			}
+			if index == 0 {
+				term.Value = amount
+			} else {
+				if amount.Cmp(term.Value) < 0 {
+					return nil, filterErrorf(offset, "field %s interval lower bound must not exceed upper bound", field)
+				}
+				term.Upper = &amount
+			}
+		}
+		return term, nil
 	case FilterFieldInitiated:
 		date, err := p.parseFilterCivilDate(value)
 		if err != nil {
