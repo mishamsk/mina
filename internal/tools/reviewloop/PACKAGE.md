@@ -7,6 +7,7 @@
 ## Implicit Contracts
 
 - The Justfile owns role model and effort defaults and passes them explicitly, including guardian and Claude settings; Codex settings accept full model IDs or shorthand without `gpt-`.
+- Child agents inherit the executing machine's approval and permission settings; the guardian additionally restricts its sandbox to read-only and disables shell, subagent, and web-search tools.
 - One persistent Codex guardian judges continuation, convergence, and review-provider alternation from supplied stage outputs and fix commit summaries; it does no reviewing, validation, fixing, or tool work. Nonfatal Codex diagnostic items do not count as tool use. There is no iteration cap or percentage schedule.
 - The guardian selects a whole review round's provider before launch and chooses fallback after failure; failed providers stay unavailable for the invocation. A failed round is retried in full with the selected provider's template; aggregation, validation, fixing, or guardian failures end the invocation.
 - Aggregation only deduplicates supplied findings and suppresses duplicates of earlier validator rejections; it retains one original version per finding without judging validity or evidence. Only independent Codex validators reject findings, and only their rejections enter review history; aggregator rejection blocks fail the invocation.

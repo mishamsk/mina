@@ -615,7 +615,6 @@ func codexInvocation(root string, settings codexSettings) []string {
 		"exec",
 		"-m", settings.model,
 		"-c", "model_reasoning_effort=" + settings.reasoningEffort,
-		"--dangerously-bypass-approvals-and-sandbox",
 		"--color", "never",
 		"--cd", root,
 		"-",

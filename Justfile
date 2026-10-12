@@ -603,12 +603,12 @@ _agent mode role *args:
         gpt-*)
             args=(codex)
             if [ "$mode" = exec ]; then args+=(exec); fi
-            args+=(-m "$model" -c "model_reasoning_effort=$effort" --dangerously-bypass-approvals-and-sandbox)
+            args+=(-m "$model" -c "model_reasoning_effort=$effort")
             ;;
         claude-*)
             args=(claude)
             if [ "$mode" = exec ]; then args+=(-p --output-format text); fi
-            args+=(--model "$model" --effort "$effort" --dangerously-skip-permissions)
+            args+=(--model "$model" --effort "$effort")
             ;;
         *) echo "unsupported model provider: $model (use gpt- or claude-)" >&2; exit 2 ;;
     esac

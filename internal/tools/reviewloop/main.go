@@ -1370,7 +1370,6 @@ func runClaude(root string, scratchDir string, label string, prompt string, mode
 		"--output-format", "text",
 		"--model", model,
 		"--effort", effort,
-		"--dangerously-skip-permissions",
 	)
 	cmd.Dir = root
 	cmd.Stdin = strings.NewReader(prompt)
@@ -1452,13 +1451,10 @@ func runCodexSession(cfg config, label string, prompt string, settings codexSett
 		"--json",
 		"--output-last-message", outputPath,
 	)
-	if session == nil {
-		args = append(args, "--dangerously-bypass-approvals-and-sandbox")
-	} else {
+	if session != nil {
 		args = append(args,
 			"--output-schema", session.outputSchema,
 			"-c", `sandbox_mode="read-only"`,
-			"-c", `approval_policy="never"`,
 			"-c", "features.shell_tool=false",
 			"-c", "features.multi_agent=false",
 			"-c", `web_search="disabled"`,

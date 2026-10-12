@@ -319,9 +319,9 @@ export const lineTags = (
   maps: LookupMaps,
 ): readonly Tag[] | "mixed" => {
   const tagIds = uniformValue(
-    transaction.records.map((record) =>
-      [...record.tag_ids].sort(compareNumbers),
-    ),
+    transaction.records
+      .filter((record) => record.tag_ids.length > 0)
+      .map((record) => [...record.tag_ids].sort(compareNumbers)),
     (left, right) =>
       left.length === right.length &&
       left.every((value, index) => value === right[index]),

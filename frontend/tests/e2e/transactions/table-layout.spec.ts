@@ -136,7 +136,7 @@ test("a narrow long-amount row keeps its value and actions reachable", async ({
   await expect(page.locator(".row-actions-menu:visible")).toBeVisible();
 });
 
-test("dense transaction tags remain discoverable at desktop and compact widths", async ({
+test("dense funding-record tags remain discoverable with an untagged flow leg", async ({
   page,
 }, testInfo) => {
   const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
@@ -153,17 +153,32 @@ test("dense transaction tags remain discoverable at desktop and compact widths",
     listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
     listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
   ]);
-  const response = await page.request.post("/api/transactions/spend", {
+  const response = await page.request.post("/api/transactions", {
     data: {
-      amount: "42.75",
-      category_id: findByFqn(categories, "Entertainment:Books").category_id,
-      counterparty_account_id: findByFqn(accounts, "merchant:PowellsBooks")
-        .account_id,
-      currency: "USD",
-      funding_account_id: findByFqn(accounts, "cash:Wallet").account_id,
       initiated_date: "2026-05-31",
-      memo,
-      tag_ids: tags.map((tag) => tag.tag_id),
+      records: [
+        {
+          account_id: findByFqn(accounts, "cash:Wallet").account_id,
+          amount: "-42.75",
+          currency: "USD",
+          memo,
+          reconciliation_status: "unreconciled",
+          settlement: { status: "posted" },
+          source: "manual",
+          tag_ids: tags.map((tag) => tag.tag_id),
+        },
+        {
+          account_id: findByFqn(accounts, "merchant:PowellsBooks").account_id,
+          amount: "42.75",
+          category_id: findByFqn(categories, "Entertainment:Books").category_id,
+          currency: "USD",
+          memo,
+          reconciliation_status: "unreconciled",
+          settlement: null,
+          source: "manual",
+          tag_ids: [],
+        },
+      ],
     },
   });
   expect(response.ok(), await response.text()).toBe(true);
