@@ -43,7 +43,7 @@ This document owns the filter expression language for `GET /api/transactions`: g
 - Every leaf term is a transaction-level predicate. For record-derived fields — account, category, tag, member, currency, role, pending, posted — the term means "at least one active journal record satisfies this". Transaction-derived fields test the attribute directly: `lifecycle` reads the lifecycle column, `settlement`, `shape`, and `class` use their server-derived summaries, and `initiated` compares the transaction's initiated civil date. Amount terms test semantic candidates below. Boolean operators compose complete transaction-level predicates.
 - Entity-ID literals compare journal-record references or direct recurring-definition provenance directly by stable ID without name/FQN resolution. A well-formed ID that does not exist validly matches nothing.
 - Same-record conjunction is out of scope: `account:A and account:B` matches a transaction holding records on both accounts, because each term is an independent record-level existence test.
-- `not term` matches transactions where no active record satisfies `term` (or the direct attribute test fails). Negation respects hierarchy scoping identically to the positive form.
+- `not term` matches transactions where the complete transaction-level predicate `term` is false, including amount terms evaluated over semantic candidates. Negation respects hierarchy scoping identically to the positive form.
 - Single-valued transaction attributes conjoined with contradictory terms simply match nothing; validation does not special-case them.
 
 ### Semantic amounts
