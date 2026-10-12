@@ -2421,26 +2421,6 @@ export const TransactionFilterControls = ({
                 );
               })}
             </div>
-            {(["amount", "amount_usd"] as const).map((field) => {
-              const conditions = row.chips.filter(
-                (chip): chip is AmountChip =>
-                  chip.kind === "amount" && chip.field === field,
-              );
-              return conditions.some(
-                (chip) => chip.operator === ">" || chip.operator === ">=",
-              ) &&
-                conditions.some(
-                  (chip) => chip.operator === "<" || chip.operator === "<=",
-                ) ? (
-                <p
-                  key={field}
-                  className="font-body text-muted-foreground w-full text-xs"
-                >
-                  These conditions may match different amounts. Use Between to
-                  constrain one amount.
-                </p>
-              ) : null;
-            })}
             {rowIndex === rows.length - 1 ? (
               <Button
                 type="button"
@@ -2471,6 +2451,26 @@ export const TransactionFilterControls = ({
                 Remove row
               </Button>
             ) : null}
+            {(["amount", "amount_usd"] as const).map((field) => {
+              const conditions = row.chips.filter(
+                (chip): chip is AmountChip =>
+                  chip.kind === "amount" && chip.field === field,
+              );
+              return conditions.some(
+                (chip) => chip.operator === ">" || chip.operator === ">=",
+              ) &&
+                conditions.some(
+                  (chip) => chip.operator === "<" || chip.operator === "<=",
+                ) ? (
+                <p
+                  key={field}
+                  className="font-body text-muted-foreground w-full text-xs"
+                >
+                  These conditions may match different amounts. Use Between to
+                  constrain one amount.
+                </p>
+              ) : null;
+            })}
           </div>
         </div>
       ))}
