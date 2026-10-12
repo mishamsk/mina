@@ -2022,7 +2022,7 @@ export const TransactionFilterControls = ({
         chip.operator === "between"
           ? `${dimension.label} between ${chip.value} and ${chip.to}`
           : `${dimension.label} ${chip.operator} ${chip.value}`;
-      return { label, tooltip: label };
+      return { label, tooltip: label, truncateLabel: false };
     }
     if (chip.kind === "range") {
       const dimensionLabel =
