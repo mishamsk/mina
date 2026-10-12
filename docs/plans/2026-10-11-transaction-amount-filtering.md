@@ -6,13 +6,11 @@ Correct transaction amount filtering so a 19–20 range finds income or spending
 
 ## Constraints
 
-- Work in `fix-transaction-amount-filter`. This plan authorizes its described implementation only when execution is requested; writing the plan does not start implementation.
 - Fix the existing `amount` and `amount_usd` fields; do not add compatibility fields or preserve their signed journal-record semantics.
 - Reuse the shape amounts defined by `docs/accounting-semantics.md`; do not change accounting classification, stored records, display amounts, or schema.
 - Aggregate contributions first, then take the absolute value. Never sum currencies, invent a transaction-wide total, or use compact-row presentation to decide which amounts are searchable.
 - Keep domain validation and projected matching in `internal/services/transactions`, persisted filtering in `internal/store`, transport thin, and frontend accounting behavior presentational.
 - Do not add frontend tests for backend filtering semantics. Use REST app-tests for the regression and semantic cases; run existing browser tests and manually check the changed editor.
-- Use the `write-package-docs` skill for every package changed during implementation. Keep owning docs evergreen and short; leave `VISION.md`, `SCOPE.md`, and architecture documents unchanged.
 
 ## Agreed Behavior
 
