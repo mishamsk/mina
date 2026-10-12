@@ -125,6 +125,48 @@ func TestTransactionAmountFilterValidation(t *testing.T) {
 	}
 }
 
+func TestTransactionAmountFilterProjectionCurrencyBinding(t *testing.T) {
+	clock := apptest.NewFakeClock(apptest.Timestamp("2024-03-12T12:00:00Z"))
+	client := newSharedClient(t, apptest.WithClock(clock))
+	refs := createRecurringDefinitionRefs(t, client, "AmountProjectionCurrency")
+	eurAccount := client.Scenario().AccountWithCurrency("AmountProjectionCurrency:EUR", "EUR")
+	request := recurringDefinitionRequest("AmountProjectionCurrency:Daily", refs, "-100", "100", intervalRule(1, "DAY"), "2024-03-11")
+	records := *request.Records
+	eurFunding, eurSpending := records[0], records[1]
+	eurFunding.AccountId = &eurAccount.AccountId
+	eurFunding.Currency, eurFunding.Amount = apptest.StringPtr("EUR"), apptest.StringPtr("-19.5")
+	eurSpending.Currency, eurSpending.Amount = apptest.StringPtr("EUR"), apptest.StringPtr("19.5")
+	records = append(records, eurFunding, eurSpending)
+	request.Records = &records
+	createRecurringDefinition(t, client, request)
+	runRecurringCatchUp(t, client)
+	through := apptest.Date("2024-03-14")
+	for _, example := range []struct {
+		expression string
+		count      int64
+	}{
+		{"currency:EUR and amount=19..20", 4},
+		{"currency:USD and amount=19..20", 0},
+		{"currency:USD and amount=100", 4},
+		{"currency:EUR and amount=100", 0},
+	} {
+		t.Run(example.expression, func(t *testing.T) {
+			response, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{Filter: &example.expression, AnchorDate: &through, Offset: ptrTo(0), Limit: ptrTo(50)})
+			requireNoTransportError(t, "currency-filtered projections", err)
+			if response.StatusCode() != http.StatusOK || response.JSON200.TotalCount != example.count || len(response.JSON200.Transactions) != int(example.count) {
+				t.Fatalf("currency-filtered projections: %s", response.Body)
+			}
+			// The same qualification must hold for both future projections and persisted occurrences.
+			for i, transaction := range response.JSON200.Transactions {
+				wantDate := fmt.Sprintf("2024-03-%02d", 14-i)
+				if got := transaction.InitiatedDate.Format("2006-01-02"); got != wantDate {
+					t.Fatalf("occurrence %d date = %s, want %s", i, got, wantDate)
+				}
+			}
+		})
+	}
+}
+
 func TestTransactionAmountFilterProjectionPagination(t *testing.T) {
 	clock := apptest.NewFakeClock(apptest.Timestamp("2024-03-12T12:00:00Z"))
 	client := newSharedClient(t, apptest.WithClock(clock))
