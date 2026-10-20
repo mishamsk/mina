@@ -18,8 +18,9 @@ stdout '"transactions":[1-9][0-9]*'
 
 # Required replacement headers cross the launched CLI boundary into REST.
 exec mina client --server http://127.0.0.1:$PORT transactions create --json @replacement.json
-stdout '"transaction_id":1061'
-! exec mina client --server http://127.0.0.1:$PORT transactions replace 1061 --if-match '"2020-01-01T00:00:00Z"' --json @replacement.json
+stdout '"transaction_id":[0-9]+'
+cp stdout created-transaction.json
+! exec sh -c 'mina client --server http://127.0.0.1:$PORT transactions replace "$(jq -r .transaction_id created-transaction.json)" --if-match ''"2020-01-01T00:00:00Z"'' --json @replacement.json'
 stderr '"code":"precondition_failed"'
 
 # Query/list output is raw JSON on stdout.
