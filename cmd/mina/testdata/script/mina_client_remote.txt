@@ -20,7 +20,7 @@ stdout '"transactions":[1-9][0-9]*'
 exec mina client --server http://127.0.0.1:$PORT transactions create --json @replacement.json
 stdout '"transaction_id":[0-9]+'
 cp stdout created-transaction.json
-! exec sh -c 'mina client --server http://127.0.0.1:$PORT transactions replace "$(sed -n ''s/.*"transaction_id":\([0-9][0-9]*\).*/\1/p'' created-transaction.json)" --if-match ''"2020-01-01T00:00:00Z"'' --json @replacement.json'
+! exec sh -c 'mina client --server http://127.0.0.1:$PORT transactions replace "$(jq -r .transaction_id created-transaction.json)" --if-match ''"2020-01-01T00:00:00Z"'' --json @replacement.json'
 stderr '"code":"precondition_failed"'
 
 # Query/list output is raw JSON on stdout.
