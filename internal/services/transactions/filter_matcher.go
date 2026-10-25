@@ -50,9 +50,7 @@ func filterExpressionMatchesTransaction(transaction Transaction, expression Filt
 	case *FilterDecimalTerm:
 		for _, shape := range transaction.Shapes {
 			for _, candidate := range shape.Amounts {
-				if slices.ContainsFunc(node.CurrencyConstraints, func(constraint FilterExpression) bool {
-					return !filterCurrencyMatches(candidate.Currency, constraint)
-				}) {
+				if node.Currency != "" && candidate.Currency != node.Currency {
 					continue
 				}
 				amount := candidate.Amount
@@ -83,21 +81,6 @@ func filterExpressionMatchesTransaction(transaction Transaction, expression Filt
 			}
 			return value != nil && filterComparisonMatches(value.Compare(node.Time), node.Op)
 		})
-	default:
-		return false
-	}
-}
-
-func filterCurrencyMatches(currency string, expression FilterExpression) bool {
-	switch node := expression.(type) {
-	case *FilterCurrencyTerm:
-		return currency == node.Currency
-	case *FilterNot:
-		return !filterCurrencyMatches(currency, node.Term)
-	case *FilterAnd:
-		return !slices.ContainsFunc(node.Terms, func(term FilterExpression) bool { return !filterCurrencyMatches(currency, term) })
-	case *FilterOr:
-		return slices.ContainsFunc(node.Terms, func(term FilterExpression) bool { return filterCurrencyMatches(currency, term) })
 	default:
 		return false
 	}

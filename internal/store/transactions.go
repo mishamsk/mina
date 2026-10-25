@@ -586,8 +586,9 @@ func (s *TransactionStore) transactionFilterAmountCondition(term *transactions.F
 		condition = "abs(" + column + ") BETWEEN ? AND ?"
 		*args = append(*args, term.Upper.LibraryDecimal())
 	}
-	for _, constraint := range term.CurrencyConstraints {
-		condition += " AND " + filterCandidateCurrencySQL(constraint, args)
+	if term.Currency != "" {
+		condition += " AND candidate.currency = ?"
+		*args = append(*args, term.Currency)
 	}
 	return `EXISTS (
 		WITH classified AS (
@@ -625,30 +626,6 @@ func (s *TransactionStore) transactionFilterAmountCondition(term *transactions.F
 			FROM accumulated GROUP BY shape, currency
 		) candidate WHERE ` + condition + `
 	)`
-}
-
-func filterCandidateCurrencySQL(expression transactions.FilterExpression, args *[]any) string {
-	switch node := expression.(type) {
-	case *transactions.FilterCurrencyTerm:
-		*args = append(*args, node.Currency)
-		return "candidate.currency = ?"
-	case *transactions.FilterNot:
-		return "(NOT " + filterCandidateCurrencySQL(node.Term, args) + ")"
-	case *transactions.FilterAnd:
-		conditions := make([]string, 0, len(node.Terms))
-		for _, child := range node.Terms {
-			conditions = append(conditions, filterCandidateCurrencySQL(child, args))
-		}
-		return "(" + strings.Join(conditions, " AND ") + ")"
-	case *transactions.FilterOr:
-		conditions := make([]string, 0, len(node.Terms))
-		for _, child := range node.Terms {
-			conditions = append(conditions, filterCandidateCurrencySQL(child, args))
-		}
-		return "(" + strings.Join(conditions, " OR ") + ")"
-	default:
-		panic("unsupported amount currency constraint")
-	}
 }
 
 func filterComparisonSQL(operator transactions.FilterCompareOp) string {

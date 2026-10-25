@@ -707,8 +707,16 @@ const AmountEditor = ({
     operator: chip?.operator ?? "between",
     value: chip?.value ?? "",
     to: chip?.to ?? "",
+    currency: chip?.currency ?? "",
   });
   const hintId = useId();
+  const currencyHintId = useId();
+  const invalidCurrency = Boolean(
+    draft.currency.trim() &&
+    !transactionFilterCurrencyPattern.test(
+      normalizeTransactionFilterCurrency(draft.currency),
+    ),
+  );
   const validDecimal = (value: string): boolean =>
     transactionFilterDecimalPattern.test(value.trim());
   const invalidValue = Boolean(
@@ -724,6 +732,8 @@ const AmountEditor = ({
     compareTransactionFilterDecimals(draft.value.trim(), draft.to.trim()) > 0;
   const update = (next: typeof draft): void => {
     setDraft(next);
+    const currency = normalizeTransactionFilterCurrency(next.currency);
+    if (currency && !transactionFilterCurrencyPattern.test(currency)) return;
     if (!validDecimal(next.value)) return;
     if (
       next.operator === "between" &&
@@ -736,6 +746,7 @@ const AmountEditor = ({
       field,
       operator: next.operator,
       value: next.value.trim(),
+      ...(currency ? { currency } : {}),
       ...(next.operator === "between" ? { to: next.to.trim() } : {}),
     });
   };
@@ -796,6 +807,32 @@ const AmountEditor = ({
           </label>
         ) : null}
       </div>
+      {field === "amount" ? (
+        <label className="flex flex-col gap-1 font-mono text-xs">
+          Currency (optional)
+          <input
+            type="text"
+            className="bg-card h-9 border-2 border-[var(--border-ink)] px-2 text-sm shadow-[var(--shadow-pixel)]"
+            placeholder="Any currency"
+            value={draft.currency}
+            aria-invalid={invalidCurrency || undefined}
+            aria-describedby={currencyHintId}
+            onChange={(event) =>
+              update({ ...draft, currency: event.target.value })
+            }
+          />
+          <span
+            id={currencyHintId}
+            role={invalidCurrency ? "alert" : undefined}
+            className={
+              invalidCurrency ? "text-destructive" : "text-muted-foreground"
+            }
+          >
+            Use a three-letter code or C:: followed by a token. Leave blank for
+            any currency.
+          </span>
+        </label>
+      ) : null}
       <p
         id={hintId}
         role={invalidValue || invalidTo || reversed ? "alert" : undefined}
@@ -2002,8 +2039,8 @@ export const TransactionFilterControls = ({
     if (chip.kind === "amount") {
       const label =
         chip.operator === "between"
-          ? `${dimension.label} between ${chip.value} and ${chip.to}`
-          : `${dimension.label} ${chip.operator} ${chip.value}`;
+          ? `${dimension.label} between ${chip.value} and ${chip.to}${chip.currency ? ` ${chip.currency}` : ""}`
+          : `${dimension.label} ${chip.operator} ${chip.value}${chip.currency ? ` ${chip.currency}` : ""}`;
       return { label, tooltip: label, truncateLabel: false };
     }
     if (chip.kind === "range") {

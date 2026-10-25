@@ -128,6 +128,7 @@ export type TransactionFilterChip =
   | {
       readonly field: "amount" | "amount_usd";
       readonly kind: "amount";
+      readonly currency?: string;
       readonly operator: TransactionFilterAmountOperator;
       readonly value: string;
       readonly to?: string;
@@ -286,7 +287,7 @@ const expressionFromFilterChip = (
     return term(
       chip.field,
       chip.operator === "between" ? "=" : chip.operator,
-      chip.operator === "between" ? `${chip.value}..${chip.to}` : chip.value,
+      `${chip.operator === "between" ? `${chip.value}..${chip.to}` : chip.value}${chip.currency ?? ""}`,
     );
   }
   if (chip.kind === "range") {
@@ -957,7 +958,14 @@ const filterRowFromExpression = (
       (candidate.field === "amount" || candidate.field === "amount_usd") &&
       candidate.operator !== ":"
     ) {
-      const bounds = candidate.value.split("..");
+      const qualified = /^([0-9.]+)([a-z]{3}|C::.+)$/i.exec(candidate.value);
+      if (qualified && qualified[2]!.trim() !== qualified[2]) return undefined;
+      const currency = qualified
+        ? normalizeTransactionFilterCurrency(qualified[2]!)
+        : undefined;
+      if (currency && candidate.field !== "amount") return undefined;
+      const operand = qualified?.[1] ?? candidate.value;
+      const bounds = operand.split("..");
       if (
         bounds.length === 2 &&
         candidate.operator === "=" &&
@@ -967,19 +975,21 @@ const filterRowFromExpression = (
         chips.push({
           kind: "amount",
           field: candidate.field,
+          ...(currency ? { currency } : {}),
           operator: "between",
           value: bounds[0]!,
           to: bounds[1]!,
         });
       } else if (
         bounds.length === 1 &&
-        transactionFilterDecimalPattern.test(candidate.value)
+        transactionFilterDecimalPattern.test(operand)
       ) {
         chips.push({
           kind: "amount",
           field: candidate.field,
+          ...(currency ? { currency } : {}),
           operator: candidate.operator,
-          value: candidate.value,
+          value: operand,
         });
       } else return undefined;
       continue;

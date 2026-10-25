@@ -394,11 +394,24 @@ func normalizeFilterCurrency(value string) string {
 func (p *filterParser) parseComparisonTermLeaf(offset int, field FilterField, op FilterCompareOp, value string) (FilterExpression, error) {
 	switch field {
 	case FilterFieldAmount, FilterFieldAmountUSD:
+		term := &FilterDecimalTerm{Field: field, Op: op}
+		currencyStart := strings.IndexFunc(value, func(character rune) bool {
+			return character >= 'A' && character <= 'Z' || character >= 'a' && character <= 'z'
+		})
+		if currencyStart > 0 {
+			if field != FilterFieldAmount {
+				return nil, filterErrorf(offset, "field amount_usd does not support a currency suffix")
+			}
+			term.Currency = normalizeFilterCurrency(value[currencyStart:])
+			if !values.ValidCurrencyCode(term.Currency) {
+				return nil, filterErrorf(offset, "amount currency suffix needs three letters or C:: followed by a token")
+			}
+			value = value[:currencyStart]
+		}
 		bounds := strings.Split(value, "..")
 		if len(bounds) > 2 || (len(bounds) == 2 && op != FilterCompareEqual) {
 			return nil, filterErrorf(offset, "field %s interval requires =lower..upper", field)
 		}
-		term := &FilterDecimalTerm{Field: field, Op: op}
 		for index, bound := range bounds {
 			amount, err := values.ParseNonNegativeDecimal(bound)
 			if err != nil {
