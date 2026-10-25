@@ -759,15 +759,22 @@ export const DefinitionEditorPanel = ({
               A complete balanced transaction schedule.
             </p>
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon-sm"
-            aria-label="Close definition editor"
-            onClick={() => closeEditor()}
+          <Tooltip
+            asChild
+            hoverOnly
+            disabled={saving}
+            label="Close and discard definition draft · Esc when no modal or toolbar sheet is above it"
           >
-            <Close aria-hidden="true" />
-          </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-sm"
+              aria-label="Close definition editor"
+              onClick={() => closeEditor()}
+            >
+              <Close aria-hidden="true" />
+            </Button>
+          </Tooltip>
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto p-4">
           {lookups.errorMessage ? (

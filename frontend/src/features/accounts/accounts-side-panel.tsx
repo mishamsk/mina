@@ -917,9 +917,10 @@ const AccountsSidePanelContent = ({
           label={
             saving
               ? "Saving prevents closing the account panel."
-              : "Close account panel"
+              : "Close account panel · Esc (after pickers and dialogs close)"
           }
           asChild
+          hoverOnly={!saving}
         >
           <Button
             type="button"

@@ -309,7 +309,11 @@ const TagsSidePanelContent = ({
             {title}
           </h2>
         </div>
-        <Tooltip label="Close tag panel" asChild>
+        <Tooltip
+          label="Close tag panel · Esc (after nested controls close)"
+          asChild
+          hoverOnly
+        >
           <Button
             type="button"
             variant="outline"

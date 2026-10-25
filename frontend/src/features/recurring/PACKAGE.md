@@ -9,6 +9,7 @@
 - Definition rows opt into the shared guarded [table-entry focus contract](../app-shell/PACKAGE.md) and follow the shared [roving focus contract](../../hooks/PACKAGE.md), [table rules](../../../../docs/webui-design.md#tables-and-filtering), and [theme](../../../../docs/webui-theme-arcade-cabinet.md); editor activation retains the row opener.
 
 - Definition lists register row help while mounted; the editor registers draft-discard help only while open.
+- The editor's hover-only close hint advertises draft-discard Escape only while idle and yields to modal and compact-toolbar surfaces.
 
 - The editor owns its draft signature baseline and exposes navigation dirtiness, saving state, and discard confirmation through a shell-held ref; Keep editing restores panel focus, while Escape and explicit close discard immediately. Navigation requested during saving waits without a discard dialog, continues after successful save and refresh, and offers the discard choice after failure; the shell clears the deferred callback and confirmation when the router stops blocking. Successful writes reset the saved baseline; a failed pause/resume remains an unsaved change.
 - The definitions list flexes beneath route and action banners within the shared fixed-page bound; loaded rows use `referenceTableFrameClassName` and `recurring-definitions-table-scroll`, while skeleton/error/empty surfaces remain bounded and oversized state content stays reachable; empty content centers only when it fits.

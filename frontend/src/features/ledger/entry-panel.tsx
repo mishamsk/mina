@@ -54,6 +54,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useShortcutGroup } from "@/hooks/use-shortcut-group";
 import type {
   AdvancedTransactionEntryDraft,
   JournalRecordRowDraft,
@@ -70,8 +71,10 @@ import {
 import {
   getTransactionsSnapshot,
   type LedgerLookupsSnapshot,
+  registerShortcutGroup,
   type TransactionEntryRecentTransaction,
   type TransactionEntryRegisterSummary,
+  unregisterShortcutGroup,
 } from "@/store";
 import {
   invalidateAccountsPage,
@@ -104,6 +107,11 @@ import {
   transactionTemplatePickerLoader,
 } from "./entity-picker-loaders";
 import { captureTransactionEntryLaunchContext } from "./entry-launch-context";
+import {
+  entryActionHint,
+  matchesEntryAction,
+  transactionEntryShortcutGroup,
+} from "./entry-shortcuts";
 import {
   buildLookupMaps,
   displayAmountKey,
@@ -5238,6 +5246,87 @@ export const EntryPanel = ({
     ],
   );
 
+  const draftShortcutEligible = !replacement && draftPersistence === "ordinary";
+  const templateShortcutEligible =
+    !replacement && templateAvailability === "available";
+  const shortcutGroup = useMemo(
+    () =>
+      transactionEntryShortcutGroup({
+        editing: Boolean(replacement),
+        draftEligible: draftShortcutEligible,
+        templateEligible: templateShortcutEligible,
+      }),
+    [replacement, draftShortcutEligible, templateShortcutEligible],
+  );
+  useShortcutGroup(
+    shortcutGroup,
+    registerShortcutGroup,
+    unregisterShortcutGroup,
+    open && currentDraftReady,
+  );
+
+  useEffect(() => {
+    if (!open) return;
+    const modal = entryPanelRef.current?.closest(
+      "[data-transaction-entry-modal]",
+    );
+    const onKeyDown = (event: KeyboardEvent) => {
+      // The dialog itself remains an editor focus target after pointer use and help.
+      // Bubble after controls so pickers and nested editors retain their ownership.
+      if (
+        event.defaultPrevented ||
+        event.isComposing ||
+        event.repeat ||
+        !(event.target instanceof HTMLElement) ||
+        (event.target !== document.body &&
+          event.target.closest("[role='dialog'], [role='alertdialog']") !==
+            modal) ||
+        Array.from(
+          document.querySelectorAll("[role='dialog'], [role='alertdialog']"),
+        ).some(
+          (surface) =>
+            surface !== modal &&
+            surface instanceof HTMLElement &&
+            (surface.getAttribute("aria-modal") === "true" ||
+              surface.getAttribute("role") === "alertdialog" ||
+              modal?.contains(surface)) &&
+            surface.getClientRects().length > 0,
+        )
+      )
+        return;
+      if (matchesEntryAction(event, "template")) {
+        if (!replacement && !templatePickerDisabled) {
+          event.preventDefault();
+          if (templateShortcutEligible) focusTemplatePicker(true);
+        }
+      } else if (matchesEntryAction(event, "draft")) {
+        event.preventDefault();
+        if (draftShortcutEligible && !clearingDraft) void saveCreateDraft(true);
+      } else if (
+        matchesEntryAction(event, "save") ||
+        matchesEntryAction(event, "saveAndClose")
+      ) {
+        event.preventDefault();
+        if (!submitDisabled && !savingDraft && !clearingDraft)
+          void submit(event.shiftKey);
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [
+    open,
+    replacement,
+    templatePickerDisabled,
+    templateShortcutEligible,
+    focusTemplatePicker,
+    draftShortcutEligible,
+    clearingDraft,
+    saveCreateDraft,
+    submitDisabled,
+    savingDraft,
+    submit,
+  ]);
+
   const primaryAccountValue =
     activeTabDraft && activeConfig
       ? accountValue(activeTabDraft, activeConfig.primaryAccountField)
@@ -5273,46 +5362,6 @@ export const EntryPanel = ({
       aria-labelledby="entry-panel-title"
       onKeyDownCapture={retireInitialFocus}
       onPointerDownCapture={retireInitialFocus}
-      onKeyDown={(event) => {
-        if (
-          confirmSaveDraftOpen ||
-          confirmCloseDiscardOpen ||
-          confirmTemplateReplaceOpen ||
-          confirmClearDraftOpen
-        ) {
-          return;
-        }
-        if (
-          (event.metaKey || event.ctrlKey) &&
-          event.shiftKey &&
-          !event.altKey &&
-          event.key.toLowerCase() === "f"
-        ) {
-          if (!replacement && !templatePickerDisabled) {
-            event.preventDefault();
-            if (templateAvailability === "available") {
-              focusTemplatePicker(true);
-            }
-          }
-          return;
-        }
-        if (
-          (event.metaKey || event.ctrlKey) &&
-          !event.shiftKey &&
-          !event.altKey &&
-          event.key.toLowerCase() === "s"
-        ) {
-          event.preventDefault();
-          if (draftPersistence === "ordinary") {
-            void saveCreateDraft(true);
-          }
-          return;
-        }
-        if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-          event.preventDefault();
-          void submit(event.shiftKey);
-        }
-      }}
     >
       <div className="flex items-center justify-between border-b-2 border-[var(--border-ink)] p-4">
         <div>
@@ -5336,15 +5385,21 @@ export const EntryPanel = ({
             </Button>
           </Tooltip>
         ) : (
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            aria-label="Close transaction editor"
-            onClick={requestClose}
+          <Tooltip
+            asChild
+            hoverOnly
+            label="Close transaction editor · Esc after closing pickers"
           >
-            <Close aria-hidden="true" />
-          </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              aria-label="Close transaction editor"
+              onClick={requestClose}
+            >
+              <Close aria-hidden="true" />
+            </Button>
+          </Tooltip>
         )}
       </div>
 
@@ -6827,30 +6882,42 @@ export const EntryPanel = ({
                   </Button>
                 ) : null}
                 {!replacement ? (
+                  <Tooltip
+                    asChild
+                    hoverOnly
+                    label={entryActionHint("saveAndClose", false)}
+                  >
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={submitDisabled}
+                      onClick={() => {
+                        void submit(true);
+                      }}
+                    >
+                      <Check aria-hidden="true" />
+                      {saving ? "Saving" : "Save and close"}
+                    </Button>
+                  </Tooltip>
+                ) : null}
+                <Tooltip
+                  asChild
+                  hoverOnly
+                  label={entryActionHint("save", Boolean(replacement))}
+                >
                   <Button
-                    type="button"
-                    variant="outline"
+                    ref={submitButtonRef}
+                    type="submit"
                     disabled={submitDisabled}
-                    onClick={() => {
-                      void submit(true);
-                    }}
                   >
                     <Check aria-hidden="true" />
-                    {saving ? "Saving" : "Save and close"}
+                    {saving
+                      ? "Saving"
+                      : replacement
+                        ? "Update transaction"
+                        : "Save and add another"}
                   </Button>
-                ) : null}
-                <Button
-                  ref={submitButtonRef}
-                  type="submit"
-                  disabled={submitDisabled}
-                >
-                  <Check aria-hidden="true" />
-                  {saving
-                    ? "Saving"
-                    : replacement
-                      ? "Update transaction"
-                      : "Save and add another"}
-                </Button>
+                </Tooltip>
               </div>
             </div>
           </div>

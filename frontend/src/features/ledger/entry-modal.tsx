@@ -14,14 +14,11 @@ import { Toast } from "@/components/toast";
 import { focusWithoutTooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useShortcutGroup } from "@/hooks/use-shortcut-group";
 import type { TransactionEntryType } from "@/models/ui-state";
 import { deleteTransactionEntryDraft } from "@/services/indexeddb";
 import {
   type LedgerLookupsSnapshot,
-  registerShortcutGroup,
   type TransactionEntryRecentTransaction,
-  unregisterShortcutGroup,
 } from "@/store";
 
 import {
@@ -29,7 +26,6 @@ import {
   type EntryPanelLaunch,
   type EntryPanelSaveContext,
 } from "./entry-panel";
-import { transactionEntryShortcutGroup } from "./entry-shortcuts";
 
 interface EntryModalProps {
   readonly errorMessage?: string;
@@ -162,12 +158,6 @@ export const EntryModal = ({
   requestCloseRef,
   returnFocusTo,
 }: EntryModalProps) => {
-  useShortcutGroup(
-    transactionEntryShortcutGroup,
-    registerShortcutGroup,
-    unregisterShortcutGroup,
-    open,
-  );
   const [attentionFlash, setAttentionFlash] = useState(false);
   const [clearDraftError, setClearDraftError] = useState<string>();
   const [clearDraftOpen, setClearDraftOpen] = useState(false);

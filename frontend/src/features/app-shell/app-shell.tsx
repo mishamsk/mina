@@ -348,6 +348,7 @@ const CommandPaletteButton = ({
   readonly collapsed: boolean;
   readonly onOpen?: () => void;
 }) => {
+  const [hovered, setHovered] = useState(false);
   const button = (
     <Button
       type="button"
@@ -355,18 +356,27 @@ const CommandPaletteButton = ({
       className={cn("w-full", collapsed && "px-0")}
       aria-label="Command palette"
       onClick={onOpen}
+      onPointerEnter={() => setHovered(true)}
+      onPointerLeave={() => setHovered(false)}
     >
       <Search aria-hidden="true" />
       <span className={cn(collapsed && "sr-only")}>Command palette</span>
     </Button>
   );
 
-  return collapsed ? (
-    <Tooltip label="Command palette" className="w-full" asChild>
+  return (
+    <Tooltip
+      label={
+        collapsed && !hovered
+          ? "Command palette"
+          : "Command palette · Cmd/Ctrl+K (outside editors and overlays)"
+      }
+      className="w-full"
+      asChild
+      hoverOnly={!collapsed}
+    >
       {button}
     </Tooltip>
-  ) : (
-    button
   );
 };
 

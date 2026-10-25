@@ -306,9 +306,11 @@ const EditDockEditor = ({
             label={
               saving || blocked
                 ? "Wait for the update to finish"
-                : "Complete the editor first"
+                : update
+                  ? "Apply · Ctrl+Enter (in this editor)"
+                  : "Complete the editor first"
             }
-            disabled={!saving && !blocked && Boolean(update)}
+            hoverOnly={!saving && !blocked && Boolean(update)}
             focusable={saving || blocked || !update}
           >
             <Button
@@ -321,15 +323,22 @@ const EditDockEditor = ({
               Apply
             </Button>
           </Tooltip>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
+          <Tooltip
+            asChild
+            hoverOnly
+            label="Cancel · Esc after closing pickers"
             disabled={saving}
-            onClick={onCancel}
           >
-            Cancel
-          </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={saving}
+              onClick={onCancel}
+            >
+              Cancel
+            </Button>
+          </Tooltip>
         </div>
       </div>
       {errorMessage ? (
@@ -540,9 +549,11 @@ const AccountReplaceEditor = ({
               ? "Wait for the update to finish"
               : sourceAccountId === undefined
                 ? "Choose an account common to every selected transaction"
-                : "Choose a replacement compatible with every affected record"
+                : canReview
+                  ? "Review replacement · Ctrl+Enter (in this editor)"
+                  : "Choose a replacement compatible with every affected record"
           }
-          disabled={canReview}
+          hoverOnly={canReview}
           focusable={!canReview}
         >
           <Button
@@ -559,15 +570,22 @@ const AccountReplaceEditor = ({
             Review replacement
           </Button>
         </Tooltip>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
+        <Tooltip
+          asChild
+          hoverOnly
+          label="Cancel · Esc after closing pickers"
           disabled={saving}
-          onClick={onCancel}
         >
-          Cancel
-        </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={saving}
+            onClick={onCancel}
+          >
+            Cancel
+          </Button>
+        </Tooltip>
       </div>
       <ConfirmationDialog
         cancelPendingTooltip="Wait for account replacement to finish"
@@ -771,8 +789,11 @@ export const TransactionEditDock = ({
                 {actionTitle[action]}
               </span>
               <Tooltip
-                label={actionDisabledReason ?? ""}
-                disabled={!actionDisabledReason}
+                label={
+                  actionDisabledReason ??
+                  `${actionTitle[action]} · ${{ account: "a", category: "c", member: "m", tags: "t" }[action]} (from a selected row)`
+                }
+                hoverOnly={!actionDisabledReason}
                 focusable={Boolean(actionDisabledReason)}
               >
                 <Button

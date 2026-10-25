@@ -968,9 +968,13 @@ export const TemplateEditorModal = ({
             </div>
             <footer className="flex items-center justify-end gap-2 border-t-2 border-[var(--border-ink)] p-4">
               <Tooltip
-                disabled={!saving}
+                hoverOnly={!saving}
                 focusable={saving}
-                label="Template is being saved."
+                label={
+                  saving
+                    ? "Template is being saved."
+                    : "Cancel · Esc after closing pickers"
+                }
               >
                 <Button
                   type="button"
@@ -982,9 +986,13 @@ export const TemplateEditorModal = ({
                 </Button>
               </Tooltip>
               <Tooltip
-                disabled={!saveDisabled}
+                hoverOnly={!saveDisabled}
                 focusable={saveDisabled}
-                label={saveDisabledReason}
+                label={
+                  saveDisabled
+                    ? saveDisabledReason
+                    : `${editing ? "Save template" : "Create template"} · Ctrl+Enter`
+                }
               >
                 <Button
                   type="button"

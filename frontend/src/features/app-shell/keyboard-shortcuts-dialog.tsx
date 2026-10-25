@@ -74,7 +74,12 @@ export const KeyboardShortcutsDialog = () => {
             focusWithoutTooltip(
               launch?.opener?.isConnected && launch.opener !== document.body
                 ? launch.opener
-                : document.querySelector<HTMLElement>("main h1[tabindex='-1']"),
+                : (document.querySelector<HTMLElement>(
+                    "[data-transaction-entry-modal][data-state='open']",
+                  ) ??
+                    document.querySelector<HTMLElement>(
+                      "main h1[tabindex='-1']",
+                    )),
               { preventScroll: true },
             );
           }}
@@ -83,7 +88,7 @@ export const KeyboardShortcutsDialog = () => {
             <Dialog.Title className="font-heading text-base font-bold uppercase">
               Keyboard shortcuts
             </Dialog.Title>
-            <Tooltip label="Close keyboard shortcuts" asChild>
+            <Tooltip label="Close keyboard shortcuts · Esc" asChild hoverOnly>
               <Dialog.Close asChild>
                 <Button
                   variant="outline"

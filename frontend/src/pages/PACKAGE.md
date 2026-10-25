@@ -6,7 +6,7 @@
 
 ## Implicit Contracts
 
-- Transactions New transaction buttons pass no tab so ledger restores the saved draft on its tab, falling back to Spend.
+- Transactions New transaction buttons pass no tab so ledger restores the saved draft on its tab, falling back to Spend; hover-only hints scope the global n action outside text fields and overlays.
 
 - Account header Transactions links use the shared ledger URL builder.
 

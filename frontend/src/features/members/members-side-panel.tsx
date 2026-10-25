@@ -385,7 +385,11 @@ const MembersSidePanelContent = ({
             {title}
           </h2>
         </div>
-        <Tooltip label="Close member panel" asChild>
+        <Tooltip
+          label="Close member panel · Esc (outside confirmations)"
+          asChild
+          hoverOnly
+        >
           <Button
             type="button"
             variant="outline"

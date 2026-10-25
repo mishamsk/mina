@@ -194,32 +194,48 @@ export const TransactionBrowserToolbar = ({
             selected
           </span>
           {selectableCount > 0 ? (
-            <Button
-              ref={selectPageButtonRef}
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={onSelectPage}
+            <AppTooltip
+              asChild
+              hoverOnly
+              label="Select page · Cmd/Ctrl+A (outside text fields, in the transaction table or dock)"
             >
-              <Check aria-hidden="true" />
-              Select page
-            </Button>
+              <Button
+                ref={selectPageButtonRef}
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={onSelectPage}
+              >
+                <Check aria-hidden="true" />
+                Select page
+              </Button>
+            </AppTooltip>
           ) : null}
           {selectedCount > 0 ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={clearSelectionAndRestoreFocus}
+            <AppTooltip
+              asChild
+              hoverOnly
+              label="Clear selection · Esc after closing the dock editor"
             >
-              <Close aria-hidden="true" />
-              Clear
-            </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={clearSelectionAndRestoreFocus}
+              >
+                <Close aria-hidden="true" />
+                Clear
+              </Button>
+            </AppTooltip>
           ) : null}
           <AppTooltip
             className="ml-auto"
-            label="Exit after the amount update finishes"
-            disabled={!amountSavePending}
+            label={
+              amountSavePending
+                ? "Exit after the amount update finishes"
+                : "Done · Esc after closing the dock editor and clearing selection"
+            }
+            hoverOnly={!amountSavePending}
             focusable={false}
           >
             <Button

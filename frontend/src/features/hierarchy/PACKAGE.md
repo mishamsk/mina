@@ -8,7 +8,7 @@
 
 - The panel trims the destination and rejects an empty or unchanged path locally; it passes the source path unchanged to the caller. Services remain the authority for FQN validity, subtree rules, and conflicts; callers display their failures through `errorMessage`.
 - Initial render focuses and selects the destination input. While a submit is pending, the panel cannot close or submit again. Callers own close state, post-success refresh fan-out, notices, and restoring focus to the opener.
-- This is a non-modal dialog that blocks app-shell global shortcuts through its overlay marker. `escapeDisabled` lets a caller defer Escape to an overlapping higher-priority surface.
+- This is a non-modal dialog that blocks app-shell global shortcuts through its overlay marker. `escapeDisabled` lets a caller defer Escape to an overlapping higher-priority surface; the hover-only close hint preserves that scope.
 
 ## Boundaries
 

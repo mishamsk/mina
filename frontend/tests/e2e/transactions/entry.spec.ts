@@ -123,12 +123,30 @@ test("create drafts reopen only after explicit save and can be discarded or clea
     },
   );
   await editor.getByRole("tab", { name: "Transfer" }).click();
+  await chooseOptionByKeyboard(
+    page,
+    "From account",
+    "joint_checking",
+    "bank:Chase:joint_checking",
+    { scope: editor },
+  );
+  await chooseOptionByKeyboard(
+    page,
+    "To account",
+    "emergency_savings",
+    "bank:Ally:emergency_savings",
+    { scope: editor },
+  );
   await editor.getByLabel("Amount", { exact: true }).fill("25");
   await editor.getByLabel("Memo").fill(memo);
   await close.click();
   await expect(
     saveDraft.getByRole("button", { name: "Discard draft" }),
   ).toBeFocused();
+  await page.keyboard.press("Control+Enter");
+  await page.keyboard.press("Control+Shift+Enter");
+  await expect(saveDraft).toBeVisible();
+  await expect(editor.getByText("Entries this session: 0")).toBeVisible();
   await saveDraft
     .getByRole("button", { name: "Save draft", exact: true })
     .click();
@@ -160,7 +178,21 @@ test("create drafts reopen only after explicit save and can be discarded or clea
   await expect(editor.getByLabel("Memo")).toHaveValue("");
   await expect(editor.getByLabel("Amount", { exact: true })).toHaveValue("");
   await editor.getByLabel("Memo").fill(memo);
-  await editor.getByLabel("Memo").press("Control+s");
+  await editor.getByLabel("Memo").press("Meta+s");
+  await expect(editor).toBeVisible();
+  await editor.getByRole("tab", { name: "Spend", exact: true }).focus();
+  await page.keyboard.press("?");
+  const help = page.getByRole("dialog", { name: "Keyboard shortcuts" });
+  await expect(
+    help.getByText("Save the draft and close", { exact: true }),
+  ).toBeVisible();
+  await page.keyboard.press("Control+s");
+  await expect(help).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(
+    editor.getByRole("tab", { name: "Spend", exact: true }),
+  ).toBeFocused();
+  await page.keyboard.press("Control+s");
   await expect(editor).toHaveCount(0);
   await launcher.click();
   await expect(editor.getByLabel("Memo")).toHaveValue(memo);
@@ -193,10 +225,33 @@ test("editing a transaction updates its visible detail", async ({
   );
 
   const row = page.getByRole("row").filter({ hasText: initialMemo }).first();
-  await clickRowAction(page, row, "Edit transaction");
+  await row.locator(".transactions-description-column").click();
+  const detail = page.getByTestId("transaction-detail-panel");
+  await detail.getByRole("button", { name: "Edit", exact: true }).click();
   const editor = page.getByRole("dialog", { name: "Transaction editor" });
   await editor.getByLabel("Memo").fill(updatedMemo);
-  await editor.getByRole("button", { name: "Update transaction" }).click();
+  const update = editor.getByRole("button", { name: "Update transaction" });
+  await update.hover();
+  await expect(page.getByRole("tooltip")).toHaveText(
+    "Update transaction · Ctrl+Enter / Ctrl+Shift+Enter",
+  );
+  await editor.getByRole("heading", { name: "Edit spend" }).hover();
+  await update.focus();
+  await expect(page.getByRole("tooltip")).toBeHidden();
+  await page.keyboard.press("?");
+  const help = page.getByRole("dialog", { name: "Keyboard shortcuts" });
+  await expect(
+    help.getByText("Update transaction", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    help.getByText("Save the draft and close", { exact: true }),
+  ).toBeHidden();
+  await expect(
+    help.getByText("Start from a template", { exact: true }),
+  ).toBeHidden();
+  await page.keyboard.press("Escape");
+  await expect(update).toBeFocused();
+  await page.keyboard.press("Control+Enter");
 
   await expect(editor).toHaveCount(0);
   const updatedRow = page
@@ -204,7 +259,6 @@ test("editing a transaction updates its visible detail", async ({
     .filter({ hasText: updatedMemo })
     .first();
   await expect(updatedRow).toBeVisible();
-  await updatedRow.locator(".transactions-description-column").click();
   await expect(
     page
       .getByTestId("transaction-detail-panel")
@@ -260,7 +314,11 @@ test("duplicating a transaction saves a seeded copy beside its source", async ({
     .filter({ hasText: sourceMemo })
     .first();
   const editor = page.getByRole("dialog", { name: "Transaction editor" });
-  await clickRowAction(page, sourceRow, "Duplicate transaction");
+  await sourceRow.locator(".transactions-description-column").click();
+  await page
+    .getByTestId("transaction-detail-panel")
+    .getByRole("button", { name: "Duplicate", exact: true })
+    .click();
   const spend = editor.getByRole("tabpanel", { name: "Spend" });
   await expect(
     editor.getByRole("heading", { name: "New spend" }),
@@ -268,7 +326,7 @@ test("duplicating a transaction saves a seeded copy beside its source", async ({
   await expect(spend.getByLabel("Amount")).toHaveValue("19.25");
   await expect(spend.getByLabel("Memo")).toHaveValue(sourceMemo);
   await spend.getByLabel("Memo").fill(copyMemo);
-  await editor.getByRole("button", { name: "Save and close" }).click();
+  await page.keyboard.press("Control+Shift+Enter");
 
   await expect(editor).toHaveCount(0);
   await expect(sourceRow).toBeVisible();
@@ -326,7 +384,16 @@ test("advanced entry previews and saves a balanced spend", async ({
   const preview = editor.getByTestId("classification-preview");
   await expect(preview).toContainText("Spend");
   await expect(preview).toContainText("-15.00 $");
-  await editor.getByRole("button", { name: "Save and close" }).click();
+  await editor.getByRole("heading", { name: "New journal" }).click();
+  await page.keyboard.press("?");
+  const help = page.getByRole("dialog", { name: "Keyboard shortcuts" });
+  await page.keyboard.press("Control+Enter");
+  await page.keyboard.press("Control+Shift+Enter");
+  await expect(help).toBeVisible();
+  await expect(editor.getByText("Entries this session: 0")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(editor).toBeFocused();
+  await page.keyboard.press("Control+Shift+Enter");
 
   await expect(editor).toHaveCount(0);
   await page.getByLabel("Search").fill(memo);
@@ -715,7 +782,7 @@ test("batched entry keeps sticky fields only within the session and clears repla
     { scope: merchant },
   );
   await spend.getByLabel("Memo").fill(firstMemo);
-  await editor.getByRole("button", { name: "Save and add another" }).click();
+  await page.keyboard.press("Control+Enter");
 
   await expect(editor.getByText("Entries this session: 1")).toBeVisible();
   await expect(editor.getByRole("tab", { name: "Spend" })).toHaveAttribute(
@@ -740,7 +807,8 @@ test("batched entry keeps sticky fields only within the session and clears repla
     { scope: merchant },
   );
   await spend.getByLabel("Memo").fill(secondMemo);
-  await editor.getByRole("button", { name: "Save and add another" }).click();
+  await editor.getByRole("tab", { name: "Spend", exact: true }).focus();
+  await page.keyboard.press("Control+Enter");
   await expect(editor.getByText("Entries this session: 2")).toBeVisible();
   await editor.getByRole("tab", { name: "Advanced" }).click();
   await editor.getByRole("combobox", { name: "Template" }).fill(templateFqn);

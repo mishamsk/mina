@@ -1483,7 +1483,11 @@ export const TransactionDetailPanel = ({
           )}
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <Tooltip label="Close transaction detail" asChild>
+          <Tooltip
+            label="Close transaction detail · Esc when no overlay is above it"
+            asChild
+            hoverOnly
+          >
             <Button
               type="button"
               variant="outline"

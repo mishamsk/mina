@@ -6,7 +6,8 @@
 
 ## Implicit Contracts
 
-- Keyboard help renders Global before mounted page/overlay groups, stacks above entry/template modals and below confirmations, initially focuses the catalog without a ring or tooltip, scrolls it with arrow/page keys and Home/End from any dialog focus target, and restores the captured opener or route heading on close.
+- Keyboard help renders Global before mounted page/overlay groups, stacks above entry/template modals and below confirmations, initially focuses the catalog without a ring or tooltip, scrolls it with arrow/page keys and Home/End from any dialog focus target, and restores the captured opener, active transaction dialog, or route heading on close.
+- Palette and help-close shortcut hints open only on pointer hover; palette hints disclose overlay/editor suppression, while keyboard focus in the collapsed rail still reveals the palette's name alone.
 - Keyboard help marks its backdrop as a modal overlay so outside-pointer dismissal preserves underlying non-modal detail panels.
 
 - Global shortcuts share overlay detection; only the help predicate ignores the entry-modal marker, while editable targets and other blocking overlays still suppress `?`. Slash and primary-modifier+Shift+F resolve the visible, enabled, non-inert marked list search at dispatch time, focus it, and select its draft; editable targets, focused dialog controls, other blocking overlays, and unavailable searches remain untouched. Mounted search owners register the stable List search help group through the shared lifecycle adapter, while dispatch behavior remains app-shell owned.

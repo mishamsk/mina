@@ -34,6 +34,7 @@
 - Register category chips re-read the category by stable ID before constructing a Transactions DSL filter, so external renames cannot submit stale FQNs.
 - Use API `deletable` and `has_credit_limit_history` signals as supplied; this package does not infer either rule. System accounts expose no mutation controls.
 - Management-panel callers restore focus to the opener (or New account fallback) on close, and successful deletion prefers the visible search field and otherwise uses the table. Register detail delegates panel rendering, loading, URL state, and focus restoration to ledger; accounts owns register-specific mutation calls, refresh sequencing, notices, and close or reload outcomes. URL-first detail focuses the panel; walking between records keeps row focus, and moving within one transaction updates the restore row without closing detail.
+- The management-panel close hint scopes Escape after pickers and dialogs close and opens only on hover; the pending-save explanation retains focus disclosure.
 
 ## Boundaries
 

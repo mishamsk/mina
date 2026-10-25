@@ -13,6 +13,7 @@ import {
 import { PageHelp } from "@/components/page-help";
 import { fixedPageClassName } from "@/components/reference-table-frame";
 import { Toast, toastDurationMs } from "@/components/toast";
+import { Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/features/app-shell";
 import {
@@ -263,14 +264,20 @@ export const TransactionsPage = () => {
           </PageHelp>
         }
         actions={
-          <Button
-            type="button"
-            data-entry-modal-restore-target
-            onClick={openEntryPanel}
+          <Tooltip
+            asChild
+            hoverOnly
+            label="New transaction · n (outside text fields and overlays)"
           >
-            <Plus aria-hidden="true" />
-            New transaction
-          </Button>
+            <Button
+              type="button"
+              data-entry-modal-restore-target
+              onClick={openEntryPanel}
+            >
+              <Plus aria-hidden="true" />
+              New transaction
+            </Button>
+          </Tooltip>
         }
         toolbar={
           <TransactionBrowserToolbar

@@ -55,6 +55,13 @@ test("creating a tag adds it to the tree", async ({ page }, testInfo) => {
   await page.goto("/tags");
   await page.getByRole("button", { name: "New tag" }).click();
   const panel = page.getByRole("dialog", { name: "Create tag" });
+  const close = panel.getByRole("button", { name: "Close tag panel" });
+  await close.focus();
+  await expect(page.getByRole("tooltip")).toBeHidden();
+  await close.hover();
+  await expect(page.getByRole("tooltip")).toHaveText(
+    "Close tag panel · Esc (after nested controls close)",
+  );
   await panel.getByLabel("FQN").fill(fqn);
   await panel.getByRole("button", { name: "Create" }).click();
 

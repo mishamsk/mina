@@ -124,7 +124,11 @@ export const RestructureDialog = ({
             {title}
           </h2>
         </div>
-        <Tooltip label="Close restructure panel" asChild>
+        <Tooltip
+          label="Close restructure panel · Esc (when no higher-priority surface is open)"
+          asChild
+          hoverOnly
+        >
           <Button
             type="button"
             variant="outline"

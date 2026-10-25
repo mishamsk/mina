@@ -17,7 +17,7 @@
 - Creating a hidden member is a create followed by a hidden-state update; if the second request fails, refresh the list before reporting the partial failure.
 - Delete affordances trust only the API `deletable` signal; dependency rules remain backend-owned.
 - The full-page member list uses a name column plus a narrow trailing actions column; compact shells scroll the document and fold the action cluster into overflow when it cannot fit, and removing a focused row by hiding or deletion restores focus to the visible search field or compact Controls trigger.
-- The editor moves focus into its panel, defers Escape to an open confirmation dialog, and cannot close while saving; callers restore focus to the panel opener after close.
+- The editor moves focus into its panel, defers Escape to an open confirmation dialog, and cannot close while saving; its hover-only close hint scopes Escape outside confirmations, and callers restore focus to the panel opener after close.
 
 ## Boundaries
 

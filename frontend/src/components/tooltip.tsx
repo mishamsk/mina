@@ -21,6 +21,7 @@ interface TooltipProps {
   readonly disabled?: boolean;
   readonly focusable?: boolean;
   readonly forceOpen?: boolean;
+  readonly hoverOnly?: boolean;
   readonly label: string;
   readonly onEscape?: () => void;
   readonly persistentForceOpen?: boolean;
@@ -62,6 +63,7 @@ export const Tooltip = ({
   disabled = false,
   focusable = true,
   forceOpen = false,
+  hoverOnly = false,
   label,
   onEscape,
   persistentForceOpen = false,
@@ -109,6 +111,7 @@ export const Tooltip = ({
   }, [effectiveOpen]);
 
   const handleFocusCapture = (event: FocusEvent<HTMLElement>) => {
+    if (hoverOnly) return;
     if (
       event.currentTarget.hasAttribute(suppressFocusTooltipAttribute) ||
       (event.target instanceof HTMLElement &&
@@ -161,11 +164,16 @@ export const Tooltip = ({
           asChild
           className={className}
           onFocusCapture={handleFocusCapture}
+          onFocus={hoverOnly ? (event) => event.preventDefault() : undefined}
         >
           {children}
         </TooltipTrigger>
       ) : (
-        <TooltipTrigger asChild onFocusCapture={handleFocusCapture}>
+        <TooltipTrigger
+          asChild
+          onFocusCapture={handleFocusCapture}
+          onFocus={hoverOnly ? (event) => event.preventDefault() : undefined}
+        >
           <span
             aria-label={triggerLabel}
             className={cn("inline-flex max-w-full min-w-0", className)}

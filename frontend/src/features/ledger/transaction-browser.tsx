@@ -1622,15 +1622,21 @@ export const TransactionBrowser = ({
               data is seeded.
             </p>
             {onNewTransaction ? (
-              <Button
-                type="button"
-                className="mt-5"
-                data-transaction-empty-action
-                onClick={onNewTransaction}
+              <Tooltip
+                asChild
+                hoverOnly
+                label="New transaction · n (outside text fields and overlays)"
               >
-                <Plus aria-hidden="true" />
-                New transaction
-              </Button>
+                <Button
+                  type="button"
+                  className="mt-5"
+                  data-transaction-empty-action
+                  onClick={onNewTransaction}
+                >
+                  <Plus aria-hidden="true" />
+                  New transaction
+                </Button>
+              </Tooltip>
             ) : null}
           </div>
         </div>

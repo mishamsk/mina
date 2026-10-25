@@ -350,7 +350,11 @@ const CategoriesSidePanelContent = ({
             {title}
           </h2>
         </div>
-        <Tooltip label="Close category panel" asChild>
+        <Tooltip
+          label="Close category panel · Esc (after nested controls close)"
+          asChild
+          hoverOnly
+        >
           <Button
             type="button"
             variant="outline"

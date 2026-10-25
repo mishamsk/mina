@@ -21,6 +21,7 @@
 - A failed broader lookup snapshot does not block saving reference IDs; existing per-entity detail reads resolve selected presentation independently, while ordinary mutation validation remains authoritative.
 - Transaction capture maps active records in response order and copies only account, category, member, currency, native amount, tags, and memo; dates and transaction-only metadata never enter the draft.
 - Create recurring copies each active template record's supplied defaults into a new definition draft without filling absent partial values.
+- Save hints advertise the existing Control+Enter variant on hover only while eligible, preserving disabled reasons and the picker-first Escape ladder on Cancel.
 - Edit preserves the FQN; hierarchy changes remain owned by restructure.
 
 ## Boundaries
