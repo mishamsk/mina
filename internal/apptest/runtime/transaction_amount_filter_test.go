@@ -37,13 +37,6 @@ func TestTransactionSemanticAmountFilters(t *testing.T) {
 	}
 	partial[1].AmountUsd = apptest.StringPtr("9.75")
 
-	intermediateOverflow := []httpclient.CreateJournalRecordRequest{
-		semanticRecord(f.cashEUR.AccountId, "-1", "EUR", nil), semanticRecordWithoutSettlement(f.correction.AccountId, "1", "EUR", nil), semanticRecordWithoutSettlement(f.correction.AccountId, "1", "EUR", nil), semanticRecordWithoutSettlement(f.correction.AccountId, "-1", "EUR", nil),
-	}
-	intermediateOverflow[1].AmountUsd = apptest.StringPtr("6000000000")
-	intermediateOverflow[2].AmountUsd = apptest.StringPtr("6000000000")
-	intermediateOverflow[3].AmountUsd = apptest.StringPtr("-6000000000")
-
 	examples := []struct {
 		name    string
 		records []httpclient.CreateJournalRecordRequest
@@ -86,8 +79,6 @@ func TestTransactionSemanticAmountFilters(t *testing.T) {
 		{"crypto suffix", []httpclient.CreateJournalRecordRequest{
 			semanticRecord(f.jordan.AccountId, "-0.1", "C::BTC", nil), semanticRecord(f.restaurant.AccountId, "0.1", "C::BTC", &f.expense.CategoryId),
 		}, []string{`amount="0.1C::BTC"`, `amount="0.09..0.11C::BTC"`, `amount="0.1c::BTC"`, `not amount="0.1C::ETH"`}, []string{"amount=0.1USD", `amount="0.1C::btc"`}},
-
-		{"intermediate USD overflow", intermediateOverflow, []string{"amount=1", "not amount_usd>=0"}, []string{"amount_usd=6000000000"}},
 
 		{"USD overflow", usdOverflow, []string{"amount=2", "not amount_usd>=0", "not amount_usd=0..9999999999"}, []string{"amount_usd>=0", "amount_usd=6000000000"}},
 		{"decimal precision", []httpclient.CreateJournalRecordRequest{

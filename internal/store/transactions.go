@@ -592,7 +592,7 @@ func (s *TransactionStore) transactionFilterAmountCondition(term *transactions.F
 	}
 	return `EXISTS (
 		WITH classified AS (
-			SELECT jr.record_id, jr.currency, jr.amount, jr.amount_usd, a.account_type,
+			SELECT jr.currency, jr.amount, jr.amount_usd, a.account_type,
 				` + s.recordRoleExpression() + ` AS role
 			FROM ` + s.db.accountingName("journal_record") + ` jr
 			JOIN ` + s.db.accountingName("account") + ` a ON a.account_id = jr.account_id
@@ -612,18 +612,11 @@ func (s *TransactionStore) transactionFilterAmountCondition(term *transactions.F
 					AND ((has_party AND account_type = 'PARTY') OR (NOT has_party AND amount > 0)) THEN 'transfer'
 			END AS shape
 			FROM flagged
-		), accumulated AS (
-			SELECT *, sum(amount_usd) OVER (
-				PARTITION BY shape, currency ORDER BY record_id ROWS UNBOUNDED PRECEDING
-			) AS running_usd
-			FROM contributions WHERE shape IS NOT NULL
 		)
 		SELECT 1 FROM (
 			SELECT shape, currency, CAST(sum(amount) AS DECIMAL(18,8)) AS amount,
-				CASE WHEN count(amount_usd) = count(*)
-					AND bool_and(TRY_CAST(running_usd AS DECIMAL(18,8)) IS NOT NULL)
-					THEN TRY_CAST(sum(amount_usd) AS DECIMAL(18,8)) END AS amount_usd
-			FROM accumulated GROUP BY shape, currency
+				CASE WHEN count(amount_usd) = count(*) THEN TRY_CAST(sum(amount_usd) AS DECIMAL(18,8)) END AS amount_usd
+			FROM contributions WHERE shape IS NOT NULL GROUP BY shape, currency
 		) candidate WHERE ` + condition + `
 	)`
 }
