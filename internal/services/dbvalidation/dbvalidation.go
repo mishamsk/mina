@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -609,6 +610,23 @@ func sortedKeys[T any](values map[string]T) []string {
 	return keys
 }
 
+// catalogSQLSpellings canonicalizes equivalent spellings DuckDB renders for the
+// same catalog expression depending on how it was stored: re-serialized after
+// ALTER TABLE (schema-qualified built-ins) or loaded from a catalog written by
+// an older DuckDB release (boolean literals as casts, TEXT alias as VARCHAR).
+var catalogSQLSpellings = []struct {
+	pattern     *regexp.Regexp
+	replacement string
+}{
+	{regexp.MustCompile(`\bmain\.([a-z_][a-z0-9_]*)\(`), "$1("},
+	{regexp.MustCompile(`CAST\('t' AS BOOLEAN\)`), "true"},
+	{regexp.MustCompile(`CAST\('f' AS BOOLEAN\)`), "false"},
+	{regexp.MustCompile(`\bAS TEXT\)`), "AS VARCHAR)"},
+}
+
 func normalizeCatalogSQL(value string) string {
+	for _, spelling := range catalogSQLSpellings {
+		value = spelling.pattern.ReplaceAllString(value, spelling.replacement)
+	}
 	return strings.Join(strings.Fields(value), " ")
 }

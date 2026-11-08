@@ -31,7 +31,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 
 FROM debian:${DEBIAN_VERSION}-slim AS runtime
 ARG TARGETARCH
-ARG DUCKDB_VERSION=1.5.5
+ARG DUCKDB_VERSION=2.0.0
 RUN DEBIAN_FRONTEND=noninteractive apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl tzdata libstdc++6 \
     && groupadd --system --gid 10001 mina \

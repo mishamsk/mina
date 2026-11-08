@@ -87,6 +87,17 @@ func prepareAccountingLocation(ctx context.Context, appDB *AppDB) error {
 	return nil
 }
 
+// configureQueryPlanning disables DuckDB's delim-join-to-CTE rewrite process-wide:
+// with it, planning a conjunction containing OR-ed correlated subqueries (the
+// transaction filter DSL shape) grows exponentially with the number of terms.
+func configureQueryPlanning(ctx context.Context, db *sql.DB) error {
+	if _, err := db.ExecContext(ctx, "SET GLOBAL delim_join_as_cte = false"); err != nil {
+		return fmt.Errorf("configure duckdb query planning: %w", err)
+	}
+
+	return nil
+}
+
 func open(ctx context.Context, path string, maxOpenConns int) (*sql.DB, error) {
 	db, err := sql.Open(duckDBDriverName, path)
 	if err != nil {

@@ -1245,7 +1245,7 @@ func (s *TransactionStore) BulkReassignAccount(ctx context.Context, recordIDs []
 		}
 
 		valuesSQL, valuesArgs := explicitRecordDateValues(recordIDs, pendingDates, postedDates)
-		args := append(valuesArgs, accountID)
+		args := append([]any{accountID}, valuesArgs...)
 		changedRecordIDs, err := queryChangedRecordIDs(ctx, tx,
 			`UPDATE `+s.db.accountingName("journal_record")+` AS jr
 SET account_id = ?,
@@ -1288,8 +1288,9 @@ func (s *TransactionStore) BulkReplaceAccount(ctx context.Context, targets []tra
 		for _, target := range targets {
 			transactionIDs = append(transactionIDs, target.TransactionID)
 		}
-		inputSQL, args := int64InputValues(transactionIDs)
-		args = append(args, replacementAccountID, sourceAccountID)
+		inputSQL, inputArgs := int64InputValues(transactionIDs)
+		args := append([]any{replacementAccountID}, inputArgs...)
+		args = append(args, sourceAccountID)
 		changedRecordIDs, err := queryChangedRecordIDs(ctx, tx,
 			`UPDATE `+s.db.accountingName("journal_record")+` AS jr
 SET account_id = ?,

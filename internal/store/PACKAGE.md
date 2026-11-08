@@ -7,6 +7,7 @@
 ## Implicit Contracts
 
 - Recurring-definition predicates coalesce absent provenance to false so boolean negation includes ordinary transactions.
+- Opening any `AppDB`, including one over a caller-supplied process database, sets the process-wide DuckDB option `delim_join_as_cte = false`; the default rewrite makes planning of OR-ed correlated subqueries (transaction-list DSL predicates) exponential in term count.
 - `AppDB` owns the selected accounting location, optional file path, and an app-unique `memory` runtime schema. Runtime objects are never portable accounting state; transaction-scoped copies retain the accounting location, optional file path, and runtime schema, and `Close` drops the runtime schema before releasing resources.
 - Accounting names must be qualified through `AppDB`; it resolves and safely renders database and schema identifiers when opened.
 - Database file-size reads stat the selected accounting path; in-memory databases return no size without error, while filesystem stat failures return an error.

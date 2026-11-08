@@ -4,7 +4,7 @@ env MINA_FX_AUTO_LOAD_ENABLED=false
 # Target-schema export is an offline embedded artifact and does not load config or open a database.
 env MINA_DB=$WORK/should-not-exist.db
 exec mina --config-file invalid-schema-config.toml db schema
-stdout '^CREATE SCHEMA mina;;$'
+stdout '^CREATE SCHEMA mina;$'
 ! stderr .
 ! exists $WORK/should-not-exist.db
 

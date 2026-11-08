@@ -88,6 +88,9 @@ func openAppDB(
 	prepareEncryptedWrites bool,
 	close func(*AppDB) error,
 ) (*AppDB, error) {
+	if err := configureQueryPlanning(ctx, db); err != nil {
+		return nil, err
+	}
 	if prepareEncryptedWrites {
 		if err := prepareEncryptedDatabaseSupport(ctx, db, request); err != nil {
 			return nil, err
